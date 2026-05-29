@@ -145,11 +145,10 @@ After **`dev:fresh`**, you must sign in again. The old session in the browser is
 
    | Field | Example (local dev) | Notes |
    |-------|---------------------|--------|
-   | **Tenant domain (host)** | `atc.localhost` or `atc.example.localhost` | Slug + brand auto-fill from hostname |
-   | **Tenant ID** | *(leave blank)* | Auto-generated UUID |
-   | **Slug** | `atc` | Fills automatically from domain; edit if needed |
-   | **Brand domain** | `example.com` | From host (`atc.example.localhost`) or `NEXT_PUBLIC_TENANT_LOCALHOST_DEFAULT_BRAND_DOMAIN` in `frontend/.env.docker` for `{slug}.localhost` |
-   | **Environment** | Local (fixed) | First tenant is always local |
+   | **Environment** | Local, Test, Staging, or Production | Pick the environment you are provisioning now |
+   | **Slug** | `atc` | Org identifier — shared across linked environments |
+   | **Brand domain** | `example.com` | Customer domain; drives deployed hostnames |
+   | **Tenant hostname** | Auto-filled (e.g. `atc.localhost`) | Generated from env + slug + brand; override if needed |
    | **TCO sequence prefix** | `A` | Default is fine |
    | **Rollout playbook** | Latest published | Recommended |
    | **Seed demo dataset** | Off | Only for demo/UAT |
