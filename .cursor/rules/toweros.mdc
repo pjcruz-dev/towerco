@@ -1,0 +1,66 @@
+---
+alwaysApply: true
+---
+
+# TowerOS Global Rules
+
+TowerOS is an enterprise-grade multi-tenant telecom SaaS platform.
+
+Architecture:
+- Backend: Laravel 11
+- Frontend: Next.js 14
+#- Database: PostgreSQL 16
+- Database: MYSQL
+- GIS: PostGIS
+- IoT: TimescaleDB
+- Auth: Sanctum + Passport
+- SSO: Microsoft Entra ID
+- RBAC: Spatie Permissions
+- Multi-tenancy: stancl/tenancy
+- Realtime: Soketi + Laravel Echo
+- Cache/Queue: Redis
+- UI: Tailwind + shadcn/ui
+- Deployment: AWS ECS Fargate
+
+Core Principles:
+- Enterprise-grade architecture
+- Modular monolith
+- API-first
+- Mobile responsive
+- Multi-tenant isolation
+- Secure by default
+- Production-ready code only
+- SOLID principles
+- Repository/service pattern
+- Reusable UI components
+- Clean folder structure
+- Type-safe frontend
+- Domain-driven design
+- UUID primary keys
+- Audit logs for critical actions
+
+Coding Rules:
+- Never generate mock architecture
+- Never generate demo code
+- Never hardcode credentials
+- Never skip validation
+- Never skip authorization
+- Never skip tenant isolation
+- Never create duplicated logic
+- Never bypass RBAC
+- Never bypass service layer
+
+Output Requirements:
+- Full folder structure
+- Full file paths
+- Production-ready implementation
+- Step-by-step explanation
+- API routes
+- Database schema
+- Validation rules
+- Authorization rules
+- UI responsiveness
+- Error handling
+- Logging strategy
+
+Always think like a senior enterprise architect.

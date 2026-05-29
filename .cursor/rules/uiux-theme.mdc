@@ -1,0 +1,288 @@
+---
+alwaysApply: true
+---
+
+# TowerOS UI/UX Theme Rules
+
+TowerOS is an enterprise telecom SaaS platform.
+
+The design style must prioritize:
+- simplicity
+- speed
+- operational clarity
+- usability
+- low cognitive load
+- enterprise professionalism
+
+The UI should feel like:
+- Microsoft Azure Portal
+- ServiceNow
+- Atlassian Jira
+- Linear
+- Grafana
+
+NOT:
+- flashy startup landing pages
+- excessive animations
+- glassmorphism-heavy UI
+- neon cyberpunk themes
+- cluttered ERP systems
+
+---
+
+# DESIGN PHILOSOPHY
+
+Use "Operational Minimalism"
+
+Meaning:
+- clean layouts
+- spacious design
+- readable typography
+- fast workflows
+- data-first interfaces
+- map-first architecture
+- low-click actions
+- clear hierarchy
+
+---
+
+# COLOR SYSTEM
+
+## Light Theme
+
+Background:
+#F8FAFC
+
+Card:
+#FFFFFF
+
+Border:
+#E2E8F0
+
+Primary:
+#2563EB
+
+Text Primary:
+#0F172A
+
+Text Secondary:
+#64748B
+
+Success:
+#16A34A
+
+Warning:
+#D97706
+
+Danger:
+#DC2626
+
+---
+
+## Dark Theme
+
+Background:
+#0F172A
+
+Card:
+#111827
+
+Border:
+#1F2937
+
+Primary:
+#3B82F6
+
+Text Primary:
+#F9FAFB
+
+Text Secondary:
+#94A3B8
+
+Success:
+#22C55E
+
+Warning:
+#F59E0B
+
+Danger:
+#EF4444
+
+---
+
+# TYPOGRAPHY
+
+Use:
+- Inter
+OR
+- Geist
+
+Typography sizes:
+- Page title: 24px (use `text-2xl`) — prefer **font-semibold** or **font-medium**, never **extrabold/black** for tenant or platform UIs
+- Section title: 20px (`text-xl font-semibold`)
+- Card title: 16px (`text-base font-medium`)
+- Body text: 14px
+- Table text: 13px
+- Labels: 12px — **font-medium**; avoid **all-caps + widest tracking** except rare NOC badges
+
+Typography must be:
+- highly readable
+- clean
+- enterprise-grade
+- **low visual weight** (operational calm): default to `font-normal`/`font-medium` for data; reserve `font-semibold` for page titles and primary actions only
+
+**Board / investor materials:** If `docs/Rules/TowerOS_Board_Presentation.pdf` (or `Rules/TowerOS_Board_Presentation.pdf`) is added to the workspace, keep module names, grouping (Infrastructure vs Governance), and hierarchy aligned with that document.
+
+---
+
+# LAYOUT RULES
+
+Use:
+- left sidebar
+- top header
+- workspace layout
+- responsive design
+- collapsible navigation
+
+Navigation hierarchy:
+1. Module
+2. Feature
+3. Action
+
+Always preserve:
+- filters
+- search
+- map state
+- active tabs
+
+---
+
+# COMPONENT RULES
+
+Cards:
+- rounded-xl
+- soft shadows
+- clean padding
+- minimal borders
+
+Tables:
+- sticky headers
+- column filters
+- bulk actions
+- export support
+- pagination
+- search
+- responsive
+
+Forms:
+- large readable inputs
+- clear labels
+- inline validation
+- grouped sections
+- keyboard-friendly
+
+Buttons:
+- clean
+- medium height
+- clear hover states
+- icon support
+
+Modals:
+- minimal
+- prefer side drawers when possible
+
+---
+
+# DASHBOARD RULES
+
+Dashboards must focus on:
+- actionable data
+- alerts
+- tasks
+- pending approvals
+- SLA risks
+- operational visibility
+
+Avoid:
+- excessive charts
+- clutter
+- unnecessary widgets
+
+---
+
+# MAP DESIGN
+
+Maps are core UI elements.
+
+Use:
+- dark operational maps
+- clean markers
+- clustered points
+- color-coded alarms
+- overlay layers
+
+Maps should feel like:
+- network operation centers
+- telecom monitoring systems
+
+---
+
+# UX RULES
+
+Critical workflows:
+- maximum 3 clicks
+
+Prefer:
+- inline actions
+- side panels
+- command palette
+- smart search
+
+Avoid:
+- too many popups
+- deep nested menus
+- cluttered screens
+
+---
+
+# MOBILE UX
+
+Field engineer screens must prioritize:
+- large touch targets
+- offline support
+- fast forms
+- camera uploads
+- QR scanning
+- GPS workflows
+
+---
+
+# ANIMATION RULES
+
+Use minimal animations.
+
+Allowed:
+- subtle hover
+- fade transitions
+- loading skeletons
+
+Avoid:
+- bouncing
+- excessive motion
+- distracting transitions
+
+---
+
+# DESIGN QUALITY
+
+All generated UI must:
+- feel enterprise-grade
+- be production-ready
+- maintain consistency
+- support scalability
+- support accessibility
+- support dark/light themes
+- support large datasets
+- support operational users
+
+Always think like a senior enterprise UX architect.

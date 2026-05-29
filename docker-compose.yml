@@ -1,0 +1,98 @@
+name: toweros
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: toweros-mysql
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_MYSQL_PORT:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-toweros}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-toweros}
+      MYSQL_USER: ${MYSQL_USER:-toweros}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-toweros}
+    volumes:
+      - toweros-mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-u",
+          "root",
+          "-p${MYSQL_ROOT_PASSWORD:-toweros}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+  phpmyadmin:
+    image: phpmyadmin:5-apache
+    container_name: toweros-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_PHPMYADMIN_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-toweros}
+      UPLOAD_LIMIT: 64M
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: toweros-api
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_API_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env.docker
+    environment:
+      TOWEROS_DOCKER: "1"
+      TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      CENTRAL_DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-toweros}
+      DB_USERNAME: ${MYSQL_USER:-toweros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-toweros}
+    volumes:
+      - ./backend:/var/www/html
+      - toweros-backend-vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: toweros-web
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_WEB_PORT:-3001}:3001"
+    env_file:
+      - ./frontend/.env.docker
+    volumes:
+      - ./frontend:/app
+      - toweros-frontend-node:/app/node_modules
+      - toweros-frontend-next:/app/.next
+    depends_on:
+      - api
+
+volumes:
+  toweros-mysql-data:
+  toweros-backend-vendor:
+  toweros-frontend-node:
+  toweros-frontend-next:

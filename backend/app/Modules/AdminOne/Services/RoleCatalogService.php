@@ -1,0 +1,141 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\AdminOne\Services;
+
+use App\Modules\AdminOne\Models\TenantPermission;
+use App\Modules\AdminOne\Models\TenantRole;
+use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
+
+class RoleCatalogService
+{
+    /** @var list<string> */
+    public const BASELINE_ROLES = ['tenant_admin', 'viewer', 'manager'];
+
+    public function __construct(
+        private readonly TenantRbacBaselineService $rbacBaseline,
+    ) {}
+
+    public function ensureBaseline(): void
+    {
+        $this->rbacBaseline->ensure();
+    }
+
+    /**
+     * @return array{roles: list<array<string, mixed>>, permissions: list<string>}
+     */
+    public function catalog(): array
+    {
+        $this->ensureBaseline();
+
+        $roles = TenantRole::query()
+            ->where('guard_name', 'sanctum')
+            ->with('permissions:id,name')
+            ->orderBy('name')
+            ->get()
+            ->map(static function (TenantRole $role): array {
+                return [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'is_baseline' => in_array($role->name, self::BASELINE_ROLES, true),
+                    'permissions' => $role->permissions->pluck('name')->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $permissions = TenantPermission::query()
+            ->where('guard_name', 'sanctum')
+            ->orderBy('name')
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return [
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    public function createCustomRole(string $name, array $permissions): TenantRole
+    {
+        $this->ensureBaseline();
+        $normalized = $this->normalizeRoleName($name);
+
+        if (in_array($normalized, self::BASELINE_ROLES, true)) {
+            throw ValidationException::withMessages([
+                'name' => [__('This role name is reserved.')],
+            ]);
+        }
+
+        if (TenantRole::query()->where('name', $normalized)->where('guard_name', 'sanctum')->exists()) {
+            throw ValidationException::withMessages([
+                'name' => [__('A role with this name already exists.')],
+            ]);
+        }
+
+        $this->assertPermissionsExist($permissions);
+
+        $role = TenantRole::query()->create([
+            'name' => $normalized,
+            'guard_name' => 'sanctum',
+        ]);
+        $role->syncPermissions($permissions);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $role->fresh(['permissions']);
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    public function updateCustomRolePermissions(TenantRole $role, array $permissions): TenantRole
+    {
+        if (in_array($role->name, self::BASELINE_ROLES, true)) {
+            throw ValidationException::withMessages([
+                'role' => [__('Baseline roles cannot be modified from the console.')],
+            ]);
+        }
+
+        $this->assertPermissionsExist($permissions);
+        $role->syncPermissions($permissions);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $role->fresh(['permissions']);
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    private function assertPermissionsExist(array $permissions): void
+    {
+        foreach ($permissions as $permission) {
+            if (! TenantPermission::query()->where('name', $permission)->where('guard_name', 'sanctum')->exists()) {
+                throw ValidationException::withMessages([
+                    'permissions' => [__('Permission :permission does not exist.', ['permission' => $permission])],
+                ]);
+            }
+        }
+    }
+
+    private function normalizeRoleName(string $name): string
+    {
+        $normalized = Str::of($name)->trim()->lower()->replace(' ', '_')->toString();
+
+        if ($normalized === '' || strlen($normalized) > 64) {
+            throw ValidationException::withMessages([
+                'name' => [__('Role name is invalid.')],
+            ]);
+        }
+
+        return $normalized;
+    }
+}
