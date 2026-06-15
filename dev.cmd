@@ -20,7 +20,7 @@ if not "%~1"=="" (
 )
 
 echo TowerOS — Docker dev stack
-echo   Web         http://localhost:3001
+echo   Web         http://localhost
 echo   API         http://localhost:8000
 echo   phpMyAdmin  http://localhost:8080
 echo   MySQL       127.0.0.1:3307

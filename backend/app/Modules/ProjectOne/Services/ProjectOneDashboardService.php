@@ -9,6 +9,7 @@ use App\Modules\ProjectOne\Models\Project;
 use App\Modules\ProjectOne\Models\ProjectApproval;
 use App\Modules\Sites\Models\Site;
 use Carbon\Carbon;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 
 final class ProjectOneDashboardService
 {
@@ -16,6 +17,20 @@ final class ProjectOneDashboardService
      * @return array<string, mixed>
      */
     public function build(): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "project_one:dashboard:{$tenantId}",
+            30,
+            fn (): array => $this->buildUncached(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(): array
     {
         $activeProjects = Project::query()
             ->whereIn('status', ['planning', 'active', 'on_hold'])

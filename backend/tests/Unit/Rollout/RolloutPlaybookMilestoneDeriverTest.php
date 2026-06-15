@@ -76,4 +76,43 @@ final class RolloutPlaybookMilestoneDeriverTest extends TestCase
         $this->assertTrue(RolloutPlaybookMilestoneResolver::shouldDeriveFromTimeline($snapshot));
         $this->assertCount(19, RolloutPlaybookMilestoneResolver::targetsForProjectType($snapshot, 'bts'));
     }
+
+    public function test_first_tssr_approved_custom_phase_becomes_post_day_one_pivot(): void
+    {
+        $snapshot = RolloutPlaybookV2Definition::payload();
+        $timeline = $snapshot['timeline_templates']['bts'];
+
+        $insertAt = null;
+        foreach ($timeline as $index => $phase) {
+            if (($phase['phase_key'] ?? '') === 'moc_col') {
+                $insertAt = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($insertAt);
+
+        $custom = [
+            'phase_key' => 'lgu_clearance',
+            'label' => 'LGU Clearance',
+            'owner_role' => 'saq',
+            'anchor' => 'tssr_approved',
+            'working_day_start' => 1,
+            'working_day_end' => 4,
+            'is_custom' => true,
+            'counts_toward_sla' => true,
+        ];
+
+        array_splice($timeline, $insertAt, 0, [$custom]);
+        $snapshot['timeline_templates']['bts'] = $timeline;
+
+        $this->assertSame('lgu_clearance', RolloutPlaybookMilestoneDeriver::postDayOneStartKey($snapshot, 'bts'));
+
+        $rows = RolloutPlaybookMilestoneDeriver::deriveForProjectType($snapshot, 'bts');
+        $this->assertCount(20, $rows);
+
+        $customRow = collect($rows)->firstWhere('phase_key', 'lgu_clearance');
+        $this->assertNotNull($customRow);
+        $this->assertTrue($customRow['is_custom']);
+    }
 }

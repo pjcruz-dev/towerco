@@ -52,6 +52,18 @@ final class RolloutIndexApiTest extends TestCase
             ->assertJsonPath('data.0.rollout_ref', 'RP-PERM-GLOBE');
     }
 
+    public function test_index_summary_view_returns_counts_without_heavy_relations(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/project-one/rollouts?view=summary&search=SAQ-RING');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.candidate_count', 0)
+            ->assertJsonPath('data.0.phase_count', 0)
+            ->assertJsonMissingPath('data.0.timelinePhases');
+    }
+
     public function test_index_search_matches_rollout_ref(): void
     {
         $response = $this->actingAsTenantAdmin()

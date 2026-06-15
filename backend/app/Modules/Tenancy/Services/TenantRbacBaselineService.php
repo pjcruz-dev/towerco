@@ -6,6 +6,7 @@ namespace App\Modules\Tenancy\Services;
 
 use App\Modules\AdminOne\Models\TenantPermission;
 use App\Modules\AdminOne\Models\TenantRole;
+use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -13,65 +14,65 @@ use Spatie\Permission\PermissionRegistrar;
  */
 class TenantRbacBaselineService
 {
-    public function ensure(): void
+    public function __construct(
+        private readonly TenantRbacPermissionCatalog $catalog,
+    ) {}
+
+    /**
+     * Lightweight: register permission names only (for role catalog API). Does not re-sync all roles.
+     */
+    public function ensurePermissionsRegistered(): void
     {
         $guard = 'sanctum';
 
-        $permissions = [
-            'dashboard:view',
-            'gis:view',
-            'sites:view',
-            'user:manage',
-            'tenant:manage',
-            'role:manage',
-            'project_one:view',
-            'project_one:manage',
-            'project_one:rollout:view',
-            'project_one:rollout:manage',
-            'project_one:rollout:gate:approve',
-            'project_one:saq:manage',
-            'project_one:cme:manage',
-            'project_one:finance:view',
-            'project_one:finance:edit',
-            'project_one:finance:view_discipline',
-            'project_one:playbook:configure',
-            'tower_one:view',
-            'fiber_one:view',
-            'asset_one:view',
-        ];
-
-        foreach ($permissions as $name) {
+        foreach ($this->catalog->enabledPermissions() as $name) {
             TenantPermission::query()->firstOrCreate(
                 ['name' => $name, 'guard_name' => $guard],
             );
         }
+    }
 
+    public function ensure(): void
+    {
+        $guard = 'sanctum';
+        $enabled = $this->catalog->enabledPermissions();
+
+        $this->ensurePermissionsRegistered();
+
+        $this->syncBaselineRoles($guard, $enabled);
+        $this->pruneDisabledPermissionsFromAllRoles($enabled, $guard);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /**
+     * @param  list<string>  $enabled
+     */
+    private function syncBaselineRoles(string $guard, array $enabled): void
+    {
         $viewer = TenantRole::query()->firstOrCreate(
             ['name' => 'viewer', 'guard_name' => $guard],
         );
-        $viewer->syncPermissions([
+        $viewer->syncPermissions($this->filterEnabled([
             'dashboard:view',
-            'gis:view',
-            'sites:view',
             'project_one:view',
             'project_one:rollout:view',
-            'tower_one:view',
-            'fiber_one:view',
-            'asset_one:view',
-        ]);
+            'e_approval:view',
+            'e_approval:submissions:view',
+            'ticketing:view',
+            'ticketing:tickets:create',
+        ], $enabled));
 
         $admin = TenantRole::query()->firstOrCreate(
             ['name' => 'tenant_admin', 'guard_name' => $guard],
         );
-        $admin->syncPermissions($permissions);
+        $admin->syncPermissions($enabled);
 
         $manager = TenantRole::query()->firstOrCreate(
             ['name' => 'manager', 'guard_name' => $guard],
         );
-        $manager->syncPermissions([
+        $manager->syncPermissions($this->filterEnabled([
             'dashboard:view',
-            'gis:view',
-            'sites:view',
             'user:manage',
             'project_one:view',
             'project_one:manage',
@@ -81,58 +82,117 @@ class TenantRbacBaselineService
             'project_one:saq:manage',
             'project_one:cme:manage',
             'project_one:finance:view_discipline',
-            'tower_one:view',
-            'fiber_one:view',
-            'asset_one:view',
-        ]);
+            'e_approval:view',
+            'e_approval:submissions:create',
+            'e_approval:submissions:view',
+            'e_approval:approve',
+            'ticketing:view',
+            'ticketing:tickets:create',
+            'ticketing:tickets:manage',
+        ], $enabled));
 
         $finance = TenantRole::query()->firstOrCreate(
             ['name' => 'finance', 'guard_name' => $guard],
         );
-        $finance->syncPermissions([
+        $finance->syncPermissions($this->filterEnabled([
             'dashboard:view',
             'project_one:view',
             'project_one:rollout:view',
             'project_one:finance:view',
             'project_one:finance:edit',
-        ]);
+        ], $enabled));
 
-        /**
-         * Operational roles aligned with rollout gate approval chains (saq, pmo, cme).
-         * Assign on users + set matching rollout owner (saq_owner_id, pmo_owner_id, cme_pm_id).
-         */
         $saqApprover = TenantRole::query()->firstOrCreate(
             ['name' => 'saq_approver', 'guard_name' => $guard],
         );
-        $saqApprover->syncPermissions([
+        $saqApprover->syncPermissions($this->filterEnabled([
             'dashboard:view',
-            'gis:view',
-            'sites:view',
             'project_one:view',
             'project_one:rollout:view',
             'project_one:saq:manage',
-        ]);
+        ], $enabled));
 
         $pmoApprover = TenantRole::query()->firstOrCreate(
             ['name' => 'pmo_approver', 'guard_name' => $guard],
         );
-        $pmoApprover->syncPermissions([
+        $pmoApprover->syncPermissions($this->filterEnabled([
             'dashboard:view',
             'project_one:view',
             'project_one:rollout:view',
             'project_one:rollout:manage',
-        ]);
+        ], $enabled));
 
         $cmeApprover = TenantRole::query()->firstOrCreate(
             ['name' => 'cme_approver', 'guard_name' => $guard],
         );
-        $cmeApprover->syncPermissions([
+        $cmeApprover->syncPermissions($this->filterEnabled([
             'dashboard:view',
             'project_one:view',
             'project_one:rollout:view',
             'project_one:cme:manage',
-        ]);
+        ], $enabled));
 
-        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        $eApprovalAdmin = TenantRole::query()->firstOrCreate(
+            ['name' => 'e_approval_admin', 'guard_name' => $guard],
+        );
+        $eApprovalAdmin->syncPermissions($this->filterEnabled([
+            'dashboard:view',
+            'e_approval:view',
+            'e_approval:forms:manage',
+            'e_approval:submissions:create',
+            'e_approval:submissions:view',
+            'e_approval:approve',
+            'e_approval:audit:view',
+            'e_approval:settings:manage',
+        ], $enabled));
+
+        $eApprovalApprover = TenantRole::query()->firstOrCreate(
+            ['name' => 'e_approval_approver', 'guard_name' => $guard],
+        );
+        $eApprovalApprover->syncPermissions($this->filterEnabled([
+            'dashboard:view',
+            'e_approval:view',
+            'e_approval:submissions:view',
+            'e_approval:approve',
+        ], $enabled));
+
+        $eApprovalRequestor = TenantRole::query()->firstOrCreate(
+            ['name' => 'e_approval_requestor', 'guard_name' => $guard],
+        );
+        $eApprovalRequestor->syncPermissions($this->filterEnabled([
+            'dashboard:view',
+            'e_approval:view',
+            'e_approval:submissions:create',
+            'e_approval:submissions:view',
+        ], $enabled));
+    }
+
+    /**
+     * @param  list<string>  $enabled
+     */
+    private function pruneDisabledPermissionsFromAllRoles(array $enabled, string $guard): void
+    {
+        TenantRole::query()
+            ->where('guard_name', $guard)
+            ->with('permissions:id,name')
+            ->get()
+            ->each(function (TenantRole $role) use ($enabled): void {
+                $current = $role->permissions->pluck('name')->all();
+                $filtered = $this->filterEnabled($current, $enabled);
+
+                if (count($filtered) !== count($current)) {
+                    $role->syncPermissions($filtered);
+                }
+            });
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     * @param  list<string>  $enabled
+     * @return list<string>
+     */
+    private function filterEnabled(array $permissions, array $enabled): array
+    {
+        return array_values(array_intersect($permissions, $enabled));
     }
 }

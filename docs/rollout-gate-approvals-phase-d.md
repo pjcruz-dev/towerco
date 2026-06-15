@@ -10,6 +10,7 @@ Phase D adds operational visibility, escalation reminders, acting approver deleg
 |------|-------------|
 | Dashboard | KPI **Awaiting my approval**, action queue link, preview widget |
 | Inbox | **Awaiting me** tab, escalation badge, CSV export, delegation panel |
+| Sidebar | **Gate approvals** nav badge when items await you |
 | Escalation | `gate_approval_escalation_working_days` tenant setting (default 3 WD) |
 | Escalation job | `rollout:gate-approvals:escalate` (weekdays 08:00 schedule) |
 | Delegation | `rollout_gate_approval_delegations` + acting approver resolution |
@@ -116,6 +117,8 @@ php artisan tenants:migrate --force
 ```bash
 php artisan test --filter=RolloutGateApproval
 php artisan test --filter=RolloutGateApprovalDelegation
+php artisan test --filter=RolloutGateApprovalEscalation
+php artisan test --filter=RolloutGateApprovalExport
 ```
 
 ---

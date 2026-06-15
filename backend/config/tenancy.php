@@ -3,7 +3,28 @@
 declare(strict_types=1);
 
 use App\Models\Tenant;
+use Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper;
+use Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper;
+use Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper;
+use Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper;
 use Stancl\Tenancy\Database\Models\Domain;
+
+$useCacheTenancyBootstrapper = match (strtolower((string) env('TENANCY_CACHE_BOOTSTRAPPER', ''))) {
+    '1', 'true', 'yes', 'on' => true,
+    '0', 'false', 'no', 'off' => false,
+    default => in_array((string) env('CACHE_STORE', 'database'), ['redis', 'memcached'], true),
+};
+
+$tenancyBootstrappers = [
+    DatabaseTenancyBootstrapper::class,
+];
+
+if ($useCacheTenancyBootstrapper) {
+    $tenancyBootstrappers[] = CacheTenancyBootstrapper::class;
+}
+
+$tenancyBootstrappers[] = FilesystemTenancyBootstrapper::class;
+$tenancyBootstrappers[] = QueueTenancyBootstrapper::class;
 
 return [
     'tenant_model' => Tenant::class,
@@ -16,12 +37,7 @@ return [
         explode(',', (string) env('CENTRAL_DOMAINS', '127.0.0.1,localhost'))
     ))),
 
-    'bootstrappers' => [
-        Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class,
-        Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper::class,
-        Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
-        Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
-    ],
+    'bootstrappers' => $tenancyBootstrappers,
 
     'database' => [
         'central_connection' => env('TENANCY_CENTRAL_CONNECTION', 'central'),

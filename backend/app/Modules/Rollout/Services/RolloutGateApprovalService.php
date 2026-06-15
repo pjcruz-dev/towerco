@@ -87,7 +87,7 @@ final class RolloutGateApprovalService
 
         $request->load(['rolloutProgram', 'timelinePhase', 'requestedBy']);
 
-        $this->notificationDispatcher->dispatch($request, 'submitted', $actorUser?->name);
+        $this->notificationDispatcher->dispatch($request, 'submitted', $actorUser?->name, $actorUser);
 
         $this->audit->log('rollout.gate_approval_submitted', $program, [
             'phase_key' => $phase->phase_key,
@@ -153,7 +153,7 @@ final class RolloutGateApprovalService
 
             $this->programService->updatePhaseGateStatus($phase, 'passed');
 
-            $this->notificationDispatcher->dispatch($request, 'approved', $actorUser->name);
+            $this->notificationDispatcher->dispatch($request, 'approved', $actorUser->name, $actorUser);
             $this->audit->log('rollout.gate_approval_completed', $program, [
                 'phase_key' => $phase->phase_key,
                 'request_id' => $request->id,
@@ -168,7 +168,7 @@ final class RolloutGateApprovalService
         $request->last_escalated_at = null;
         $request->save();
 
-        $this->notificationDispatcher->dispatch($request, 'step_approved', $actorUser->name);
+        $this->notificationDispatcher->dispatch($request, 'step_approved', $actorUser->name, $actorUser);
 
         $this->audit->log('rollout.gate_approval_step_approved', $program, [
             'phase_key' => $phase->phase_key,
@@ -237,7 +237,7 @@ final class RolloutGateApprovalService
             $phase->save();
         }
 
-        $this->notificationDispatcher->dispatch($request, 'rejected', $actorUser->name);
+        $this->notificationDispatcher->dispatch($request, 'rejected', $actorUser->name, $actorUser);
         $this->audit->log('rollout.gate_approval_rejected', $program, [
             'phase_key' => $phase->phase_key,
             'request_id' => $request->id,

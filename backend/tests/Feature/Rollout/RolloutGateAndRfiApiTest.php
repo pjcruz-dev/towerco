@@ -6,8 +6,13 @@ namespace Tests\Feature\Rollout;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Models\TenantBillingRfiCompletion;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\RolloutTimelinePhase;
+use Carbon\Carbon;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -25,6 +30,31 @@ final class RolloutGateAndRfiApiTest extends TestCase
         ]);
 
         $this->bootInMemoryTenantApi();
+        $this->ensureHybridBillingSchema();
+    }
+
+    public function test_post_rfi_blocked_when_billable_limit_reached(): void
+    {
+        $this->testTenant->billing_meter_starts_at = Carbon::parse('2026-01-01');
+        $this->testTenant->billing_overrides = ['included_rfi_units' => 1];
+        $this->testTenant->save();
+
+        TenantBillingRfiCompletion::query()->create([
+            'tenant_id' => $this->testTenant->id,
+            'rollout_id' => (string) Str::uuid(),
+            'rfi_at' => Carbon::parse('2026-02-01'),
+        ]);
+
+        [$rollout] = $this->seedRolloutWithPhase();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/project-one/rollouts/'.$rollout->id.'/rfi-recorded', [
+                'actual_rfi_date' => '2026-05-15',
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['actual_rfi_date']);
     }
 
     public function test_patch_gate_status_updates_phase_and_returns_rollout_detail(): void
@@ -96,5 +126,32 @@ final class RolloutGateAndRfiApiTest extends TestCase
         tenancy()->end();
 
         return [$rollout, $phase];
+    }
+
+    private function ensureHybridBillingSchema(): void
+    {
+        Schema::connection('central')->table('tenants', function (Blueprint $table): void {
+            if (! Schema::connection('central')->hasColumn('tenants', 'billing_meter_starts_at')) {
+                $table->timestamp('billing_meter_starts_at')->nullable();
+            }
+            if (! Schema::connection('central')->hasColumn('tenants', 'billing_interval')) {
+                $table->string('billing_interval', 16)->default('monthly');
+            }
+            if (! Schema::connection('central')->hasColumn('tenants', 'billing_overrides')) {
+                $table->json('billing_overrides')->nullable();
+            }
+        });
+
+        if (! Schema::connection('central')->hasTable('tenant_billing_rfi_completions')) {
+            Schema::connection('central')->create('tenant_billing_rfi_completions', function (Blueprint $table): void {
+                $table->uuid('id')->primary();
+                $table->string('tenant_id');
+                $table->uuid('rollout_id');
+                $table->uuid('site_id')->nullable();
+                $table->timestamp('rfi_at');
+                $table->timestamps();
+                $table->unique(['tenant_id', 'rollout_id']);
+            });
+        }
     }
 }

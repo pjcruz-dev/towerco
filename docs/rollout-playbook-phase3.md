@@ -39,8 +39,8 @@ Uses an in-memory SQLite tenant connection to exercise CRUD + PH seed without My
 
 ## Verify locally
 
-1. **Platform** — `http://localhost:3001/platform/playbooks` — catalog + publish v2
-2. **Tenant** — `http://alliance.localhost:3001/project-one/rollout-playbook` — holiday table, seed/add/edit/delete as `admin@alliance.localhost`
+1. **Platform** — `http://localhost/platform/playbooks` — catalog + publish v2
+2. **Tenant** — `http://alliance.localhost/project-one/rollout-playbook` — holiday table, seed/add/edit/delete as `admin@alliance.localhost`
 3. Re-login if `project_one:playbook:configure` was added after your session started
 
 See also: [rollout-playbook-phase2.md](./rollout-playbook-phase2.md)

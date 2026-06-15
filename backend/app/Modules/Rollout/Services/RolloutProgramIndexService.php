@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Rollout\Services;
 
 use App\Modules\Rollout\Models\RolloutProgram;
-use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
-use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 final class RolloutProgramIndexService
 {
     public function __construct(
-        private readonly TenantWorkingDaysCalendarFactory $calendarFactory,
+        private readonly RolloutSlaAtRiskService $slaAtRisk,
     ) {}
     private const SORTABLE = [
         'created_at',
@@ -24,7 +22,7 @@ final class RolloutProgramIndexService
     ];
 
     /**
-     * @param  array{search?: string, status?: string, mno?: string, project_type?: string, region?: string, sort?: string, sla_at_risk?: bool}  $filters
+     * @param  array{search?: string, status?: string, mno?: string, project_type?: string, region?: string, sort?: string, sla_at_risk?: bool, view?: string}  $filters
      */
     public function paginate(int $page, int $perPage, array $filters = []): LengthAwarePaginator
     {
@@ -38,7 +36,7 @@ final class RolloutProgramIndexService
      */
     public function allForExport(array $filters = [], int $limit = 5000): array
     {
-        return $this->baseQuery($filters)
+        return $this->baseQuery(array_merge($filters, ['view' => 'full']))
             ->limit($limit)
             ->get()
             ->all();
@@ -52,7 +50,7 @@ final class RolloutProgramIndexService
      */
     public function flattenedForExport(array $filters = [], int $limit = 5000): array
     {
-        $parents = $this->baseQuery($filters)
+        $parents = $this->baseQuery(array_merge($filters, ['view' => 'full']))
             ->with($this->exportRelations())
             ->limit($limit)
             ->get();
@@ -75,8 +73,32 @@ final class RolloutProgramIndexService
     /**
      * @return array<int|string, mixed>
      */
-    private function listRelations(): array
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function listRelations(bool $summary): array
     {
+        if ($summary) {
+            return [
+                'children' => static fn ($childQuery) => $childQuery
+                    ->orderBy('rollout_ref')
+                    ->select([
+                        'id',
+                        'parent_rollout_id',
+                        'rollout_ref',
+                        'search_ring_name',
+                        'status',
+                        'mno',
+                        'project_type',
+                        'region',
+                        'tco_site_id',
+                        'endorsement_date',
+                        'tssr_approved_date',
+                        'target_rfi_working_date',
+                    ]),
+            ];
+        }
+
         return [
             'timelinePhases',
             'candidates',
@@ -109,9 +131,11 @@ final class RolloutProgramIndexService
      */
     private function baseQuery(array $filters): Builder
     {
+        $summary = ($filters['view'] ?? 'summary') !== 'full';
+
         $query = RolloutProgram::query()
-            ->with($this->listRelations())
-            ->withCount('children')
+            ->with($this->listRelations($summary))
+            ->withCount($summary ? ['children', 'candidates', 'timelinePhases'] : ['children'])
             ->whereNull('parent_rollout_id');
 
         $search = trim((string) ($filters['search'] ?? ''));
@@ -146,7 +170,7 @@ final class RolloutProgramIndexService
         }
 
         if (! empty($filters['sla_at_risk'])) {
-            $ids = $this->slaAtRiskProgramIds();
+            $ids = $this->slaAtRisk->ids();
             if ($ids === []) {
                 $query->whereRaw('1 = 0');
             } else {
@@ -174,35 +198,6 @@ final class RolloutProgramIndexService
         }
 
         return [$column, $direction];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function slaAtRiskProgramIds(): array
-    {
-        $today = Carbon::today();
-
-        return RolloutProgram::query()
-            ->whereNotNull('target_rfi_working_date')
-            ->whereNull('actual_rfi_date')
-            ->whereNotIn('status', ['completed', 'cancelled'])
-            ->whereNull('parent_rollout_id')
-            ->get()
-            ->filter(function (RolloutProgram $program) use ($today): bool {
-                $target = $program->target_rfi_working_date;
-                if ($target === null) {
-                    return false;
-                }
-
-                $remaining = $this->calendarFactory
-                    ->make($program->region)
-                    ->workingDaysBetween($today, Carbon::parse($target));
-
-                return $remaining <= 10;
-            })
-            ->pluck('id')
-            ->all();
     }
 
     /**
@@ -234,8 +229,12 @@ final class RolloutProgramIndexService
             'target_rfi_working_date' => $program->target_rfi_working_date?->toDateString(),
             'actual_rfi_date' => $program->actual_rfi_date?->toDateString(),
             'sla_variance_working_days' => $program->sla_variance_working_days,
-            'candidate_count' => $program->status === 'batch' ? 0 : $program->candidates->count(),
-            'phase_count' => $program->status === 'batch' ? 0 : $program->timelinePhases->count(),
+            'candidate_count' => $program->status === 'batch'
+                ? 0
+                : (int) ($program->candidates_count ?? $program->candidates()->count()),
+            'phase_count' => $program->status === 'batch'
+                ? 0
+                : (int) ($program->timeline_phases_count ?? $program->timelinePhases()->count()),
             'cancelled_at' => $program->cancelled_at?->toIso8601String(),
         ];
     }

@@ -81,7 +81,7 @@ class SeedAllianceDemo extends Command
         $this->line('  project.lead@alliance.localhost — manager');
         $this->line('  finance@alliance.localhost      — finance');
         $this->line('  ops.viewer@alliance.localhost   — viewer');
-        $this->line('Tenant URL: http://alliance.localhost:3001/login');
+        $this->line('Tenant URL: http://alliance.localhost/login');
 
         return self::SUCCESS;
     }

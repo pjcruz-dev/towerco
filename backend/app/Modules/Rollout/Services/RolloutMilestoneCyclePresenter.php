@@ -55,7 +55,10 @@ final class RolloutMilestoneCyclePresenter
         $overrides = $config->day_overrides[$templateKey] ?? [];
         $calendar = $this->calendarFactory->make($program->region);
         $today = Carbon::today();
-        $completedProgram = $program->status === 'completed' || $program->actual_rfi_date !== null;
+        $programClosed = $program->status === 'completed' || $program->actual_rfi_date !== null;
+        $closeDate = $program->actual_rfi_date
+            ? Carbon::parse($program->actual_rfi_date)
+            : ($program->status === 'completed' ? $today->copy() : null);
 
         $endorsement = $program->endorsement_date ? Carbon::parse($program->endorsement_date) : null;
         $dayOne = $program->tssr_approved_date ? Carbon::parse($program->tssr_approved_date) : null;
@@ -90,7 +93,8 @@ final class RolloutMilestoneCyclePresenter
             }
 
             $status = $this->resolveStatus(
-                $completedProgram,
+                $programClosed,
+                $closeDate,
                 $targetDate,
                 $today,
                 $calendar,
@@ -192,14 +196,21 @@ final class RolloutMilestoneCyclePresenter
     }
 
     private function resolveStatus(
-        bool $completedProgram,
+        bool $programClosed,
+        ?Carbon $closeDate,
         ?Carbon $targetDate,
         Carbon $today,
         WorkingDaysCalendar $calendar,
         ?Carbon $anchorDate,
     ): string {
-        if ($completedProgram) {
-            return 'completed';
+        if ($programClosed) {
+            if ($targetDate === null) {
+                return 'pending';
+            }
+
+            $effectiveClose = $closeDate ?? $today;
+
+            return $targetDate->lessThanOrEqualTo($effectiveClose) ? 'completed' : 'pending';
         }
 
         if ($anchorDate === null || $targetDate === null) {

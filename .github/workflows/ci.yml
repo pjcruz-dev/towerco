@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Composer security audit
+        run: composer audit
+
       - name: Copy environment
         run: cp .env.example .env
 
@@ -72,6 +75,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: npm security audit
+        run: npm audit --audit-level=high
 
       - name: ESLint
         run: npm run lint

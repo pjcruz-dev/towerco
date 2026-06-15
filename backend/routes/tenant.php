@@ -20,4 +20,5 @@ Route::middleware([
 Route::middleware([
     'api',
     InitializeTenancyForTenantRequest::class,
+    'tenant.subscription',
 ])->prefix('api/'.config('toweros.api.current_version', 'v1'))->group(base_path('routes/api/v1/tenant.php'));

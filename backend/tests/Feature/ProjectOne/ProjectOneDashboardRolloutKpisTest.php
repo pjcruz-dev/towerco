@@ -31,7 +31,7 @@ final class ProjectOneDashboardRolloutKpisTest extends TestCase
         $this->seedDashboardFixtures();
     }
 
-    public function test_dashboard_includes_rollout_kpis_map_pins_and_saq_metrics(): void
+    public function test_dashboard_includes_rollout_kpis_without_map_by_default(): void
     {
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
@@ -41,23 +41,48 @@ final class ProjectOneDashboardRolloutKpisTest extends TestCase
             ->assertJsonPath('data.rollouts.active_rollouts', 1)
             ->assertJsonPath('data.rollouts.pending_gates', 1)
             ->assertJsonPath('data.rollouts.open_saq_programs', 1)
-            ->assertJsonStructure([
-                'data' => [
-                    'map_pins' => [
-                        ['type', 'id', 'lat', 'lng', 'label'],
-                    ],
-                    'kpis',
-                ],
-            ]);
+            ->assertJsonMissingPath('data.map_pins');
 
         $kpiKeys = collect($response->json('data.kpis'))->pluck('key')->all();
         $this->assertContains('rollout_pending_gates', $kpiKeys);
         $this->assertContains('rollout_open_saq', $kpiKeys);
         $this->assertContains('rollout_sla_risk', $kpiKeys);
+    }
+
+    public function test_dashboard_include_map_returns_pins(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/project-one/dashboard?include=map');
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'map_pins' => [
+                        ['type', 'id', 'lat', 'lng', 'label'],
+                    ],
+                ],
+            ]);
 
         $pins = $response->json('data.map_pins');
         $this->assertNotEmpty($pins);
         $this->assertTrue(collect($pins)->contains(static fn (array $pin): bool => $pin['type'] === 'candidate'));
+    }
+
+    public function test_dashboard_map_endpoint_returns_pins(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/project-one/dashboard/map');
+
+        $response->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'map_pins' => [
+                        ['type', 'id', 'lat', 'lng', 'label'],
+                    ],
+                ],
+            ]);
     }
 
     public function test_rollout_map_endpoint_returns_geojson(): void

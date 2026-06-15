@@ -36,6 +36,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.session' => \App\Core\Http\Middleware\EnsureActiveSession::class,
             'auth.mfa' => \App\Core\Http\Middleware\EnsureMfaVerified::class,
             'platform.admin' => \App\Core\Http\Middleware\EnsurePlatformAdmin::class,
+            'platform.permission' => \App\Core\Http\Middleware\EnsurePlatformPermission::class,
+            'platform.mfa' => \App\Core\Http\Middleware\EnsurePlatformMfaVerified::class,
+            'tenant.subscription' => \App\Core\Http\Middleware\EnsureTenantSubscriptionAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -97,5 +100,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('rollout:gate-approvals:escalate')
             ->weekdays()
             ->dailyAt('08:00')
+            ->withoutOverlapping();
+
+        $schedule->command('e-approval:sla-run')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
+        $schedule->command('ticketing:sla-run')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
+        $schedule->command('toweros:subscriptions:process')
+            ->hourly()
             ->withoutOverlapping();
     })->create();

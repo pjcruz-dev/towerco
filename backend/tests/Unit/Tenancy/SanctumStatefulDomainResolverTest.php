@@ -30,7 +30,7 @@ final class SanctumStatefulDomainResolverTest extends TestCase
         ]);
         Config::set('tenancy.database.central_connection', 'central');
         Config::set('toweros.sanctum.stateful_domain_cache_ttl', 0);
-        Config::set('toweros.tenant_app_url', 'http://localhost:3001');
+        Config::set('toweros.tenant_app_url', 'http://localhost');
         Config::set('toweros.sanctum.stateful_domain_extras', 'platform.localhost');
 
         Schema::connection('central')->create('tenants', function (Blueprint $table): void {
@@ -78,11 +78,11 @@ final class SanctumStatefulDomainResolverTest extends TestCase
         $domains = $resolver->resolve();
 
         $this->assertContains('atc.localhost', $domains);
-        $this->assertContains('atc.localhost:3001', $domains);
         $this->assertContains('test.atc.localhost', $domains);
-        $this->assertContains('test.atc.localhost:3001', $domains);
         $this->assertContains('platform.localhost', $domains);
-        $this->assertContains('localhost:3001', $domains);
+        $this->assertContains('localhost', $domains);
+        $this->assertNotContains('atc.localhost:3001', $domains);
+        $this->assertNotContains('localhost:3001', $domains);
         $this->assertContains(Sanctum::$currentRequestHostPlaceholder, $domains);
     }
 

@@ -6,6 +6,9 @@ namespace App\Modules\Platform\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Modules\Platform\Services\PlatformTenantAuditLogger;
+use App\Modules\Platform\Support\PlatformTenantAuditEventType;
 use App\Modules\Tenancy\Services\TenantEnvironmentProvisioningService;
 use App\Modules\Tenancy\Support\InitialAdminExposure;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +22,7 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
         Request $request,
         Tenant $tenant,
         TenantEnvironmentProvisioningService $environments,
+        PlatformTenantAuditLogger $audit,
     ): JsonResponse {
         $data = $request->validate([
             'environment' => ['required', 'string', 'in:local,test,staging,production'],
@@ -60,6 +64,20 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
         if (isset($result['initial_admin'])) {
             $payload['initial_admin'] = InitialAdminExposure::forTransport($result['initial_admin']);
         }
+
+        /** @var User|null $actor */
+        $actor = $request->user();
+        $audit->log(
+            PlatformTenantAuditEventType::TENANT_ENVIRONMENT_PROVISIONED,
+            $created,
+            $actor,
+            null,
+            [
+                'source_tenant_id' => $payload['source_tenant_id'],
+                'domain' => $payload['domain'],
+                'environment' => $payload['environment'],
+            ],
+        );
 
         return $this->ok($payload, 201);
     }

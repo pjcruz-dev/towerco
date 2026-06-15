@@ -12,6 +12,16 @@ class AuthSessionService
 {
     public function start(string $userId, string $authMethod = 'local'): string
     {
+        return $this->startWithAuthMethod($userId, $authMethod);
+    }
+
+    public function startImpersonation(string $targetUserId): string
+    {
+        return $this->startWithAuthMethod($targetUserId, 'impersonation');
+    }
+
+    private function startWithAuthMethod(string $userId, string $authMethod): string
+    {
         return (string) DB::transaction(function () use ($userId, $authMethod): string {
             $sessionId = (string) Str::uuid();
             $fingerprint = hash('sha256', request()->userAgent() ?? '');

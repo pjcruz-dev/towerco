@@ -72,6 +72,11 @@ class TenantOnboardingService
             ]);
         }
 
+        $planTier = strtolower(trim((string) ($input['plan_tier'] ?? config('toweros.tenant_provisioning.default_plan_tier', 'starter'))));
+        if (! in_array($planTier, ['starter', 'professional', 'enterprise'], true)) {
+            $planTier = 'starter';
+        }
+
         /** @var Tenant $tenant */
         $tenant = Tenant::create([
             'id' => $tenantId,
@@ -79,7 +84,14 @@ class TenantOnboardingService
             'brand_domain' => $brandDomain !== '' ? $brandDomain : null,
             'environment' => $environment,
             'tco_sequence_prefix' => $tcoPrefix,
+            'mfa_required' => (bool) config('toweros.tenant_provisioning.default_mfa_required', false),
+            'plan_tier' => $planTier,
+            'seat_limit' => (int) ($input['seat_limit'] ?? 25),
         ]);
+
+        app(\App\Modules\Billing\Services\TenantSubscriptionLifecycleService::class)
+            ->applyProvisioningDefaults($tenant);
+        $tenant->save();
 
         $tenant->createDomain($domain);
 

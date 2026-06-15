@@ -120,9 +120,9 @@ final class SanctumStatefulDomainResolver
             return $variants;
         }
 
-        $port = $this->frontendDevPort();
-        if ($port > 0) {
-            $variants[] = "{$hostname}:{$port}";
+        $withPort = FrontendDevUrl::withPortSuffix($hostname);
+        if ($withPort !== $hostname) {
+            $variants[] = $withPort;
         }
 
         return $variants;
@@ -136,22 +136,6 @@ final class SanctumStatefulDomainResolver
 
         return $hostname === 'localhost'
             || str_ends_with($hostname, '.localhost');
-    }
-
-    private function frontendDevPort(): int
-    {
-        foreach ([config('toweros.tenant_app_url'), env('FRONTEND_APP_URL')] as $url) {
-            if (! is_string($url) || $url === '') {
-                continue;
-            }
-
-            $port = parse_url($url, PHP_URL_PORT);
-            if (is_int($port) && $port > 0) {
-                return $port;
-            }
-        }
-
-        return 3001;
     }
 
     private function hostFromUrl(?string $url): ?string

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Tenancy\Services;
 
+use App\Modules\Tenancy\Support\FrontendDevUrl;
 use App\Models\Tenant;
 use App\Models\TenantDomainEndpoint;
 use Illuminate\Support\Str;
@@ -34,8 +35,6 @@ final class TenantDomainSlugService
         }
 
         $brandDomain = $this->normalizeBrandDomain($brandDomain ?? (string) ($tenant->brand_domain ?? 'toweros.app'));
-        $webPort = (int) (parse_url((string) env('FRONTEND_APP_URL', 'http://localhost:3001'), PHP_URL_PORT) ?: 3001);
-
         $endpoints = match (true) {
             app()->environment('local') && $environment === 'test' => [
                 ['purpose' => 'test', 'hostname' => "test.{$slug}.localhost", 'is_primary' => true],
@@ -62,7 +61,7 @@ final class TenantDomainSlugService
         };
 
         foreach ($endpoints as &$endpoint) {
-            $endpoint['login_url'] = $this->loginUrl($endpoint['hostname'], $environment, $webPort);
+            $endpoint['login_url'] = FrontendDevUrl::tenantLoginUrl($endpoint['hostname'], $environment);
         }
         unset($endpoint);
 
@@ -112,12 +111,4 @@ final class TenantDomainSlugService
         return $this->normalizeSlug($parts[0] ?? 'tenant');
     }
 
-    private function loginUrl(string $hostname, string $environment, int $webPort): string
-    {
-        if ($environment === 'local' || str_ends_with($hostname, '.localhost')) {
-            return "http://{$hostname}:{$webPort}/login";
-        }
-
-        return "https://{$hostname}/login";
-    }
 }

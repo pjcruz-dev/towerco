@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Models\User;
+use App\Modules\Platform\Services\PlatformTenantAuditLogger;
+use App\Modules\Platform\Support\PlatformTenantAuditEventType;
 use App\Modules\Tenancy\Services\TenantOnboardingService;
 use App\Modules\Tenancy\Support\InitialAdminExposure;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +17,11 @@ use InvalidArgumentException;
 
 class CentralTenantProvisioningController extends AbstractApiController
 {
-    public function store(Request $request, TenantOnboardingService $onboarding): JsonResponse
+    public function store(
+        Request $request,
+        TenantOnboardingService $onboarding,
+        PlatformTenantAuditLogger $audit,
+    ): JsonResponse
     {
         $data = $request->validate([
             'domain' => ['required', 'string', 'max:255'],
@@ -64,6 +71,21 @@ class CentralTenantProvisioningController extends AbstractApiController
         if (isset($result['initial_admin'])) {
             $payload['initial_admin'] = InitialAdminExposure::forTransport($result['initial_admin']);
         }
+
+        /** @var User|null $actor */
+        $actor = $request->user();
+        $audit->log(
+            PlatformTenantAuditEventType::TENANT_PROVISIONED,
+            $tenant,
+            $actor,
+            null,
+            [
+                'domain' => $payload['domain'],
+                'slug' => $payload['slug'],
+                'environment' => $payload['environment'],
+                'playbook_version' => $payload['playbook_version'],
+            ],
+        );
 
         return $this->ok($payload, 201);
     }

@@ -4,10 +4,10 @@
 
 | Environment | Hostname pattern | Example (Alliance / ATC) |
 |-------------|------------------|----------------------------|
-| **local** | `{slug}.localhost` | `atc.localhost:3001/login` |
-| **test (local dev)** | `test.{slug}.localhost` | `test.atc.localhost:3001/login` |
-| **staging (local dev)** | `staging.{slug}.localhost` | `staging.atc.localhost:3001/login` |
-| **production (local dev)** | `app.{slug}.localhost` | `app.atc.localhost:3001/login` |
+| **local** | `{slug}.localhost` | `atc.localhost/login` |
+| **test (local dev)** | `test.{slug}.localhost` | `test.atc.localhost/login` |
+| **staging (local dev)** | `staging.{slug}.localhost` | `staging.atc.localhost/login` |
+| **production (local dev)** | `app.{slug}.localhost` | `app.atc.localhost/login` |
 | **test** | `test.{slug}.{brand_domain}` | `test.atc.alliancetowers.com` |
 | **staging** | `staging.{slug}.{brand_domain}` | `staging.atc.alliancetowers.com` |
 | **production** | `app.{slug}.{brand_domain}` | `app.atc.alliancetowers.com` |
@@ -57,18 +57,18 @@ Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 
 | Purpose | URL |
 |---------|-----|
-| Local dev (current) | http://alliance.localhost:3001/login |
-| Local dev (slug style) | http://atc.localhost:3001/login |
-| Local dev (UAT) | http://test.atc.localhost:3001/login |
-| Local dev (staging) | http://staging.atc.localhost:3001/login |
-| Local dev (production) | http://app.atc.localhost:3001/login |
+| Local dev (current) | http://alliance.localhost/login |
+| Local dev (slug style) | http://atc.localhost/login |
+| Local dev (UAT) | http://test.atc.localhost/login |
+| Local dev (staging) | http://staging.atc.localhost/login |
+| Local dev (production) | http://app.atc.localhost/login |
 | Test | https://test.atc.alliancetowers.com/login |
 | Production app | https://app.atc.alliancetowers.com/login |
 
 ## After you create a tenant environment
 
 1. Use the **Open tenant sign-in** button (or the sign-in URL shown in the credentials panel).
-2. Always include your dev port in the URL, for example `http://test.atc.localhost:3001/login`.
+2. Use the tenant hostname without a port when the web app listens on port 80, for example `http://test.atc.localhost/login`.
 3. Sign in with **admin@{domain}** and the password shown in the panel (default dev password is often `password`).
 4. If the page shows **Loading sign-in…** for more than a few seconds, restart the frontend dev server (`npm run dev`) so `next.config.ts` allowlist changes apply, then hard-refresh the tenant tab.
 5. If you switched between tenant hosts (local → test → app), clear site data for that hostname in DevTools → Application when testing auth.

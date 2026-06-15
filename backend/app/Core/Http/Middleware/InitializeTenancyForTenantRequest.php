@@ -38,16 +38,14 @@ class InitializeTenancyForTenantRequest
         if (is_string($tenantId) && $tenantId !== '' && Str::isUuid($tenantId)) {
             /** @var Tenant|null $tenant */
             $tenant = Tenant::query()->find($tenantId);
-            if (! $tenant) {
-                abort(Response::HTTP_NOT_FOUND, __('Tenant not found.'));
+            if ($tenant) {
+                tenancy()->initialize($tenant);
+
+                return $next($request);
             }
-
-            tenancy()->initialize($tenant);
-
-            return $next($request);
         }
 
-        $tenantDomain = $this->normalizeTenantDomainHeader($request->header('X-Tenant-Domain'));
+        $tenantDomain = $this->resolveTenantDomainOnCentralHost($request);
         if ($tenantDomain !== null) {
             $this->assertSafeCentralHostTenantDomainResolution($request, $tenantDomain);
 
@@ -62,9 +60,13 @@ class InitializeTenancyForTenantRequest
             abort(Response::HTTP_NOT_FOUND, __('Tenant domain not found.'));
         }
 
+        if (is_string($tenantId) && $tenantId !== '' && Str::isUuid($tenantId)) {
+            abort(Response::HTTP_NOT_FOUND, __('Tenant not found.'));
+        }
+
         if ($this->isTenantAuthRoute($request)) {
             abort(Response::HTTP_UNPROCESSABLE_ENTITY, __(
-                'Tenant context is required. Open your tenant sign-in URL (for example http://staging.quantum.localhost:3001/login) instead of the platform host.',
+                'Tenant context is required. Open your tenant sign-in URL (for example http://staging.quantum.localhost/login) instead of the platform host.',
             ));
         }
 
@@ -74,6 +76,50 @@ class InitializeTenancyForTenantRequest
     private function isTenantAuthRoute(Request $request): bool
     {
         return $request->is('api/*/auth/*') || $request->is('*/auth/login');
+    }
+
+    private function resolveTenantDomainOnCentralHost(Request $request): ?string
+    {
+        $fromHeader = $this->normalizeTenantDomainHeader($request->header('X-Tenant-Domain'));
+        if ($fromHeader !== null) {
+            return $fromHeader;
+        }
+
+        $fromQuery = $this->normalizeTenantDomainHeader($request->query('tenant_domain'));
+        if ($fromQuery !== null) {
+            return $fromQuery;
+        }
+
+        if ($request->is('api/*/auth/sso/azure/*')) {
+            return $this->tenantDomainFromOAuthState($request->query('state'));
+        }
+
+        return null;
+    }
+
+    private function tenantDomainFromOAuthState(mixed $state): ?string
+    {
+        if (! is_string($state) || trim($state) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($state, true);
+        if (is_array($decoded) && isset($decoded['tenant_domain'])) {
+            return $this->normalizeTenantDomainHeader($decoded['tenant_domain']);
+        }
+
+        $padded = $state.str_repeat('=', (4 - strlen($state) % 4) % 4);
+        $json = base64_decode(strtr($padded, '-_', '+/'), true);
+        if (! is_string($json) || $json === '') {
+            return null;
+        }
+
+        $payload = json_decode($json, true);
+        if (! is_array($payload) || ! isset($payload['tenant_domain'])) {
+            return null;
+        }
+
+        return $this->normalizeTenantDomainHeader($payload['tenant_domain']);
     }
 
     private function normalizeTenantDomainHeader(mixed $header): ?string

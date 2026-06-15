@@ -87,8 +87,9 @@ final class TenantEnvironmentProvisioningService
             'environment' => $environment,
             'tco_sequence_prefix' => $orgRoot->tco_sequence_prefix ?? $sourceTenant->tco_sequence_prefix ?? 'A',
             'parent_tenant_id' => $orgRoot->id,
-            'mfa_required' => $orgRoot->mfa_required ?? true,
-            'plan_tier' => $orgRoot->plan_tier ?? 'starter',
+            'mfa_required' => $orgRoot->mfa_required
+                ?? (bool) config('toweros.tenant_provisioning.default_mfa_required', false),
+            'plan_tier' => $orgRoot->plan_tier ?? config('toweros.tenant_provisioning.default_plan_tier', 'starter'),
             'subscription_status' => $orgRoot->subscription_status ?? 'active',
             'seat_limit' => $orgRoot->seat_limit ?? 25,
         ]);

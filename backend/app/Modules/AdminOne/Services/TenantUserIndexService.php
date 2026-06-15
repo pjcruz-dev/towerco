@@ -10,6 +10,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class TenantUserIndexService
 {
+    public function __construct(
+        private readonly TenantUserImpersonationService $impersonationService,
+    ) {}
+
     public function paginate(int $page, int $perPage, string $search, ?string $status): LengthAwarePaginator
     {
         $query = TenantUser::query()
@@ -32,10 +36,16 @@ class TenantUserIndexService
     /**
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
      */
-    public function asPayload(LengthAwarePaginator $paginator): array
+    /**
+     * @param  TenantUser|null  $viewer  Current admin listing users (for impersonation eligibility).
+     */
+    public function asPayload(LengthAwarePaginator $paginator, ?TenantUser $viewer = null): array
     {
         return [
-            'data' => $paginator->getCollection()->map(static function (TenantUser $user): array {
+            'data' => $paginator->getCollection()->map(function (TenantUser $user) use ($viewer): array {
+                $canImpersonate = $viewer !== null
+                    && $this->impersonationService->canImpersonateTarget($viewer, $user);
+
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -44,6 +54,7 @@ class TenantUserIndexService
                     'deactivated_at' => $user->deactivated_at?->toIso8601String(),
                     'roles' => $user->getRoleNames()->values()->all(),
                     'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
+                    'can_impersonate' => $canImpersonate,
                     'created_at' => $user->created_at?->toIso8601String(),
                     'updated_at' => $user->updated_at?->toIso8601String(),
                 ];

@@ -127,11 +127,28 @@ return [
         ],
 
         'audit' => [
+            'driver' => 'stack',
+            'channels' => explode(',', (string) env('LOG_AUDIT_STACK', 'audit_daily,audit_stderr')),
+            'ignore_exceptions' => false,
+        ],
+
+        'audit_daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/toweros-audit.log'),
             'level' => env('LOG_AUDIT_LEVEL', 'info'),
             'days' => env('LOG_AUDIT_DAYS', 365),
             'replace_placeholders' => true,
+        ],
+
+        'audit_stderr' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_AUDIT_LEVEL', 'info'),
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => 'php://stderr',
+            ],
+            'formatter' => env('LOG_AUDIT_STDERR_FORMATTER'),
+            'processors' => [PsrLogMessageProcessor::class],
         ],
 
         'null' => [
