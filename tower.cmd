@@ -24,7 +24,7 @@ echo    7  Stop Docker           Stop MySQL container
 echo    8  Help / URLs
 echo    0  Exit
 echo.
-echo  Quick URLs:  Web http://localhost:3001   API http://127.0.0.1:8000   phpMyAdmin http://localhost:8080
+echo  Quick URLs:  Web http://localhost   API http://127.0.0.1:8000   phpMyAdmin http://localhost:8080
 echo.
 set "CHOICE="
 set /p CHOICE="Select option [0-8]: "

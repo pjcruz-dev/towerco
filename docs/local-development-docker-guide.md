@@ -10,13 +10,15 @@ Step-by-step guide for **Windows** using Docker Desktop. No local PHP or Node in
 
 | Service | URL |
 |---------|-----|
-| Tenant + platform web | http://localhost:3001 |
+| Tenant + platform web | http://localhost |
 | API | http://localhost:8000 |
-| Platform console | http://localhost:3001/platform |
+| Platform console | http://localhost/platform |
 | phpMyAdmin | http://localhost:8080 |
 | MySQL (host tools) | `127.0.0.1:3307` |
 
 You will be able to log in as **platform superadmin** and **create your first tenant** (e.g. `atc.localhost`).
+
+**E-Approval:** Forms and approvals run inside this stack only (`/e-approval` in the main Next.js app). The old standalone formbuilder was decommissioned (P4) and lives under `legacy/atcformbuiilder/` for reference — **do not** run a second Node app or its `docker-compose.yml` for TowerOS development.
 
 ---
 
@@ -109,6 +111,7 @@ npm run dev:seed
 This creates:
 
 - Platform user **superadmin@toweros.local**
+- **Optional** auto dev tenant when `TOWEROS_DEV_DEFAULT_TENANT_DOMAIN` is set in `backend/.env.docker` (any hostname)
 - Published rollout playbooks **v1** and **v2**
 - Published policy **`towerco-default`** (v1 baseline + email notifications)
 - Published policy **`towerco-full-gate-approval`** (v2, all phases gated + email notifications)
@@ -121,7 +124,7 @@ This creates:
 
 After **`dev:fresh`**, you must sign in again. The old session in the browser is invalid (database was wiped).
 
-1. Open **http://localhost:3001/platform/login** (or sign out if you still see the console shell)
+1. Open **http://localhost/platform/login** (or sign out if you still see the console shell)
 2. If you see **Unauthenticated** on any page, clear **localStorage** key `toweros.platform.session` and log in again.
 3. Sign in:
 
@@ -138,7 +141,7 @@ After **`dev:fresh`**, you must sign in again. The old session in the browser is
 
 ## Part 5 — Create your first tenant
 
-1. Go to **http://localhost:3001/platform/tenants/create**  
+1. Go to **http://localhost/platform/tenants/create**  
    (or use the sidebar → **Create tenant**).
 
 2. Fill the form:
@@ -169,7 +172,7 @@ After **`dev:fresh`**, you must sign in again. The old session in the browser is
 
    - **Tenant ID**
    - **Initial admin email / password** (shown once)
-   - **Tenant login URL** (e.g. http://atc.localhost:3001/login)
+   - **Tenant login URL** (e.g. http://atc.localhost/login)
 
 ---
 
@@ -186,11 +189,11 @@ After **`dev:fresh`**, you must sign in again. The old session in the browser is
    127.0.0.1 atc.localhost
    ```
 
-3. Open the login URL from the success screen, e.g. **http://atc.localhost:3001/login**
+3. Open the login URL from the success screen, e.g. **http://atc.localhost/login**
 
 4. Sign in with **admin@atc.localhost** and the password from step 5.
 
-### Option 2 — Stay on `localhost:3001`
+### Option 2 — Stay on `localhost`
 
 Platform-created tenants also work on the central host with tenant headers when configured. Prefer **Option 1** for normal tenant UX.
 
@@ -256,6 +259,39 @@ Watch API logs while creating:
 npm run dev:logs:api
 ```
 
+### E-Approval import: “File upload fields require a Professional or Enterprise plan”
+
+Tenant `plan_tier` is **starter** by default in production; local new tenants default to **professional**.
+
+```bat
+docker compose --env-file .env.docker exec api php artisan tenants:set-plan-tier professional --domain=atc.localhost
+```
+
+Or set plan tier in **Platform → Tenants** for that organization.
+
+### Tenant UI: “Could not load submissions / notifications” on every page
+
+The footer **Database connected** / **Cache active** labels are static — they do not reflect tenant API health.
+
+Typical causes after `npm run dev:fresh`, `toweros:dev-reset`, or a wiped MySQL volume:
+
+1. **No tenant registered for your hostname** — API returns `Tenant domain not found.`  
+   Check: `docker compose --env-file .env.docker exec api php artisan tenants:list`  
+   If empty, create the tenant again at **http://localhost/platform/tenants/create** (use the same hostname you open in the browser, e.g. `atc.localhost`).
+
+2. **Stale browser session** — localStorage still has tokens for a deleted tenant.  
+   Sign out, hard refresh, or clear site data for `atc.localhost`, then sign in with the **new** admin password from provisioning.
+
+3. **Passport keys reset** — after a full fresh reset, old access tokens are invalid. Sign in again.
+
+4. **Pending tenant migrations** — after `git pull`:
+
+   ```bat
+   docker compose --env-file .env.docker exec api php artisan toweros:migrate
+   ```
+
+After fixing, retry the page; the UI now shows the API message (e.g. tenant domain not found) and a **Retry** button.
+
 ### Port already in use
 
 Edit `.env.docker` (e.g. `TOWEROS_WEB_PORT=3002`, `TOWEROS_API_PORT=8001`) and restart.
@@ -271,7 +307,7 @@ Edit `.env.docker` (e.g. `TOWEROS_WEB_PORT=3002`, `TOWEROS_API_PORT=8001`) and r
 [ ] npm run dev:fresh  OR  docker compose up -d --build
 [ ] npm run dev:mysql:grants
 [ ] npm run dev:seed     (skip if dev:fresh)
-[ ] Open http://localhost:3001/platform — login superadmin
+[ ] Open http://localhost/platform — login superadmin
 [ ] Create tenant at /platform/tenants/create
 [ ] Save admin password + login URL
 [ ] (Optional) hosts file: 127.0.0.1 <slug>.localhost
@@ -301,8 +337,31 @@ docker compose --env-file .env.docker exec api php artisan toweros:migrate
 
 ---
 
+## E-Approval (tenant module)
+
+After tenant login with a user that has E-Approval permissions (e.g. `tenant_admin`):
+
+| Page | URL |
+|------|-----|
+| Dashboard | http://localhost/e-approval |
+| Forms | http://localhost/e-approval/forms |
+| Submissions | http://localhost/e-approval/submissions |
+| Approvals | http://localhost/e-approval/approvals |
+| Settings (admin) | http://localhost/e-approval/settings |
+
+Apply tenant migrations after pull:
+
+```bat
+docker compose --env-file .env.docker exec api php artisan toweros:migrate
+```
+
+Module docs: [docs/modules/e-approval.md](modules/e-approval.md)
+
+---
+
 ## Related docs
 
 - [Tenant isolation (MySQL)](architecture/tenant-isolation-mysql.md)
 - [Tenant domain slugs](infrastructure/tenant-domain-slugs.md)
+- [E-Approval module](modules/e-approval.md)
 - [README — local development](../README.md)

@@ -30,7 +30,7 @@ class RolloutProgramIndexController extends AbstractApiController
     }
 
     /**
-     * @return array{status?: string, mno?: string, project_type?: string, region?: string, sort?: string, sla_at_risk?: bool}
+     * @return array{status?: string, mno?: string, project_type?: string, region?: string, sort?: string, sla_at_risk?: bool, view?: string}
      */
     private function validatedRolloutIndexFilters(Request $request): array
     {
@@ -41,6 +41,7 @@ class RolloutProgramIndexController extends AbstractApiController
             'region' => ['sometimes', 'string', 'max:64'],
             'sort' => ['sometimes', 'string', 'max:64'],
             'sla_at_risk' => ['sometimes', 'boolean'],
+            'view' => ['sometimes', 'string', 'in:summary,full'],
         ]);
 
         $filters = array_filter([
@@ -53,6 +54,10 @@ class RolloutProgramIndexController extends AbstractApiController
 
         if ($request->boolean('sla_at_risk')) {
             $filters['sla_at_risk'] = true;
+        }
+
+        if (isset($validated['view'])) {
+            $filters['view'] = (string) $validated['view'];
         }
 
         return $filters;

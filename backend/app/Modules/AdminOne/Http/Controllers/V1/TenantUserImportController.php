@@ -48,7 +48,7 @@ class TenantUserImportController extends AbstractApiController
                 continue;
             }
             $rows[] = [
-                'email' => trim((string) ($line[$emailIdx] ?? '')),
+                'email' => strtolower(trim((string) ($line[$emailIdx] ?? ''))),
                 'name' => trim((string) ($line[$nameIdx] ?? '')),
                 'role' => $roleIdx !== false ? trim((string) ($line[$roleIdx] ?? 'viewer')) : 'viewer',
             ];
@@ -57,6 +57,11 @@ class TenantUserImportController extends AbstractApiController
 
         $result = $service->importRows($rows);
 
-        return $this->ok($result);
+        return $this->ok([
+            ...$result,
+            'hint' => __(
+                'Users are matched by email (case-insensitive). Microsoft sign-in reuses imported accounts — duplicate CSV rows and matching emails are skipped. Roles from import are kept unless Entra group mapping adds roles on sign-in.',
+            ),
+        ]);
     }
 }

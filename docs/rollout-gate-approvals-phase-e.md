@@ -46,6 +46,7 @@ Derives fine-grained milestone rows from coarse timeline phases using a segment 
 - Presenter passes snapshot into `postDayOneStartKey()` and returns `timeline_phase_key` / `is_custom` on rows
 - `day_overrides` on timeline phase keys propagate via `timeline_phase_key`
 - Frontend milestone timeline uses `anchor === "day_one"` instead of hardcoded `moc_securing`
+- Milestone table + grid show a **Custom** badge on catalog-driven rows
 
 ---
 
@@ -68,6 +69,7 @@ Derives fine-grained milestone rows from coarse timeline phases using a segment 
 cd backend
 php artisan test --filter=RolloutPlaybookMilestoneDeriverTest
 php artisan test --filter=RolloutMilestoneCycleTest
+php artisan test --filter=RolloutMilestoneCycleApi
 ```
 
 After assigning a policy bundle:

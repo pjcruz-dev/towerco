@@ -6,7 +6,10 @@ namespace App\Modules\Platform\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Modules\Platform\Models\RolloutPlaybookVersion;
+use App\Modules\Platform\Services\PlatformTenantAuditLogger;
+use App\Modules\Platform\Support\PlatformTenantAuditEventType;
 use App\Modules\Platform\Models\RolloutPolicyBundle;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
 use App\Modules\Platform\Services\RolloutPolicyBundleService;
@@ -23,6 +26,7 @@ class CentralTenantPlaybookAssignController extends AbstractApiController
         RolloutPlaybookCatalogService $catalog,
         RolloutPolicyBundleService $policyBundles,
         TenantPlaybookSyncService $sync,
+        PlatformTenantAuditLogger $audit,
     ): JsonResponse {
         $data = $request->validate([
             'rollout_policy_bundle_id' => ['sometimes', 'nullable', 'uuid'],
@@ -66,6 +70,21 @@ class CentralTenantPlaybookAssignController extends AbstractApiController
         if ($data['sync_tenant_database'] ?? true) {
             $sync->syncBindingToTenantDatabase($tenant, $binding->fresh(['playbookVersion', 'rolloutPolicyBundle']), $request->user()?->email);
         }
+
+        /** @var User|null $actor */
+        $actor = $request->user();
+        $audit->log(
+            PlatformTenantAuditEventType::TENANT_PLAYBOOK_ASSIGNED,
+            $tenant,
+            $actor,
+            null,
+            [
+                'assigned_version' => $assignedVersion,
+                'assigned_policy_code' => $assignedPolicy,
+                'rollout_policy_bundle_id' => $binding->rollout_policy_bundle_id,
+                'upgrade_policy' => $binding->upgrade_policy,
+            ],
+        );
 
         return $this->ok([
             'tenant_id' => $tenant->id,

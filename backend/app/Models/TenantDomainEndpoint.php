@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Modules\Tenancy\Support\CorsAllowedOriginResolver;
 use App\Modules\Tenancy\Support\SanctumStatefulDomainResolver;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -43,10 +44,12 @@ class TenantDomainEndpoint extends Model
     {
         static::saved(static function (): void {
             app(SanctumStatefulDomainResolver::class)->forget();
+            app(CorsAllowedOriginResolver::class)->forget();
         });
 
         static::deleted(static function (): void {
             app(SanctumStatefulDomainResolver::class)->forget();
+            app(CorsAllowedOriginResolver::class)->forget();
         });
     }
 }

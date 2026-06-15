@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Stancl\Tenancy\Database\DatabaseManager;
@@ -23,6 +24,8 @@ trait InteractsWithInMemoryTenantApi
     protected function bootInMemoryTenantApi(): void
     {
         config([
+            'cache.default' => 'array',
+            'database.default' => 'central',
             'database.connections.central' => [
                 'driver' => 'sqlite',
                 'database' => ':memory:',
@@ -32,10 +35,16 @@ trait InteractsWithInMemoryTenantApi
             'toweros.allow_tenant_on_central_host' => true,
         ]);
 
+        DB::purge('central');
+        DB::setDefaultConnection('central');
+
         Schema::connection('central')->create('tenants', function (Blueprint $table): void {
             $table->string('id')->primary();
             $table->timestamps();
             $table->json('data')->nullable();
+            $table->string('plan_tier', 32)->default('starter');
+            $table->string('subscription_status', 32)->default('active');
+            $table->unsignedInteger('seat_limit')->default(25);
         });
 
         Schema::connection('central')->create('domains', function (Blueprint $table): void {

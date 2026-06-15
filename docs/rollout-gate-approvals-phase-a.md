@@ -49,7 +49,7 @@ MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
 MAIL_FROM_NAME="TowerOS"
 
-TOWEROS_TENANT_APP_URL=http://localhost:3001
+TOWEROS_TENANT_APP_URL=http://localhost
 QUEUE_CONNECTION=database
 ```
 

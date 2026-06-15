@@ -10,11 +10,11 @@ use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\AzureGraphService;
 use App\Modules\Identity\Services\AzureGroupRoleMapper;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Identity\Services\TenantSsoConfigService;
 use App\Modules\Identity\Services\TenantUserProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,6 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
 class TenantSsoController extends AbstractApiController
 {
     public function __construct(
+        private readonly TenantSsoConfigService $ssoConfig,
         private readonly TenantUserProvisioningService $provisioning,
         private readonly AzureGroupRoleMapper $roleMapper,
         private readonly AzureGraphService $graphService,
@@ -30,35 +31,61 @@ class TenantSsoController extends AbstractApiController
         private readonly AuthAuditService $auditService,
     ) {}
 
-    public function redirect(): RedirectResponse|JsonResponse
+    public function redirect(Request $request): RedirectResponse|JsonResponse
     {
-        $config = DB::table('tenant_sso_configs')
-            ->where('tenant_id', (string) tenant('id'))
-            ->where('provider', 'azure')
-            ->where('enabled', true)
-            ->first();
+        $config = $this->ssoConfig->findEnabledForTenant((string) tenant('id'), 'azure');
 
-        if (! $config) {
-            return response()->json(['message' => __('Azure SSO is not configured.')], Response::HTTP_SERVICE_UNAVAILABLE);
+        if ($config === null) {
+            return response()->json(['message' => __('Microsoft sign-in is not enabled for this organization.')], Response::HTTP_SERVICE_UNAVAILABLE);
         }
 
-        config([
-            'services.azure.client_id' => $config->client_id,
-            'services.azure.client_secret' => decrypt((string) $config->client_secret_encrypted),
-            'services.azure.tenant' => $config->tenant_identifier,
-            'services.azure.redirect' => route('api.tenant.v1.auth.sso.azure.callback'),
-        ]);
+        $this->ssoConfig->applyAzureSocialiteConfig($config);
 
-        return Socialite::driver('azure')->stateless()->redirect();
+        $driver = Socialite::driver('azure')->stateless();
+        $tenantDomain = $this->resolveTenantDomainForSsoState($request);
+        if ($tenantDomain !== null) {
+            $state = json_encode(['tenant_domain' => $tenantDomain], JSON_THROW_ON_ERROR);
+            $driver = $driver->with(['state' => $state]);
+        }
+
+        return $driver->redirect();
+    }
+
+    private function resolveTenantDomainForSsoState(Request $request): ?string
+    {
+        $fromQuery = $request->query('tenant_domain');
+        if (is_string($fromQuery) && trim($fromQuery) !== '') {
+            return strtolower(trim($fromQuery));
+        }
+
+        $tenantId = tenant('id');
+        if ($tenantId === null) {
+            return null;
+        }
+
+        $domain = \Stancl\Tenancy\Database\Models\Domain::query()
+            ->where('tenant_id', (string) $tenantId)
+            ->value('domain');
+
+        return is_string($domain) && $domain !== '' ? strtolower($domain) : null;
     }
 
     public function callback(Request $request): JsonResponse|RedirectResponse
     {
+        $config = $this->ssoConfig->findEnabledForTenant((string) tenant('id'), 'azure');
+
+        if ($config === null) {
+            return response()->json(['message' => __('Microsoft sign-in is not enabled for this organization.')], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        $this->ssoConfig->applyAzureSocialiteConfig($config);
+
         $socialUser = Socialite::driver('azure')->stateless()->user();
 
-        $user = $this->provisioning->findOrProvision(
+        $user = $this->provisioning->findForSso(
+            tenantId: (string) tenant('id'),
             email: (string) $socialUser->getEmail(),
-            name: $socialUser->getName()
+            name: $socialUser->getName(),
         );
 
         if (! $user->isActive()) {
@@ -97,28 +124,14 @@ class TenantSsoController extends AbstractApiController
             'refresh_token' => $refresh['token'],
             'session_id' => $sessionId,
             'mfa_required' => false,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'tenant_id' => (string) tenant('id'),
-                'roles' => $user->getRoleNames()->values()->all(),
-                'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
-                'tenant_accesses' => [[
-                    'tenant_id' => (string) tenant('id'),
-                    'tenant_name' => (string) tenant('id'),
-                    'roles' => $user->getRoleNames()->values()->all(),
-                    'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
-                ]],
-            ],
+            'user' => app(\App\Modules\Identity\Services\TenantAuthUserPayloadBuilder::class)->build($user),
         ];
 
         if ($request->boolean('redirect', true)) {
-            $frontendAppUrl = rtrim((string) env('FRONTEND_APP_URL', 'http://localhost:3001'), '/');
             $encodedPayload = rtrim(strtr(base64_encode((string) json_encode($payload)), '+/', '-_'), '=');
 
             return response()->redirectTo(
-                $frontendAppUrl.'/login/sso-callback?payload='.$encodedPayload,
+                $this->ssoConfig->resolveSsoCallbackFrontendUrl().'?payload='.$encodedPayload,
                 Response::HTTP_FOUND
             );
         }
@@ -126,4 +139,3 @@ class TenantSsoController extends AbstractApiController
         return $this->ok($payload);
     }
 }
-

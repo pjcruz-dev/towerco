@@ -7,6 +7,7 @@ namespace App\Modules\ProjectOne\Services;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\SiteCandidate;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use Illuminate\Support\Facades\Schema;
 
 final class ProjectOneMapDataService
@@ -16,23 +17,44 @@ final class ProjectOneMapDataService
      */
     public function buildPins(): array
     {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "project_one:map_pins:{$tenantId}",
+            45,
+            fn (): array => $this->buildPinsUncached(),
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildPinsUncached(): array
+    {
         if (! Schema::connection('tenant')->hasTable('rollout_programs')) {
             return $this->sitePinsOnly();
         }
 
-        $pins = [];
-
-        foreach ($this->sitePinsOnly() as $pin) {
-            $pins[] = $pin;
-        }
+        $pins = $this->sitePinsOnly();
 
         $activeRollouts = RolloutProgram::query()
-            ->with(['candidates', 'site'])
+            ->with(['site:id,name,latitude,longitude'])
             ->whereNotIn('status', ['completed', 'cancelled', 'batch'])
             ->whereNull('parent_rollout_id')
             ->orderByDesc('updated_at')
             ->limit(50)
-            ->get();
+            ->get(['id', 'rollout_ref', 'status', 'site_id']);
+
+        $rolloutIds = $activeRollouts->pluck('id')->all();
+        $candidatesByRollout = $rolloutIds === []
+            ? collect()
+            : SiteCandidate::query()
+                ->whereIn('rollout_program_id', $rolloutIds)
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->orderBy('candidate_number')
+                ->get(['id', 'rollout_program_id', 'candidate_number', 'status', 'label', 'latitude', 'longitude'])
+                ->groupBy('rollout_program_id');
 
         foreach ($activeRollouts as $rollout) {
             if ($rollout->site !== null
@@ -50,11 +72,7 @@ final class ProjectOneMapDataService
                 ];
             }
 
-            foreach ($rollout->candidates as $candidate) {
-                if ($candidate->latitude === null || $candidate->longitude === null) {
-                    continue;
-                }
-
+            foreach ($candidatesByRollout->get($rollout->id, collect()) as $candidate) {
                 $pins[] = $this->candidatePin($rollout, $candidate);
             }
         }

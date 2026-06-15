@@ -76,7 +76,7 @@ final class DevResetCommand extends Command
         }
 
         $this->info("Deleted {$deleted} tenant(s). Kept: users, rollout_playbook_versions, rollout_policy_bundles.");
-        $this->line('Create a new tenant from http://localhost:3001/platform/tenants/create');
+        $this->line('Create a new tenant from http://localhost/platform/tenants/create');
 
         return self::SUCCESS;
     }

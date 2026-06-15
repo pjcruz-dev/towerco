@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Rollout\Notifications;
 
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
+use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -14,11 +15,15 @@ final class RolloutGateApprovalNotification extends Notification implements Shou
 {
     use Queueable;
 
+    private readonly ?string $tenantId;
+
     public function __construct(
         private readonly RolloutGateApprovalRequest $request,
         private readonly string $event,
         private readonly ?string $actorName = null,
+        ?string $tenantId = null,
     ) {
+        $this->tenantId = $tenantId ?? (tenant()?->getTenantKey());
         $this->onQueue(config('toweros.queues.notifications', 'toweros-notifications'));
     }
 
@@ -32,57 +37,64 @@ final class RolloutGateApprovalNotification extends Notification implements Shou
 
     public function toMail(object $notifiable): MailMessage
     {
-        $program = $this->request->rolloutProgram;
-        $phase = $this->request->timelinePhase;
-        $baseUrl = rtrim((string) config('toweros.tenant_app_url', env('TOWEROS_TENANT_APP_URL', 'http://localhost:3001')), '/');
-        $rolloutUrl = $program !== null
-            ? "{$baseUrl}/project-one/rollouts/{$program->id}?tab=timeline"
-            : "{$baseUrl}/project-one/gate-approvals";
-        $inboxUrl = "{$baseUrl}/project-one/gate-approvals";
+        return app(TenantAppUrlResolver::class)->runForTenant($this->tenantId, function (): MailMessage {
+            $resolver = app(TenantAppUrlResolver::class);
+            $prefix = $resolver->subjectPrefix();
+            $brand = $resolver->mailBrandLabel();
 
-        $subject = match ($this->event) {
-            'submitted' => "[TowerOS] Gate approval requested — {$program?->rollout_ref}",
-            'step_approved' => "[TowerOS] Gate approval advanced — {$program?->rollout_ref}",
-            'approved' => "[TowerOS] Gate approved — {$program?->rollout_ref}",
-            'rejected' => "[TowerOS] Gate approval rejected — {$program?->rollout_ref}",
-            'escalated' => "[TowerOS] Gate approval escalation — {$program?->rollout_ref}",
-            default => "[TowerOS] Rollout gate update — {$program?->rollout_ref}",
-        };
+            $program = $this->request->rolloutProgram;
+            $phase = $this->request->timelinePhase;
 
-        $message = (new MailMessage())
-            ->mailer((string) config('toweros.gate_approval_mail_mailer', config('mail.default')))
-            ->subject($subject)
-            ->greeting('Rollout gate approval')
-            ->line("Rollout: **{$program?->rollout_ref}**")
-            ->line("Phase: **{$phase?->label}**")
-            ->line("Gate: **{$this->request->gate_label}**");
+            $inboxUrl = $resolver->urlForCurrentTenant('/project-one/gate-approvals');
+            $rolloutUrl = $program !== null
+                ? $resolver->urlForCurrentTenant("/project-one/rollouts/{$program->id}?tab=timeline")
+                : $inboxUrl;
 
-        if ($this->actorName !== null) {
-            $message->line("Action by: {$this->actorName}");
-        }
+            $subject = match ($this->event) {
+                'submitted' => "{$prefix} Gate approval requested — {$program?->rollout_ref}",
+                'step_approved' => "{$prefix} Gate approval advanced — {$program?->rollout_ref}",
+                'approved' => "{$prefix} Gate approved — {$program?->rollout_ref}",
+                'rejected' => "{$prefix} Gate approval rejected — {$program?->rollout_ref}",
+                'escalated' => "{$prefix} Gate approval escalation — {$program?->rollout_ref}",
+                default => "{$prefix} Rollout gate update — {$program?->rollout_ref}",
+            };
 
-        if ($this->event === 'rejected' && $this->request->rejection_notes) {
-            $message->line("Notes: {$this->request->rejection_notes}");
-        }
+            $message = (new MailMessage())
+                ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
+                ->subject($subject)
+                ->greeting("{$brand} — ".__('Rollout gate approval'))
+                ->line("Rollout: **{$program?->rollout_ref}**")
+                ->line("Phase: **{$phase?->label}**")
+                ->line("Gate: **{$this->request->gate_label}**");
 
-        if ($this->request->request_notes && in_array($this->event, ['submitted', 'step_approved'], true)) {
-            $message->line("Request notes: {$this->request->request_notes}");
-        }
-
-        if ($this->request->isOpen()) {
-            $role = $this->request->currentApproverRole();
-            if ($role !== null) {
-                $message->line("Pending approver role: **{$role}**");
+            if ($this->actorName !== null) {
+                $message->line("Action by: {$this->actorName}");
             }
-        }
 
-        if ($this->event === 'escalated') {
-            $message->line('This step has exceeded the configured escalation threshold. Please review promptly.');
-        }
+            if ($this->event === 'rejected' && $this->request->rejection_notes) {
+                $message->line("Notes: {$this->request->rejection_notes}");
+            }
 
-        return $message
-            ->action('Open rollout timeline', $rolloutUrl)
-            ->line('Review pending items in the gate approvals inbox.')
-            ->action('Gate approvals inbox', $inboxUrl);
+            if ($this->request->request_notes && in_array($this->event, ['submitted', 'step_approved'], true)) {
+                $message->line("Request notes: {$this->request->request_notes}");
+            }
+
+            if ($this->request->isOpen()) {
+                $role = $this->request->currentApproverRole();
+                if ($role !== null) {
+                    $message->line("Pending approver role: **{$role}**");
+                }
+            }
+
+            if ($this->event === 'escalated') {
+                $message->line('This step has exceeded the configured escalation threshold. Please review promptly.');
+            }
+
+            return $message
+                ->action('Open rollout timeline', $rolloutUrl)
+                ->line('Review pending items in the gate approvals inbox.')
+                ->action('Gate approvals inbox', $inboxUrl)
+                ->salutation(__('Regards,')."\n".$brand);
+        });
     }
 }

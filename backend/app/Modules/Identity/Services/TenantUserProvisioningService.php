@@ -6,16 +6,39 @@ namespace App\Modules\Identity\Services;
 
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class TenantUserProvisioningService
 {
-    public function findOrProvision(string $email, ?string $name = null): TenantUser
+    public function __construct(
+        private readonly TenantAuthPolicyService $authPolicy,
+    ) {}
+
+    /**
+     * Resolve an existing user for Microsoft SSO, optionally creating one when auto-provision is enabled.
+     */
+    public function findForSso(string $tenantId, string $email, ?string $name = null): TenantUser
     {
-        /** @var TenantUser|null $user */
-        $user = TenantUser::query()->where('email', $email)->first();
-        if ($user) {
+        $email = TenantUser::normalizeEmail($email);
+        $this->authPolicy->assertEmailDomainAllowed($tenantId, $email);
+
+        $user = TenantUser::findByEmail($email);
+        if ($user !== null) {
             return $user;
         }
+
+        if (! $this->authPolicy->shouldAutoProvisionSso($tenantId)) {
+            throw ValidationException::withMessages([
+                'email' => [__('Your account is not provisioned for this organization. Contact your administrator.')],
+            ]);
+        }
+
+        return $this->provision($email, $name);
+    }
+
+    private function provision(string $email, ?string $name): TenantUser
+    {
+        $email = TenantUser::normalizeEmail($email);
 
         /** @var TenantUser $provisioned */
         $provisioned = TenantUser::query()->create([
@@ -25,6 +48,7 @@ class TenantUserProvisioningService
             'password' => Str::password(32),
             'is_active' => true,
             'deactivated_at' => null,
+            'password_login_exempt' => false,
         ]);
 
         $defaultRole = env('TENANT_SSO_DEFAULT_ROLE', 'viewer');
@@ -33,4 +57,3 @@ class TenantUserProvisioningService
         return $provisioned;
     }
 }
-

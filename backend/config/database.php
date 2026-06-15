@@ -134,6 +134,25 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        /*
+        | Legacy standalone formbuilder MySQL (cutover import only).
+        | Configure LEGACY_FB_* in .env — see docs/modules/e-approval.md.
+        */
+        'legacy_formbuilder' => [
+            'driver' => 'mysql',
+            'host' => env('LEGACY_FB_HOST', '127.0.0.1'),
+            'port' => env('LEGACY_FB_PORT', '3306'),
+            'database' => env('LEGACY_FB_DATABASE', 'flow_architect'),
+            'username' => env('LEGACY_FB_USERNAME', 'root'),
+            'password' => env('LEGACY_FB_PASSWORD', ''),
+            'charset' => env('LEGACY_FB_CHARSET', 'utf8mb4'),
+            'collation' => env('LEGACY_FB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+        ],
+
     ],
 
     /*

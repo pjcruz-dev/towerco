@@ -16,6 +16,7 @@ Phase C adds a **platform custom phase catalog** so super admins can define reus
 | Playbooks UI | Custom phase catalog section on `/platform/playbooks` |
 | Rollout create | `RolloutProgramService::instantiateTimeline()` copies custom metadata to phase rows |
 | Rollout API | Timeline detail exposes `is_custom` and `counts_toward_sla` |
+| Tenant UI | Timeline shows **Custom** and **Off SLA** badges on phase rows |
 
 ---
 
@@ -90,6 +91,7 @@ php artisan migrate --force
 php artisan tenants:migrate --force
 php artisan test --filter=RolloutPolicyBundle
 php artisan test --filter=RolloutCustomPhase
+php artisan test --filter=RolloutCustomPhaseTimeline
 ```
 
 ---

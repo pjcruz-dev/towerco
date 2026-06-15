@@ -10,16 +10,30 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
 
 class TenantUserAdminService
 {
+    public function __construct(
+        private readonly TenantSeatLimitService $seatLimits,
+    ) {}
+
     /**
      * @param  list<string>  $roles
      * @return array{user: TenantUser, generated_password: string|null}
      */
     public function create(string $name, string $email, array $roles, ?string $password = null): array
     {
-        if (TenantUser::query()->where('email', $email)->exists()) {
+        $this->seatLimits->assertCanAddActiveUser($roles);
+
+        $email = TenantUser::normalizeEmail($email);
+        if ($email === '') {
+            throw ValidationException::withMessages([
+                'email' => [__('A valid email address is required.')],
+            ]);
+        }
+
+        if (TenantUser::emailExists($email)) {
             throw ValidationException::withMessages([
                 'email' => [__('A user with this email already exists.')],
             ]);
@@ -40,6 +54,7 @@ class TenantUserAdminService
         ]);
 
         $user->syncRoles($roles !== [] ? $roles : ['viewer']);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return [
             'user' => $user->fresh(['roles']),
@@ -56,13 +71,16 @@ class TenantUserAdminService
             $user->name = $name;
         }
 
-        if ($email !== null && $email !== $user->email) {
-            if (TenantUser::query()->where('email', $email)->where('id', '!=', $user->id)->exists()) {
-                throw ValidationException::withMessages([
-                    'email' => [__('A user with this email already exists.')],
-                ]);
+        if ($email !== null) {
+            $email = TenantUser::normalizeEmail($email);
+            if ($email !== TenantUser::normalizeEmail((string) $user->email)) {
+                if (TenantUser::emailExists($email, (string) $user->id)) {
+                    throw ValidationException::withMessages([
+                        'email' => [__('A user with this email already exists.')],
+                    ]);
+                }
+                $user->email = $email;
             }
-            $user->email = $email;
         }
 
         if (is_string($password) && $password !== '') {
@@ -74,6 +92,7 @@ class TenantUserAdminService
         if ($roles !== null) {
             $this->assertRolesExist($roles);
             $user->syncRoles($roles);
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
         }
 
         return $user->fresh(['roles']);
@@ -108,6 +127,9 @@ class TenantUserAdminService
         if ($target->isActive()) {
             return $target->fresh(['roles']);
         }
+
+        $target->loadMissing('roles');
+        $this->seatLimits->assertCanAddActiveUser($target->roles->pluck('name')->all());
 
         $target->is_active = true;
         $target->deactivated_at = null;
@@ -168,7 +190,7 @@ class TenantUserAdminService
 
         foreach ($rows as $index => $row) {
             $line = $index + 1;
-            $email = trim($row['email'] ?? '');
+            $email = TenantUser::normalizeEmail((string) ($row['email'] ?? ''));
             $name = trim($row['name'] ?? '');
 
             if ($email === '' || $name === '') {
@@ -176,8 +198,16 @@ class TenantUserAdminService
                 continue;
             }
 
-            if (TenantUser::query()->where('email', $email)->exists()) {
+            if (TenantUser::emailExists($email)) {
                 $skipped++;
+                continue;
+            }
+
+            if ($this->seatLimits->activeSeatCount() >= $this->seatLimits->seatLimit()) {
+                $errors[] = "Row {$line}: ".__(
+                    'Seat limit reached (:used / :limit).',
+                    ['used' => $this->seatLimits->activeSeatCount(), 'limit' => $this->seatLimits->seatLimit()],
+                );
                 continue;
             }
 

@@ -24,7 +24,7 @@ echo   7  Stop Docker           dev-stop.cmd
 echo   8  Help                  this screen
 echo.
 echo URLs ^(browser^)
-echo   Web         http://localhost:3001
+echo   Web         http://localhost
 echo   API         http://127.0.0.1:8000
 echo   phpMyAdmin  http://localhost:8080   MySQL web UI ^(root / toweros^)
 echo.
@@ -50,5 +50,5 @@ echo.
 echo Demo data (Alliance tenant)
 echo   cd backend ^&^& php artisan tenants:seed-demo --billing
 echo   Logins: admin/manager/project.lead/ops.viewer @alliance.localhost  password: password
-echo   URL: http://alliance.localhost:3001/login
+echo   URL: http://alliance.localhost/login
 echo.

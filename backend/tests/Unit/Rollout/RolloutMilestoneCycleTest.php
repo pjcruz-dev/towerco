@@ -244,6 +244,100 @@ final class RolloutMilestoneCycleTest extends TestCase
         $this->assertSame(85, $postSum);
     }
 
+    public function test_custom_timeline_phase_appears_in_milestone_presenter_with_day_one_anchor(): void
+    {
+        $snapshot = RolloutPlaybookV2Definition::payload();
+        $timeline = $snapshot['timeline_templates']['bts'];
+
+        foreach ($timeline as $index => $phase) {
+            if (($phase['phase_key'] ?? '') === 'moc_col') {
+                array_splice($timeline, $index, 0, [[
+                    'phase_key' => 'lgu_clearance',
+                    'label' => 'LGU Clearance',
+                    'owner_role' => 'saq',
+                    'anchor' => 'tssr_approved',
+                    'working_day_start' => 1,
+                    'working_day_end' => 4,
+                    'is_custom' => true,
+                    'counts_toward_sla' => true,
+                ]]);
+                break;
+            }
+        }
+
+        $snapshot['timeline_templates']['bts'] = $timeline;
+        $snapshot['milestone_derived_from_timeline'] = true;
+
+        TenantRolloutPlaybookConfig::query()->create([
+            'assigned_version' => '2.0.0',
+            'latest_platform_version' => '2.0.0',
+            'playbook_snapshot' => $snapshot,
+            'day_overrides' => [],
+            'assigned_at' => now(),
+        ]);
+
+        $program = RolloutProgram::query()->create([
+            'status' => 'tssr_mno_approval',
+            'project_type' => 'bts',
+            'mno' => 'globe',
+            'rollout_ref' => 'RP-MILESTONE-CUSTOM',
+            'endorsement_date' => '2026-04-01',
+            'tssr_approved_date' => '2026-04-28',
+            'sla_working_days' => 115,
+        ]);
+
+        $rows = app(RolloutMilestoneCyclePresenter::class)->forProgram($program);
+
+        $custom = collect($rows)->firstWhere('phase_key', 'lgu_clearance');
+        $this->assertNotNull($custom);
+        $this->assertTrue($custom['is_custom']);
+        $this->assertSame('day_one', $custom['anchor']);
+        $this->assertSame('lgu_clearance', $custom['timeline_phase_key']);
+        $this->assertSame(4, $custom['target_working_days']);
+
+        $moc = collect($rows)->firstWhere('phase_key', 'moc_securing');
+        $this->assertNotNull($moc);
+        $this->assertSame('day_one', $moc['anchor']);
+    }
+
+    public function test_rfi_recorded_does_not_mark_future_milestones_completed(): void
+    {
+        TenantRolloutPlaybookConfig::query()->create([
+            'assigned_version' => '2.0.0',
+            'latest_platform_version' => '2.0.0',
+            'playbook_snapshot' => RolloutPlaybookV2Definition::payload(),
+            'day_overrides' => [],
+            'assigned_at' => now(),
+        ]);
+
+        Carbon::setTestNow('2026-06-04');
+
+        $program = RolloutProgram::query()->create([
+            'status' => 'site_hunting',
+            'project_type' => 'bts',
+            'mno' => 'globe',
+            'rollout_ref' => 'RP-RFI-EARLY',
+            'endorsement_date' => '2026-04-01',
+            'tssr_approved_date' => null,
+            'actual_rfi_date' => '2026-06-04',
+            'sla_working_days' => 115,
+        ]);
+
+        $rows = app(RolloutMilestoneCyclePresenter::class)->forProgram($program);
+
+        $this->assertNotEmpty($rows);
+
+        $completedCount = collect($rows)->where('status', 'completed')->count();
+        $this->assertGreaterThan(0, $completedCount);
+        $this->assertLessThan(count($rows), $completedCount);
+
+        $billing = collect($rows)->firstWhere('phase_key', 'billing');
+        $this->assertNotNull($billing);
+        $this->assertContains($billing['status'], ['pending', 'active', 'at_risk']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_colocation_rollout_returns_three_milestone_rows(): void
     {
         TenantRolloutPlaybookConfig::query()->create([

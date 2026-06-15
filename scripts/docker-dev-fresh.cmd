@@ -26,6 +26,8 @@ echo   - Helper center operational acronyms (TowerOS defaults)
 
 echo   - Passport personal access client
 
+echo   - Optional dev tenant when TOWEROS_DEV_DEFAULT_TENANT_DOMAIN is set in backend/.env.docker
+
 echo.
 
 echo Custom policy bundles from the platform UI are NOT restored.
@@ -82,13 +84,10 @@ if errorlevel 1 exit /b 1
 
 
 
-echo [5/6] Running central migrations + seed (one-off, no API server yet)...
+echo [5/6] Installing Composer deps, then central migrate + seed (one-off, no API server yet)...
 
-docker compose --env-file .env.docker run --rm --no-deps --entrypoint php api artisan migrate --force --no-interaction
-
-if errorlevel 1 exit /b 1
-
-docker compose --env-file .env.docker run --rm --no-deps --entrypoint php api artisan db:seed --force --no-interaction
+REM down -v removes toweros-backend-vendor; bypassing entrypoint skips composer install — install before artisan.
+docker compose --env-file .env.docker run --rm --no-deps --entrypoint sh api -c "if [ ! -f .env ] && [ -f .env.docker ]; then cp .env.docker .env; fi && composer install --no-interaction --prefer-dist && php artisan migrate --force --no-interaction && php artisan db:seed --force --no-interaction"
 
 if errorlevel 1 exit /b 1
 
@@ -107,10 +106,12 @@ echo.
 echo Done.
 echo.
 echo IMPORTANT: Log in again after fresh reset (old browser tokens are invalid).
-echo   http://localhost:3001/platform/login
+echo   http://localhost/platform/login
 echo   Email:    superadmin@toweros.local
 echo   Password: 123123123
-echo   Create tenant: http://localhost:3001/platform/tenants/create
+echo   Create tenant: http://localhost/platform/tenants/create
+
+echo   Then open the tenant login URL shown on the success screen (any *.localhost hostname).
 
 echo.
 

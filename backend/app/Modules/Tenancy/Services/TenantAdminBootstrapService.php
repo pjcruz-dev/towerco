@@ -39,6 +39,7 @@ class TenantAdminBootstrapService
                 [
                     'name' => $name,
                     'password' => $plain,
+                    'password_login_exempt' => true,
                 ],
             );
 

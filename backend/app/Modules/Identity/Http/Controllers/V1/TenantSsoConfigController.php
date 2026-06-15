@@ -5,90 +5,79 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\Identity\Services\TenantSsoConfigService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
-class TenantSsoConfigController extends AbstractApiController
+final class TenantSsoConfigController extends AbstractApiController
 {
-    public function show(): JsonResponse
+    public function show(Request $request, TenantSsoConfigService $service): JsonResponse
     {
-        $config = DB::table('tenant_sso_configs')
-            ->where('tenant_id', (string) tenant('id'))
-            ->where('provider', 'azure')
-            ->first();
+        $this->authorizeTenantSettings($request);
 
-        if (! $config) {
-            return $this->ok(null);
-        }
+        $config = $service->findForTenant((string) tenant('id'), 'azure');
 
-        return $this->ok([
-            'id' => $config->id,
-            'provider' => $config->provider,
-            'issuer' => $config->issuer,
-            'client_id' => $config->client_id,
-            'tenant_identifier' => $config->tenant_identifier,
-            'group_mapping_rules' => json_decode((string) $config->group_mapping_rules, true),
-            'auto_provision_users' => (bool) $config->auto_provision_users,
-            'enabled' => (bool) $config->enabled,
-        ]);
+        return $this->ok($service->toAdminPayload($config));
     }
 
-    public function update(Request $request): JsonResponse
+    public function update(Request $request, TenantSsoConfigService $service): JsonResponse
     {
+        $this->authorizeTenantSettings($request);
+
         $data = $request->validate([
             'issuer' => ['nullable', 'string', 'max:255'],
             'client_id' => ['required', 'string', 'max:255'],
-            'client_secret' => ['required', 'string', 'max:2048'],
+            'client_secret' => ['nullable', 'string', 'max:2048'],
             'tenant_identifier' => ['nullable', 'string', 'max:255'],
             'group_mapping_rules' => ['nullable', 'array'],
+            'allowed_email_domains' => ['nullable', 'array'],
+            'allowed_email_domains.*' => ['string', 'max:253'],
             'auto_provision_users' => ['boolean'],
+            'disable_password_login_when_enabled' => ['boolean'],
             'enabled' => ['boolean'],
         ]);
 
-        $tenantId = (string) tenant('id');
-        $existing = DB::table('tenant_sso_configs')
-            ->where('tenant_id', $tenantId)
-            ->where('provider', 'azure')
-            ->first();
+        $service->upsert((string) tenant('id'), $data);
 
-        $payload = [
-            'tenant_id' => $tenantId,
-            'provider' => 'azure',
-            'issuer' => $data['issuer'] ?? null,
-            'client_id' => $data['client_id'],
-            'client_secret_encrypted' => encrypt($data['client_secret']),
-            'tenant_identifier' => $data['tenant_identifier'] ?? 'common',
-            'group_mapping_rules' => json_encode($data['group_mapping_rules'] ?? []),
-            'auto_provision_users' => (bool) ($data['auto_provision_users'] ?? true),
-            'enabled' => (bool) ($data['enabled'] ?? false),
-            'updated_at' => now(),
-        ];
+        $config = $service->findForTenant((string) tenant('id'), 'azure');
 
-        if ($existing) {
-            DB::table('tenant_sso_configs')->where('id', $existing->id)->update($payload);
-        } else {
-            DB::table('tenant_sso_configs')->insert($payload + [
-                'id' => (string) Str::uuid(),
-                'created_at' => now(),
+        return $this->ok([
+            'message' => __('Microsoft sign-in settings saved.'),
+            'config' => $service->toAdminPayload($config),
+        ]);
+    }
+
+    public function testConnection(Request $request, TenantSsoConfigService $service): JsonResponse
+    {
+        $this->authorizeTenantSettings($request);
+
+        $data = $request->validate([
+            'client_id' => ['required', 'string', 'max:255'],
+            'tenant_identifier' => ['required', 'string', 'max:255'],
+        ]);
+
+        $existing = $service->findForTenant((string) tenant('id'), 'azure');
+        $hasSecret = ! empty($request->input('client_secret'))
+            || ($existing !== null && trim((string) $existing->client_secret_encrypted) !== '');
+
+        if (! $hasSecret) {
+            return $this->ok([
+                'ok' => false,
+                'message' => __('Save a client secret before testing the connection.'),
             ]);
         }
 
-        return $this->ok(['message' => __('SSO configuration updated.')]);
-    }
-
-    public function testConnection(Request $request): JsonResponse
-    {
-        $request->validate([
-            'client_id' => ['required', 'string'],
-            'tenant_identifier' => ['required', 'string'],
-        ]);
-
         return $this->ok([
             'ok' => true,
-            'message' => __('Connection settings look valid.'),
+            'message' => __('Application (client) ID and directory (tenant) ID are set. Register the redirect URI in Azure, then enable sign-in.'),
+            'redirect_uri' => $service->redirectUri(),
+            'client_id' => $data['client_id'],
+            'tenant_identifier' => $data['tenant_identifier'],
         ]);
     }
-}
 
+    private function authorizeTenantSettings(Request $request): void
+    {
+        abort_unless($request->user()?->can('tenant:manage'), 403);
+    }
+}

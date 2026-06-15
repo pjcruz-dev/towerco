@@ -1,0 +1,103 @@
+{
+  "format": "atc-form-export",
+  "formatVersion": 1,
+  "exportedAt": "2026-06-03T00:00:00.000Z",
+  "form": {
+    "name": "Document Approval",
+    "description": "Multi-level document approval with title and PDF attachments.",
+    "category": "general",
+    "metadata_json": {},
+    "restricted_to": null,
+    "status": "draft",
+    "schema_version": 1,
+    "owner_code": "DA",
+    "doc_type_code": "F",
+    "doc_no_custom_enabled": true,
+    "doc_no_template": "ATC-{ownerCode}-{docTypeCode}-{seq:3}",
+    "doc_no_seq_start": null,
+    "doc_no_seq_start_rules": null,
+    "brand_logo_url": null,
+    "brand_primary_color": null,
+    "related_form_ids": [],
+    "fields": [
+      {
+        "type": "text",
+        "name": "title",
+        "label": "Title",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 12 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 0
+      },
+      {
+        "type": "approver",
+        "name": "approver_1",
+        "label": "Approver 1",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 4 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 1
+      },
+      {
+        "type": "approver",
+        "name": "approver_2",
+        "label": "Approver 2",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 4 },
+          "required": false
+        },
+        "options": [],
+        "step_order": 2
+      },
+      {
+        "type": "approver",
+        "name": "approver_3",
+        "label": "Approver 3",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 4 },
+          "required": false
+        },
+        "options": [],
+        "step_order": 3
+      },
+      {
+        "type": "file",
+        "name": "attachments",
+        "label": "Attachments",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 12 },
+          "maxFiles": 10,
+          "required": true,
+          "maxFileSizeMb": 20,
+          "allowedFileTypes": ["pdf"]
+        },
+        "options": [],
+        "step_order": 4
+      }
+    ],
+    "steps": [
+      { "type": "field", "approverId": "approver_1", "condition": null, "step_order": 1 },
+      { "type": "field", "approverId": "approver_2", "condition": null, "step_order": 2 },
+      { "type": "field", "approverId": "approver_3", "condition": null, "step_order": 3 }
+    ]
+  }
+}

@@ -124,7 +124,7 @@ Application secrets remain in AWS Secrets Manager per environment.
 |---------|-------------------|-----|
 | Database | Docker MySQL 3307 | Aurora MySQL |
 | Cache/queue | Optional Redis | ElastiCache / SQS |
-| Web port | 3001 | 443 via ALB |
+| Web port | 80 (`http://localhost`) | 443 via ALB |
 | Tenancy | `*.localhost` | `*.toweros.app` |
 
 ## Phase 1 deliverables checklist

@@ -6,6 +6,7 @@ namespace App\Modules\Identity\Services;
 
 use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -15,23 +16,44 @@ class MfaService
     public function __construct(private readonly TotpService $totpService) {}
 
     /**
-     * Global gate (env) plus per-tenant policy (central `tenants.mfa_required`).
+     * Global gate (config) plus per-tenant policy (central `tenants.mfa_required`).
      */
     public function isTenantMfaPolicyActive(): bool
     {
-        if (! (bool) env('TENANT_MFA_REQUIRED', true)) {
+        if (! (bool) config('toweros.tenant_mfa.global_required', false)) {
             return false;
         }
 
         $tenantKey = tenant()?->getTenantKey();
         if ($tenantKey === null) {
-            return true;
+            return false;
         }
 
-        /** @var Tenant|null $record */
-        $record = Tenant::query()->find((string) $tenantKey);
+        return $this->tenantRequiresMfa((string) $tenantKey);
+    }
 
-        return (bool) ($record?->mfa_required ?? true);
+    public function forgetTenantPolicyCache(string $tenantId): void
+    {
+        Cache::forget($this->tenantPolicyCacheKey($tenantId));
+    }
+
+    private function tenantRequiresMfa(string $tenantId): bool
+    {
+        return (bool) Cache::remember(
+            $this->tenantPolicyCacheKey($tenantId),
+            300,
+            static function () use ($tenantId): bool {
+                /** @var Tenant|null $record */
+                $record = Tenant::query()->find($tenantId);
+
+                return (bool) ($record?->mfa_required ?? false);
+            },
+        );
+    }
+
+    private function tenantPolicyCacheKey(string $tenantId): string
+    {
+        return 'toweros:tenant:mfa_required:'.$tenantId;
     }
 
     public function isMfaRequired(TenantUser $user): bool

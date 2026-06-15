@@ -1,0 +1,136 @@
+{
+  "format": "atc-form-export",
+  "formatVersion": 1,
+  "exportedAt": "2026-06-03T00:00:00.000Z",
+  "form": {
+    "name": "Payment Request",
+    "description": "Request payment approval with payee, amount, and manager sign-off.",
+    "category": "finance",
+    "metadata_json": {},
+    "restricted_to": null,
+    "status": "draft",
+    "schema_version": 1,
+    "owner_code": "GEN",
+    "doc_type_code": "F",
+    "doc_no_custom_enabled": false,
+    "doc_no_template": null,
+    "doc_no_seq_start": null,
+    "doc_no_seq_start_rules": null,
+    "brand_logo_url": null,
+    "brand_primary_color": null,
+    "related_form_ids": [],
+    "fields": [
+      {
+        "type": "text",
+        "name": "payee",
+        "label": "Payee",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 0
+      },
+      {
+        "type": "text",
+        "name": "amount",
+        "label": "Amount",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 1
+      },
+      {
+        "type": "select",
+        "name": "currency",
+        "label": "Currency",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 4 },
+          "required": true
+        },
+        "options": ["PHP|PHP", "USD|USD"],
+        "step_order": 2
+      },
+      {
+        "type": "select",
+        "name": "department",
+        "label": "Department",
+        "semantic_type": "department",
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 8 },
+          "required": true
+        },
+        "options": [
+          "Financial Accounting Department|FAD",
+          "Human Resource Department|HRD",
+          "Operation and Maintenance|OMD",
+          "Project Management Office|PMO"
+        ],
+        "step_order": 3
+      },
+      {
+        "type": "text",
+        "name": "purpose",
+        "label": "Purpose / description",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 12 },
+          "required": true,
+          "min": 10
+        },
+        "options": [],
+        "step_order": 4
+      },
+      {
+        "type": "approver",
+        "name": "finance_approver",
+        "label": "Finance approver",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 5
+      },
+      {
+        "type": "file",
+        "name": "attachments",
+        "label": "Supporting documents",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 12 },
+          "required": false,
+          "maxFiles": 5,
+          "maxFileSizeMb": 20,
+          "allowedFileTypes": ["pdf", "image"]
+        },
+        "options": [],
+        "step_order": 6
+      }
+    ],
+    "steps": [
+      { "type": "manager", "approverId": null, "condition": null, "step_order": 1 },
+      { "type": "field", "approverId": "finance_approver", "condition": null, "step_order": 2 }
+    ]
+  }
+}

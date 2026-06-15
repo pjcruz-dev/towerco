@@ -19,7 +19,7 @@ use Spatie\Permission\Traits\HasRoles;
 /**
  * End-user identity inside a tenant database (TowerCo staff, field users).
  */
-#[Fillable(['name', 'email', 'password', 'is_active', 'deactivated_at'])]
+#[Fillable(['name', 'email', 'password', 'is_active', 'deactivated_at', 'password_login_exempt'])]
 #[Hidden(['password', 'remember_token'])]
 class TenantUser extends Authenticatable
 {
@@ -58,6 +58,7 @@ class TenantUser extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'password_login_exempt' => 'boolean',
             'deactivated_at' => 'datetime',
         ];
     }
@@ -65,6 +66,41 @@ class TenantUser extends Authenticatable
     public function isActive(): bool
     {
         return (bool) $this->is_active;
+    }
+
+    public static function normalizeEmail(string $email): string
+    {
+        return strtolower(trim($email));
+    }
+
+    public static function findByEmail(string $email): ?self
+    {
+        $normalized = self::normalizeEmail($email);
+        if ($normalized === '') {
+            return null;
+        }
+
+        /** @var self|null $user */
+        $user = self::query()
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->first();
+
+        return $user;
+    }
+
+    public static function emailExists(string $email, ?string $exceptUserId = null): bool
+    {
+        $normalized = self::normalizeEmail($email);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $query = self::query()->whereRaw('LOWER(email) = ?', [$normalized]);
+        if ($exceptUserId !== null && $exceptUserId !== '') {
+            $query->where('id', '!=', $exceptUserId);
+        }
+
+        return $query->exists();
     }
 
     public function getActivitylogOptions(): LogOptions

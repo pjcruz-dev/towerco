@@ -1,3 +1,4 @@
+# TowerOS local/production stack only. Legacy formbuilder: legacy/atcformbuiilder/ (not a service here).
 name: toweros
 
 services:
@@ -48,14 +49,30 @@ services:
       mysql:
         condition: service_healthy
 
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    container_name: toweros-soketi
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_SOKETI_PORT:-6001}:6001"
+    environment:
+      SOKETI_DEBUG: "1"
+      SOKETI_DEFAULT_APP_ID: toweros-local
+      SOKETI_DEFAULT_APP_KEY: toweros-local
+      SOKETI_DEFAULT_APP_SECRET: toweros-local-secret
+      SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
+
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Bind-mounted script so entrypoint fixes apply without image rebuild.
+    entrypoint: ["/bin/sh", "/var/www/html/docker/entrypoint.sh"]
     container_name: toweros-api
     restart: unless-stopped
     ports:
       - "${TOWEROS_API_PORT:-8000}:8000"
+    # Non-secret defaults only — do not set APP_KEY here (empty APP_KEY overrides backend/.env and breaks encrypted SSO secrets).
     env_file:
       - ./backend/.env.docker
     environment:
@@ -73,6 +90,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      soketi:
+        condition: service_started
 
   web:
     build:
@@ -81,7 +100,7 @@ services:
     container_name: toweros-web
     restart: unless-stopped
     ports:
-      - "${TOWEROS_WEB_PORT:-3001}:3001"
+      - "${TOWEROS_WEB_PORT:-80}:80"
     env_file:
       - ./frontend/.env.docker
     volumes:

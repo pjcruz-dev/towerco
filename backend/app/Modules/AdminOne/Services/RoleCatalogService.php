@@ -7,6 +7,7 @@ namespace App\Modules\AdminOne\Services;
 use App\Modules\AdminOne\Models\TenantPermission;
 use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
@@ -18,46 +19,53 @@ class RoleCatalogService
 
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,
+        private readonly TenantRbacPermissionCatalog $permissionCatalog,
     ) {}
 
     public function ensureBaseline(): void
     {
-        $this->rbacBaseline->ensure();
+        $this->rbacBaseline->ensurePermissionsRegistered();
     }
 
     /**
-     * @return array{roles: list<array<string, mixed>>, permissions: list<string>}
+     * @return array{
+     *     roles: list<array<string, mixed>>,
+     *     permissions: list<string>,
+     *     permission_groups: array<string, array{label: string, permissions: list<string>}>,
+     *     enabled_modules: list<string>
+     * }
      */
     public function catalog(): array
     {
         $this->ensureBaseline();
+
+        $enabled = $this->permissionCatalog->enabledPermissions();
 
         $roles = TenantRole::query()
             ->where('guard_name', 'sanctum')
             ->with('permissions:id,name')
             ->orderBy('name')
             ->get()
-            ->map(static function (TenantRole $role): array {
+            ->map(static function (TenantRole $role) use ($enabled): array {
                 return [
                     'id' => $role->id,
                     'name' => $role->name,
                     'is_baseline' => in_array($role->name, self::BASELINE_ROLES, true),
-                    'permissions' => $role->permissions->pluck('name')->values()->all(),
+                    'permissions' => $role->permissions
+                        ->pluck('name')
+                        ->filter(static fn (string $name): bool => in_array($name, $enabled, true))
+                        ->values()
+                        ->all(),
                 ];
             })
             ->values()
             ->all();
 
-        $permissions = TenantPermission::query()
-            ->where('guard_name', 'sanctum')
-            ->orderBy('name')
-            ->pluck('name')
-            ->values()
-            ->all();
-
         return [
             'roles' => $roles,
-            'permissions' => $permissions,
+            'permissions' => $enabled,
+            'permission_groups' => $this->permissionCatalog->permissionGroupsForApi(),
+            'enabled_modules' => $this->permissionCatalog->enabledModules(),
         ];
     }
 
@@ -118,6 +126,12 @@ class RoleCatalogService
     private function assertPermissionsExist(array $permissions): void
     {
         foreach ($permissions as $permission) {
+            if (! $this->permissionCatalog->isEnabled($permission)) {
+                throw ValidationException::withMessages([
+                    'permissions' => [__('Permission :permission is not available for this tenant.', ['permission' => $permission])],
+                ]);
+            }
+
             if (! TenantPermission::query()->where('name', $permission)->where('guard_name', 'sanctum')->exists()) {
                 throw ValidationException::withMessages([
                     'permissions' => [__('Permission :permission does not exist.', ['permission' => $permission])],

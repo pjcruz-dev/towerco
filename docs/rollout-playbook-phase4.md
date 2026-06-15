@@ -46,7 +46,7 @@ Exercises list, create, delete, and PH seed endpoints with in-memory SQLite tena
 
 ## Verify locally
 
-1. **Holidays page** — `http://alliance.localhost:3001/project-one/public-holidays`
+1. **Holidays page** — `http://alliance.localhost/project-one/public-holidays`
 2. **Platform directory** — assigned playbook + upgrade badge on `/platform`
 3. **Create tenant** — `/platform/tenants/create` with slug/metadata fields
 

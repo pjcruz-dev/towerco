@@ -4,7 +4,7 @@ Manual QA script for production sign-off after Phases 7–14. Run once per relea
 
 **Tenant:** `alliance.localhost`  
 **Login:** `admin@alliance.localhost` / `password`  
-**Frontend:** `http://alliance.localhost:3001` (or your local port)  
+**Frontend:** `http://alliance.localhost`  
 **API:** `http://localhost:8000/api/v1` (with `X-Tenant-Domain: alliance.localhost` if SPA is on central host)
 
 ---

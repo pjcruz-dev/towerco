@@ -10,6 +10,9 @@ use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Identity\Services\TenantAuthPolicyService;
+use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Support\TenantImpersonationContextResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +26,7 @@ class TenantAuthController extends AbstractApiController
         private readonly RefreshTokenService $refreshTokenService,
         private readonly MfaService $mfaService,
         private readonly AuthAuditService $auditService,
+        private readonly TenantAuthPolicyService $authPolicy,
     ) {}
 
     public function login(Request $request): JsonResponse
@@ -33,8 +37,11 @@ class TenantAuthController extends AbstractApiController
             'password' => ['required', 'string', 'min:8'],
         ]);
 
-        /** @var TenantUser|null $user */
-        $user = TenantUser::query()->where('email', $credentials['email'])->first();
+        $tenantId = (string) tenant('id');
+        $email = TenantUser::normalizeEmail($credentials['email']);
+        $this->authPolicy->assertEmailDomainAllowed($tenantId, $email);
+
+        $user = TenantUser::findByEmail($email);
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             $this->auditService->log('auth.login.failed', $user?->id, null, [
@@ -54,6 +61,8 @@ class TenantAuthController extends AbstractApiController
                 'email' => [__('This account has been deactivated. Contact your administrator.')],
             ]);
         }
+
+        $this->authPolicy->assertPasswordLoginAllowed($user, $tenantId);
 
         $sessionId = $this->sessionService->start((string) $user->id, 'local');
         $accessToken = $this->issueAccessToken($user, $sessionId);
@@ -109,13 +118,19 @@ class TenantAuthController extends AbstractApiController
         ]);
     }
 
-    public function me(Request $request): JsonResponse
+    public function me(Request $request, TenantImpersonationContextResolver $impersonationResolver): JsonResponse
     {
         /** @var TenantUser|null $user */
         $user = $request->user();
         assert($user instanceof TenantUser);
 
-        return $this->ok($this->authUserPayload($user));
+        $impersonation = $impersonationResolver->fromRequest($request);
+
+        return $this->ok($this->authUserPayload(
+            $user,
+            $impersonation?->tenantImpersonator,
+            $impersonation?->platformImpersonator,
+        ));
     }
 
     public function logout(Request $request): JsonResponse
@@ -327,27 +342,15 @@ class TenantAuthController extends AbstractApiController
     /**
      * @return array<string, mixed>
      */
-    private function authUserPayload(TenantUser $user): array
-    {
-        $roles = $user->getRoleNames()->values()->all();
-        $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
-
-        return [
-            'id' => $user->getKey(),
-            'name' => $user->name,
-            'email' => $user->email,
-            'tenant_id' => (string) tenant('id'),
-            'roles' => $roles,
-            'permissions' => $permissions,
-            'tenant_accesses' => [
-                [
-                    'tenant_id' => (string) tenant('id'),
-                    'tenant_name' => (string) tenant('id'),
-                    'roles' => $roles,
-                    'permissions' => $permissions,
-                ],
-            ],
-        ];
+    /**
+     * @param  array{id: string, name: string, email: string, source?: string}|null  $platformImpersonator
+     */
+    private function authUserPayload(
+        TenantUser $user,
+        ?TenantUser $impersonator = null,
+        ?array $platformImpersonator = null,
+    ): array {
+        return app(TenantAuthUserPayloadBuilder::class)->build($user, $impersonator, $platformImpersonator);
     }
 }
 

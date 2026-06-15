@@ -1,0 +1,163 @@
+{
+  "format": "atc-form-export",
+  "formatVersion": 1,
+  "exportedAt": "2026-06-03T00:00:00.000Z",
+  "form": {
+    "name": "ISO Approval",
+    "description": "ISO document control: type, department, head approval, and two additional reviewers.",
+    "category": "general",
+    "metadata_json": {},
+    "restricted_to": null,
+    "status": "draft",
+    "schema_version": 1,
+    "owner_code": "GEN",
+    "doc_type_code": "F",
+    "doc_no_custom_enabled": true,
+    "doc_no_template": "ATC-{department}--{documentType}-{seq:3}",
+    "doc_no_seq_start": null,
+    "doc_no_seq_start_rules": null,
+    "brand_logo_url": null,
+    "brand_primary_color": null,
+    "related_form_ids": [],
+    "fields": [
+      {
+        "type": "text",
+        "name": "title",
+        "label": "Title",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "min": 2,
+          "_layout": { "layoutSpan": 12 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 0
+      },
+      {
+        "type": "select",
+        "name": "document_type",
+        "label": "Document type",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [
+          "Manual|M",
+          "Policies and Procedures|P",
+          "Guidelines|G",
+          "Work Instructions|W",
+          "Support Documents|S",
+          "Forms|F"
+        ],
+        "step_order": 1
+      },
+      {
+        "type": "select",
+        "name": "department",
+        "label": "Department",
+        "semantic_type": "department",
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [
+          "Quality Management System|QMS",
+          "Occupational Health and Safety Management System|OHS",
+          "Operation and Maintenance|OMD",
+          "Supply Chain Management|SCM",
+          "Human Resource Department|HRD",
+          "Financial Accounting Department|FAD",
+          "Business Development Department|BDD",
+          "Project Implementation Department|PID",
+          "Project Management Office|PMO",
+          "Engineering & Design Department|EDD",
+          "Technology and Quality Governance Office|TQGO"
+        ],
+        "step_order": 2
+      },
+      {
+        "type": "date",
+        "name": "effective_date",
+        "label": "Effective date",
+        "semantic_type": "date",
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": false
+        },
+        "options": [],
+        "step_order": 3
+      },
+      {
+        "type": "approver",
+        "name": "head_approval",
+        "label": "Head approval",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 4
+      },
+      {
+        "type": "approver",
+        "name": "iso_reviewer_2",
+        "label": "ISO reviewer 2",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": true
+        },
+        "options": [],
+        "step_order": 5
+      },
+      {
+        "type": "approver",
+        "name": "iso_reviewer_3",
+        "label": "ISO reviewer 3",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 6 },
+          "required": false
+        },
+        "options": [],
+        "step_order": 6
+      },
+      {
+        "type": "file",
+        "name": "attachments",
+        "label": "Attachments",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "_layout": { "layoutSpan": 12 },
+          "required": true,
+          "maxFileSizeMb": 25
+        },
+        "options": [],
+        "step_order": 7
+      }
+    ],
+    "steps": [
+      { "type": "field", "approverId": "head_approval", "condition": null, "step_order": 1 },
+      { "type": "field", "approverId": "iso_reviewer_2", "condition": null, "step_order": 2 },
+      { "type": "field", "approverId": "iso_reviewer_3", "condition": null, "step_order": 3 }
+    ]
+  }
+}

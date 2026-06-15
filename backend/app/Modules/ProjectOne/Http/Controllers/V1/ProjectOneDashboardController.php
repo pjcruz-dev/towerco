@@ -29,10 +29,23 @@ class ProjectOneDashboardController extends AbstractApiController
                 $payload = array_merge($payload, $this->mergeRolloutMetrics($payload, $rollout));
             }
 
-            $payload['map_pins'] = $mapData->buildPins();
+            if ($this->shouldIncludeMap($request)) {
+                $payload['map_pins'] = $mapData->buildPins();
+            }
         }
 
         return $this->ok($payload);
+    }
+
+    private function shouldIncludeMap(Request $request): bool
+    {
+        if ($request->boolean('with_map')) {
+            return true;
+        }
+
+        $include = array_filter(array_map('trim', explode(',', (string) $request->query('include', ''))));
+
+        return in_array('map', $include, true);
     }
 
     /**

@@ -1,2 +1,8 @@
 node_modules/
 .env.docker
+
+# Legacy reference app (not part of TowerOS deploy)
+legacy/atcformbuiilder/node_modules/
+legacy/atcformbuiilder/.next/
+legacy/atcformbuiilder/dist/
+legacy/atcformbuiilder/coverage/

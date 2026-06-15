@@ -18,7 +18,7 @@ use Stancl\Tenancy\Database\Concerns\CentralConnection;
  * Central (landlord) operators: billing, tenant lifecycle, platform administration.
  * Authenticated via Passport on central domains; never stored in tenant databases.
  */
-#[Fillable(['name', 'email', 'password', 'is_platform_admin'])]
+#[Fillable(['name', 'email', 'password', 'is_platform_admin', 'platform_role'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -45,5 +45,25 @@ class User extends Authenticatable
     public function isPlatformAdmin(): bool
     {
         return (bool) $this->is_platform_admin;
+    }
+
+    public function resolvePlatformRole(): string
+    {
+        return app(\App\Modules\Platform\Support\PlatformRoleCatalog::class)
+            ->normalizeRole($this->platform_role);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function platformPermissions(): array
+    {
+        return app(\App\Modules\Platform\Support\PlatformRoleCatalog::class)
+            ->permissionsForRole($this->resolvePlatformRole());
+    }
+
+    public function hasPlatformPermission(string $permission): bool
+    {
+        return in_array($permission, $this->platformPermissions(), true);
     }
 }

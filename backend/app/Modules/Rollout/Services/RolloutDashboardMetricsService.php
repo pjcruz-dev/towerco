@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Rollout\Services;
 
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\ProjectOne\Models\Project;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\RolloutTimelinePhase;
-use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
-use Carbon\Carbon;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use Illuminate\Support\Facades\Schema;
 
 final class RolloutDashboardMetricsService
 {
     public function __construct(
-        private readonly TenantWorkingDaysCalendarFactory $calendarFactory,
+        private readonly RolloutSlaAtRiskService $slaAtRisk,
         private readonly RolloutGateApprovalService $gateApprovals,
     ) {}
 
@@ -27,8 +27,21 @@ final class RolloutDashboardMetricsService
             return null;
         }
 
-        $today = Carbon::today();
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+        $userId = $viewer?->id ?? 'guest';
 
+        return TenantScopedCache::remember(
+            "project_one:rollout_dashboard:{$tenantId}:{$userId}",
+            30,
+            fn (): array => $this->buildUncached($viewer),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(?TenantUser $viewer): array
+    {
         $activeRollouts = RolloutProgram::query()
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->count();
@@ -38,24 +51,7 @@ final class RolloutDashboardMetricsService
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->count();
 
-        $slaAtRisk = RolloutProgram::query()
-            ->whereNotNull('target_rfi_working_date')
-            ->whereNull('actual_rfi_date')
-            ->whereNotIn('status', ['completed', 'cancelled'])
-            ->get()
-            ->filter(function (RolloutProgram $program) use ($today): bool {
-                $target = $program->target_rfi_working_date;
-                if ($target === null) {
-                    return false;
-                }
-
-                $remaining = $this->calendarFactory
-                    ->make($program->region)
-                    ->workingDaysBetween($today, Carbon::parse($target));
-
-                return $remaining <= 10;
-            })
-            ->count();
+        $slaAtRisk = $this->slaAtRisk->count();
 
         $recentRollouts = RolloutProgram::query()
             ->orderByDesc('updated_at')
@@ -113,6 +109,7 @@ final class RolloutDashboardMetricsService
     private function openSaqProgramsCount(): int
     {
         return RolloutProgram::query()
+            ->select(['id'])
             ->whereNotIn('status', ['completed', 'cancelled', 'batch'])
             ->whereNull('parent_rollout_id')
             ->where('status', 'saq')
@@ -127,26 +124,30 @@ final class RolloutDashboardMetricsService
      */
     private function activeRolloutsByProject(): array
     {
-        return RolloutProgram::query()
+        $rows = RolloutProgram::query()
             ->selectRaw('project_id, COUNT(*) as active_rollouts')
             ->whereNotIn('status', ['completed', 'cancelled', 'batch'])
             ->whereNull('parent_rollout_id')
             ->groupBy('project_id')
             ->orderByDesc('active_rollouts')
             ->limit(8)
-            ->get()
-            ->map(function ($row) {
-                $project = $row->project_id
-                    ? \App\Modules\ProjectOne\Models\Project::query()->find($row->project_id)
-                    : null;
+            ->get();
 
-                return [
-                    'project_id' => $row->project_id,
-                    'project_name' => $project?->name ?? 'Unassigned',
-                    'active_rollouts' => (int) $row->active_rollouts,
-                ];
-            })
-            ->values()
-            ->all();
+        $projectIds = $rows->pluck('project_id')->filter()->unique()->values()->all();
+        $projectNames = $projectIds === [] || ! Schema::connection('tenant')->hasTable('projects')
+            ? collect()
+            : Project::query()->whereIn('id', $projectIds)->pluck('name', 'id');
+
+        return $rows->map(static function ($row) use ($projectNames): array {
+            $projectId = $row->project_id;
+
+            return [
+                'project_id' => $projectId,
+                'project_name' => $projectId !== null
+                    ? (string) ($projectNames[(string) $projectId] ?? 'Unassigned')
+                    : 'Unassigned',
+                'active_rollouts' => (int) $row->active_rollouts,
+            ];
+        })->values()->all();
     }
 }

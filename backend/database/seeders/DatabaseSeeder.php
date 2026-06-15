@@ -37,6 +37,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'Platform Super Administrator',
                 'password' => $password,
                 'is_platform_admin' => true,
+                'platform_role' => 'superadmin',
             ],
         );
 
@@ -50,6 +51,8 @@ class DatabaseSeeder extends Seeder
         $policyBundles->ensureFullGateApprovalPublishedBundle($playbookV2);
 
         app(OperationalAcronymService::class)->syncDefaults(OperationalAcronymDefaults::all());
+
+        $this->call(DevDefaultTenantSeeder::class);
     }
 
     private function ensurePassportPersonalAccessClient(): void

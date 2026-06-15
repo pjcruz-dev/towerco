@@ -168,7 +168,7 @@ Base unit **4px**. Align with Tailwind default scale.
 
 **Right:** tenant context, notifications, help, **theme toggle**, user menu (avatar + name + role).
 
-**Breadcrumbs:** below header on deep pages (14px secondary) — Module / Feature / Current.
+**Breadcrumbs:** inline in header left (14px secondary, truncate on mobile) — Module / Feature / Current. Deep record pages may override the last segment with the record label (e.g. document number).
 
 ---
 

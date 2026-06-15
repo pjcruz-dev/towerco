@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Models\Tenant;
+use App\Modules\Billing\Services\TenantRfiMeterService;
 use App\Modules\ProjectOne\Models\Project;
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
@@ -23,6 +25,7 @@ final class RolloutProgramService
         private readonly TcoSiteIdGenerator $tcoSiteIdGenerator,
         private readonly RolloutSlaRecalculationService $slaRecalculation,
         private readonly RolloutAuditLogger $audit,
+        private readonly TenantRfiMeterService $rfiMeter,
     ) {}
 
     /**
@@ -298,10 +301,19 @@ final class RolloutProgramService
             ->make($program->region)
             ->workingDaysBetween($deliveryStart, $actualRfiDate);
 
+        $central = $this->resolveCentralTenant();
+        if ($central instanceof Tenant) {
+            $this->rfiMeter->assertCanRecordRfi($central, $program, $actualRfiDate);
+        }
+
         $program->actual_rfi_date = $actualRfiDate->toDateString();
         $program->sla_variance_working_days = $elapsedWorkingDays - $program->sla_working_days;
         $program->status = 'completed';
         $program->save();
+
+        if ($central instanceof Tenant) {
+            $this->rfiMeter->recordCompletion($central, $program->fresh(), $actualRfiDate);
+        }
 
         $updated = $program->fresh(['timelinePhases']);
 
@@ -619,5 +631,18 @@ final class RolloutProgramService
                 'rollout' => [__('This rollout cannot be edited.')],
             ]);
         }
+    }
+
+    private function resolveCentralTenant(): ?Tenant
+    {
+        $tenantKey = tenant()?->getTenantKey();
+        if ($tenantKey === null || $tenantKey === '') {
+            return null;
+        }
+
+        /** @var Tenant|null $central */
+        $central = Tenant::query()->find((string) $tenantKey);
+
+        return $central;
     }
 }

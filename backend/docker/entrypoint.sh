@@ -3,7 +3,8 @@ set -e
 
 cd /var/www/html
 
-if [ "${TOWEROS_DOCKER:-0}" = "1" ] && [ -f .env.docker ]; then
+# Seed .env once; do not overwrite on every start (would rotate APP_KEY and break encrypted SSO secrets).
+if [ "${TOWEROS_DOCKER:-0}" = "1" ] && [ -f .env.docker ] && [ ! -f .env ]; then
   cp .env.docker .env
 fi
 
@@ -33,7 +34,37 @@ wait_for_mysql() {
 
 wait_for_mysql
 
-php artisan key:generate --no-interaction 2>/dev/null || true
+# APP_KEY must be `APP_KEY=base64:...` in backend/.env (bind-mounted). Bare `APP_KEY` or empty breaks encryption.
+ensure_app_key() {
+  # Docker may inject APP_KEY= (empty) from an old container create; that blocks .env and key:generate.
+  unset APP_KEY
+
+  if [ ! -f .env ]; then
+    echo "[api] Error: backend/.env missing. Copy backend/.env.docker to backend/.env on the host, then restart."
+    exit 1
+  fi
+
+  if grep -qE '^APP_KEY=base64:' .env 2>/dev/null; then
+    APP_KEY_FROM_FILE=$(grep -E '^APP_KEY=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
+    export APP_KEY="$APP_KEY_FROM_FILE"
+    return 0
+  fi
+
+  echo "[api] APP_KEY missing or invalid in .env — generating (one-time)..."
+  sed -i '/^APP_KEY$/d' .env 2>/dev/null || true
+  sed -i '/^APP_KEY=$/d' .env 2>/dev/null || true
+  sed -i '/^APP_KEY=/d' .env 2>/dev/null || true
+  if ! grep -qE '^APP_KEY=' .env 2>/dev/null; then
+    echo 'APP_KEY=' >> .env
+  fi
+  unset APP_KEY
+  php artisan key:generate --force --no-interaction
+  APP_KEY_FROM_FILE=$(grep -E '^APP_KEY=' .env | head -n1 | cut -d= -f2- | tr -d '\r')
+  export APP_KEY="$APP_KEY_FROM_FILE"
+}
+
+ensure_app_key
+php artisan config:clear --no-interaction 2>/dev/null || true
 
 if [ "${TOWEROS_DOCKER_AUTO_MIGRATE:-1}" = "1" ]; then
   echo "[api] Running central migrations..."

@@ -39,7 +39,10 @@ final class SiteHuntingLogService
             'hunter_user_id' => $input['hunter_user_id'] ?? auth()->id(),
             'summary' => $input['summary'] ?? null,
             'candidate_ids' => $candidateIds,
-            'candidates_identified_count' => (int) ($input['candidates_identified_count'] ?? count($candidateIds)),
+            'candidates_identified_count' => $this->resolveCandidatesIdentifiedCount(
+                $input['candidates_identified_count'] ?? null,
+                $candidateIds,
+            ),
         ];
 
         if (array_key_exists('photo_links', $input)) {
@@ -65,5 +68,29 @@ final class SiteHuntingLogService
         );
 
         return RolloutFieldCreateResult::of($log->fresh(), $existingByDate === null);
+    }
+
+    /**
+     * @param  list<string>  $candidateIds
+     */
+    private function resolveCandidatesIdentifiedCount(mixed $raw, array $candidateIds): int
+    {
+        if ($raw === null || $raw === '') {
+            return count($candidateIds);
+        }
+
+        if (is_int($raw)) {
+            return max(0, $raw);
+        }
+
+        if (is_float($raw) || is_numeric($raw)) {
+            return max(0, (int) $raw);
+        }
+
+        if (is_string($raw) && preg_match('/\d+/', $raw, $matches) === 1) {
+            return max(0, (int) $matches[0]);
+        }
+
+        return count($candidateIds);
     }
 }

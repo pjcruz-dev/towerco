@@ -6,6 +6,7 @@ namespace Tests\Unit\Tenancy;
 
 use App\Models\Tenant;
 use App\Modules\Tenancy\Services\TenantDomainSlugService;
+use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
 
 final class TenantDomainSlugServiceTest extends TestCase
@@ -13,6 +14,7 @@ final class TenantDomainSlugServiceTest extends TestCase
     public function test_recommends_localhost_domains_for_all_environments_when_app_is_local(): void
     {
         $this->app['env'] = 'local';
+        Config::set('toweros.tenant_app_url', 'http://localhost');
 
         $tenant = new Tenant([
             'slug' => 'acme',
@@ -23,7 +25,7 @@ final class TenantDomainSlugServiceTest extends TestCase
 
         $local = $service->recommend($tenant, 'acme', 'alliancetowers.com', 'local');
         $this->assertSame('acme.localhost', $local['endpoints'][0]['hostname']);
-        $this->assertSame('http://acme.localhost:3001/login', $local['endpoints'][0]['login_url']);
+        $this->assertSame('http://acme.localhost/login', $local['endpoints'][0]['login_url']);
 
         $test = $service->recommend($tenant, 'acme', 'alliancetowers.com', 'test');
         $this->assertSame('test.acme.localhost', $test['endpoints'][0]['hostname']);
@@ -33,7 +35,7 @@ final class TenantDomainSlugServiceTest extends TestCase
 
         $production = $service->recommend($tenant, 'acme', 'alliancetowers.com', 'production');
         $this->assertSame('app.acme.localhost', $production['endpoints'][0]['hostname']);
-        $this->assertSame('http://app.acme.localhost:3001/login', $production['endpoints'][0]['login_url']);
+        $this->assertSame('http://app.acme.localhost/login', $production['endpoints'][0]['login_url']);
     }
 
     public function test_recommends_brand_domains_for_deployed_environments_when_app_is_production(): void

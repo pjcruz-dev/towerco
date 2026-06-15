@@ -25,7 +25,9 @@ class TenantUserIndexController extends AbstractApiController
         $status = $status === 'all' ? null : $status;
 
         $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $status);
-        $payload = $service->asPayload($paginator);
+        /** @var \App\Modules\Identity\Models\TenantUser $viewer */
+        $viewer = $request->user();
+        $payload = $service->asPayload($paginator, $viewer);
 
         return $this->okWithMeta($payload['data'], $payload['meta']);
     }

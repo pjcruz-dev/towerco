@@ -11,7 +11,7 @@
     "dev:app": "concurrently -k -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:web\"",
     "dev:docker": "node scripts/ensure-env-docker.js && docker compose --env-file .env.docker up -d --wait mysql phpmyadmin",
     "dev:api": "cd backend && php artisan serve --host=127.0.0.1 --port=8000",
-    "dev:web": "cd frontend && npm run dev -- -p 3001",
+    "dev:web": "cd frontend && npm run dev -- -p 80",
     "dev:seed": "docker compose --env-file .env.docker exec api php artisan db:seed --force",
     "dev:mysql:grants": "scripts\\docker-mysql-grants.cmd",
     "dev:fresh": "scripts\\docker-dev-fresh.cmd"
