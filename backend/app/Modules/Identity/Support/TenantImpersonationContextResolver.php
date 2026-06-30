@@ -1,31 +1,17 @@
 <?php
 
-
-
 declare(strict_types=1);
-
-
 
 namespace App\Modules\Identity\Support;
 
-
-
 use App\Models\User;
-
 use App\Modules\Identity\Models\TenantUser;
-
 use Illuminate\Http\Request;
-
-use Laravel\Sanctum\PersonalAccessToken;
-
-
+use Laravel\Sanctum\Contracts\HasAbilities;
 
 final class TenantImpersonationContextResolver
-
 {
-
     public function fromRequest(Request $request): ?TenantImpersonationContext
-
     {
 
         $user = $request->user();
@@ -36,31 +22,33 @@ final class TenantImpersonationContextResolver
 
         }
 
-
-
         $token = $user->currentAccessToken();
 
-        if (! $token instanceof PersonalAccessToken) {
+        if (! $token instanceof HasAbilities) {
 
             return null;
 
         }
 
+        $abilities = $this->normalizeAbilities($token->abilities ?? null);
 
+        $platformImpersonatorId = $this->abilityValue($abilities, 'platform_impersonator:');
 
-        $platformImpersonatorId = $this->abilityValue($token->abilities, 'platform_impersonator:');
-
-        $tenantImpersonatorId = $this->abilityValue($token->abilities, 'impersonator:');
+        $tenantImpersonatorId = $this->abilityValue($abilities, 'impersonator:');
 
         $sessionId = (string) $request->attributes->get('auth_session_id', '');
 
         if ($sessionId === '') {
 
-            $sessionId = $this->abilityValue($token->abilities, 'session:') ?? '';
+            $sessionId = $this->abilityValue($abilities, 'session:') ?? '';
 
         }
 
+        if ($sessionId === '') {
 
+            $sessionId = trim((string) $request->header('X-Session-Id', ''));
+
+        }
 
         if ($sessionId === '') {
 
@@ -68,12 +56,9 @@ final class TenantImpersonationContextResolver
 
         }
 
-
-
         if ($platformImpersonatorId !== null) {
 
             /** @var User|null $platformActor */
-
             $platformActor = User::query()->find($platformImpersonatorId);
 
             if (! $platformActor) {
@@ -81,8 +66,6 @@ final class TenantImpersonationContextResolver
                 return null;
 
             }
-
-
 
             return new TenantImpersonationContext(
 
@@ -106,18 +89,13 @@ final class TenantImpersonationContextResolver
 
         }
 
-
-
         if ($tenantImpersonatorId === null) {
 
             return null;
 
         }
 
-
-
         /** @var TenantUser|null $impersonator */
-
         $impersonator = TenantUser::query()->find($tenantImpersonatorId);
 
         if (! $impersonator) {
@@ -126,43 +104,41 @@ final class TenantImpersonationContextResolver
 
         }
 
-
-
         return new TenantImpersonationContext($sessionId, $impersonator);
 
     }
 
-
-
     /**
-
      * @param  list<string>  $abilities
-
      */
-
     private function abilityValue(array $abilities, string $prefix): ?string
-
     {
-
         foreach ($abilities as $ability) {
-
             if (is_string($ability) && str_starts_with($ability, $prefix)) {
-
                 $value = substr($ability, strlen($prefix));
 
-
-
                 return $value !== '' ? $value : null;
-
             }
-
         }
 
-
-
         return null;
-
     }
 
-}
+    /**
+     * Sanctum may return false or "*" for tokens without explicit ability lists.
+     *
+     * @return list<string>
+     */
+    private function normalizeAbilities(mixed $abilities): array
+    {
+        if (is_array($abilities)) {
+            return $abilities;
+        }
 
+        if ($abilities === '*' || $abilities === true) {
+            return ['*'];
+        }
+
+        return [];
+    }
+}

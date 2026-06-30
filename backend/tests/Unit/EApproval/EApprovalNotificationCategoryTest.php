@@ -33,6 +33,10 @@ final class EApprovalNotificationCategoryTest extends TestCase
             EApprovalNotificationCategory::hrefFor('approval_assigned', null),
         );
         $this->assertSame(
+            '/e-approval/submissions/sub-1?tab=workflow',
+            EApprovalNotificationCategory::hrefFor('manual_follow_up', 'sub-1'),
+        );
+        $this->assertSame(
             '/e-approval/submissions/sub-1?tab=actions',
             EApprovalNotificationCategory::hrefFor('returned', 'sub-1'),
         );

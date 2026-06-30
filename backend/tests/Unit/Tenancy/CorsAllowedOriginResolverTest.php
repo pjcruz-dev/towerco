@@ -26,12 +26,13 @@ final class CorsAllowedOriginResolverTest extends TestCase
         $this->assertNotContains('http://evil.example', $origins);
     }
 
-    public function test_it_exposes_configured_origin_patterns(): void
+    public function test_it_exposes_configured_origin_patterns_as_regex(): void
     {
         Config::set('toweros.cors.allowed_origin_patterns', 'https://*.example.com');
 
         $patterns = app(CorsAllowedOriginResolver::class)->resolvePatterns();
 
-        $this->assertSame(['https://*.example.com'], $patterns);
+        $this->assertSame(['#^https://.*\.example\.com$#i'], $patterns);
+        $this->assertSame(1, preg_match($patterns[0], 'https://app.example.com'));
     }
 }

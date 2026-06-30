@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\ProjectOne\Services;
 
 use App\Modules\ProjectOne\Models\ProjectApproval;
-use App\Modules\ProjectOne\Services\ProjectApprovalAttachmentService;
+use App\Modules\Rollout\Models\TenantRolloutFile;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class ProjectApprovalIndexService
 {
@@ -42,10 +43,15 @@ class ProjectApprovalIndexService
      */
     public function asPayload(LengthAwarePaginator $paginator): array
     {
+        $attachmentIndex = $this->attachmentIndexFor($paginator->getCollection());
+
         return [
-            'data' => $paginator->getCollection()->map(function (ProjectApproval $approval): array {
+            'data' => $paginator->getCollection()->map(function (ProjectApproval $approval) use ($attachmentIndex): array {
                 $row = $approval->toListRow();
-                $row['attachments'] = $this->attachments->enrich($approval->attachment_file_ids);
+                $row['attachments'] = $this->attachments->enrichFromIndex(
+                    $approval->attachment_file_ids,
+                    $attachmentIndex,
+                );
 
                 return $row;
             })->values()->all(),
@@ -56,5 +62,27 @@ class ProjectApprovalIndexService
                 'last_page' => $paginator->lastPage(),
             ],
         ];
+    }
+
+    /**
+     * @param  Collection<int, ProjectApproval>  $approvals
+     * @return Collection<string, TenantRolloutFile>
+     */
+    private function attachmentIndexFor(Collection $approvals): Collection
+    {
+        $fileIds = $approvals
+            ->flatMap(static fn (ProjectApproval $approval): array => $approval->attachment_file_ids ?? [])
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($fileIds === []) {
+            return collect();
+        }
+
+        return TenantRolloutFile::query()
+            ->whereIn('id', $fileIds)
+            ->get()
+            ->keyBy('id');
     }
 }

@@ -51,8 +51,14 @@ class TenantUserProvisioningService
             'password_login_exempt' => false,
         ]);
 
-        $defaultRole = env('TENANT_SSO_DEFAULT_ROLE', 'viewer');
-        $provisioned->assignRole($defaultRole);
+        $defaultRoles = config('toweros.tenant_auth.default_sso_roles', [
+            'e_approval_requestor',
+            'ticketing_contributor',
+        ]);
+
+        if ($defaultRoles !== []) {
+            $provisioned->assignRole($defaultRoles);
+        }
 
         return $provisioned;
     }

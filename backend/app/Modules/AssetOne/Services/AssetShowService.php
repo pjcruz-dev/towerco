@@ -24,6 +24,8 @@ final class AssetShowService
             'location_id' => $asset->location_id,
             'warranty_expiry' => $asset->warranty_expiry?->toDateString(),
             'purchase_value' => $asset->purchase_value,
+            'source_po_line_id' => $asset->source_po_line_id,
+            'source_grn_line_id' => $asset->source_grn_line_id,
             'created_at' => $asset->created_at?->toIso8601String(),
             'updated_at' => $asset->updated_at?->toIso8601String(),
         ];

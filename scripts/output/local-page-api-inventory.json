@@ -1,0 +1,1319 @@
+{
+  "generated_at": "2026-06-26T03:29:48.888Z",
+  "note": "Local dev inventory — API calls discovered in page-client files. Global calls apply to most tenant pages.",
+  "global_tenant_shell": [
+    {
+      "fn": "me",
+      "module": "auth-api",
+      "note": "AppProviders + PlatformGuard if user missing"
+    },
+    {
+      "fn": "me",
+      "module": "auth-api",
+      "note": "useAuthProfileSync on every platform page"
+    }
+  ],
+  "modules": {
+    "admin": {
+      "page_count": 2,
+      "unique_api_functions": [
+        "fetchAdminSettings",
+        "fetchTenantMicrosoftSsoConfig",
+        "fetchTenantSecuritySettings"
+      ],
+      "pages": [
+        {
+          "route": "/admin/settings/admin-settings",
+          "file": "frontend\\app\\(platform)\\admin\\settings\\admin-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchAdminSettings",
+              "module": "admin-settings-api"
+            }
+          ]
+        },
+        {
+          "route": "/admin/settings/tenant-settings",
+          "file": "frontend\\app\\(platform)\\admin\\settings\\tenant-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTenantMicrosoftSsoConfig",
+              "module": "admin-api"
+            },
+            {
+              "fn": "fetchTenantSecuritySettings",
+              "module": "admin-api"
+            }
+          ]
+        }
+      ]
+    },
+    "asset-one": {
+      "page_count": 2,
+      "unique_api_functions": [
+        "fetchAssetOneAsset",
+        "fetchAssetOneDashboard"
+      ],
+      "pages": [
+        {
+          "route": "/asset-one/asset-one-dashboard",
+          "file": "frontend\\app\\(platform)\\asset-one\\asset-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchAssetOneDashboard",
+              "module": "asset-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/asset-one/assets/:id/asset-detail",
+          "file": "frontend\\app\\(platform)\\asset-one\\assets\\[id]\\asset-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchAssetOneAsset",
+              "module": "asset-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "billing": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchTenantBilling",
+        "fetchTenantBillingUsage"
+      ],
+      "pages": [
+        {
+          "route": "/billing/billing",
+          "file": "frontend\\app\\(platform)\\billing\\billing-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTenantBilling",
+              "module": "admin-billing-api"
+            },
+            {
+              "fn": "fetchTenantBillingUsage",
+              "module": "admin-billing-api"
+            }
+          ]
+        }
+      ]
+    },
+    "documents": {
+      "page_count": 3,
+      "unique_api_functions": [
+        "fetchControlledDocuments",
+        "fetchDocumentBinderTemplate",
+        "fetchExpiringDocuments"
+      ],
+      "pages": [
+        {
+          "route": "/documents/controlled/controlled-documents",
+          "file": "frontend\\app\\(platform)\\documents\\controlled\\controlled-documents-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchControlledDocuments",
+              "module": "controlled-documents-api"
+            }
+          ]
+        },
+        {
+          "route": "/documents/documents-home",
+          "file": "frontend\\app\\(platform)\\documents\\documents-home-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchExpiringDocuments",
+              "module": "documents-api"
+            }
+          ]
+        },
+        {
+          "route": "/documents/settings/documents-settings",
+          "file": "frontend\\app\\(platform)\\documents\\settings\\documents-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchDocumentBinderTemplate",
+              "module": "documents-api"
+            }
+          ]
+        }
+      ]
+    },
+    "e-approval": {
+      "page_count": 15,
+      "unique_api_functions": [
+        "fetchEApprovalApprovalPolicy",
+        "fetchEApprovalApprovalsIndex",
+        "fetchEApprovalAssignableUsers",
+        "fetchEApprovalAuditIndex",
+        "fetchEApprovalComments",
+        "fetchEApprovalCustomFormTemplate",
+        "fetchEApprovalDashboard",
+        "fetchEApprovalForm",
+        "fetchEApprovalFormRevisions",
+        "fetchEApprovalFormTemplates",
+        "fetchEApprovalFormsIndex",
+        "fetchEApprovalMasterDataRows",
+        "fetchEApprovalMasterDataSets",
+        "fetchEApprovalMetadata",
+        "fetchEApprovalSettings",
+        "fetchEApprovalSettingsPublic",
+        "fetchEApprovalSubmission",
+        "fetchEApprovalSubmissionPrint",
+        "fetchEApprovalSubmissionsIndex"
+      ],
+      "pages": [
+        {
+          "route": "/e-approval/approval-policies/e-approval-approval-policies",
+          "file": "frontend\\app\\(platform)\\e-approval\\approval-policies\\e-approval-approval-policies-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalApprovalPolicy",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/approvals/e-approval-approvals",
+          "file": "frontend\\app\\(platform)\\e-approval\\approvals\\e-approval-approvals-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalApprovalsIndex",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/audit/e-approval-audit",
+          "file": "frontend\\app\\(platform)\\e-approval\\audit\\e-approval-audit-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalAuditIndex",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/e-approval-dashboard",
+          "file": "frontend\\app\\(platform)\\e-approval\\e-approval-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalDashboard",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/forms/e-approval-form-edit",
+          "file": "frontend\\app\\(platform)\\e-approval\\forms\\e-approval-form-edit-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalForm",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalFormRevisions",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalAssignableUsers",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalMetadata",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/forms/e-approval-forms",
+          "file": "frontend\\app\\(platform)\\e-approval\\forms\\e-approval-forms-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalFormsIndex",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/forms/templates/e-approval-form-templates-admin",
+          "file": "frontend\\app\\(platform)\\e-approval\\forms\\templates\\e-approval-form-templates-admin-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalCustomFormTemplate",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalFormTemplates",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/master-data/e-approval-master-data",
+          "file": "frontend\\app\\(platform)\\e-approval\\master-data\\e-approval-master-data-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalMasterDataRows",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalMasterDataSets",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/notifications/e-approval-notifications",
+          "file": "frontend\\app\\(platform)\\e-approval\\notifications\\e-approval-notifications-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/e-approval/profile/e-approval-profile",
+          "file": "frontend\\app\\(platform)\\e-approval\\profile\\e-approval-profile-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSettingsPublic",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalAssignableUsers",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/request/:formId/e-approval-request-form",
+          "file": "frontend\\app\\(platform)\\e-approval\\request\\[formId]\\e-approval-request-form-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalForm",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/settings/e-approval-settings",
+          "file": "frontend\\app\\(platform)\\e-approval\\settings\\e-approval-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSettings",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/submissions/:id/e-approval-submission-detail",
+          "file": "frontend\\app\\(platform)\\e-approval\\submissions\\[id]\\e-approval-submission-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalComments",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalSubmission",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalAssignableUsers",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchEApprovalSubmissionPrint",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/submissions/e-approval-submissions",
+          "file": "frontend\\app\\(platform)\\e-approval\\submissions\\e-approval-submissions-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSubmissionsIndex",
+              "module": "e-approval-api"
+            }
+          ]
+        },
+        {
+          "route": "/e-approval/submissions/new/e-approval-submission-new",
+          "file": "frontend\\app\\(platform)\\e-approval\\submissions\\new\\e-approval-submission-new-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalFormsIndex",
+              "module": "e-approval-api"
+            }
+          ]
+        }
+      ]
+    },
+    "fiber-one": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchFiberOneDashboard"
+      ],
+      "pages": [
+        {
+          "route": "/fiber-one/fiber-one-dashboard",
+          "file": "frontend\\app\\(platform)\\fiber-one\\fiber-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchFiberOneDashboard",
+              "module": "fiber-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "finance": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchProcurementOneDashboard"
+      ],
+      "pages": [
+        {
+          "route": "/finance/finance-one-dashboard",
+          "file": "frontend\\app\\(platform)\\finance\\finance-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementOneDashboard",
+              "module": "procurement-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "notifications": {
+      "page_count": 1,
+      "unique_api_functions": [],
+      "pages": [
+        {
+          "route": "/notifications/tenant-notifications",
+          "file": "frontend\\app\\(platform)\\notifications\\tenant-notifications-page-client.tsx",
+          "apis": []
+        }
+      ]
+    },
+    "print/e-approval": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchEApprovalSubmissionPrint"
+      ],
+      "pages": [
+        {
+          "route": "/e-approval/submissions/:id/print/e-approval-submission-print",
+          "file": "frontend\\app\\(print)\\e-approval\\submissions\\[id]\\print\\e-approval-submission-print-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSubmissionPrint",
+              "module": "e-approval-api"
+            }
+          ]
+        }
+      ]
+    },
+    "print/procurement": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchProcurementGrnPrint"
+      ],
+      "pages": [
+        {
+          "route": "/procurement/grns/:id/print/procurement-grn-print",
+          "file": "frontend\\app\\(print)\\procurement\\grns\\[id]\\print\\procurement-grn-print-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementGrnPrint",
+              "module": "procurement-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "procurement": {
+      "page_count": 26,
+      "unique_api_functions": [
+        "fetchEApprovalSubmission",
+        "fetchProcurementApAging",
+        "fetchProcurementApInvoice",
+        "fetchProcurementApInvoices",
+        "fetchProcurementBudgetLines",
+        "fetchProcurementBudgetUtilization",
+        "fetchProcurementContract",
+        "fetchProcurementContracts",
+        "fetchProcurementCostCenters",
+        "fetchProcurementFormSchema",
+        "fetchProcurementGrn",
+        "fetchProcurementGrns",
+        "fetchProcurementInventoryLocations",
+        "fetchProcurementInventoryMovements",
+        "fetchProcurementInventoryStockBalances",
+        "fetchProcurementOneDashboard",
+        "fetchProcurementOneMetadata",
+        "fetchProcurementOneSettings",
+        "fetchProcurementPaymentBatches",
+        "fetchProcurementPaymentRequest",
+        "fetchProcurementPaymentRequests",
+        "fetchProcurementPo",
+        "fetchProcurementPos",
+        "fetchProcurementPr",
+        "fetchProcurementPrs",
+        "fetchProcurementRfq",
+        "fetchProcurementRfqs",
+        "fetchProcurementVendor",
+        "fetchProcurementVendorFormSchema",
+        "fetchProcurementVendors"
+      ],
+      "pages": [
+        {
+          "route": "/procurement/ap-invoices/:id/procurement-ap-invoice-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\ap-invoices\\[id]\\procurement-ap-invoice-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSubmission",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchProcurementApInvoice",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementFormSchema",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/ap-invoices/procurement-ap-invoices",
+          "file": "frontend\\app\\(platform)\\procurement\\ap-invoices\\procurement-ap-invoices-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementApAging",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementApInvoices",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/budget/procurement-budget",
+          "file": "frontend\\app\\(platform)\\procurement\\budget\\procurement-budget-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementBudgetLines",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementBudgetUtilization",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementCostCenters",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/contracts/:id/procurement-contract-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\contracts\\[id]\\procurement-contract-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementContract",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/contracts/new/procurement-contract-create",
+          "file": "frontend\\app\\(platform)\\procurement\\contracts\\new\\procurement-contract-create-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementVendors",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/contracts/procurement-contracts",
+          "file": "frontend\\app\\(platform)\\procurement\\contracts\\procurement-contracts-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementContracts",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/grns/:id/procurement-grn-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\grns\\[id]\\procurement-grn-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementGrn",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/grns/procurement-grns",
+          "file": "frontend\\app\\(platform)\\procurement\\grns\\procurement-grns-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementGrns",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/inventory/procurement-inventory",
+          "file": "frontend\\app\\(platform)\\procurement\\inventory\\procurement-inventory-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementInventoryLocations",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementInventoryMovements",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementInventoryStockBalances",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/payments/:id/procurement-payment-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\payments\\[id]\\procurement-payment-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPaymentRequest",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/payments/procurement-payments",
+          "file": "frontend\\app\\(platform)\\procurement\\payments\\procurement-payments-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPaymentBatches",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementPaymentRequests",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/pos/:id/edit/procurement-po-edit",
+          "file": "frontend\\app\\(platform)\\procurement\\pos\\[id]\\edit\\procurement-po-edit-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPo",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/pos/:id/grns/new/procurement-grn-from-po-compose",
+          "file": "frontend\\app\\(platform)\\procurement\\pos\\[id]\\grns\\new\\procurement-grn-from-po-compose-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPo",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/pos/:id/procurement-po-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\pos\\[id]\\procurement-po-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchEApprovalSubmission",
+              "module": "e-approval-api"
+            },
+            {
+              "fn": "fetchProcurementFormSchema",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementPo",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/pos/procurement-pos",
+          "file": "frontend\\app\\(platform)\\procurement\\pos\\procurement-pos-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPos",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/procurement-one-dashboard",
+          "file": "frontend\\app\\(platform)\\procurement\\procurement-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementOneDashboard",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/prs/:id/pos/new/procurement-po-from-pr-compose",
+          "file": "frontend\\app\\(platform)\\procurement\\prs\\[id]\\pos\\new\\procurement-po-from-pr-compose-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPr",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/prs/:id/procurement-pr-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\prs\\[id]\\procurement-pr-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementFormSchema",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementPr",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementOneMetadata",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/prs/procurement-pr-compose",
+          "file": "frontend\\app\\(platform)\\procurement\\prs\\procurement-pr-compose-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPr",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/prs/procurement-prs",
+          "file": "frontend\\app\\(platform)\\procurement\\prs\\procurement-prs-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementPrs",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/rfqs/:id/procurement-rfq-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\rfqs\\[id]\\procurement-rfq-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementRfq",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/rfqs/procurement-rfqs",
+          "file": "frontend\\app\\(platform)\\procurement\\rfqs\\procurement-rfqs-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementRfqs",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/settings/procurement-one-settings",
+          "file": "frontend\\app\\(platform)\\procurement\\settings\\procurement-one-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementOneSettings",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/vendors/:id/procurement-vendor-detail",
+          "file": "frontend\\app\\(platform)\\procurement\\vendors\\[id]\\procurement-vendor-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementVendor",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/vendors/new/procurement-vendor-register",
+          "file": "frontend\\app\\(platform)\\procurement\\vendors\\new\\procurement-vendor-register-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementVendorFormSchema",
+              "module": "procurement-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/procurement/vendors/procurement-vendors",
+          "file": "frontend\\app\\(platform)\\procurement\\vendors\\procurement-vendors-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProcurementVendorFormSchema",
+              "module": "procurement-one-api"
+            },
+            {
+              "fn": "fetchProcurementVendors",
+              "module": "procurement-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "project-one": {
+      "page_count": 10,
+      "unique_api_functions": [
+        "fetchGateApprovalsAwaitingMeCount",
+        "fetchProjectOneApprovalsIndex",
+        "fetchProjectOneDashboard",
+        "fetchProjectOneDashboardMap",
+        "fetchProjectOneProject",
+        "fetchProjectOneProjectsIndex",
+        "fetchRolloutDetail",
+        "fetchRolloutGateApprovals",
+        "fetchRolloutsIndex",
+        "fetchSitesIndex"
+      ],
+      "pages": [
+        {
+          "route": "/project-one/approvals/new/project-one-approval-new",
+          "file": "frontend\\app\\(platform)\\project-one\\approvals\\new\\project-one-approval-new-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProjectOneProjectsIndex",
+              "module": "project-one-api"
+            },
+            {
+              "fn": "fetchRolloutsIndex",
+              "module": "rollout-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/approvals/project-one-approvals",
+          "file": "frontend\\app\\(platform)\\project-one\\approvals\\project-one-approvals-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProjectOneApprovalsIndex",
+              "module": "project-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/gate-approvals/rollout-gate-approvals",
+          "file": "frontend\\app\\(platform)\\project-one\\gate-approvals\\rollout-gate-approvals-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchGateApprovalsAwaitingMeCount",
+              "module": "rollout-api"
+            },
+            {
+              "fn": "fetchRolloutGateApprovals",
+              "module": "rollout-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/project-one-dashboard",
+          "file": "frontend\\app\\(platform)\\project-one\\project-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProjectOneDashboard",
+              "module": "project-one-api"
+            },
+            {
+              "fn": "fetchProjectOneDashboardMap",
+              "module": "project-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/projects/:id/project-detail",
+          "file": "frontend\\app\\(platform)\\project-one\\projects\\[id]\\project-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchProjectOneProject",
+              "module": "project-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/projects/new/project-new",
+          "file": "frontend\\app\\(platform)\\project-one\\projects\\new\\project-new-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchSitesIndex",
+              "module": "sites-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/rollout-playbook/rollout-playbook",
+          "file": "frontend\\app\\(platform)\\project-one\\rollout-playbook\\rollout-playbook-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/project-one/rollouts/:id/rollout-detail",
+          "file": "frontend\\app\\(platform)\\project-one\\rollouts\\[id]\\rollout-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchRolloutDetail",
+              "module": "rollout-api"
+            }
+          ]
+        },
+        {
+          "route": "/project-one/rollouts/batch/new/rollout-batch-new",
+          "file": "frontend\\app\\(platform)\\project-one\\rollouts\\batch\\new\\rollout-batch-new-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/project-one/rollouts/rollouts",
+          "file": "frontend\\app\\(platform)\\project-one\\rollouts\\rollouts-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchRolloutsIndex",
+              "module": "rollout-api"
+            }
+          ]
+        }
+      ]
+    },
+    "public/login": {
+      "page_count": 3,
+      "unique_api_functions": [
+        "fetchTenantAuthPublicStatus"
+      ],
+      "pages": [
+        {
+          "route": "/login/login",
+          "file": "frontend\\app\\(public)\\login\\login-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTenantAuthPublicStatus",
+              "module": "admin-api"
+            }
+          ]
+        },
+        {
+          "route": "/login/mfa/enroll/mfa-enroll",
+          "file": "frontend\\app\\(public)\\login\\mfa\\enroll\\mfa-enroll-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/login/mfa/mfa",
+          "file": "frontend\\app\\(public)\\login\\mfa\\mfa-page-client.tsx",
+          "apis": []
+        }
+      ]
+    },
+    "public/platform": {
+      "page_count": 10,
+      "unique_api_functions": [
+        "fetchMfaStatus",
+        "platformCreateOperationalAcronym",
+        "platformCreateOperator",
+        "platformCreateTenantEnvironment",
+        "platformDeleteOperationalAcronym",
+        "platformDeleteOperator",
+        "platformDeleteTenant",
+        "platformFetchBillingInsights",
+        "platformFetchRoleCatalog",
+        "platformFetchRolloutPolicy",
+        "platformFetchTenant",
+        "platformFetchTenantAudit",
+        "platformHasPermission",
+        "platformListOperationalAcronyms",
+        "platformListOperators",
+        "platformListRolloutPlaybooks",
+        "platformListTenants",
+        "platformPatchTenantSettings",
+        "platformPublishRolloutPlaybook",
+        "platformRoleLabel",
+        "platformUpdateOperationalAcronym",
+        "platformUpdateOperator",
+        "platformUpdateTenantMfa"
+      ],
+      "pages": [
+        {
+          "route": "/platform/(console)/helper-center/platform-helper-center",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\helper-center\\platform-helper-center-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformCreateOperationalAcronym",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformDeleteOperationalAcronym",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformListOperationalAcronyms",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformUpdateOperationalAcronym",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/operators/platform-operators",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\operators\\platform-operators-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformCreateOperator",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformDeleteOperator",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformFetchRoleCatalog",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformHasPermission",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformListOperators",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformRoleLabel",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformUpdateOperator",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/playbooks/platform-playbooks",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\playbooks\\platform-playbooks-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformHasPermission",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformListRolloutPlaybooks",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformPublishRolloutPlaybook",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/playbooks/policies/:id/platform-rollout-policy",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\playbooks\\policies\\[id]\\platform-rollout-policy-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformFetchRolloutPolicy",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/settings/mfa/platform-mfa-settings",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\settings\\mfa\\platform-mfa-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchMfaStatus",
+              "module": "?"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/tenants/:id/platform-tenant-detail",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\tenants\\[id]\\platform-tenant-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformFetchTenant",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformFetchTenantAudit",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformHasPermission",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformPatchTenantSettings",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformUpdateTenantMfa",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/(console)/tenants/create/platform-create-tenant",
+          "file": "frontend\\app\\(public)\\platform\\(console)\\tenants\\create\\platform-create-tenant-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformListRolloutPlaybooks",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/billing/platform-billing",
+          "file": "frontend\\app\\(public)\\platform\\billing\\platform-billing-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformFetchBillingInsights",
+              "module": "platform-api"
+            }
+          ]
+        },
+        {
+          "route": "/platform/login/platform-login",
+          "file": "frontend\\app\\(public)\\platform\\login\\platform-login-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/platform/platform-home",
+          "file": "frontend\\app\\(public)\\platform\\platform-home-page-client.tsx",
+          "apis": [
+            {
+              "fn": "platformCreateTenantEnvironment",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformDeleteTenant",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformListTenants",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformPatchTenantSettings",
+              "module": "platform-api"
+            },
+            {
+              "fn": "platformUpdateTenantMfa",
+              "module": "platform-api"
+            }
+          ]
+        }
+      ]
+    },
+    "settings": {
+      "page_count": 3,
+      "unique_api_functions": [
+        "fetchSessions"
+      ],
+      "pages": [
+        {
+          "route": "/settings/security/mfa/mfa-settings",
+          "file": "frontend\\app\\(platform)\\settings\\security\\mfa\\mfa-settings-page-client.tsx",
+          "apis": []
+        },
+        {
+          "route": "/settings/sessions/sessions",
+          "file": "frontend\\app\\(platform)\\settings\\sessions\\sessions-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchSessions",
+              "module": "auth-api"
+            }
+          ]
+        },
+        {
+          "route": "/settings/settings-hub",
+          "file": "frontend\\app\\(platform)\\settings\\settings-hub-page-client.tsx",
+          "apis": []
+        }
+      ]
+    },
+    "sites": {
+      "page_count": 1,
+      "unique_api_functions": [
+        "fetchSite"
+      ],
+      "pages": [
+        {
+          "route": "/sites/:id/site-detail",
+          "file": "frontend\\app\\(platform)\\sites\\[id]\\site-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchSite",
+              "module": "sites-api"
+            }
+          ]
+        }
+      ]
+    },
+    "ticketing": {
+      "page_count": 5,
+      "unique_api_functions": [
+        "fetchTicketingAssignableUsers",
+        "fetchTicketingDashboard",
+        "fetchTicketingMetadata",
+        "fetchTicketingSettings",
+        "fetchTicketingTicket",
+        "fetchTicketingTickets"
+      ],
+      "pages": [
+        {
+          "route": "/ticketing/settings/ticketing-settings",
+          "file": "frontend\\app\\(platform)\\ticketing\\settings\\ticketing-settings-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTicketingSettings",
+              "module": "ticketing-api"
+            }
+          ]
+        },
+        {
+          "route": "/ticketing/ticketing-dashboard",
+          "file": "frontend\\app\\(platform)\\ticketing\\ticketing-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTicketingDashboard",
+              "module": "ticketing-api"
+            }
+          ]
+        },
+        {
+          "route": "/ticketing/tickets/:id/ticketing-ticket-detail",
+          "file": "frontend\\app\\(platform)\\ticketing\\tickets\\[id]\\ticketing-ticket-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTicketingAssignableUsers",
+              "module": "ticketing-api"
+            },
+            {
+              "fn": "fetchTicketingMetadata",
+              "module": "ticketing-api"
+            },
+            {
+              "fn": "fetchTicketingTicket",
+              "module": "ticketing-api"
+            }
+          ]
+        },
+        {
+          "route": "/ticketing/tickets/new/ticketing-new-ticket",
+          "file": "frontend\\app\\(platform)\\ticketing\\tickets\\new\\ticketing-new-ticket-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTicketingMetadata",
+              "module": "ticketing-api"
+            }
+          ]
+        },
+        {
+          "route": "/ticketing/tickets/ticketing-tickets",
+          "file": "frontend\\app\\(platform)\\ticketing\\tickets\\ticketing-tickets-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTicketingMetadata",
+              "module": "ticketing-api"
+            },
+            {
+              "fn": "fetchTicketingTickets",
+              "module": "ticketing-api"
+            }
+          ]
+        }
+      ]
+    },
+    "tower-one": {
+      "page_count": 2,
+      "unique_api_functions": [
+        "fetchTowerOneDashboard",
+        "fetchTowerOneTower"
+      ],
+      "pages": [
+        {
+          "route": "/tower-one/tower-one-dashboard",
+          "file": "frontend\\app\\(platform)\\tower-one\\tower-one-dashboard-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTowerOneDashboard",
+              "module": "tower-one-api"
+            }
+          ]
+        },
+        {
+          "route": "/tower-one/towers/:id/tower-detail",
+          "file": "frontend\\app\\(platform)\\tower-one\\towers\\[id]\\tower-detail-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchTowerOneTower",
+              "module": "tower-one-api"
+            }
+          ]
+        }
+      ]
+    },
+    "users": {
+      "page_count": 2,
+      "unique_api_functions": [
+        "fetchAdminRole",
+        "fetchAdminRoleCatalog",
+        "fetchAdminUsersIndex"
+      ],
+      "pages": [
+        {
+          "route": "/users/roles/roles",
+          "file": "frontend\\app\\(platform)\\users\\roles\\roles-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchAdminRole",
+              "module": "admin-roles-api"
+            },
+            {
+              "fn": "fetchAdminRoleCatalog",
+              "module": "admin-roles-api"
+            }
+          ]
+        },
+        {
+          "route": "/users/users",
+          "file": "frontend\\app\\(platform)\\users\\users-page-client.tsx",
+          "apis": [
+            {
+              "fn": "fetchAdminUsersIndex",
+              "module": "admin-users-api"
+            },
+            {
+              "fn": "fetchAdminRoleCatalog",
+              "module": "admin-roles-api"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

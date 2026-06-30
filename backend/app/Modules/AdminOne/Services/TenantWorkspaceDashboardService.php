@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\AdminOne\Services;
 
-use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
@@ -16,6 +15,7 @@ use App\Modules\Notifications\Support\TenantNotificationAccess;
 use App\Modules\Rollout\Services\RolloutDashboardMetricsService;
 use App\Modules\Sites\Models\Site;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -32,6 +32,20 @@ final class TenantWorkspaceDashboardService
      * @return array<string, mixed>
      */
     public function build(TenantUser $user): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return Cache::remember(
+            "workspace:dashboard:{$tenantId}:{$user->id}",
+            30,
+            fn (): array => $this->buildUncached($user),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(TenantUser $user): array
     {
         $kpis = [];
         $actions = [];
@@ -126,7 +140,7 @@ final class TenantWorkspaceDashboardService
                 ];
             }
 
-            $recentActivity = array_merge($recentActivity, $this->recentEApprovalAudit());
+            $recentActivity = array_merge($recentActivity, $this->recentUserEApprovalActivity($user));
         }
 
         if ($user->can('project_one:rollout:view')) {
@@ -284,30 +298,87 @@ final class TenantWorkspaceDashboardService
     }
 
     /**
+     * User-scoped E-Approval workflow activity (submissions + approval steps).
+     *
      * @return list<array<string, mixed>>
      */
-    private function recentEApprovalAudit(): array
+    private function recentUserEApprovalActivity(TenantUser $user): array
     {
-        if (! Schema::connection('tenant')->hasTable('e_approval_audit_logs')) {
-            return [];
+        $items = [];
+
+        if ($user->can('e_approval:submissions:view')) {
+            $submissions = EApprovalSubmission::query()
+                ->where('requestor_id', $user->id)
+                ->orderByDesc('updated_at')
+                ->limit(4)
+                ->get(['id', 'document_no', 'status', 'updated_at']);
+
+            foreach ($submissions as $submission) {
+                $items[] = [
+                    'id' => 'ea-submission-'.$submission->id,
+                    'module' => 'e_approval',
+                    'label' => self::submissionActivityLabel((string) $submission->status),
+                    'detail' => (string) ($submission->document_no ?: 'Your submission'),
+                    'href' => '/e-approval/submissions/'.$submission->id,
+                    'created_at' => $submission->updated_at?->toIso8601String(),
+                ];
+            }
         }
 
-        return EApprovalAuditLog::query()
-            ->with('user:id,name')
-            ->orderByDesc('created_at')
-            ->limit(5)
-            ->get()
-            ->map(static fn (EApprovalAuditLog $log) => [
-                'id' => (string) $log->id,
-                'module' => 'e_approval',
-                'label' => $log->action,
-                'detail' => $log->user?->name !== null
-                    ? "By {$log->user->name}"
-                    : ($log->target_id ? "Target {$log->target_id}" : null),
-                'href' => '/e-approval/audit',
-                'created_at' => $log->created_at?->toIso8601String(),
-            ])
-            ->values()
-            ->all();
+        if ($user->can('e_approval:approve')) {
+            $approvals = EApprovalRequestApproval::query()
+                ->with(['submission:id,document_no', 'step:id,step_order'])
+                ->where('approver_id', $user->id)
+                ->orderByRaw('COALESCE(acted_at, updated_at, created_at) DESC')
+                ->limit(4)
+                ->get();
+
+            foreach ($approvals as $approval) {
+                $documentNo = $approval->submission?->document_no;
+                $stepOrder = $approval->step?->step_order;
+                $stepLabel = $stepOrder !== null ? "Step {$stepOrder}" : 'Approval step';
+                $detail = $documentNo !== null && $documentNo !== ''
+                    ? "{$documentNo} · {$stepLabel}"
+                    : $stepLabel;
+
+                $items[] = [
+                    'id' => 'ea-approval-'.$approval->id,
+                    'module' => 'e_approval',
+                    'label' => self::approvalActivityLabel((string) $approval->status),
+                    'detail' => $detail,
+                    'href' => $approval->submission_id !== null
+                        ? '/e-approval/submissions/'.$approval->submission_id
+                        : '/e-approval/approvals',
+                    'created_at' => ($approval->acted_at ?? $approval->updated_at ?? $approval->created_at)?->toIso8601String(),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    private static function submissionActivityLabel(string $status): string
+    {
+        return match ($status) {
+            EApprovalSubmissionStatus::DRAFT => 'Draft submission',
+            EApprovalSubmissionStatus::PENDING => 'Submission in review',
+            EApprovalSubmissionStatus::RETURNED => 'Submission returned',
+            EApprovalSubmissionStatus::AWAITING_DCF => 'Awaiting document control',
+            EApprovalSubmissionStatus::APPROVED => 'Submission approved',
+            EApprovalSubmissionStatus::REJECTED => 'Submission rejected',
+            EApprovalSubmissionStatus::CANCELLED => 'Submission cancelled',
+            default => 'Your submission',
+        };
+    }
+
+    private static function approvalActivityLabel(string $status): string
+    {
+        return match ($status) {
+            EApprovalApprovalStatus::PENDING => 'Approval awaiting you',
+            EApprovalApprovalStatus::APPROVED => 'You approved a request',
+            EApprovalApprovalStatus::REJECTED => 'You rejected a request',
+            EApprovalApprovalStatus::CANCELLED => 'Approval step cancelled',
+            default => 'Approval step update',
+        };
     }
 }

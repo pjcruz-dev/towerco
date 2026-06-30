@@ -16,13 +16,18 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class EApprovalFileStorageService
 {
+    public function assertUploadAllowed(UploadedFile $file): void
+    {
+        $this->assertAllowedMime($file);
+        $this->assertAllowedSize($file);
+    }
+
     public function store(
         EApprovalSubmission $submission,
         UploadedFile $file,
         ?string $fieldName,
     ): EApprovalAttachment {
-        $this->assertAllowedMime($file);
-        $this->assertAllowedSize($file);
+        $this->assertUploadAllowed($file);
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $filename = Str::uuid()->toString().'.'.$extension;
@@ -34,11 +39,17 @@ final class EApprovalFileStorageService
             $filename,
         );
 
-        Storage::disk($this->disk())->putFileAs(
+        $stored = Storage::disk($this->disk())->putFileAs(
             dirname($storedPath),
             $file,
             basename($storedPath),
         );
+
+        if ($stored === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('File could not be stored. Check storage configuration and try again.')],
+            ]);
+        }
 
         return EApprovalAttachment::query()->create([
             'id' => (string) Str::uuid(),
@@ -54,8 +65,7 @@ final class EApprovalFileStorageService
      */
     public function storeFormLogo(EApprovalForm $form, UploadedFile $file): array
     {
-        $this->assertAllowedMime($file);
-        $this->assertAllowedSize($file);
+        $this->assertUploadAllowed($file);
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $allowedLogo = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
@@ -89,8 +99,7 @@ final class EApprovalFileStorageService
      */
     public function storeUserAttachment(TenantUser $user, UploadedFile $file): array
     {
-        $this->assertAllowedMime($file);
-        $this->assertAllowedSize($file);
+        $this->assertUploadAllowed($file);
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $filename = Str::uuid()->toString().'.'.$extension;
@@ -134,19 +143,61 @@ final class EApprovalFileStorageService
 
     private function assertAllowedMime(UploadedFile $file): void
     {
-        $mime = (string) $file->getMimeType();
+        $mime = strtolower((string) $file->getMimeType());
         $allowed = config('toweros.tenant_files.allowed_mimes', []);
 
-        if ($allowed !== [] && ! in_array($mime, $allowed, true)) {
-            throw ValidationException::withMessages([
-                'file' => [__('File type is not allowed.')],
-            ]);
+        if ($allowed === []) {
+            return;
         }
+
+        if (in_array($mime, $allowed, true)) {
+            return;
+        }
+
+        if ($this->mimeAllowedByExtension($file, $allowed)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'file' => [__('File type is not allowed.')],
+        ]);
+    }
+
+    /**
+     * Browsers and Windows often report Office files as application/octet-stream or application/zip.
+     *
+     * @param  list<string>  $allowedMimes
+     */
+    private function mimeAllowedByExtension(UploadedFile $file, array $allowedMimes): bool
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '') {
+            return false;
+        }
+
+        $mimeByExtension = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            'gif' => 'image/gif',
+            'pdf' => 'application/pdf',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt' => 'application/vnd.ms-powerpoint',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ];
+
+        $expectedMime = $mimeByExtension[$ext] ?? null;
+
+        return $expectedMime !== null && in_array($expectedMime, $allowedMimes, true);
     }
 
     private function assertAllowedSize(UploadedFile $file): void
     {
-        $maxKb = (int) config('toweros.tenant_files.max_size_kb', 10240);
+        $maxKb = (int) config('toweros.tenant_files.max_size_kb', 25600);
         if ($maxKb > 0 && $file->getSize() > $maxKb * 1024) {
             throw ValidationException::withMessages([
                 'file' => [__('File exceeds maximum upload size.')],

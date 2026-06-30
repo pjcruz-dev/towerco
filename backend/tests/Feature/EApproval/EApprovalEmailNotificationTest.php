@@ -79,6 +79,49 @@ final class EApprovalEmailNotificationTest extends TestCase
         Notification::assertSentTo($this->approver, EApprovalSubmissionNotification::class);
     }
 
+    public function test_manual_follow_up_notifies_current_approver_by_mail(): void
+    {
+        Notification::fake();
+
+        $formRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/forms', [
+                'name' => 'Follow-up Mail Form',
+                'status' => 'published',
+                'fields' => [
+                    ['type' => 'text', 'name' => 'reason', 'label' => 'Reason'],
+                ],
+                'steps' => [
+                    ['type' => 'user', 'approverId' => (string) $this->approver->id, 'step_order' => 1],
+                ],
+            ]);
+
+        $formRes->assertCreated();
+        $formId = $formRes->json('data.form.id');
+
+        $subRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Needs approval'],
+            ]);
+
+        $subRes->assertCreated();
+        $submissionId = $subRes->json('data.id');
+
+        Notification::fake();
+
+        $followUpRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/manual-follow-up", [
+                'note' => 'Please review today',
+            ]);
+
+        $followUpRes->assertOk();
+
+        Notification::assertSentTo($this->approver, EApprovalSubmissionNotification::class);
+    }
+
     public function test_settings_test_email_endpoint_sends_modern_test_notification(): void
     {
         Notification::fake();

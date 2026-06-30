@@ -12,7 +12,6 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -28,6 +27,7 @@ final class EApprovalPublicSubmissionService
         private readonly EApprovalSubmissionValuesValidator $valuesValidator,
         private readonly EApprovalAuditLogger $audit,
         private readonly EApprovalFileStorageService $files,
+        private readonly EApprovalSubmissionAttachmentValidator $attachmentValidator,
         private readonly EApprovalPlanFeaturesService $planFeatures,
         private readonly EApprovalInAppNotificationService $inApp,
     ) {}
@@ -141,6 +141,7 @@ final class EApprovalPublicSubmissionService
     ): EApprovalAttachment {
         $this->assertUploadSession($link, $submission, $uploadToken);
         $this->planFeatures->assertCanUploadAttachment();
+        $this->attachmentValidator->assertCanStore($submission, $file, $fieldName);
 
         return $this->files->store($submission, $file, $fieldName);
     }

@@ -32,6 +32,8 @@ class RolloutProgramStoreController extends AbstractApiController
         return $this->created([
             'id' => $program->id,
             'rollout_ref' => $program->rollout_ref,
+            'tco_site_id' => $program->tco_site_id,
+            'site_id' => $program->site_id,
             'sla_working_days' => $program->sla_working_days,
             'status' => $program->status,
         ]);

@@ -129,6 +129,29 @@ final class TenantUserImpersonationService
         }
     }
 
+    public function actorMayImpersonate(TenantUser $actor): bool
+    {
+        try {
+            $this->assertFeatureEnabled();
+            $this->assertActorMayImpersonate($actor);
+
+            return true;
+        } catch (ValidationException) {
+            return false;
+        }
+    }
+
+    public function isTargetImpersonatable(TenantUser $actor, TenantUser $target): bool
+    {
+        try {
+            $this->assertTargetImpersonatable($actor, $target);
+
+            return true;
+        } catch (ValidationException) {
+            return false;
+        }
+    }
+
     private function assertFeatureEnabled(): void
     {
         if (! (bool) config('toweros.tenant_impersonation.enabled', true)) {

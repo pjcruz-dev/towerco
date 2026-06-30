@@ -89,4 +89,45 @@ final class EApprovalWorkflowTest extends TestCase
         $this->assertNotNull($submission);
         $this->assertSame('approved', $submission->status);
     }
+
+    public function test_submit_fails_when_workflow_steps_cannot_be_assigned(): void
+    {
+        $formPayload = [
+            'name' => 'Manager-only form',
+            'description' => 'Workflow resolution test',
+            'status' => 'published',
+            'fields' => [
+                ['type' => 'text', 'name' => 'reason', 'label' => 'Reason'],
+            ],
+            'steps' => [
+                ['type' => 'manager', 'step_order' => 1],
+            ],
+        ];
+
+        $formRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/forms', $formPayload);
+
+        $formRes->assertCreated();
+        $formId = $formRes->json('data.form.id');
+
+        $draftRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Needs manager'],
+                'as_draft' => true,
+            ]);
+
+        $draftRes->assertCreated();
+        $submissionId = $draftRes->json('data.id');
+
+        $submitRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/submit", [
+                'values' => ['reason' => 'Needs manager'],
+            ]);
+
+        $submitRes->assertStatus(422)->assertJsonValidationErrors(['workflow']);
+    }
 }

@@ -4,22 +4,49 @@
   "exportedAt": "2026-06-03T00:00:00.000Z",
   "form": {
     "name": "ISO Approval",
-    "description": "ISO document control: type, department, head approval, and two additional reviewers.",
+    "description": "ISO document control — new documents and revisions with sequential approval.",
     "category": "general",
-    "metadata_json": {},
+    "metadata_json": {
+      "controlledDocumentSync": {
+        "enabled": true,
+        "autoRevision": true,
+        "documentCodeField": "document_code",
+        "fieldMap": {
+          "title": "title",
+          "document_type": "document_type",
+          "department": "department",
+          "revision_number": "revision_number",
+          "effective_date": "effective_date",
+          "next_review_date": "review_date",
+          "change_summary": "change_summary"
+        },
+        "attachmentField": "attachments"
+      }
+    },
     "restricted_to": null,
     "status": "draft",
     "schema_version": 1,
     "owner_code": "GEN",
     "doc_type_code": "F",
     "doc_no_custom_enabled": true,
-    "doc_no_template": "ATC-{department}--{documentType}-{seq:3}",
+    "doc_no_template": "ATC-{department}-{documentType}-{seq:3}",
     "doc_no_seq_start": null,
     "doc_no_seq_start_rules": null,
     "brand_logo_url": null,
     "brand_primary_color": null,
     "related_form_ids": [],
     "fields": [
+      {
+        "type": "section",
+        "name": "section_new_document",
+        "label": "New document",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": null,
+        "options": [],
+        "step_order": 0
+      },
       {
         "type": "text",
         "name": "title",
@@ -29,11 +56,12 @@
         "formula": null,
         "validation": {
           "min": 2,
-          "_layout": { "layoutSpan": 12 },
           "required": true
         },
-        "options": [],
-        "step_order": 0
+        "options": {
+          "layout": { "width": "full" }
+        },
+        "step_order": 1
       },
       {
         "type": "select",
@@ -42,19 +70,24 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
+        "validation": { "required": true },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_new_type_dept",
+            "slot": 0,
+            "row_columns": 2
+          },
+          "choices": [
+            "Manual|M",
+            "Policies and Procedures|P",
+            "Guidelines|G",
+            "Work Instructions|W",
+            "Support Documents|S",
+            "Forms|F"
+          ]
         },
-        "options": [
-          "Manual|M",
-          "Policies and Procedures|P",
-          "Guidelines|G",
-          "Work Instructions|W",
-          "Support Documents|S",
-          "Forms|F"
-        ],
-        "step_order": 1
+        "step_order": 2
       },
       {
         "type": "select",
@@ -63,24 +96,29 @@
         "semantic_type": "department",
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
+        "validation": { "required": true },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_new_type_dept",
+            "slot": 1,
+            "row_columns": 2
+          },
+          "choices": [
+            "Quality Management System|QMS",
+            "Occupational Health and Safety Management System|OHS",
+            "Operation and Maintenance|OMD",
+            "Supply Chain Management|SCM",
+            "Human Resource Department|HRD",
+            "Financial Accounting Department|FAD",
+            "Business Development Department|BDD",
+            "Project Implementation Department|PID",
+            "Project Management Office|PMO",
+            "Engineering & Design Department|EDD",
+            "Technology and Quality Governance Office|TQGO"
+          ]
         },
-        "options": [
-          "Quality Management System|QMS",
-          "Occupational Health and Safety Management System|OHS",
-          "Operation and Maintenance|OMD",
-          "Supply Chain Management|SCM",
-          "Human Resource Department|HRD",
-          "Financial Accounting Department|FAD",
-          "Business Development Department|BDD",
-          "Project Implementation Department|PID",
-          "Project Management Office|PMO",
-          "Engineering & Design Department|EDD",
-          "Technology and Quality Governance Office|TQGO"
-        ],
-        "step_order": 2
+        "step_order": 3
       },
       {
         "type": "date",
@@ -89,12 +127,118 @@
         "semantic_type": "date",
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": false
+        "validation": { "required": false },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_new_dates",
+            "slot": 0,
+            "row_columns": 2
+          }
         },
+        "step_order": 4
+      },
+      {
+        "type": "date",
+        "name": "review_date",
+        "label": "Next review date",
+        "semantic_type": "date",
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": false,
+          "help_text": "Optional compliance reminder on the master record after approval."
+        },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_new_dates",
+            "slot": 1,
+            "row_columns": 2
+          }
+        },
+        "step_order": 5
+      },
+      {
+        "type": "section",
+        "name": "section_revision",
+        "label": "Revision",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": null,
         "options": [],
-        "step_order": 3
+        "step_order": 6
+      },
+      {
+        "type": "number",
+        "name": "revision_number",
+        "label": "Revision (auto)",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": false,
+          "min": 0,
+          "help_text": "Assigned automatically. Leave blank unless you need to override."
+        },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_rev_code",
+            "slot": 0,
+            "row_columns": 2
+          }
+        },
+        "step_order": 7
+      },
+      {
+        "type": "text",
+        "name": "document_code",
+        "label": "Existing document code",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": false,
+          "help_text": "Leave blank for a new document. Enter an existing code (e.g. ATC-QMS-P-001) for a revision."
+        },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_rev_code",
+            "slot": 1,
+            "row_columns": 2
+          }
+        },
+        "step_order": 8
+      },
+      {
+        "type": "textarea",
+        "name": "change_summary",
+        "label": "Change summary",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": false,
+          "help_text": "Describe what changed in this revision."
+        },
+        "options": {
+          "layout": { "width": "full" }
+        },
+        "step_order": 9
+      },
+      {
+        "type": "section",
+        "name": "section_approval",
+        "label": "Approval",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": null,
+        "options": [],
+        "step_order": 10
       },
       {
         "type": "approver",
@@ -103,12 +247,16 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
+        "validation": { "required": true },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_approval_heads",
+            "slot": 0,
+            "row_columns": 2
+          }
         },
-        "options": [],
-        "step_order": 4
+        "step_order": 11
       },
       {
         "type": "approver",
@@ -117,12 +265,16 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
+        "validation": { "required": true },
+        "options": {
+          "layout": {
+            "width": "half",
+            "row_id": "iso_approval_heads",
+            "slot": 1,
+            "row_columns": 2
+          }
         },
-        "options": [],
-        "step_order": 5
+        "step_order": 12
       },
       {
         "type": "approver",
@@ -131,12 +283,11 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": false
+        "validation": { "required": false },
+        "options": {
+          "layout": { "width": "half" }
         },
-        "options": [],
-        "step_order": 6
+        "step_order": 13
       },
       {
         "type": "file",
@@ -146,12 +297,13 @@
         "behavior": {},
         "formula": null,
         "validation": {
-          "_layout": { "layoutSpan": 12 },
           "required": true,
           "maxFileSizeMb": 25
         },
-        "options": [],
-        "step_order": 7
+        "options": {
+          "layout": { "width": "full" }
+        },
+        "step_order": 14
       }
     ],
     "steps": [

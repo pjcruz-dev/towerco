@@ -6,11 +6,18 @@ namespace App\Modules\Identity\Services;
 
 use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
+use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
 use Illuminate\Support\Facades\Cache;
 
 final class TenantAuthUserPayloadBuilder
 {
+    public function __construct(
+        private readonly TenantRbacBaselineService $rbacBaseline,
+        private readonly TenantRbacPermissionCatalog $permissionCatalog,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -22,6 +29,11 @@ final class TenantAuthUserPayloadBuilder
         ?TenantUser $impersonator = null,
         ?array $platformImpersonator = null,
     ): array {
+        $this->syncBaselineRolesIfNeeded();
+
+        $user->unsetRelation('roles');
+        $user->unsetRelation('permissions');
+
         $roles = $user->getRoleNames()->values()->all();
         $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
         $tenantId = (string) tenant('id');
@@ -70,6 +82,24 @@ final class TenantAuthUserPayloadBuilder
         }
 
         return $payload;
+    }
+
+    private function syncBaselineRolesIfNeeded(): void
+    {
+        if (! function_exists('tenancy') || ! tenancy()->initialized) {
+            return;
+        }
+
+        $tenantId = (string) tenant('id');
+        $fingerprint = sha1(implode("\0", $this->permissionCatalog->enabledPermissions()));
+        $cacheKey = "toweros:tenant:rbac_sync:{$tenantId}:{$fingerprint}";
+
+        if (Cache::get($cacheKey) === true) {
+            return;
+        }
+
+        $this->rbacBaseline->ensure();
+        Cache::put($cacheKey, true, now()->addDay());
     }
 
     private function resolvePrimaryDomain(): ?string

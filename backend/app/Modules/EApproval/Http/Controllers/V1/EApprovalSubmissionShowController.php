@@ -22,6 +22,6 @@ class EApprovalSubmissionShowController extends AbstractApiController
         $canViewAll = $request->user()->can('e_approval:forms:manage');
         $service->assertCanView($submission, $request->user(), $canViewAll);
 
-        return $this->ok($service->toDetailPayload($submission));
+        return $this->ok($service->toDetailPayload($submission, $request->user()));
     }
 }

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Workspace\Services;
 
+use App\Modules\AdminOne\Services\TenantUserIndexFilters;
 use App\Modules\AdminOne\Services\TenantUserIndexService;
 use App\Modules\AssetOne\Models\Asset;
 use App\Modules\AssetOne\Services\AssetIndexService;
+use App\Modules\Documents\Services\ControlledDocumentSearchService;
+use App\Modules\Documents\Services\DocumentSearchService;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
 use App\Modules\FiberOne\Models\FiberRoute;
@@ -28,6 +31,8 @@ final class WorkspaceSearchService
 {
     private const MIN_QUERY_LENGTH = 2;
 
+    private const MAX_TOTAL_RESULTS = 40;
+
     public function __construct(
         private readonly TenantEnabledModulesResolver $enabledModules,
         private readonly EApprovalSubmissionService $eApprovalSubmissions,
@@ -39,6 +44,8 @@ final class WorkspaceSearchService
         private readonly ProjectIndexService $projects,
         private readonly RolloutProgramIndexService $rollouts,
         private readonly TenantUserIndexService $users,
+        private readonly DocumentSearchService $documents,
+        private readonly ControlledDocumentSearchService $controlledDocuments,
     ) {}
 
     /**
@@ -63,40 +70,61 @@ final class WorkspaceSearchService
         $enabled = $this->enabledModules->resolveForCurrentTenant();
         $results = [];
 
+        $append = function (array $items) use (&$results, $limitPerType): void {
+            if ($items === []) {
+                return;
+            }
+
+            $remaining = self::MAX_TOTAL_RESULTS - count($results);
+            if ($remaining <= 0) {
+                return;
+            }
+
+            $results = array_merge($results, array_slice($items, 0, min($limitPerType, $remaining)));
+        };
+
         if ($this->canSearchModule($enabled, $viewer, 'e_approval', 'e_approval:submissions:view')) {
-            $results = array_merge($results, $this->searchEApprovalSubmissions($viewer, $search, $limitPerType));
+            $append($this->searchEApprovalSubmissions($viewer, $search, $limitPerType));
+        }
+
+        if ($this->canSearchModule($enabled, $viewer, 'documents', 'documents:controlled:view')) {
+            $append($this->controlledDocuments->asWorkspaceResults($viewer, $search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'ticketing', 'ticketing:view')) {
-            $results = array_merge($results, $this->searchTicketingTickets($viewer, $search, $limitPerType));
+            $append($this->searchTicketingTickets($viewer, $search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'sites', 'sites:view')) {
-            $results = array_merge($results, $this->searchSites($search, $limitPerType));
+            $append($this->searchSites($search, $limitPerType));
+        }
+
+        if ($this->canSearchModule($enabled, $viewer, 'documents', 'documents:view')) {
+            $append($this->documents->asWorkspaceResults($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'tower_one', 'tower_one:view')) {
-            $results = array_merge($results, $this->searchTowers($search, $limitPerType));
+            $append($this->searchTowers($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'asset_one', 'asset_one:view')) {
-            $results = array_merge($results, $this->searchAssets($search, $limitPerType));
+            $append($this->searchAssets($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'fiber_one', 'fiber_one:view')) {
-            $results = array_merge($results, $this->searchFiberRoutes($search, $limitPerType));
+            $append($this->searchFiberRoutes($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:view')) {
-            $results = array_merge($results, $this->searchProjects($search, $limitPerType));
+            $append($this->searchProjects($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:rollout:view')) {
-            $results = array_merge($results, $this->searchRollouts($search, $limitPerType));
+            $append($this->searchRollouts($search, $limitPerType));
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'team_access', 'user:manage')) {
-            $results = array_merge($results, $this->searchUsers($search, $limitPerType));
+            $append($this->searchUsers($search, $limitPerType));
         }
 
         return $results;
@@ -373,7 +401,7 @@ final class WorkspaceSearchService
      */
     private function searchUsers(string $search, int $limit): array
     {
-        $paginator = $this->users->paginate(1, $limit, $search, null);
+        $paginator = $this->users->paginate(1, $limit, $search, new TenantUserIndexFilters);
 
         return $this->mapPaginator($paginator, static function (TenantUser $user): array {
             return [

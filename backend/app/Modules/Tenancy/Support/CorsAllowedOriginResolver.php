@@ -45,7 +45,34 @@ final class CorsAllowedOriginResolver
             $patterns = array_filter(array_map('trim', explode(',', $patterns)));
         }
 
-        return is_array($patterns) ? array_values(array_unique($patterns)) : [];
+        if (! is_array($patterns)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map(
+            fn (mixed $pattern): string => $this->normalizeOriginPattern((string) $pattern),
+            $patterns,
+        )));
+    }
+
+    /**
+     * fruitcake/php-cors expects delimiter-wrapped regex; env defaults use wildcard hosts.
+     */
+    private function normalizeOriginPattern(string $pattern): string
+    {
+        $pattern = trim($pattern);
+        if ($pattern === '') {
+            return $pattern;
+        }
+
+        if (preg_match('/^[#\/|@%~].*[#\/|@%~]$/', $pattern) === 1) {
+            return $pattern;
+        }
+
+        $regex = preg_quote($pattern, '#');
+        $regex = str_replace('\*', '.*', $regex);
+
+        return '#^'.$regex.'$#i';
     }
 
     public function forget(): void

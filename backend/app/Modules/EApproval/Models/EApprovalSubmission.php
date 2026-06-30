@@ -35,6 +35,8 @@ class EApprovalSubmission extends Model
         'schema_snapshot_json',
         'workflow_snapshot_json',
         'workflow_version_id',
+        'approval_policy_version_id',
+        'approval_policy_label',
     ];
 
     protected function casts(): array

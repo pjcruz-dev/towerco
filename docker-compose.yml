@@ -16,6 +16,8 @@ services:
     volumes:
       - toweros-mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+    mem_limit: ${TOWEROS_MYSQL_MEM_LIMIT:-1g}
     healthcheck:
       test:
         [
@@ -34,6 +36,7 @@ services:
       start_period: 25s
 
   phpmyadmin:
+    profiles: ["tools"]
     image: phpmyadmin:5-apache
     container_name: toweros-phpmyadmin
     restart: unless-stopped
@@ -45,6 +48,7 @@ services:
       PMA_USER: root
       PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-toweros}
       UPLOAD_LIMIT: 64M
+    mem_limit: ${TOWEROS_PHPMYADMIN_MEM_LIMIT:-256m}
     depends_on:
       mysql:
         condition: service_healthy
@@ -56,11 +60,12 @@ services:
     ports:
       - "${TOWEROS_SOKETI_PORT:-6001}:6001"
     environment:
-      SOKETI_DEBUG: "1"
+      SOKETI_DEBUG: "${SOKETI_DEBUG:-0}"
       SOKETI_DEFAULT_APP_ID: toweros-local
       SOKETI_DEFAULT_APP_KEY: toweros-local
       SOKETI_DEFAULT_APP_SECRET: toweros-local-secret
       SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
+    mem_limit: ${TOWEROS_SOKETI_MEM_LIMIT:-256m}
 
   api:
     build:
@@ -72,12 +77,12 @@ services:
     restart: unless-stopped
     ports:
       - "${TOWEROS_API_PORT:-8000}:8000"
-    # Non-secret defaults only — do not set APP_KEY here (empty APP_KEY overrides backend/.env and breaks encrypted SSO secrets).
-    env_file:
-      - ./backend/.env.docker
+    # Module catalog and secrets live in bind-mounted backend/.env — do not duplicate via env_file
+    # (stale env_file values override .env until the container is recreated).
     environment:
       TOWEROS_DOCKER: "1"
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
+      TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-2}
       DB_HOST: mysql
       DB_PORT: "3306"
       CENTRAL_DB_PORT: "3306"
@@ -92,6 +97,7 @@ services:
         condition: service_healthy
       soketi:
         condition: service_started
+    mem_limit: ${TOWEROS_API_MEM_LIMIT:-768m}
 
   web:
     build:
@@ -103,12 +109,17 @@ services:
       - "${TOWEROS_WEB_PORT:-80}:80"
     env_file:
       - ./frontend/.env.docker
+    environment:
+      TOWEROS_WEB_MODE: ${TOWEROS_WEB_MODE:-dev}
+      TOWEROS_WEB_FORCE_BUILD: ${TOWEROS_WEB_FORCE_BUILD:-0}
+      NODE_OPTIONS: ${NODE_OPTIONS:-}
     volumes:
       - ./frontend:/app
       - toweros-frontend-node:/app/node_modules
       - toweros-frontend-next:/app/.next
     depends_on:
       - api
+    mem_limit: ${TOWEROS_WEB_MEM_LIMIT:-3g}
 
 volumes:
   toweros-mysql-data:

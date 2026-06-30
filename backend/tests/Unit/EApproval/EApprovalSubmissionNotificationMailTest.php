@@ -62,9 +62,27 @@ final class EApprovalSubmissionNotificationMailTest extends TestCase
         $this->assertStringContainsString('public form link', implode("\n", $mail->introLines));
     }
 
-    private function renderMail(EApprovalSubmission $submission, string $event): MailMessage
+    public function test_manual_follow_up_mail_prompts_approver_to_review(): void
     {
-        $notification = new EApprovalSubmissionNotification($submission, $event, null, null);
+        $submission = new EApprovalSubmission(['document_no' => 'GEN-F-00006']);
+        $submission->id = 'sub-id';
+        $submission->setRelation('form', new EApprovalForm(['name' => 'Policy approval']));
+        $submission->setRelation('requestor', new TenantUser(['name' => 'Requestor User', 'email' => 'requestor@test.localhost']));
+
+        $mail = $this->renderMail($submission, 'manual_follow_up', 'Requestor User');
+
+        $this->assertStringContainsString('Follow-up reminder', $mail->subject);
+        $this->assertStringContainsString('follow-up reminder', implode("\n", $mail->introLines));
+        $this->assertStringContainsString('Requestor User', implode("\n", $mail->introLines));
+        $this->assertSame(
+            'http://localhost/e-approval/submissions/sub-id?tab=workflow',
+            $mail->actionUrl,
+        );
+    }
+
+    private function renderMail(EApprovalSubmission $submission, string $event, ?string $actorName = null): MailMessage
+    {
+        $notification = new EApprovalSubmissionNotification($submission, $event, $actorName, null);
 
         return $notification->toMail(new TenantUser());
     }

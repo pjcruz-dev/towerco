@@ -11,6 +11,9 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
+use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
+use App\Modules\ProcurementOne\Services\ProcurementVendorPoPolicyGuard;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -32,6 +35,11 @@ final class EApprovalSubmissionService
         private readonly EApprovalSubmissionRelatedService $relatedSubmissions,
         private readonly EApprovalDocumentLinkService $documentLinks,
         private readonly EApprovalSubmissionFinanceAuditService $financeAudit,
+        private readonly EApprovalFieldComputedService $computedFields,
+        private readonly EApprovalSubmissionWorkflowPreparer $workflowPreparer,
+        private readonly ProcurementVendorPoPolicyGuard $vendorPoPolicy,
+        private readonly ProcurementPrEApprovalHookService $procurementPrHook,
+        private readonly ControlledDocumentEApprovalValuesService $controlledDocumentValues,
     ) {}
 
     public function paginate(
@@ -110,34 +118,56 @@ final class EApprovalSubmissionService
 
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, true);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
+        $values = $this->computedFields->apply($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values);
+        $controlled = $this->controlledDocumentValues->prepareForSubmit(
+            $form,
+            $values,
+            fn () => $this->documentNumbers->nextDocumentNumber($form, $values),
+        );
+        $values = $controlled['values'];
 
         $this->valuesValidator->validate($form, $values);
+        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
-        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning) {
-            $snapshot = $this->snapshots->capture($form);
-            $documentNo = $this->documentNumbers->nextDocumentNumber($form, $values);
+        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled) {
+            $submissionId = (string) Str::uuid();
+            $prepared = $this->workflowPreparer->prepare($form, $values, $submissionId);
+            $documentNo = $controlled['document_no'];
 
             $submission = EApprovalSubmission::query()->create([
-                'id' => (string) Str::uuid(),
+                'id' => $submissionId,
                 'document_no' => $documentNo,
                 'form_id' => $form->id,
                 'requestor_id' => $requestor->id,
                 'parent_submission_id' => $parentId,
                 'status' => EApprovalSubmissionStatus::PENDING,
                 'current_step' => 1,
-                'schema_snapshot_json' => $snapshot['schema_snapshot_json'],
-                'workflow_snapshot_json' => $snapshot['workflow_snapshot_json'],
-                'workflow_version_id' => $snapshot['workflow_version_id'],
+                'schema_snapshot_json' => $prepared['schema_snapshot_json'],
+                'workflow_snapshot_json' => $prepared['workflow_snapshot_json'],
+                'workflow_version_id' => $prepared['workflow_version_id'],
+                'approval_policy_version_id' => $prepared['approval_policy_version_id'],
+                'approval_policy_label' => $prepared['approval_policy_label'],
             ]);
 
             $this->persistValues($submission, $form, $values);
-            $this->workflow->initiateWorkflow($submission, $form, $values);
+            $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
             $this->audit->log('submission_created', $submission->id, $documentNo, $requestor);
+            if ($prepared['approval_policy_label'] !== null) {
+                $this->audit->log(
+                    'approval_policy_applied',
+                    $submission->id,
+                    $prepared['approval_policy_label'],
+                    $requestor,
+                );
+            }
             $this->financeAudit->logParentLinkChange((string) $submission->id, null, $parentId, $requestor);
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
-            return $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
+
+            return $fresh;
         });
     }
 
@@ -160,10 +190,13 @@ final class EApprovalSubmissionService
         TenantUser $requestor,
         ?string $parentSubmissionId = null,
         bool $updateParentLink = true,
+        bool $forceNew = false,
     ): EApprovalSubmission {
-        $existing = $this->findRequestorDraft($requestor, $formId);
-        if ($existing !== null) {
-            return $this->updateDraft($existing, $values, $requestor, $parentSubmissionId, $updateParentLink);
+        if (! $forceNew) {
+            $existing = $this->findRequestorDraft($requestor, $formId);
+            if ($existing !== null) {
+                return $this->updateDraft($existing, $values, $requestor, $parentSubmissionId, $updateParentLink);
+            }
         }
 
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->find($formId);
@@ -181,6 +214,8 @@ final class EApprovalSubmissionService
 
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, $updateParentLink);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
+        $values = $this->computedFields->apply($form, $values);
+        $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values);
 
         $this->valuesValidator->validate($form, $values, false);
@@ -234,6 +269,8 @@ final class EApprovalSubmissionService
             (string) $submission->id,
         );
         $values = $this->enrichValuesForParent($parentId, $form, $values);
+        $values = $this->computedFields->apply($form, $values);
+        $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values, (string) $submission->id);
         $this->valuesValidator->validate($form, $values, false);
 
@@ -281,12 +318,25 @@ final class EApprovalSubmissionService
             (string) $submission->id,
         );
         $values = $this->enrichValuesForParent($parentId, $form, $values);
+        $values = $this->computedFields->apply($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values, (string) $submission->id);
-        $this->valuesValidator->validate($form, $values, true);
+        $controlled = $this->controlledDocumentValues->prepareForSubmit(
+            $form,
+            $values,
+            fn () => $this->documentNumbers->nextDocumentNumber($form, $values),
+        );
+        $values = $controlled['values'];
+        $this->valuesValidator->validate(
+            $form,
+            $values,
+            true,
+            $this->attachmentCountsByFieldName($submission),
+        );
+        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
-        return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId) {
-            $documentNo = $this->documentNumbers->nextDocumentNumber($form, $values);
-            $snapshot = $this->snapshots->capture($form);
+        return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId, $controlled) {
+            $documentNo = $controlled['document_no'];
+            $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
 
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
 
@@ -294,9 +344,11 @@ final class EApprovalSubmissionService
                 'document_no' => $documentNo,
                 'status' => EApprovalSubmissionStatus::PENDING,
                 'current_step' => 1,
-                'schema_snapshot_json' => $snapshot['schema_snapshot_json'],
-                'workflow_snapshot_json' => $snapshot['workflow_snapshot_json'],
-                'workflow_version_id' => $snapshot['workflow_version_id'],
+                'schema_snapshot_json' => $prepared['schema_snapshot_json'],
+                'workflow_snapshot_json' => $prepared['workflow_snapshot_json'],
+                'workflow_version_id' => $prepared['workflow_version_id'],
+                'approval_policy_version_id' => $prepared['approval_policy_version_id'],
+                'approval_policy_label' => $prepared['approval_policy_label'],
             ]);
             if ($updateParentLink || $submission->parent_submission_id === null) {
                 $submission->parent_submission_id = $parentId;
@@ -304,8 +356,16 @@ final class EApprovalSubmissionService
             $submission->save();
 
             $this->persistValues($submission, $form, $values);
-            $this->workflow->initiateWorkflow($submission, $form, $values);
+            $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
             $this->audit->log('submission_created', $submission->id, $documentNo, $requestor);
+            if ($prepared['approval_policy_label'] !== null) {
+                $this->audit->log(
+                    'approval_policy_applied',
+                    $submission->id,
+                    $prepared['approval_policy_label'],
+                    $requestor,
+                );
+            }
             $this->financeAudit->logParentLinkChange(
                 (string) $submission->id,
                 $previousParentId,
@@ -314,7 +374,10 @@ final class EApprovalSubmissionService
             );
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
-            return $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
+
+            return $fresh;
         });
     }
 
@@ -344,7 +407,10 @@ final class EApprovalSubmissionService
 
         $this->audit->log('submission_cancelled', $submission->id, null, $actor);
 
-        return $submission->fresh(['form', 'requestor']);
+        $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
+        $this->procurementPrHook->afterSubmissionMutation($fresh, $actor);
+
+        return $fresh;
     }
 
     /**
@@ -368,25 +434,41 @@ final class EApprovalSubmissionService
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->findOrFail($submission->form_id);
 
         $overspendWarning = $this->assertLinkedParentAmounts($submission, $form, $values);
-        $this->valuesValidator->validate($form, $values);
+        $this->valuesValidator->validate(
+            $form,
+            $values,
+            true,
+            $this->attachmentCountsByFieldName($submission),
+        );
+        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
         return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $actor, $overspendWarning) {
             EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
 
-            $snapshot = $this->snapshots->capture($form);
+            $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
             $submission->fill([
                 'status' => EApprovalSubmissionStatus::PENDING,
                 'current_step' => 1,
-                'schema_snapshot_json' => $snapshot['schema_snapshot_json'],
-                'workflow_snapshot_json' => $snapshot['workflow_snapshot_json'],
-                'workflow_version_id' => $snapshot['workflow_version_id'],
+                'schema_snapshot_json' => $prepared['schema_snapshot_json'],
+                'workflow_snapshot_json' => $prepared['workflow_snapshot_json'],
+                'workflow_version_id' => $prepared['workflow_version_id'],
+                'approval_policy_version_id' => $prepared['approval_policy_version_id'],
+                'approval_policy_label' => $prepared['approval_policy_label'],
             ]);
             $submission->save();
 
             $this->persistValues($submission, $form, $values);
-            $this->workflow->initiateWorkflow($submission, $form, $values);
+            $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
             $this->audit->log('submission_resubmitted', $submission->id, null, $actor);
+            if ($prepared['approval_policy_label'] !== null) {
+                $this->audit->log(
+                    'approval_policy_applied',
+                    $submission->id,
+                    $prepared['approval_policy_label'],
+                    $actor,
+                );
+            }
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $actor);
 
             return $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
@@ -396,14 +478,18 @@ final class EApprovalSubmissionService
     /**
      * @return array<string, mixed>
      */
-    public function toDetailPayload(EApprovalSubmission $submission): array
+    public function toDetailPayload(EApprovalSubmission $submission, ?TenantUser $viewer = null): array
     {
         $submission->loadMissing(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver', 'attachments']);
         $snapshotFields = $this->snapshotFieldsFromSubmission($submission);
+        $viewerContext = $this->viewerContext($submission, $viewer);
 
         return array_merge($submission->toListRow(), $this->lifecycle->manualFollowUpMeta($submission), [
             'form_schema_version_at_submit' => $this->schemaVersionFromSnapshot($submission),
             'workflow_version_id' => $submission->workflow_version_id,
+            'approval_policy_version_id' => $submission->approval_policy_version_id,
+            'approval_policy_label' => $submission->approval_policy_label,
+            'workflow_policy' => $this->workflowPolicyMetaFromSnapshot($submission),
             'parent_submission_id' => $submission->parent_submission_id,
             'related_submissions' => $this->relatedSubmissions->listForSubmission($submission),
             'related_form_navigation' => $this->relatedSubmissions->relatedFormNavigation($submission->form),
@@ -418,7 +504,50 @@ final class EApprovalSubmissionService
                 'file_name' => $a->file_name,
                 'file_path' => $a->file_path,
             ])->values()->all(),
+            'viewer_is_requestor' => $viewerContext['viewer_is_requestor'],
+            'viewer_pending_approval_id' => $viewerContext['viewer_pending_approval_id'],
         ]);
+    }
+
+    /**
+     * @return array{viewer_is_requestor: bool, viewer_pending_approval_id: string|null}
+     */
+    private function viewerContext(EApprovalSubmission $submission, ?TenantUser $viewer): array
+    {
+        if ($viewer === null) {
+            return [
+                'viewer_is_requestor' => false,
+                'viewer_pending_approval_id' => null,
+            ];
+        }
+
+        $viewerIsRequestor = (string) $submission->requestor_id === (string) $viewer->id;
+        $viewerPendingApprovalId = null;
+
+        /** @var EApprovalRequestApproval|null $pending */
+        $pending = $submission->approvals->first(
+            static fn (EApprovalRequestApproval $approval): bool => $approval->status === EApprovalApprovalStatus::PENDING
+                && (int) ($approval->step?->step_order ?? 0) === (int) $submission->current_step,
+        );
+
+        if ($pending !== null) {
+            $assignedId = (string) ($pending->approver_id ?? '');
+            $canAct = $assignedId !== ''
+                && (
+                    $assignedId === (string) $viewer->id
+                    || app(EApprovalDelegationService::class)->canActForApprover($viewer, $assignedId)
+                    || $viewer->can('e_approval:forms:manage')
+                );
+
+            if ($canAct) {
+                $viewerPendingApprovalId = (string) $pending->id;
+            }
+        }
+
+        return [
+            'viewer_is_requestor' => $viewerIsRequestor,
+            'viewer_pending_approval_id' => $viewerPendingApprovalId,
+        ];
     }
 
     /**
@@ -627,5 +756,58 @@ final class EApprovalSubmissionService
                 'value' => $stored,
             ]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function workflowPolicyMetaFromSnapshot(EApprovalSubmission $submission): ?array
+    {
+        $raw = $submission->workflow_snapshot_json;
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        if (! isset($decoded['approval_policy_version_id']) && ! isset($decoded['workflow_profile_key'])) {
+            return null;
+        }
+
+        return [
+            'approval_policy_version_id' => $decoded['approval_policy_version_id'] ?? $submission->approval_policy_version_id,
+            'approval_policy_label' => $decoded['approval_policy_label'] ?? $submission->approval_policy_label,
+            'workflow_profile_key' => $decoded['workflow_profile_key'] ?? null,
+            'workflow_profile_label' => $decoded['workflow_profile_label'] ?? null,
+            'policy_context' => $decoded['policy_context'] ?? null,
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function attachmentCountsByFieldName(EApprovalSubmission $submission): array
+    {
+        $submission->loadMissing('attachments');
+        $counts = [];
+
+        foreach ($submission->attachments as $attachment) {
+            $fieldName = trim((string) ($attachment->field_name ?? ''));
+            if ($fieldName === '') {
+                continue;
+            }
+
+            $counts[$fieldName] = ($counts[$fieldName] ?? 0) + 1;
+        }
+
+        return $counts;
     }
 }

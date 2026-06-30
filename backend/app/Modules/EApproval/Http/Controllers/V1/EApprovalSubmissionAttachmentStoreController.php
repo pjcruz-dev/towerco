@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Services\EApprovalFileStorageService;
 use App\Modules\EApproval\Services\EApprovalPlanFeaturesService;
+use App\Modules\EApproval\Services\EApprovalSubmissionAttachmentValidator;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
         EApprovalFileStorageService $files,
         EApprovalSubmissionService $submissions,
         EApprovalPlanFeaturesService $planFeatures,
+        EApprovalSubmissionAttachmentValidator $attachmentValidator,
     ): JsonResponse {
         abort_unless($request->user()?->can('e_approval:submissions:create'), 403);
 
@@ -28,10 +30,14 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
         $canViewAll = $request->user()->can('e_approval:forms:manage');
         $submissions->assertCanView($submission, $request->user(), $canViewAll);
 
+        $maxKb = max(1, (int) config('toweros.tenant_files.max_size_kb', 25600));
+
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:10240'],
+            'file' => ['required', 'file', 'max:'.$maxKb],
             'field_name' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $attachmentValidator->assertCanStore($submission, $data['file'], $data['field_name'] ?? null);
 
         $attachment = $files->store($submission, $data['file'], $data['field_name'] ?? null);
 

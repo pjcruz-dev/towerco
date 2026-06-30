@@ -21,7 +21,16 @@ class EApprovalSubmissionIndexController extends AbstractApiController
 
         $query = $this->validatedTenantListQuery($request);
         $status = (string) $request->query('status', 'all');
-        $canViewAll = $request->user()->can('e_approval:forms:manage');
+
+        // Only auditors see every user's submissions by default.
+        // Form managers (e_approval:forms:manage) can manage forms but are scoped
+        // to their own submissions + those they approve, unless they also hold the
+        // audit:view permission.
+        $canViewAll = $request->user()->can('e_approval:audit:view');
+
+        // ?mine=1 forces the current-user-only scope regardless of canViewAll,
+        // so admins can filter to their own submissions.
+        $forceOwn = filter_var($request->query('mine', false), FILTER_VALIDATE_BOOLEAN);
 
         $paginator = $service->paginate(
             $request->user(),
@@ -29,7 +38,7 @@ class EApprovalSubmissionIndexController extends AbstractApiController
             $query['per_page'],
             $query['search'],
             $status === 'all' ? null : $status,
-            $canViewAll,
+            $canViewAll && ! $forceOwn,
         );
 
         return $this->okWithMeta(

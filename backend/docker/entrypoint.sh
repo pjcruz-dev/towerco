@@ -93,4 +93,44 @@ mkdir -p storage/framework/cache storage/framework/sessions storage/framework/vi
 chmod -R ug+rwx storage/framework storage/logs bootstrap/cache 2>/dev/null || true
 
 echo "[api] Laravel API http://0.0.0.0:8000"
+
+WORKERS="${TOWEROS_API_WORKERS:-4}"
+if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
+  echo "[api] Starting ${WORKERS} PHP workers behind nginx (concurrent dev requests)"
+  rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+
+  {
+    echo "upstream toweros_api_workers {"
+    i=1
+    while [ "$i" -le "$WORKERS" ]; do
+      echo "    server 127.0.0.1:$((8000 + i));"
+      i=$((i + 1))
+    done
+    echo "}"
+    echo "server {"
+    echo "    listen 8000;"
+    echo "    server_name _;"
+    echo "    client_max_body_size 64m;"
+    echo "    location / {"
+    echo "        proxy_http_version 1.1;"
+    echo "        proxy_set_header Host \$http_host;"
+    echo "        proxy_set_header X-Real-IP \$remote_addr;"
+    echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
+    echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
+    echo "        proxy_read_timeout 300s;"
+    echo "        proxy_pass http://toweros_api_workers;"
+    echo "    }"
+    echo "}"
+  } > /etc/nginx/conf.d/toweros-api.conf
+
+  i=1
+  while [ "$i" -le "$WORKERS" ]; do
+    worker_port=$((8000 + i))
+    php artisan serve --host=127.0.0.1 --port="$worker_port" --no-reload &
+    i=$((i + 1))
+  done
+  exec nginx -g 'daemon off;'
+fi
+
+echo "[api] Single-worker mode (set TOWEROS_API_WORKERS=4 for concurrent requests)"
 exec php artisan serve --host=0.0.0.0 --port=8000

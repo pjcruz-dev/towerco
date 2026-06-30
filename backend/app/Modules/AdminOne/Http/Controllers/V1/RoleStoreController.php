@@ -22,11 +22,9 @@ class RoleStoreController extends AbstractApiController
         ]);
 
         $role = $service->createCustomRole($data['name'], $data['permissions']);
+        $payload = $service->show($role);
+        unset($payload['users']);
 
-        return $this->created([
-            'id' => $role->id,
-            'name' => $role->name,
-            'permissions' => $role->permissions->pluck('name')->values()->all(),
-        ]);
+        return $this->created($payload);
     }
 }

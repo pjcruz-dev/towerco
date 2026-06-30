@@ -6,6 +6,7 @@ namespace App\Modules\Rollout\Services;
 
 use App\Models\Tenant;
 use App\Modules\Billing\Services\TenantRfiMeterService;
+use App\Modules\Documents\Services\DocumentRolloutGateEnforcementService;
 use App\Modules\ProjectOne\Models\Project;
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
@@ -15,6 +16,7 @@ use App\Modules\Rollout\Models\TenantPublicHoliday;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +28,8 @@ final class RolloutProgramService
         private readonly RolloutSlaRecalculationService $slaRecalculation,
         private readonly RolloutAuditLogger $audit,
         private readonly TenantRfiMeterService $rfiMeter,
+        private readonly DocumentRolloutGateEnforcementService $documentGateEnforcement,
+        private readonly RolloutCanonicalSiteService $canonicalSites,
     ) {}
 
     /**
@@ -73,12 +77,14 @@ final class RolloutProgramService
         $this->instantiateTimeline($program, $config);
         $this->ensureProfitabilityShell($program);
 
+        $this->canonicalSites->ensureForProgram($program);
+
         $this->audit->log('rollout.created', $program, [
             'mno' => $program->mno,
             'project_type' => $program->project_type,
         ]);
 
-        return $program->fresh(['timelinePhases', 'profitability']);
+        return $program->fresh(['timelinePhases', 'profitability', 'site']);
     }
 
     /**
@@ -221,6 +227,8 @@ final class RolloutProgramService
                     ]);
                 }
             }
+
+            $this->documentGateEnforcement->assertCanPassGate($program, $phase);
         }
 
         $phase->gate_status = $gateStatus;
@@ -266,6 +274,7 @@ final class RolloutProgramService
         $this->assertProgramEditable($program);
 
         if ($markGatePassed) {
+            $this->documentGateEnforcement->assertCanPassGate($program, $phase);
             $phase->gate_status = 'passed';
         }
 
@@ -479,13 +488,13 @@ final class RolloutProgramService
             'gate_approval_escalation_working_days' => (int) ($config->gate_approval_escalation_working_days ?? 3),
             'timeline_templates' => $config->playbook_snapshot['timeline_templates'] ?? [],
             'delivery_periods' => $config->playbook_snapshot['delivery_periods'] ?? [],
-            'public_holidays_count' => \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('tenant_public_holidays')
+            'public_holidays_count' => Schema::connection('tenant')->hasTable('tenant_public_holidays')
                 ? TenantPublicHoliday::query()->where('calendar_year', (int) now()->format('Y'))->count()
                 : 0,
-            'national_holidays_count' => \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('tenant_public_holidays')
+            'national_holidays_count' => Schema::connection('tenant')->hasTable('tenant_public_holidays')
                 ? TenantPublicHoliday::query()->where('calendar_year', (int) now()->format('Y'))->whereNull('region')->count()
                 : 0,
-            'regional_holidays_count' => \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('tenant_public_holidays')
+            'regional_holidays_count' => Schema::connection('tenant')->hasTable('tenant_public_holidays')
                 ? TenantPublicHoliday::query()->where('calendar_year', (int) now()->format('Y'))->whereNotNull('region')->count()
                 : 0,
             'sla_holiday_policy' => 'National holidays apply to all rollouts. Regional holidays apply only when the rollout region matches.',
@@ -610,18 +619,10 @@ final class RolloutProgramService
 
     public function issueTcoSiteId(RolloutProgram $program, string $tenantSequencePrefix): RolloutProgram
     {
-        if ($program->tco_site_id !== null) {
-            return $program;
-        }
+        $program = $this->canonicalSites->issueTcoSiteId($program, $tenantSequencePrefix);
+        $this->canonicalSites->ensureForProgram($program);
 
-        $program->tco_site_id = $this->tcoSiteIdGenerator->generate(
-            (string) ($program->region ?? 'ncr'),
-            (string) $program->mno,
-            $tenantSequencePrefix,
-        );
-        $program->save();
-
-        return $program;
+        return $program->fresh(['site']);
     }
 
     private function assertProgramEditable(RolloutProgram $program): void

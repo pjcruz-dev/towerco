@@ -42,6 +42,7 @@ trait InteractsWithInMemoryTenantApi
             $table->string('id')->primary();
             $table->timestamps();
             $table->json('data')->nullable();
+            $table->boolean('mfa_required')->default(false);
             $table->string('plan_tier', 32)->default('starter');
             $table->string('subscription_status', 32)->default('active');
             $table->unsignedInteger('seat_limit')->default(25);
@@ -69,6 +70,7 @@ trait InteractsWithInMemoryTenantApi
             'name' => 'Test Admin',
             'email' => 'admin@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $this->testTenantAdmin->assignRole('tenant_admin');
         tenancy()->end();

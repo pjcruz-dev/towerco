@@ -79,4 +79,45 @@ final class TenantPlanEntitlementsServiceTest extends TestCase
         $this->assertTrue($service->isDowngrade('enterprise', 'starter'));
         $this->assertFalse($service->isDowngrade('starter', 'professional'));
     }
+
+    public function test_enterprise_procurement_one_features_are_fully_enabled(): void
+    {
+        $tenant = Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'plan_tier' => 'enterprise',
+            'billing_overrides' => null,
+        ]);
+
+        $features = app(TenantPlanEntitlementsService::class)->procurementOneFeatures($tenant->id);
+
+        $this->assertSame('enterprise', $features['plan_tier']);
+        $this->assertTrue($features['enabled']);
+        $this->assertTrue($features['goods_receipt']);
+        $this->assertTrue($features['ap_invoices']);
+        $this->assertTrue($features['payment_tracking']);
+        $this->assertTrue($features['rfq_sourcing']);
+        $this->assertTrue($features['vendor_contracts']);
+        $this->assertTrue($features['reporting_exports']);
+
+        $tenant->delete();
+    }
+
+    public function test_professional_procurement_one_is_core_only(): void
+    {
+        $tenant = Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'plan_tier' => 'professional',
+            'billing_overrides' => null,
+        ]);
+
+        $features = app(TenantPlanEntitlementsService::class)->procurementOneFeatures($tenant->id);
+
+        $this->assertSame('professional', $features['plan_tier']);
+        $this->assertTrue($features['enabled']);
+        $this->assertFalse($features['goods_receipt']);
+        $this->assertFalse($features['ap_invoices']);
+        $this->assertFalse($features['payment_tracking']);
+
+        $tenant->delete();
+    }
 }

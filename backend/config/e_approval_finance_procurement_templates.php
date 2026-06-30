@@ -151,8 +151,16 @@ return [
                 'name' => 'total_reimbursement',
                 'label' => 'Total liquidation amount',
                 'step_order' => 3,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_total', 'slot' => 0]],
+                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'sum_grid_column',
+                        'source_field' => 'expense_lines',
+                        'column' => 'Amount',
+                    ],
+                    'layout' => ['width' => 'half', 'row_id' => 'lq_total', 'slot' => 0],
+                ],
             ],
             [
                 'type' => 'date',
@@ -246,7 +254,15 @@ return [
                 'name' => 'total_reimbursement',
                 'label' => 'Total reimbursement amount',
                 'step_order' => 4,
-                'validation' => ['required' => true],
+                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'sum_grid_column',
+                        'source_field' => 'expense_lines',
+                        'column' => 'Amount',
+                    ],
+                ],
             ],
             [
                 'type' => 'grid',
@@ -297,7 +313,10 @@ return [
         'doc_type_code' => 'PR',
         'metadata_json' => [
             'form_family' => 'purchase_requisition',
+            'print_template_kind' => 'purchase_requisition',
             'related_template_ids' => ['purchase_order'],
+            'use_approval_policy' => true,
+            'workflow_source' => 'form',
         ],
         'fields' => [
             [
@@ -351,7 +370,30 @@ return [
                 'validation' => ['required' => true],
                 'options' => [
                     'columns' => [
+                        ['label' => 'Site ID', 'type' => 'select', 'master_data_key' => 'sites'],
                         ['label' => 'Description', 'type' => 'text'],
+                        ['label' => 'Item Code', 'type' => 'select', 'master_data_key' => 'item_codes'],
+                        [
+                            'label' => 'Department',
+                            'type' => 'select',
+                            'choices' => [
+                                ['value' => 'operations', 'label' => 'Operations'],
+                                ['value' => 'it', 'label' => 'IT'],
+                                ['value' => 'network', 'label' => 'Network'],
+                                ['value' => 'facilities', 'label' => 'Facilities'],
+                            ],
+                        ],
+                        ['label' => 'UOM', 'type' => 'text'],
+                        [
+                            'label' => 'Quote basis',
+                            'type' => 'select',
+                            'choices' => [
+                                ['value' => 'one_time', 'label' => 'One-time'],
+                                ['value' => 'monthly', 'label' => 'Monthly'],
+                                ['value' => 'yearly', 'label' => 'Yearly'],
+                                ['value' => 'monthly_yearly', 'label' => 'Monthly + Yearly'],
+                            ],
+                        ],
                         ['label' => 'Qty', 'type' => 'number'],
                         ['label' => 'Unit price', 'type' => 'currency'],
                     ],
@@ -362,7 +404,16 @@ return [
                 'name' => 'estimated_total',
                 'label' => 'Estimated total',
                 'step_order' => 6,
-                'validation' => ['required' => true],
+                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from line items (Qty × unit price).'],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'sum_grid_lines',
+                        'source_field' => 'line_items',
+                        'quantity_column' => 'Qty',
+                        'amount_column' => 'Unit price',
+                    ],
+                ],
             ],
             [
                 'type' => 'textarea',
@@ -377,25 +428,9 @@ return [
                 'label' => 'Quotes / specifications',
                 'step_order' => 8,
             ],
-            [
-                'type' => 'approver',
-                'name' => 'procurement_approver',
-                'label' => 'Procurement approver',
-                'step_order' => 9,
-                'validation' => ['required' => true],
-            ],
-            [
-                'type' => 'approver',
-                'name' => 'finance_approver',
-                'label' => 'Finance approver',
-                'step_order' => 10,
-                'validation' => ['required' => true],
-            ],
         ],
         'steps' => [
             ['type' => 'manager', 'step_order' => 1],
-            ['type' => 'field', 'approverId' => 'procurement_approver', 'step_order' => 2],
-            ['type' => 'field', 'approverId' => 'finance_approver', 'step_order' => 3],
         ],
     ],
 
@@ -406,9 +441,12 @@ return [
         'doc_type_code' => 'PO',
         'metadata_json' => [
             'form_family' => 'purchase_order',
+            'print_template_kind' => 'purchase_order',
             'parent_form_family' => 'purchase_requisition',
             'requires_parent_submission' => true,
             'related_template_ids' => ['purchase_requisition', 'vendor_registration'],
+            'use_approval_policy' => true,
+            'workflow_source' => 'form',
         ],
         'fields' => [
             [
@@ -454,14 +492,36 @@ return [
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'po_dates', 'slot' => 1]],
             ],
             [
+                'type' => 'textarea',
+                'name' => 'payment_terms',
+                'label' => 'Payment terms',
+                'step_order' => 6,
+                'validation' => [
+                    'placeholder' => 'e.g. Net 30 days from invoice date',
+                    'help_text' => 'Free text — describe commercial terms for this PO.',
+                ],
+            ],
+            [
                 'type' => 'grid',
                 'name' => 'line_items',
                 'label' => 'PO line items',
-                'step_order' => 6,
+                'step_order' => 7,
                 'validation' => ['required' => true],
                 'options' => [
                     'columns' => [
-                        ['label' => 'Item', 'type' => 'text'],
+                        ['label' => 'Site ID', 'type' => 'select', 'master_data_key' => 'sites'],
+                        ['label' => 'Description', 'type' => 'text'],
+                        ['label' => 'Item Code', 'type' => 'select', 'master_data_key' => 'item_codes'],
+                        [
+                            'label' => 'Department',
+                            'type' => 'select',
+                            'choices' => [
+                                ['value' => 'operations', 'label' => 'Operations'],
+                                ['value' => 'it', 'label' => 'IT'],
+                                ['value' => 'network', 'label' => 'Network'],
+                                ['value' => 'facilities', 'label' => 'Facilities'],
+                            ],
+                        ],
                         ['label' => 'Qty', 'type' => 'number'],
                         ['label' => 'Unit price', 'type' => 'currency'],
                     ],
@@ -471,14 +531,104 @@ return [
                 'type' => 'currency',
                 'name' => 'total_amount',
                 'label' => 'PO total amount',
-                'step_order' => 7,
-                'validation' => ['required' => true],
+                'step_order' => 8,
+                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from line items (Qty × unit price).'],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'sum_grid_lines',
+                        'source_field' => 'line_items',
+                        'quantity_column' => 'Qty',
+                        'amount_column' => 'Unit price',
+                    ],
+                ],
             ],
             [
                 'type' => 'file',
                 'name' => 'vendor_quote',
                 'label' => 'Vendor quote / order confirmation',
+                'step_order' => 9,
+            ],
+        ],
+        'steps' => [
+            ['type' => 'manager', 'step_order' => 1],
+        ],
+    ],
+
+    'ap_invoice' => [
+        'name' => 'AP invoice (supplier invoice)',
+        'description' => 'Match supplier invoice to purchase order and goods receipt for accounts payable.',
+        'category' => 'procurement',
+        'doc_type_code' => 'APINV',
+        'metadata_json' => [
+            'form_family' => 'ap_invoice',
+            'print_template_kind' => 'ap_invoice',
+            'parent_form_family' => 'purchase_order',
+            'requires_parent_submission' => true,
+            'related_template_ids' => ['purchase_order', 'purchase_requisition'],
+            'use_approval_policy' => true,
+        ],
+        'fields' => [
+            [
+                'type' => 'section',
+                'name' => 'section_invoice',
+                'label' => 'Supplier invoice',
+                'step_order' => 1,
+            ],
+            [
+                'type' => 'text',
+                'name' => 'purchase_order_document_no',
+                'label' => 'PO document no.',
+                'step_order' => 2,
+                'validation' => ['required' => true],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'vendor_invoice_no',
+                'label' => 'Vendor invoice no.',
+                'step_order' => 3,
+                'validation' => ['required' => true],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'supplier',
+                'label' => 'Supplier',
+                'step_order' => 4,
+                'validation' => ['required' => true],
+            ],
+            [
+                'type' => 'date',
+                'name' => 'invoice_date',
+                'label' => 'Invoice date',
+                'step_order' => 5,
+                'validation' => ['required' => true],
+            ],
+            [
+                'type' => 'date',
+                'name' => 'due_date',
+                'label' => 'Due date',
+                'step_order' => 6,
+            ],
+            [
+                'type' => 'grid',
+                'name' => 'line_items',
+                'label' => 'Invoice lines',
+                'step_order' => 7,
+                'validation' => ['required' => true],
+                'options' => [
+                    'columns' => [
+                        ['label' => 'Description', 'type' => 'text'],
+                        ['label' => 'Qty', 'type' => 'number'],
+                        ['label' => 'Unit price', 'type' => 'currency'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'grand_total',
+                'label' => 'Invoice total',
                 'step_order' => 8,
+                'validation' => ['required' => true],
             ],
             [
                 'type' => 'approver',
@@ -489,7 +639,7 @@ return [
             ],
         ],
         'steps' => [
-            ['type' => 'field', 'approverId' => 'finance_approver', 'step_order' => 1],
+            ['type' => 'manager', 'step_order' => 1],
         ],
     ],
 

@@ -12,15 +12,22 @@ final class EApprovalSubmissionValuesValidator
 {
     public function __construct(
         private readonly EApprovalFieldVisibilityEvaluator $visibility,
+        private readonly EApprovalApprovalPolicyRequiredApproverFields $policyRequiredApprovers,
     ) {}
 
     /**
      * @param  array<string, mixed>  $values
+     * @param  array<string, int>  $attachmentCountsByFieldName
      */
-    public function validate(EApprovalForm $form, array $values, bool $requireRequired = true): void
-    {
+    public function validate(
+        EApprovalForm $form,
+        array $values,
+        bool $requireRequired = true,
+        array $attachmentCountsByFieldName = [],
+    ): void {
         $form->loadMissing('fields');
         $errors = [];
+        $policyApproverFields = $this->policyRequiredApprovers->fieldNamesForValidation($form, $values);
 
         foreach ($form->fields as $field) {
             if ($this->isStructuralField($field)) {
@@ -36,8 +43,31 @@ final class EApprovalSubmissionValuesValidator
             $value = $this->normalizeValue($raw);
             $validation = is_array($field->validation) ? $field->validation : [];
             $label = trim((string) $field->label) ?: $name;
+            $type = (string) $field->type;
+            $isRequired = $type === 'approver' && $policyApproverFields !== null
+                ? in_array($name, $policyApproverFields, true)
+                : (($validation['required'] ?? false) === true);
 
-            if ($requireRequired && ($validation['required'] ?? false) === true && $value === '') {
+            if ($type === 'file') {
+                if ($requireRequired && (($validation['required'] ?? false) === true)) {
+                    $count = (int) ($attachmentCountsByFieldName[$name] ?? 0);
+                    if ($count <= 0) {
+                        $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
+                    }
+                }
+
+                continue;
+            }
+
+            if ($type === 'grid') {
+                if ($requireRequired && (($validation['required'] ?? false) === true) && ! $this->gridHasContent($raw, $field)) {
+                    $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
+                }
+
+                continue;
+            }
+
+            if ($requireRequired && $isRequired && $value === '') {
                 $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
 
                 continue;
@@ -52,7 +82,6 @@ final class EApprovalSubmissionValuesValidator
                 $errors["values.{$name}"] = [__(':label must be at most :max characters.', ['label' => $label, 'max' => $maxLength])];
             }
 
-            $type = (string) $field->type;
             if ($type === 'email' && ! filter_var($value, FILTER_VALIDATE_EMAIL)) {
                 $errors["values.{$name}"] = [__(':label must be a valid email address.', ['label' => $label])];
             }
@@ -89,7 +118,7 @@ final class EApprovalSubmissionValuesValidator
 
     private function isStructuralField(EApprovalFormField $field): bool
     {
-        return in_array((string) $field->type, ['section', 'divider'], true);
+        return in_array((string) $field->type, ['section', 'divider', 'page_break'], true);
     }
 
     private function normalizeValue(mixed $raw): string
@@ -179,5 +208,65 @@ final class EApprovalSubmissionValuesValidator
         }
 
         return strlen($trimmed) <= 5000;
+    }
+
+    private function gridHasContent(mixed $raw, EApprovalFormField $field): bool
+    {
+        $rows = $this->gridRows($raw);
+        if ($rows === []) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            foreach ($row as $cell) {
+                if (is_scalar($cell) && trim((string) $cell) !== '') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function gridRows(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            if (array_is_list($raw)) {
+                return $raw;
+            }
+
+            $rows = $raw['rows'] ?? null;
+
+            return is_array($rows) ? array_values($rows) : [];
+        }
+
+        if (! is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        if (array_is_list($decoded)) {
+            return $decoded;
+        }
+
+        $rows = $decoded['rows'] ?? null;
+
+        return is_array($rows) ? array_values($rows) : [];
     }
 }

@@ -22,7 +22,7 @@ class AuthSessionService
 
     private function startWithAuthMethod(string $userId, string $authMethod): string
     {
-        return (string) DB::transaction(function () use ($userId, $authMethod): string {
+        return (string) DB::connection('tenant')->transaction(function () use ($userId, $authMethod): string {
             $sessionId = (string) Str::uuid();
             $fingerprint = hash('sha256', request()->userAgent() ?? '');
             $now = now();
@@ -33,20 +33,20 @@ class AuthSessionService
                 'updated_at' => $now,
             ];
 
-            $existing = DB::table('auth_devices')
+            $existing = DB::connection('tenant')->table('auth_devices')
                 ->where('user_id', $userId)
                 ->where('device_fingerprint_hash', $fingerprint)
                 ->first();
 
             if ($existing !== null) {
                 $deviceId = (string) $existing->id;
-                DB::table('auth_devices')
+                DB::connection('tenant')->table('auth_devices')
                     ->where('id', $deviceId)
                     ->update($devicePayload);
             } else {
                 $deviceId = (string) Str::uuid();
                 try {
-                    DB::table('auth_devices')->insert([
+                    DB::connection('tenant')->table('auth_devices')->insert([
                         'id' => $deviceId,
                         'user_id' => $userId,
                         'device_fingerprint_hash' => $fingerprint,
@@ -62,7 +62,7 @@ class AuthSessionService
                     if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
                         throw $e;
                     }
-                    $existing = DB::table('auth_devices')
+                    $existing = DB::connection('tenant')->table('auth_devices')
                         ->where('user_id', $userId)
                         ->where('device_fingerprint_hash', $fingerprint)
                         ->first();
@@ -70,13 +70,13 @@ class AuthSessionService
                         throw $e;
                     }
                     $deviceId = (string) $existing->id;
-                    DB::table('auth_devices')
+                    DB::connection('tenant')->table('auth_devices')
                         ->where('id', $deviceId)
                         ->update($devicePayload);
                 }
             }
 
-            DB::table('auth_sessions')->insert([
+            DB::connection('tenant')->table('auth_sessions')->insert([
                 'id' => $sessionId,
                 'user_id' => $userId,
                 'device_id' => $deviceId,
@@ -95,7 +95,7 @@ class AuthSessionService
 
     public function markMfaVerified(string $sessionId): void
     {
-        DB::table('auth_sessions')
+        DB::connection('tenant')->table('auth_sessions')
             ->where('id', $sessionId)
             ->update([
                 'mfa_verified_at' => now(),
@@ -105,7 +105,7 @@ class AuthSessionService
 
     public function revoke(string $sessionId): void
     {
-        DB::table('auth_sessions')
+        DB::connection('tenant')->table('auth_sessions')
             ->where('id', $sessionId)
             ->update([
                 'state' => 'revoked',
@@ -116,7 +116,7 @@ class AuthSessionService
 
     public function revokeAllForUser(string $userId): void
     {
-        DB::table('auth_sessions')
+        DB::connection('tenant')->table('auth_sessions')
             ->where('user_id', $userId)
             ->where('state', 'active')
             ->update([
@@ -126,4 +126,3 @@ class AuthSessionService
             ]);
     }
 }
-

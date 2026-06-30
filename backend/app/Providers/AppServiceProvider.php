@@ -12,7 +12,9 @@ use App\Modules\Tenancy\Support\SanctumStatefulDomainResolver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Horizon\Horizon;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +30,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $appUrl = config('app.url');
+        if (is_string($appUrl) && $appUrl !== '') {
+            URL::forceRootUrl($appUrl);
+        }
+
         $this->configureSanctumStatefulDomains();
         $this->configureCorsAllowedOrigins();
 
@@ -41,8 +48,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute($perMinute)->by($request->ip().'|'.($request->route('token') ?? 'global'));
         });
 
-        if (class_exists(\Laravel\Horizon\Horizon::class)) {
-            \Laravel\Horizon\Horizon::auth(function ($request) {
+        RateLimiter::for('procurement-public', function (Request $request) {
+            $perMinute = max(10, (int) config('procurement_one.public_quotes.rate_limit_per_minute', 30));
+
+            return Limit::perMinute($perMinute)->by($request->ip().'|'.($request->route('token') ?? 'global'));
+        });
+
+        if (class_exists(Horizon::class)) {
+            Horizon::auth(function ($request) {
                 if (app()->environment('local')) {
                     return true;
                 }

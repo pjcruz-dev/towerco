@@ -21,6 +21,9 @@ final class TenantEnabledModulesResolver
         'fiber_one',
         'asset_one',
         'ticketing',
+        'procurement_one',
+        'finance_one',
+        'documents',
     ];
 
     /** @var array<string, string> */
@@ -35,6 +38,9 @@ final class TenantEnabledModulesResolver
         'fiber_one' => 'Fiber-One',
         'asset_one' => 'Asset-One',
         'ticketing' => 'Ticketing',
+        'procurement_one' => 'Procurement-One',
+        'finance_one' => 'Finance-One',
+        'documents' => 'Documents',
     ];
 
     /**
@@ -44,7 +50,14 @@ final class TenantEnabledModulesResolver
     {
         $configured = config('toweros.tenant_modules.enabled');
         if (! is_array($configured) || $configured === []) {
-            return ['core', 'team_access', 'project_one', 'e_approval', 'ticketing'];
+            return $this->normalizeSelection([
+                'project_one',
+                'e_approval',
+                'ticketing',
+                'procurement_one',
+                'sites',
+                'documents',
+            ]);
         }
 
         return $this->normalizeSelection(array_map('strval', $configured));

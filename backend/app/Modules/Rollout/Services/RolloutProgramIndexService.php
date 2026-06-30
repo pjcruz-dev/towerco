@@ -13,6 +13,7 @@ final class RolloutProgramIndexService
     public function __construct(
         private readonly RolloutSlaAtRiskService $slaAtRisk,
     ) {}
+
     private const SORTABLE = [
         'created_at',
         'rollout_ref',
@@ -209,6 +210,8 @@ final class RolloutProgramIndexService
             'id' => $program->id,
             'rollout_ref' => $program->rollout_ref,
             'tco_site_id' => $program->tco_site_id,
+            'project_id' => $program->project_id,
+            'site_id' => $program->site_id,
             'mno' => $program->mno,
             'project_type' => $program->project_type,
             'status' => $program->status,

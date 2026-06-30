@@ -28,6 +28,14 @@ class EApprovalWorkflowTemplate extends Model
     /** @return HasMany<EApprovalWorkflowStep, $this> */
     public function steps(): HasMany
     {
+        return $this->hasMany(EApprovalWorkflowStep::class, 'template_id')
+            ->whereNull('compiled_for_submission_id')
+            ->orderBy('step_order');
+    }
+
+    /** @return HasMany<EApprovalWorkflowStep, $this> */
+    public function allSteps(): HasMany
+    {
         return $this->hasMany(EApprovalWorkflowStep::class, 'template_id')->orderBy('step_order');
     }
 }

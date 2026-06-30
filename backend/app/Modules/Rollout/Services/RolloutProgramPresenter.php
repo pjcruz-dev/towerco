@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Modules\Documents\Services\DocumentRolloutGateEnforcementService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutProgram;
+use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
@@ -18,6 +20,7 @@ final class RolloutProgramPresenter
         private readonly RolloutMilestoneCyclePresenter $milestoneCycles,
         private readonly RolloutGateApprovalService $gateApprovals,
         private readonly RolloutGateApprovalPolicyService $gatePolicies,
+        private readonly DocumentRolloutGateEnforcementService $documentGateEnforcement,
     ) {}
 
     /**
@@ -105,31 +108,32 @@ final class RolloutProgramPresenter
                 $policy = $this->gatePolicies->policyForPhase((string) $program->project_type, (string) $p->phase_key, $config);
 
                 return [
-                'id' => $p->id,
-                'phase_key' => $p->phase_key,
-                'label' => $p->label,
-                'owner_role' => $p->owner_role,
-                'anchor' => $p->anchor,
-                'working_day_start' => $p->working_day_start,
-                'working_day_end' => $p->working_day_end,
-                'target_start_date' => $p->target_start_date?->toDateString(),
-                'target_end_date' => $p->target_end_date?->toDateString(),
-                'actual_start_date' => $p->actual_start_date?->toDateString(),
-                'actual_end_date' => $p->actual_end_date?->toDateString(),
-                'gate_status' => $p->gate_status,
-                'gate_label' => $p->gate_label,
-                'counts_toward_sla' => (bool) ($p->counts_toward_sla ?? true),
-                'is_custom' => (bool) ($p->is_custom ?? false),
-                'phase_progress' => $this->phaseProgress($p),
-                'approval_required' => $policy !== null,
-                'approval_chain' => $policy['chain'] ?? [],
-                'active_gate_approval' => $active
-                    ? $this->gateApprovals->presentRequest($active, $viewer)
-                    : null,
-                'latest_gate_approval' => $latest && ($active === null || $latest->id !== $active->id)
-                    ? $this->gateApprovals->presentRequest($latest, $viewer)
-                    : ($active ? null : ($latest ? $this->gateApprovals->presentRequest($latest, $viewer) : null)),
-            ];
+                    'id' => $p->id,
+                    'phase_key' => $p->phase_key,
+                    'label' => $p->label,
+                    'owner_role' => $p->owner_role,
+                    'anchor' => $p->anchor,
+                    'working_day_start' => $p->working_day_start,
+                    'working_day_end' => $p->working_day_end,
+                    'target_start_date' => $p->target_start_date?->toDateString(),
+                    'target_end_date' => $p->target_end_date?->toDateString(),
+                    'actual_start_date' => $p->actual_start_date?->toDateString(),
+                    'actual_end_date' => $p->actual_end_date?->toDateString(),
+                    'gate_status' => $p->gate_status,
+                    'gate_label' => $p->gate_label,
+                    'counts_toward_sla' => (bool) ($p->counts_toward_sla ?? true),
+                    'is_custom' => (bool) ($p->is_custom ?? false),
+                    'phase_progress' => $this->phaseProgress($p),
+                    'approval_required' => $policy !== null,
+                    'approval_chain' => $policy['chain'] ?? [],
+                    'active_gate_approval' => $active
+                        ? $this->gateApprovals->presentRequest($active, $viewer)
+                        : null,
+                    'latest_gate_approval' => $latest && ($active === null || $latest->id !== $active->id)
+                        ? $this->gateApprovals->presentRequest($latest, $viewer)
+                        : ($active ? null : ($latest ? $this->gateApprovals->presentRequest($latest, $viewer) : null)),
+                    'document_binder_gate' => $this->documentGateEnforcement->phaseSummary($program, $p),
+                ];
             })->values()->all(),
             'candidates' => $program->status === 'batch' ? [] : $program->candidates->map(fn ($c) => [
                 'id' => $c->id,
@@ -183,7 +187,7 @@ final class RolloutProgramPresenter
         ];
     }
 
-    private function phaseProgress(\App\Modules\Rollout\Models\RolloutTimelinePhase $phase): string
+    private function phaseProgress(RolloutTimelinePhase $phase): string
     {
         if ($phase->gate_status === 'passed' || $phase->actual_end_date !== null) {
             return 'completed';

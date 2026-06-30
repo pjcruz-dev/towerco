@@ -9,7 +9,10 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
+use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -23,6 +26,8 @@ final class ApprovalDecisionService
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalVendorRegistrationMasterDataService $vendorMasterData,
+        private readonly ProcurementPrEApprovalHookService $procurementPrHook,
+        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
     ) {}
 
     public function paginate(
@@ -32,46 +37,35 @@ final class ApprovalDecisionService
         ?string $status,
         bool $awaitingMeOnly,
     ): LengthAwarePaginator {
-        $query = EApprovalRequestApproval::query()
-            ->with(['submission.form', 'approver', 'step']);
-
-        if ($awaitingMeOnly) {
-            $query->where('approver_id', $viewer->id)->where('status', EApprovalApprovalStatus::PENDING);
-        } elseif ($status !== null && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        if (! $viewer->can('e_approval:forms:manage')) {
-            $query->where('approver_id', $viewer->id);
-        }
-
-        $viewerId = (string) $viewer->id;
-        $deduped = $query->orderByDesc('created_at')->get()->groupBy('submission_id')->map(
-            function ($group) use ($viewerId, $awaitingMeOnly) {
-                /** @var \Illuminate\Support\Collection<int, EApprovalRequestApproval> $group */
-                $pending = $group->first(
-                    static fn (EApprovalRequestApproval $a) => (string) $a->approver_id === $viewerId
-                        && $a->status === EApprovalApprovalStatus::PENDING,
-                );
-                if ($pending !== null) {
-                    return $pending;
-                }
-
-                if ($awaitingMeOnly) {
-                    return null;
-                }
-
-                return $group->sortByDesc(
-                    static fn (EApprovalRequestApproval $a) => (int) ($a->step?->step_order ?? 0),
-                )->first();
-            },
-        )->filter()->values()->sortByDesc(
-            static fn (EApprovalRequestApproval $a) => $a->created_at?->getTimestamp() ?? 0,
-        )->values();
-
-        $total = $deduped->count();
         $page = max(1, $page);
-        $items = $deduped->slice(($page - 1) * $perPage, $perPage)->values();
+        $perPage = max(1, min(100, $perPage));
+
+        $ranked = $this->rankedApprovalsQuery($viewer, $status, $awaitingMeOnly);
+        $total = (clone $ranked)->count();
+
+        $pageIds = (clone $ranked)
+            ->orderByDesc('created_at')
+            ->forPage($page, $perPage)
+            ->pluck('id')
+            ->all();
+
+        if ($pageIds === []) {
+            return new \Illuminate\Pagination\LengthAwarePaginator(
+                collect(),
+                $total,
+                $perPage,
+                $page,
+                ['path' => request()->url(), 'query' => request()->query()],
+            );
+        }
+
+        $order = array_flip($pageIds);
+        $items = EApprovalRequestApproval::query()
+            ->with(['submission.form', 'approver', 'step'])
+            ->whereIn('id', $pageIds)
+            ->get()
+            ->sortBy(static fn (EApprovalRequestApproval $approval): int => $order[(string) $approval->id] ?? PHP_INT_MAX)
+            ->values();
 
         return new \Illuminate\Pagination\LengthAwarePaginator(
             $items,
@@ -80,6 +74,45 @@ final class ApprovalDecisionService
             $page,
             ['path' => request()->url(), 'query' => request()->query()],
         );
+    }
+
+    private function rankedApprovalsQuery(
+        TenantUser $viewer,
+        ?string $status,
+        bool $awaitingMeOnly,
+    ): Builder {
+        $viewerId = (string) $viewer->id;
+        $pending = EApprovalApprovalStatus::PENDING;
+
+        $inner = DB::connection('tenant')
+            ->table('e_approval_request_approvals as era')
+            ->leftJoin('e_approval_workflow_steps as steps', 'steps.id', '=', 'era.step_id');
+
+        if ($awaitingMeOnly) {
+            $inner->where('era.approver_id', $viewerId)->where('era.status', $pending);
+        } elseif ($status !== null && $status !== 'all') {
+            $inner->where('era.status', $status);
+        }
+
+        if (! $viewer->can('e_approval:forms:manage')) {
+            $inner->where('era.approver_id', $viewerId);
+        }
+
+        $inner->selectRaw(
+            'era.id, era.created_at, ROW_NUMBER() OVER (
+                PARTITION BY era.submission_id
+                ORDER BY
+                    CASE WHEN era.approver_id = ? AND era.status = ? THEN 0 ELSE 1 END,
+                    COALESCE(steps.step_order, 0) DESC,
+                    era.created_at DESC
+            ) AS approval_rank',
+            [$viewerId, $pending],
+        );
+
+        return DB::connection('tenant')
+            ->query()
+            ->fromSub($inner, 'ranked_approvals')
+            ->where('approval_rank', '=', 1);
     }
 
     public function decide(
@@ -163,6 +196,8 @@ final class ApprovalDecisionService
                     $this->audit->log('request_approved_final', $submission->id, null, $actor);
                     $submission->loadMissing(['form', 'values.field']);
                     $this->vendorMasterData->syncApprovedRegistration($submission, $actor);
+                    $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
+                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             } else {
                 $this->audit->log('request_approved_step', $submission->id, "Step {$stepOrder}", $actor);
@@ -198,6 +233,8 @@ final class ApprovalDecisionService
             );
             $this->mail->dispatchToRequestor($submission, 'rejected', $actor->name);
             $this->audit->log('request_rejected', $submission->id, $remarks, $actor);
+            $submission->loadMissing(['form', 'values.field']);
+            $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
 
             return $approval->fresh(['submission.form', 'approver', 'step']);
         });

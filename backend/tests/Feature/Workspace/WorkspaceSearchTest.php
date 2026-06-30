@@ -62,6 +62,39 @@ final class WorkspaceSearchTest extends TestCase
             ]);
     }
 
+    public function test_workspace_search_includes_controlled_documents(): void
+    {
+        config([
+            'toweros.tenant_modules.enabled' => [
+                'core',
+                'team_access',
+                'documents',
+            ],
+        ]);
+
+        tenancy()->initialize($this->testTenant);
+        app(TenantRbacBaselineService::class)->ensure();
+        \App\Modules\Documents\Models\ControlledDocument::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'document_code' => 'WS-CD-SEARCH-001',
+            'title' => 'Quality Manual',
+            'department' => 'QMS',
+            'current_revision' => 1,
+            'status' => \App\Modules\Documents\Support\ControlledDocumentStatus::PUBLISHED,
+        ]);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/workspace/search?q=WS-CD-SEARCH')
+            ->assertOk()
+            ->assertJsonFragment([
+                'module' => 'documents',
+                'entity_type' => 'controlled_document',
+                'title' => 'WS-CD-SEARCH-001',
+            ]);
+    }
+
     public function test_workspace_search_returns_empty_for_short_query(): void
     {
         $this->actingAsTenantAdmin()

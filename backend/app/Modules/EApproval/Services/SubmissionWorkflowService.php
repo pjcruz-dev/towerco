@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 final class SubmissionWorkflowService
 {
@@ -22,30 +26,46 @@ final class SubmissionWorkflowService
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalDocumentControlService $documentControl,
         private readonly EApprovalManagerApproverResolver $managerResolver,
+        private readonly EApprovalRoleApproverResolver $roleResolver,
         private readonly EApprovalSubmissionWorkflowResolver $workflowResolver,
+        private readonly EApprovalFieldMapResolver $fieldMapResolver,
+        private readonly EApprovalFormFieldChoicesResolver $fieldChoicesResolver,
+        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
     ) {}
 
     /**
      * @param  array<string, mixed>  $values
+     * @param  Collection<int, EApprovalWorkflowStep>|null  $stepsOverride
      */
-    public function initiateWorkflow(EApprovalSubmission $submission, EApprovalForm $form, array $values): void
-    {
+    public function initiateWorkflow(
+        EApprovalSubmission $submission,
+        EApprovalForm $form,
+        array $values,
+        ?Collection $stepsOverride = null,
+    ): void {
         EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
 
-        $form->loadMissing('workflowTemplate.steps');
-        $steps = $form->workflowTemplate?->steps ?? collect();
+        if ($stepsOverride instanceof Collection && $stepsOverride->isNotEmpty()) {
+            $steps = $stepsOverride->sortBy('step_order')->values();
+        } else {
+            $form->loadMissing('workflowTemplate.steps');
+            $steps = $form->workflowTemplate?->steps ?? collect();
+        }
 
         if ($steps->isEmpty()) {
             $submission->status = EApprovalSubmissionStatus::APPROVED;
             $submission->save();
             $this->audit->log('no_steps', $submission->id, 'No workflow steps; auto-approved.');
             $this->notifyRequestorOutcome($submission, 'approved', __('System'));
+            $submission->loadMissing(['form', 'values.field', 'attachments']);
+            $this->controlledDocumentHook->afterSubmissionMutation($submission, null);
 
             return;
         }
 
         $currentOrder = null;
         $activated = 0;
+        $unresolvedSteps = [];
 
         foreach ($steps as $step) {
             if ($currentOrder !== null && $step->step_order > $currentOrder) {
@@ -58,8 +78,9 @@ final class SubmissionWorkflowService
                 continue;
             }
 
-            $approverId = $this->resolveApproverId($step, $values, $submission);
+            $approverId = $this->resolveApproverId($step, $values, $submission, $form);
             if ($approverId === null) {
+                $unresolvedSteps[] = $this->describeUnresolvedStep($step);
                 $this->audit->log('skip_step', $submission->id, "No approver for step {$step->step_order}");
 
                 continue;
@@ -95,10 +116,12 @@ final class SubmissionWorkflowService
             $this->audit->log('workflow_initiated', $submission->id, "Activated {$activated} step(s) at order {$currentOrder}");
             $this->notifyRequestorSubmitted($submission);
         } else {
-            $submission->status = EApprovalSubmissionStatus::APPROVED;
-            $submission->save();
-            $this->audit->log('no_steps_match', $submission->id, 'No matching steps; auto-approved.');
-            $this->notifyRequestorOutcome($submission, 'approved', __('System'));
+            throw ValidationException::withMessages([
+                'workflow' => array_values(array_filter([
+                    __('No approvers could be assigned for this submission. Review workflow steps and try again.'),
+                    ...$unresolvedSteps,
+                ])),
+            ]);
         }
     }
 
@@ -189,7 +212,7 @@ final class SubmissionWorkflowService
                 continue;
             }
 
-            $approverId = $this->resolveApproverId($step, $values, $submission);
+            $approverId = $this->resolveApproverId($step, $values, $submission, $submission->form);
             if ($approverId === null) {
                 continue;
             }
@@ -252,25 +275,101 @@ final class SubmissionWorkflowService
     /**
      * @param  array<string, mixed>  $values
      */
-    private function resolveApproverId(EApprovalWorkflowStep $step, array $values, EApprovalSubmission $submission): ?string
-    {
+    private function resolveApproverId(
+        EApprovalWorkflowStep $step,
+        array $values,
+        EApprovalSubmission $submission,
+        ?EApprovalForm $form = null,
+    ): ?string {
+        $approverType = $this->normalizeApproverType((string) $step->approver_type);
         $approverId = $step->approver_id;
 
-        if ($step->approver_type === 'field' && $step->approver_id) {
+        if ($approverType === 'field' && $step->approver_id) {
             $candidate = trim((string) ($values[$step->approver_id] ?? ''));
             if ($candidate === '') {
                 return null;
             }
             $approverId = $candidate;
-        } elseif ($step->approver_type === 'manager') {
+        } elseif ($approverType === 'manager') {
             return $this->managerResolver->resolveForSubmission($submission);
-        }
-
-        if ($approverId === null || $approverId === '') {
+        } elseif ($approverType === 'role' && $step->approver_id) {
+            return $this->roleResolver->resolveFirstApproverForRole((string) $step->approver_id);
+        } elseif ($approverType === 'field_map') {
+            return $this->resolveFieldMapApproverId($step, $values, $form);
+        } elseif ($approverType !== 'user') {
             return null;
         }
 
-        return TenantUser::query()->where('id', $approverId)->value('id');
+        if ($approverId === null || trim((string) $approverId) === '') {
+            return null;
+        }
+
+        $approverId = trim((string) $approverId);
+
+        $userId = TenantUser::query()
+            ->where('id', $approverId)
+            ->where('is_active', true)
+            ->value('id');
+
+        if ($userId !== null) {
+            return (string) $userId;
+        }
+
+        if (str_contains($approverId, '@')) {
+            $byEmail = TenantUser::query()
+                ->whereRaw('LOWER(email) = ?', [strtolower($approverId)])
+                ->where('is_active', true)
+                ->value('id');
+
+            return $byEmail !== null ? (string) $byEmail : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveFieldMapApproverId(EApprovalWorkflowStep $step, array $values, ?EApprovalForm $form = null): ?string
+    {
+        $sourceField = trim((string) ($step->approver_id ?? ''));
+        if ($sourceField === '') {
+            return null;
+        }
+
+        $raw = trim((string) ($values[$sourceField] ?? ''));
+        $condition = is_array($step->condition) ? $step->condition : [];
+        $mappings = is_array($condition['mappings'] ?? null) ? $condition['mappings'] : [];
+        $default = $condition['default_approver_id'] ?? null;
+        $choices = $form !== null ? $this->fieldChoicesResolver->choicesForFieldName($form, $sourceField) : [];
+
+        return $this->fieldMapResolver->resolveApproverId(
+            $mappings,
+            $raw,
+            is_string($default) ? $default : null,
+            $choices,
+        );
+    }
+
+    private function normalizeApproverType(string $type): string
+    {
+        return EApprovalFormPolicySupport::normalizeApproverType($type);
+    }
+
+    private function describeUnresolvedStep(EApprovalWorkflowStep $step): string
+    {
+        $order = (int) $step->step_order;
+        $type = $this->normalizeApproverType((string) $step->approver_type);
+
+        return match ($type) {
+            'manager' => __('Step :order: direct manager could not be resolved from Entra ID.', ['order' => $order]),
+            'field' => $step->approver_id
+                ? __('Step :order: approver field ":field" is empty or invalid.', ['order' => $order, 'field' => $step->approver_id])
+                : __('Step :order: "From approver field" step is missing a field mapping.', ['order' => $order]),
+            'field_map' => __('Step :order: no approver mapping found for the selected field value.', ['order' => $order]),
+            'role' => __('Step :order: no active user found for role.', ['order' => $order]),
+            default => __('Step :order: fixed approver is missing or inactive.', ['order' => $order]),
+        };
     }
 
     /**

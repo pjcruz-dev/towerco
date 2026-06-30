@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
+use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
+use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -78,7 +80,29 @@ final class TicketingSettingsService
      */
     public function categories(): array
     {
-        return app(\App\Modules\Ticketing\Support\TicketingCategoryCatalog::class)->resolve();
+        return app(TicketingCategoryCatalog::class)->resolve();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function applyCategoryPack(string $packId): array
+    {
+        $catalog = app(TicketingCategoryPackCatalog::class);
+        if (! $catalog->isValid($packId)) {
+            throw ValidationException::withMessages([
+                'apply_category_pack' => [__('Unknown category pack.')],
+            ]);
+        }
+
+        $merged = array_values(array_unique(array_merge(
+            $this->categories(),
+            $catalog->categoriesFor($packId),
+        )));
+
+        $this->setString(self::CATEGORIES, json_encode($merged, JSON_THROW_ON_ERROR));
+
+        return $merged;
     }
 
     /**
@@ -117,6 +141,7 @@ final class TicketingSettingsService
             'notify_requestor_on_resolve' => $this->getBool(self::NOTIFY_REQUESTOR_ON_RESOLVE, true),
             'notify_assignee_on_assign' => $this->getBool(self::NOTIFY_ASSIGNEE_ON_ASSIGN, true),
             'categories' => $this->categories(),
+            'category_packs' => app(TicketingCategoryPackCatalog::class)->all(),
             'sla_enabled' => $this->getBool(self::SLA_ENABLED, true),
             'sla_response_minutes' => $this->getInt(self::SLA_RESPONSE_MINUTES, 480),
             'sla_escalation_minutes' => $this->getInt(self::SLA_ESCALATION_MINUTES, 1440),
@@ -193,6 +218,13 @@ final class TicketingSettingsService
                 $slugs[] = $slug;
             }
             $this->setString(self::CATEGORIES, json_encode(array_values(array_unique($slugs)), JSON_THROW_ON_ERROR));
+        }
+
+        if (array_key_exists('apply_category_pack', $values)) {
+            $packId = strtolower(trim((string) $values['apply_category_pack']));
+            if ($packId !== '') {
+                $this->applyCategoryPack($packId);
+            }
         }
     }
 

@@ -6,6 +6,10 @@ namespace App\Modules\AdminOne\Services;
 
 use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Identity\Services\AuthAuditService;
+use App\Modules\Identity\Services\AuthSessionService;
+use App\Modules\Identity\Services\RefreshTokenService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -16,6 +20,9 @@ class TenantUserAdminService
 {
     public function __construct(
         private readonly TenantSeatLimitService $seatLimits,
+        private readonly AuthSessionService $sessionService,
+        private readonly RefreshTokenService $refreshTokenService,
+        private readonly AuthAuditService $auditService,
     ) {}
 
     /**
@@ -122,6 +129,21 @@ class TenantUserAdminService
         $target->tokens()->delete();
     }
 
+    public function revokeAllSessions(TenantUser $actor, TenantUser $target): void
+    {
+        $this->sessionService->revokeAllForUser((string) $target->id);
+        $this->refreshTokenService->revokeAllForUser((string) $target->id);
+        $target->tokens()->delete();
+
+        $this->auditService->log(
+            'auth.admin.sessions_revoked',
+            (string) $target->id,
+            null,
+            ['revoked_by' => (string) $actor->id],
+            'medium',
+        );
+    }
+
     public function reactivate(TenantUser $target): TenantUser
     {
         if ($target->isActive()) {
@@ -136,6 +158,168 @@ class TenantUserAdminService
         $target->save();
 
         return $target->fresh(['roles']);
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     * @return array{processed: int, skipped: int, errors: list<array{user_id: string, message: string}>}
+     */
+    public function bulkDeactivate(TenantUser $actor, array $userIds): array
+    {
+        $processed = 0;
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($userIds as $userId) {
+            $target = TenantUser::query()->find($userId);
+            if ($target === null) {
+                $errors[] = [
+                    'user_id' => $userId,
+                    'message' => (string) __('User not found.'),
+                ];
+
+                continue;
+            }
+
+            if (! $target->isActive()) {
+                $skipped++;
+
+                continue;
+            }
+
+            try {
+                $this->deactivate($actor, $target);
+                $processed++;
+            } catch (ValidationException $e) {
+                $errors[] = [
+                    'user_id' => (string) $target->id,
+                    'message' => (string) collect($e->errors())->flatten()->first(),
+                ];
+            }
+        }
+
+        return compact('processed', 'skipped', 'errors');
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     * @return array{processed: int, skipped: int, errors: list<array{user_id: string, message: string}>}
+     */
+    public function bulkAssignRole(array $userIds, string $role): array
+    {
+        return $this->bulkAssignRoles($userIds, [$role], 'add', []);
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     * @param  list<string>  $roles
+     * @param  list<string>  $removeRoles
+     * @return array{processed: int, skipped: int, errors: list<array{user_id: string, message: string}>}
+     */
+    public function bulkAssignRoles(
+        array $userIds,
+        array $roles,
+        string $mode = 'add',
+        array $removeRoles = [],
+    ): array {
+        $roles = array_values(array_unique(array_filter(array_map('trim', $roles))));
+        $removeRoles = array_values(array_unique(array_filter(array_map('trim', $removeRoles))));
+
+        if ($roles === [] && $removeRoles === []) {
+            throw ValidationException::withMessages([
+                'roles' => [__('At least one role to assign or remove is required.')],
+            ]);
+        }
+
+        if ($roles !== []) {
+            $this->assertRolesExist($roles);
+        }
+
+        if ($removeRoles !== []) {
+            $this->assertRolesExist($removeRoles);
+        }
+
+        if (! in_array($mode, ['add', 'replace'], true)) {
+            throw ValidationException::withMessages([
+                'mode' => [__('Role assignment mode must be add or replace.')],
+            ]);
+        }
+
+        $processed = 0;
+        $skipped = 0;
+        $errors = [];
+
+        foreach ($userIds as $userId) {
+            $target = TenantUser::query()->find($userId);
+            if ($target === null) {
+                $errors[] = [
+                    'user_id' => $userId,
+                    'message' => (string) __('User not found.'),
+                ];
+
+                continue;
+            }
+
+            if ($this->isLastActiveTenantAdmin($target) && $removeRoles !== []) {
+                $remaining = array_values(array_diff($target->getRoleNames()->all(), $removeRoles));
+                if ($remaining === [] || ! in_array('tenant_admin', $remaining, true)) {
+                    $errors[] = [
+                        'user_id' => (string) $target->id,
+                        'message' => (string) __('Cannot remove roles from the last active tenant administrator.'),
+                    ];
+
+                    continue;
+                }
+            }
+
+            $changed = false;
+
+            if ($mode === 'replace' && $roles !== []) {
+                if ($target->getRoleNames()->sort()->values()->all() !== collect($roles)->sort()->values()->all()) {
+                    $target->syncRoles($roles);
+                    $changed = true;
+                }
+            } elseif ($roles !== []) {
+                foreach ($roles as $role) {
+                    if ($target->hasRole($role)) {
+                        continue;
+                    }
+
+                    $target->assignRole($role);
+                    $changed = true;
+                }
+            }
+
+            foreach ($removeRoles as $removeRole) {
+                if (! $target->hasRole($removeRole)) {
+                    continue;
+                }
+
+                if ($this->isLastActiveTenantAdmin($target) && $removeRole === 'tenant_admin') {
+                    $errors[] = [
+                        'user_id' => (string) $target->id,
+                        'message' => (string) __('Cannot remove the tenant administrator role from the last active administrator.'),
+                    ];
+
+                    continue 2;
+                }
+
+                $target->removeRole($removeRole);
+                $changed = true;
+            }
+
+            if ($changed) {
+                $processed++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        if ($processed > 0) {
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+        }
+
+        return compact('processed', 'skipped', 'errors');
     }
 
     public function destroyPermanently(TenantUser $actor, TenantUser $target): void
@@ -195,11 +379,13 @@ class TenantUserAdminService
 
             if ($email === '' || $name === '') {
                 $errors[] = "Row {$line}: email and name are required.";
+
                 continue;
             }
 
             if (TenantUser::emailExists($email)) {
                 $skipped++;
+
                 continue;
             }
 
@@ -208,6 +394,7 @@ class TenantUserAdminService
                     'Seat limit reached (:used / :limit).',
                     ['used' => $this->seatLimits->activeSeatCount(), 'limit' => $this->seatLimits->seatLimit()],
                 );
+
                 continue;
             }
 
@@ -255,7 +442,7 @@ class TenantUserAdminService
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<TenantUser>  $query
+     * @param  Builder<TenantUser>  $query
      */
     private function applyStatusFilter($query, ?string $status): void
     {

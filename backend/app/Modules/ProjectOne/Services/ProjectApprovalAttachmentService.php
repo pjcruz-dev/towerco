@@ -6,6 +6,8 @@ namespace App\Modules\ProjectOne\Services;
 
 use App\Modules\Rollout\Models\TenantRolloutFile;
 use App\Modules\Rollout\Services\TenantFileStorageService;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 final class ProjectApprovalAttachmentService
 {
@@ -28,7 +30,7 @@ final class ProjectApprovalAttachmentService
         }
 
         if ($rolloutProgramId === null) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'attachment_file_ids' => [__('Rollout is required when attaching files.')],
             ]);
         }
@@ -48,9 +50,28 @@ final class ProjectApprovalAttachmentService
             return $fileIds;
         }
 
+        $files = TenantRolloutFile::query()
+            ->whereIn('id', $fileIds)
+            ->get()
+            ->keyBy('id');
+
+        return $this->enrichFromIndex($fileIds, $files);
+    }
+
+    /**
+     * @param  list<string>|null  $fileIds
+     * @param  Collection<string, TenantRolloutFile>  $filesById
+     * @return list<array{file_id: string, url: string, label: string, mime_type: string}>|null
+     */
+    public function enrichFromIndex(?array $fileIds, Collection $filesById): ?array
+    {
+        if ($fileIds === null || $fileIds === []) {
+            return $fileIds;
+        }
+
         $enriched = [];
         foreach ($fileIds as $fileId) {
-            $file = TenantRolloutFile::query()->find($fileId);
+            $file = $filesById->get($fileId);
             if ($file === null) {
                 continue;
             }

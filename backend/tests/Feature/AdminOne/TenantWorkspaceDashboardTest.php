@@ -56,4 +56,34 @@ final class TenantWorkspaceDashboardTest extends TestCase
             ->getJson('/api/v1/dashboard')
             ->assertForbidden();
     }
+
+    public function test_recent_activity_excludes_tenant_wide_admin_audit_logs(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $requestor = $this->testTenantAdmin;
+        $requestor->syncRoles(['e_approval_requestor']);
+
+        \App\Modules\EApproval\Models\EApprovalAuditLog::query()->create([
+            'user_id' => $this->testTenantAdmin->id,
+            'action' => 'form_deleted',
+            'target_id' => (string) \Illuminate\Support\Str::uuid(),
+            'remarks' => 'Procurement form cleanup',
+        ]);
+
+        tenancy()->end();
+
+        $response = $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dashboard');
+
+        $response->assertOk();
+
+        $labels = collect($response->json('data.recent_activity'))
+            ->pluck('label')
+            ->all();
+
+        $this->assertNotContains('form_deleted', $labels);
+        $this->assertNotContains('form_created', $labels);
+    }
 }
