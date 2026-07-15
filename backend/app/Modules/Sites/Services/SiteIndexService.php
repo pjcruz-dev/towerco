@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace App\Modules\Sites\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Sites\Models\Site;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class SiteIndexService
 {
-    public function paginate(int $page, int $perPage, string $search): LengthAwarePaginator
+    private const SORTABLE = [
+        'site_code',
+        'name',
+        'type',
+        'status',
+        'updated_at',
+        'created_at',
+    ];
+
+    public function paginate(int $page, int $perPage, string $search, ?string $sort = null): LengthAwarePaginator
     {
-        $query = Site::query()->orderBy('site_code');
+        $query = Site::query();
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
@@ -22,6 +32,14 @@ class SiteIndexService
                     ->orWhere('status', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'site_code:asc'),
+            self::SORTABLE,
+            'site_code',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

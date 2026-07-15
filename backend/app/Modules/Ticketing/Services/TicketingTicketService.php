@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Models\TicketingComment;
 use App\Models\TicketingLink;
 use App\Models\TicketingTicket;
@@ -17,6 +18,16 @@ use Illuminate\Validation\ValidationException;
 
 final class TicketingTicketService
 {
+    private const SORTABLE = [
+        'ticket_number',
+        'title',
+        'status',
+        'priority',
+        'updated_at',
+        'created_at',
+        'sla_due_at',
+    ];
+
     public function __construct(
         private readonly TicketingSourceCatalog $sources,
         private readonly TicketingCategoryCatalog $categories,
@@ -33,7 +44,8 @@ final class TicketingTicketService
    *   assignee_id?: string|null,
    *   source_module?: string|null,
    *   source_reference_id?: string|null,
-   *   mine?: bool
+   *   mine?: bool,
+   *   sort?: string|null
    * }  $query
    */
     public function paginate(TenantUser $viewer, array $query): LengthAwarePaginator
@@ -62,8 +74,15 @@ final class TicketingTicketService
                         ->orWhere('description', 'like', '%'.$search.'%')
                         ->orWhere('ticket_number', 'like', '%'.ltrim($search, 'TKT-').'%');
                 });
-            })
-            ->orderByDesc('updated_at');
+            });
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($query['sort'] ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $builder->orderBy($column, $direction);
 
         return $builder->paginate(
             max(1, min(100, (int) ($query['per_page'] ?? 20))),

@@ -4,19 +4,33 @@ declare(strict_types=1);
 
 namespace App\Modules\ProjectOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProjectOne\Models\Project;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class ProjectIndexService
 {
-    public function paginate(int $page, int $perPage, string $search, ?string $siteId = null): LengthAwarePaginator
-    {
+    private const SORTABLE = [
+        'name',
+        'status',
+        'start_date',
+        'end_date',
+        'updated_at',
+        'created_at',
+    ];
+
+    public function paginate(
+        int $page,
+        int $perPage,
+        string $search,
+        ?string $siteId = null,
+        ?string $sort = null,
+    ): LengthAwarePaginator {
         $query = Project::query()
             ->with([
                 'site:id,site_code,name',
                 'projectManager:id,name,email',
-            ])
-            ->orderByDesc('updated_at');
+            ]);
 
         if ($siteId !== null && $siteId !== '') {
             $query->where('site_id', $siteId);
@@ -33,6 +47,14 @@ class ProjectIndexService
                     });
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

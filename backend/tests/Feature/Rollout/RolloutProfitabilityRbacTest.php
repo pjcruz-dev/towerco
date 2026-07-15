@@ -96,7 +96,7 @@ final class RolloutProfitabilityRbacTest extends TestCase
             'email' => 'viewer@test.localhost',
             'password' => 'password',
         ]);
-        $viewer->assignRole('viewer');
+        $viewer->assignRole('project_one_viewer');
 
         $financeUser = TenantUser::query()->create([
             'name' => 'Finance User',

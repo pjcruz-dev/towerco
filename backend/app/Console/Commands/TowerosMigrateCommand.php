@@ -49,6 +49,14 @@ final class TowerosMigrateCommand extends Command
 
                 return self::FAILURE;
             }
+
+            $this->info('Ensuring tenant RBAC baselines…');
+            $rbacExit = $this->call('tenants:ensure-rbac');
+            if ($rbacExit !== self::SUCCESS) {
+                $this->error('Tenant RBAC baseline sync failed.');
+
+                return self::FAILURE;
+            }
         }
 
         $this->info('TowerOS migrations complete.');
@@ -71,6 +79,7 @@ final class TowerosMigrateCommand extends Command
             if (! $tenant->database()->manager()->databaseExists($database)) {
                 $this->warn("Skipping {$tenant->id}: database {$database} does not exist.");
                 $skipped++;
+
                 continue;
             }
 

@@ -13,7 +13,11 @@ class EApprovalMetadataController extends AbstractApiController
 {
     public function __invoke(Request $request, EApprovalMetadataService $metadata): JsonResponse
     {
-        abort_unless($request->user()?->can('e_approval:view'), 403);
+        abort_unless(
+            $request->user()?->can('e_approval:view')
+            || $request->user()?->can('e_approval:submissions:create'),
+            403,
+        );
 
         return $this->ok($metadata->build());
     }

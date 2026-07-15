@@ -161,6 +161,24 @@ return [
         'default_sso_auto_provision' => env('TOWEROS_TENANT_DEFAULT_SSO_AUTO_PROVISION', false),
         /** When Microsoft sign-in is enabled, block password login except break-glass bootstrap admin. */
         'default_disable_password_when_sso' => env('TOWEROS_TENANT_DEFAULT_DISABLE_PASSWORD_WHEN_SSO', true),
+        /**
+         * Roles assigned on first Microsoft SSO auto-provision (comma-separated).
+         * Default: E-Approval requestor + Ticketing contributor (dashboard, submissions, tickets).
+         * Legacy TENANT_SSO_DEFAULT_ROLE (single role) is used when TENANT_SSO_DEFAULT_ROLES is unset.
+         */
+        'default_sso_roles' => (static function (): array {
+            $rolesEnv = env('TENANT_SSO_DEFAULT_ROLES');
+            if (is_string($rolesEnv) && trim($rolesEnv) !== '') {
+                return array_values(array_filter(array_map('trim', explode(',', $rolesEnv))));
+            }
+
+            $legacyRole = env('TENANT_SSO_DEFAULT_ROLE');
+            if (is_string($legacyRole) && trim($legacyRole) !== '') {
+                return [trim($legacyRole)];
+            }
+
+            return ['e_approval_requestor', 'ticketing_contributor'];
+        })(),
     ],
 
     'billing' => [
@@ -197,7 +215,7 @@ return [
      */
     'tenant_files' => [
         'disk' => env('TOWEROS_TENANT_FILES_DISK', 'tenant_files'),
-        'max_size_kb' => (int) env('TOWEROS_TENANT_FILES_MAX_KB', 10240),
+        'max_size_kb' => (int) env('TOWEROS_TENANT_FILES_MAX_KB', 25600),
         'signed_url_minutes' => (int) env('TOWEROS_TENANT_FILES_SIGNED_URL_MINUTES', 60),
         'allowed_mimes' => [
             'image/jpeg',
@@ -205,6 +223,59 @@ return [
             'image/webp',
             'image/gif',
             'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ],
+    ],
+
+    /**
+     * Site binder documents (S3 path: {tenantId}/documents/{siteId}/...).
+     */
+    'documents' => [
+        'max_size_kb' => (int) env('TOWEROS_DOCUMENTS_MAX_KB', 51200),
+        'allowed_mimes' => [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+            'application/pdf',
+            'application/zip',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/msword',
+            'application/vnd.ms-excel',
+            'application/dxf',
+            'image/vnd.dwg',
+            'application/acad',
+            'model/vnd.dwf',
+        ],
+        'cad_extensions' => ['dwg', 'dxf', 'dwf', 'dgn', 'step', 'stp', 'iges', 'igs', 'ifc'],
+        'cad_mimes' => [
+            'application/octet-stream',
+            'application/dxf',
+            'image/vnd.dwg',
+            'application/acad',
+            'application/x-dwg',
+            'model/vnd.dwf',
+            'application/vnd.dwg',
+        ],
+        'presigned_upload_enabled' => filter_var(env('TOWEROS_DOCUMENTS_PRESIGNED_UPLOAD', true), FILTER_VALIDATE_BOOLEAN),
+        'presigned_upload_ttl_minutes' => (int) env('TOWEROS_DOCUMENTS_PRESIGNED_TTL_MINUTES', 15),
+        'presigned_upload_min_kb' => (int) env('TOWEROS_DOCUMENTS_PRESIGNED_MIN_KB', 10240),
+        'gate_required_node_keys' => ['saq_phase_1', 'col', 'affidavit'],
+        'gate_enforcement' => [
+            'enabled' => filter_var(env('TOWEROS_DOCUMENTS_GATE_ENFORCEMENT', true), FILTER_VALIDATE_BOOLEAN),
+            'phase_keys' => [
+                'moc_col',
+                'col_social',
+                'pre_assessment',
+                'site_license',
+            ],
         ],
     ],
 
@@ -243,12 +314,12 @@ return [
 
     /**
      * Tenant modules enabled for RBAC provisioning and the Team & Access role editor.
-     * Keys: core, team_access, project_one, e_approval, ticketing (plus optional gis, sites, tower_one, fiber_one, asset_one).
+     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, sites, documents (plus optional gis, tower_one, fiber_one, asset_one).
      */
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents,document_register')),
         ))),
     ],
 

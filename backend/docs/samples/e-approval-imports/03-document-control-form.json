@@ -1,0 +1,180 @@
+{
+  "format": "atc-form-export",
+  "formatVersion": 1,
+  "exportedAt": "2026-06-23T00:00:00.000Z",
+  "form": {
+    "name": "Document Control Form",
+    "description": "Alliance Towers DCF — document identification, change details, and authorization for ISO controlled documents.",
+    "category": "general",
+    "metadata_json": {
+      "form_family": "iso_document_control",
+      "controlledDocumentSync": {
+        "enabled": true,
+        "autoRevision": true,
+        "documentCodeField": "document_code",
+        "fieldMap": {
+          "title": "document_title",
+          "document_type": "document_type",
+          "department": "department",
+          "revision_number": "current_revision",
+          "effective_date": "effective_date",
+          "next_review_date": "next_review_date",
+          "change_summary": "details_of_change"
+        },
+        "attachmentField": "attachments"
+      }
+    },
+    "restricted_to": null,
+    "status": "draft",
+    "schema_version": 1,
+    "owner_code": "DCF",
+    "doc_type_code": "F",
+    "doc_no_custom_enabled": true,
+    "doc_no_template": "DCF-{seq:4}",
+    "doc_no_seq_start": null,
+    "doc_no_seq_start_rules": null,
+    "brand_logo_url": null,
+    "brand_primary_color": null,
+    "related_form_ids": [],
+    "fields": [
+      {
+        "type": "section",
+        "name": "section_identification",
+        "label": "Document identification",
+        "step_order": 0,
+        "options": []
+      },
+      {
+        "type": "text",
+        "name": "document_code",
+        "label": "Document number",
+        "validation": {
+          "required": false,
+          "help_text": "Leave blank for a new document. Select from registry when submitting a revision."
+        },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_id_row", "slot": 0, "row_columns": 2 }
+        },
+        "step_order": 1
+      },
+      {
+        "type": "text",
+        "name": "document_title",
+        "label": "Document title",
+        "validation": { "required": true },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_id_row", "slot": 1, "row_columns": 2 }
+        },
+        "step_order": 2
+      },
+      {
+        "type": "number",
+        "name": "previous_revision",
+        "label": "Previous revision",
+        "validation": {
+          "required": false,
+          "help_text": "Prefilled from the registry on revision requests."
+        },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_rev_row", "slot": 0, "row_columns": 2 }
+        },
+        "step_order": 3
+      },
+      {
+        "type": "number",
+        "name": "current_revision",
+        "label": "Current revision",
+        "validation": {
+          "required": false,
+          "help_text": "Assigned automatically. Leave blank unless overriding."
+        },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_rev_row", "slot": 1, "row_columns": 2 }
+        },
+        "step_order": 4
+      },
+      {
+        "type": "select",
+        "name": "document_type",
+        "label": "Document type",
+        "validation": { "required": true },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_meta_row", "slot": 0, "row_columns": 2 },
+          "master_data_key": "document-type"
+        },
+        "step_order": 5
+      },
+      {
+        "type": "select",
+        "name": "department",
+        "label": "Department",
+        "validation": { "required": true },
+        "options": {
+          "layout": { "width": "half", "row_id": "dcf_meta_row", "slot": 1, "row_columns": 2 },
+          "master_data_key": "cost-center"
+        },
+        "step_order": 6
+      },
+      {
+        "type": "section",
+        "name": "section_change",
+        "label": "Details of change",
+        "step_order": 7,
+        "options": []
+      },
+      {
+        "type": "textarea",
+        "name": "details_of_change",
+        "label": "Details of change",
+        "validation": {
+          "required": false,
+          "help_text": "Describe what was modified in the document."
+        },
+        "options": { "layout": { "width": "full" } },
+        "step_order": 8
+      },
+      {
+        "type": "textarea",
+        "name": "reason_for_change",
+        "label": "Reason for change",
+        "validation": {
+          "required": false,
+          "help_text": "Why this revision is needed (audit, regulation, process improvement, etc.)."
+        },
+        "options": { "layout": { "width": "full" } },
+        "step_order": 9
+      },
+      {
+        "type": "section",
+        "name": "section_approval",
+        "label": "Authorization",
+        "step_order": 10,
+        "options": []
+      },
+      {
+        "type": "approver",
+        "name": "document_control_authorizer",
+        "label": "Document control authorization",
+        "validation": { "required": true },
+        "options": { "layout": { "width": "full" } },
+        "step_order": 11
+      },
+      {
+        "type": "file",
+        "name": "attachments",
+        "label": "Controlled document file",
+        "validation": { "required": false, "maxFileSizeMb": 25 },
+        "options": { "layout": { "width": "full" } },
+        "step_order": 12
+      }
+    ],
+    "steps": [
+      {
+        "type": "field",
+        "approverId": "document_control_authorizer",
+        "condition": null,
+        "step_order": 1
+      }
+    ]
+  }
+}

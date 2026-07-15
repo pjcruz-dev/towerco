@@ -52,6 +52,31 @@ final class RolloutProjectLinkTest extends TestCase
         tenancy()->end();
     }
 
+    public function test_create_rollout_persists_site_profile_fields(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/project-one/rollouts', [
+                'mno' => 'globe',
+                'project_type' => 'bts',
+                'search_ring_name' => 'Profile ring',
+                'region' => 'ncr',
+                'full_address' => '123 Rizal Ave, Manila',
+                'latitude' => 14.5995,
+                'longitude' => 120.9842,
+            ]);
+
+        $response->assertCreated();
+
+        tenancy()->initialize($this->testTenant);
+        $rollout = RolloutProgram::query()->with('site')->findOrFail($response->json('data.id'));
+        $this->assertNotNull($rollout->site);
+        $this->assertSame('123 Rizal Ave, Manila', $rollout->site->full_address);
+        $this->assertEqualsWithDelta(14.5995, (float) $rollout->site->latitude, 0.0001);
+        $this->assertEqualsWithDelta(120.9842, (float) $rollout->site->longitude, 0.0001);
+        tenancy()->end();
+    }
+
     public function test_patch_rollout_reassigns_project(): void
     {
         [$project] = $this->seedProjectAndSite();

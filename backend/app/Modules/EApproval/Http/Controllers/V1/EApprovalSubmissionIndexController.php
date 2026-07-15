@@ -6,8 +6,11 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 
 use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Services\EApprovalFormWorkspaceService;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
+use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,7 +24,30 @@ class EApprovalSubmissionIndexController extends AbstractApiController
 
         $query = $this->validatedTenantListQuery($request);
         $status = (string) $request->query('status', 'all');
-        $canViewAll = $request->user()->can('e_approval:forms:manage');
+
+        // Only auditors see every user's submissions by default.
+        // Form managers (e_approval:forms:manage) can manage forms but are scoped
+        // to their own submissions + those they approve, unless they also hold the
+        // audit:view permission or workspace-wide access for a form workspace.
+        $canViewAll = $request->user()->can('e_approval:audit:view');
+
+        // ?mine=1 forces the current-user-only scope regardless of canViewAll,
+        // so admins can filter to their own submissions.
+        $forceOwn = filter_var($request->query('mine', false), FILTER_VALIDATE_BOOLEAN);
+        $formId = trim((string) $request->query('form_id', ''));
+        $workspaceAll = filter_var($request->query('workspace_all', false), FILTER_VALIDATE_BOOLEAN);
+        $validated = $request->validate([
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date'],
+        ]);
+
+        if (! $canViewAll && $workspaceAll && $formId !== '') {
+            $form = EApprovalForm::query()->find($formId);
+            $workspace = $form !== null ? EApprovalFormWorkspaceSupport::configFromForm($form) : null;
+            if ($workspace !== null && app(EApprovalFormWorkspaceService::class)->viewerCanSeeAllInWorkspace($request->user(), $workspace)) {
+                $canViewAll = true;
+            }
+        }
 
         $paginator = $service->paginate(
             $request->user(),
@@ -29,7 +55,13 @@ class EApprovalSubmissionIndexController extends AbstractApiController
             $query['per_page'],
             $query['search'],
             $status === 'all' ? null : $status,
-            $canViewAll,
+            $canViewAll && ! $forceOwn,
+            $formId !== '' ? $formId : null,
+            isset($validated['from']) ? (string) $validated['from'] : null,
+            isset($validated['to']) ? (string) $validated['to'] : null,
+            null,
+            null,
+            $query['sort'],
         );
 
         return $this->okWithMeta(

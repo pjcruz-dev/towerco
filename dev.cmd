@@ -19,14 +19,15 @@ if not "%~1"=="" (
   exit /b 1
 )
 
-echo TowerOS — Docker dev stack
-echo   Web         http://localhost
+echo TowerOS — Podman/Docker dev stack ^(no web container^)
 echo   API         http://localhost:8000
-echo   phpMyAdmin  http://localhost:8080
+echo   phpMyAdmin  http://localhost:8080  ^(COMPOSE_PROFILES=tools^)
 echo   MySQL       127.0.0.1:3307
 echo.
+echo   Web on host:  npm run dev:web   ^(http://localhost^)
+echo   Or one shot:  npm run dev:hybrid
 echo   Stop: dev-stop.cmd  or  npm run dev:down
-echo   Logs: npm run dev:logs
+echo   Logs: npm run dev:logs:api
 echo.
 
 where docker >nul 2>&1

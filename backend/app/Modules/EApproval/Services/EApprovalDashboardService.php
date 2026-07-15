@@ -11,6 +11,7 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ final class EApprovalDashboardService
 
     public function __construct(
         private readonly EApprovalFinanceProcurementKpiService $financeProcurementKpis,
+        private readonly TenantEnabledModulesResolver $enabledModules,
     ) {}
 
     /**
@@ -81,9 +83,14 @@ final class EApprovalDashboardService
             ->values()
             ->all();
 
-        $financeCounts = $this->financeProcurementKpis->counts();
-        $financeKpis = $this->financeProcurementKpis->kpiCards($financeCounts);
-        $financeActions = $this->financeProcurementKpis->actions($financeCounts);
+        $financeCounts = [];
+        $financeKpis = [];
+        $financeActions = [];
+        if ($this->financeProcurementModuleEnabled()) {
+            $financeCounts = $this->financeProcurementKpis->counts();
+            $financeKpis = $this->financeProcurementKpis->kpiCards($financeCounts);
+            $financeActions = $this->financeProcurementKpis->actions($financeCounts);
+        }
 
         return [
             'kpis' => [
@@ -151,7 +158,17 @@ final class EApprovalDashboardService
             ])),
             'recent_audit' => $recentAudit,
             'phase' => 'P7',
-            'message' => 'Finance and procurement KPIs, form builder, templates, and approval workflows are active.',
+            'message' => $this->financeProcurementModuleEnabled()
+                ? 'Finance and procurement KPIs, form builder, templates, and approval workflows are active.'
+                : 'Form builder, templates, and approval workflows are active.',
         ];
+    }
+
+    private function financeProcurementModuleEnabled(): bool
+    {
+        $enabled = $this->enabledModules->resolveForCurrentTenant();
+
+        return in_array('procurement_one', $enabled, true)
+            || in_array('finance_one', $enabled, true);
     }
 }

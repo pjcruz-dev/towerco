@@ -39,6 +39,7 @@ final class EApprovalManagerApproverTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
+        $requestor->assignRole('e_approval_requestor');
 
         $manager = TenantUser::query()->create([
             'name' => 'Manager',

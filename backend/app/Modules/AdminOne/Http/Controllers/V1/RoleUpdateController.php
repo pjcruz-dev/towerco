@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\AdminOne\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\AdminOne\Services\RoleCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Modules\AdminOne\Models\TenantRole;
 
 class RoleUpdateController extends AbstractApiController
 {
@@ -22,11 +22,9 @@ class RoleUpdateController extends AbstractApiController
         ]);
 
         $updated = $service->updateCustomRolePermissions($role, $data['permissions']);
+        $payload = $service->show($updated);
+        unset($payload['users']);
 
-        return $this->ok([
-            'id' => $updated->id,
-            'name' => $updated->name,
-            'permissions' => $updated->permissions->pluck('name')->values()->all(),
-        ]);
+        return $this->ok($payload);
     }
 }

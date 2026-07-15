@@ -54,7 +54,7 @@ echo.
 
 echo [1/6] Stopping stack and removing MySQL volume...
 
-docker compose --env-file .env.docker down -v
+node scripts\compose-run.js --env-file .env.docker down -v
 
 if errorlevel 1 exit /b 1
 
@@ -62,7 +62,7 @@ if errorlevel 1 exit /b 1
 
 echo [2/6] Starting MySQL...
 
-docker compose --env-file .env.docker up -d mysql
+node scripts\compose-run.js --env-file .env.docker up -d mysql
 
 if errorlevel 1 exit /b 1
 
@@ -70,7 +70,7 @@ if errorlevel 1 exit /b 1
 
 echo [3/6] Waiting for MySQL...
 
-docker compose --env-file .env.docker up -d --wait mysql
+node scripts\compose-run.js --env-file .env.docker up -d --wait mysql
 
 if errorlevel 1 exit /b 1
 
@@ -87,15 +87,15 @@ if errorlevel 1 exit /b 1
 echo [5/6] Installing Composer deps, then central migrate + seed (one-off, no API server yet)...
 
 REM down -v removes toweros-backend-vendor; bypassing entrypoint skips composer install — install before artisan.
-docker compose --env-file .env.docker run --rm --no-deps --entrypoint sh api -c "if [ ! -f .env ] && [ -f .env.docker ]; then cp .env.docker .env; fi && composer install --no-interaction --prefer-dist && php artisan migrate --force --no-interaction && php artisan db:seed --force --no-interaction"
+node scripts\compose-run.js --env-file .env.docker run --rm --no-deps --entrypoint sh api -c "if [ ! -f .env ] && [ -f .env.docker ]; then cp .env.docker .env; fi && composer install --no-interaction --prefer-dist && php artisan migrate --force --no-interaction && php artisan db:seed --force --no-interaction"
 
 if errorlevel 1 exit /b 1
 
 
 
-echo [6/6] Starting full stack...
+echo [6/6] Starting Podman stack ^(API + MySQL + Soketi — web runs on host^)...
 
-docker compose --env-file .env.docker up -d --build
+node scripts\compose-run.js --env-file .env.docker up -d --build mysql api soketi
 
 if errorlevel 1 exit /b 1
 

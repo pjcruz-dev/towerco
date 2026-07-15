@@ -23,6 +23,8 @@ class Asset extends Model
         'location_id',
         'warranty_expiry',
         'purchase_value',
+        'source_grn_line_id',
+        'source_po_line_id',
     ];
 
     protected function casts(): array

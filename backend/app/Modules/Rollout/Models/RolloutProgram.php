@@ -33,6 +33,12 @@ class RolloutProgram extends Model
         'region',
         'territory',
         'status',
+        'mno_anchor_site_id',
+        'alliance_tag',
+        'area',
+        'site_license_remarks',
+        'energization_tempo_date',
+        'rfti_signed_tempo_date',
         'cancellation_reason',
         'cancelled_at',
         'tssr_approved_date',
@@ -54,6 +60,8 @@ class RolloutProgram extends Model
             'tssr_approved_date' => 'date',
             'doa_execution_date' => 'date',
             'site_license_executed_date' => 'date',
+            'energization_tempo_date' => 'date',
+            'rfti_signed_tempo_date' => 'date',
             'target_rfi_working_date' => 'date',
             'actual_rfi_date' => 'date',
             'cancelled_at' => 'datetime',
@@ -114,6 +122,12 @@ class RolloutProgram extends Model
     public function profitability(): HasOne
     {
         return $this->hasOne(SiteProfitabilityRecord::class);
+    }
+
+    /** @return HasMany<RolloutPermit, $this> */
+    public function permits(): HasMany
+    {
+        return $this->hasMany(RolloutPermit::class)->orderBy('sort_order');
     }
 
     /** @return BelongsTo<TenantUser, $this> */

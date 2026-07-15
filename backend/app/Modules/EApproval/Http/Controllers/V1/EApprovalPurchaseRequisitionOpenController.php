@@ -20,11 +20,18 @@ class EApprovalPurchaseRequisitionOpenController extends AbstractApiController
     ): JsonResponse {
         abort_unless(
             $request->user()?->can('e_approval:submissions:create')
-            || $request->user()?->can('e_approval:submissions:view'),
+            || $request->user()?->can('e_approval:submissions:view')
+            || $request->user()?->can('procurement_one:documents:create'),
             403,
         );
 
-        $items = $service->openForUser($request->user());
+        $scope = strtolower(trim((string) $request->query('scope', 'requestor')));
+        if ($scope === 'procurement') {
+            abort_unless($request->user()?->can('procurement_one:documents:create'), 403);
+            $items = $service->openForProcurement();
+        } else {
+            $items = $service->openForUser($request->user());
+        }
 
         $forFormId = trim((string) $request->query('for_form_id', ''));
         if ($forFormId !== '') {

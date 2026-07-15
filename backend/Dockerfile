@@ -3,6 +3,7 @@ FROM php:8.3-cli-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
+    nginx \
     libzip-dev \
     libpng-dev \
     libicu-dev \
@@ -19,6 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# OPcache + JIT tuning (see docker/entrypoint.sh for the runtime bind-mount copy).
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/zz-toweros-opcache.ini
+COPY docker/php-uploads.ini /usr/local/etc/php/conf.d/zz-toweros-uploads.ini
+
 WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./
@@ -29,6 +34,7 @@ RUN composer dump-autoload --optimize \
     && mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
 
+COPY docker/nginx-api-dev.conf /etc/nginx/conf.d/toweros-api.conf
 COPY docker/entrypoint.sh /usr/local/bin/toweros-api-entrypoint
 RUN sed -i 's/\r$//' /usr/local/bin/toweros-api-entrypoint \
     && chmod +x /usr/local/bin/toweros-api-entrypoint

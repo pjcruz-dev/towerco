@@ -4,19 +4,27 @@ declare(strict_types=1);
 
 namespace App\Modules\FiberOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\FiberOne\Models\FiberRoute;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class FiberRouteIndexService
 {
-    public function paginate(int $page, int $perPage, string $search): LengthAwarePaginator
+    private const SORTABLE = [
+        'name',
+        'status',
+        'length_km',
+        'updated_at',
+        'created_at',
+    ];
+
+    public function paginate(int $page, int $perPage, string $search, ?string $sort = null): LengthAwarePaginator
     {
         $query = FiberRoute::query()
             ->with([
                 'fromSite:id,site_code,name',
                 'toSite:id,site_code,name',
-            ])
-            ->orderBy('name');
+            ]);
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
@@ -25,6 +33,14 @@ class FiberRouteIndexService
                     ->orWhere('status', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'name:asc'),
+            self::SORTABLE,
+            'name',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

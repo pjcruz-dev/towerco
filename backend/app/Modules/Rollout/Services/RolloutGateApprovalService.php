@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
@@ -17,6 +18,15 @@ use Illuminate\Validation\ValidationException;
 
 final class RolloutGateApprovalService
 {
+    private const SORTABLE = [
+        'submitted_at',
+        'status',
+        'phase_key',
+        'current_step',
+        'completed_at',
+        'current_step_started_at',
+    ];
+
     public function __construct(
         private readonly RolloutGateApprovalPolicyService $policies,
         private readonly RolloutGateApproverResolver $approvers,
@@ -25,6 +35,7 @@ final class RolloutGateApprovalService
         private readonly TenantWorkingDaysCalendarFactory $calendarFactory,
         private readonly RolloutGateApprovalEscalationService $escalation,
         private readonly RolloutGateApprovalNotificationDispatcher $notificationDispatcher,
+        private readonly RolloutGateApprovalInboxScope $inboxScope,
     ) {}
 
     public function submit(
@@ -257,14 +268,14 @@ final class RolloutGateApprovalService
         bool $awaitingMeOnly = false,
         int $page = 1,
         int $perPage = 25,
+        ?string $sort = null,
     ): array {
         if ($awaitingMeOnly) {
             $status = RolloutGateApprovalRequest::STATUS_IN_REVIEW;
         }
 
         $query = RolloutGateApprovalRequest::query()
-            ->with(['rolloutProgram', 'timelinePhase', 'requestedBy'])
-            ->orderByDesc('submitted_at');
+            ->with(['rolloutProgram', 'timelinePhase', 'requestedBy']);
 
         if ($status !== null && $status !== 'all') {
             $query->where('status', $status);
@@ -275,22 +286,16 @@ final class RolloutGateApprovalService
         }
 
         if ($awaitingMeOnly && $viewer !== null) {
-            $filtered = $query->get()
-                ->filter(fn (RolloutGateApprovalRequest $row) => $this->viewerCanAct($row, $viewer))
-                ->values();
-            $total = $filtered->count();
-            $items = $filtered->slice(($page - 1) * $perPage, $perPage)->values();
-
-            return [
-                'data' => $items->map(fn (RolloutGateApprovalRequest $row) => $this->presentRequest($row, $viewer))->values()->all(),
-                'meta' => [
-                    'current_page' => $page,
-                    'last_page' => max(1, (int) ceil($total / $perPage)),
-                    'per_page' => $perPage,
-                    'total' => $total,
-                ],
-            ];
+            $this->inboxScope->constrainAwaitingActor($query, $viewer);
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'submitted_at:desc'),
+            self::SORTABLE,
+            'submitted_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -311,12 +316,12 @@ final class RolloutGateApprovalService
             return 0;
         }
 
-        return RolloutGateApprovalRequest::query()
-            ->with(['rolloutProgram'])
-            ->where('status', RolloutGateApprovalRequest::STATUS_IN_REVIEW)
-            ->get()
-            ->filter(fn (RolloutGateApprovalRequest $row) => $this->viewerCanAct($row, $viewer))
-            ->count();
+        $query = RolloutGateApprovalRequest::query()
+            ->where('status', RolloutGateApprovalRequest::STATUS_IN_REVIEW);
+
+        $this->inboxScope->constrainAwaitingActor($query, $viewer);
+
+        return (int) $query->count();
     }
 
     /**
@@ -328,13 +333,16 @@ final class RolloutGateApprovalService
             return [];
         }
 
-        return RolloutGateApprovalRequest::query()
+        $query = RolloutGateApprovalRequest::query()
             ->with(['rolloutProgram', 'timelinePhase', 'requestedBy'])
             ->where('status', RolloutGateApprovalRequest::STATUS_IN_REVIEW)
-            ->orderByDesc('submitted_at')
+            ->orderByDesc('submitted_at');
+
+        $this->inboxScope->constrainAwaitingActor($query, $viewer);
+
+        return $query
+            ->limit($limit)
             ->get()
-            ->filter(fn (RolloutGateApprovalRequest $row) => $this->viewerCanAct($row, $viewer))
-            ->take($limit)
             ->map(fn (RolloutGateApprovalRequest $row) => $this->presentRequest($row, $viewer))
             ->values()
             ->all();

@@ -6,13 +6,13 @@ namespace Tests\Feature\Ticketing;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Models\TicketingTicket;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Sites\Models\Site;
-use App\Models\TicketingTicket;
+use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Ticketing\Notifications\TicketingTicketMailNotification;
 use App\Modules\Ticketing\Services\TicketingSettingsService;
 use App\Modules\Ticketing\Services\TicketingSlaRunnerService;
-use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -231,7 +231,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'requester@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         tenancy()->initialize($this->testTenant);
@@ -351,7 +351,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'comment-requester@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         $create = $this->actingAs($requester, 'sanctum')
@@ -480,7 +480,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'other@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         $adminTicket = $this->actingAsTenantAdmin()
@@ -491,7 +491,7 @@ final class TicketingModuleTest extends TestCase
             ->assertCreated()
             ->json('data.id');
 
-        $this->actingAs($requester, 'sanctum')t
+        $this->actingAs($requester, 'sanctum')
             ->withHeaders($this->tenantApiHeaders())
             ->getJson('/api/v1/ticketing/tickets')
             ->assertOk()

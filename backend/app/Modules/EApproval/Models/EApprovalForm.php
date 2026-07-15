@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Models;
 
+use App\Modules\EApproval\Services\EApprovalFileStorageService;
+use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
+use App\Modules\EApproval\Support\EApprovalFormSnapshotSanitizer;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -135,7 +139,7 @@ class EApprovalForm extends Model
     /**
      * @return array<string, mixed>
      */
-    public function toDetailPayload(): array
+    public function toDetailPayload(bool $includeRevisionSnapshots = false): array
     {
         $this->loadMissing(['fields', 'workflowTemplate.steps']);
 
@@ -144,30 +148,47 @@ class EApprovalForm extends Model
             ->whereIn('status', EApprovalSubmissionStatus::open())
             ->count());
 
-        $steps = $this->workflowTemplate?->steps->map(static fn (EApprovalWorkflowStep $s) => [
-            'id' => (string) $s->id,
-            'step_order' => $s->step_order,
-            'type' => $s->approver_type,
-            'approverId' => $s->approver_id,
-            'condition' => $s->condition ?? new \stdClass,
-        ])->values()->all() ?? [];
+        $steps = $this->workflowTemplate?->steps->map(static function (EApprovalWorkflowStep $s): array {
+            $condition = is_array($s->condition) ? $s->condition : [];
+            $payload = [
+                'id' => (string) $s->id,
+                'step_order' => $s->step_order,
+                'type' => $s->approver_type,
+                'approverId' => $s->approver_id,
+                'condition' => $condition === [] ? new \stdClass : $condition,
+            ];
+
+            if ($s->approver_type === 'field_map') {
+                $payload['source_field'] = $s->approver_id;
+                $payload['mappings'] = is_array($condition['mappings'] ?? null) ? $condition['mappings'] : [];
+                $payload['default_approver_id'] = $condition['default_approver_id'] ?? null;
+            }
+
+            $when = EApprovalWorkflowStepDefinitionSupport::whenFromDefinition([], $condition);
+            if ($when !== []) {
+                $payload['when'] = $when;
+            }
+
+            return $payload;
+        })->values()->all() ?? [];
 
         $metadata = is_array($this->metadata_json) ? $this->metadata_json : [];
-        $revisions = is_array($metadata['revisions'] ?? null) ? $metadata['revisions'] : [];
+        $revisions = is_array($metadata['revisions'] ?? null) ? array_values($metadata['revisions']) : [];
+        $apiMetadata = EApprovalFormSnapshotSanitizer::stripRevisionsFromMetadata($metadata);
+        $apiMetadata['effective_workflow_source'] = EApprovalFormPolicySupport::effectiveWorkflowSource($this);
 
-        return array_merge($this->toListRow(), [
+        $payload = array_merge($this->toListRow(), [
             'submissions_count' => $submissionsCount,
             'pending_submissions_count' => $pendingSubmissionsCount,
             'accepts_new_submissions' => $this->accepts_new_submissions !== false,
-            'revisions' => $revisions,
-            'metadata_json' => $this->metadata_json,
+            'metadata_json' => $apiMetadata === [] ? null : $apiMetadata,
             'restricted_to' => $this->restricted_to,
-            'published_snapshot' => $this->published_snapshot,
             'doc_no_custom_enabled' => $this->doc_no_custom_enabled,
             'doc_no_template' => $this->doc_no_template,
             'doc_no_seq_start' => $this->doc_no_seq_start,
             'doc_no_seq_start_rules' => $this->doc_no_seq_start_rules,
-            'brand_logo_url' => $this->brand_logo_url,
+            'brand_logo_url' => app(EApprovalFileStorageService::class)->presentFormLogoUrl($this)
+                ?? $this->brand_logo_url,
             'brand_primary_color' => $this->brand_primary_color,
             'related_form_ids' => $this->related_form_ids,
             'fields' => $this->fields->map(static fn (EApprovalFormField $f) => [
@@ -184,5 +205,21 @@ class EApprovalForm extends Model
             ])->values()->all(),
             'steps' => $steps,
         ]);
+
+        if ($includeRevisionSnapshots) {
+            $payload['revisions'] = $revisions;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Compact snapshot used for publish storage and revision history (no nested revision blobs).
+     *
+     * @return array<string, mixed>
+     */
+    public function toStorageSnapshot(): array
+    {
+        return EApprovalFormSnapshotSanitizer::stripNestedHistory($this->toDetailPayload());
     }
 }

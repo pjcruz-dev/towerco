@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\EApproval\Models\EApprovalDocumentLink;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
@@ -29,6 +30,7 @@ final class EApprovalSubmissionLifecycleService
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalCommentService $comments,
         private readonly EApprovalDocumentLinkService $documentLinks,
+        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
     ) {}
 
     public function requestRevision(EApprovalSubmission $submission, string $remarks, TenantUser $actor): void
@@ -110,6 +112,8 @@ final class EApprovalSubmissionLifecycleService
                         actor: $actor,
                     );
                     $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
+                    $submission->loadMissing(['form', 'values.field', 'attachments']);
+                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             }
 
@@ -188,6 +192,8 @@ final class EApprovalSubmissionLifecycleService
             actor: $actor,
             bodyPreview: $note !== '' ? $note : null,
         );
+
+        $this->mail->dispatchManualFollowUp($submission, (string) $pending->approver_id, $actor->name);
 
         $this->audit->log('submission_manual_follow_up', $submission->id, "To approver {$pending->approver_id}", $actor);
 

@@ -58,7 +58,7 @@ final class EApprovalModuleShellTest extends TestCase
     {
         $viewer = $this->testTenantAdmin;
         tenancy()->initialize($this->testTenant);
-        $viewer->syncRoles(['viewer']);
+        $viewer->syncRoles(['e_approval_viewer']);
         tenancy()->end();
 
         $this->actingAs($viewer, 'sanctum')

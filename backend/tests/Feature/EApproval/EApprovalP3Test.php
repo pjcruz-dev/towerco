@@ -59,7 +59,9 @@ final class EApprovalP3Test extends TestCase
 
     public function test_settings_update_requires_permission(): void
     {
+        tenancy()->initialize($this->testTenant);
         app(EApprovalSettingsService::class)->setString(EApprovalSettingsService::SLA_REMINDER_MINUTES, '100');
+        tenancy()->end();
 
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())

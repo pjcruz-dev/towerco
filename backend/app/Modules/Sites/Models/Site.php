@@ -19,6 +19,7 @@ class Site extends Model
     protected $fillable = [
         'site_code',
         'name',
+        'full_address',
         'latitude',
         'longitude',
         'type',

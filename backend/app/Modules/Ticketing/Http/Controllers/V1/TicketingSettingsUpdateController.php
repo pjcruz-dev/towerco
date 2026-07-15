@@ -35,6 +35,7 @@ class TicketingSettingsUpdateController extends AbstractApiController
             'notify_teams_on_sla_escalation' => ['sometimes', 'boolean'],
             'categories' => ['sometimes', 'array'],
             'categories.*' => ['string', 'max:64'],
+            'apply_category_pack' => ['sometimes', 'string', 'max:64'],
         ]);
 
         $settings->update($data);

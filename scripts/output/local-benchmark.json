@@ -1,0 +1,40 @@
+﻿{
+    "web_base":  "http://127.0.0.1:80",
+    "generated_at":  "2026-07-07T07:33:55.5878764Z",
+    "runs":  5,
+    "api_base":  "http://127.0.0.1:8000",
+    "results":  [
+                    {
+                        "Label":  "Laravel /up (health HTML)",
+                        "Url":  "http://127.0.0.1:8000/up",
+                        "Status":  200,
+                        "MinMs":  1854.2,
+                        "MedMs":  4025.9,
+                        "MaxMs":  4212.3,
+                        "Runs":  5
+                    },
+                    {
+                        "Label":  "Central health JSON",
+                        "Url":  "http://127.0.0.1:8000/api/v1/health",
+                        "Status":  404,
+                        "MinMs":  1795.6,
+                        "MedMs":  1861.8,
+                        "MaxMs":  1977.4,
+                        "Runs":  5
+                    },
+                    {
+                        "Label":  "Next.js home (dev)",
+                        "Url":  "http://127.0.0.1:80/",
+                        "Status":  200,
+                        "MinMs":  142.3,
+                        "MedMs":  146.3,
+                        "MaxMs":  151.3,
+                        "Runs":  5
+                    }
+                ],
+    "notes":  [
+                  "High /up times are normal in Docker + php artisan serve on Windows.",
+                  "Use dev:host (API on host PHP) for faster local API.",
+                  "Authenticated tenant endpoints need a token - use browser Network tab per page."
+              ]
+}

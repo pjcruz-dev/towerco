@@ -53,6 +53,22 @@ final class EApprovalNotificationDispatcher
         );
     }
 
+    public function dispatchManualFollowUp(
+        EApprovalSubmission $submission,
+        string $approverUserId,
+        string $requestorName,
+    ): void {
+        $user = TenantUser::query()->find($approverUserId);
+        if ($user === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $user,
+            new EApprovalSubmissionNotification($submission, 'manual_follow_up', $requestorName),
+        );
+    }
+
     /**
      * @param  list<string>  $recipientIds
      */

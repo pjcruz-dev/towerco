@@ -7,9 +7,9 @@ namespace App\Modules\Identity\Services;
 use App\Models\Tenant;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Illuminate\Contracts\Encryption\DecryptException;
-use Illuminate\Encryption\MissingAppKeyException;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Encryption\MissingAppKeyException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -113,7 +113,9 @@ final class TenantSsoConfigService
 
     public function redirectUri(): string
     {
-        return route('api.tenant.v1.auth.sso.azure.callback', [], true);
+        $path = route('api.tenant.v1.auth.sso.azure.callback', [], false);
+
+        return rtrim((string) config('app.url'), '/').$path;
     }
 
     public function hasMicrosoftCredentials(?stdClass $config): bool

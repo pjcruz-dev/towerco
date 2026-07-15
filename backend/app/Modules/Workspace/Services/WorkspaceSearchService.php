@@ -4,41 +4,41 @@ declare(strict_types=1);
 
 namespace App\Modules\Workspace\Services;
 
-use App\Modules\AdminOne\Services\TenantUserIndexService;
+use App\Models\TicketingTicket;
 use App\Modules\AssetOne\Models\Asset;
-use App\Modules\AssetOne\Services\AssetIndexService;
+use App\Modules\Documents\Services\ControlledDocumentSearchService;
+use App\Modules\Documents\Services\DocumentSearchService;
+use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
-use App\Modules\EApproval\Services\EApprovalSubmissionService;
 use App\Modules\FiberOne\Models\FiberRoute;
-use App\Modules\FiberOne\Services\FiberRouteIndexService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProjectOne\Models\Project;
-use App\Modules\ProjectOne\Services\ProjectIndexService;
 use App\Modules\Rollout\Models\RolloutProgram;
-use App\Modules\Rollout\Services\RolloutProgramIndexService;
 use App\Modules\Sites\Models\Site;
-use App\Modules\Sites\Services\SiteIndexService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
-use App\Modules\Ticketing\Services\TicketingTicketService;
 use App\Modules\TowerOne\Models\Tower;
-use App\Modules\TowerOne\Services\TowerIndexService;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
+/**
+ * Tenant-wide command-palette entity search.
+ *
+ * Uses lean LIMIT queries (no COUNT / LengthAwarePaginator) so each keystroke
+ * does not scan every registry with a full pagination count.
+ */
 final class WorkspaceSearchService
 {
     private const MIN_QUERY_LENGTH = 2;
 
+    private const MAX_TOTAL_RESULTS = 30;
+
+    private const DEFAULT_LIMIT_PER_TYPE = 4;
+
     public function __construct(
         private readonly TenantEnabledModulesResolver $enabledModules,
-        private readonly EApprovalSubmissionService $eApprovalSubmissions,
-        private readonly TicketingTicketService $ticketingTickets,
-        private readonly SiteIndexService $sites,
-        private readonly TowerIndexService $towers,
-        private readonly AssetIndexService $assets,
-        private readonly FiberRouteIndexService $fiberRoutes,
-        private readonly ProjectIndexService $projects,
-        private readonly RolloutProgramIndexService $rollouts,
-        private readonly TenantUserIndexService $users,
+        private readonly DocumentSearchService $documents,
+        private readonly ControlledDocumentSearchService $controlledDocuments,
     ) {}
 
     /**
@@ -52,7 +52,7 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    public function search(TenantUser $viewer, string $query, int $limitPerType = 5): array
+    public function search(TenantUser $viewer, string $query, int $limitPerType = self::DEFAULT_LIMIT_PER_TYPE): array
     {
         $search = trim($query);
         if (mb_strlen($search) < self::MIN_QUERY_LENGTH) {
@@ -61,42 +61,68 @@ final class WorkspaceSearchService
 
         $limitPerType = max(1, min(10, $limitPerType));
         $enabled = $this->enabledModules->resolveForCurrentTenant();
+        $like = $this->like($search);
         $results = [];
 
+        /** @var list<callable(): list<array<string, mixed>>> $providers */
+        $providers = [];
+
         if ($this->canSearchModule($enabled, $viewer, 'e_approval', 'e_approval:submissions:view')) {
-            $results = array_merge($results, $this->searchEApprovalSubmissions($viewer, $search, $limitPerType));
+            $providers[] = fn (): array => $this->searchEApprovalSubmissions($viewer, $like, $limitPerType);
+        }
+
+        if ($this->canSearchModule($enabled, $viewer, 'document_register', 'documents:controlled:view')) {
+            $providers[] = fn (): array => $this->controlledDocuments->asWorkspaceResults($viewer, $search, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'ticketing', 'ticketing:view')) {
-            $results = array_merge($results, $this->searchTicketingTickets($viewer, $search, $limitPerType));
+            $providers[] = fn (): array => $this->searchTicketingTickets($viewer, $search, $like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'sites', 'sites:view')) {
-            $results = array_merge($results, $this->searchSites($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchSites($like, $limitPerType);
+        }
+
+        if ($this->canSearchModule($enabled, $viewer, 'documents', 'documents:view')) {
+            $providers[] = fn (): array => $this->documents->asWorkspaceResults($search, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'tower_one', 'tower_one:view')) {
-            $results = array_merge($results, $this->searchTowers($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchTowers($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'asset_one', 'asset_one:view')) {
-            $results = array_merge($results, $this->searchAssets($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchAssets($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'fiber_one', 'fiber_one:view')) {
-            $results = array_merge($results, $this->searchFiberRoutes($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchFiberRoutes($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:view')) {
-            $results = array_merge($results, $this->searchProjects($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchProjects($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:rollout:view')) {
-            $results = array_merge($results, $this->searchRollouts($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchRollouts($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'team_access', 'user:manage')) {
-            $results = array_merge($results, $this->searchUsers($search, $limitPerType));
+            $providers[] = fn (): array => $this->searchUsers($like, $limitPerType);
+        }
+
+        foreach ($providers as $provider) {
+            $remaining = self::MAX_TOTAL_RESULTS - count($results);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $chunk = $provider();
+            if ($chunk === []) {
+                continue;
+            }
+
+            $results = array_merge($results, array_slice($chunk, 0, min($limitPerType, $remaining)));
         }
 
         return $results;
@@ -114,6 +140,11 @@ final class WorkspaceSearchService
         return $viewer->can($permission);
     }
 
+    private function like(string $search): string
+    {
+        return '%'.addcslashes($search, '%_\\').'%';
+    }
+
     /**
      * @return list<array{
      *   module: string,
@@ -125,24 +156,44 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchEApprovalSubmissions(TenantUser $viewer, string $search, int $limit): array
+    private function searchEApprovalSubmissions(TenantUser $viewer, string $like, int $limit): array
     {
         $canViewAll = $viewer->can('e_approval:forms:manage');
-        $paginator = $this->eApprovalSubmissions->paginate($viewer, 1, $limit, $search, null, $canViewAll);
 
-        return $this->mapPaginator($paginator, static function (EApprovalSubmission $submission): array {
-            $submission->loadMissing(['form:id,name']);
+        $query = EApprovalSubmission::query()
+            ->select(['id', 'document_no', 'status', 'form_id', 'requestor_id'])
+            ->with(['form:id,name']);
 
-            return [
-                'module' => 'e_approval',
-                'entity_type' => 'submission',
-                'id' => (string) $submission->id,
-                'title' => (string) $submission->document_no,
-                'subtitle' => $submission->form?->name,
-                'status' => $submission->status,
-                'href' => '/e-approval/submissions/'.$submission->id,
-            ];
+        if (! $canViewAll) {
+            $query->where(static function (Builder $q) use ($viewer): void {
+                $q->where('requestor_id', $viewer->id)
+                    ->orWhereIn('id', EApprovalRequestApproval::query()
+                        ->where('approver_id', $viewer->id)
+                        ->select('submission_id'));
+            });
+        }
+
+        $query->where(static function (Builder $q) use ($like): void {
+            $q->where('document_no', 'like', $like)
+                ->orWhereIn('form_id', EApprovalForm::query()
+                    ->select('id')
+                    ->where('name', 'like', $like));
         });
+
+        return $this->mapRows(
+            $query->orderByDesc('created_at')->limit($limit)->get(),
+            static function (EApprovalSubmission $submission): array {
+                return [
+                    'module' => 'e_approval',
+                    'entity_type' => 'submission',
+                    'id' => (string) $submission->id,
+                    'title' => (string) $submission->document_no,
+                    'subtitle' => $submission->form?->name,
+                    'status' => $submission->status,
+                    'href' => '/e-approval/submissions/'.$submission->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -156,27 +207,38 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchTicketingTickets(TenantUser $viewer, string $search, int $limit): array
+    private function searchTicketingTickets(TenantUser $viewer, string $search, string $like, int $limit): array
     {
-        $paginator = $this->ticketingTickets->paginate($viewer, [
-            'page' => 1,
-            'per_page' => $limit,
-            'search' => $search,
-        ]);
+        $canManage = $viewer->can('ticketing:tickets:manage');
+        $ticketNeedle = ltrim($search, 'TKT-tkt-');
 
-        return $this->mapPaginator($paginator, function ($ticket): array {
-            $row = $this->ticketingTickets->asListRow($ticket);
+        $query = TicketingTicket::query()
+            ->select(['id', 'ticket_number', 'title', 'status', 'assignee_id', 'requester_id'])
+            ->with(['assignee:id,name']);
 
-            return [
-                'module' => 'ticketing',
-                'entity_type' => 'ticket',
-                'id' => (string) $row['id'],
-                'title' => trim((string) ($row['ticket_number'] ?? '').' · '.(string) ($row['title'] ?? '')),
-                'subtitle' => isset($row['assignee']['name']) ? 'Assignee: '.$row['assignee']['name'] : null,
-                'status' => isset($row['status']) ? (string) $row['status'] : null,
-                'href' => '/ticketing/tickets/'.$row['id'],
-            ];
+        if (! $canManage) {
+            $query->where('requester_id', $viewer->id);
+        }
+
+        $query->where(static function (Builder $inner) use ($like, $ticketNeedle): void {
+            $inner->where('title', 'like', $like)
+                ->orWhere('ticket_number', 'like', '%'.addcslashes($ticketNeedle, '%_\\').'%');
         });
+
+        return $this->mapRows(
+            $query->orderByDesc('updated_at')->limit($limit)->get(),
+            static function (TicketingTicket $ticket): array {
+                return [
+                    'module' => 'ticketing',
+                    'entity_type' => 'ticket',
+                    'id' => (string) $ticket->id,
+                    'title' => trim($ticket->displayNumber().' · '.$ticket->title),
+                    'subtitle' => $ticket->assignee?->name ? 'Assignee: '.$ticket->assignee->name : null,
+                    'status' => (string) $ticket->status,
+                    'href' => '/ticketing/tickets/'.$ticket->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -190,21 +252,30 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchSites(string $search, int $limit): array
+    private function searchSites(string $like, int $limit): array
     {
-        $paginator = $this->sites->paginate(1, $limit, $search);
-
-        return $this->mapPaginator($paginator, static function (Site $site): array {
-            return [
-                'module' => 'sites',
-                'entity_type' => 'site',
-                'id' => (string) $site->id,
-                'title' => trim($site->site_code.' · '.$site->name),
-                'subtitle' => $site->type,
-                'status' => $site->status,
-                'href' => '/sites/'.$site->id,
-            ];
-        });
+        return $this->mapRows(
+            Site::query()
+                ->select(['id', 'site_code', 'name', 'type', 'status'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('site_code', 'like', $like)
+                        ->orWhere('name', 'like', $like);
+                })
+                ->orderBy('site_code')
+                ->limit($limit)
+                ->get(),
+            static function (Site $site): array {
+                return [
+                    'module' => 'sites',
+                    'entity_type' => 'site',
+                    'id' => (string) $site->id,
+                    'title' => trim($site->site_code.' · '.$site->name),
+                    'subtitle' => $site->type,
+                    'status' => $site->status,
+                    'href' => '/sites/'.$site->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -218,26 +289,38 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchTowers(string $search, int $limit): array
+    private function searchTowers(string $like, int $limit): array
     {
-        $paginator = $this->towers->paginate(1, $limit, $search);
+        return $this->mapRows(
+            Tower::query()
+                ->select(['id', 'tower_type', 'status', 'site_id'])
+                ->with(['site:id,site_code,name'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('tower_type', 'like', $like)
+                        ->orWhereHas('site', static function (Builder $site) use ($like): void {
+                            $site->where('site_code', 'like', $like)
+                                ->orWhere('name', 'like', $like);
+                        });
+                })
+                ->orderByDesc('updated_at')
+                ->limit($limit)
+                ->get(),
+            static function (Tower $tower): array {
+                $siteLabel = $tower->site
+                    ? trim($tower->site->site_code.' · '.$tower->site->name)
+                    : 'Unlinked site';
 
-        return $this->mapPaginator($paginator, static function (Tower $tower): array {
-            $tower->loadMissing(['site:id,site_code,name']);
-            $siteLabel = $tower->site
-                ? trim($tower->site->site_code.' · '.$tower->site->name)
-                : 'Unlinked site';
-
-            return [
-                'module' => 'tower_one',
-                'entity_type' => 'tower',
-                'id' => (string) $tower->id,
-                'title' => ucfirst((string) $tower->tower_type).' tower',
-                'subtitle' => $siteLabel,
-                'status' => $tower->status,
-                'href' => '/tower-one/towers/'.$tower->id,
-            ];
-        });
+                return [
+                    'module' => 'tower_one',
+                    'entity_type' => 'tower',
+                    'id' => (string) $tower->id,
+                    'title' => ucfirst((string) $tower->tower_type).' tower',
+                    'subtitle' => $siteLabel,
+                    'status' => $tower->status,
+                    'href' => '/tower-one/towers/'.$tower->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -251,21 +334,31 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchAssets(string $search, int $limit): array
+    private function searchAssets(string $like, int $limit): array
     {
-        $paginator = $this->assets->paginate(1, $limit, $search);
-
-        return $this->mapPaginator($paginator, static function (Asset $asset): array {
-            return [
-                'module' => 'asset_one',
-                'entity_type' => 'asset',
-                'id' => (string) $asset->id,
-                'title' => trim($asset->asset_code.' · '.$asset->name),
-                'subtitle' => $asset->category,
-                'status' => $asset->status,
-                'href' => '/asset-one/assets/'.$asset->id,
-            ];
-        });
+        return $this->mapRows(
+            Asset::query()
+                ->select(['id', 'asset_code', 'name', 'category', 'status'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('asset_code', 'like', $like)
+                        ->orWhere('name', 'like', $like)
+                        ->orWhere('rfid_tag', 'like', $like);
+                })
+                ->orderBy('asset_code')
+                ->limit($limit)
+                ->get(),
+            static function (Asset $asset): array {
+                return [
+                    'module' => 'asset_one',
+                    'entity_type' => 'asset',
+                    'id' => (string) $asset->id,
+                    'title' => trim($asset->asset_code.' · '.$asset->name),
+                    'subtitle' => $asset->category,
+                    'status' => $asset->status,
+                    'href' => '/asset-one/assets/'.$asset->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -279,25 +372,31 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchFiberRoutes(string $search, int $limit): array
+    private function searchFiberRoutes(string $like, int $limit): array
     {
-        $paginator = $this->fiberRoutes->paginate(1, $limit, $search);
+        return $this->mapRows(
+            FiberRoute::query()
+                ->select(['id', 'name', 'status', 'from_site_id', 'to_site_id'])
+                ->with(['fromSite:id,site_code,name', 'toSite:id,site_code,name'])
+                ->where('name', 'like', $like)
+                ->orderBy('name')
+                ->limit($limit)
+                ->get(),
+            static function (FiberRoute $route): array {
+                $from = $route->fromSite?->site_code ?? '—';
+                $to = $route->toSite?->site_code ?? '—';
 
-        return $this->mapPaginator($paginator, static function (FiberRoute $route): array {
-            $route->loadMissing(['fromSite:id,site_code,name', 'toSite:id,site_code,name']);
-            $from = $route->fromSite?->site_code ?? '—';
-            $to = $route->toSite?->site_code ?? '—';
-
-            return [
-                'module' => 'fiber_one',
-                'entity_type' => 'fiber_route',
-                'id' => (string) $route->id,
-                'title' => (string) $route->name,
-                'subtitle' => $from.' → '.$to,
-                'status' => $route->status,
-                'href' => '/fiber-one/routes?search='.rawurlencode((string) $route->name),
-            ];
-        });
+                return [
+                    'module' => 'fiber_one',
+                    'entity_type' => 'fiber_route',
+                    'id' => (string) $route->id,
+                    'title' => (string) $route->name,
+                    'subtitle' => $from.' → '.$to,
+                    'status' => $route->status,
+                    'href' => '/fiber-one/routes?search='.rawurlencode((string) $route->name),
+                ];
+            },
+        );
     }
 
     /**
@@ -311,25 +410,36 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchProjects(string $search, int $limit): array
+    private function searchProjects(string $like, int $limit): array
     {
-        $paginator = $this->projects->paginate(1, $limit, $search);
-
-        return $this->mapPaginator($paginator, static function (Project $project): array {
-            $project->loadMissing(['site:id,site_code,name']);
-
-            return [
-                'module' => 'project_one',
-                'entity_type' => 'project',
-                'id' => (string) $project->id,
-                'title' => (string) $project->name,
-                'subtitle' => $project->site
-                    ? trim($project->site->site_code.' · '.$project->site->name)
-                    : null,
-                'status' => $project->status,
-                'href' => '/project-one/projects/'.$project->id,
-            ];
-        });
+        return $this->mapRows(
+            Project::query()
+                ->select(['id', 'name', 'status', 'site_id'])
+                ->with(['site:id,site_code,name'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('name', 'like', $like)
+                        ->orWhereHas('site', static function (Builder $site) use ($like): void {
+                            $site->where('site_code', 'like', $like)
+                                ->orWhere('name', 'like', $like);
+                        });
+                })
+                ->orderByDesc('updated_at')
+                ->limit($limit)
+                ->get(),
+            static function (Project $project): array {
+                return [
+                    'module' => 'project_one',
+                    'entity_type' => 'project',
+                    'id' => (string) $project->id,
+                    'title' => (string) $project->name,
+                    'subtitle' => $project->site
+                        ? trim($project->site->site_code.' · '.$project->site->name)
+                        : null,
+                    'status' => $project->status,
+                    'href' => '/project-one/projects/'.$project->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -343,21 +453,30 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchRollouts(string $search, int $limit): array
+    private function searchRollouts(string $like, int $limit): array
     {
-        $paginator = $this->rollouts->paginate(1, $limit, ['search' => $search]);
-
-        return $this->mapPaginator($paginator, static function (RolloutProgram $rollout): array {
-            return [
-                'module' => 'project_one',
-                'entity_type' => 'rollout',
-                'id' => (string) $rollout->id,
-                'title' => (string) $rollout->rollout_ref,
-                'subtitle' => $rollout->search_ring_name,
-                'status' => $rollout->status,
-                'href' => '/project-one/rollouts/'.$rollout->id,
-            ];
-        });
+        return $this->mapRows(
+            RolloutProgram::query()
+                ->select(['id', 'rollout_ref', 'search_ring_name', 'status'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('rollout_ref', 'like', $like)
+                        ->orWhere('search_ring_name', 'like', $like);
+                })
+                ->orderBy('rollout_ref')
+                ->limit($limit)
+                ->get(),
+            static function (RolloutProgram $rollout): array {
+                return [
+                    'module' => 'project_one',
+                    'entity_type' => 'rollout',
+                    'id' => (string) $rollout->id,
+                    'title' => (string) $rollout->rollout_ref,
+                    'subtitle' => $rollout->search_ring_name,
+                    'status' => $rollout->status,
+                    'href' => '/project-one/rollouts/'.$rollout->id,
+                ];
+            },
+        );
     }
 
     /**
@@ -371,27 +490,36 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function searchUsers(string $search, int $limit): array
+    private function searchUsers(string $like, int $limit): array
     {
-        $paginator = $this->users->paginate(1, $limit, $search, null);
-
-        return $this->mapPaginator($paginator, static function (TenantUser $user): array {
-            return [
-                'module' => 'team_access',
-                'entity_type' => 'user',
-                'id' => (string) $user->id,
-                'title' => (string) $user->name,
-                'subtitle' => (string) $user->email,
-                'status' => $user->isActive() ? 'active' : 'inactive',
-                'href' => '/users?search='.rawurlencode((string) $user->email),
-            ];
-        });
+        return $this->mapRows(
+            TenantUser::query()
+                ->select(['id', 'name', 'email', 'is_active'])
+                ->where(static function (Builder $q) use ($like): void {
+                    $q->where('name', 'like', $like)
+                        ->orWhere('email', 'like', $like);
+                })
+                ->orderBy('name')
+                ->limit($limit)
+                ->get(),
+            static function (TenantUser $user): array {
+                return [
+                    'module' => 'team_access',
+                    'entity_type' => 'user',
+                    'id' => (string) $user->id,
+                    'title' => (string) $user->name,
+                    'subtitle' => (string) $user->email,
+                    'status' => $user->isActive() ? 'active' : 'inactive',
+                    'href' => '/users?search='.rawurlencode((string) $user->email),
+                ];
+            },
+        );
     }
 
     /**
      * @template TModel of object
      *
-     * @param  LengthAwarePaginator<int, TModel>  $paginator
+     * @param  Collection<int, TModel>  $rows
      * @param  callable(TModel): array{
      *   module: string,
      *   entity_type: string,
@@ -411,9 +539,9 @@ final class WorkspaceSearchService
      *   href: string
      * }>
      */
-    private function mapPaginator(LengthAwarePaginator $paginator, callable $mapper): array
+    private function mapRows(Collection $rows, callable $mapper): array
     {
-        return $paginator->getCollection()
+        return $rows
             ->map(static fn ($model) => $mapper($model))
             ->values()
             ->all();

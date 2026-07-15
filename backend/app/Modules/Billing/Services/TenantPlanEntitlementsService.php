@@ -6,6 +6,7 @@ namespace App\Modules\Billing\Services;
 
 use App\Models\Tenant;
 use App\Modules\EApproval\Models\EApprovalForm;
+use Illuminate\Support\Facades\Schema;
 
 final class TenantPlanEntitlementsService
 {
@@ -252,6 +253,64 @@ final class TenantPlanEntitlementsService
     }
 
     /**
+     * Procurement-One slice for plan gating and UI.
+     *
+     * @return array{
+     *   plan_tier: string,
+     *   enabled: bool,
+     *   goods_receipt: bool,
+     *   advanced_numbering: bool,
+     *   inventory: bool
+     * }
+     */
+    public function procurementOneFeatures(?string $tenantId = null): array
+    {
+        if ($tenantId !== null) {
+            /** @var Tenant|null $central */
+            $central = Tenant::query()->find($tenantId);
+            if ($central instanceof Tenant) {
+                $tier = $this->normalizeTier($central->plan_tier);
+                $modules = $this->forTenant($central)['modules'];
+            } else {
+                $tier = 'starter';
+                $modules = $this->forTier($tier)['modules'];
+            }
+        } else {
+            $tenantKey = tenant()?->getTenantKey();
+            if ($tenantKey !== null) {
+                /** @var Tenant|null $central */
+                $central = Tenant::query()->find((string) $tenantKey);
+                if ($central instanceof Tenant) {
+                    $tier = $this->normalizeTier($central->plan_tier);
+                    $modules = $this->forTenant($central)['modules'];
+                } else {
+                    $tier = $this->resolvePlanTierForCurrentTenant();
+                    $modules = $this->forTier($tier)['modules'];
+                }
+            } else {
+                $tier = $this->resolvePlanTierForCurrentTenant();
+                $modules = $this->forTier($tier)['modules'];
+            }
+        }
+
+        /** @var array<string, mixed> $procurementOne */
+        $procurementOne = $modules['procurement_one'] ?? [];
+
+        return [
+            'plan_tier' => $tier,
+            'enabled' => (bool) ($procurementOne['enabled'] ?? false),
+            'goods_receipt' => (bool) ($procurementOne['goods_receipt'] ?? false),
+            'advanced_numbering' => (bool) ($procurementOne['advanced_numbering'] ?? false),
+            'inventory' => (bool) ($procurementOne['inventory'] ?? false),
+            'ap_invoices' => (bool) ($procurementOne['ap_invoices'] ?? false),
+            'payment_tracking' => (bool) ($procurementOne['payment_tracking'] ?? false),
+            'rfq_sourcing' => (bool) ($procurementOne['rfq_sourcing'] ?? false),
+            'vendor_contracts' => (bool) ($procurementOne['vendor_contracts'] ?? false),
+            'reporting_exports' => (bool) ($procurementOne['reporting_exports'] ?? false),
+        ];
+    }
+
+    /**
      * Full catalog for plan comparison UI.
      *
      * @return array{
@@ -320,7 +379,7 @@ final class TenantPlanEntitlementsService
     private function countEApprovalFileFields(Tenant $tenant): array
     {
         return $tenant->run(function (): array {
-            if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('e_approval_form_fields')) {
+            if (! Schema::connection('tenant')->hasTable('e_approval_form_fields')) {
                 return ['published' => 0, 'draft' => 0];
             }
 
@@ -341,7 +400,7 @@ final class TenantPlanEntitlementsService
     private function formsExceedingFileFieldLimit(Tenant $tenant, int $max): int
     {
         return $tenant->run(function () use ($max): int {
-            if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('e_approval_form_fields')) {
+            if (! Schema::connection('tenant')->hasTable('e_approval_form_fields')) {
                 return 0;
             }
 

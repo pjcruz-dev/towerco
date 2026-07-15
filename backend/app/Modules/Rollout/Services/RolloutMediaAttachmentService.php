@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Modules\Documents\Models\Document;
 use App\Modules\Rollout\Models\TenantRolloutFile;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 
 final class RolloutMediaAttachmentService
 {
     public function __construct(
         private readonly TenantFileStorageService $files,
+        private readonly TenantEnabledModulesResolver $enabledModules,
     ) {}
 
     /**
@@ -171,12 +174,12 @@ final class RolloutMediaAttachmentService
                 continue;
             }
 
-            $enrichedDocuments[] = [
+            $enrichedDocuments[] = array_merge([
                 'file_id' => $file->id,
                 'url' => $this->files->apiUrl($file),
                 'label' => $document['label'] ?? $file->original_filename,
                 'mime_type' => $file->mime_type,
-            ];
+            ], $this->documentMigrationMeta($file));
         }
 
         return array_merge($package, ['documents' => $enrichedDocuments]);
@@ -212,5 +215,26 @@ final class RolloutMediaAttachmentService
         }
 
         return $fileIds;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function documentMigrationMeta(TenantRolloutFile $file): array
+    {
+        $enabled = $this->enabledModules->resolveForCurrentTenant();
+        if (! in_array('documents', $enabled, true)) {
+            return [];
+        }
+
+        $migrated = Document::query()->where('source_rollout_file_id', $file->id)->first();
+        if ($migrated === null) {
+            return [];
+        }
+
+        return [
+            'document_id' => (string) $migrated->id,
+            'document_href' => '/sites/'.$migrated->site_id,
+        ];
     }
 }

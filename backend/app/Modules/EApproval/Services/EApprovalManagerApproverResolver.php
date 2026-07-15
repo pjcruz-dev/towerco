@@ -32,7 +32,12 @@ final class EApprovalManagerApproverResolver
 
     public function resolveForEmail(string $requestorEmail): ?string
     {
-        $managerEmail = $this->graph->getManagerEmailForUser($requestorEmail);
+        try {
+            $managerEmail = $this->graph->getManagerEmailForUser($requestorEmail);
+        } catch (\Throwable) {
+            return null;
+        }
+
         if ($managerEmail === null) {
             return null;
         }

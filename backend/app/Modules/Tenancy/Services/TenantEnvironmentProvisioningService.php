@@ -24,6 +24,7 @@ final class TenantEnvironmentProvisioningService
         private readonly TenantPlaybookSyncService $playbookSync,
         private readonly TenantRolloutBootstrapService $rolloutBootstrap,
         private readonly TenantAdminBootstrapService $adminBootstrap,
+        private readonly TenantDocumentsBootstrapService $documentsBootstrap,
     ) {}
 
     /**
@@ -124,6 +125,8 @@ final class TenantEnvironmentProvisioningService
 
         // Stancl creates the tenant DB on createDomain(); always ensure admin@{domain} exists.
         $initialAdmin = $this->adminBootstrap->bootstrap($tenant, $domain);
+
+        $this->documentsBootstrap->provisionSiteDocumentReviewForm($tenant);
 
         return [
             'tenant' => $tenant->fresh(['domains']),

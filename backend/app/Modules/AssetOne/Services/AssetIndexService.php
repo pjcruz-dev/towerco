@@ -4,14 +4,25 @@ declare(strict_types=1);
 
 namespace App\Modules\AssetOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\AssetOne\Models\Asset;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class AssetIndexService
 {
-    public function paginate(int $page, int $perPage, string $search): LengthAwarePaginator
+    private const SORTABLE = [
+        'asset_code',
+        'name',
+        'category',
+        'status',
+        'warranty_expiry',
+        'updated_at',
+        'created_at',
+    ];
+
+    public function paginate(int $page, int $perPage, string $search, ?string $sort = null): LengthAwarePaginator
     {
-        $query = Asset::query()->orderBy('asset_code');
+        $query = Asset::query();
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
@@ -23,6 +34,14 @@ class AssetIndexService
                     ->orWhere('rfid_tag', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'asset_code:asc'),
+            self::SORTABLE,
+            'asset_code',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

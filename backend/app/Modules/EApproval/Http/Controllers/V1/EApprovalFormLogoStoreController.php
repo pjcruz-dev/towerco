@@ -26,11 +26,11 @@ class EApprovalFormLogoStoreController extends AbstractApiController
         ]);
 
         $result = $storage->storeFormLogo($form, $data['file']);
-        $form->brand_logo_url = $result['brand_logo_url'];
+        $form->brand_logo_url = $result['brand_logo_path'];
         $form->save();
 
         $audit->log('form_logo_updated', $form->id, $form->brand_logo_url, $request->user());
 
-        return $this->ok(['brand_logo_url' => $form->brand_logo_url]);
+        return $this->ok(['brand_logo_url' => $result['brand_logo_url']]);
     }
 }

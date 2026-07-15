@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Modules\Documents\Services\DocumentRolloutGateEnforcementService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutProgram;
+use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
@@ -18,6 +20,8 @@ final class RolloutProgramPresenter
         private readonly RolloutMilestoneCyclePresenter $milestoneCycles,
         private readonly RolloutGateApprovalService $gateApprovals,
         private readonly RolloutGateApprovalPolicyService $gatePolicies,
+        private readonly DocumentRolloutGateEnforcementService $documentGateEnforcement,
+        private readonly RolloutPermitService $permits,
     ) {}
 
     /**
@@ -33,7 +37,7 @@ final class RolloutProgramPresenter
             'profitability',
             'site',
             'project',
-            'children' => static fn ($q) => $q->orderBy('rollout_ref'),
+            'children' => static fn ($q) => $q->with('site')->orderBy('rollout_ref'),
         ]);
 
         $slaRemaining = null;
@@ -46,7 +50,9 @@ final class RolloutProgramPresenter
                 );
         }
 
-        $milestoneCycleRows = $program->status === 'batch' ? [] : $this->milestoneCycles->forProgram($program);
+        $milestoneCycleRows = $program->status === 'batch'
+            ? []
+            : $this->milestoneCycles->forProgram($program, $program->timelinePhases);
         $config = TenantRolloutPlaybookConfig::query()->first();
 
         return [
@@ -64,6 +70,12 @@ final class RolloutProgramPresenter
             'search_ring_name' => $program->search_ring_name,
             'region' => $program->region,
             'territory' => $program->territory,
+            'area' => $program->area,
+            'alliance_tag' => $program->alliance_tag,
+            'mno_anchor_site_id' => $program->mno_anchor_site_id,
+            'site_license_remarks' => $program->site_license_remarks,
+            'energization_tempo_date' => $program->energization_tempo_date?->toDateString(),
+            'rfti_signed_tempo_date' => $program->rfti_signed_tempo_date?->toDateString(),
             'saq_owner_id' => $program->saq_owner_id,
             'cme_pm_id' => $program->cme_pm_id,
             'pmo_owner_id' => $program->pmo_owner_id,
@@ -80,6 +92,7 @@ final class RolloutProgramPresenter
                 'id' => $program->site->id,
                 'site_code' => $program->site->site_code,
                 'name' => $program->site->name,
+                'full_address' => $program->site->full_address,
                 'latitude' => $program->site->latitude !== null ? (float) $program->site->latitude : null,
                 'longitude' => $program->site->longitude !== null ? (float) $program->site->longitude : null,
             ] : null,
@@ -99,37 +112,51 @@ final class RolloutProgramPresenter
                     'tco_site_id' => $c->tco_site_id,
                 ])->values()->all()
                 : [],
+            'colocation_tenants' => $program->status !== 'batch'
+                ? $program->children->map(static fn ($c) => [
+                    'id' => $c->id,
+                    'rollout_ref' => $c->rollout_ref,
+                    'mno' => $c->mno,
+                    'tco_site_id' => $c->tco_site_id,
+                    'status' => $c->status,
+                    'actual_rfi_date' => $c->actual_rfi_date?->toDateString(),
+                    'site_license_remarks' => $c->site_license_remarks,
+                    'site_name' => $c->site?->name,
+                ])->values()->all()
+                : [],
+            'permits' => $program->status === 'batch' ? [] : $this->permits->listForProgram($program),
             'timeline_phases' => $program->status === 'batch' ? [] : $program->timelinePhases->map(function ($p) use ($program, $config, $viewer) {
                 $active = $this->gateApprovals->activeRequestForPhase($p);
                 $latest = $this->gateApprovals->latestRequestForPhase($p);
                 $policy = $this->gatePolicies->policyForPhase((string) $program->project_type, (string) $p->phase_key, $config);
 
                 return [
-                'id' => $p->id,
-                'phase_key' => $p->phase_key,
-                'label' => $p->label,
-                'owner_role' => $p->owner_role,
-                'anchor' => $p->anchor,
-                'working_day_start' => $p->working_day_start,
-                'working_day_end' => $p->working_day_end,
-                'target_start_date' => $p->target_start_date?->toDateString(),
-                'target_end_date' => $p->target_end_date?->toDateString(),
-                'actual_start_date' => $p->actual_start_date?->toDateString(),
-                'actual_end_date' => $p->actual_end_date?->toDateString(),
-                'gate_status' => $p->gate_status,
-                'gate_label' => $p->gate_label,
-                'counts_toward_sla' => (bool) ($p->counts_toward_sla ?? true),
-                'is_custom' => (bool) ($p->is_custom ?? false),
-                'phase_progress' => $this->phaseProgress($p),
-                'approval_required' => $policy !== null,
-                'approval_chain' => $policy['chain'] ?? [],
-                'active_gate_approval' => $active
-                    ? $this->gateApprovals->presentRequest($active, $viewer)
-                    : null,
-                'latest_gate_approval' => $latest && ($active === null || $latest->id !== $active->id)
-                    ? $this->gateApprovals->presentRequest($latest, $viewer)
-                    : ($active ? null : ($latest ? $this->gateApprovals->presentRequest($latest, $viewer) : null)),
-            ];
+                    'id' => $p->id,
+                    'phase_key' => $p->phase_key,
+                    'label' => $p->label,
+                    'owner_role' => $p->owner_role,
+                    'anchor' => $p->anchor,
+                    'working_day_start' => $p->working_day_start,
+                    'working_day_end' => $p->working_day_end,
+                    'target_start_date' => $p->target_start_date?->toDateString(),
+                    'target_end_date' => $p->target_end_date?->toDateString(),
+                    'actual_start_date' => $p->actual_start_date?->toDateString(),
+                    'actual_end_date' => $p->actual_end_date?->toDateString(),
+                    'gate_status' => $p->gate_status,
+                    'gate_label' => $p->gate_label,
+                    'counts_toward_sla' => (bool) ($p->counts_toward_sla ?? true),
+                    'is_custom' => (bool) ($p->is_custom ?? false),
+                    'phase_progress' => $this->phaseProgress($p),
+                    'approval_required' => $policy !== null,
+                    'approval_chain' => $policy['chain'] ?? [],
+                    'active_gate_approval' => $active
+                        ? $this->gateApprovals->presentRequest($active, $viewer)
+                        : null,
+                    'latest_gate_approval' => $latest && ($active === null || $latest->id !== $active->id)
+                        ? $this->gateApprovals->presentRequest($latest, $viewer)
+                        : ($active ? null : ($latest ? $this->gateApprovals->presentRequest($latest, $viewer) : null)),
+                    'document_binder_gate' => $this->documentGateEnforcement->phaseSummary($program, $p),
+                ];
             })->values()->all(),
             'candidates' => $program->status === 'batch' ? [] : $program->candidates->map(fn ($c) => [
                 'id' => $c->id,
@@ -183,7 +210,7 @@ final class RolloutProgramPresenter
         ];
     }
 
-    private function phaseProgress(\App\Modules\Rollout\Models\RolloutTimelinePhase $phase): string
+    private function phaseProgress(RolloutTimelinePhase $phase): string
     {
         if ($phase->gate_status === 'passed' || $phase->actual_end_date !== null) {
             return 'completed';

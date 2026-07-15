@@ -20,6 +20,7 @@ final class TenantRbacPermissionCatalog
     private const MODULE_PERMISSIONS = [
         'core' => [
             'dashboard:view',
+            'workspace:audit:view',
         ],
         'team_access' => [
             'user:manage',
@@ -55,12 +56,45 @@ final class TenantRbacPermissionCatalog
             'ticketing:tickets:manage',
             'ticketing:settings:manage',
         ],
+        'procurement_one' => [
+            'procurement_one:view',
+            'procurement_one:documents:create',
+            'procurement_one:documents:manage',
+            'procurement_one:settings:manage',
+            'procurement_one:vendors:view',
+            'procurement_one:vendors:manage',
+            'procurement_one:inventory:view',
+            'procurement_one:inventory:manage',
+        ],
+        'finance_one' => [
+            'finance_one:view',
+            'finance_one:documents:create',
+            'finance_one:documents:manage',
+            'finance_one:budget:manage',
+            'finance_one:contracts:manage',
+            'finance_one:payments:manage',
+            'finance_one:reports:view',
+            'finance_one:settings:manage',
+        ],
         // Disabled modules (retained for reference; not in default enabled set).
         'gis' => ['gis:view'],
         'sites' => ['sites:view'],
         'tower_one' => ['tower_one:view'],
         'fiber_one' => ['fiber_one:view'],
-        'asset_one' => ['asset_one:view'],
+        'asset_one' => ['asset_one:view', 'asset_one:assets:manage'],
+        'documents' => [
+            'documents:view',
+            'documents:upload',
+            'documents:manage',
+            'documents:template:manage',
+        ],
+        'document_register' => [
+            'documents:controlled:view',
+            'documents:controlled:create',
+            'documents:controlled:approve',
+            'documents:controlled:manage',
+            'documents:controlled:import',
+        ],
     ];
 
     /** @var array<string, string> */
@@ -70,11 +104,15 @@ final class TenantRbacPermissionCatalog
         'project_one' => 'Project-One',
         'e_approval' => 'E-Approval',
         'ticketing' => 'Ticketing',
+        'procurement_one' => 'Procurement-One',
+        'finance_one' => 'Finance-One',
         'gis' => 'GIS',
         'sites' => 'Sites',
         'tower_one' => 'Tower-One',
         'fiber_one' => 'Fiber-One',
         'asset_one' => 'Asset-One',
+        'documents' => 'Documents',
+        'document_register' => 'Document register',
     ];
 
     /**

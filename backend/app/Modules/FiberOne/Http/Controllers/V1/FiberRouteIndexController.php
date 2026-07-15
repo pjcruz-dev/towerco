@@ -19,7 +19,7 @@ class FiberRouteIndexController extends AbstractApiController
         abort_unless($request->user()?->can('fiber_one:view'), 403);
 
         $query = $this->validatedTenantListQuery($request);
-        $paginator = $service->paginate($query['page'], $query['per_page'], $query['search']);
+        $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $query['sort']);
         $payload = $service->asPayload($paginator);
 
         return $this->okWithMeta($payload['data'], $payload['meta']);

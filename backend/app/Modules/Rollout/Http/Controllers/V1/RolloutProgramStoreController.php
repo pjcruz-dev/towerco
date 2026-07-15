@@ -25,6 +25,9 @@ class RolloutProgramStoreController extends AbstractApiController
             'territory' => ['sometimes', 'nullable', 'string', 'max:64'],
             'rollout_ref' => ['sometimes', 'nullable', 'string', 'max:64'],
             'project_id' => ['sometimes', 'nullable', 'uuid', 'exists:projects,id'],
+            'full_address' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
         ]);
 
         $program = $service->create($data);
@@ -32,6 +35,8 @@ class RolloutProgramStoreController extends AbstractApiController
         return $this->created([
             'id' => $program->id,
             'rollout_ref' => $program->rollout_ref,
+            'tco_site_id' => $program->tco_site_id,
+            'site_id' => $program->site_id,
             'sla_working_days' => $program->sla_working_days,
             'status' => $program->status,
         ]);

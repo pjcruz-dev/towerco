@@ -32,6 +32,7 @@ class EApprovalAuditIndexController extends AbstractApiController
             $query['search'],
             isset($validated['from']) ? (string) $validated['from'] : null,
             isset($validated['to']) ? (string) $validated['to'] : null,
+            $query['sort'],
         );
 
         return $this->okWithMeta($service->asPayload($paginator), [

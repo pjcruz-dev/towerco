@@ -8,10 +8,12 @@ echo   tower.cmd              Interactive menu ^(recommended^)
 echo   tower.cmd 2            Jump directly ^(1=start, 2=restart, 3=stop, 4=db, ...^)
 echo.
 echo Daily workflow
-echo   Terminal 1:  npm run dev           Full Docker stack ^(API + Web + MySQL^)
+echo   Terminal 1:  npm run dev           Podman: MySQL + API + Soketi
 echo                dev.cmd              Same as npm run dev
-echo   After changes: tower.cmd ^> 2       Restart api + web containers
-echo   Terminal 2:  npm run dev:logs:api  or  dev-logs.cmd api
+echo   Terminal 2:  npm run dev:web       Next.js on host ^(http://localhost^)
+echo                npm run dev:hybrid   Core + web in one command
+echo   After API changes: tower.cmd ^> 2   Restart api container
+echo   Logs: npm run dev:logs:api  or  dev-logs.cmd api
 echo.
 echo Menu options
 echo   1  Start dev stack       dev.cmd / npm run dev

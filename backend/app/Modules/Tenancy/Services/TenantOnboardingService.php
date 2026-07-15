@@ -25,6 +25,7 @@ class TenantOnboardingService
         private readonly RolloutPolicyBundleService $policyBundles,
         private readonly TenantPlaybookSyncService $playbookSync,
         private readonly TenantRolloutBootstrapService $rolloutBootstrap,
+        private readonly TenantDocumentsBootstrapService $documentsBootstrap,
     ) {}
 
     /**
@@ -123,17 +124,20 @@ class TenantOnboardingService
 
             // Stancl TenantCreated already runs CreateDatabase + MigrateDatabase synchronously.
             // Avoid a second full tenants:migrate pass (often exceeds frontend timeouts on Windows).
-
-            $this->playbookSync->syncBindingToTenantDatabase(
-                $tenant,
-                $binding->fresh(['playbookVersion', 'rolloutPolicyBundle']),
-            );
-
-            $rolloutBootstrap = $this->rolloutBootstrap->provision($tenant);
         }
+
+        // Tenant DB always exists after createDomain(); sync playbook + holidays for every new org.
+        $this->playbookSync->syncBindingToTenantDatabase(
+            $tenant,
+            $binding->fresh(['playbookVersion', 'rolloutPolicyBundle']),
+        );
+
+        $rolloutBootstrap = $this->rolloutBootstrap->provision($tenant);
 
         // Stancl creates the tenant DB on createDomain(); always ensure admin@{domain} exists.
         $initialAdmin = $this->adminBootstrap->bootstrap($tenant, $domain);
+
+        $this->documentsBootstrap->provisionSiteDocumentReviewForm($tenant);
 
         return [
             'tenant' => $tenant->fresh(['domains']),

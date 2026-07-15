@@ -46,7 +46,7 @@ final class EApprovalFormRevisionService
                 'id' => (string) $actor->id,
                 'name' => (string) $actor->name,
             ],
-            'snapshot' => $form->toDetailPayload(),
+            'snapshot' => $form->toStorageSnapshot(),
         ];
 
         if (count($revisions) > self::MAX_REVISIONS) {

@@ -23,6 +23,7 @@ class EApprovalWorkflowStep extends Model
         'approver_type',
         'approver_id',
         'condition',
+        'compiled_for_submission_id',
     ];
 
     protected function casts(): array

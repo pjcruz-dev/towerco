@@ -32,7 +32,7 @@ final class EApprovalNotificationCategory
 
     public static function hrefFor(string $type, ?string $submissionId): string
     {
-        if (in_array($type, ['approval_assigned', 'sla_reminder', 'sla_escalation'], true)) {
+        if (in_array($type, ['approval_assigned', 'sla_reminder', 'sla_escalation', 'manual_follow_up'], true)) {
             if ($submissionId !== null && $submissionId !== '') {
                 return "/e-approval/submissions/{$submissionId}?tab=workflow";
             }

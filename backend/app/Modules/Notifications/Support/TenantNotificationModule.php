@@ -12,6 +12,10 @@ final class TenantNotificationModule
 
     public const TICKETING = 'ticketing';
 
+    public const DOCUMENTS = 'documents';
+
+    public const PROCUREMENT_ONE = 'procurement_one';
+
     /**
      * @return list<string>
      */
@@ -21,6 +25,8 @@ final class TenantNotificationModule
             self::E_APPROVAL,
             self::PROJECT_ONE,
             self::TICKETING,
+            self::DOCUMENTS,
+            self::PROCUREMENT_ONE,
         ];
     }
 }

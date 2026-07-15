@@ -22,6 +22,7 @@ class RolloutGateApprovalIndexController extends AbstractApiController
             'awaiting_me' => ['sometimes', 'boolean'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sort' => ['sometimes', 'string', 'max:64'],
         ]);
 
         $result = $service->index(
@@ -31,6 +32,7 @@ class RolloutGateApprovalIndexController extends AbstractApiController
             $request->boolean('awaiting_me'),
             (int) ($data['page'] ?? 1),
             (int) ($data['per_page'] ?? 25),
+            isset($data['sort']) ? (string) $data['sort'] : null,
         );
 
         return $this->ok($result);

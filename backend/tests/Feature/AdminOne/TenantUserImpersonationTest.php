@@ -8,6 +8,7 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -37,10 +38,11 @@ class TenantUserImpersonationTest extends TestCase
             'name' => 'Field User',
             'email' => 'field@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $target->assignRole('viewer');
 
-        Sanctum::actingAs($this->testTenantAdmin, ['*', 'session:'.(string) \Illuminate\Support\Str::uuid()]);
+        Sanctum::actingAs($this->testTenantAdmin, ['*', 'session:'.(string) Str::uuid()]);
 
         $response = $this->postJson(
             '/api/v1/admin/users/'.$target->id.'/impersonate',
@@ -66,6 +68,7 @@ class TenantUserImpersonationTest extends TestCase
             'name' => 'Other Admin',
             'email' => 'other-admin@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $otherAdmin->assignRole('tenant_admin');
 
@@ -89,6 +92,7 @@ class TenantUserImpersonationTest extends TestCase
             'name' => 'Manager',
             'email' => 'manager@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $manager->assignRole('manager');
 
@@ -96,6 +100,7 @@ class TenantUserImpersonationTest extends TestCase
             'name' => 'Viewer',
             'email' => 'viewer@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $target->assignRole('viewer');
 
@@ -119,6 +124,7 @@ class TenantUserImpersonationTest extends TestCase
             'name' => 'Field User',
             'email' => 'field2@test.localhost',
             'password' => 'password',
+            'is_active' => true,
         ]);
         $target->assignRole('viewer');
 
@@ -132,6 +138,8 @@ class TenantUserImpersonationTest extends TestCase
 
         $sessionId = $start->json('data.session_id');
         $token = $start->json('data.access_token');
+
+        auth()->forgetGuards();
 
         $stop = $this->postJson('/api/v1/auth/impersonation/stop', [], array_merge($this->tenantApiHeaders(), [
             'Authorization' => 'Bearer '.$token,

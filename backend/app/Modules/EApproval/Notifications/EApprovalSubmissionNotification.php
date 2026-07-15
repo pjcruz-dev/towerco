@@ -60,6 +60,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'awaiting_dcf' => "{$prefix} Document control required — {$documentNo}",
                 'sla_reminder' => "{$prefix} Approval reminder — {$documentNo}",
                 'sla_escalation' => "{$prefix} Approval escalation — {$documentNo}",
+                'manual_follow_up' => "{$prefix} Follow-up reminder — {$documentNo}",
                 default => "{$prefix} E-Approval update — {$documentNo}",
             };
 
@@ -97,6 +98,11 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 $message->line(__('A public form link was used to submit this request. It is now in your approval workflow.'));
             } elseif ($this->event === 'submitted') {
                 $message->line(__('Your request was submitted successfully and is pending approval. You will receive another email when the workflow completes.'));
+            } elseif ($this->event === 'manual_follow_up') {
+                $message->line(__('The requestor sent a follow-up reminder. Please review this approval when you can.'));
+                if ($this->actorName !== null) {
+                    $message->line(__('From: :name', ['name' => $this->actorName]));
+                }
             } elseif ($this->actorName !== null) {
                 $message->line(__('By: :name', ['name' => $this->actorName]));
             }

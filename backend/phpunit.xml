@@ -11,6 +11,42 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Smoke">
+            <file>tests/Feature/ExampleTest.php</file>
+            <directory>tests/Feature/AdminOne</directory>
+            <directory>tests/Feature/Http</directory>
+            <directory>tests/Feature/Workspace</directory>
+        </testsuite>
+        <testsuite name="TeamAccess">
+            <directory>tests/Feature/AdminOne</directory>
+        </testsuite>
+        <testsuite name="EApproval">
+            <directory>tests/Feature/EApproval</directory>
+        </testsuite>
+        <testsuite name="Rollout">
+            <directory>tests/Feature/Rollout</directory>
+        </testsuite>
+        <testsuite name="ProcurementOne">
+            <directory>tests/Feature/ProcurementOne</directory>
+        </testsuite>
+        <testsuite name="Documents">
+            <directory>tests/Feature/Documents</directory>
+        </testsuite>
+        <testsuite name="ProjectOne">
+            <directory>tests/Feature/ProjectOne</directory>
+        </testsuite>
+        <testsuite name="Ticketing">
+            <directory>tests/Feature/Ticketing</directory>
+        </testsuite>
+        <testsuite name="Platform">
+            <directory>tests/Feature/Platform</directory>
+        </testsuite>
+        <testsuite name="Infrastructure">
+            <directory>tests/Feature/Infrastructure</directory>
+        </testsuite>
+        <testsuite name="Notifications">
+            <directory>tests/Feature/Notifications</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

@@ -13,15 +13,23 @@ class EApprovalFormShowController extends AbstractApiController
 {
     public function __invoke(Request $request, EApprovalForm $form): JsonResponse
     {
-        abort_unless($request->user()?->can('e_approval:view'), 403);
+        $user = $request->user();
+        $canView = $user?->can('e_approval:view') || $user?->can('e_approval:forms:manage');
+        $canSubmit = $user?->can('e_approval:submissions:create') === true
+            && $form->status === 'published'
+            && $form->accepts_new_submissions !== false;
 
-        if ($form->status === 'draft' && ! $request->user()?->can('e_approval:forms:manage')) {
+        abort_unless($canView || $canSubmit, 403);
+
+        if ($form->status === 'draft' && ! $user?->can('e_approval:forms:manage')) {
             abort(404);
         }
 
         $form->load(['fields', 'workflowTemplate.steps']);
         $form->loadCount('submissions');
 
-        return $this->ok($form->toDetailPayload());
+        $includeRevisionSnapshots = $user?->can('e_approval:forms:manage') === true;
+
+        return $this->ok($form->toDetailPayload($includeRevisionSnapshots));
     }
 }

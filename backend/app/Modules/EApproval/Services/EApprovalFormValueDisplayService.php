@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class EApprovalFormValueDisplayService
@@ -44,6 +45,7 @@ final class EApprovalFormValueDisplayService
             'approver' => $this->resolveApproverDisplay($rawValue, $usersById),
             'select', 'radio' => EApprovalFieldOptionsParser::choiceLabel($fieldOptions, $rawValue),
             'checkbox' => $this->resolveCheckboxDisplay($rawValue),
+            'date' => $this->resolveDateDisplay($rawValue),
             'grid' => $this->resolveGridDisplay($fieldOptions, $rawValue),
             default => $rawValue,
         };
@@ -202,6 +204,19 @@ final class EApprovalFormValueDisplayService
             'false', '0', 'no', 'off' => 'No',
             default => $rawValue,
         };
+    }
+
+    private function resolveDateDisplay(?string $rawValue): ?string
+    {
+        if ($rawValue === null || trim($rawValue) === '') {
+            return $rawValue;
+        }
+
+        try {
+            return Carbon::parse($rawValue)->format('Y-m-d');
+        } catch (\Throwable) {
+            return $rawValue;
+        }
     }
 
     private function maskOpaqueIdentifier(?string $display, ?string $raw, ?string $fieldType): ?string

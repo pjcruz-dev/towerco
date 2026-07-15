@@ -4,22 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
-use App\Models\Tenant;
+use App\Modules\Documents\Services\DocumentRolloutLeasePackageMigrationService;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Rollout\Models\CmeDailyReport;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\SiteCandidate;
-use App\Modules\Rollout\Models\SiteHuntingDailyLog;
-use App\Modules\Rollout\Models\SiteProfitabilityRecord;
 use App\Modules\Rollout\Support\RolloutFieldCreateResult;
 use App\Modules\Sites\Models\Site;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Validation\ValidationException;
 
 final class SiteCandidateService
 {
     public function __construct(
-        private readonly RolloutProgramService $rollouts,
-        private readonly TcoSiteIdGenerator $tcoSiteIdGenerator,
+        private readonly RolloutCanonicalSiteService $canonicalSites,
         private readonly RolloutMediaAttachmentService $media,
         private readonly RolloutAuditLogger $audit,
     ) {}
@@ -156,28 +153,9 @@ final class SiteCandidateService
         $candidate->selected_at = now();
         $candidate->save();
 
-        $prefix = $this->resolveTcoPrefix();
+        $site = $this->canonicalSites->enrichFromCandidate($candidate, $program->fresh());
 
-        if ($program->tco_site_id === null) {
-            $this->rollouts->issueTcoSiteId($program, $prefix);
-            $program->refresh();
-        }
-
-        $siteCode = $program->tco_site_id ?? ('CAND-'.$candidate->candidate_number);
-
-        $site = Site::query()->updateOrCreate(
-            ['site_code' => $siteCode],
-            [
-                'name' => $candidate->label ?? $program->search_ring_name ?? $program->rollout_ref,
-                'latitude' => $candidate->latitude,
-                'longitude' => $candidate->longitude,
-                'type' => 'macro',
-                'status' => 'under_construction',
-            ],
-        );
-
-        $program->site_id = $site->id;
-        $program->save();
+        $this->migrateLeasePackageToDocuments($candidate, $site);
 
         $updated = $program->fresh(['site', 'candidates', 'timelinePhases', 'profitability']);
 
@@ -189,12 +167,20 @@ final class SiteCandidateService
         return $updated;
     }
 
-    private function resolveTcoPrefix(): string
+    private function migrateLeasePackageToDocuments(SiteCandidate $candidate, Site $site): void
     {
-        $tenantId = (string) tenant('id');
-        /** @var Tenant|null $central */
-        $central = Tenant::query()->find($tenantId);
+        $enabled = app(TenantEnabledModulesResolver::class)
+            ->resolveForCurrentTenant();
 
-        return strtoupper(substr((string) ($central?->tco_sequence_prefix ?? 'A'), 0, 1));
+        if (! in_array('documents', $enabled, true) || ! in_array('sites', $enabled, true)) {
+            return;
+        }
+
+        try {
+            app(DocumentRolloutLeasePackageMigrationService::class)
+                ->migrateCandidate($candidate, $site, null);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 }

@@ -25,6 +25,7 @@ class ProjectIndexController extends AbstractApiController
             $query['per_page'],
             $query['search'],
             is_string($siteId) ? $siteId : null,
+            $query['sort'],
         );
         $payload = $service->asPayload($paginator);
 

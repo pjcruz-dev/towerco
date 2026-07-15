@@ -11,6 +11,8 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Models\EApprovalWorkflowTemplate;
+use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Support\Str;
 
 /**
@@ -23,11 +25,12 @@ final class EApprovalFormSyncService
      */
     public function sync(EApprovalForm $form, array $payload): void
     {
-        $this->syncFields($form, is_array($payload['fields'] ?? null) ? $payload['fields'] : []);
-        $this->syncWorkflow(
-            $form,
-            is_array($payload['steps'] ?? null) ? $payload['steps'] : [],
-        );
+        $fieldsPayload = is_array($payload['fields'] ?? null) ? $payload['fields'] : [];
+        $stepsPayload = is_array($payload['steps'] ?? null) ? $payload['steps'] : [];
+
+        $this->syncFields($form, $fieldsPayload);
+        $this->syncWorkflow($form, $stepsPayload);
+        $this->syncWorkflowSourceMetadata($form, $stepsPayload);
     }
 
     /**
@@ -83,6 +86,7 @@ final class EApprovalFormSyncService
                 $match->fill($attributes);
                 $match->save();
                 $keptIds[] = (string) $match->id;
+
                 continue;
             }
 
@@ -121,6 +125,7 @@ final class EApprovalFormSyncService
 
         $existingById = EApprovalWorkflowStep::query()
             ->where('template_id', $template->id)
+            ->whereNull('compiled_for_submission_id')
             ->get()
             ->keyBy(static fn (EApprovalWorkflowStep $s) => (string) $s->id);
 
@@ -139,14 +144,19 @@ final class EApprovalFormSyncService
             }
 
             $payloadId = isset($step['id']) ? trim((string) $step['id']) : '';
-            $type = (string) ($step['type'] ?? $step['approver_type'] ?? 'user');
-            $approverId = isset($step['approverId']) ? (string) $step['approverId'] : ($step['approver_id'] ?? null);
+            $type = $this->normalizeApproverType((string) ($step['type'] ?? $step['approver_type'] ?? 'user'));
+            $approverId = isset($step['approverId']) ? trim((string) $step['approverId']) : trim((string) ($step['approver_id'] ?? ''));
+            if ($type === 'field_map') {
+                $sourceField = trim((string) ($step['source_field'] ?? $approverId));
+                $approverId = $sourceField !== '' ? $sourceField : '';
+            }
+            $approverId = $approverId === '' ? null : $approverId;
 
             $attributes = [
                 'step_order' => (int) ($step['step_order'] ?? $index + 1),
                 'approver_type' => $type,
                 'approver_id' => $approverId,
-                'condition' => is_array($step['condition'] ?? null) ? $step['condition'] : null,
+                'condition' => EApprovalWorkflowStepDefinitionSupport::buildStoredCondition($step, $type),
             ];
 
             $match = ($payloadId !== '' && $existingById->has($payloadId))
@@ -161,6 +171,7 @@ final class EApprovalFormSyncService
                 $match->fill($attributes);
                 $match->save();
                 $keptIds[] = (string) $match->id;
+
                 continue;
             }
 
@@ -174,6 +185,7 @@ final class EApprovalFormSyncService
 
         $deletable = EApprovalWorkflowStep::query()
             ->where('template_id', $template->id)
+            ->whereNull('compiled_for_submission_id')
             ->when($keptIds !== [], static fn ($q) => $q->whereNotIn('id', $keptIds))
             ->pluck('id')
             ->map(static fn ($id) => (string) $id)
@@ -185,5 +197,37 @@ final class EApprovalFormSyncService
             }
             EApprovalWorkflowStep::query()->where('id', $stepId)->delete();
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $stepsPayload
+     */
+    private function syncWorkflowSourceMetadata(EApprovalForm $form, array $stepsPayload): void
+    {
+        if (! EApprovalFormPolicySupport::usesApprovalPolicy($form)
+            || ! EApprovalFormPolicySupport::isPolicyCapableForm($form)) {
+            return;
+        }
+
+        $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+        $metadata['workflow_source'] = $stepsPayload === []
+            ? EApprovalFormPolicySupport::effectiveWorkflowSource($form)
+            : EApprovalFormPolicySupport::inferWorkflowSourceFromStepsPayload($stepsPayload);
+
+        if ($metadata !== $form->metadata_json) {
+            $form->metadata_json = $metadata;
+            $form->save();
+        }
+    }
+
+    private function normalizeApproverType(string $type): string
+    {
+        return match (strtolower(trim($type))) {
+            'fixed', 'fixed_user', 'fixeduser' => 'user',
+            'approver_field', 'from_field', 'from_approver_field' => 'field',
+            'direct_manager', 'entra_manager' => 'manager',
+            'field_map', 'map_field', 'mapped_field' => 'field_map',
+            default => strtolower(trim($type)),
+        };
     }
 }

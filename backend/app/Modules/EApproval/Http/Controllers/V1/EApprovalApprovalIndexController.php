@@ -29,6 +29,7 @@ class EApprovalApprovalIndexController extends AbstractApiController
             $query['per_page'],
             $status,
             $awaitingMe,
+            $query['sort'],
         );
 
         return $this->okWithMeta(
