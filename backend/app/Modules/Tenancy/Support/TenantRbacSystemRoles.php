@@ -10,11 +10,12 @@ namespace App\Modules\Tenancy\Support;
 final class TenantRbacSystemRoles
 {
     /** Core cross-module tiers shown first in Team & Access. */
-    public const CORE_BASELINE = ['tenant_admin', 'viewer', 'manager'];
+    public const CORE_BASELINE = ['tenant_admin', 'billing', 'viewer', 'manager'];
 
     /** @var list<string> */
     public const ALL = [
         'tenant_admin',
+        'billing',
         'viewer',
         'manager',
         'finance',
@@ -71,7 +72,7 @@ final class TenantRbacSystemRoles
     {
         return array_values(array_filter(
             self::ALL,
-            static fn (string $name): bool => ! in_array($name, ['tenant_admin', 'viewer', 'manager', 'finance'], true)
+            static fn (string $name): bool => ! in_array($name, ['tenant_admin', 'billing', 'viewer', 'manager', 'finance'], true)
                 && ! in_array($name, ['saq_approver', 'pmo_approver', 'cme_approver'], true),
         ));
     }

@@ -15,7 +15,7 @@ final class TenantBillingCheckoutSessionStoreController extends AbstractApiContr
 {
     public function __invoke(Request $request, StripeBillingService $stripe): JsonResponse
     {
-        abort_unless($request->user()?->can('tenant:manage'), 403);
+        abort_unless($request->user()?->can('billing:manage'), 403);
 
         $validated = $request->validate([
             'plan_tier' => ['required', 'string', 'in:starter,professional,enterprise'],

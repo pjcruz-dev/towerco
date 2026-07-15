@@ -27,6 +27,8 @@ final class TenantRbacPermissionCatalog
             'user:impersonate',
             'role:manage',
             'tenant:manage',
+            'billing:view',
+            'billing:manage',
         ],
         'project_one' => [
             'project_one:view',

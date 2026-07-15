@@ -14,7 +14,7 @@ final class TenantBillingPortalSessionStoreController extends AbstractApiControl
 {
     public function __invoke(Request $request, StripeBillingService $stripe): JsonResponse
     {
-        abort_unless($request->user()?->can('tenant:manage'), 403);
+        abort_unless($request->user()?->can('billing:manage'), 403);
 
         $tenantKey = (string) tenant('id');
         $central = Tenant::query()->findOrFail($tenantKey);

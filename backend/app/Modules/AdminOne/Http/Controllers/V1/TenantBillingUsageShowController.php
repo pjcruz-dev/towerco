@@ -13,7 +13,7 @@ final class TenantBillingUsageShowController extends AbstractApiController
 {
     public function __invoke(Request $request, TenantUsageReportService $usage): JsonResponse
     {
-        abort_unless($request->user()?->can('tenant:manage'), 403);
+        abort_unless($request->user()?->can('billing:view'), 403);
 
         return $this->ok($usage->report());
     }

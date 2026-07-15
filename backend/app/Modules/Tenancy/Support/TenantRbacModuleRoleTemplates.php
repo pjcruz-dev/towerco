@@ -37,6 +37,12 @@ final class TenantRbacModuleRoleTemplates
         return [
             // Global read-only landing — no module sidebar groups.
             'viewer' => ['dashboard:view'],
+            // SaaS billing only — not tenant administration (users/roles/settings).
+            'billing' => [
+                'dashboard:view',
+                'billing:view',
+                'billing:manage',
+            ],
             'manager' => [
                 'dashboard:view',
                 'project_one:view',
