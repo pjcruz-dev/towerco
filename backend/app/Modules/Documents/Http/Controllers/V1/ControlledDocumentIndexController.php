@@ -25,6 +25,7 @@ class ControlledDocumentIndexController extends AbstractApiController
             'department' => ['sometimes', 'nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'nullable', 'string', 'max:32'],
             'document_type' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $result = $registry->paginate(
@@ -35,6 +36,7 @@ class ControlledDocumentIndexController extends AbstractApiController
             department: $data['department'] ?? null,
             status: $data['status'] ?? null,
             documentType: $data['document_type'] ?? null,
+            sort: $data['sort'] ?? null,
         );
 
         $documents = $result['documents']->through(static fn (ControlledDocument $doc): array => [

@@ -3,6 +3,21 @@ set -e
 
 cd /var/www/html
 
+# Apply tuned OPcache config at boot so existing images pick it up without a rebuild.
+if [ -f docker/opcache.ini ]; then
+  target_dir="$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR ?: "/usr/local/etc/php/conf.d";' 2>/dev/null || echo /usr/local/etc/php/conf.d)"
+  if [ -d "$target_dir" ] && [ -w "$target_dir" ]; then
+    cp docker/opcache.ini "$target_dir/zz-toweros-opcache.ini" 2>/dev/null || true
+  fi
+fi
+
+if [ -f docker/php-uploads.ini ]; then
+  target_dir="$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR ?: "/usr/local/etc/php/conf.d";' 2>/dev/null || echo /usr/local/etc/php/conf.d)"
+  if [ -d "$target_dir" ] && [ -w "$target_dir" ]; then
+    cp docker/php-uploads.ini "$target_dir/zz-toweros-uploads.ini" 2>/dev/null || true
+  fi
+fi
+
 # Seed .env once; do not overwrite on every start (would rotate APP_KEY and break encrypted SSO secrets).
 if [ "${TOWEROS_DOCKER:-0}" = "1" ] && [ -f .env.docker ] && [ ! -f .env ]; then
   cp .env.docker .env
@@ -64,7 +79,18 @@ ensure_app_key() {
 }
 
 ensure_app_key
-php artisan config:clear --no-interaction 2>/dev/null || true
+
+# Framework boot optimization. Cache config + events for faster per-request boot.
+# route:cache is intentionally skipped: the app has closure routes (web.php, tenant.php).
+# Set TOWEROS_API_OPTIMIZE=0 to keep hot-reload of config in active development.
+if [ "${TOWEROS_API_OPTIMIZE:-1}" = "1" ]; then
+  echo "[api] Optimizing boot: config:cache + event:cache (set TOWEROS_API_OPTIMIZE=0 to disable)"
+  php artisan config:clear --no-interaction 2>/dev/null || true
+  php artisan config:cache --no-interaction 2>/dev/null || echo "[api] Warning: config:cache failed; using runtime config."
+  php artisan event:cache --no-interaction 2>/dev/null || true
+else
+  php artisan config:clear --no-interaction 2>/dev/null || true
+fi
 
 if [ "${TOWEROS_DOCKER_AUTO_MIGRATE:-1}" = "1" ]; then
   echo "[api] Running central migrations..."

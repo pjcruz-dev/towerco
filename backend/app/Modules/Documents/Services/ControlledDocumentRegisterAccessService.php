@@ -25,6 +25,7 @@ final class ControlledDocumentRegisterAccessService
      *         viewer_roles: list<string>,
      *         full_access_roles: list<string>,
      *         full_access_permissions: list<string>,
+     *         own_only_roles: list<string>,
      *         role_department_map: array<string, list<string>>
      *     }
      * }
@@ -45,6 +46,7 @@ final class ControlledDocumentRegisterAccessService
      * @param  array{
      *     viewer_roles?: list<string>|null,
      *     full_access_roles?: list<string>|null,
+     *     own_only_roles?: list<string>|null,
      *     role_department_map?: array<string, list<string>>|null
      * }  $input
      * @return array{
@@ -54,6 +56,7 @@ final class ControlledDocumentRegisterAccessService
      *         viewer_roles: list<string>,
      *         full_access_roles: list<string>,
      *         full_access_permissions: list<string>,
+     *         own_only_roles: list<string>,
      *         role_department_map: array<string, list<string>>
      *     }
      * }
@@ -77,6 +80,9 @@ final class ControlledDocumentRegisterAccessService
             'viewerRoles' => $input['viewer_roles'] ?? [],
             'fullAccessRoles' => $input['full_access_roles'] ?? null,
             'fullAccessPermissions' => ['documents:controlled:manage'],
+            'ownOnlyRoles' => array_key_exists('own_only_roles', $input)
+                ? ($input['own_only_roles'] ?? [])
+                : ControlledDocumentAccessPolicy::defaults()->ownOnlyRoles,
             'roleDepartmentMap' => $input['role_department_map'] ?? [],
         ]);
 
@@ -84,6 +90,7 @@ final class ControlledDocumentRegisterAccessService
             'viewerRoles' => $policy->viewerRoles,
             'fullAccessRoles' => $policy->fullAccessRoles,
             'fullAccessPermissions' => $policy->fullAccessPermissions,
+            'ownOnlyRoles' => $policy->ownOnlyRoles,
             'roleDepartmentMap' => $policy->roleDepartmentMap,
         ];
 
@@ -104,6 +111,7 @@ final class ControlledDocumentRegisterAccessService
             metadata: [
                 'viewer_roles' => $policy->viewerRoles,
                 'full_access_roles' => $policy->fullAccessRoles,
+                'own_only_roles' => $policy->ownOnlyRoles,
                 'role_department_map' => $policy->roleDepartmentMap,
             ],
         );
@@ -154,6 +162,7 @@ final class ControlledDocumentRegisterAccessService
      *     viewer_roles: list<string>,
      *     full_access_roles: list<string>,
      *     full_access_permissions: list<string>,
+     *     own_only_roles: list<string>,
      *     role_department_map: array<string, list<string>>
      * }
      */
@@ -163,6 +172,7 @@ final class ControlledDocumentRegisterAccessService
             'viewer_roles' => $policy->viewerRoles,
             'full_access_roles' => $policy->fullAccessRoles,
             'full_access_permissions' => $policy->fullAccessPermissions,
+            'own_only_roles' => $policy->ownOnlyRoles,
             'role_department_map' => $policy->roleDepartmentMap,
         ];
     }

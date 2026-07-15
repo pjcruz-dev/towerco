@@ -11,6 +11,8 @@ namespace App\Modules\Documents\Support;
  * 1. Spatie permission documents:controlled:view (required for registry)
  * 2. optional viewerRoles — user must hold at least one when non-empty
  * 3. fullAccessRoles / fullAccessPermissions — bypass viewer role list and see all rows
+ * 4. ownOnlyRoles — authors see only documents they created or revised (default: dcf_author)
+ * 5. roleDepartmentMap — optional department filter for remaining roles
  */
 final class ControlledDocumentAccessPolicy
 {
@@ -18,12 +20,14 @@ final class ControlledDocumentAccessPolicy
      * @param  list<string>  $viewerRoles
      * @param  list<string>  $fullAccessRoles
      * @param  list<string>  $fullAccessPermissions
+     * @param  list<string>  $ownOnlyRoles
      * @param  array<string, list<string>>  $roleDepartmentMap  role name => department codes; "*" = all
      */
     public function __construct(
         public readonly array $viewerRoles,
         public readonly array $fullAccessRoles,
         public readonly array $fullAccessPermissions,
+        public readonly array $ownOnlyRoles,
         public readonly array $roleDepartmentMap,
     ) {}
 
@@ -36,14 +40,25 @@ final class ControlledDocumentAccessPolicy
             return self::defaults();
         }
 
+        $ownOnlyProvided = array_key_exists('ownOnlyRoles', $raw)
+            || array_key_exists('own_only_roles', $raw);
+
         return new self(
             viewerRoles: self::normalizeStringList($raw['viewerRoles'] ?? $raw['viewer_roles'] ?? []),
             fullAccessRoles: self::normalizeStringList(
-                $raw['fullAccessRoles'] ?? $raw['full_access_roles'] ?? ['document_controller', 'quality_manager'],
+                $raw['fullAccessRoles'] ?? $raw['full_access_roles'] ?? [
+                    'document_controller',
+                    'quality_manager',
+                    'dcf_controller',
+                    'dcf_admin',
+                ],
             ),
             fullAccessPermissions: self::normalizeStringList(
                 $raw['fullAccessPermissions'] ?? $raw['full_access_permissions'] ?? ['documents:controlled:manage'],
             ),
+            ownOnlyRoles: $ownOnlyProvided
+                ? self::normalizeStringList($raw['ownOnlyRoles'] ?? $raw['own_only_roles'] ?? [])
+                : self::defaults()->ownOnlyRoles,
             roleDepartmentMap: self::normalizeRoleDepartmentMap(
                 $raw['roleDepartmentMap'] ?? $raw['role_department_map'] ?? [],
             ),
@@ -54,8 +69,10 @@ final class ControlledDocumentAccessPolicy
     {
         return new self(
             viewerRoles: [],
-            fullAccessRoles: ['document_controller', 'quality_manager'],
+            fullAccessRoles: ['document_controller', 'quality_manager', 'dcf_controller', 'dcf_admin'],
             fullAccessPermissions: ['documents:controlled:manage'],
+            // Authors submit via E-Approval; registry shows their own published documents only.
+            ownOnlyRoles: ['dcf_author'],
             roleDepartmentMap: [],
         );
     }

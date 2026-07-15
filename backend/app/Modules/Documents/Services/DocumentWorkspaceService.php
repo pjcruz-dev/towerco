@@ -22,6 +22,8 @@ final class DocumentWorkspaceService
     {
         $existing = DocumentSiteWorkspace::query()->where('site_id', $site->id)->first();
         if ($existing instanceof DocumentSiteWorkspace) {
+            $this->syncMissingTemplateNodes($existing);
+
             return $existing;
         }
 
@@ -71,6 +73,77 @@ final class DocumentWorkspaceService
         }
 
         return $node;
+    }
+
+    private function syncMissingTemplateNodes(DocumentSiteWorkspace $workspace): void
+    {
+        $existingKeys = DocumentSiteNode::query()
+            ->where('workspace_id', $workspace->id)
+            ->pluck('node_key')
+            ->all();
+
+        $knownKeys = array_fill_keys($existingKeys, true);
+        $order = (int) (DocumentSiteNode::query()
+            ->where('workspace_id', $workspace->id)
+            ->max('sort_order') ?? -1);
+
+        foreach ($this->templates->effectiveTree() as $binder) {
+            $this->syncMissingNodeTree($workspace, null, $binder, $knownKeys, $order);
+        }
+    }
+
+    /**
+     * @param  array<string, true>  $knownKeys
+     * @param  array<string, mixed>  $definition
+     */
+    private function syncMissingNodeTree(
+        DocumentSiteWorkspace $workspace,
+        ?string $parentId,
+        array $definition,
+        array &$knownKeys,
+        int &$order,
+    ): void {
+        $key = (string) ($definition['key'] ?? '');
+        if ($key === '') {
+            return;
+        }
+
+        if (isset($knownKeys[$key])) {
+            $node = DocumentSiteNode::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('node_key', $key)
+                ->first();
+
+            if ($node === null) {
+                return;
+            }
+
+            $nodeId = (string) $node->id;
+        } else {
+            $node = DocumentSiteNode::query()->create([
+                'id' => (string) Str::uuid(),
+                'workspace_id' => $workspace->id,
+                'parent_id' => $parentId,
+                'node_key' => $key,
+                'label' => (string) $definition['label'],
+                'node_type' => (string) $definition['type'],
+                'sort_order' => ++$order,
+            ]);
+            $knownKeys[$key] = true;
+            $nodeId = (string) $node->id;
+        }
+
+        foreach ($definition['children'] ?? [] as $child) {
+            if (! is_array($child)) {
+                continue;
+            }
+
+            if (($child['type'] ?? '') === 'fixed' && ($definition['type'] ?? '') === 'repeatable_container') {
+                continue;
+            }
+
+            $this->syncMissingNodeTree($workspace, $nodeId, $child, $knownKeys, $order);
+        }
     }
 
     /**

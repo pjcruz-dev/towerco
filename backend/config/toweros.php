@@ -319,7 +319,7 @@ return [
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents,document_register')),
         ))),
     ],
 

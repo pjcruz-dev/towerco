@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Workspace\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Models\TenantActivityLog;
@@ -18,6 +19,12 @@ final class WorkspaceAuditIndexService
 {
     private const LEGACY_FETCH_CAP = 120;
 
+    private const SORTABLE = [
+        'created_at',
+        'module',
+        'action',
+    ];
+
     public function paginate(
         TenantUser $viewer,
         int $page,
@@ -26,15 +33,16 @@ final class WorkspaceAuditIndexService
         ?string $search = null,
         ?string $from = null,
         ?string $to = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $perPage = max(1, min($perPage, 100));
         $page = max(1, $page);
 
         if ($this->canViewLegacyEApprovalAudit($viewer)) {
-            return $this->paginateFederated($viewer, $page, $perPage, $module, $search, $from, $to);
+            return $this->paginateFederated($viewer, $page, $perPage, $module, $search, $from, $to, $sort);
         }
 
-        return $this->paginateWorkspaceLogs($viewer, $page, $perPage, $module, $search, $from, $to);
+        return $this->paginateWorkspaceLogs($viewer, $page, $perPage, $module, $search, $from, $to, $sort);
     }
 
     /**
@@ -61,12 +69,20 @@ final class WorkspaceAuditIndexService
         ?string $search,
         ?string $from,
         ?string $to,
+        ?string $sort,
     ): LengthAwarePaginator {
         $query = TenantActivityLog::query()
-            ->with('actor:id,name,email')
-            ->orderByDesc('created_at');
+            ->with('actor:id,name,email');
 
         $this->applyWorkspaceFilters($query, $module, $search, $from, $to);
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -81,6 +97,7 @@ final class WorkspaceAuditIndexService
         ?string $search,
         ?string $from,
         ?string $to,
+        ?string $sort,
     ): LengthAwarePaginator {
         $workspaceRows = $this->fetchWorkspaceRows($module, $search, $from, $to, self::LEGACY_FETCH_CAP);
         $eApprovalRows = $this->fetchEApprovalRows($module, $search, $from, $to, self::LEGACY_FETCH_CAP);
@@ -88,9 +105,18 @@ final class WorkspaceAuditIndexService
             ? $this->fetchAuthRows($module, $search, $from, $to, self::LEGACY_FETCH_CAP)
             : [];
 
-        $merged = Collection::make([...$workspaceRows, ...$eApprovalRows, ...$authRows])
-            ->sortByDesc(static fn (array $row): string => (string) ($row['created_at'] ?? ''))
-            ->values();
+        [, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            ['created_at'],
+            'created_at',
+            'desc',
+        );
+
+        $merged = Collection::make([...$workspaceRows, ...$eApprovalRows, ...$authRows]);
+        $merged = $direction === 'asc'
+            ? $merged->sortBy(static fn (array $row): string => (string) ($row['created_at'] ?? ''))
+            : $merged->sortByDesc(static fn (array $row): string => (string) ($row['created_at'] ?? ''));
+        $merged = $merged->values();
 
         $total = $merged->count();
         $slice = $merged->slice(($page - 1) * $perPage, $perPage)->values();

@@ -8,6 +8,7 @@ use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Core\Http\Middleware\EnsurePlatformAdmin;
 use App\Core\Http\Middleware\EnsurePlatformMfaVerified;
 use App\Core\Http\Middleware\EnsurePlatformPermission;
+use App\Core\Http\Middleware\EnsureTenantModule;
 use App\Core\Http\Middleware\EnsureTenantSubscriptionAccess;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -49,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'platform.permission' => EnsurePlatformPermission::class,
             'platform.mfa' => EnsurePlatformMfaVerified::class,
             'tenant.subscription' => EnsureTenantSubscriptionAccess::class,
+            'tenant.module' => EnsureTenantModule::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

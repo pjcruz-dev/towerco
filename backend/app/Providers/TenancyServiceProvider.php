@@ -13,6 +13,7 @@ use Stancl\Tenancy\Jobs;
 use Stancl\Tenancy\Listeners;
 use Stancl\Tenancy\Middleware;
 use App\Modules\Tenancy\Listeners\InvalidateSanctumStatefulDomainsCache;
+use App\Modules\Tenancy\Listeners\ScopeTenantPermissionCache;
 
 class TenancyServiceProvider extends ServiceProvider
 {
@@ -61,10 +62,12 @@ class TenancyServiceProvider extends ServiceProvider
             Events\InitializingTenancy::class => [],
             Events\TenancyInitialized::class => [
                 Listeners\BootstrapTenancy::class,
+                [ScopeTenantPermissionCache::class, 'handleTenancyInitialized'],
             ],
             Events\EndingTenancy::class => [],
             Events\TenancyEnded::class => [
                 Listeners\RevertToCentralContext::class,
+                [ScopeTenantPermissionCache::class, 'handleTenancyEnded'],
             ],
             Events\BootstrappingTenancy::class => [],
             Events\TenancyBootstrapped::class => [],

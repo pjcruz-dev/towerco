@@ -32,7 +32,7 @@ Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular mon
 | Backend | Laravel 13, PHP 8.3 |
 | Frontend | Next.js 16, React 19, TypeScript |
 | Database | **MySQL 8.0** — database-per-tenant ([stancl/tenancy](https://tenancyforlaravel.com/)) |
-| Cache / queues | Redis (production); local Docker often uses `sync` + database cache |
+| Cache / queues | Redis (cache, sessions, permission cache) — local `toweros-redis` container + production ElastiCache; queues `sync` locally, `redis`/SQS in prod |
 | Auth | Sanctum (tenant SPA) + Passport (platform console) |
 | SSO | Microsoft Entra ID per tenant |
 | RBAC | Spatie Laravel Permission |
@@ -427,69 +427,384 @@ New tenants from the platform UI run tenant migrations automatically during prov
 
 ## Production deployment
 
-Target architecture: **AWS ECS Fargate**, **Aurora MySQL 8**, **ElastiCache Redis**, **ALB + WAF**, **S3**, **Secrets Manager**.  
+TowerOS supports two production models:
+
+| Model | Best for | Doc |
+|-------|----------|-----|
+| **A — Linux EC2 + RDS** (your proposal) | First customer go-live, fixed monthly cost, simpler ops | [below](#a-linux-ec2--rds-your-aws-proposal) |
+| **B — ECS Fargate + Aurora** | Multi-tenant scale, autoscaling, zero-downtime deploys | [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md) |
+
+---
+
+### Is TowerOS ready for production?
+
+**Application:** Yes for the modules you have been testing (Project-One, Sites, Documents, Document register, E-Approval, Ticketing). Priority automated tests pass; run your staging manual checklist before cutover.
+
+**Operations:** Production is ready when **you** complete the checklist below — not only when code is merged.
+
+| Area | Status | Before go-live |
+|------|--------|----------------|
+| Staging validation | Your checklist on `staging.*` | Complete smoke + module flows |
+| Secrets & TLS | Required | `APP_KEY`, DB passwords, OAuth secrets in a vault (not git) |
+| HTTPS everywhere | Required | ACM cert + Route 53 (or ALB) |
+| Database | Required | RDS MySQL 8; app user can `CREATE DATABASE` (tenant provisioning) |
+| Redis | **Required** | Queues + cache (not in your AWS slide — see gaps below) |
+| Queue worker | **Required** | `php artisan queue:work` always running |
+| Scheduler | **Required** | Cron every minute: `schedule:run` |
+| File storage | Recommended | S3 disk for tenant uploads (not local EC2 disk) |
+| Backups | Required | RDS snapshots + S3 versioning (your 30-day AWS Backup fits) |
+| Monitoring | Required | CloudWatch alarms (5xx, disk, RDS CPU, queue depth) |
+| Mail | Required | SES or Microsoft 365 SMTP for approvals / gate emails |
+| SSO | Per tenant | Entra redirect URI on production API host |
+
+---
+
+### A. Linux EC2 + RDS (your AWS proposal)
+
+Your **1-year AWS subscription** slide maps well to TowerOS with a few additions.
+
+#### Spec alignment
+
+| Proposed resource | TowerOS use | Verdict |
+|-------------------|-------------|---------|
+| **EC2 t3.large** (2 vCPU, 8 GB, 50 GB) | Docker: API + Next.js web + Redis + Soketi + queue worker | **OK** for first production tenant (~hundreds of users). Plan **16 GB** if you run heavy imports + Next.js build on the same box. |
+| **EBS 100 GB gp3** | Docker images, logs, temp build | **OK** |
+| **RDS MySQL db.t3.medium Multi-AZ** (2 vCPU, 4 GB, 50 GB) | Central DB `toweros` + one DB per tenant (`tenant<uuid>`) | **Good** — enable automated backups; grant `CREATE` to app user |
+| **S3 50 GB** | Tenant documents, exports, presigned uploads | **Required** — set `TOWEROS_TENANT_FILES_DISK=s3` |
+| **CloudFront** | Next.js static assets, file downloads | **Recommended** |
+| **Route 53** | `console.yourdomain.com`, `app.customer.com`, wildcards | **Required** |
+| **CloudWatch** | API/web logs, RDS metrics, alarms | **Required** |
+| **AWS Backup 30-day** | RDS + EBS | **Good** |
+
+#### Gaps to add (not on your slide)
+
+| Missing | Why TowerOS needs it |
+|---------|-------------------|
+| **Redis** | Production `.env` uses `QUEUE_CONNECTION=redis`, `CACHE_STORE=redis`. Add **ElastiCache cache.t3.micro** *or* run **Redis in Docker** on the EC2 (acceptable for first go-live). |
+| **Queue worker process** | Without it: no approval emails, no gate escalation, no async jobs. |
+| **Laravel scheduler** | Gate SLA, document expiry, rollout recalc — needs cron every minute. |
+| **Reverse proxy + TLS** | Terminate HTTPS on **ALB** or **Nginx/Caddy** on the EC2; do not expose `:8000` publicly. |
+| **Soketi / Pusher** (optional) | Realtime notifications; can enable later with `NEXT_PUBLIC_SOCKET_ENABLED=true`. |
+
+#### Suggested production topology
+
+```text
+Internet
+  → Route 53
+  → CloudFront (optional, static + downloads)
+  → ALB or Nginx :443
+       ├─ /api/*  → Laravel API :8000 (Docker)
+       └─ /*      → Next.js :80 (Docker)
+  → RDS MySQL (private subnet)
+  → S3 (tenant files)
+  → Redis (ElastiCache or Docker on EC2)
+```
+
+**DNS pattern** (see [`tenant-domain-slugs`](docs/infrastructure/tenant-domain-slugs.md)):
+
+| Host | Role |
+|------|------|
+| `console.yourdomain.com` | Platform superadmin (`CENTRAL_DOMAINS`) |
+| `app.customer.com` or `staging.customer.com` | Tenant SPA + API (`/api/v1` on same host) |
+| `*.customer.com` | Optional per-tenant hosts |
+
+---
+
+### B. Deploy to Linux EC2 — step by step
+
+Target OS: **Amazon Linux 2023** or **Ubuntu 22.04 LTS**. All commands as `ubuntu` or `ec2-user` with `sudo` where noted.
+
+#### 1. Provision AWS (console or IaC)
+
+1. **VPC** with public + private subnets (RDS in private subnet).
+2. **RDS MySQL 8.0** — Multi-AZ as proposed; database name `toweros`; note endpoint hostname.
+3. **EC2 t3.large** — Amazon Linux 2023; security group: `22` (your IP only), `80`/`443` from ALB or `0.0.0.0/0` if using on-box Nginx.
+4. **S3 bucket** — e.g. `toweros-prod-files-<account-id>`; block public access; IAM role for EC2 with `s3:PutObject/GetObject`.
+5. **Route 53** — hosted zone for your domain.
+6. **(Recommended)** ElastiCache Redis `cache.t3.micro` in same VPC **or** skip and use Redis container on EC2.
+7. **IAM role** attached to EC2: S3 access, SES send (if using SES), CloudWatch agent.
+
+**RDS app user** (run once as master user):
+
+```sql
+CREATE USER 'toweros'@'%' IDENTIFIED BY 'STRONG_PASSWORD_HERE';
+GRANT ALL PRIVILEGES ON `toweros`.* TO 'toweros'@'%';
+GRANT CREATE ON *.* TO 'toweros'@'%';
+FLUSH PRIVILEGES;
+```
+
+`CREATE` is required so new tenants get `tenant<uuid>` databases automatically.
+
+#### 2. Install Docker on the EC2
+
+**Amazon Linux 2023:**
+
+```bash
+sudo dnf update -y
+sudo dnf install -y docker git
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+# Log out and back in, then:
+docker compose version || sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && sudo chmod +x /usr/local/bin/docker-compose
+```
+
+**Ubuntu 22.04:**
+
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+```
+
+#### 3. Clone TowerOS and configure env
+
+```bash
+sudo mkdir -p /opt/toweros && sudo chown $USER:$USER /opt/toweros
+cd /opt/toweros
+git clone <your-repo-url> .
+```
+
+**Root Docker env** — create `/opt/toweros/.env.docker`:
+
+```env
+TOWEROS_MYSQL_PORT=3307
+MYSQL_ROOT_PASSWORD=unused-local-only
+MYSQL_DATABASE=toweros
+MYSQL_USER=toweros
+MYSQL_PASSWORD=unused-local-only
+TOWEROS_API_PORT=8000
+TOWEROS_WEB_PORT=80
+TOWEROS_REDIS_PORT=6379
+TOWEROS_DOCKER_AUTO_MIGRATE=0
+TOWEROS_DOCKER_MIGRATE_TENANTS=0
+TOWEROS_API_WORKERS=4
+TOWEROS_API_MEM_LIMIT=2g
+TOWEROS_WEB_MEM_LIMIT=3g
+TOWEROS_WEB_MODE=prod
+```
+
+**Backend** — copy and edit production env:
+
+```bash
+cp backend/.env.production.example backend/.env
+```
+
+Edit `backend/.env` (minimum):
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_KEY=base64:...          # php artisan key:generate --show (once, store safely)
+APP_URL=https://app.customer.com
+FRONTEND_APP_URL=https://app.customer.com
+TOWEROS_TENANT_APP_URL=https://app.customer.com
+
+DB_HOST=<rds-endpoint.region.rds.amazonaws.com>
+DB_PORT=3306
+CENTRAL_DB_PORT=3306
+DB_DATABASE=toweros
+DB_USERNAME=toweros
+DB_PASSWORD=<rds-password>
+
+CENTRAL_DOMAINS=console.yourdomain.com
+TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST=false
+
+QUEUE_CONNECTION=redis
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# S3 tenant files
+FILESYSTEM_DISK=s3
+AWS_BUCKET=toweros-prod-files-<account-id>
+AWS_DEFAULT_REGION=ap-southeast-1
+TOWEROS_TENANT_FILES_DISK=s3
+
+MAIL_MAILER=ses
+TOWEROS_TENANT_BOOTSTRAP_EXPOSE_PASSWORD_IN_API=false
+TOWEROS_TENANT_DEFAULT_MFA_REQUIRED=true
+```
+
+**Frontend** — create `frontend/.env.docker`:
+
+```env
+NEXT_PUBLIC_APP_ENV=production
+NEXT_PUBLIC_API_BASE_URL=https://app.customer.com/api/v1
+NEXT_PUBLIC_CENTRAL_API_BASE_URL=https://console.yourdomain.com/api/v1
+NEXT_PUBLIC_CENTRAL_DOMAINS=console.yourdomain.com
+NEXT_PUBLIC_SOCKET_ENABLED=false
+TOWEROS_WEB_MODE=prod
+```
+
+> Do **not** put `APP_KEY` in `.env.docker` — only in `backend/.env` (see [Authentication & security](#authentication--security)).
+
+#### 4. Point Compose at RDS (not container MySQL)
+
+Override DB host for the API container in `.env.docker` or shell export:
+
+```bash
+export DB_HOST=<rds-endpoint>
+export DB_USERNAME=toweros
+export DB_PASSWORD=<rds-password>
+```
+
+Start **without** the local `mysql` service — API, web, redis only:
+
+```bash
+cd /opt/toweros
+docker compose --env-file .env.docker up -d --build redis api
+docker compose --env-file .env.docker --profile web up -d --build web
+```
+
+First boot on RDS:
+
+```bash
+docker compose --env-file .env.docker exec api php artisan migrate --force
+docker compose --env-file .env.docker exec api php artisan db:seed --force
+docker compose --env-file .env.docker exec api php artisan passport:client --personal --no-interaction
+```
+
+#### 5. Queue worker (required)
+
+Create `/etc/systemd/system/toweros-worker.service`:
+
+```ini
+[Unit]
+Description=TowerOS queue worker
+After=docker.service
+Requires=docker.service
+
+[Service]
+Restart=always
+WorkingDirectory=/opt/toweros
+ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStop=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:restart
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now toweros-worker
+```
+
+#### 6. Scheduler (required)
+
+```bash
+sudo crontab -e
+```
+
+Add:
+
+```cron
+* * * * * cd /opt/toweros && docker compose --env-file .env.docker exec -T api php artisan schedule:run >> /var/log/toweros-scheduler.log 2>&1
+```
+
+#### 7. HTTPS reverse proxy
+
+**Option A — Application Load Balancer (recommended):** Target groups → EC2:80 (web) and EC2:8000 (API) or single Nginx on EC2 routing `/api` → API. ACM certificate on ALB.
+
+**Option B — Nginx on EC2** terminating TLS with ACM-exported cert or Let's Encrypt:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name app.customer.com;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+Point Route 53 `A`/`CNAME` records to ALB or EC2 Elastic IP.
+
+#### 8. Post-deploy smoke test
+
+```bash
+curl -fsS https://app.customer.com/api/v1/health || curl -fsS https://app.customer.com/up
+```
+
+| Check | URL / action |
+|-------|----------------|
+| Platform login | `https://console.yourdomain.com/platform/login` |
+| Create tenant | Platform → Tenants → Create (save bootstrap password) |
+| Tenant login | Customer hostname from provisioning |
+| Microsoft SSO | Tenant → Sign-in & security → Validate |
+| File upload | Site binder or document register |
+| Queue | Trigger approval → confirm email / notification |
+
+#### 9. Release upgrades
+
+```bash
+cd /opt/toweros
+git pull
+docker compose --env-file .env.docker build api web
+docker compose --env-file .env.docker up -d api web
+docker compose --env-file .env.docker exec api php artisan toweros:migrate --force
+docker compose --env-file .env.docker exec api php artisan config:cache
+docker compose --env-file .env.docker exec api php artisan queue:restart
+sudo systemctl restart toweros-worker
+```
+
+Clear Next.js cache if routes 404 after upgrade:
+
+```bash
+docker compose --env-file .env.docker exec web sh -c 'rm -rf .next && npm run build'
+docker compose --env-file .env.docker restart web
+```
+
+---
+
+### C. ECS Fargate (scale path)
+
+Target architecture for multi-tenant scale: **ECS Fargate**, **Aurora MySQL 8**, **ElastiCache Redis**, **ALB + WAF**, **S3**, **Secrets Manager**.
+
 Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md)
 
-### Environment checklist
+#### Environment checklist (all deployments)
 
 | Concern | Production guidance |
 |---------|---------------------|
 | `APP_ENV` | `production` |
 | `APP_DEBUG` | `false` |
-| `APP_KEY` | Stable secret in Secrets Manager — never rotate without re-encrypting SSO secrets |
+| `APP_KEY` | Stable secret — never rotate without re-encrypting SSO secrets |
 | `CENTRAL_DOMAINS` | Platform hostnames only (e.g. `console.toweros.app`) |
-| `TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST` | `false` unless you have a controlled split-host API design |
-| Tenant API | Prefer **same hostname** as SPA (`app.customer.com/api/v1` via ALB routing) |
-| Tenant hosts | `app.{slug}.{brand_domain}` per [`tenant-domain-slugs`](docs/infrastructure/tenant-domain-slugs.md) |
+| `TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST` | `false` |
+| Tenant API | Same hostname as SPA (`app.customer.com/api/v1`) |
 | TLS | ACM certificates; wildcard DNS for tenant apps |
-| Database | Aurora MySQL; central DB + one DB per tenant |
-| Queues | Redis or SQS; run `toweros-worker` ECS service |
-| Scheduler | ECS task: `php artisan schedule:run` |
-| Files | S3 disk for `TOWEROS_TENANT_FILES_DISK` |
-| Mail | SES or Microsoft 365 SMTP for gate/approval emails |
+| Database | MySQL 8; central DB + one DB per tenant |
+| Queues | Redis + dedicated worker service |
+| Scheduler | Cron or ECS scheduled task: `schedule:run` |
+| Files | S3 for `TOWEROS_TENANT_FILES_DISK` |
+| Mail | SES or Microsoft 365 SMTP |
 | SSO | Per-tenant Entra app; production redirect URI on API host |
 | Bootstrap passwords | `TOWEROS_TENANT_BOOTSTRAP_EXPOSE_PASSWORD_IN_API=false` |
-| MFA | `TENANT_MFA_REQUIRED` / per-tenant `mfa_required` as required |
 
-### Frontend production (`frontend/.env`)
+#### Deploy runbook (ECS summary)
 
-```env
-NEXT_PUBLIC_APP_ENV=production
-NEXT_PUBLIC_API_BASE_URL=https://app.customer.com/api/v1
-NEXT_PUBLIC_CENTRAL_API_BASE_URL=https://console.toweros.app/api/v1
-NEXT_PUBLIC_CENTRAL_DOMAINS=console.toweros.app
-NEXT_PUBLIC_SOCKET_ENABLED=true   # when Soketi/Pusher is deployed
-```
+1. **CI:** PR → lint, test, build (`.github/workflows/ci.yml`)
+2. **Build & push** Docker images to ECR (`toweros-api`, `toweros-web`)
+3. **Migrate:** ECS one-off: `php artisan migrate --force` then `tenants:migrate --force`
+4. **Deploy** ECS services (API, web, worker, scheduler)
+5. **Smoke test:** `/up`, platform login, tenant login, one SSO flow
 
-### Backend production highlights (`backend/.env`)
+#### Post-deploy tenant operations
 
-```env
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://api.customer.com
-FRONTEND_APP_URL=https://app.customer.com
-TOWEROS_TENANT_APP_URL=https://app.customer.com
-CENTRAL_DOMAINS=console.toweros.app
-TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST=false
-QUEUE_CONNECTION=redis
-CACHE_STORE=redis
-SESSION_DRIVER=redis
-```
-
-### Deploy runbook (summary)
-
-1. **CI:** PR → lint, test, build (see `.github/workflows/ci.yml`)  
-2. **Build & push** Docker images to ECR (`toweros-api`, `toweros-web`)  
-3. **Migrate:** ECS one-off task: `php artisan migrate --force` then `tenants:migrate --force`  
-4. **Deploy** ECS services (API, web, worker, scheduler)  
-5. **Smoke test:** `/up`, platform login, tenant login, one SSO flow  
-6. **Rollback:** ECS circuit breaker; DB restore from snapshot only if needed  
-
-### Post-deploy tenant operations
-
-- Create tenants from **production** platform console with production `brand_domain` and DNS.  
-- Point customer DNS (CNAME) to ALB.  
-- Configure **Sign-in & security** per tenant.  
+- Create tenants from the **production** platform console with production `brand_domain` and DNS.
+- Point customer DNS (CNAME) to ALB.
+- Configure **Sign-in & security** per tenant.
 - Run `toweros:migrate` after releases that include migrations.
 
 ---
@@ -540,16 +855,19 @@ SESSION_DRIVER=redis
 
 ---
 
-## Host-only development
+## Host-only development (fastest on Windows)
 
-If you run PHP and Node on the host instead of the API/web containers:
+Running the API on host PHP avoids ~1.5–2 s/request of Docker-on-Windows overhead (~6× faster). Infra stays in Docker.
 
-1. `npm run dev:docker` — starts MySQL (+ phpMyAdmin) only  
-2. Configure `backend/.env` with `DB_HOST=127.0.0.1`, `DB_PORT=3307`  
-3. `npm run dev:app` — Laravel on `:8000`, Next on `:80`  
-4. `php artisan key:generate`, `migrate`, `db:seed` from `backend/`
+1. Start infra only: `docker compose --env-file .env.docker up -d mysql redis soketi`
+2. Configure `backend/.env`: `DB_HOST=127.0.0.1`, `DB_PORT=3307`, `CENTRAL_DB_PORT=3307`, `REDIS_HOST=127.0.0.1`, `REDIS_PORT=6379`
+3. If you previously ran the Docker API, clear its baked config: `cd backend && php artisan config:clear`
+4. Terminal 1: `cd backend && php artisan serve --host=127.0.0.1 --port=8000`
+5. Terminal 2: `cd frontend && npm run dev -- -p 80`
 
-Prefer full Docker (`npm run dev`) for the least friction on Windows.
+Switch back to Docker API: stop the host `php artisan serve`, then `docker compose --env-file .env.docker up -d api` (compose overrides `DB_HOST=mysql` automatically).
+
+Prefer full Docker (`npm run dev`) for the least setup; prefer host mode for the fastest requests. Full step-by-step: [`docs/local-development-docker-guide.md`](docs/local-development-docker-guide.md#run-modes--performance-updated-jul-2026).
 
 ---
 

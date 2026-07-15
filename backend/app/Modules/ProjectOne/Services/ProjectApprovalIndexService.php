@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ProjectOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProjectOne\Models\ProjectApproval;
 use App\Modules\Rollout\Models\TenantRolloutFile;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -11,15 +12,23 @@ use Illuminate\Support\Collection;
 
 class ProjectApprovalIndexService
 {
+    private const SORTABLE = [
+        'status',
+        'approval_type',
+        'title',
+        'requester',
+        'submitted_at',
+        'resolved_at',
+    ];
+
     public function __construct(
         private readonly ProjectApprovalAttachmentService $attachments,
     ) {}
 
-    public function paginate(int $page, int $perPage, string $search, string $status): LengthAwarePaginator
+    public function paginate(int $page, int $perPage, string $search, string $status, ?string $sort = null): LengthAwarePaginator
     {
         $query = ProjectApproval::query()
-            ->with(['project:id,name', 'rolloutProgram:id,rollout_ref', 'resolvedBy:id,name'])
-            ->orderByDesc('submitted_at');
+            ->with(['project:id,name', 'rolloutProgram:id,rollout_ref', 'resolvedBy:id,name']);
 
         if ($status !== 'all') {
             $query->where('status', $status);
@@ -34,6 +43,14 @@ class ProjectApprovalIndexService
                     ->orWhere('status', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'submitted_at:desc'),
+            self::SORTABLE,
+            'submitted_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

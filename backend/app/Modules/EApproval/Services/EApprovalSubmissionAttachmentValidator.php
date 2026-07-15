@@ -38,6 +38,7 @@ final class EApprovalSubmissionAttachmentValidator
 
         $validation = is_array($field->validation) ? $field->validation : [];
         $this->assertFieldMaxSize($file, $validation, $fieldName, $field->label);
+        $this->assertFieldMinSize($file, $validation, $fieldName, $field->label);
 
         $allowed = $this->normalizeAllowedTypes($validation['allowedFileTypes'] ?? null);
         if (! $this->matchesAllowedTypes($file, $allowed)) {
@@ -85,6 +86,32 @@ final class EApprovalSubmissionAttachmentValidator
         }
 
         return $allowed !== [] ? array_values(array_unique($allowed)) : $defaults;
+    }
+
+    /**
+     * @param  array<string, mixed>  $validation
+     */
+    private function assertFieldMinSize(
+        UploadedFile $file,
+        array $validation,
+        string $fieldName,
+        ?string $fieldLabel,
+    ): void {
+        $minKb = $validation['minFileSizeKb'] ?? null;
+        if (! is_numeric($minKb) || (int) $minKb <= 0) {
+            return;
+        }
+
+        $minBytes = (int) $minKb * 1024;
+        if ($file->getSize() < $minBytes) {
+            $label = trim((string) $fieldLabel) ?: $fieldName;
+            throw ValidationException::withMessages([
+                'file' => [__(
+                    ':label requires files of at least :min KB.',
+                    ['label' => $label, 'min' => (int) $minKb],
+                )],
+            ]);
+        }
     }
 
     /**

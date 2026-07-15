@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace App\Modules\ProcurementOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProcurementOne\Models\ProcurementVendor;
 use App\Modules\ProcurementOne\Support\ProcurementVendorAccreditationStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class ProcurementVendorRegistryService
 {
+    private const SORTABLE = [
+        'company_name',
+        'vendor_code',
+        'category',
+        'accreditation_status',
+        'updated_at',
+    ];
+
     public function __construct(
         private readonly ProcurementVendorAccreditationPolicyService $policy,
         private readonly ProcurementPaymentRequestRegistryService $payments,
@@ -20,10 +29,10 @@ final class ProcurementVendorRegistryService
         int $perPage,
         ?string $search = null,
         ?string $status = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = ProcurementVendor::query()
-            ->where('is_active', true)
-            ->orderBy('company_name');
+            ->where('is_active', true);
 
         if ($status !== null && $status !== '' && $status !== 'all') {
             $query->where('accreditation_status', $status);
@@ -38,6 +47,14 @@ final class ProcurementVendorRegistryService
                     ->orWhere('category', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'company_name:asc'),
+            self::SORTABLE,
+            'company_name',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalAuditLog;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
 final class EApprovalAuditIndexService
 {
+    private const SORTABLE = [
+        'created_at',
+        'action',
+        'target_id',
+    ];
+
     public function paginate(
         int $page,
         int $perPage,
@@ -17,12 +24,20 @@ final class EApprovalAuditIndexService
         ?string $search = null,
         ?string $from = null,
         ?string $to = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = EApprovalAuditLog::query()
-            ->with('user:id,name,email')
-            ->orderByDesc('created_at');
+            ->with('user:id,name,email');
 
         $this->applyFilters($query, $action, $search, $from, $to);
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

@@ -89,6 +89,9 @@ final class ControlledDocumentSyncService
             $nextReviewDate = $this->parseDate($this->fieldValue($values, $config->fieldMap, 'next_review_date'));
             $changeSummary = $this->fieldValue($values, $config->fieldMap, 'change_summary');
 
+            $requestorId = (string) ($submission->requestor_id ?? '');
+            $authorId = $requestorId !== '' ? $requestorId : ($actor !== null ? (string) $actor->id : null);
+
             if ($existing === null) {
                 $existing = ControlledDocument::query()->create([
                     'id' => (string) Str::uuid(),
@@ -101,7 +104,8 @@ final class ControlledDocumentSyncService
                     'effective_date' => $effectiveDate,
                     'next_review_date' => $nextReviewDate,
                     'e_approval_form_id' => $form->id,
-                    'created_by_id' => $actor?->id ?? $submission->requestor_id,
+                    // Registry ownership follows the requestor (DCF author), not the final approver.
+                    'created_by_id' => $authorId,
                     'published_at' => now(),
                 ]);
             } else {
@@ -133,7 +137,7 @@ final class ControlledDocumentSyncService
                 'effective_date' => $effectiveDate,
                 'approved_by_id' => $actor?->id,
                 'approved_at' => now(),
-                'created_by_id' => $actor?->id ?? $submission->requestor_id,
+                'created_by_id' => $authorId,
             ]);
 
             $attachment = $this->primaryAttachment($submission, $config->attachmentField);

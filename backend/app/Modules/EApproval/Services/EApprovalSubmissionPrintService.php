@@ -77,7 +77,10 @@ final class EApprovalSubmissionPrintService
               ? $this->settings->getUserSignature((string) $submission->requestor_id)
               : null,
             'created_at' => $submission->created_at?->format('Y-m-d H:i'),
-            'brand_logo_url' => $submission->form?->brand_logo_url,
+            'brand_logo_url' => $submission->form !== null
+                ? app(EApprovalFileStorageService::class)->presentFormLogoUrl($submission->form)
+                    ?? $submission->form->brand_logo_url
+                : null,
             'print_template_kind' => $printTemplateKind !== '' ? $printTemplateKind : null,
             'fields' => $fields,
             'grids' => $this->buildGridPrintModels(

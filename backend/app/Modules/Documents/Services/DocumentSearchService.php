@@ -23,14 +23,11 @@ final class DocumentSearchService
         $like = '%'.addcslashes($search, '%_\\').'%';
 
         return Document::query()
+            ->select(['id', 'title', 'status', 'site_id', 'original_filename', 'last_touched_at'])
             ->whereNull('deleted_at')
             ->where(static function ($q) use ($like): void {
                 $q->where('title', 'like', $like)
-                    ->orWhere('original_filename', 'like', $like)
-                    ->orWhereHas('site', static function ($siteQuery) use ($like): void {
-                        $siteQuery->where('site_code', 'like', $like)
-                            ->orWhere('name', 'like', $like);
-                    });
+                    ->orWhere('original_filename', 'like', $like);
             })
             ->with(['site:id,site_code,name'])
             ->orderByDesc('last_touched_at')

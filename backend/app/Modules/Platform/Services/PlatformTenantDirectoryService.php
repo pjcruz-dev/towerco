@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Models\Tenant;
 use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Billing\Services\TenantRfiMeterService;
@@ -18,6 +19,15 @@ use Illuminate\Support\Str;
 
 final class PlatformTenantDirectoryService
 {
+    private const SORTABLE = [
+        'created_at',
+        'slug',
+        'environment',
+        'plan_tier',
+        'subscription_status',
+        'brand_domain',
+    ];
+
     public function __construct(
         private readonly TenantPlanEntitlementsService $entitlements,
         private readonly TenantRfiMeterService $rfiMeter,
@@ -36,12 +46,20 @@ final class PlatformTenantDirectoryService
         $subscriptionStatus = Str::limit(trim((string) $request->query('subscription_status', '')), 32, '');
         $modulesFilter = Str::limit(trim((string) $request->query('modules', '')), 32, '');
         $accessMode = Str::limit(trim((string) $request->query('access_mode', '')), 32, '');
+        $sort = Str::limit(trim((string) $request->query('sort', '')), 64, '');
         $page = max(1, (int) $request->query('page', 1));
         $perPage = min(100, max(10, (int) $request->query('per_page', 25)));
 
+        [$column, $direction] = AllowlistedSort::resolve(
+            $sort !== '' ? $sort : 'created_at:desc',
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+
         $query = Tenant::query()
             ->with(['domains:id,domain,tenant_id'])
-            ->orderByDesc('created_at');
+            ->orderBy($column, $direction);
 
         $this->applySearch($query, $search);
         $this->applyEnvironmentFilter($query, $environment);

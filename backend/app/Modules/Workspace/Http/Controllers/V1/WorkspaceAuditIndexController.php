@@ -25,6 +25,7 @@ final class WorkspaceAuditIndexController extends AbstractApiController
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'from' => ['sometimes', 'nullable', 'date'],
             'to' => ['sometimes', 'nullable', 'date'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $paginator = $audit->paginate(
@@ -35,6 +36,7 @@ final class WorkspaceAuditIndexController extends AbstractApiController
             $validated['search'] ?? null,
             $validated['from'] ?? null,
             $validated['to'] ?? null,
+            $validated['sort'] ?? null,
         );
 
         return $this->okWithMeta($audit->asPayload($paginator), [

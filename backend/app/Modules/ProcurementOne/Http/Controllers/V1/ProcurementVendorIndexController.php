@@ -20,6 +20,7 @@ final class ProcurementVendorIndexController extends AbstractApiController
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $paginator = $registry->paginate(
@@ -27,6 +28,7 @@ final class ProcurementVendorIndexController extends AbstractApiController
             (int) ($data['per_page'] ?? 25),
             $data['search'] ?? null,
             $data['status'] ?? null,
+            $data['sort'] ?? null,
         );
 
         $rows = collect($paginator->items())

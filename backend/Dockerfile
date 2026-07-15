@@ -20,6 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# OPcache + JIT tuning (see docker/entrypoint.sh for the runtime bind-mount copy).
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/zz-toweros-opcache.ini
+COPY docker/php-uploads.ini /usr/local/etc/php/conf.d/zz-toweros-uploads.ini
+
 WORKDIR /var/www/html
 
 COPY composer.json composer.lock ./

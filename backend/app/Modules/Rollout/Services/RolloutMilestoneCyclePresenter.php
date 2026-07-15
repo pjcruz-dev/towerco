@@ -28,7 +28,7 @@ final class RolloutMilestoneCyclePresenter
      *     variance_wd: int|null
      * }>
      */
-    public function forProgram(RolloutProgram $program): array
+    public function forProgram(RolloutProgram $program, $timelinePhases = null): array
     {
         if ($program->status === 'batch') {
             return [];
@@ -38,6 +38,8 @@ final class RolloutMilestoneCyclePresenter
         if ($config === null) {
             return [];
         }
+
+        $passedTimelinePhaseKeys = $this->passedTimelinePhaseKeys($timelinePhases ?? $program->timelinePhases);
 
         $targets = RolloutPlaybookMilestoneResolver::targetsForProjectType(
             $config->playbook_snapshot,
@@ -99,6 +101,8 @@ final class RolloutMilestoneCyclePresenter
                 $today,
                 $calendar,
                 $postDayOne ? $dayOne : $endorsement,
+                isset($target['timeline_phase_key']) ? (string) $target['timeline_phase_key'] : null,
+                $passedTimelinePhaseKeys,
             );
 
             $variance = null;
@@ -202,6 +206,8 @@ final class RolloutMilestoneCyclePresenter
         Carbon $today,
         WorkingDaysCalendar $calendar,
         ?Carbon $anchorDate,
+        ?string $timelinePhaseKey = null,
+        array $passedTimelinePhaseKeys = [],
     ): string {
         if ($programClosed) {
             if ($targetDate === null) {
@@ -217,13 +223,17 @@ final class RolloutMilestoneCyclePresenter
             return 'pending';
         }
 
+        $gatePassed = $timelinePhaseKey !== null
+            && $timelinePhaseKey !== ''
+            && in_array($timelinePhaseKey, $passedTimelinePhaseKeys, true);
+
         if ($today->greaterThan($targetDate)) {
-            return 'overdue';
+            return $gatePassed ? 'active' : 'overdue';
         }
 
         $remaining = $calendar->workingDaysBetween($today, $targetDate);
         if ($remaining >= 0 && $remaining <= 3) {
-            return 'at_risk';
+            return $gatePassed ? 'active' : 'at_risk';
         }
 
         if ($today->greaterThanOrEqualTo($anchorDate)) {
@@ -231,5 +241,21 @@ final class RolloutMilestoneCyclePresenter
         }
 
         return 'pending';
+    }
+
+    /**
+     * @param  iterable<\App\Modules\Rollout\Models\RolloutTimelinePhase>  $timelinePhases
+     * @return list<string>
+     */
+    private function passedTimelinePhaseKeys(iterable $timelinePhases): array
+    {
+        $keys = [];
+        foreach ($timelinePhases as $phase) {
+            if ($phase->gate_status === 'passed' || $phase->actual_end_date !== null) {
+                $keys[] = (string) $phase->phase_key;
+            }
+        }
+
+        return array_values(array_unique($keys));
     }
 }

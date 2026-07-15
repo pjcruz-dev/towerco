@@ -32,7 +32,7 @@ final class ControlledDocumentSearchService
         }
 
         $limit = max(1, min(10, $limit));
-        $needle = '%'.addcslashes(mb_strtolower($search), '%_\\').'%';
+        $needle = '%'.addcslashes($search, '%_\\').'%';
 
         $builder = ControlledDocument::query()
             ->select(['id', 'document_code', 'title', 'department', 'status'])
@@ -40,8 +40,9 @@ final class ControlledDocumentSearchService
 
         $this->access->applyRegistryScope($builder, $viewer);
         $builder->where(static function ($inner) use ($needle): void {
-            $inner->whereRaw('LOWER(document_code) LIKE ?', [$needle])
-                ->orWhereRaw('LOWER(title) LIKE ?', [$needle]);
+            // Rely on DB collation for case-insensitivity (avoids LOWER() full scans).
+            $inner->where('document_code', 'like', $needle)
+                ->orWhere('title', 'like', $needle);
         });
 
         return $builder
@@ -54,7 +55,7 @@ final class ControlledDocumentSearchService
                 ]);
 
                 return [
-                    'module' => 'documents',
+                    'module' => 'document_register',
                     'entity_type' => 'controlled_document',
                     'id' => (string) $document->id,
                     'title' => (string) $document->document_code,

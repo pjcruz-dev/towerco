@@ -29,6 +29,11 @@ final class EApprovalFileStorageService
     ): EApprovalAttachment {
         $this->assertUploadAllowed($file);
 
+        $existing = $this->findExistingByOriginalName($submission, $file->getClientOriginalName(), $fieldName);
+        if ($existing !== null) {
+            return $existing;
+        }
+
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $filename = Str::uuid()->toString().'.'.$extension;
         $tenantId = $this->tenantStoragePrefix();
@@ -60,8 +65,24 @@ final class EApprovalFileStorageService
         ]);
     }
 
+    public function findExistingByOriginalName(
+        EApprovalSubmission $submission,
+        string $originalFileName,
+        ?string $fieldName,
+    ): ?EApprovalAttachment {
+        $submission->loadMissing('attachments');
+
+        return $submission->attachments->first(static function (EApprovalAttachment $attachment) use ($originalFileName, $fieldName): bool {
+            if ((string) $attachment->file_name !== $originalFileName) {
+                return false;
+            }
+
+            return (string) ($attachment->field_name ?? '') === (string) ($fieldName ?? '');
+        });
+    }
+
     /**
-     * @return array{brand_logo_url: string}
+     * @return array{brand_logo_url: string, brand_logo_path: string}
      */
     public function storeFormLogo(EApprovalForm $form, UploadedFile $file): array
     {
@@ -75,6 +96,11 @@ final class EApprovalFileStorageService
             ]);
         }
 
+        $previousPath = $this->resolveFormLogoStoragePath($form);
+        if ($previousPath !== null) {
+            $this->deleteIfExists($previousPath);
+        }
+
         $filename = 'logo-'.Str::uuid()->toString().'.'.$extension;
         $storedPath = sprintf(
             '%s/e-approval/forms/%s/%s',
@@ -83,15 +109,86 @@ final class EApprovalFileStorageService
             $filename,
         );
 
-        Storage::disk($this->disk())->putFileAs(
+        $stored = Storage::disk($this->disk())->putFileAs(
             dirname($storedPath),
             $file,
             basename($storedPath),
         );
 
-        $publicUrl = '/storage/tenant/'.$storedPath;
+        if ($stored === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('Logo could not be stored. Check storage configuration and try again.')],
+            ]);
+        }
 
-        return ['brand_logo_url' => $publicUrl];
+        return [
+            'brand_logo_path' => $storedPath,
+            'brand_logo_url' => '/api/v1/e-approval/forms/'.$form->id.'/logo',
+        ];
+    }
+
+    public function presentFormLogoUrl(EApprovalForm $form): ?string
+    {
+        if ($this->resolveFormLogoStoragePath($form) === null) {
+            return null;
+        }
+
+        return '/api/v1/e-approval/forms/'.$form->id.'/logo';
+    }
+
+    public function streamFormLogo(EApprovalForm $form): StreamedResponse
+    {
+        $path = $this->resolveFormLogoStoragePath($form);
+        if ($path === null) {
+            abort(404);
+        }
+
+        $disk = Storage::disk($this->disk());
+        if (! $disk->exists($path)) {
+            abort(404);
+        }
+
+        $filename = basename($path);
+
+        return $disk->response($path, $filename, [
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    public function resolveFormLogoStoragePath(EApprovalForm $form): ?string
+    {
+        $value = trim((string) ($form->brand_logo_url ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        if (str_starts_with($value, '/storage/tenant/')) {
+            return substr($value, strlen('/storage/tenant/'));
+        }
+
+        if (str_starts_with($value, '/api/')) {
+            return $this->findLatestFormLogoPath((string) $form->id);
+        }
+
+        if (str_contains($value, '/e-approval/forms/')) {
+            return ltrim($value, '/');
+        }
+
+        return null;
+    }
+
+    private function findLatestFormLogoPath(string $formId): ?string
+    {
+        $prefix = sprintf('%s/e-approval/forms/%s/', $this->tenantStoragePrefix(), $formId);
+        $disk = Storage::disk($this->disk());
+        $files = $disk->files($prefix);
+        if ($files === []) {
+            return null;
+        }
+
+        usort($files, static fn (string $a, string $b): int => strcmp($b, $a));
+
+        return $files[0];
     }
 
     /**
@@ -139,6 +236,12 @@ final class EApprovalFileStorageService
         }
 
         return $disk->response($attachment->file_path, $attachment->file_name);
+    }
+
+    public function deleteAttachment(EApprovalAttachment $attachment): void
+    {
+        $this->deleteIfExists((string) $attachment->file_path);
+        $attachment->delete();
     }
 
     private function assertAllowedMime(UploadedFile $file): void

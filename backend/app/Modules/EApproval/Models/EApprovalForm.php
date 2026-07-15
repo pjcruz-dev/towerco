@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Models;
 
+use App\Modules\EApproval\Services\EApprovalFileStorageService;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalFormSnapshotSanitizer;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
@@ -186,7 +187,8 @@ class EApprovalForm extends Model
             'doc_no_template' => $this->doc_no_template,
             'doc_no_seq_start' => $this->doc_no_seq_start,
             'doc_no_seq_start_rules' => $this->doc_no_seq_start_rules,
-            'brand_logo_url' => $this->brand_logo_url,
+            'brand_logo_url' => app(EApprovalFileStorageService::class)->presentFormLogoUrl($this)
+                ?? $this->brand_logo_url,
             'brand_primary_color' => $this->brand_primary_color,
             'related_form_ids' => $this->related_form_ids,
             'fields' => $this->fields->map(static fn (EApprovalFormField $f) => [

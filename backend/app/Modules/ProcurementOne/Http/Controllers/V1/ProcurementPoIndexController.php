@@ -27,6 +27,7 @@ final class ProcurementPoIndexController extends AbstractApiController
             'status' => ['sometimes', 'nullable', 'string', 'max:32'],
             'mine' => ['sometimes', 'boolean'],
             'pr_id' => ['sometimes', 'nullable', 'uuid'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $requestorId = $scope->requestorIdForIndex($user, (bool) ($data['mine'] ?? false));
@@ -38,6 +39,7 @@ final class ProcurementPoIndexController extends AbstractApiController
             $data['status'] ?? null,
             $requestorId,
             $data['pr_id'] ?? null,
+            $data['sort'] ?? null,
         );
 
         $rows = collect($paginator->items())

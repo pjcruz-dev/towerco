@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
@@ -18,6 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 final class ApprovalDecisionService
 {
+    private const SORTABLE = [
+        'created_at',
+        'status',
+        'document_no',
+    ];
+
     public function __construct(
         private readonly SubmissionWorkflowService $workflow,
         private readonly EApprovalDelegationService $delegations,
@@ -36,6 +43,7 @@ final class ApprovalDecisionService
         int $perPage,
         ?string $status,
         bool $awaitingMeOnly,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $page = max(1, $page);
         $perPage = max(1, min(100, $perPage));
@@ -43,8 +51,15 @@ final class ApprovalDecisionService
         $ranked = $this->rankedApprovalsQuery($viewer, $status, $awaitingMeOnly);
         $total = (clone $ranked)->count();
 
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+
         $pageIds = (clone $ranked)
-            ->orderByDesc('created_at')
+            ->orderBy($column, $direction)
             ->forPage($page, $perPage)
             ->pluck('id')
             ->all();
@@ -86,7 +101,8 @@ final class ApprovalDecisionService
 
         $inner = DB::connection('tenant')
             ->table('e_approval_request_approvals as era')
-            ->leftJoin('e_approval_workflow_steps as steps', 'steps.id', '=', 'era.step_id');
+            ->leftJoin('e_approval_workflow_steps as steps', 'steps.id', '=', 'era.step_id')
+            ->leftJoin('e_approval_submissions as eas', 'eas.id', '=', 'era.submission_id');
 
         if ($awaitingMeOnly) {
             $inner->where('era.approver_id', $viewerId)->where('era.status', $pending);
@@ -99,7 +115,7 @@ final class ApprovalDecisionService
         }
 
         $inner->selectRaw(
-            'era.id, era.created_at, ROW_NUMBER() OVER (
+            'era.id, era.created_at, era.status, eas.document_no, ROW_NUMBER() OVER (
                 PARTITION BY era.submission_id
                 ORDER BY
                     CASE WHEN era.approver_id = ? AND era.status = ? THEN 0 ELSE 1 END,

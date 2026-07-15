@@ -24,6 +24,7 @@ final class TenantEnabledModulesResolver
         'procurement_one',
         'finance_one',
         'documents',
+        'document_register',
     ];
 
     /** @var array<string, string> */
@@ -41,6 +42,13 @@ final class TenantEnabledModulesResolver
         'procurement_one' => 'Procurement-One',
         'finance_one' => 'Finance-One',
         'documents' => 'Documents',
+        'document_register' => 'Document register',
+    ];
+
+    /** @var array<string, string> */
+    public const MODULE_DESCRIPTIONS = [
+        'documents' => 'Expiring leases, permits, and contracts across sites.',
+        'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Approval.',
     ];
 
     /**
@@ -57,6 +65,7 @@ final class TenantEnabledModulesResolver
                 'procurement_one',
                 'sites',
                 'documents',
+                'document_register',
             ]);
         }
 
@@ -124,7 +133,8 @@ final class TenantEnabledModulesResolver
      *   platform_modules: list<string>,
      *   toggleable_modules: list<string>,
      *   required_modules: list<string>,
-     *   labels: array<string, string>
+     *   labels: array<string, string>,
+     *   descriptions: array<string, string>
      * }
      */
     public function catalogForPlatformApi(): array
@@ -134,6 +144,7 @@ final class TenantEnabledModulesResolver
             'toggleable_modules' => $this->toggleableModules(),
             'required_modules' => self::REQUIRED_MODULES,
             'labels' => self::MODULE_LABELS,
+            'descriptions' => self::MODULE_DESCRIPTIONS,
         ];
     }
 }

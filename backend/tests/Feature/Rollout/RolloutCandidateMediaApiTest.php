@@ -48,7 +48,7 @@ final class RolloutCandidateMediaApiTest extends TestCase
         $upload = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->post('/api/v1/project-one/files', [
-                'file' => UploadedFile::fake()->image('site.jpg'),
+                'file' => UploadedFile::fake()->create('site.jpg', 100, 'image/jpeg'),
                 'context' => 'candidate_photo',
                 'rollout_id' => $rollout->id,
             ]);

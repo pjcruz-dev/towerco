@@ -82,12 +82,38 @@ final class RolloutHappyPathApiTest extends TestCase
 
         $this->assertNotNull($huntingPhase);
 
-        $this->actingAsTenantAdmin()
+        $submit = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
-            ->patchJson('/api/v1/project-one/rollout-phases/'.$huntingPhase['id'].'/gate', [
-                'gate_status' => 'passed',
+            ->postJson('/api/v1/project-one/rollout-phases/'.$huntingPhase['id'].'/gate-approvals', [
+                'request_notes' => 'Three candidates uploaded',
             ])
             ->assertOk();
+
+        $approvalId = $submit->json('data.approval.id');
+        $this->assertNotEmpty($approvalId);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/project-one/gate-approvals/'.$approvalId.'/decide', [
+                'decision' => 'approve',
+            ])
+            ->assertOk();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/project-one/gate-approvals/'.$approvalId.'/decide', [
+                'decision' => 'approve',
+            ])
+            ->assertOk();
+
+        $detailAfterGate = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/project-one/rollouts/'.$rolloutId)
+            ->assertOk();
+
+        $passedHuntingPhase = collect($detailAfterGate->json('data.timeline_phases'))
+            ->firstWhere('phase_key', 'site_hunting');
+        $this->assertSame('passed', $passedHuntingPhase['gate_status'] ?? null);
 
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())

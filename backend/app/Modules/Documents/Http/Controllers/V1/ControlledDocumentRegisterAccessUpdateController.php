@@ -23,6 +23,8 @@ final class ControlledDocumentRegisterAccessUpdateController extends AbstractApi
             'viewer_roles.*' => ['string', 'max:120'],
             'full_access_roles' => ['nullable', 'array'],
             'full_access_roles.*' => ['string', 'max:120'],
+            'own_only_roles' => ['nullable', 'array'],
+            'own_only_roles.*' => ['string', 'max:120'],
             'role_department_map' => ['nullable', 'array'],
             'role_department_map.*' => ['array'],
             'role_department_map.*.*' => ['string', 'max:120'],

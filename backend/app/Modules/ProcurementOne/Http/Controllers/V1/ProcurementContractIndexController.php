@@ -23,16 +23,24 @@ final class ProcurementContractIndexController extends AbstractApiController
         FinanceOneAccess::authorizeView($request->user());
         $planFeatures->assertVendorContractsEnabled();
 
-        $page = max(1, (int) $request->integer('page', 1));
-        $perPage = min(100, max(1, (int) $request->integer('per_page', 25)));
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'status' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'vendor_id' => ['sometimes', 'nullable', 'uuid'],
+            'site_id' => ['sometimes', 'nullable', 'uuid'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
 
         $paginator = $service->paginate(
-            $page,
-            $perPage,
-            $request->string('search')->toString() ?: null,
-            $request->string('status')->toString() ?: null,
-            $request->string('vendor_id')->toString() ?: null,
-            $request->string('site_id')->toString() ?: null,
+            max(1, (int) ($data['page'] ?? 1)),
+            min(100, max(1, (int) ($data['per_page'] ?? 25))),
+            $data['search'] ?? null,
+            $data['status'] ?? null,
+            $data['vendor_id'] ?? null,
+            $data['site_id'] ?? null,
+            $data['sort'] ?? null,
         );
 
         return $this->okWithMeta(

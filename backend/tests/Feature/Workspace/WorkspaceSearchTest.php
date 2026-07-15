@@ -68,7 +68,7 @@ final class WorkspaceSearchTest extends TestCase
             'toweros.tenant_modules.enabled' => [
                 'core',
                 'team_access',
-                'documents',
+                'document_register',
             ],
         ]);
 
@@ -89,7 +89,7 @@ final class WorkspaceSearchTest extends TestCase
             ->getJson('/api/v1/workspace/search?q=WS-CD-SEARCH')
             ->assertOk()
             ->assertJsonFragment([
-                'module' => 'documents',
+                'module' => 'document_register',
                 'entity_type' => 'controlled_document',
                 'title' => 'WS-CD-SEARCH-001',
             ]);

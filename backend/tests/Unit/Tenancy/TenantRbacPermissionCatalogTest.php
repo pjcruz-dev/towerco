@@ -30,6 +30,34 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertNotContains('asset_one:view', $enabled);
     }
 
+    public function test_permission_groups_split_documents_and_document_register(): void
+    {
+        Config::set('toweros.tenant_modules.enabled', [
+            'core',
+            'team_access',
+            'documents',
+            'document_register',
+        ]);
+
+        $groups = app(TenantRbacPermissionCatalog::class)->permissionGroupsForApi();
+
+        $this->assertArrayHasKey('documents', $groups);
+        $this->assertArrayHasKey('document_register', $groups);
+        $this->assertContains('documents:view', $groups['documents']['permissions']);
+        $this->assertNotContains('documents:controlled:view', $groups['documents']['permissions']);
+        $this->assertContains('documents:controlled:view', $groups['document_register']['permissions']);
+    }
+
+    public function test_document_register_permissions_require_module(): void
+    {
+        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'documents']);
+
+        $enabled = app(TenantRbacPermissionCatalog::class)->enabledPermissions();
+
+        $this->assertContains('documents:view', $enabled);
+        $this->assertNotContains('documents:controlled:view', $enabled);
+    }
+
     public function test_permission_groups_only_include_enabled_modules(): void
     {
         Config::set('toweros.tenant_modules.enabled', ['core', 'project_one', 'e_approval']);

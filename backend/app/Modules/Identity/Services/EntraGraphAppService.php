@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Microsoft Graph application (client credentials) — uses per-tenant Microsoft settings when tenancy is active.
  */
-final class EntraGraphAppService
+class EntraGraphAppService
 {
     public function __construct(
         private readonly TenantSsoConfigService $tenantMicrosoft,

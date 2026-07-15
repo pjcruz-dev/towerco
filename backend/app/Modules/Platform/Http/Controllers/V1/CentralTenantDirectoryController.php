@@ -13,6 +13,10 @@ class CentralTenantDirectoryController extends AbstractApiController
 {
     public function index(Request $request, PlatformTenantDirectoryService $directory): JsonResponse
     {
+        $request->validate([
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
+
         return $this->ok($directory->list($request));
     }
 }

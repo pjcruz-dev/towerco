@@ -38,6 +38,7 @@ final class RolloutBulkPhaseDatesService
         array $phaseDates,
         bool $markGatePassed = true,
         ?Authenticatable $actor = null,
+        bool $forImport = false,
     ): array {
         if ($phaseDates === []) {
             throw ValidationException::withMessages([
@@ -54,6 +55,7 @@ final class RolloutBulkPhaseDatesService
             ], $rolloutIds),
             $markGatePassed,
             $actor,
+            $forImport,
         );
     }
 
@@ -127,7 +129,7 @@ final class RolloutBulkPhaseDatesService
      *     }>
      * }
      */
-    private function runBulkApply(array $rows, bool $markGatePassed, ?Authenticatable $actor): array
+    private function runBulkApply(array $rows, bool $markGatePassed, ?Authenticatable $actor, bool $forImport = false): array
     {
         $results = [];
         $updated = 0;
@@ -153,7 +155,9 @@ final class RolloutBulkPhaseDatesService
             }
 
             try {
-                $this->assertRolloutEligible($program);
+                if (! $forImport) {
+                    $this->assertRolloutEligible($program);
+                }
             } catch (ValidationException $exception) {
                 $message = collect($exception->errors())->flatten()->first();
                 $results[] = [

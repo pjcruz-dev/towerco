@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Documents\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Models\ControlledDocumentRevision;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
@@ -16,6 +17,18 @@ use Illuminate\Validation\ValidationException;
 
 final class ControlledDocumentRegistryService
 {
+    private const SORTABLE = [
+        'document_code',
+        'title',
+        'document_type',
+        'department',
+        'current_revision',
+        'status',
+        'effective_date',
+        'next_review_date',
+        'published_at',
+    ];
+
     public function __construct(
         private readonly ControlledDocumentAccessService $access,
         private readonly TenantActivityLogger $activity,
@@ -32,13 +45,21 @@ final class ControlledDocumentRegistryService
         ?string $department = null,
         ?string $status = null,
         ?string $documentType = null,
+        ?string $sort = null,
     ): array {
         $query = ControlledDocument::query()
-            ->with(['createdBy:id,name'])
-            ->orderBy('document_code');
+            ->with(['createdBy:id,name']);
 
         $this->access->applyRegistryScope($query, $actor);
         $this->applyFilters($query, $search, $department, $status, $documentType);
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'document_code:asc'),
+            self::SORTABLE,
+            'document_code',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return [
             'kpis' => $this->kpis($actor),

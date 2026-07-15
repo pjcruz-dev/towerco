@@ -36,8 +36,9 @@ final class ProcurementContractService
         ?string $status = null,
         ?string $vendorId = null,
         ?string $siteId = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
-        return $this->registry->paginate($page, $perPage, $search, $status, $vendorId, $siteId);
+        return $this->registry->paginate($page, $perPage, $search, $status, $vendorId, $siteId, $sort);
     }
 
     /**

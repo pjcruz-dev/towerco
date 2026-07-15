@@ -37,9 +37,19 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
             'field_name' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $attachmentValidator->assertCanStore($submission, $data['file'], $data['field_name'] ?? null);
+        $fieldName = $data['field_name'] ?? null;
+        $existing = $files->findExistingByOriginalName($submission, $data['file']->getClientOriginalName(), $fieldName);
+        if ($existing !== null) {
+            return $this->ok([
+                'id' => (string) $existing->id,
+                'file_name' => $existing->file_name,
+                'field_name' => $existing->field_name,
+            ]);
+        }
 
-        $attachment = $files->store($submission, $data['file'], $data['field_name'] ?? null);
+        $attachmentValidator->assertCanStore($submission, $data['file'], $fieldName);
+
+        $attachment = $files->store($submission, $data['file'], $fieldName);
 
         return $this->created([
             'id' => (string) $attachment->id,

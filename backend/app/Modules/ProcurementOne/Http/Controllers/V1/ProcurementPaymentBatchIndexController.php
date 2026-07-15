@@ -21,13 +21,18 @@ final class ProcurementPaymentBatchIndexController extends AbstractApiController
         FinanceOneAccess::authorizeView($request->user());
         $planFeatures->assertPaymentTrackingEnabled();
 
-        $page = max(1, (int) $request->integer('page', 1));
-        $perPage = min(100, max(1, (int) $request->integer('per_page', 25)));
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'status' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
 
         $paginator = $service->paginate(
-            $page,
-            $perPage,
-            $request->string('status')->toString() ?: null,
+            max(1, (int) ($data['page'] ?? 1)),
+            min(100, max(1, (int) ($data['per_page'] ?? 25))),
+            $data['status'] ?? null,
+            $data['sort'] ?? null,
         );
 
         return $this->okWithMeta(

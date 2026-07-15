@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\AdminOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class TenantUserIndexService
 {
+    private const SORTABLE = [
+        'name',
+        'email',
+        'created_at',
+        'updated_at',
+    ];
+
     public function __construct(
         private readonly TenantUserImpersonationService $impersonationService,
         private readonly TenantUserSecuritySummaryService $securitySummary,
@@ -20,6 +28,7 @@ class TenantUserIndexService
         int $perPage,
         string $search,
         ?TenantUserIndexFilters $filters = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $filters ??= new TenantUserIndexFilters;
 
@@ -28,8 +37,7 @@ class TenantUserIndexService
                 'roles:id,name',
                 'roles.permissions:id,name',
                 'permissions:id,name',
-            ])
-            ->orderBy('name');
+            ]);
 
         $this->queryFilters->apply($query, $filters);
 
@@ -40,6 +48,14 @@ class TenantUserIndexService
                     ->orWhere('email', 'like', $like);
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'name:asc'),
+            self::SORTABLE,
+            'name',
+            'asc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

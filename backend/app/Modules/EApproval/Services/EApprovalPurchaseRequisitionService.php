@@ -87,6 +87,11 @@ final class EApprovalPurchaseRequisitionService
 
     public function openBalanceForParent(string $parentSubmissionId, ?string $excludeChildSubmissionId = null): ?float
     {
+        $modelBalance = $this->openBalanceForParentFromModels($parentSubmissionId, $excludeChildSubmissionId);
+        if ($modelBalance !== null) {
+            return $modelBalance;
+        }
+
         $procurementPr = ProcurementPr::query()
             ->where('e_approval_submission_id', $parentSubmissionId)
             ->first();
@@ -105,7 +110,7 @@ final class EApprovalPurchaseRequisitionService
             return max(0, round($estimated - $committed, 2));
         }
 
-        return $this->openBalanceForParentFromModels($parentSubmissionId, $excludeChildSubmissionId);
+        return null;
     }
 
     private function openBalanceForProcurementPr(

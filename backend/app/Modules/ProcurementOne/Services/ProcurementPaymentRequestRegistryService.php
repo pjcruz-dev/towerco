@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ProcurementOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProcurementOne\Models\ProcurementPaymentRequest;
 use App\Modules\ProcurementOne\Support\ProcurementDocumentType;
 use App\Modules\ProcurementOne\Support\ProcurementPaymentRequestStatus;
@@ -11,6 +12,15 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class ProcurementPaymentRequestRegistryService
 {
+    private const SORTABLE = [
+        'document_no',
+        'status',
+        'amount',
+        'scheduled_date',
+        'updated_at',
+        'created_at',
+    ];
+
     public function __construct(
         private readonly ProcurementApInvoiceOpenBalanceService $balances,
         private readonly ProcurementLifecycleAuditService $audit,
@@ -23,10 +33,10 @@ final class ProcurementPaymentRequestRegistryService
         ?string $status = null,
         ?string $vendorCode = null,
         ?string $apInvoiceId = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = ProcurementPaymentRequest::query()
-            ->with(['apInvoice:id,document_no,vendor_invoice_no', 'paymentBatch:id,document_no', 'requestor:id,name'])
-            ->orderByDesc('updated_at');
+            ->with(['apInvoice:id,document_no,vendor_invoice_no', 'paymentBatch:id,document_no', 'requestor:id,name']);
 
         if ($status !== null && $status !== '' && $status !== 'all') {
             $query->where('status', $status);
@@ -52,6 +62,14 @@ final class ProcurementPaymentRequestRegistryService
                         ->orWhere('vendor_invoice_no', 'like', $like));
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

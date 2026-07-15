@@ -31,7 +31,7 @@ final class ControlledDocumentTest extends TestCase
 
         config([
             'toweros.tenant_modules.enabled' => [
-                'core', 'team_access', 'documents', 'e_approval',
+                'core', 'team_access', 'documents', 'document_register', 'e_approval',
             ],
         ]);
 
@@ -170,15 +170,15 @@ CSV;
         $prepared = $service->prepareForSubmit($form, [
             'document_code' => 'ATC-QMS-P-011',
             'title' => 'Policy',
-        ], 'ATC-QMS-P-999');
+        ], fn (): string => 'ATC-QMS-P-999');
 
-        $this->assertSame('ATC-QMS-P-999', $prepared['document_no']);
+        $this->assertSame('ATC-QMS-P-011-R001', $prepared['document_no']);
         $this->assertSame('ATC-QMS-P-011', $prepared['values']['document_code']);
         $this->assertSame('2', $prepared['values']['revision_number']);
 
         $newDoc = $service->prepareForSubmit($form, [
             'title' => 'New policy',
-        ], 'ATC-QMS-P-020');
+        ], fn (): string => 'ATC-QMS-P-020');
 
         $this->assertSame('ATC-QMS-P-020', $newDoc['document_no']);
         $this->assertSame('ATC-QMS-P-020', $newDoc['values']['document_code']);
@@ -263,6 +263,24 @@ CSV;
         $this->assertSame(['viewer'], $policy['viewerRoles'] ?? null);
         $this->assertSame(['PMO', 'QMS'], $policy['roleDepartmentMap']['viewer'] ?? null);
         tenancy()->end();
+    }
+
+    public function test_controlled_document_index_requires_document_register_module(): void
+    {
+        config([
+            'toweros.tenant_modules.enabled' => [
+                'core', 'team_access', 'documents', 'e_approval',
+            ],
+        ]);
+
+        tenancy()->initialize($this->testTenant);
+        app(TenantRbacBaselineService::class)->ensure();
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled')
+            ->assertForbidden();
     }
 
     private function createViewerUser(): TenantUser

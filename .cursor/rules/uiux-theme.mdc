@@ -59,7 +59,10 @@ Card:
 Border:
 #E2E8F0
 
-Primary:
+Primary (action / CTA — Geist neutral):
+#171717 (near-black) — CSS `--primary`
+
+Brand / charts / info chips (keep blue):
 #2563EB
 
 Text Primary:
@@ -77,6 +80,8 @@ Warning:
 Danger:
 #DC2626
 
+Note: Status/info chips must **not** use `--primary` for fill/text — use sky/success/warning tones so "Draft" does not look charcoal.
+
 ---
 
 ## Dark Theme
@@ -90,7 +95,10 @@ Card:
 Border:
 #1F2937
 
-Primary:
+Primary (action / CTA — Geist neutral):
+#F9FAFB (near-white) — CSS `--primary`
+
+Brand / charts / info chips:
 #3B82F6
 
 Text Primary:

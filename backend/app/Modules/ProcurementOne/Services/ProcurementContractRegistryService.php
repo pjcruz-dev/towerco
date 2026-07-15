@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ProcurementOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProcurementOne\Models\ProcurementContract;
 use App\Modules\ProcurementOne\Support\ProcurementContractStatus;
 use App\Modules\ProcurementOne\Support\ProcurementDocumentType;
@@ -11,6 +12,15 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class ProcurementContractRegistryService
 {
+    private const SORTABLE = [
+        'document_no',
+        'title',
+        'status',
+        'end_date',
+        'updated_at',
+        'created_at',
+    ];
+
     public function __construct(
         private readonly ProcurementLifecycleAuditService $lifecycleAudit,
         private readonly ProcurementContractSpendService $spend,
@@ -23,10 +33,10 @@ final class ProcurementContractRegistryService
         ?string $status = null,
         ?string $vendorId = null,
         ?string $siteId = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = ProcurementContract::query()
-            ->with(['vendor:id,vendor_code,company_name', 'site:id,site_code,name', 'owner:id,name'])
-            ->orderByDesc('updated_at');
+            ->with(['vendor:id,vendor_code,company_name', 'site:id,site_code,name', 'owner:id,name']);
 
         if ($status !== null && $status !== '' && $status !== 'all') {
             $query->where('status', $status);
@@ -50,6 +60,14 @@ final class ProcurementContractRegistryService
                         ->orWhere('vendor_code', 'like', $like));
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +15,14 @@ use Illuminate\Validation\ValidationException;
 
 final class EApprovalFormService
 {
+    private const SORTABLE = [
+        'name',
+        'status',
+        'category',
+        'created_at',
+        'updated_at',
+    ];
+
     public function __construct(
         private readonly EApprovalFormValidator $validator,
         private readonly EApprovalAuditLogger $audit,
@@ -29,8 +39,9 @@ final class EApprovalFormService
         string $search,
         bool $manageAll,
         ?string $statusFilter = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
-        $query = EApprovalForm::query()->orderByDesc('created_at');
+        $query = EApprovalForm::query();
 
         if ($statusFilter === 'published') {
             $query->where('status', 'published');
@@ -49,6 +60,14 @@ final class EApprovalFormService
             $query->where(static fn ($q) => $q->where('name', 'like', $like)->orWhere('description', 'like', $like));
         }
 
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
+
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
 
@@ -62,6 +81,15 @@ final class EApprovalFormService
             ? (string) $payload['status']
             : 'draft';
         $warnings = $this->validator->validate($payload, $status === 'published');
+
+        if ($status === 'published') {
+            EApprovalFormWorkspaceSupport::assertUniqueSlug(
+                is_array($payload['metadata_json'] ?? null) ? $payload['metadata_json'] : null,
+            );
+            EApprovalFormWorkspaceSupport::assertValidWorkspaceMetadata(
+                is_array($payload['metadata_json'] ?? null) ? $payload['metadata_json'] : null,
+            );
+        }
 
         return DB::connection('tenant')->transaction(function () use ($payload, $actor, $status, $warnings) {
             $form = EApprovalForm::query()->create([
@@ -117,6 +145,15 @@ final class EApprovalFormService
             $confirmFormUpgrade,
             $status === 'published' || $form->status === 'published',
         );
+
+        $effectiveStatus = in_array($status, ['draft', 'published'], true) ? $status : $form->status;
+        if ($effectiveStatus === 'published') {
+            $metadata = is_array($payload['metadata_json'] ?? null)
+                ? $payload['metadata_json']
+                : (is_array($form->metadata_json) ? $form->metadata_json : null);
+            EApprovalFormWorkspaceSupport::assertUniqueSlug($metadata, (string) $form->id);
+            EApprovalFormWorkspaceSupport::assertValidWorkspaceMetadata($metadata, (string) $form->id);
+        }
 
         return DB::connection('tenant')->transaction(function () use ($form, $payload, $actor, $status, $warnings) {
             $form->fill([

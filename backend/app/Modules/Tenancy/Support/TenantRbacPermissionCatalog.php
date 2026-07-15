@@ -87,6 +87,8 @@ final class TenantRbacPermissionCatalog
             'documents:upload',
             'documents:manage',
             'documents:template:manage',
+        ],
+        'document_register' => [
             'documents:controlled:view',
             'documents:controlled:create',
             'documents:controlled:approve',
@@ -110,6 +112,7 @@ final class TenantRbacPermissionCatalog
         'fiber_one' => 'Fiber-One',
         'asset_one' => 'Asset-One',
         'documents' => 'Documents',
+        'document_register' => 'Document register',
     ];
 
     /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Core\Support\AllowlistedSort;
+use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
@@ -21,6 +23,14 @@ use Illuminate\Validation\ValidationException;
 
 final class EApprovalSubmissionService
 {
+    private const SORTABLE = [
+        'document_no',
+        'status',
+        'current_step',
+        'created_at',
+        'updated_at',
+    ];
+
     public function __construct(
         private readonly EApprovalDocumentSequenceService $documentNumbers,
         private readonly EApprovalSubmissionSnapshotService $snapshots,
@@ -49,10 +59,21 @@ final class EApprovalSubmissionService
         string $search,
         ?string $status,
         bool $canViewAll,
+        ?string $formId = null,
+        ?string $from = null,
+        ?string $to = null,
+        ?array $eagerFieldNames = null,
+        ?array $formIds = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = EApprovalSubmission::query()
-            ->with(['form:id,name', 'requestor:id,name,email'])
-            ->orderByDesc('created_at');
+            ->with(['form:id,name', 'requestor:id,name,email']);
+
+        if ($formIds !== null && $formIds !== []) {
+            $query->whereIn('form_id', $formIds);
+        } elseif ($formId !== null && $formId !== '') {
+            $query->where('form_id', $formId);
+        }
 
         if (! $canViewAll) {
             $query->where(static function ($q) use ($viewer): void {
@@ -72,6 +93,28 @@ final class EApprovalSubmissionService
             $query->where(static fn ($q) => $q->where('document_no', 'like', $like)
                 ->orWhereHas('form', static fn ($f) => $f->where('name', 'like', $like)));
         }
+
+        if ($from !== null && $from !== '') {
+            $query->where('created_at', '>=', $from);
+        }
+
+        if ($to !== null && $to !== '') {
+            $query->where('created_at', '<=', $to);
+        }
+
+        if ($eagerFieldNames !== null && $eagerFieldNames !== [] && $formId !== null) {
+            $query->with(['values' => static function ($relation) use ($eagerFieldNames): void {
+                $relation->whereHas('field', static fn ($field) => $field->whereIn('name', $eagerFieldNames));
+            }, 'values.field']);
+        }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }
@@ -506,7 +549,56 @@ final class EApprovalSubmissionService
             ])->values()->all(),
             'viewer_is_requestor' => $viewerContext['viewer_is_requestor'],
             'viewer_pending_approval_id' => $viewerContext['viewer_pending_approval_id'],
+            ...$this->revisionFeedbackMeta($submission),
         ]);
+    }
+
+    /**
+     * Latest approver feedback when the requestor must revise or acknowledge rejection.
+     *
+     * @return array{
+     *     revision_remarks: string|null,
+     *     revision_remarks_at: string|null,
+     *     revision_remarks_by: string|null
+     * }
+     */
+    private function revisionFeedbackMeta(EApprovalSubmission $submission): array
+    {
+        $empty = [
+            'revision_remarks' => null,
+            'revision_remarks_at' => null,
+            'revision_remarks_by' => null,
+        ];
+
+        $action = match ((string) $submission->status) {
+            EApprovalSubmissionStatus::RETURNED => 'revision_requested',
+            EApprovalSubmissionStatus::REJECTED => 'request_rejected',
+            default => null,
+        };
+
+        if ($action === null) {
+            return $empty;
+        }
+
+        /** @var EApprovalAuditLog|null $log */
+        $log = EApprovalAuditLog::query()
+            ->with('user:id,name')
+            ->where('target_id', $submission->id)
+            ->where('action', $action)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($log === null) {
+            return $empty;
+        }
+
+        $remarks = trim((string) ($log->remarks ?? ''));
+
+        return [
+            'revision_remarks' => $remarks !== '' ? $remarks : null,
+            'revision_remarks_at' => $log->created_at?->toIso8601String(),
+            'revision_remarks_by' => $log->user?->name,
+        ];
     }
 
     /**
@@ -628,6 +720,35 @@ final class EApprovalSubmissionService
         if ((string) $submission->requestor_id !== (string) $requestor->id) {
             throw ValidationException::withMessages([
                 'submission' => [__('You cannot edit this draft.')],
+            ]);
+        }
+    }
+
+    public function assertCanEditDraft(EApprovalSubmission $submission, TenantUser $requestor): void
+    {
+        $this->assertDraftOwner($submission, $requestor);
+    }
+
+    /**
+     * Drafts plus returned/rejected requests (requestor may update attachments before resubmit).
+     */
+    public function assertCanEditAttachments(EApprovalSubmission $submission, TenantUser $actor): void
+    {
+        $editable = [
+            EApprovalSubmissionStatus::DRAFT,
+            EApprovalSubmissionStatus::RETURNED,
+            EApprovalSubmissionStatus::REJECTED,
+        ];
+
+        if (! in_array($submission->status, $editable, true)) {
+            throw ValidationException::withMessages([
+                'submission' => [__('Attachments cannot be changed for this submission status.')],
+            ]);
+        }
+
+        if ((string) $submission->requestor_id !== (string) $actor->id && ! $actor->can('e_approval:forms:manage')) {
+            throw ValidationException::withMessages([
+                'submission' => [__('Only the requestor can change attachments on this submission.')],
             ]);
         }
     }

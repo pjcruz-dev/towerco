@@ -4,16 +4,26 @@ declare(strict_types=1);
 
 namespace App\Modules\TowerOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\TowerOne\Models\Tower;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class TowerIndexService
 {
-    public function paginate(int $page, int $perPage, string $search): LengthAwarePaginator
+    private const SORTABLE = [
+        'tower_type',
+        'height_m',
+        'capacity_kg',
+        'max_tenants',
+        'status',
+        'updated_at',
+        'created_at',
+    ];
+
+    public function paginate(int $page, int $perPage, string $search, ?string $sort = null): LengthAwarePaginator
     {
         $query = Tower::query()
-            ->with(['site:id,site_code,name'])
-            ->orderByDesc('updated_at');
+            ->with(['site:id,site_code,name']);
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
@@ -26,6 +36,14 @@ class TowerIndexService
                     });
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

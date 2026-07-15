@@ -24,7 +24,13 @@ class ProjectApprovalIndexController extends AbstractApiController
             $status = 'pending';
         }
 
-        $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $status);
+        $paginator = $service->paginate(
+            $query['page'],
+            $query['per_page'],
+            $query['search'],
+            $status,
+            $query['sort'],
+        );
         $payload = $service->asPayload($paginator);
 
         return $this->okWithMeta($payload['data'], $payload['meta']);

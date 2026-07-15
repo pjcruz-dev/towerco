@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ProcurementOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProcurementOne\Models\ProcurementPaymentBatch;
 use App\Modules\ProcurementOne\Models\ProcurementPaymentRequest;
@@ -16,6 +17,14 @@ use Illuminate\Validation\ValidationException;
 
 final class ProcurementPaymentBatchService
 {
+    private const SORTABLE = [
+        'document_no',
+        'status',
+        'scheduled_date',
+        'updated_at',
+        'created_at',
+    ];
+
     public function __construct(
         private readonly ProcurementDocumentNumberAllocator $numbers,
         private readonly ProcurementLifecycleAuditService $audit,
@@ -178,16 +187,23 @@ final class ProcurementPaymentBatchService
         });
     }
 
-    public function paginate(int $page, int $perPage, ?string $status = null): LengthAwarePaginator
+    public function paginate(int $page, int $perPage, ?string $status = null, ?string $sort = null): LengthAwarePaginator
     {
         $query = ProcurementPaymentBatch::query()
             ->with(['createdBy:id,name'])
-            ->withCount('paymentRequests')
-            ->orderByDesc('updated_at');
+            ->withCount('paymentRequests');
 
         if ($status !== null && $status !== '' && $status !== 'all') {
             $query->where('status', $status);
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

@@ -46,6 +46,8 @@ final class RolloutGateApprovalEscalationTest extends TestCase
         ])->assertSuccessful();
 
         tenancy()->initialize($this->testTenant);
+        $this->app->terminate();
+
         $fresh = RolloutGateApprovalRequest::query()->findOrFail($requestId);
         $this->assertNotNull($fresh->last_escalated_at);
         tenancy()->end();
@@ -88,6 +90,8 @@ final class RolloutGateApprovalEscalationTest extends TestCase
         ])->assertSuccessful();
 
         tenancy()->initialize($this->testTenant);
+        $this->app->terminate();
+
         $fresh = RolloutGateApprovalRequest::query()->findOrFail($request->id);
         $this->assertNull($fresh->last_escalated_at);
         tenancy()->end();

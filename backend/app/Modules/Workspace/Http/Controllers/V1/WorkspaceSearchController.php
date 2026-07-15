@@ -24,7 +24,7 @@ class WorkspaceSearchController extends AbstractApiController
         ]);
 
         $query = Str::limit(trim((string) ($validated['q'] ?? '')), 255, '');
-        $limit = (int) ($validated['limit'] ?? 5);
+        $limit = (int) ($validated['limit'] ?? 4);
 
         return $this->ok($service->search($user, $query, $limit));
     }

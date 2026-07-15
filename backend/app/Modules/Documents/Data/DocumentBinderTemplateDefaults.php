@@ -50,6 +50,7 @@ final class DocumentBinderTemplateDefaults
                             ['key' => 'col', 'label' => 'COL', 'type' => 'fixed'],
                             ['key' => 'affidavit', 'label' => 'Affidavit', 'type' => 'fixed'],
                             ['key' => 'vendor_contracts', 'label' => 'Vendor contracts', 'type' => 'fixed'],
+                            ['key' => 'permits_clearances', 'label' => 'Permits & clearances', 'type' => 'fixed'],
                         ],
                     ],
                 ],

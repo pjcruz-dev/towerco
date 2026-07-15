@@ -21,6 +21,7 @@ final class RolloutProgramPresenter
         private readonly RolloutGateApprovalService $gateApprovals,
         private readonly RolloutGateApprovalPolicyService $gatePolicies,
         private readonly DocumentRolloutGateEnforcementService $documentGateEnforcement,
+        private readonly RolloutPermitService $permits,
     ) {}
 
     /**
@@ -36,7 +37,7 @@ final class RolloutProgramPresenter
             'profitability',
             'site',
             'project',
-            'children' => static fn ($q) => $q->orderBy('rollout_ref'),
+            'children' => static fn ($q) => $q->with('site')->orderBy('rollout_ref'),
         ]);
 
         $slaRemaining = null;
@@ -49,7 +50,9 @@ final class RolloutProgramPresenter
                 );
         }
 
-        $milestoneCycleRows = $program->status === 'batch' ? [] : $this->milestoneCycles->forProgram($program);
+        $milestoneCycleRows = $program->status === 'batch'
+            ? []
+            : $this->milestoneCycles->forProgram($program, $program->timelinePhases);
         $config = TenantRolloutPlaybookConfig::query()->first();
 
         return [
@@ -67,6 +70,12 @@ final class RolloutProgramPresenter
             'search_ring_name' => $program->search_ring_name,
             'region' => $program->region,
             'territory' => $program->territory,
+            'area' => $program->area,
+            'alliance_tag' => $program->alliance_tag,
+            'mno_anchor_site_id' => $program->mno_anchor_site_id,
+            'site_license_remarks' => $program->site_license_remarks,
+            'energization_tempo_date' => $program->energization_tempo_date?->toDateString(),
+            'rfti_signed_tempo_date' => $program->rfti_signed_tempo_date?->toDateString(),
             'saq_owner_id' => $program->saq_owner_id,
             'cme_pm_id' => $program->cme_pm_id,
             'pmo_owner_id' => $program->pmo_owner_id,
@@ -83,6 +92,7 @@ final class RolloutProgramPresenter
                 'id' => $program->site->id,
                 'site_code' => $program->site->site_code,
                 'name' => $program->site->name,
+                'full_address' => $program->site->full_address,
                 'latitude' => $program->site->latitude !== null ? (float) $program->site->latitude : null,
                 'longitude' => $program->site->longitude !== null ? (float) $program->site->longitude : null,
             ] : null,
@@ -102,6 +112,19 @@ final class RolloutProgramPresenter
                     'tco_site_id' => $c->tco_site_id,
                 ])->values()->all()
                 : [],
+            'colocation_tenants' => $program->status !== 'batch'
+                ? $program->children->map(static fn ($c) => [
+                    'id' => $c->id,
+                    'rollout_ref' => $c->rollout_ref,
+                    'mno' => $c->mno,
+                    'tco_site_id' => $c->tco_site_id,
+                    'status' => $c->status,
+                    'actual_rfi_date' => $c->actual_rfi_date?->toDateString(),
+                    'site_license_remarks' => $c->site_license_remarks,
+                    'site_name' => $c->site?->name,
+                ])->values()->all()
+                : [],
+            'permits' => $program->status === 'batch' ? [] : $this->permits->listForProgram($program),
             'timeline_phases' => $program->status === 'batch' ? [] : $program->timelinePhases->map(function ($p) use ($program, $config, $viewer) {
                 $active = $this->gateApprovals->activeRequestForPhase($p);
                 $latest = $this->gateApprovals->latestRequestForPhase($p);

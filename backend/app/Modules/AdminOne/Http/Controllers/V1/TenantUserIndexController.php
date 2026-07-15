@@ -28,7 +28,7 @@ class TenantUserIndexController extends AbstractApiController
             'role' => ['sometimes', 'string', 'max:64'],
         ]));
 
-        $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $filters);
+        $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $filters, $query['sort']);
         /** @var TenantUser $viewer */
         $viewer = $request->user();
         $payload = $service->asPayload($paginator, $viewer);

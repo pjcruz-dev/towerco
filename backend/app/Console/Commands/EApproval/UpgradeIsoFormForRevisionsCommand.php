@@ -11,6 +11,7 @@ use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Models\EApprovalWorkflowTemplate;
 use App\Modules\EApproval\Services\EApprovalFormService;
+use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Console\Command;
 
@@ -224,6 +225,7 @@ final class UpgradeIsoFormForRevisionsCommand extends Command
 
         $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
         $metadata['form_family'] = 'iso_document_control';
+        $metadata['workspace'] = EApprovalFormWorkspaceSupport::isoPilotDefaults((string) $form->name);
         $metadata['builder_layout_rows'] = [
             ['id' => 'row_mqt3qnjf', 'columns' => 2, 'insert_index' => 6],
             ['id' => 'row_mqt3zdp1', 'columns' => 2, 'insert_index' => 8],

@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace App\Modules\ProcurementOne\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\ProcurementOne\Models\ProcurementGrn;
 use App\Modules\ProcurementOne\Support\ProcurementGrnStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class ProcurementGrnRegistryService
 {
+    private const SORTABLE = [
+        'document_no',
+        'status',
+        'received_at',
+        'updated_at',
+        'created_at',
+    ];
+
     public function __construct(
         private readonly ProcurementGrnPoBalanceService $balances,
         private readonly ProcurementGrnMismatchService $mismatches,
@@ -23,10 +32,10 @@ final class ProcurementGrnRegistryService
         ?string $search = null,
         ?string $status = null,
         ?string $poId = null,
+        ?string $sort = null,
     ): LengthAwarePaginator {
         $query = ProcurementGrn::query()
-            ->with(['purchaseOrder:id,document_no,supplier,vendor_name', 'receivedBy:id,name'])
-            ->orderByDesc('updated_at');
+            ->with(['purchaseOrder:id,document_no,supplier,vendor_name', 'receivedBy:id,name']);
 
         if ($status !== null && $status !== '' && $status !== 'all') {
             $query->where('status', $status);
@@ -45,6 +54,14 @@ final class ProcurementGrnRegistryService
                         ->orWhere('supplier', 'like', $like));
             });
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

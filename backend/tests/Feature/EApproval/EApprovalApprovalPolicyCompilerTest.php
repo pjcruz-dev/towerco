@@ -70,8 +70,10 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
         tenancy()->end();
 
         $this->assertCount(3, $workflow['steps']);
-        $this->assertSame('field', $workflow['steps'][2]['approver_type']);
-        $this->assertSame('finance_approver', $workflow['steps'][2]['approver_id']);
+        $this->assertSame('role', $workflow['steps'][1]['approver_type']);
+        $this->assertSame('tenant_admin', $workflow['steps'][1]['approver_id']);
+        $this->assertSame('role', $workflow['steps'][2]['approver_type']);
+        $this->assertSame('finance', $workflow['steps'][2]['approver_id']);
     }
 
     public function test_pr_under_threshold_uses_standard_profile_without_extra_finance_step(): void
@@ -151,8 +153,9 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
         tenancy()->end();
 
         $types = array_column($workflow['steps'], 'approver_type');
-        $this->assertNotContains('role', $types);
-        $this->assertCount(3, $workflow['steps']);
+        $this->assertContains('role', $types);
+        $this->assertNotContains('finance', array_column($workflow['steps'], 'approver_id'));
+        $this->assertCount(2, $workflow['steps']);
     }
 
     public function test_po_over_threshold_includes_gm_role_step(): void
@@ -182,7 +185,8 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
 
         $types = array_column($workflow['steps'], 'approver_type');
         $this->assertContains('role', $types);
-        $this->assertCount(4, $workflow['steps']);
+        $this->assertContains('finance', array_column($workflow['steps'], 'approver_id'));
+        $this->assertCount(3, $workflow['steps']);
     }
 
     public function test_policy_enabled_form_with_fixed_workflow_steps_uses_form_steps_not_policy(): void
@@ -225,7 +229,7 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
             ]);
 
         $response->assertCreated()
-            ->assertJsonPath('data.approval_policy_label', null);
+            ->assertJsonPath('data.approval_policy_label', 'Form workflow');
 
         $submissionId = (string) $response->json('data.id');
         tenancy()->initialize($this->testTenant);
@@ -275,7 +279,7 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
             ]);
 
         $response->assertCreated()
-            ->assertJsonPath('data.approval_policy_label', null);
+            ->assertJsonPath('data.approval_policy_label', 'Form workflow');
     }
 
     public function test_saving_procurement_form_sets_workflow_source_metadata(): void

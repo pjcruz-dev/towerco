@@ -14,6 +14,7 @@ use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Rollout\Models\SiteProfitabilityRecord;
 use App\Modules\Rollout\Models\TenantPublicHoliday;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
+use App\Modules\Rollout\Support\RolloutCoordinateRules;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -57,6 +58,7 @@ final class RolloutProgramService
             'parent_rollout_id' => $input['parent_rollout_id'] ?? null,
             'playbook_version' => $config->assigned_version,
             'rollout_ref' => $rolloutRef,
+            'tco_site_id' => $input['tco_site_id'] ?? null,
             'mno' => strtolower((string) $input['mno']),
             'project_type' => $projectType,
             'endorsement_ref' => $input['endorsement_ref'] ?? null,
@@ -64,6 +66,9 @@ final class RolloutProgramService
             'search_ring_name' => $input['search_ring_name'] ?? null,
             'region' => $input['region'] ?? null,
             'territory' => $input['territory'] ?? null,
+            'area' => $input['area'] ?? null,
+            'alliance_tag' => $input['alliance_tag'] ?? null,
+            'mno_anchor_site_id' => $input['mno_anchor_site_id'] ?? null,
             'status' => 'saq',
             'sla_working_days' => $slaDays,
             'saq_owner_id' => $input['saq_owner_id'] ?? null,
@@ -78,6 +83,14 @@ final class RolloutProgramService
         $this->ensureProfitabilityShell($program);
 
         $this->canonicalSites->ensureForProgram($program);
+
+        $siteProfile = array_filter(
+            array_intersect_key($input, array_flip(['full_address', 'latitude', 'longitude'])),
+            static fn (mixed $value): bool => $value !== null && $value !== '',
+        );
+        if ($siteProfile !== []) {
+            $program = $this->updateSiteProfile($program->fresh(), $siteProfile);
+        }
 
         $this->audit->log('rollout.created', $program, [
             'mno' => $program->mno,
@@ -349,8 +362,14 @@ final class RolloutProgramService
             'search_ring_name',
             'region',
             'territory',
+            'area',
+            'alliance_tag',
+            'mno_anchor_site_id',
             'endorsement_ref',
             'endorsement_date',
+            'site_license_remarks',
+            'energization_tempo_date',
+            'rfti_signed_tempo_date',
             'saq_owner_id',
             'cme_pm_id',
             'pmo_owner_id',
@@ -360,13 +379,13 @@ final class RolloutProgramService
         $changes = [];
         foreach ($allowed as $field) {
             if (array_key_exists($field, $input)) {
-                if ($field === 'endorsement_date') {
+                if (in_array($field, ['endorsement_date', 'energization_tempo_date', 'rfti_signed_tempo_date'], true)) {
                     if ($input[$field] === null || $input[$field] === '') {
-                        $program->endorsement_date = null;
+                        $program->{$field} = null;
                     } else {
-                        $program->endorsement_date = Carbon::parse((string) $input[$field])->toDateString();
+                        $program->{$field} = Carbon::parse((string) $input[$field])->toDateString();
                     }
-                    $changes[$field] = $program->endorsement_date;
+                    $changes[$field] = $program->{$field};
                 } else {
                     $program->{$field} = $input[$field];
                     $changes[$field] = $input[$field];
@@ -395,6 +414,219 @@ final class RolloutProgramService
         ]);
 
         return $updated;
+    }
+
+    /**
+     * One-time migration import: set lifecycle dates without API workflow gates.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function backfillImportedDates(RolloutProgram $program, array $input): RolloutProgram
+    {
+        if (in_array($program->status, ['batch'], true)) {
+            return $program;
+        }
+
+        $dateFields = [
+            'endorsement_date',
+            'tssr_approved_date',
+            'site_license_executed_date',
+            'actual_rfi_date',
+            'energization_tempo_date',
+            'rfti_signed_tempo_date',
+        ];
+
+        $changes = [];
+        foreach ($dateFields as $field) {
+            if (empty($input[$field])) {
+                continue;
+            }
+
+            $program->{$field} = Carbon::parse((string) $input[$field])->toDateString();
+            $changes[$field] = $program->{$field};
+        }
+
+        if ($program->actual_rfi_date !== null && $program->tssr_approved_date !== null) {
+            $elapsedWorkingDays = $this->calendarFactory
+                ->make($program->region)
+                ->workingDaysBetween(
+                    Carbon::parse((string) $program->tssr_approved_date),
+                    Carbon::parse((string) $program->actual_rfi_date),
+                );
+            $program->sla_variance_working_days = $elapsedWorkingDays - $program->sla_working_days;
+            $program->status = 'completed';
+            $changes['sla_variance_working_days'] = $program->sla_variance_working_days;
+            $changes['status'] = $program->status;
+        }
+
+        if ($changes === []) {
+            return $program;
+        }
+
+        $program->save();
+
+        $updated = $program->fresh(['timelinePhases']);
+
+        if (array_key_exists('endorsement_date', $changes) || array_key_exists('tssr_approved_date', $changes)) {
+            $updated = $this->slaRecalculation->recalculateProgram($updated);
+        }
+
+        $this->audit->log('rollout.import_backfilled', $updated, [
+            'changes' => $changes,
+        ]);
+
+        return $updated;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    public function backfillImportedMetadata(RolloutProgram $program, array $input): RolloutProgram
+    {
+        if ($program->status === 'batch') {
+            return $program;
+        }
+
+        $allowed = [
+            'search_ring_name',
+            'region',
+            'territory',
+            'area',
+            'alliance_tag',
+            'mno_anchor_site_id',
+            'site_license_remarks',
+        ];
+
+        $changes = [];
+        foreach ($allowed as $field) {
+            if (! array_key_exists($field, $input)) {
+                continue;
+            }
+
+            $program->{$field} = $input[$field];
+            $changes[$field] = $input[$field];
+        }
+
+        if ($changes === []) {
+            return $program;
+        }
+
+        $program->save();
+
+        $updated = $program->fresh(['timelinePhases']);
+
+        $this->audit->log('rollout.import_backfilled', $updated, [
+            'changes' => $changes,
+        ]);
+
+        return $updated;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    public function backfillImportedSiteProfile(RolloutProgram $program, array $input): RolloutProgram
+    {
+        if ($program->status === 'batch') {
+            return $program;
+        }
+
+        $this->canonicalSites->ensureForProgram($program);
+        $program->refresh()->load('site');
+
+        if ($program->site === null) {
+            return $program;
+        }
+
+        $site = $program->site;
+        $changes = [];
+
+        if (array_key_exists('full_address', $input)) {
+            $site->full_address = $input['full_address'];
+            $changes['full_address'] = $input['full_address'];
+        }
+
+        $coordinateInput = array_intersect_key($input, array_flip(['latitude', 'longitude']));
+        if ($coordinateInput !== []) {
+            try {
+                $normalized = RolloutCoordinateRules::applyToInput($coordinateInput);
+                if (array_key_exists('latitude', $normalized)) {
+                    $site->latitude = $normalized['latitude'];
+                    $changes['latitude'] = $normalized['latitude'];
+                }
+                if (array_key_exists('longitude', $normalized)) {
+                    $site->longitude = $normalized['longitude'];
+                    $changes['longitude'] = $normalized['longitude'];
+                }
+            } catch (ValidationException) {
+                // Skip invalid coordinates during one-time import backfill.
+            }
+        }
+
+        if ($changes === []) {
+            return $program;
+        }
+
+        $site->save();
+
+        $this->audit->log('rollout.import_backfilled', $program, [
+            'site_changes' => $changes,
+        ]);
+
+        return $program->fresh(['site']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    public function updateSiteProfile(RolloutProgram $program, array $input): RolloutProgram
+    {
+        if (in_array($program->status, ['completed', 'cancelled', 'batch'], true)) {
+            throw ValidationException::withMessages([
+                'rollout' => [__('This rollout cannot be edited.')],
+            ]);
+        }
+
+        $this->canonicalSites->ensureForProgram($program);
+        $program->refresh()->load('site');
+
+        if ($program->site === null) {
+            throw ValidationException::withMessages([
+                'site' => [__('No site is linked to this rollout yet.')],
+            ]);
+        }
+
+        $site = $program->site;
+        $changes = [];
+
+        if (array_key_exists('full_address', $input)) {
+            $site->full_address = $input['full_address'];
+            $changes['full_address'] = $input['full_address'];
+        }
+
+        if (array_key_exists('latitude', $input)) {
+            $site->latitude = $input['latitude'];
+            $changes['latitude'] = $input['latitude'];
+        }
+
+        if (array_key_exists('longitude', $input)) {
+            $site->longitude = $input['longitude'];
+            $changes['longitude'] = $input['longitude'];
+        }
+
+        if ($changes === []) {
+            throw ValidationException::withMessages([
+                'site' => [__('No site profile fields were provided.')],
+            ]);
+        }
+
+        $site->save();
+
+        $this->audit->log('rollout.site_profile_updated', $program->fresh(), [
+            'changes' => $changes,
+        ]);
+
+        return $program->fresh(['site', 'timelinePhases', 'children']);
     }
 
     public function cancel(RolloutProgram $program, string $reason): RolloutProgram

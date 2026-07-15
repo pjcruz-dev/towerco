@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
@@ -17,6 +18,15 @@ use Illuminate\Validation\ValidationException;
 
 final class RolloutGateApprovalService
 {
+    private const SORTABLE = [
+        'submitted_at',
+        'status',
+        'phase_key',
+        'current_step',
+        'completed_at',
+        'current_step_started_at',
+    ];
+
     public function __construct(
         private readonly RolloutGateApprovalPolicyService $policies,
         private readonly RolloutGateApproverResolver $approvers,
@@ -258,14 +268,14 @@ final class RolloutGateApprovalService
         bool $awaitingMeOnly = false,
         int $page = 1,
         int $perPage = 25,
+        ?string $sort = null,
     ): array {
         if ($awaitingMeOnly) {
             $status = RolloutGateApprovalRequest::STATUS_IN_REVIEW;
         }
 
         $query = RolloutGateApprovalRequest::query()
-            ->with(['rolloutProgram', 'timelinePhase', 'requestedBy'])
-            ->orderByDesc('submitted_at');
+            ->with(['rolloutProgram', 'timelinePhase', 'requestedBy']);
 
         if ($status !== null && $status !== 'all') {
             $query->where('status', $status);
@@ -278,6 +288,14 @@ final class RolloutGateApprovalService
         if ($awaitingMeOnly && $viewer !== null) {
             $this->inboxScope->constrainAwaitingActor($query, $viewer);
         }
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($sort ?? 'submitted_at:desc'),
+            self::SORTABLE,
+            'submitted_at',
+            'desc',
+        );
+        $query->orderBy($column, $direction);
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 

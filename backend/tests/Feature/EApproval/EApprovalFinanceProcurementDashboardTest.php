@@ -7,6 +7,7 @@ namespace Tests\Feature\EApproval;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Facades\Config;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -24,6 +25,29 @@ final class EApprovalFinanceProcurementDashboardTest extends TestCase
         ]);
 
         $this->bootInMemoryTenantApi();
+    }
+
+    public function test_dashboard_omits_finance_procurement_kpis_when_modules_disabled(): void
+    {
+        $previous = config('toweros.tenant_modules.enabled');
+        Config::set('toweros.tenant_modules.enabled', [
+            'core',
+            'team_access',
+            'e_approval',
+            'project_one',
+        ]);
+
+        try {
+            $response = $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->getJson('/api/v1/e-approval/dashboard');
+
+            $response->assertOk()
+                ->assertJsonPath('data.finance_kpis', [])
+                ->assertJsonPath('data.finance_counts', []);
+        } finally {
+            Config::set('toweros.tenant_modules.enabled', $previous);
+        }
     }
 
     public function test_dashboard_includes_finance_procurement_kpis(): void

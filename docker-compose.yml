@@ -17,7 +17,7 @@ services:
       - toweros-mysql-data:/var/lib/mysql
       - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
       - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
-    mem_limit: ${TOWEROS_MYSQL_MEM_LIMIT:-1g}
+    mem_limit: ${TOWEROS_MYSQL_MEM_LIMIT:-768m}
     healthcheck:
       test:
         [
@@ -53,6 +53,23 @@ services:
       mysql:
         condition: service_healthy
 
+  redis:
+    image: redis:7-alpine
+    container_name: toweros-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    ports:
+      - "${TOWEROS_REDIS_PORT:-6379}:6379"
+    volumes:
+      - toweros-redis-data:/data
+    mem_limit: ${TOWEROS_REDIS_MEM_LIMIT:-256m}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
   soketi:
     image: quay.io/soketi/soketi:1.6-16-debian
     container_name: toweros-soketi
@@ -82,13 +99,17 @@ services:
     environment:
       TOWEROS_DOCKER: "1"
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
-      TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-2}
+      TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-1}
       DB_HOST: mysql
       DB_PORT: "3306"
       CENTRAL_DB_PORT: "3306"
       DB_DATABASE: ${MYSQL_DATABASE:-toweros}
       DB_USERNAME: ${MYSQL_USER:-toweros}
       DB_PASSWORD: ${MYSQL_PASSWORD:-toweros}
+      # Redis for cache/session/permission store (service name wins over .env 127.0.0.1).
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_CLIENT: predis
     volumes:
       - ./backend:/var/www/html
       - toweros-backend-vendor:/var/www/html/vendor
@@ -97,9 +118,12 @@ services:
         condition: service_healthy
       soketi:
         condition: service_started
-    mem_limit: ${TOWEROS_API_MEM_LIMIT:-768m}
+      redis:
+        condition: service_healthy
+    mem_limit: ${TOWEROS_API_MEM_LIMIT:-512m}
 
   web:
+    profiles: ["web"]
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -110,19 +134,24 @@ services:
     env_file:
       - ./frontend/.env.docker
     environment:
+      TOWEROS_DOCKER: "1"
       TOWEROS_WEB_MODE: ${TOWEROS_WEB_MODE:-dev}
       TOWEROS_WEB_FORCE_BUILD: ${TOWEROS_WEB_FORCE_BUILD:-0}
-      NODE_OPTIONS: ${NODE_OPTIONS:-}
+      # Windows bind mounts: polling avoids watcher crashes / surprise dev-server exits.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      NODE_OPTIONS: ${NODE_OPTIONS:---max-old-space-size=1536}
     volumes:
       - ./frontend:/app
       - toweros-frontend-node:/app/node_modules
       - toweros-frontend-next:/app/.next
     depends_on:
       - api
-    mem_limit: ${TOWEROS_WEB_MEM_LIMIT:-3g}
+    mem_limit: ${TOWEROS_WEB_MEM_LIMIT:-4g}
 
 volumes:
   toweros-mysql-data:
+  toweros-redis-data:
   toweros-backend-vendor:
   toweros-frontend-node:
   toweros-frontend-next:

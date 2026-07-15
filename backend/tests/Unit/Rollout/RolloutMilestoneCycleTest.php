@@ -6,6 +6,7 @@ namespace Tests\Unit\Rollout;
 
 use App\Modules\Rollout\Data\RolloutPlaybookV2Definition;
 use App\Modules\Rollout\Models\RolloutProgram;
+use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
 use App\Modules\Rollout\Services\RolloutMilestoneCyclePresenter;
 use App\Modules\Rollout\Services\RolloutProgramPresenter;
@@ -81,6 +82,17 @@ final class RolloutMilestoneCycleTest extends TestCase
             $table->date('actual_end_date')->nullable();
             $table->string('gate_status')->nullable();
             $table->string('gate_label')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::connection('tenant')->create('rollout_permits', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+            $table->uuid('rollout_program_id');
+            $table->string('permit_type', 64);
+            $table->date('applied_date')->nullable();
+            $table->date('secured_date')->nullable();
+            $table->text('notes')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(0);
             $table->timestamps();
         });
 
@@ -363,5 +375,51 @@ final class RolloutMilestoneCycleTest extends TestCase
         $this->assertSame('site_license', $rows[0]['phase_key']);
         $this->assertSame('day_one', $rows[0]['anchor']);
         $this->assertSame(30, array_sum(array_column($rows, 'target_working_days')));
+    }
+
+    public function test_passed_timeline_gate_reconciles_overdue_milestones_to_active(): void
+    {
+        TenantRolloutPlaybookConfig::query()->create([
+            'assigned_version' => '2.0.0',
+            'latest_platform_version' => '2.0.0',
+            'playbook_snapshot' => RolloutPlaybookV2Definition::payload(),
+            'day_overrides' => [],
+            'assigned_at' => now(),
+        ]);
+
+        Carbon::setTestNow('2026-08-01');
+
+        $program = RolloutProgram::query()->create([
+            'status' => 'permitting',
+            'project_type' => 'bts',
+            'mno' => 'globe',
+            'rollout_ref' => 'RP-GATE-RECON',
+            'endorsement_date' => '2026-04-01',
+            'tssr_approved_date' => '2026-04-28',
+            'sla_working_days' => 115,
+        ]);
+
+        $permittingPhase = RolloutTimelinePhase::query()->create([
+            'rollout_program_id' => $program->id,
+            'phase_key' => 'permitting',
+            'label' => 'Permitting',
+            'anchor' => 'tssr_approved',
+            'working_day_start' => 26,
+            'working_day_end' => 45,
+            'sort_order' => 3,
+            'gate_status' => 'passed',
+        ]);
+
+        $rowsWithoutGate = app(RolloutMilestoneCyclePresenter::class)->forProgram($program, collect());
+        $buildingWithoutGate = collect($rowsWithoutGate)->firstWhere('phase_key', 'building_permit');
+        $this->assertNotNull($buildingWithoutGate);
+        $this->assertSame('overdue', $buildingWithoutGate['status']);
+
+        $rowsWithGate = app(RolloutMilestoneCyclePresenter::class)->forProgram($program, collect([$permittingPhase]));
+        $buildingWithGate = collect($rowsWithGate)->firstWhere('phase_key', 'building_permit');
+        $this->assertNotNull($buildingWithGate);
+        $this->assertSame('active', $buildingWithGate['status']);
+
+        Carbon::setTestNow();
     }
 }

@@ -333,14 +333,11 @@ final class TenantRbacModuleRoleTemplates
             // Read-only access to the controlled document register.
             'dcf_viewer' => [
                 'dashboard:view',
-                'documents:view',
                 'documents:controlled:view',
             ],
             // Can submit new controlled documents and revisions via E-Approval.
             'dcf_author' => [
                 'dashboard:view',
-                'documents:view',
-                'documents:upload',
                 'documents:controlled:view',
                 'documents:controlled:create',
                 'e_approval:view',
@@ -350,7 +347,6 @@ final class TenantRbacModuleRoleTemplates
             // Can approve controlled-document E-Approval workflow steps.
             'dcf_approver' => [
                 'dashboard:view',
-                'documents:view',
                 'documents:controlled:view',
                 'documents:controlled:approve',
                 'e_approval:view',
@@ -360,9 +356,6 @@ final class TenantRbacModuleRoleTemplates
             // Full document control: publish, obsolete, edit metadata, upload revisions.
             'dcf_controller' => [
                 'dashboard:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
                 'documents:controlled:view',
                 'documents:controlled:create',
                 'documents:controlled:approve',
@@ -375,10 +368,6 @@ final class TenantRbacModuleRoleTemplates
             // Admin: full DCF control including bulk import and E-Approval form management.
             'dcf_admin' => [
                 'dashboard:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
-                'documents:template:manage',
                 'documents:controlled:view',
                 'documents:controlled:create',
                 'documents:controlled:approve',

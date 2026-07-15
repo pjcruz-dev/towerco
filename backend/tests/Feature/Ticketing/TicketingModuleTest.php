@@ -231,7 +231,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'requester@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         tenancy()->initialize($this->testTenant);
@@ -351,7 +351,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'comment-requester@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         $create = $this->actingAs($requester, 'sanctum')
@@ -480,7 +480,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'other@test.localhost',
             'password' => 'password',
         ]);
-        $requester->assignRole('viewer');
+        $requester->assignRole('ticketing_contributor');
         tenancy()->end();
 
         $adminTicket = $this->actingAsTenantAdmin()

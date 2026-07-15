@@ -32,6 +32,7 @@ class EApprovalFormIndexController extends AbstractApiController
             $query['search'],
             $manageAll,
             is_string($status) ? $status : null,
+            $query['sort'],
         );
 
         return $this->okWithMeta(

@@ -186,5 +186,6 @@ return [
                 ['type' => 'manager', 'step_order' => 1],
             ],
         ],
+        'site_document_review' => \App\Modules\Documents\Data\SiteDocumentReviewFormTemplate::definition(),
     ], require __DIR__.'/e_approval_finance_procurement_templates.php'),
 ];

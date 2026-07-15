@@ -116,6 +116,7 @@ Base unit **4px**. Align with Tailwind default scale.
 - **Pagination:** bottom-right; page size selector 10 / 25 / 50 / 100.
 - **Column resize:** optional for power users; persist widths in `localStorage` per view key.
 - **Empty / loading:** use §11–12 patterns inside table body.
+- **Implementation:** use `RegistryDataTableView` for registries/lists. Guide: [`docs/frontend/registry-data-table-view.md`](../frontend/registry-data-table-view.md). Persist column visibility with `columnVisibilityStorageKey` (`toweros.table.columns.<module>.<page>`). Keep plain `Table` for inline-edit grids and expand timelines.
 
 **Responsive**
 
@@ -160,15 +161,11 @@ Base unit **4px**. Align with Tailwind default scale.
 
 ## 7. Header
 
-**Height:** 56px fixed; `border-b border`; background `surface` or same as page (subtle elevation).
+**Height:** 56px (`h-14`) fixed; `border-b border`; solid `bg-card` (no backdrop blur).
 
-**Left:** product mark + optional **environment badge** (DEV / STAGING — `warning` background, never in prod customer tenants unless white-label).
+**Left:** sidebar trigger + breadcrumbs (14px secondary, truncate on mobile) — Module / Feature / Current. Deep record pages may override the last segment with the record label (e.g. document number).
 
-**Center (optional):** global search / command trigger (⌘K pattern).
-
-**Right:** tenant context, notifications, help, **theme toggle**, user menu (avatar + name + role).
-
-**Breadcrumbs:** inline in header left (14px secondary, truncate on mobile) — Module / Feature / Current. Deep record pages may override the last segment with the record label (e.g. document number).
+**Right:** global search / command trigger, notifications (when permitted), user menu.
 
 ---
 

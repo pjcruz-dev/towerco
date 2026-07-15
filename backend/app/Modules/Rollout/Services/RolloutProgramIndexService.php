@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Core\Support\AllowlistedSort;
 use App\Modules\Rollout\Models\RolloutProgram;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -179,26 +180,15 @@ final class RolloutProgramIndexService
             }
         }
 
-        [$sortColumn, $sortDirection] = $this->resolveSort((string) ($filters['sort'] ?? 'created_at:desc'));
+        [$sortColumn, $sortDirection] = AllowlistedSort::resolve(
+            (string) ($filters['sort'] ?? 'created_at:desc'),
+            self::SORTABLE,
+            'created_at',
+            'desc',
+        );
         $query->orderBy($sortColumn, $sortDirection);
 
         return $query;
-    }
-
-    /**
-     * @return array{0: string, 1: 'asc'|'desc'}
-     */
-    private function resolveSort(string $sort): array
-    {
-        $parts = explode(':', $sort);
-        $column = $parts[0] ?? 'created_at';
-        $direction = strtolower($parts[1] ?? 'desc') === 'asc' ? 'asc' : 'desc';
-
-        if (! in_array($column, self::SORTABLE, true)) {
-            $column = 'created_at';
-        }
-
-        return [$column, $direction];
     }
 
     /**
