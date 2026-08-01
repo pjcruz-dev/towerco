@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Support;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
+use Illuminate\Support\Collection;
 
 final class EApprovalFormWorkspaceDashboardSupport
 {
@@ -20,10 +21,12 @@ final class EApprovalFormWorkspaceDashboardSupport
         'section',
         'page_break',
         'divider',
+        'instruction',
         'info',
         'heading',
         'html',
         'file',
+        'camera',
         'attachment',
         'signature',
     ];
@@ -168,7 +171,6 @@ final class EApprovalFormWorkspaceDashboardSupport
     }
 
     /**
-     * @param  mixed  $widgets
      * @param  list<array<string, mixed>>  $defaults
      * @return list<array<string, mixed>>
      */
@@ -205,7 +207,6 @@ final class EApprovalFormWorkspaceDashboardSupport
     }
 
     /**
-     * @param  mixed  $columns
      * @param  list<array<string, mixed>>  $defaults
      * @return list<array<string, mixed>>
      */
@@ -276,7 +277,6 @@ final class EApprovalFormWorkspaceDashboardSupport
     }
 
     /**
-     * @param  mixed  $views
      * @param  list<array<string, mixed>>  $defaults
      * @return list<array<string, mixed>>
      */
@@ -331,9 +331,9 @@ final class EApprovalFormWorkspaceDashboardSupport
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, EApprovalFormField>
+     * @return Collection<int, EApprovalFormField>
      */
-    private static function exportableFields(EApprovalForm $form): \Illuminate\Support\Collection
+    private static function exportableFields(EApprovalForm $form): Collection
     {
         return EApprovalFormField::query()
             ->where('form_id', $form->id)

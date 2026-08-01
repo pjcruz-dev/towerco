@@ -21,11 +21,17 @@ class EApprovalFormWorkflowPreviewController extends AbstractApiController
 
         $request->validate([
             'values' => ['nullable', 'array'],
+            'requestor_email' => ['nullable', 'email', 'max:255'],
         ]);
 
         /** @var array<string, mixed> $values */
         $values = is_array($request->input('values')) ? $request->input('values') : [];
+        $requestorEmail = $request->input('requestor_email');
 
-        return $this->ok($compiler->preview($form, $values));
+        return $this->ok($compiler->preview(
+            $form,
+            $values,
+            is_string($requestorEmail) ? $requestorEmail : null,
+        ));
     }
 }

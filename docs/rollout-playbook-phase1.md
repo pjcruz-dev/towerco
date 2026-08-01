@@ -24,6 +24,8 @@ Aligned to `Rules/TowerCo_Rollout_Playbook_v1.docx`.
 
 Each project type has its own **timeline template** and **milestone cycle list** in the playbook snapshot (`timeline_templates`, `milestone_cycle_targets`). RTB post–Day-1 phases are scaled to the 85 WD SLA budget; colocation uses a short 2-phase timeline and 3 milestone checkpoints.
 
+**Playbook v3 (BTS process alignment):** see [rollout-playbook-phase15.md](./rollout-playbook-phase15.md) — Pre-assessment after SAQ select, MOC/COL before TSSR, Site License + Handover after RFI.
+
 ## Tenant admin customization
 
 May override **working day end counts per phase** only (`day_overrides` JSON). Cannot add/remove phases. Overrides are keyed by template:

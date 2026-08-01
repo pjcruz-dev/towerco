@@ -24,6 +24,7 @@ final class EApprovalMasterDataService
     public function listSets(): array
     {
         return EApprovalMasterDataSet::query()
+            ->withCount('rows')
             ->orderBy('name')
             ->get()
             ->map(static fn (EApprovalMasterDataSet $set) => [
@@ -31,7 +32,7 @@ final class EApprovalMasterDataService
                 'key' => $set->key,
                 'name' => $set->name,
                 'status' => $set->status,
-                'row_count' => $set->rows()->count(),
+                'row_count' => (int) ($set->rows_count ?? 0),
                 'updated_at' => $set->updated_at?->toIso8601String(),
             ])
             ->values()

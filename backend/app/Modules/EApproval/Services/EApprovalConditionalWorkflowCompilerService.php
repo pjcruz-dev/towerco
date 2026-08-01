@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
+use App\Modules\EApproval\Support\EApprovalWhenLogic;
 use App\Modules\EApproval\Support\EApprovalWorkflowConditionEvaluator;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Support\Collection;
@@ -16,6 +17,7 @@ final class EApprovalConditionalWorkflowCompilerService
     public function __construct(
         private readonly EApprovalWorkflowConditionEvaluator $evaluator,
         private readonly EApprovalApprovalPolicyStepPersister $stepPersister,
+        private readonly EApprovalUserListStepExpander $userListExpander,
     ) {}
 
     /**
@@ -31,7 +33,7 @@ final class EApprovalConditionalWorkflowCompilerService
     public function compileForSubmit(EApprovalForm $form, array $values, string $submissionId): array
     {
         $definitions = EApprovalWorkflowStepDefinitionSupport::definitionsFromForm($form);
-        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values);
+        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, strictUserList: true);
 
         if ($activeDefinitions === []) {
             throw ValidationException::withMessages([
@@ -68,12 +70,18 @@ final class EApprovalConditionalWorkflowCompilerService
 
     /**
      * @param  array<string, mixed>  $values
+     * @param  list<array<string, mixed>>|null  $definitions  When set, preview uses these instead of the live form steps.
      * @return array<string, mixed>
      */
-    public function preview(EApprovalForm $form, array $values): array
-    {
-        $definitions = EApprovalWorkflowStepDefinitionSupport::definitionsFromForm($form);
-        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values);
+    public function preview(
+        EApprovalForm $form,
+        array $values,
+        ?string $requestorEmail = null,
+        ?array $definitions = null,
+    ): array {
+        $definitions ??= EApprovalWorkflowStepDefinitionSupport::definitionsFromForm($form);
+        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, strictUserList: false);
+        $skipped = $this->describeSkippedSteps($definitions, $values);
 
         return [
             'workflow_mode' => 'conditional_steps',
@@ -86,7 +94,8 @@ final class EApprovalConditionalWorkflowCompilerService
                 ]),
             'step_definitions' => $definitions,
             'active_step_definitions' => $activeDefinitions,
-            'resolved_steps' => $this->describeSteps($activeDefinitions, $values, $form),
+            'skipped_steps' => $skipped,
+            'resolved_steps' => $this->describeSteps($activeDefinitions, $values, $form, $requestorEmail),
         ];
     }
 
@@ -95,11 +104,11 @@ final class EApprovalConditionalWorkflowCompilerService
      * @param  array<string, mixed>  $values
      * @return list<array<string, mixed>>
      */
-    public function filterActiveDefinitions(array $definitions, array $values): array
+    public function filterActiveDefinitions(array $definitions, array $values, bool $strictUserList = true): array
     {
-        $active = [];
+        $matched = [];
 
-        foreach (array_values($definitions) as $index => $definition) {
+        foreach (array_values($definitions) as $definition) {
             if (! is_array($definition)) {
                 continue;
             }
@@ -109,17 +118,20 @@ final class EApprovalConditionalWorkflowCompilerService
                 is_array($definition['condition'] ?? null) ? $definition['condition'] : [],
             );
 
-            if (! $this->evaluator->matchesAll($when, $values)) {
+            if (! $this->evaluator->matchesWhen(
+                $when,
+                $values,
+                EApprovalWhenLogic::fromDefinition($definition, is_array($definition['condition'] ?? null) ? $definition['condition'] : []),
+            )) {
                 continue;
             }
 
-            $active[] = [
-                ...$definition,
-                'step_order' => count($active) + 1,
-            ];
+            $matched[] = $definition;
         }
 
-        return $active;
+        return EApprovalWorkflowStepDefinitionSupport::compactStepOrdersPreservingTies(
+            $this->userListExpander->expand($matched, $values, $strictUserList),
+        );
     }
 
     private function ensureWorkflowTemplateId(EApprovalForm $form): string
@@ -140,8 +152,12 @@ final class EApprovalConditionalWorkflowCompilerService
      * @param  array<string, mixed>  $values
      * @return list<array<string, mixed>>
      */
-    private function describeSteps(array $stepDefinitions, array $values, EApprovalForm $form): array
-    {
+    private function describeSteps(
+        array $stepDefinitions,
+        array $values,
+        EApprovalForm $form,
+        ?string $requestorEmail = null,
+    ): array {
         $resolver = app(EApprovalFormWorkflowStepPreviewResolver::class);
         $described = [];
 
@@ -150,9 +166,43 @@ final class EApprovalConditionalWorkflowCompilerService
                 continue;
             }
 
-            $described[] = $resolver->describe($definition, $values, $index + 1, $form);
+            $described[] = $resolver->describe($definition, $values, $index + 1, $form, $requestorEmail);
         }
 
         return $described;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $values
+     * @return list<array<string, mixed>>
+     */
+    private function describeSkippedSteps(array $definitions, array $values): array
+    {
+        $resolver = app(EApprovalFormWorkflowStepPreviewResolver::class);
+        $skipped = [];
+
+        foreach (array_values($definitions) as $index => $definition) {
+            if (! is_array($definition)) {
+                continue;
+            }
+
+            $when = EApprovalWorkflowStepDefinitionSupport::whenFromDefinition(
+                $definition,
+                is_array($definition['condition'] ?? null) ? $definition['condition'] : [],
+            );
+
+            if ($this->evaluator->matchesWhen(
+                $when,
+                $values,
+                EApprovalWhenLogic::fromDefinition($definition, is_array($definition['condition'] ?? null) ? $definition['condition'] : []),
+            )) {
+                continue;
+            }
+
+            $skipped[] = $resolver->describeSkipped($definition, $index + 1);
+        }
+
+        return $skipped;
     }
 }

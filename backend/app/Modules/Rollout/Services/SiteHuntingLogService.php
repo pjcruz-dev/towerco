@@ -6,6 +6,7 @@ namespace App\Modules\Rollout\Services;
 
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\SiteHuntingDailyLog;
+use App\Modules\Rollout\Support\RolloutEndorsementGuard;
 use App\Modules\Rollout\Support\RolloutFieldCreateResult;
 
 final class SiteHuntingLogService
@@ -20,6 +21,8 @@ final class SiteHuntingLogService
      */
     public function upsert(RolloutProgram $program, array $input): array
     {
+        RolloutEndorsementGuard::assertEstablished($program);
+
         if (! empty($input['client_draft_id'])) {
             $existing = SiteHuntingDailyLog::query()
                 ->where('rollout_program_id', $program->id)

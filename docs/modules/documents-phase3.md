@@ -116,6 +116,24 @@ Site binder upload uses smart routing: presigned for CAD or files above `presign
 
 ---
 
+## Gate approvals binder readiness (Priority 1 UX)
+
+Approvers see site binder status **before** final Approve:
+
+- Inbox (`/project-one/gate-approvals`) and Timeline review popover show missing folders + **Open site binder** link.
+- Final Approve / Mark passed is disabled until the checklist is complete (or site is linked).
+- Backend asserts binder enforcement **before** committing the approval row (avoids approved-but-gate-not-passed).
+
+API fields on gate approval presenters: `is_final_step`, `document_binder_gate` (same shape as rollout phase `document_binder_gate`).
+
+## Binder ↔ gate guidance (Priority 3)
+
+Operators are guided that:
+
+- Gate checklist final docs live in the **site binder**, not on the gate review form.
+- **Lease package** files copy via candidate select or **Import lease package**; SAQ photos do not satisfy checklist folders.
+- Workspace **Dashboard** (`/dashboard`) includes an **Awaiting you** hub (e-approvals + gate approvals + tickets assigned to you).
+
 ## Remaining Phase 3
 
 | Item | Status |

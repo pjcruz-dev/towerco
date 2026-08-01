@@ -6,6 +6,7 @@ namespace App\Modules\Rollout\Services;
 
 use App\Modules\Rollout\Models\TenantPublicHoliday;
 use App\Modules\Rollout\Support\PhilippinesPublicHolidayCatalog;
+use App\Modules\Rollout\Support\RolloutOpsGeography;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -65,7 +66,7 @@ final class TenantPublicHolidayService
         $holiday = TenantPublicHoliday::query()->create([
             'holiday_date' => $date->toDateString(),
             'name' => $data['name'],
-            'region' => $data['region'] ?? null,
+            'region' => $this->normalizeHolidayScope($data['region'] ?? null),
             'calendar_year' => (int) ($data['calendar_year'] ?? $date->format('Y')),
         ]);
 
@@ -90,7 +91,7 @@ final class TenantPublicHolidayService
         }
 
         if (array_key_exists('region', $data)) {
-            $holiday->region = $data['region'];
+            $holiday->region = $this->normalizeHolidayScope($data['region']);
         }
 
         if (array_key_exists('calendar_year', $data) && $data['calendar_year'] !== null && ! array_key_exists('holiday_date', $data)) {
@@ -123,12 +124,13 @@ final class TenantPublicHolidayService
     public function seedPhilippinesYear(int $year, ?string $region = null): int
     {
         $count = 0;
+        $scope = $this->normalizeHolidayScope($region);
 
         foreach (PhilippinesPublicHolidayCatalog::forYear($year) as $row) {
             TenantPublicHoliday::query()->updateOrCreate(
                 [
                     'holiday_date' => $row['date'],
-                    'region' => $region,
+                    'region' => $scope,
                 ],
                 [
                     'name' => $row['name'],
@@ -141,6 +143,18 @@ final class TenantPublicHolidayService
         $this->refreshRolloutSlas();
 
         return $count;
+    }
+
+    /**
+     * Holiday `region` column stores territory/ops scope (national when null).
+     */
+    private function normalizeHolidayScope(mixed $region): ?string
+    {
+        if ($region === null || $region === '') {
+            return null;
+        }
+
+        return RolloutOpsGeography::normalize((string) $region);
     }
 
     /**

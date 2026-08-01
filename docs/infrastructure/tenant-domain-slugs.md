@@ -38,10 +38,12 @@ Recommended endpoints are stored in `tenant_domain_endpoints` for DNS/runbook re
 
 TowerOS uses **one tenant record per environment**. Each environment has its own database, domain, and rollout data.
 
+**Operator checklist (Phase 2):** [`tenant-environments-phase-2.md`](./tenant-environments-phase-2.md)
+
 | Step | Action |
 |------|--------|
 | 1 | Create the first tenant with **slug** + **brand domain** + environment (e.g. production) |
-| 2 | Platform → **Tenant directory** → **Add env** on that row |
+| 2 | Platform → **Tenant directory** → **Add environment** on that row |
 | 3 | Pick staging / test / production and confirm the recommended domain |
 | 4 | Assign rollout policy if needed (copied from source when possible) |
 

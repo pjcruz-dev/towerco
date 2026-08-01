@@ -35,6 +35,7 @@ final class ApprovalDecisionService
         private readonly EApprovalVendorRegistrationMasterDataService $vendorMasterData,
         private readonly ProcurementPrEApprovalHookService $procurementPrHook,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
+        private readonly EApprovalCommentService $comments,
     ) {}
 
     public function paginate(
@@ -235,6 +236,16 @@ final class ApprovalDecisionService
             $approval->acted_at = now();
             $approval->save();
 
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->where('id', '!=', $approval->id)
+                ->update([
+                    'status' => EApprovalApprovalStatus::INVALIDATED,
+                    'remarks' => __('Invalidated because the request was rejected.'),
+                    'acted_at' => now(),
+                ]);
+
             $submission->status = EApprovalSubmissionStatus::REJECTED;
             $submission->save();
 
@@ -249,6 +260,12 @@ final class ApprovalDecisionService
             );
             $this->mail->dispatchToRequestor($submission, 'rejected', $actor->name);
             $this->audit->log('request_rejected', $submission->id, $remarks, $actor);
+            $this->comments->add(
+                $submission,
+                __('Rejected: :remarks', ['remarks' => $remarks]),
+                $actor,
+                notifyStakeholders: false,
+            );
             $submission->loadMissing(['form', 'values.field']);
             $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
 

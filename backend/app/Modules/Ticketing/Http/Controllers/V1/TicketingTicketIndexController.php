@@ -28,10 +28,14 @@ class TicketingTicketIndexController extends AbstractApiController
             ...$listQuery,
             'status' => $request->query('status'),
             'priority' => $request->query('priority'),
+            'category' => $request->query('category'),
             'assignee_id' => $request->query('assignee_id'),
             'source_module' => $request->query('source_module'),
             'source_reference_id' => $request->query('source_reference_id'),
+            'linked_module' => $request->query('linked_module'),
+            'linked_id' => $request->query('linked_id'),
             'mine' => $request->boolean('mine'),
+            'assigned_me' => $request->boolean('assigned_me'),
         ]);
 
         $data = collect($paginator->items())->map(

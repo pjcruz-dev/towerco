@@ -43,7 +43,7 @@ final class RolloutProgramPresenter
         $slaRemaining = null;
         if ($program->tssr_approved_date !== null && $program->target_rfi_working_date !== null) {
             $slaRemaining = $this->calendarFactory
-                ->make($program->region)
+                ->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program))
                 ->workingDaysBetween(
                     Carbon::today(),
                     Carbon::parse($program->target_rfi_working_date),
@@ -87,7 +87,9 @@ final class RolloutProgramPresenter
             'actual_rfi_date' => $program->actual_rfi_date?->toDateString(),
             'sla_variance_working_days' => $program->sla_variance_working_days,
             'sla_working_days_remaining' => $slaRemaining,
-            'sla_holiday_scope' => $this->calendarFactory->holidayScopeLabel($program->region),
+            'sla_holiday_scope' => $this->calendarFactory->holidayScopeLabel(
+                \App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program),
+            ),
             'site' => $program->site ? [
                 'id' => $program->site->id,
                 'site_code' => $program->site->site_code,

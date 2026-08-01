@@ -33,8 +33,12 @@ final class EApprovalSubmissionLifecycleService
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
     ) {}
 
-    public function requestRevision(EApprovalSubmission $submission, string $remarks, TenantUser $actor): void
-    {
+    public function requestRevision(
+        EApprovalSubmission $submission,
+        string $remarks,
+        TenantUser $actor,
+        bool $forceFullRestart = false,
+    ): void {
         $remarks = trim($remarks);
         if (strlen($remarks) < 5) {
             throw ValidationException::withMessages([
@@ -48,13 +52,59 @@ final class EApprovalSubmissionLifecycleService
             ]);
         }
 
-        DB::connection('tenant')->transaction(function () use ($submission, $remarks, $actor): void {
-            EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
+        $form = EApprovalForm::query()->find($submission->form_id);
+        $revisionConfig = \App\Modules\EApproval\Support\EApprovalRevisionRouting::fromFormMetadata(
+            is_array($form?->metadata_json) ? $form->metadata_json : [],
+        );
+        if (! $revisionConfig['approver_can_force_full_restart']) {
+            $forceFullRestart = false;
+        }
+
+        DB::connection('tenant')->transaction(function () use ($submission, $remarks, $actor, $forceFullRestart): void {
+            $returnedFromStep = max(0, (int) $submission->current_step);
+
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->where(function ($query) use ($returnedFromStep): void {
+                    if ($returnedFromStep > 0) {
+                        $query->whereHas('step', static fn ($q) => $q->where('step_order', $returnedFromStep));
+                    }
+                })
+                ->update([
+                    'status' => EApprovalApprovalStatus::INVALIDATED,
+                    'remarks' => __('Invalidated: revision requested.'),
+                    'acted_at' => now(),
+                ]);
+
+            // Clear any other stray pending rows outside the return step.
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->update([
+                    'status' => EApprovalApprovalStatus::INVALIDATED,
+                    'remarks' => __('Invalidated: revision requested.'),
+                    'acted_at' => now(),
+                ]);
+
             $submission->status = EApprovalSubmissionStatus::RETURNED;
+            $submission->returned_from_step = $returnedFromStep > 0 ? $returnedFromStep : null;
+            $submission->force_full_restart = $forceFullRestart;
             $submission->current_step = 0;
             $submission->save();
 
-            $this->audit->log('revision_requested', $submission->id, $remarks, $actor);
+            $auditRemarks = $remarks;
+            if ($forceFullRestart) {
+                $auditRemarks .= ' [force_full_restart=1]';
+            }
+
+            $this->audit->log('revision_requested', $submission->id, $auditRemarks, $actor);
+            $this->comments->add(
+                $submission,
+                __('Revision requested: :remarks', ['remarks' => $remarks]),
+                $actor,
+                notifyStakeholders: false,
+            );
             $this->inApp->notify(
                 (string) $submission->requestor_id,
                 'returned',

@@ -11,8 +11,10 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
+use App\Modules\EApproval\Support\EApprovalParallelMode;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
+use App\Modules\EApproval\Support\EApprovalWorkflowConditionEvaluator;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -31,6 +33,7 @@ final class SubmissionWorkflowService
         private readonly EApprovalFieldMapResolver $fieldMapResolver,
         private readonly EApprovalFormFieldChoicesResolver $fieldChoicesResolver,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
+        private readonly EApprovalWorkflowConditionEvaluator $conditionEvaluator,
     ) {}
 
     /**
@@ -42,8 +45,20 @@ final class SubmissionWorkflowService
         EApprovalForm $form,
         array $values,
         ?Collection $stepsOverride = null,
+        bool $preserveHistoricalApprovals = false,
     ): void {
-        EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
+        if ($preserveHistoricalApprovals) {
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->update([
+                    'status' => EApprovalApprovalStatus::SUPERSEDED,
+                    'remarks' => __('Superseded by full workflow restart.'),
+                    'acted_at' => now(),
+                ]);
+        } else {
+            EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
+        }
 
         if ($stepsOverride instanceof Collection && $stepsOverride->isNotEmpty()) {
             $steps = $stepsOverride->sortBy('step_order')->values();
@@ -66,6 +81,7 @@ final class SubmissionWorkflowService
         $currentOrder = null;
         $activated = 0;
         $unresolvedSteps = [];
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
 
         foreach ($steps as $step) {
             if ($currentOrder !== null && $step->step_order > $currentOrder) {
@@ -96,6 +112,7 @@ final class SubmissionWorkflowService
                 'step_id' => $step->id,
                 'approver_id' => $approverId,
                 'status' => EApprovalApprovalStatus::PENDING,
+                'approval_cycle' => $cycle,
             ]);
 
             $activated++;
@@ -123,6 +140,151 @@ final class SubmissionWorkflowService
                 ])),
             ]);
         }
+    }
+
+    /**
+     * Re-open pending approvals only at the given step order (revision resume).
+     * Falls back by advancing past the step when its condition/approver no longer applies.
+     *
+     * @param  array<string, mixed>  $values
+     * @param  Collection<int, EApprovalWorkflowStep>|null  $stepsOverride
+     * @return array{routed: string, reason: string, current_step: int}
+     */
+    public function resumeWorkflowAtStep(
+        EApprovalSubmission $submission,
+        EApprovalForm $form,
+        array $values,
+        int $stepOrder,
+        ?Collection $stepsOverride = null,
+    ): array {
+        EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->update([
+                'status' => EApprovalApprovalStatus::INVALIDATED,
+                'remarks' => __('Invalidated before resume.'),
+                'acted_at' => now(),
+            ]);
+
+        if ($stepsOverride instanceof Collection && $stepsOverride->isNotEmpty()) {
+            $steps = $stepsOverride->sortBy('step_order')->values();
+        } else {
+            $steps = $this->workflowResolver->stepsForAdvance($submission);
+            if ($steps->isEmpty()) {
+                $form->loadMissing('workflowTemplate.steps');
+                $steps = $form->workflowTemplate?->steps?->sortBy('step_order')->values() ?? collect();
+            }
+        }
+
+        $targetSteps = $steps->where('step_order', $stepOrder)->values();
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $activated = 0;
+
+        foreach ($targetSteps as $step) {
+            if (! $this->evaluateCondition($step->condition, $values)) {
+                continue;
+            }
+
+            $approverId = $this->resolveApproverId($step, $values, $submission, $form);
+            if ($approverId === null) {
+                continue;
+            }
+
+            EApprovalRequestApproval::query()->create([
+                'id' => (string) Str::uuid(),
+                'submission_id' => $submission->id,
+                'step_id' => $step->id,
+                'approver_id' => $approverId,
+                'status' => EApprovalApprovalStatus::PENDING,
+                'approval_cycle' => $cycle,
+            ]);
+
+            $activated++;
+            $this->inApp->notify(
+                $approverId,
+                'approval_assigned',
+                $submission->id,
+                __('You have a revised approval request for :doc.', ['doc' => $submission->document_no]),
+                submission: $submission,
+            );
+            $this->mail->dispatchApprovalAssigned($submission, $approverId);
+        }
+
+        if ($activated > 0) {
+            $submission->status = EApprovalSubmissionStatus::PENDING;
+            $submission->current_step = $stepOrder;
+            $submission->save();
+            $this->audit->log(
+                'workflow_resumed',
+                $submission->id,
+                "Resumed at step order {$stepOrder} ({$activated} pending)",
+            );
+            $this->notifyRequestorSubmitted($submission);
+
+            return [
+                'routed' => 'resume_returning_step',
+                'reason' => 'resume_returning_step',
+                'current_step' => $stepOrder,
+            ];
+        }
+
+        // Condition/approver no longer valid at return step — try advancing past it.
+        $submission->status = EApprovalSubmissionStatus::PENDING;
+        $submission->current_step = $stepOrder;
+        $submission->save();
+
+        $hasMore = $this->triggerNextStep($submission, $stepOrder);
+        $submission->refresh();
+
+        if ($hasMore || $submission->approvals()->where('status', EApprovalApprovalStatus::PENDING)->exists()) {
+            $this->audit->log(
+                'workflow_resumed_advanced',
+                $submission->id,
+                "Return step {$stepOrder} not applicable; advanced to step {$submission->current_step}",
+            );
+            $this->notifyRequestorSubmitted($submission);
+
+            return [
+                'routed' => 'resume_returning_step',
+                'reason' => 'return_step_condition_failed',
+                'current_step' => (int) $submission->current_step,
+            ];
+        }
+
+        throw ValidationException::withMessages([
+            'workflow' => [__('Could not resume the workflow at the returned step. Resubmit will restart from step 1.')],
+        ]);
+    }
+
+    /**
+     * Whether at least one step at the given order would activate with the provided values.
+     *
+     * @param  array<string, mixed>  $values
+     * @param  Collection<int, EApprovalWorkflowStep>|null  $steps
+     */
+    public function stepOrderIsActivatable(
+        EApprovalSubmission $submission,
+        EApprovalForm $form,
+        array $values,
+        int $stepOrder,
+        ?Collection $steps = null,
+    ): bool {
+        $steps ??= $this->workflowResolver->stepsForAdvance($submission);
+        if ($steps->isEmpty()) {
+            $form->loadMissing('workflowTemplate.steps');
+            $steps = $form->workflowTemplate?->steps?->sortBy('step_order')->values() ?? collect();
+        }
+
+        foreach ($steps->where('step_order', $stepOrder) as $step) {
+            if (! $this->evaluateCondition($step->condition, $values)) {
+                continue;
+            }
+            if ($this->resolveApproverId($step, $values, $submission, $form) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function notifyRequestorSubmitted(EApprovalSubmission $submission): void
@@ -172,6 +334,8 @@ final class SubmissionWorkflowService
 
     public function triggerNextStep(EApprovalSubmission $submission, int $completedStepOrder): bool
     {
+        $this->settleParallelBandIfQuorumMet($submission, $completedStepOrder);
+
         $pendingSameOrder = EApprovalRequestApproval::query()
             ->where('submission_id', $submission->id)
             ->whereHas('step', static fn ($q) => $q->where('step_order', $completedStepOrder))
@@ -202,6 +366,7 @@ final class SubmissionWorkflowService
 
         $nextOrder = (int) $nextSteps->first()->step_order;
         $activated = 0;
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
 
         foreach ($nextSteps as $step) {
             if ($step->step_order !== $nextOrder) {
@@ -209,11 +374,16 @@ final class SubmissionWorkflowService
             }
 
             if (! $this->evaluateCondition($step->condition, $values)) {
+                $this->audit->log('skip_step', $submission->id, "Condition not met for step {$step->step_order}");
+
                 continue;
             }
 
             $approverId = $this->resolveApproverId($step, $values, $submission, $submission->form);
             if ($approverId === null) {
+                $message = $this->describeUnresolvedStep($step);
+                $this->audit->log('skip_step', $submission->id, $message);
+
                 continue;
             }
 
@@ -223,6 +393,7 @@ final class SubmissionWorkflowService
                 'step_id' => $step->id,
                 'approver_id' => $approverId,
                 'status' => EApprovalApprovalStatus::PENDING,
+                'approval_cycle' => $cycle,
             ]);
 
             $activated++;
@@ -248,34 +419,131 @@ final class SubmissionWorkflowService
     }
 
     /**
+     * For parallel bands configured as any / n_of_m, invalidate remaining pending
+     * siblings once the required number of approvals is reached.
+     */
+    public function settleParallelBandIfQuorumMet(EApprovalSubmission $submission, int $stepOrder): void
+    {
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $bandApprovals = EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where(function ($query) use ($cycle): void {
+                $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+            })
+            ->whereHas('step', static fn ($q) => $q->where('step_order', $stepOrder))
+            ->with('step')
+            ->get();
+
+        if ($bandApprovals->count() < 2) {
+            return;
+        }
+
+        // Ignore already-cleared rows from prior settles when sizing the band.
+        $activeBand = $bandApprovals->filter(
+            static fn (EApprovalRequestApproval $row): bool => in_array(
+                (string) $row->status,
+                [EApprovalApprovalStatus::PENDING, EApprovalApprovalStatus::APPROVED],
+                true,
+            ),
+        );
+        if ($activeBand->count() < 2 && $bandApprovals->where('status', EApprovalApprovalStatus::APPROVED)->count() < 1) {
+            return;
+        }
+
+        $sampleStep = $bandApprovals->first(
+            static fn (EApprovalRequestApproval $row) => $row->step !== null,
+        )?->step;
+        $condition = is_array($sampleStep?->condition) ? $sampleStep->condition : [];
+        $mode = EApprovalParallelMode::fromCondition($condition);
+        if ($mode === EApprovalParallelMode::ALL) {
+            return;
+        }
+
+        $memberCount = $bandApprovals
+            ->reject(static fn (EApprovalRequestApproval $row): bool => in_array(
+                (string) $row->status,
+                [EApprovalApprovalStatus::INVALIDATED, EApprovalApprovalStatus::SUPERSEDED, EApprovalApprovalStatus::CANCELLED],
+                true,
+            ))
+            ->count();
+        if ($memberCount < 1) {
+            $memberCount = $bandApprovals->count();
+        }
+
+        $quorum = EApprovalParallelMode::quorumFromCondition($condition, $memberCount);
+        $approvedCount = $bandApprovals
+            ->where('status', EApprovalApprovalStatus::APPROVED)
+            ->count();
+
+        if ($approvedCount < $quorum) {
+            return;
+        }
+
+        $pendingIds = $bandApprovals
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->pluck('id')
+            ->all();
+
+        if ($pendingIds === []) {
+            return;
+        }
+
+        EApprovalRequestApproval::query()
+            ->whereIn('id', $pendingIds)
+            ->update([
+                'status' => EApprovalApprovalStatus::INVALIDATED,
+                'remarks' => $mode === EApprovalParallelMode::ANY
+                    ? __('Invalidated — another approver already satisfied this parallel step.')
+                    : __('Invalidated — parallel quorum already met.'),
+                'acted_at' => now(),
+            ]);
+
+        $this->audit->log(
+            'parallel_quorum_met',
+            $submission->id,
+            "Step {$stepOrder} parallel mode {$mode} met quorum {$quorum}/{$memberCount}; invalidated ".count($pendingIds).' pending approval(s).',
+        );
+    }
+
+    /**
      * @param  array<string, mixed>|null  $condition
      * @param  array<string, mixed>  $values
      */
     public function evaluateCondition(?array $condition, array $values): bool
     {
-        if ($condition === null || empty($condition['field'])) {
-            return true;
-        }
-
-        $field = (string) $condition['field'];
-        $operator = (string) ($condition['operator'] ?? '==');
-        $expected = (string) ($condition['value'] ?? '');
-        $actual = (string) ($values[$field] ?? '');
-
-        return match ($operator) {
-            '>' => is_numeric($actual) && is_numeric($expected) && (float) $actual > (float) $expected,
-            '<' => is_numeric($actual) && is_numeric($expected) && (float) $actual < (float) $expected,
-            '>=' => is_numeric($actual) && is_numeric($expected) && (float) $actual >= (float) $expected,
-            '<=' => is_numeric($actual) && is_numeric($expected) && (float) $actual <= (float) $expected,
-            '!=' => $actual !== $expected,
-            default => $actual === $expected,
-        };
+        return $this->conditionEvaluator->matchesStoredCondition($condition, $values);
     }
 
     /**
      * @param  array<string, mixed>  $values
      */
     private function resolveApproverId(
+        EApprovalWorkflowStep $step,
+        array $values,
+        EApprovalSubmission $submission,
+        ?EApprovalForm $form = null,
+    ): ?string {
+        $primary = $this->resolvePrimaryApproverId($step, $values, $submission, $form);
+        if ($primary !== null) {
+            return $primary;
+        }
+
+        $fallback = $this->resolveFallbackApproverId($step);
+        if ($fallback !== null) {
+            $this->audit->log(
+                'fallback_approver',
+                $submission->id,
+                "Step {$step->step_order} used fallback approver after primary resolution failed.",
+            );
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function resolvePrimaryApproverId(
         EApprovalWorkflowStep $step,
         array $values,
         EApprovalSubmission $submission,
@@ -300,6 +568,22 @@ final class SubmissionWorkflowService
             return null;
         }
 
+        return $this->resolveActiveUserId($approverId);
+    }
+
+    private function resolveFallbackApproverId(EApprovalWorkflowStep $step): ?string
+    {
+        $condition = is_array($step->condition) ? $step->condition : [];
+        $fallback = $condition['fallback_approver_id'] ?? null;
+        if (! is_string($fallback) || trim($fallback) === '') {
+            return null;
+        }
+
+        return $this->resolveActiveUserId(trim($fallback));
+    }
+
+    private function resolveActiveUserId(mixed $approverId): ?string
+    {
         if ($approverId === null || trim((string) $approverId) === '') {
             return null;
         }
@@ -366,6 +650,9 @@ final class SubmissionWorkflowService
             'field' => $step->approver_id
                 ? __('Step :order: approver field ":field" is empty or invalid.', ['order' => $order, 'field' => $step->approver_id])
                 : __('Step :order: "From approver field" step is missing a field mapping.', ['order' => $order]),
+            'user_list' => $step->approver_id
+                ? __('Step :order: approver list ":field" is empty or invalid.', ['order' => $order, 'field' => $step->approver_id])
+                : __('Step :order: dynamic approver list step is missing a field mapping.', ['order' => $order]),
             'field_map' => __('Step :order: no approver mapping found for the selected field value.', ['order' => $order]),
             'role' => __('Step :order: no active user found for role.', ['order' => $order]),
             default => __('Step :order: fixed approver is missing or inactive.', ['order' => $order]),

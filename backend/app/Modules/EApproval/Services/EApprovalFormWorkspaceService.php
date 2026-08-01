@@ -14,7 +14,9 @@ use App\Modules\EApproval\Support\EApprovalFormWorkspaceDashboardSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 final class EApprovalFormWorkspaceService
@@ -26,11 +28,20 @@ final class EApprovalFormWorkspaceService
             return null;
         }
 
-        $forms = EApprovalForm::query()
-            ->where('status', 'published')
-            ->get();
+        // Fast path: resolve the form id from a short-lived slug map, then load one row.
+        $formId = $this->publishedSlugMap()[$slug] ?? null;
+        if ($formId !== null) {
+            $form = EApprovalForm::query()->where('status', 'published')->find($formId);
+            if ($form !== null) {
+                $config = EApprovalFormWorkspaceSupport::configFromForm($form);
+                if ($config !== null && ($config['slug'] ?? '') === $slug) {
+                    return $form;
+                }
+            }
+        }
 
-        foreach ($forms as $form) {
+        // Fallback (stale/missing cache): authoritative scan of published forms.
+        foreach (EApprovalForm::query()->where('status', 'published')->get() as $form) {
             $config = EApprovalFormWorkspaceSupport::configFromForm($form);
             if ($config !== null && ($config['slug'] ?? '') === $slug) {
                 return $form;
@@ -38,6 +49,34 @@ final class EApprovalFormWorkspaceService
         }
 
         return null;
+    }
+
+    /**
+     * Cached slug -> published form id map (short TTL; the fallback scan keeps lookups correct
+     * even if a form's slug changed within the TTL window).
+     *
+     * @return array<string, string>
+     */
+    private function publishedSlugMap(): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "e_approval:workspace_slug_map:{$tenantId}",
+            60,
+            static function (): array {
+                $map = [];
+                foreach (EApprovalForm::query()->where('status', 'published')->get() as $form) {
+                    $config = EApprovalFormWorkspaceSupport::configFromForm($form);
+                    $slug = is_array($config) ? trim((string) ($config['slug'] ?? '')) : '';
+                    if ($slug !== '') {
+                        $map[$slug] = (string) $form->id;
+                    }
+                }
+
+                return $map;
+            },
+        );
     }
 
     public function findWorkspaceForm(string $slug): ?EApprovalForm
@@ -133,7 +172,30 @@ final class EApprovalFormWorkspaceService
      */
     public function buildDashboard(string $slug, TenantUser $viewer): array
     {
+        // Resolve + authorize outside the cache so 404/403 are never cached.
         $context = $this->resolveWorkspaceContext($slug, $viewer);
+
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+        $key = sprintf(
+            'e_approval:workspace_dashboard:%s:%s:%s',
+            $tenantId,
+            (string) $context['form']->id,
+            (string) $viewer->id,
+        );
+
+        return TenantScopedCache::remember(
+            $key,
+            30,
+            fn (): array => $this->buildDashboardData($context, $viewer),
+        );
+    }
+
+    /**
+     * @param  array{form: EApprovalForm, workspace: array<string, mixed>, form_ids: list<string>}  $context
+     * @return array<string, mixed>
+     */
+    private function buildDashboardData(array $context, TenantUser $viewer): array
+    {
         $form = $context['form'];
         $workspace = $context['workspace'];
         $formIds = $context['form_ids'];
@@ -281,7 +343,7 @@ final class EApprovalFormWorkspaceService
     /**
      * @param  list<string>  $formIds
      */
-    public function scopedSubmissionsQuery(array $formIds, TenantUser $viewer, bool $canViewAll): \Illuminate\Database\Eloquent\Builder
+    public function scopedSubmissionsQuery(array $formIds, TenantUser $viewer, bool $canViewAll): Builder
     {
         $query = EApprovalSubmission::query()->whereIn('form_id', $formIds);
         if (! $canViewAll) {
@@ -299,7 +361,7 @@ final class EApprovalFormWorkspaceService
     /**
      * @return list<array{status: string, label: string, count: int}>
      */
-    private function statusBreakdown(\Illuminate\Database\Eloquent\Builder $scopedQuery): array
+    private function statusBreakdown(Builder $scopedQuery): array
     {
         $counts = (clone $scopedQuery)
             ->select('status', DB::raw('count(*) as aggregate'))
@@ -333,7 +395,7 @@ final class EApprovalFormWorkspaceService
     /**
      * @return list<array<string, mixed>>
      */
-    private function recentActivity(\Illuminate\Database\Eloquent\Builder $scopedQuery): array
+    private function recentActivity(Builder $scopedQuery): array
     {
         return (clone $scopedQuery)
             ->with(['requestor:id,name,email', 'form:id,name'])

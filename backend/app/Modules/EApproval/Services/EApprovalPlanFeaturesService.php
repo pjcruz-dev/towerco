@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\Billing\Services\TenantPlanEntitlementsService;
+use Illuminate\Validation\ValidationException;
 
 final class EApprovalPlanFeaturesService
 {
@@ -45,13 +46,13 @@ final class EApprovalPlanFeaturesService
 
             $fileCount = 0;
             foreach ($fields as $field) {
-                if (is_array($field) && ($field['type'] ?? '') === 'file') {
+                if (is_array($field) && in_array(($field['type'] ?? ''), ['file', 'camera'], true)) {
                     $fileCount++;
                 }
             }
 
             if ($fileCount > $max) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'fields' => [__('Your plan allows at most :max file upload field(s). Upgrade to add more.', ['max' => $max])],
                 ]);
             }
@@ -60,8 +61,8 @@ final class EApprovalPlanFeaturesService
         }
 
         foreach ($fields as $index => $field) {
-            if (is_array($field) && ($field['type'] ?? '') === 'file') {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+            if (is_array($field) && in_array(($field['type'] ?? ''), ['file', 'camera'], true)) {
+                throw ValidationException::withMessages([
                     "fields.{$index}" => [__('File upload fields require a Professional or Enterprise plan.')],
                 ]);
             }
@@ -71,10 +72,9 @@ final class EApprovalPlanFeaturesService
     public function assertCanUploadAttachment(): void
     {
         if (! $this->fileUploadsAllowed()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'file' => [__('File uploads are not included on your current plan.')],
             ]);
         }
     }
-
 }

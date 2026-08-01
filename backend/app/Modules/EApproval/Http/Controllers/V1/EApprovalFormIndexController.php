@@ -17,22 +17,35 @@ class EApprovalFormIndexController extends AbstractApiController
 
     public function __invoke(Request $request, EApprovalFormService $service): JsonResponse
     {
-        abort_unless($request->user()?->can('e_approval:view'), 403);
+        $user = $request->user();
+        abort_unless($user !== null, 401);
 
         $query = $this->validatedTenantListQuery($request);
         $status = $request->validate([
             'status' => ['sometimes', 'string', 'in:published,draft'],
         ])['status'] ?? null;
 
-        $manageAll = $request->user()->can('e_approval:forms:manage');
+        $canViewAll = $user->can('e_approval:view') || $user->can('e_approval:forms:manage');
+        $canPickPublished = $user->can('e_approval:submissions:create') && $status === 'published';
+
+        abort_unless($canViewAll || $canPickPublished, 403);
+
+        if (! $canViewAll && $status !== 'published') {
+            abort(403);
+        }
+
+        $manageAll = $user->can('e_approval:forms:manage');
+        $submissionPickerOnly = $canPickPublished && ! $canViewAll;
+
         $paginator = $service->paginate(
-            $request->user(),
+            $user,
             $query['page'],
             $query['per_page'],
             $query['search'],
             $manageAll,
             is_string($status) ? $status : null,
             $query['sort'],
+            $submissionPickerOnly,
         );
 
         return $this->okWithMeta(

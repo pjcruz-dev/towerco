@@ -19,9 +19,16 @@ final class RolloutPlaybookTemplateScaler
         $postIndices = [];
 
         foreach ($timeline as $index => $phase) {
-            if (($phase['anchor'] ?? '') === 'tssr_approved') {
-                $postIndices[] = $index;
+            if (($phase['anchor'] ?? '') !== 'tssr_approved') {
+                continue;
             }
+
+            // Post-RFI close-out phases stay outside the delivery SLA budget.
+            if (array_key_exists('counts_toward_sla', $phase) && ! (bool) $phase['counts_toward_sla']) {
+                continue;
+            }
+
+            $postIndices[] = $index;
         }
 
         if ($postIndices === []) {

@@ -43,6 +43,11 @@ final class EApprovalFormValidator
             if ($fieldName === '' || $label === '' || $type === '') {
                 throw ValidationException::withMessages(["fields.{$index}" => [__('Each field needs type, name, and label.')]]);
             }
+            if (mb_strlen($fieldName) > 100) {
+                throw ValidationException::withMessages([
+                    "fields.{$index}.name" => [__('Field API key must be at most 100 characters.')],
+                ]);
+            }
             if (isset($names[$fieldName])) {
                 throw ValidationException::withMessages(["fields.{$index}.name" => [__('Field names must be unique.')]]);
             }

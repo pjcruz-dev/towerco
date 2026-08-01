@@ -29,20 +29,21 @@ final class EApprovalFinanceProcurementTemplateBundleTest extends TestCase
         $this->testTenant->save();
     }
 
-    public function test_finance_procurement_bundle_creates_six_forms_with_related_form_ids(): void
+    public function test_finance_procurement_bundle_creates_seven_forms_with_related_form_ids(): void
     {
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/e-approval/form-templates/finance-procurement-bundle');
 
         $response->assertCreated();
-        $response->assertJsonCount(6, 'data.forms');
+        $response->assertJsonCount(7, 'data.forms');
         $response->assertJsonPath('data.bundle.id', 'finance_procurement');
 
         $formsByTemplate = collect($response->json('data.forms'))
             ->keyBy(static fn (array $form): string => (string) ($form['metadata_json']['created_from_template'] ?? ''));
 
-        $this->assertCount(6, $formsByTemplate);
+        $this->assertCount(7, $formsByTemplate);
+        $this->assertArrayHasKey('request_for_payment', $formsByTemplate);
 
         $cashAdvanceId = (string) $formsByTemplate['cash_advance']['id'];
         $liquidationId = (string) $formsByTemplate['liquidation']['id'];

@@ -5,4 +5,5 @@ return [
     App\Providers\AuthServiceProvider::class,
     App\Providers\EventServiceProvider::class,
     App\Providers\TenancyServiceProvider::class,
+    App\Modules\AiAssistant\Providers\AiAssistantServiceProvider::class,
 ];

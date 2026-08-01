@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Ticketing\Services;
 
 use App\Models\TicketingTicket;
+use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use Carbon\CarbonInterface;
 
 final class TicketingSlaCalculator
@@ -19,6 +20,7 @@ final class TicketingSlaCalculator
 
     public function __construct(
         private readonly TicketingSettingsService $settings,
+        private readonly TicketingCategoryCatalog $categories,
     ) {}
 
     public function isEnabled(): bool
@@ -26,16 +28,16 @@ final class TicketingSlaCalculator
         return $this->settings->getBool(TicketingSettingsService::SLA_ENABLED, true);
     }
 
-    public function responseMinutesFor(string $priority): int
+    public function responseMinutesFor(string $priority, ?string $category = null): int
     {
-        $base = $this->settings->getInt(TicketingSettingsService::SLA_RESPONSE_MINUTES, 480);
+        $base = $this->baseResponseMinutes($category);
 
         return max(1, (int) round($base * $this->multiplierFor($priority)));
     }
 
-    public function escalationMinutesFor(string $priority): int
+    public function escalationMinutesFor(string $priority, ?string $category = null): int
     {
-        $base = $this->settings->getInt(TicketingSettingsService::SLA_ESCALATION_MINUTES, 1440);
+        $base = $this->baseEscalationMinutes($category);
 
         return max(1, (int) round($base * $this->multiplierFor($priority)));
     }
@@ -53,7 +55,9 @@ final class TicketingSlaCalculator
             return null;
         }
 
-        return $ticket->created_at->copy()->addMinutes($this->escalationMinutesFor((string) $ticket->priority));
+        return $ticket->created_at->copy()->addMinutes(
+            $this->escalationMinutesFor((string) $ticket->priority, $ticket->category),
+        );
     }
 
     /**
@@ -73,17 +77,42 @@ final class TicketingSlaCalculator
         }
 
         $now = now();
-        $escalationAt = $ticket->created_at->copy()->addMinutes($this->escalationMinutesFor((string) $ticket->priority));
+        $category = $ticket->category;
+        $escalationAt = $ticket->created_at->copy()->addMinutes(
+            $this->escalationMinutesFor((string) $ticket->priority, $category),
+        );
         if ($now->greaterThanOrEqualTo($escalationAt) || $ticket->sla_escalated_at !== null) {
             return 'breached';
         }
 
-        $responseAt = $ticket->created_at->copy()->addMinutes($this->responseMinutesFor((string) $ticket->priority));
+        $responseAt = $ticket->created_at->copy()->addMinutes(
+            $this->responseMinutesFor((string) $ticket->priority, $category),
+        );
         if ($now->greaterThanOrEqualTo($responseAt) || $ticket->sla_reminder_sent_at !== null) {
             return 'at_risk';
         }
 
         return 'on_track';
+    }
+
+    private function baseResponseMinutes(?string $category): int
+    {
+        $option = $this->categories->optionFor($category);
+        if ($option !== null && $option['sla_response_minutes'] !== null) {
+            return max(1, (int) $option['sla_response_minutes']);
+        }
+
+        return $this->settings->getInt(TicketingSettingsService::SLA_RESPONSE_MINUTES, 480);
+    }
+
+    private function baseEscalationMinutes(?string $category): int
+    {
+        $option = $this->categories->optionFor($category);
+        if ($option !== null && $option['sla_escalation_minutes'] !== null) {
+            return max(1, (int) $option['sla_escalation_minutes']);
+        }
+
+        return $this->settings->getInt(TicketingSettingsService::SLA_ESCALATION_MINUTES, 1440);
     }
 
     private function multiplierFor(string $priority): float

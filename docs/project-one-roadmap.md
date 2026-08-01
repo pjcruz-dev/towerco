@@ -18,6 +18,7 @@ This document plans **Phases 7–14** for everything still pending in PROJECT-ON
 | [12](./rollout-playbook-phase12.md) | Map & QMS depth | Candidate/site map, approvals attachments, dashboard KPIs | 7, 11 ✅ |
 | [13](./rollout-playbook-phase13.md) | Field mobile UX | Touch-first SAQ/CME, camera, GPS, offline drafts | 7 ✅ |
 | [14](./rollout-playbook-phase14.md) | Platform polish & QA | Playbook upgrade UX, README, full E2E test suite | 7–13 ✅ |
+| [15](./rollout-playbook-phase15.md) | BTS process v3 | Pre-assessment + early MOC/COL + post-RFI license/handover | 1, 9, E ✅ |
 
 ---
 
@@ -89,3 +90,4 @@ PROJECT-ONE reaches **production-ready rollout + QMS baseline** when Phases **7�
 | 4 | [rollout-playbook-phase4.md](./rollout-playbook-phase4.md) |
 | 5 | [rollout-playbook-phase5.md](./rollout-playbook-phase5.md) |
 | 6 | [rollout-playbook-phase6.md](./rollout-playbook-phase6.md) |
+| 15 | [rollout-playbook-phase15.md](./rollout-playbook-phase15.md) — BTS process v3 |

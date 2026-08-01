@@ -1,6 +1,8 @@
-# TowerOS Phase 1 — AWS ECS, Aurora, CI/CD
+# TowerOS — AWS ECS, Aurora, CI/CD (scale path)
 
-Board Phase 1 target infrastructure for TowerOS production. This document defines the **foundation** architecture and deployment pipeline; resources are not provisioned in the local dev stack.
+**Current production baseline** is EC2 + RDS MySQL — see [`aws-ec2-rds-production.md`](./aws-ec2-rds-production.md).
+
+This document is the **scale-out** target (ECS Fargate + Aurora + ElastiCache) and CI/CD foundation; resources are not provisioned in the local dev stack.
 
 ## Architecture overview
 
@@ -104,17 +106,21 @@ Repository workflow: [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml
 
 ### Release tag `v*` (CD — production)
 
+Workflow: [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) — see [`cicd-phase-3.md`](./cicd-phase-3.md).
+
 1. Promote tested ECR image digests (no rebuild)
 2. Blue/green or rolling deploy with circuit breaker
 3. Post-deploy: `/up`, tenant login smoke, queue drain check
 
 ## Required GitHub / AWS secrets
 
-| Secret | Used for |
-|--------|----------|
+| Secret / var | Used for |
+|--------------|----------|
+| `TOWEROS_CD_ENABLED` (variable) | Set `true` to enable CD on push/tag |
 | `AWS_ROLE_ARN` | OIDC deploy role (no long-lived keys) |
 | `AWS_REGION` | e.g. `ap-southeast-1` |
 | `ECR_REGISTRY` | `123456789012.dkr.ecr.region.amazonaws.com` |
+| ECS cluster/service/subnet vars | See [`cicd-phase-3.md`](./cicd-phase-3.md) |
 
 Application secrets remain in AWS Secrets Manager per environment.
 
@@ -130,17 +136,20 @@ Application secrets remain in AWS Secrets Manager per environment.
 ## Phase 1 deliverables checklist
 
 - [x] CI workflow skeleton (lint, test, build)
+- [x] Manual release runbook (Staging → tag → Production → rollback) — [`release-runbook.md`](./release-runbook.md)
+- [x] Automated CD workflows (Phase 3) — [`cicd-phase-3.md`](./cicd-phase-3.md) + `deploy-staging.yml` / `deploy-production.yml`
 - [ ] Terraform / CDK modules for VPC, ECS, Aurora, Redis
 - [ ] ECR repositories + lifecycle policies
-- [ ] Staging environment first deploy
-- [ ] Runbook: migrate, rollback, tenant provision
+- [ ] Staging environment first deploy (enable `TOWEROS_CD_ENABLED` after AWS exists)
 
 ## Operations runbook (summary)
 
-**Deploy:** merge to `main` → CI green → staging deploy → manual promote to prod tag.
+**Deploy:** merge to `main` → CI green → **Deploy Staging** (Phase 3) → smoke checklist → **git tag `v*`** → **Deploy Production** (digest promote). Manual steps: [`release-runbook.md`](./release-runbook.md). Enablement: [`cicd-phase-3.md`](./cicd-phase-3.md).
 
-**Migrate:** ECS run-task `php artisan migrate --force` (central), then `tenants:migrate --force`.
+**Migrate:** Staging first; then Production on promote. ECS one-off: `php artisan toweros:migrate --force` (workflow) or `migrate` + `tenants:migrate`.
 
-**Rollback:** ECS circuit breaker auto-revert; DB rollback via snapshot restore (break-glass only).
+**Rollback:** Actions → **Deploy Rollback** ([`hardening-phase-4.md`](./hardening-phase-4.md)). ECS circuit breaker auto-reverts bad rolling deploys; DB snapshot restore is break-glass only.
 
 **Scale:** target tracking on API CPU (70%) and ALB request count per target.
+
+**Hardening (Phase 4):** circuit breaker, pre-migrate snapshots, quarterly drill — [`hardening-phase-4.md`](./hardening-phase-4.md).

@@ -53,7 +53,7 @@ final class RolloutGateApprovalEscalationService
                 }
 
                 $stepStarted = Carbon::parse($request->current_step_started_at)->startOfDay();
-                $calendar = $this->calendarFactory->make($program->region);
+                $calendar = $this->calendarFactory->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program));
                 $waitingDays = $calendar->workingDaysBetween($stepStarted, $today);
 
                 if ($waitingDays < $thresholdDays) {

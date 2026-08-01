@@ -52,6 +52,9 @@ jobs:
       - name: Lint (Pint — dry run)
         run: vendor/bin/pint --test
 
+      - name: Validate AI Assistant help packs
+        run: php artisan ai-assistant:validate-help-packs --strict
+
       - name: PHPUnit
         run: php artisan test
 
@@ -90,18 +93,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000/api/v1
 
-  # Phase 1 CD placeholder — enable when AWS OIDC + ECR are configured.
-  # deploy-staging:
-  #   needs: [backend, frontend]
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     id-token: write
-  #     contents: read
-  #   steps:
-  #     - uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-  #         aws-region: ${{ secrets.AWS_REGION }}
-  #     - name: Build and push images
-  #       run: echo "Wire ECR build/push and ecs deploy update-service"
+  # Phase 3 CD lives in separate workflows (gated by TOWEROS_CD_ENABLED):
+  #   deploy-staging.yml  — push to main / workflow_dispatch
+  #   deploy-production.yml — tag v* / workflow_dispatch
+  # Docs: docs/infrastructure/cicd-phase-3.md

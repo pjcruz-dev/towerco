@@ -8,7 +8,9 @@ use App\Modules\Documents\Services\DocumentRolloutLeasePackageMigrationService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\SiteCandidate;
+use App\Modules\Rollout\Support\RolloutEndorsementGuard;
 use App\Modules\Rollout\Support\RolloutFieldCreateResult;
+use App\Modules\Rollout\Support\RolloutSaqSelectGuard;
 use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +29,8 @@ final class SiteCandidateService
      */
     public function create(RolloutProgram $program, array $input): array
     {
+        RolloutEndorsementGuard::assertEstablished($program);
+
         if (! empty($input['client_draft_id'])) {
             $existing = SiteCandidate::query()
                 ->where('rollout_program_id', $program->id)
@@ -143,6 +147,8 @@ final class SiteCandidateService
             throw ValidationException::withMessages(['rollout' => [__('Rollout not found.')]]);
         }
 
+        RolloutSaqSelectGuard::assertReadyToSelect($program);
+
         SiteCandidate::query()
             ->where('rollout_program_id', $program->id)
             ->where('id', '!=', $candidate->id)
@@ -162,6 +168,7 @@ final class SiteCandidateService
         $this->audit->log('rollout.candidate_selected', $updated, [
             'candidate_number' => $candidate->candidate_number,
             'tco_site_id' => $updated->tco_site_id,
+            'via' => 'p2_saq_select',
         ]);
 
         return $updated;

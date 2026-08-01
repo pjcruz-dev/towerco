@@ -23,7 +23,7 @@ final class RolloutSlaRecalculationService
             return $program;
         }
 
-        $workingDays = $this->calendarFactory->make($program->region);
+        $workingDays = $this->calendarFactory->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program));
 
         if ($program->tssr_approved_date !== null && $program->sla_working_days > 0) {
             $deliveryStart = Carbon::parse($program->tssr_approved_date);

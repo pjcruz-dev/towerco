@@ -12,6 +12,7 @@ use App\Modules\ProcurementOne\Support\ProcurementPoStatus;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use App\Modules\Ticketing\Support\TicketingSourceCatalog;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -105,6 +106,69 @@ final class ProcurementTicketingTest extends TestCase
         $related->assertOk();
         $this->assertSame($ticketId, (string) $related->json('data.0.id'));
         $this->assertSame('Delivery delay: PO-TEST', $related->json('data.0.title'));
+    }
+
+    public function test_linked_id_filter_surfaces_tickets_linked_to_a_parent_record(): void
+    {
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->putJson('/api/v1/ticketing/settings', [
+                'apply_category_pack' => TicketingCategoryPackCatalog::PACK_PROCUREMENT_ONE,
+            ])
+            ->assertOk();
+
+        $poId = (string) Str::uuid();
+        $grnId = (string) Str::uuid();
+
+        // Ticket sourced from a GRN but linked back to its parent PO.
+        $create = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'GRN receipt mismatch: GRN-TEST',
+                'description' => 'Short delivery detected during goods receipt.',
+                'category' => 'procurement_grn_mismatch',
+                'source_module' => TicketingSourceCatalog::MODULE_PROCUREMENT_ONE,
+                'source_reference_type' => 'goods_receipt',
+                'source_reference_id' => $grnId,
+                'source_label' => 'GRN-TEST',
+                'links' => [
+                    [
+                        'link_module' => TicketingSourceCatalog::MODULE_PROCUREMENT_ONE,
+                        'link_type' => 'goods_receipt',
+                        'link_id' => $grnId,
+                        'link_label' => 'GRN-TEST',
+                    ],
+                    [
+                        'link_module' => TicketingSourceCatalog::MODULE_PROCUREMENT_ONE,
+                        'link_type' => 'purchase_order',
+                        'link_id' => $poId,
+                        'link_label' => 'PO-TEST',
+                    ],
+                ],
+            ]);
+
+        $create->assertCreated();
+        $ticketId = (string) $create->json('data.id');
+
+        // Source-only filter on the PO must NOT find the GRN-sourced ticket.
+        $sourceOnly = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/tickets?'.http_build_query([
+                'source_module' => TicketingSourceCatalog::MODULE_PROCUREMENT_ONE,
+                'source_reference_id' => $poId,
+            ]));
+        $sourceOnly->assertOk();
+        $this->assertEmpty($sourceOnly->json('data'));
+
+        // Linked filter on the PO surfaces the ticket via its link row.
+        $linked = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/tickets?'.http_build_query([
+                'linked_module' => TicketingSourceCatalog::MODULE_PROCUREMENT_ONE,
+                'linked_id' => $poId,
+            ]));
+        $linked->assertOk();
+        $this->assertSame($ticketId, (string) $linked->json('data.0.id'));
     }
 
     public function test_apply_procurement_category_pack_merges_categories(): void

@@ -14,10 +14,16 @@ final class RolloutGateApprovalPolicyDefaults
     /** @var list<string> */
     public const PILOT_PHASE_KEYS = [
         'site_hunting',
+        'pre_assessment',
+        'moc_col',
         'tssr_creation',
+        'tssr_mno_approval',
         'pre_construction',
         'permitting',
+        'skom',
         'construction',
+        'site_license',
+        'handover_operations',
     ];
 
     /**
@@ -30,9 +36,21 @@ final class RolloutGateApprovalPolicyDefaults
                 'enabled' => true,
                 'chain' => ['saq', 'pmo'],
             ],
+            'pre_assessment' => [
+                'enabled' => true,
+                'chain' => ['mno', 'pmo'],
+            ],
+            'moc_col' => [
+                'enabled' => true,
+                'chain' => ['saq', 'pmo'],
+            ],
             'tssr_creation' => [
                 'enabled' => true,
                 'chain' => ['saq_engineering', 'saq', 'pmo'],
+            ],
+            'tssr_mno_approval' => [
+                'enabled' => true,
+                'chain' => ['mno', 'pmo'],
             ],
             'pre_construction' => [
                 'enabled' => true,
@@ -42,9 +60,21 @@ final class RolloutGateApprovalPolicyDefaults
                 'enabled' => true,
                 'chain' => ['saq', 'engineering', 'pmo'],
             ],
+            'skom' => [
+                'enabled' => true,
+                'chain' => ['cme', 'pmo'],
+            ],
             'construction' => [
                 'enabled' => true,
                 'chain' => ['cme', 'pmo', 'tenant_admin'],
+            ],
+            'site_license' => [
+                'enabled' => true,
+                'chain' => ['saq', 'pmo', 'tenant_admin'],
+            ],
+            'handover_operations' => [
+                'enabled' => true,
+                'chain' => ['pmo', 'tenant_admin'],
             ],
         ];
 

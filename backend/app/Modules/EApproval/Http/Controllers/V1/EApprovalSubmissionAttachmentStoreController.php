@@ -35,26 +35,55 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
         $data = $request->validate([
             'file' => ['required', 'file', 'max:'.$maxKb],
             'field_name' => ['nullable', 'string', 'max:255'],
+            'metadata' => ['nullable'],
         ]);
 
         $fieldName = $data['field_name'] ?? null;
+        $rawMetadata = $this->parseMetadataInput($request->input('metadata'));
+        $metadata = $attachmentValidator->normalizeMetadata($rawMetadata);
+
         $existing = $files->findExistingByOriginalName($submission, $data['file']->getClientOriginalName(), $fieldName);
         if ($existing !== null) {
+            if ($metadata !== null && empty($existing->metadata)) {
+                $existing->metadata = $metadata;
+                $existing->save();
+            }
+
             return $this->ok([
                 'id' => (string) $existing->id,
                 'file_name' => $existing->file_name,
                 'field_name' => $existing->field_name,
+                'metadata' => $existing->metadata,
             ]);
         }
 
-        $attachmentValidator->assertCanStore($submission, $data['file'], $fieldName);
+        $attachmentValidator->assertCanStore($submission, $data['file'], $fieldName, $metadata);
 
-        $attachment = $files->store($submission, $data['file'], $fieldName);
+        $attachment = $files->store($submission, $data['file'], $fieldName, $metadata);
 
         return $this->created([
             'id' => (string) $attachment->id,
             'file_name' => $attachment->file_name,
             'field_name' => $attachment->field_name,
+            'metadata' => $attachment->metadata,
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function parseMetadataInput(mixed $raw): ?array
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        return is_array($raw) ? $raw : null;
     }
 }

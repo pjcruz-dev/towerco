@@ -91,6 +91,8 @@ final class DocumentRolloutGateEnforcementService
                 'site_id' => null,
                 'missing_labels' => [],
                 'checklist_href' => null,
+                'summary' => null,
+                'items' => [],
             ];
         }
 
@@ -107,8 +109,14 @@ final class DocumentRolloutGateEnforcementService
             'complete' => (bool) ($checklist['summary']['complete'] ?? false),
             'site_id' => (string) $site->id,
             'missing_labels' => $missing,
-            'checklist_href' => '/sites/'.$site->id,
-            'summary' => $checklist['summary'],
+            'checklist_href' => '/sites/'.$site->id.'?panel=documents',
+            'summary' => $checklist['summary'] ?? null,
+            'items' => collect($checklist['items'] ?? [])->map(static fn (array $item): array => [
+                'node_key' => $item['node_key'] ?? null,
+                'label' => $item['label'] ?? null,
+                'met' => (bool) ($item['met'] ?? false),
+                'required' => (bool) ($item['required'] ?? true),
+            ])->values()->all(),
         ];
     }
 

@@ -55,7 +55,7 @@ final class RolloutMilestoneCyclePresenter
             (string) $program->project_type,
         );
         $overrides = $config->day_overrides[$templateKey] ?? [];
-        $calendar = $this->calendarFactory->make($program->region);
+        $calendar = $this->calendarFactory->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program));
         $today = Carbon::today();
         $programClosed = $program->status === 'completed' || $program->actual_rfi_date !== null;
         $closeDate = $program->actual_rfi_date

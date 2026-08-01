@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\User;
+use App\Modules\Rollout\Contracts\ReverseGeocoderInterface;
+use App\Modules\Rollout\Services\ReverseGeocodeService;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use App\Modules\Rollout\Support\WorkingDaysCalendar;
 use App\Modules\Tenancy\Support\CorsAllowedOriginResolver;
@@ -25,6 +27,10 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(WorkingDaysCalendar::class, static function ($app) {
             return $app->make(TenantWorkingDaysCalendarFactory::class)->make();
+        });
+
+        $this->app->bind(ReverseGeocoderInterface::class, static function () {
+            return ReverseGeocodeService::resolveDriver();
         });
     }
 
@@ -52,6 +58,20 @@ class AppServiceProvider extends ServiceProvider
             $perMinute = max(10, (int) config('procurement_one.public_quotes.rate_limit_per_minute', 30));
 
             return Limit::perMinute($perMinute)->by($request->ip().'|'.($request->route('token') ?? 'global'));
+        });
+
+        RateLimiter::for('assistant', function (Request $request) {
+            $perMinute = max(5, (int) config('ai_assistant.rate_limit_per_minute', 20));
+
+            return Limit::perMinute($perMinute)->by(
+                ($request->user()?->getAuthIdentifier() ?: $request->ip()).'|assistant',
+            );
+        });
+
+        RateLimiter::for('geocode', function (Request $request) {
+            return Limit::perMinute(30)->by(
+                ($request->user()?->getAuthIdentifier() ?: $request->ip()).'|geocode',
+            );
         });
 
         if (class_exists(Horizon::class)) {

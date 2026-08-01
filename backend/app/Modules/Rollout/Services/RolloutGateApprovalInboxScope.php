@@ -152,12 +152,13 @@ final class RolloutGateApprovalInboxScope
     private function delegatorPermissionMatchSql(string $roleSql, string $userModelType): string
     {
         $escapedType = str_replace("'", "''", $userModelType);
+        $modelKey = (string) config('permission.column_names.model_morph_key', 'model_id');
 
         return "EXISTS (
             SELECT 1
             FROM model_has_permissions mhp
             INNER JOIN permissions p ON p.id = mhp.permission_id
-            WHERE mhp.model_id = inbox_del.delegator_id
+            WHERE mhp.{$modelKey} = inbox_del.delegator_id
               AND mhp.model_type = '{$escapedType}'
               AND (
                 ({$roleSql} IN ('saq', 'saq_engineering') AND p.name = 'project_one:saq:manage')
@@ -168,7 +169,7 @@ final class RolloutGateApprovalInboxScope
             SELECT 1
             FROM model_has_roles mhr
             INNER JOIN roles r ON r.id = mhr.role_id
-            WHERE mhr.model_id = inbox_del.delegator_id
+            WHERE mhr.{$modelKey} = inbox_del.delegator_id
               AND mhr.model_type = '{$escapedType}'
               AND (
                 ({$roleSql} = 'tenant_admin' AND r.name = 'tenant_admin')

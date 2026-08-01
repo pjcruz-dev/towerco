@@ -23,6 +23,22 @@ class RoleCatalogService
     /** @var list<string> */
     public const SYSTEM_ROLES = TenantRbacSystemRoles::ALL;
 
+    /** @var array<string, string> role name prefix → enabled_modules key */
+    private const MODULE_ROLE_PREFIXES = [
+        'project_one_' => 'project_one',
+        'ticketing_' => 'ticketing',
+        'procurement_' => 'procurement_one',
+        'finance_' => 'finance_one',
+        'documents_' => 'documents',
+        'dcf_' => 'document_register',
+        'sites_' => 'sites',
+        'e_approval_' => 'e_approval',
+        'ai_assistant_' => 'ai_assistant',
+    ];
+
+    /** @var list<string> */
+    private const PROJECT_ONE_DISCIPLINE_ROLES = ['saq_approver', 'pmo_approver', 'cme_approver'];
+
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,
         private readonly TenantRbacPermissionCatalog $permissionCatalog,
@@ -58,6 +74,10 @@ class RoleCatalogService
             ->with('permissions:id,name')
             ->orderBy('name')
             ->get()
+            ->filter(fn (TenantRole $role): bool => $this->isRoleAssignableForEnabledModules(
+                (string) $role->name,
+                $this->permissionCatalog->enabledModules(),
+            ))
             ->map(fn (TenantRole $role): array => $this->roleSummary($role, $enabled, $userCounts))
             ->values()
             ->all();
@@ -231,6 +251,37 @@ class RoleCatalogService
             'only_right' => array_values(array_diff($rightPermissions, $leftPermissions)),
             'shared' => array_values(array_intersect($leftPermissions, $rightPermissions)),
         ];
+    }
+
+    /**
+     * Hide system roles for modules that are not enabled on this tenant.
+     * Core / custom roles always remain available.
+     *
+     * @param  list<string>  $enabledModules
+     */
+    private function isRoleAssignableForEnabledModules(string $roleName, array $enabledModules): bool
+    {
+        if ($enabledModules === []) {
+            return true;
+        }
+
+        if (TenantRbacSystemRoles::isCoreBaseline($roleName)) {
+            return true;
+        }
+
+        if ($roleName === 'finance' || in_array($roleName, self::PROJECT_ONE_DISCIPLINE_ROLES, true)) {
+            return in_array('project_one', $enabledModules, true)
+                || ($roleName === 'finance' && in_array('finance_one', $enabledModules, true));
+        }
+
+        foreach (self::MODULE_ROLE_PREFIXES as $prefix => $module) {
+            if (str_starts_with($roleName, $prefix)) {
+                return in_array($module, $enabledModules, true);
+            }
+        }
+
+        // Custom roles (not system-prefixed) stay visible.
+        return true;
     }
 
     /**

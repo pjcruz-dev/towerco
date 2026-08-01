@@ -95,7 +95,8 @@ final class TenantUserSecurityAdminTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('data.mfa_required', true)
-            ->assertJsonPath('data.mfa_policy_active', true);
+            ->assertJsonPath('data.mfa_policy_active', true)
+            ->assertJsonPath('data.mfa_trust_days', 7);
 
         $this->testTenant->refresh();
         $this->assertTrue((bool) $this->testTenant->mfa_required);

@@ -6,6 +6,7 @@ namespace App\Modules\Ticketing\Services;
 
 use App\Models\TicketingTicket;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
+use App\Modules\Ticketing\Support\TeamsWebhookCardFactory;
 use App\Modules\Ticketing\Support\TicketingNotificationCategory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -32,44 +33,34 @@ final class TicketingWebhookDispatcher
         $path = TicketingNotificationCategory::hrefFor((string) $ticket->id);
         $ticketUrl = $resolver->urlForCurrentTenant($path);
 
-        $themeColor = match ($event) {
-            'sla_escalation' => 'DC2626',
-            'sla_reminder' => 'D97706',
-            default => '2563EB',
+        $accentColor = match ($event) {
+            'sla_escalation' => 'Attention',
+            'sla_reminder' => 'Warning',
+            default => 'Accent',
         };
 
-        $lines = [
-            '**'.__('Ticket').':** '.$ticket->displayNumber(),
-            '**'.__('Title').':** '.$ticket->title,
-            '**'.__('Priority').':** '.$ticket->priority,
-            '**'.__('Status').':** '.$ticket->status,
+        $facts = [
+            ['title' => __('Ticket'), 'value' => $ticket->displayNumber()],
+            ['title' => __('Title'), 'value' => (string) $ticket->title],
+            ['title' => __('Priority'), 'value' => (string) $ticket->priority],
+            ['title' => __('Status'), 'value' => (string) $ticket->status],
         ];
 
         if ($ticket->requester !== null) {
-            $lines[] = '**'.__('Requester').':** '.$ticket->requester->name;
+            $facts[] = ['title' => __('Requester'), 'value' => (string) $ticket->requester->name];
         }
 
         if ($ticket->assignee !== null) {
-            $lines[] = '**'.__('Assignee').':** '.$ticket->assignee->name;
+            $facts[] = ['title' => __('Assignee'), 'value' => (string) $ticket->assignee->name];
         }
 
-        $payload = [
-            '@type' => 'MessageCard',
-            '@context' => 'http://schema.org/extensions',
-            'summary' => $summary,
-            'themeColor' => $themeColor,
-            'title' => $summary,
-            'text' => implode("\n\n", $lines),
-            'potentialAction' => [
-                [
-                    '@type' => 'OpenUri',
-                    'name' => __('Open ticket'),
-                    'targets' => [
-                        ['os' => 'default', 'uri' => $ticketUrl],
-                    ],
-                ],
-            ],
-        ];
+        $payload = TeamsWebhookCardFactory::build(
+            title: $summary,
+            facts: $facts,
+            accentColor: $accentColor,
+            actionUrl: $ticketUrl,
+            actionLabel: __('Open ticket'),
+        );
 
         try {
             Http::timeout(10)->post($url, $payload)->throw();

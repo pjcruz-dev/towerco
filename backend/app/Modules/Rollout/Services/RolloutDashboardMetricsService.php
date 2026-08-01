@@ -6,6 +6,7 @@ namespace App\Modules\Rollout\Services;
 
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProjectOne\Models\Project;
+use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Tenancy\Support\TenantScopedCache;
@@ -87,8 +88,8 @@ final class RolloutDashboardMetricsService
             return 0;
         }
 
-        return \App\Modules\Rollout\Models\RolloutGateApprovalRequest::query()
-            ->where('status', \App\Modules\Rollout\Models\RolloutGateApprovalRequest::STATUS_IN_REVIEW)
+        return RolloutGateApprovalRequest::query()
+            ->where('status', RolloutGateApprovalRequest::STATUS_IN_REVIEW)
             ->count();
     }
 
@@ -108,14 +109,12 @@ final class RolloutDashboardMetricsService
 
     private function openSaqProgramsCount(): int
     {
+        // Count SAQ parents with fewer than 3 candidates entirely in SQL (correlated
+        // subquery via has()) instead of loading every SAQ program and filtering in PHP.
         return RolloutProgram::query()
-            ->select(['id'])
-            ->whereNotIn('status', ['completed', 'cancelled', 'batch'])
             ->whereNull('parent_rollout_id')
             ->where('status', 'saq')
-            ->withCount('candidates')
-            ->get()
-            ->filter(static fn (RolloutProgram $program): bool => $program->candidates_count < 3)
+            ->has('candidates', '<', 3)
             ->count();
     }
 

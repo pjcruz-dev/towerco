@@ -20,7 +20,7 @@ Architecture:
 - Realtime: Soketi + Laravel Echo
 - Cache/Queue: Redis
 - UI: Tailwind + shadcn/ui
-- Deployment: AWS ECS Fargate
+- Deployment: AWS EC2 + RDS MySQL (production baseline); ECS Fargate scale path
 
 Core Principles:
 - Enterprise-grade architecture

@@ -40,11 +40,17 @@ final class EApprovalFormService
         bool $manageAll,
         ?string $statusFilter = null,
         ?string $sort = null,
+        bool $submissionPickerOnly = false,
     ): LengthAwarePaginator {
         $query = EApprovalForm::query();
 
         if ($statusFilter === 'published') {
             $query->where('status', 'published');
+            if ($submissionPickerOnly) {
+                $query->where(static function ($q): void {
+                    $q->where('accepts_new_submissions', true)->orWhereNull('accepts_new_submissions');
+                });
+            }
         } elseif ($statusFilter === 'draft') {
             $query->where('status', 'draft');
         } elseif (! $manageAll) {
@@ -77,6 +83,7 @@ final class EApprovalFormService
      */
     public function create(array $payload, TenantUser $actor): array
     {
+        $payload = $this->normalizeFieldApiKeys($payload);
         $status = in_array($payload['status'] ?? 'draft', ['draft', 'published'], true)
             ? (string) $payload['status']
             : 'draft';
@@ -135,6 +142,7 @@ final class EApprovalFormService
      */
     public function update(EApprovalForm $form, array $payload, TenantUser $actor, bool $confirmFormUpgrade = false): array
     {
+        $payload = $this->normalizeFieldApiKeys($payload);
         $status = $payload['status'] ?? $form->status;
         $warnings = $this->validator->validate($payload, $status === 'published');
         $warnings = array_merge($warnings, $this->publishGuard->warningsFor($form, $payload));
@@ -262,6 +270,33 @@ final class EApprovalFormService
 
         $form->delete();
         $this->audit->log('form_deleted', $form->id, $form->name, $actor);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeFieldApiKeys(array $payload): array
+    {
+        $fields = $payload['fields'] ?? null;
+        if (! is_array($fields)) {
+            return $payload;
+        }
+
+        foreach ($fields as $index => $field) {
+            if (! is_array($field)) {
+                continue;
+            }
+            $name = trim((string) ($field['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $fields[$index]['name'] = mb_substr($name, 0, 100);
+        }
+
+        $payload['fields'] = $fields;
+
+        return $payload;
     }
 
 }

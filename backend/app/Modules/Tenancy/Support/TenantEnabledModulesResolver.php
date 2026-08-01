@@ -25,6 +25,7 @@ final class TenantEnabledModulesResolver
         'finance_one',
         'documents',
         'document_register',
+        'ai_assistant',
     ];
 
     /** @var array<string, string> */
@@ -43,12 +44,14 @@ final class TenantEnabledModulesResolver
         'finance_one' => 'Finance-One',
         'documents' => 'Documents',
         'document_register' => 'Document register',
+        'ai_assistant' => 'AI Assistant',
     ];
 
     /** @var array<string, string> */
     public const MODULE_DESCRIPTIONS = [
         'documents' => 'Expiring leases, permits, and contracts across sites.',
         'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Approval.',
+        'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
     ];
 
     /**
@@ -66,6 +69,7 @@ final class TenantEnabledModulesResolver
                 'sites',
                 'documents',
                 'document_register',
+                'ai_assistant',
             ]);
         }
 

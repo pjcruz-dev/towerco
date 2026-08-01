@@ -23,6 +23,8 @@ final class TicketingSettingsService
 
     public const CATEGORIES = 'categories';
 
+    public const ASSIGNMENT_RULES = 'assignment_rules';
+
     public const SLA_ENABLED = 'sla_enabled';
 
     public const SLA_RESPONSE_MINUTES = 'sla_response_minutes';
@@ -84,6 +86,40 @@ final class TicketingSettingsService
     }
 
     /**
+     * @return list<array{id: string, label: string, sla_response_minutes: ?int, sla_escalation_minutes: ?int}>
+     */
+    public function categoryOptions(): array
+    {
+        return app(TicketingCategoryCatalog::class)->resolveOptions();
+    }
+
+    /**
+     * @return list<array{category: string, assignee_id: string, enabled: bool}>
+     */
+    public function assignmentRules(): array
+    {
+        $raw = $this->getString(self::ASSIGNMENT_RULES);
+        if ($raw === null || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return app(TicketingAssignmentService::class)->parseStoredRules($decoded);
+    }
+
+    /**
+     * @param  list<array{category: string, assignee_id: string, enabled: bool}>  $rules
+     */
+    public function persistAssignmentRules(array $rules): void
+    {
+        $this->setString(self::ASSIGNMENT_RULES, json_encode(array_values($rules), JSON_THROW_ON_ERROR));
+    }
+
+    /**
      * @return list<string>
      */
     public function applyCategoryPack(string $packId): array
@@ -95,14 +131,40 @@ final class TicketingSettingsService
             ]);
         }
 
-        $merged = array_values(array_unique(array_merge(
-            $this->categories(),
-            $catalog->categoriesFor($packId),
-        )));
+        $byId = [];
+        foreach ($this->categoryOptions() as $option) {
+            $byId[$option['id']] = $option;
+        }
 
-        $this->setString(self::CATEGORIES, json_encode($merged, JSON_THROW_ON_ERROR));
+        foreach ($catalog->categoriesFor($packId) as $slug) {
+            if (! isset($byId[$slug])) {
+                $byId[$slug] = [
+                    'id' => $slug,
+                    'label' => TicketingCategoryCatalog::labelFor($slug),
+                    'sla_response_minutes' => null,
+                    'sla_escalation_minutes' => null,
+                ];
+            }
+        }
 
-        return $merged;
+        $merged = array_values($byId);
+        $this->persistCategoryOptions($merged);
+
+        return array_column($merged, 'id');
+    }
+
+    /**
+     * @param  list<array{id: string, label: string, sla_response_minutes?: ?int, sla_escalation_minutes?: ?int}>  $options
+     */
+    public function persistCategoryOptions(array $options): void
+    {
+        if ($options === []) {
+            throw ValidationException::withMessages([
+                'categories' => [__('Add at least one ticket category.')],
+            ]);
+        }
+
+        $this->setString(self::CATEGORIES, json_encode($options, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -141,7 +203,9 @@ final class TicketingSettingsService
             'notify_requestor_on_resolve' => $this->getBool(self::NOTIFY_REQUESTOR_ON_RESOLVE, true),
             'notify_assignee_on_assign' => $this->getBool(self::NOTIFY_ASSIGNEE_ON_ASSIGN, true),
             'categories' => $this->categories(),
+            'category_options' => $this->categoryOptions(),
             'category_packs' => app(TicketingCategoryPackCatalog::class)->all(),
+            'assignment_rules' => $this->assignmentRules(),
             'sla_enabled' => $this->getBool(self::SLA_ENABLED, true),
             'sla_response_minutes' => $this->getInt(self::SLA_RESPONSE_MINUTES, 480),
             'sla_escalation_minutes' => $this->getInt(self::SLA_ESCALATION_MINUTES, 1440),
@@ -207,17 +271,18 @@ final class TicketingSettingsService
         }
 
         if (array_key_exists('categories', $values) && is_array($values['categories'])) {
-            $slugs = [];
-            foreach ($values['categories'] as $item) {
-                $slug = strtolower(trim((string) $item));
-                if ($slug === '' || ! preg_match('/^[a-z0-9_]+$/', $slug)) {
-                    throw ValidationException::withMessages([
-                        'categories' => [__('Categories must use lowercase letters, numbers, and underscores only.')],
-                    ]);
-                }
-                $slugs[] = $slug;
+            $options = TicketingCategoryCatalog::normalizeList($values['categories']);
+            if ($options === []) {
+                throw ValidationException::withMessages([
+                    'categories' => [__('Categories must use lowercase letters, numbers, and underscores only.')],
+                ]);
             }
-            $this->setString(self::CATEGORIES, json_encode(array_values(array_unique($slugs)), JSON_THROW_ON_ERROR));
+            $this->persistCategoryOptions($options);
+        }
+
+        if (array_key_exists('assignment_rules', $values) && is_array($values['assignment_rules'])) {
+            $rules = app(TicketingAssignmentService::class)->normalizeRulesForPersist($values['assignment_rules']);
+            $this->persistAssignmentRules($rules);
         }
 
         if (array_key_exists('apply_category_pack', $values)) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Http\Middleware;
 
+use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\MfaService;
 use Closure;
 use Illuminate\Http\Request;
@@ -32,7 +33,12 @@ class EnsureMfaVerified
             return response()->json(['message' => __('Session not found.')], 401);
         }
 
-        if ($this->mfaService->isTenantMfaPolicyActive() && ! $session->mfa_verified_at) {
+        $user = $request->user();
+        $requiresMfa = $user instanceof TenantUser
+            ? $this->mfaService->sessionRequiresMfaVerification($user)
+            : $this->mfaService->isTenantMfaPolicyActive();
+
+        if ($requiresMfa && ! $session->mfa_verified_at) {
             return response()->json(['message' => __('MFA verification is required.')], 403);
         }
 

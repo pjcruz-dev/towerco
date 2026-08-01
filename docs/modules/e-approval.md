@@ -74,7 +74,7 @@ npm run dev:fresh
 ### Backend APIs
 
 - `GET/POST /e-approval/forms`, `GET/PUT/DELETE /e-approval/forms/{form}`, `POST .../publish`, `POST /e-approval/forms/validate`
-- `GET/POST /e-approval/submissions`, `GET .../submissions/{submission}`, `POST .../cancel`, `PUT .../resubmit`
+- `GET/POST /e-approval/submissions`, `GET .../submissions/{submission}`, `GET .../submissions/{submission}/workflow-preview` (admin `e_approval:forms:manage` — runs/skips path for this request), `POST .../cancel`, `PUT .../resubmit`
 - `GET/POST .../submissions/{submission}/comments`, `POST .../attachments`, `GET /e-approval/attachments/{attachment}`
 - `GET /e-approval/approvals`, `POST /e-approval/approvals/{approval}/decide`
 - `GET /e-approval/notifications`, unread count, mark read / mark all read
@@ -133,6 +133,99 @@ npm run dev:fresh
 ### Document control gate (DCF)
 
 Configure on form `metadata_json.documentControlGate` with `afterStepOrder` and field names. When workflow completes that step, submission moves to `awaiting_dcf`; requestor uses **DCF resubmit** with updated field values.
+
+### Revision / resubmit routing
+
+Default behavior after a requestor revises and resubmits is **restart from step 1** (same as historical TowerOS behavior).
+
+Per-form opt-in via `metadata_json.revision`:
+
+```json
+{
+  "revision": {
+    "routing": "resume_returning_step",
+    "material_fields": ["payment_amount", "payee"],
+    "approver_can_force_full_restart": false
+  }
+}
+```
+
+| Setting | Default | Behavior |
+|---------|---------|----------|
+| `routing` | `restart_from_start` | Rebuild from step 1, or resume at returning step when set |
+| `material_fields` | `[]` | If resume is on and any listed field changes → force restart |
+| `approver_can_force_full_restart` | `false` | When `true`, Decide UI can require full re-approval on that return |
+
+Resume falls back to restart when: approver sets `force_full_restart` (only if the form allows it), a configured material field changes, the return step is missing, or the return step’s condition/approver no longer applies.
+
+Submission detail exposes `revision_config`, `returned_from_step`, `force_full_restart`, and `revision_routing_applied` for UI banners. Form editor: **Workflow** tab → **Revision routing** card.
+
+### Threshold if/else routing (complementary steps)
+
+The approval engine is still linear: conditions **skip** a step; they do not jump to an alternate graph. Exclusive forks use two or more adjacent steps with complementary `when` rules on any numeric/comparable field. Which band runs is always resolved from the **submission field values** at submit/preview time:
+
+| Band | Example condition | Who runs |
+|------|-------------------|----------|
+| If | `amount` ≤ 5000 | Approver A |
+| Else | `amount` > 5000 | Approver B |
+| Shared | Always | Later steps |
+
+Step conditions combine with `when_logic`:
+
+| `when_logic` | Behavior |
+|--------------|----------|
+| `and` (default) | Every condition must match |
+| `or` | Any one condition can match |
+
+Example: escalate when `urgent = yes` **OR** `amount > 5000`. Nested BPM-style OR trees, goto/jump targets, and a full graph canvas remain out of scope — model complex forks with exclusive bands, field map, or parallel groups instead.
+
+| Step | Condition | Approver |
+|------|-----------|----------|
+| Band 1 | `field` ≤ T1 | Approver A |
+| Band 2 (optional middle) | `field` > T1 and ≤ T2 | Approver B |
+| Band N | `field` > Tn | Approver Z |
+| Shared | Always | Later steps |
+
+Form editor → **Workflow** → **Add branch / ladder** supports:
+- **If / Else** — one threshold (2 bands)
+- **Threshold ladder** — multiple boundaries (3+ exclusive bands)
+
+Matching adjacent bands render side-by-side (or in a multi-column ladder). If two-way thresholds differ (e.g. `5000` vs `500`), steps stay separate and the editor offers an align action. This is different from **Mapped field value**, which picks an approver inside one step from exact field values (codes/choices), not threshold path forking.
+
+### Parallel approval (all / any / N of M)
+
+Steps that share the same `step_order` activate together. Completion is controlled by `parallel_mode` on the step condition:
+
+| Mode | Behavior |
+|------|----------|
+| `all` (default) | Wait until every pending approval in the band is decided |
+| `any` | First approval settles the band; remaining pending siblings are invalidated |
+| `n_of_m` | After `parallel_quorum` approvals, remaining pending siblings are invalidated |
+
+Form editor → **Workflow** → **Add branch / ladder / parallel** → **Parallel** inserts N fixed-user steps with the same order and a completion rule. Preview groups them under one step band. Rejecting one member still rejects the submission and invalidates other pending siblings.
+
+| Routing style | `step_order` | Outcome |
+|---------------|--------------|---------|
+| Exclusive If/Else or ladder | Different orders | Only matching band runs |
+| Parallel | Same order | Band completes per mode above |
+
+### Dynamic N approvers from a list
+
+Add an **Approver list (multi)** form field and a workflow step typed **From approver list (dynamic N)**. At submit, the compiler expands the selected user IDs into fixed-user siblings that share one `step_order` (a parallel band), using the step’s completion rule (`all` / `any` / `n_of_m`).
+
+| Piece | Role |
+|-------|------|
+| Field `approver_list` | Requestor picks N stakeholders (JSON array of user ids) |
+| Step `user_list` | Points at that field; optional fallback if the list is empty |
+| Parallel mode | Same as Phase 3 — applied to every expanded sibling |
+
+Preview soft-expands when sample values are present; empty lists show a path warning instead of failing the preview call.
+
+### Workflow health (Phase 0)
+
+Publish checklist also warns on: near-miss If/Else thresholds, all-conditional workflows (no always-on step), incomplete conditions, unmapped field_map choices without a default, and dynamic steps (manager/field/role) without a **fallback approver**.
+
+`fallback_approver_id` (stored on the step condition) is used when primary resolution fails; field_map continues to use `default_approver_id` for unmapped values. Workflow preview returns **runs** vs **skipped** steps (`path_reason`) and accepts optional `requestor_email` to resolve manager steps.
 
 ---
 

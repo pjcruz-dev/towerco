@@ -9,32 +9,33 @@ use Illuminate\Support\Facades\Schema;
 
 final class TenantWorkingDaysCalendarFactory
 {
-    public function make(?string $rolloutRegion = null): WorkingDaysCalendar
+    public function make(?string $opsScope = null): WorkingDaysCalendar
     {
-        return new WorkingDaysCalendar($this->activeHolidayDates($rolloutRegion));
+        return new WorkingDaysCalendar($this->activeHolidayDates($opsScope));
     }
 
     /**
-     * National holidays always apply. Regional holidays apply only when rollout region matches.
+     * National holidays always apply. Territory-scoped holidays apply when ops scope matches
+     * (rollout territory preferred; region used as legacy fallback by callers).
      *
      * @return list<string>
      */
-    public function activeHolidayDates(?string $rolloutRegion = null, ?int $year = null): array
+    public function activeHolidayDates(?string $opsScope = null, ?int $year = null): array
     {
         if (! Schema::connection('tenant')->hasTable('tenant_public_holidays')) {
             return [];
         }
 
         $year = $year ?? (int) now()->format('Y');
-        $normalizedRegion = $this->normalizeRegion($rolloutRegion);
+        $matchKey = RolloutOpsGeography::matchKey($opsScope);
 
         return TenantPublicHoliday::query()
             ->where('calendar_year', $year)
-            ->where(function ($query) use ($normalizedRegion): void {
+            ->where(function ($query) use ($matchKey): void {
                 $query->whereNull('region');
 
-                if ($normalizedRegion !== null) {
-                    $query->orWhereRaw('LOWER(region) = ?', [$normalizedRegion]);
+                if ($matchKey !== null) {
+                    $query->orWhereRaw('LOWER(region) = ?', [$matchKey]);
                 }
             })
             ->orderBy('holiday_date')
@@ -44,23 +45,12 @@ final class TenantWorkingDaysCalendarFactory
             ->all();
     }
 
-    public function holidayScopeLabel(?string $rolloutRegion): string
+    public function holidayScopeLabel(?string $opsScope): string
     {
-        $normalizedRegion = $this->normalizeRegion($rolloutRegion);
+        $normalized = RolloutOpsGeography::normalize($opsScope);
 
-        return $normalizedRegion !== null
-            ? strtoupper($normalizedRegion).' + national'
+        return $normalized !== null
+            ? $normalized.' + national'
             : 'National only';
-    }
-
-    private function normalizeRegion(?string $region): ?string
-    {
-        if ($region === null) {
-            return null;
-        }
-
-        $trimmed = strtolower(trim($region));
-
-        return $trimmed !== '' ? $trimmed : null;
     }
 }

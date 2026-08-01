@@ -16,6 +16,7 @@ final class RolloutPlaybookDefinitionRegistry
         return match ($version) {
             RolloutPlaybookV1Definition::VERSION => RolloutPlaybookV1Definition::payload(),
             RolloutPlaybookV2Definition::VERSION => RolloutPlaybookV2Definition::payload(),
+            RolloutPlaybookV3Definition::VERSION => RolloutPlaybookV3Definition::payload(),
             default => throw new InvalidArgumentException("Unknown playbook version [{$version}]."),
         };
     }
@@ -28,6 +29,7 @@ final class RolloutPlaybookDefinitionRegistry
         return [
             RolloutPlaybookV1Definition::VERSION,
             RolloutPlaybookV2Definition::VERSION,
+            RolloutPlaybookV3Definition::VERSION,
         ];
     }
 }

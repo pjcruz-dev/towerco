@@ -20,6 +20,7 @@ class EApprovalRequestApproval extends Model
         'step_id',
         'approver_id',
         'status',
+        'approval_cycle',
         'remarks',
         'acted_at',
         'signature',
@@ -30,6 +31,7 @@ class EApprovalRequestApproval extends Model
     protected function casts(): array
     {
         return [
+            'approval_cycle' => 'integer',
             'acted_at' => 'datetime',
             'last_reminder_at' => 'datetime',
             'escalated_at' => 'datetime',
@@ -71,14 +73,23 @@ class EApprovalRequestApproval extends Model
             ? $this->status
             : ($submissionStatus ?? $this->status);
 
+        $cycle = (int) ($this->approval_cycle ?: 1);
+        $submissionCycle = (int) ($this->submission?->approval_cycle ?: 1);
+        $isPriorCycle = $cycle < $submissionCycle
+            || in_array((string) $this->status, ['superseded', 'invalidated'], true);
+
         return [
             'id' => (string) $this->id,
             'status' => $displayStatus,
             'approval_status' => $this->status,
+            'approval_cycle' => $cycle,
+            'is_prior_cycle' => $isPriorCycle,
             'remarks' => $this->remarks,
             'signature' => $this->signature,
             'acted_at' => $this->acted_at?->toIso8601String(),
             'step_order' => $this->step?->step_order,
+            'parallel_mode' => $this->parallelModeFromStep(),
+            'parallel_quorum' => $this->parallelQuorumFromStep(),
             'approver' => $this->approver ? [
                 'id' => (string) $this->approver->id,
                 'name' => $this->approver->name,
@@ -91,5 +102,23 @@ class EApprovalRequestApproval extends Model
                 'form_name' => $this->submission->form?->name,
             ] : null,
         ];
+    }
+
+    private function parallelModeFromStep(): ?string
+    {
+        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
+        $mode = strtolower(trim((string) ($condition['parallel_mode'] ?? '')));
+
+        return in_array($mode, ['any', 'n_of_m', 'all'], true) ? $mode : null;
+    }
+
+    private function parallelQuorumFromStep(): ?int
+    {
+        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
+        if (! is_numeric($condition['parallel_quorum'] ?? null)) {
+            return null;
+        }
+
+        return max(1, (int) $condition['parallel_quorum']);
     }
 }
