@@ -75,13 +75,18 @@ final class RolloutGateApprovalPolicyFullCoverage
     {
         return match ($phaseKey) {
             'site_hunting' => ['saq', 'pmo'],
+            'pre_assessment' => ['mno', 'pmo'],
+            'moc_col' => ['saq', 'pmo'],
             'tssr_creation' => ['saq_engineering', 'saq', 'pmo'],
             'tssr_mno_approval' => ['mno', 'pmo'],
             'pre_construction' => ['engineering', 'pmo'],
             'permitting' => ['saq', 'engineering', 'pmo'],
+            'skom' => ['cme', 'pmo'],
             'construction' => ['cme', 'pmo', 'tenant_admin'],
-            'site_license' => ['pmo', 'tenant_admin'],
+            'site_license' => ['saq', 'pmo', 'tenant_admin'],
+            'handover_operations' => ['pmo', 'tenant_admin'],
             'implementation' => ['cme', 'pmo'],
+            'endorsement' => ['pmo'],
             default => match ($ownerRole) {
                 'saq' => ['saq', 'pmo'],
                 'saq_engineering' => ['saq_engineering', 'saq', 'pmo'],
@@ -92,5 +97,23 @@ final class RolloutGateApprovalPolicyFullCoverage
                 default => ['pmo'],
             },
         };
+    }
+
+    /**
+     * Uses playbook v3.0.0 timeline structure with full approval on every phase.
+     *
+     * @return array<string, array<string, GatePolicy>>
+     */
+    public static function forPlaybookV3(): array
+    {
+        $payload = RolloutPlaybookV3Definition::payload();
+        $templates = $payload['timeline_templates'] ?? [];
+
+        if (! is_array($templates)) {
+            return [];
+        }
+
+        /** @var array<string, list<array<string, mixed>>> $templates */
+        return self::fromTimelineTemplates($templates);
     }
 }

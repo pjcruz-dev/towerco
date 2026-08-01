@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\AssetOne\Services;
 
 use App\Modules\AssetOne\Models\Asset;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use Illuminate\Support\Facades\DB;
 
 final class AssetOneDashboardService
@@ -13,6 +14,20 @@ final class AssetOneDashboardService
      * @return array<string, mixed>
      */
     public function build(): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "asset_one:dashboard:{$tenantId}",
+            30,
+            fn (): array => $this->buildUncached(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(): array
     {
         $total = Asset::query()->count();
         $inWarehouse = Asset::query()->where('status', 'in_warehouse')->count();

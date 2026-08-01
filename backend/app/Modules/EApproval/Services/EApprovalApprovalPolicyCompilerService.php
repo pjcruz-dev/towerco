@@ -21,6 +21,7 @@ final class EApprovalApprovalPolicyCompilerService
         private readonly EApprovalApprovalPolicyStepPersister $stepPersister,
         private readonly EApprovalFormWorkflowRulesCompilerService $formRulesCompiler,
         private readonly EApprovalConditionalWorkflowCompilerService $conditionalCompiler,
+        private readonly EApprovalUserListStepExpander $userListExpander,
     ) {}
 
     /**
@@ -81,6 +82,7 @@ final class EApprovalApprovalPolicyCompilerService
         }
 
         $stepDefinitions = is_array($profile['steps'] ?? null) ? $profile['steps'] : [];
+        $stepDefinitions = $this->userListExpander->expand($stepDefinitions, $values, true);
         $steps = $this->stepPersister->persist($templateId, $submissionId, $stepDefinitions);
 
         $snapshot = [

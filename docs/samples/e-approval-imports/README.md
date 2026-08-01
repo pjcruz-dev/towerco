@@ -7,13 +7,13 @@ Three `atc-form-export` JSON files ready for **E-Approval → Forms → Edit →
 | `01-document-approval.json` | Document Approval (3 sequential approver fields) |
 | `02-iso-approval.json` | ISO Approval (type, department, 3 reviewers) |
 | `03-document-control-form.json` | Document Control Form (DCF) — matches paper DCF layout |
-| `03-payment-request.json` | Payment Request (manager + finance approver) |
+| `03-payment-request.json` | **Request For Payment** — payee/amount/invoice → bank & cost → review summary |
 
 ## Revisions from legacy export
 
 - **Document Approval:** fixed field name `appprover_1` → `approver_1` (steps aligned).
 - **ISO Approval:** replaced hardcoded user UUID steps with portable `iso_reviewer_2` / `iso_reviewer_3` approver fields; fixed department label typo.
-- **Payment Request:** third form (not in your paste) — adjust or replace if you use a different third form.
+- **Request For Payment:** polished ATC-style RFP — named steps, half-width contact/dates, invoice upload beside payment note, stepped compose + review summary.
 - **All:** `status` is `draft` so you can re-upload logo and **Publish** when ready; legacy `/uploads/...` logos are omitted (re-upload in form settings).
 - Empty `condition` objects use `null` (import normalizes either).
 

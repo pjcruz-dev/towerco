@@ -39,7 +39,6 @@ class TenantAuthController extends AbstractApiController
 
         $tenantId = (string) tenant('id');
         $email = TenantUser::normalizeEmail($credentials['email']);
-        $this->authPolicy->assertEmailDomainAllowed($tenantId, $email);
 
         $user = TenantUser::findByEmail($email);
 
@@ -62,38 +61,36 @@ class TenantAuthController extends AbstractApiController
             ]);
         }
 
+        // Break-glass / password-exempt admins must remain able to sign in even if an
+        // allowed-email-domain list was set (otherwise a misconfigured allowlist locks everyone out).
+        if (! (bool) $user->password_login_exempt) {
+            $this->authPolicy->assertEmailDomainAllowed($tenantId, $email);
+        }
+
         $this->authPolicy->assertPasswordLoginAllowed($user, $tenantId);
 
         $sessionId = $this->sessionService->start((string) $user->id, 'local');
         $accessToken = $this->issueAccessToken($user, $sessionId);
         $refresh = $this->refreshTokenService->issue((string) $user->id, $sessionId);
 
-        $mfaRequired = $this->mfaService->isMfaRequired($user);
-        $challenge = null;
-        $mfaEnrolled = false;
-        if ($mfaRequired) {
-            $mfaEnrolled = DB::table('mfa_factors')
-                ->where('user_id', $user->id)
-                ->whereNull('disabled_at')
-                ->whereNotNull('verified_at')
-                ->exists();
-            $challenge = $this->mfaService->createChallenge($sessionId);
-        } else {
+        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId);
+        if ($mfaState['mark_verified']) {
             $this->sessionService->markMfaVerified($sessionId);
         }
 
         $this->auditService->log('auth.login.success', (string) $user->id, $sessionId, [
             'auth_method' => 'local',
-            'mfa_required' => $mfaRequired,
+            'mfa_required' => $mfaState['mfa_required'],
+            'mfa_trusted_device' => ! $mfaState['mfa_required'] && $this->mfaService->isMfaRequired($user),
         ]);
 
         return $this->ok([
             'access_token' => $accessToken,
             'refresh_token' => $refresh['token'],
             'session_id' => $sessionId,
-            'mfa_required' => $mfaRequired,
-            'mfa_enrollment_required' => $mfaRequired && ! $mfaEnrolled,
-            'mfa_challenge' => $challenge,
+            'mfa_required' => $mfaState['mfa_required'],
+            'mfa_enrollment_required' => $mfaState['mfa_enrollment_required'],
+            'mfa_challenge' => $mfaState['mfa_challenge'],
             'user' => $this->authUserPayload($user),
         ]);
     }
@@ -242,6 +239,10 @@ class TenantAuthController extends AbstractApiController
         }
 
         $this->sessionService->markMfaVerified($data['session_id']);
+        $session = DB::table('auth_sessions')->where('id', $data['session_id'])->first();
+        if ($session) {
+            $this->mfaService->trustCurrentDevice((string) $session->user_id);
+        }
         $this->auditService->log('auth.mfa.challenge.verified', null, $data['session_id']);
 
         return $this->ok(['verified' => true]);
@@ -276,6 +277,7 @@ class TenantAuthController extends AbstractApiController
         }
 
         $this->sessionService->markMfaVerified($data['session_id']);
+        $this->mfaService->trustCurrentDevice((string) $user->id);
         $this->auditService->log('auth.mfa.recovery.verified', (string) $user->id, $data['session_id'], [], 'high');
 
         return $this->ok(['verified' => true]);
@@ -308,6 +310,7 @@ class TenantAuthController extends AbstractApiController
         if ($sessionId !== '') {
             $this->sessionService->markMfaVerified($sessionId);
         }
+        $this->mfaService->trustCurrentDevice((string) $user->id);
         $this->auditService->log('auth.mfa.enrollment.completed', (string) $user->id, $sessionId ?: null, []);
 
         return $this->ok(['recovery_codes' => $recoveryCodes]);

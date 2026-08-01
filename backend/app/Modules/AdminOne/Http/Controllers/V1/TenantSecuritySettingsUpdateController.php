@@ -17,6 +17,7 @@ final class TenantSecuritySettingsUpdateController extends AbstractApiController
 
         $data = $request->validate([
             'mfa_required' => ['required', 'boolean'],
+            'mfa_trust_days' => ['sometimes', 'integer', 'min:0', 'max:90'],
         ]);
 
         return $this->ok($service->update($data));

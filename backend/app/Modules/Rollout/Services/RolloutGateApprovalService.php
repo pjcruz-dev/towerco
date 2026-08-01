@@ -5,15 +5,24 @@ declare(strict_types=1);
 namespace App\Modules\Rollout\Services;
 
 use App\Core\Support\AllowlistedSort;
+use App\Modules\Documents\Services\DocumentRolloutGateEnforcementService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutGateApprovalRequest;
 use App\Modules\Rollout\Models\RolloutProgram;
 use App\Modules\Rollout\Models\RolloutTimelinePhase;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
+use App\Modules\Rollout\Support\RolloutBuildReadinessGuard;
+use App\Modules\Rollout\Support\RolloutCloseOutGuard;
+use App\Modules\Rollout\Support\RolloutConstructionRfiGuard;
+use App\Modules\Rollout\Support\RolloutMocColGuard;
+use App\Modules\Rollout\Support\RolloutPreAssessmentGuard;
+use App\Modules\Rollout\Support\RolloutSaqSelectGuard;
+use App\Modules\Rollout\Support\RolloutTssrDayOneGuard;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 final class RolloutGateApprovalService
@@ -36,6 +45,7 @@ final class RolloutGateApprovalService
         private readonly RolloutGateApprovalEscalationService $escalation,
         private readonly RolloutGateApprovalNotificationDispatcher $notificationDispatcher,
         private readonly RolloutGateApprovalInboxScope $inboxScope,
+        private readonly DocumentRolloutGateEnforcementService $documentGateEnforcement,
     ) {}
 
     public function submit(
@@ -52,7 +62,51 @@ final class RolloutGateApprovalService
             ]);
         }
 
-        $this->assertProgramEditable($program);
+        $this->assertProgramEditable($program, (string) $phase->phase_key);
+
+        if ($phase->phase_key === 'site_hunting') {
+            RolloutSaqSelectGuard::assertSiteHuntingGateReady($program);
+        }
+
+        if ($phase->phase_key === 'pre_assessment') {
+            RolloutPreAssessmentGuard::assertReadyForPreAssessment($program);
+        }
+
+        if ($phase->phase_key === 'moc_col') {
+            RolloutMocColGuard::assertReadyForMocCol($program);
+        }
+
+        if ($phase->phase_key === 'tssr_creation') {
+            RolloutTssrDayOneGuard::assertReadyForTssrCreation($program);
+        }
+
+        if ($phase->phase_key === 'tssr_mno_approval') {
+            RolloutTssrDayOneGuard::assertReadyForTssrMnoGate($program);
+        }
+
+        if ($phase->phase_key === 'pre_construction') {
+            RolloutBuildReadinessGuard::assertReadyForPreConstruction($program);
+        }
+
+        if ($phase->phase_key === 'permitting') {
+            RolloutBuildReadinessGuard::assertReadyForPermitting($program);
+        }
+
+        if ($phase->phase_key === 'skom') {
+            RolloutBuildReadinessGuard::assertReadyForSkom($program);
+        }
+
+        if ($phase->phase_key === 'construction') {
+            RolloutConstructionRfiGuard::assertReadyForConstruction($program);
+        }
+
+        if ($phase->phase_key === 'site_license') {
+            RolloutCloseOutGuard::assertReadyForSiteLicense($program);
+        }
+
+        if ($phase->phase_key === 'handover_operations') {
+            RolloutCloseOutGuard::assertReadyForHandover($program);
+        }
 
         $policy = $this->policies->policyForPhase(
             (string) $program->project_type,
@@ -156,13 +210,18 @@ final class RolloutGateApprovalService
         $nextStep = $request->current_step + 1;
 
         if ($nextStep >= count($chain)) {
-            $request->status = RolloutGateApprovalRequest::STATUS_APPROVED;
-            $request->current_step = $nextStep;
-            $request->step_log = $stepLog;
-            $request->completed_at = now();
-            $request->save();
+            // Binder / gate enforcement must pass before we commit the approval row.
+            $this->documentGateEnforcement->assertCanPassGate($program, $phase);
 
-            $this->programService->updatePhaseGateStatus($phase, 'passed');
+            DB::transaction(function () use ($request, $nextStep, $stepLog, $phase): void {
+                $request->status = RolloutGateApprovalRequest::STATUS_APPROVED;
+                $request->current_step = $nextStep;
+                $request->step_log = $stepLog;
+                $request->completed_at = now();
+                $request->save();
+
+                $this->programService->updatePhaseGateStatus($phase, 'passed');
+            });
 
             $this->notificationDispatcher->dispatch($request, 'approved', $actorUser->name, $actorUser);
             $this->audit->log('rollout.gate_approval_completed', $program, [
@@ -365,7 +424,7 @@ final class RolloutGateApprovalService
 
         if ($request->isOpen() && $program !== null && $request->current_step_started_at !== null) {
             $stepWaitingDays = $this->calendarFactory
-                ->make($program->region)
+                ->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program))
                 ->workingDaysBetween(
                     Carbon::parse($request->current_step_started_at)->startOfDay(),
                     Carbon::today(),
@@ -395,6 +454,12 @@ final class RolloutGateApprovalService
             'completed_at' => $request->completed_at?->toIso8601String(),
             'can_act' => $canAct,
             'acting_for' => $actingFor,
+            'is_final_step' => $request->isOpen()
+                && is_array($request->approval_chain)
+                && ($request->current_step + 1) >= count($request->approval_chain),
+            'document_binder_gate' => $program !== null && $phase !== null
+                ? $this->documentGateEnforcement->phaseSummary($program, $phase)
+                : null,
             'rollout' => $program ? [
                 'id' => $program->id,
                 'rollout_ref' => $program->rollout_ref,
@@ -428,13 +493,30 @@ final class RolloutGateApprovalService
             ->first();
     }
 
-    private function assertProgramEditable(RolloutProgram $program): void
+    private function assertProgramEditable(RolloutProgram $program, ?string $phaseKey = null): void
     {
-        if (in_array($program->status, ['completed', 'cancelled', 'batch'], true)) {
+        if (in_array($program->status, ['cancelled', 'batch'], true)) {
             throw ValidationException::withMessages([
                 'rollout' => [__('This rollout cannot be edited.')],
             ]);
         }
+
+        if ($program->status !== 'completed') {
+            return;
+        }
+
+        // P8 close-out gates remain actionable after RFI marks delivery complete (site ready).
+        if (
+            $phaseKey !== null
+            && in_array($phaseKey, ['site_license', 'handover_operations'], true)
+            && $program->actual_rfi_date !== null
+        ) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'rollout' => [__('This rollout cannot be edited.')],
+        ]);
     }
 
     private function viewerCanAct(RolloutGateApprovalRequest $request, ?TenantUser $viewer): bool

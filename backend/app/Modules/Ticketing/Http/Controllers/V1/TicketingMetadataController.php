@@ -31,6 +31,7 @@ class TicketingMetadataController extends AbstractApiController
                 TicketingTicket::PRIORITY_URGENT,
             ],
             'categories' => $categories->resolve(),
+            'category_options' => $categories->resolveOptions(),
             'source_modules' => collect($sources->modules())->map(fn (string $module) => [
                 'id' => $module,
                 'label' => $sources->labels()[$module] ?? $module,

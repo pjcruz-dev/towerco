@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\AdminOne\Services;
 
+use App\Models\TicketingTicket;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
@@ -143,52 +144,77 @@ final class TenantWorkspaceDashboardService
             $recentActivity = array_merge($recentActivity, $this->recentUserEApprovalActivity($user));
         }
 
+        $rolloutMetrics = null;
         if ($user->can('project_one:rollout:view')) {
-            $rollout = $this->rolloutMetrics->build($user);
-            if ($rollout !== null) {
-                if (($rollout['gate_approvals_awaiting_me'] ?? 0) > 0) {
+            $rolloutMetrics = $this->rolloutMetrics->build($user);
+            if ($rolloutMetrics !== null) {
+                if (($rolloutMetrics['gate_approvals_awaiting_me'] ?? 0) > 0) {
                     $kpis[] = [
                         'key' => 'rollout_gates_awaiting_me',
                         'label' => 'Gate approvals · awaiting you',
-                        'value' => (string) $rollout['gate_approvals_awaiting_me'],
+                        'value' => (string) $rolloutMetrics['gate_approvals_awaiting_me'],
                         'change' => 'PROJECT-ONE formal gates',
                         'tone' => 'danger',
                     ];
                     $actions[] = [
                         'id' => 'ws-gate-approvals',
                         'label' => 'Gate approvals awaiting you',
-                        'count' => (int) $rollout['gate_approvals_awaiting_me'],
+                        'count' => (int) $rolloutMetrics['gate_approvals_awaiting_me'],
                         'href' => '/project-one/gate-approvals?awaiting_me=1',
                         'priority' => 'high',
                     ];
                 }
 
-                if (($rollout['sla_at_risk'] ?? 0) > 0) {
+                if (($rolloutMetrics['sla_at_risk'] ?? 0) > 0) {
                     $kpis[] = [
                         'key' => 'rollout_sla_risk',
                         'label' => 'Rollout SLA risk',
-                        'value' => (string) $rollout['sla_at_risk'],
+                        'value' => (string) $rolloutMetrics['sla_at_risk'],
                         'change' => '≤10 working days to RFI',
                         'tone' => 'danger',
                     ];
                     $actions[] = [
                         'id' => 'ws-rollout-sla',
                         'label' => 'Rollouts at SLA risk',
-                        'count' => (int) $rollout['sla_at_risk'],
+                        'count' => (int) $rolloutMetrics['sla_at_risk'],
                         'href' => '/project-one/rollouts',
                         'priority' => 'high',
                     ];
                 }
 
-                if (($rollout['active_rollouts'] ?? 0) > 0 && count($kpis) < 6) {
+                if (($rolloutMetrics['active_rollouts'] ?? 0) > 0 && count($kpis) < 6) {
                     $kpis[] = [
                         'key' => 'active_rollouts',
                         'label' => 'Active rollouts',
-                        'value' => (string) $rollout['active_rollouts'],
+                        'value' => (string) $rolloutMetrics['active_rollouts'],
                         'change' => 'Open rollout programs',
                         'tone' => 'neutral',
                     ];
                 }
+            }
+        }
+
+        if ($user->can('ticketing:view') && Schema::connection('tenant')->hasTable('ticketing_tickets')) {
+            $assignedToMe = TicketingTicket::query()
+                ->where('assignee_id', $user->id)
+                ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
+                ->count();
+
+            if ($assignedToMe > 0) {
+                $kpis[] = [
+                    'key' => 'ticketing_assigned_me',
+                    'label' => 'Tickets · assigned to you',
+                    'value' => (string) $assignedToMe,
+                    'change' => 'Open / in progress',
+                    'tone' => 'warning',
+                ];
+                $actions[] = [
+                    'id' => 'ws-tickets-assigned',
+                    'label' => 'Tickets assigned to you',
+                    'count' => $assignedToMe,
+                    'href' => '/ticketing/tickets?assigned_me=1',
+                    'priority' => 'high',
+                ];
             }
         }
 
@@ -237,12 +263,109 @@ final class TenantWorkspaceDashboardService
             ->values()
             ->all();
 
+        $awaitingMe = $this->awaitingMeHub($user, $actions, $rolloutMetrics);
+
         return [
             'environment' => app()->environment(),
             'kpis' => array_slice($kpis, 0, 6),
             'actions' => array_values($actions),
+            'awaiting_me' => $awaitingMe,
             'recent_activity' => $recentActivity,
             'quick_links' => $this->quickLinks($user),
+        ];
+    }
+
+    /**
+     * Cross-module work queue: e-approval + gates + tickets assigned to the viewer.
+     *
+     * @param  list<array<string, mixed>>  $actions
+     * @param  array<string, mixed>|null  $rolloutMetrics
+     * @return array{total: int, items: list<array<string, mixed>>}
+     */
+    private function awaitingMeHub(TenantUser $user, array $actions, ?array $rolloutMetrics): array
+    {
+        $items = [];
+
+        if ($user->can('e_approval:approve')) {
+            $approvals = EApprovalRequestApproval::query()
+                ->with(['submission:id,document_no,form_id', 'submission.form:id,name'])
+                ->where('approver_id', $user->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->orderBy('created_at')
+                ->limit(5)
+                ->get();
+
+            foreach ($approvals as $approval) {
+                $submission = $approval->submission;
+                $items[] = [
+                    'id' => 'ea-'.$approval->id,
+                    'module' => 'e_approval',
+                    'label' => $submission?->document_no
+                        ? 'Approve '.$submission->document_no
+                        : 'E-Approval step awaiting you',
+                    'detail' => $submission?->form?->name,
+                    'href' => $submission
+                        ? '/e-approval/submissions/'.$submission->id
+                        : '/e-approval/approvals?awaiting_me=1',
+                    'created_at' => $approval->created_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        foreach (($rolloutMetrics['gate_approvals_preview'] ?? []) as $gate) {
+            if (! is_array($gate)) {
+                continue;
+            }
+            $rollout = is_array($gate['rollout'] ?? null) ? $gate['rollout'] : [];
+            $phase = is_array($gate['phase'] ?? null) ? $gate['phase'] : [];
+            $ref = (string) ($rollout['rollout_ref'] ?? 'Gate');
+            $phaseLabel = (string) ($phase['label'] ?? $gate['gate_label'] ?? $gate['phase_key'] ?? 'gate');
+            $items[] = [
+                'id' => 'gate-'.($gate['id'] ?? uniqid('g', true)),
+                'module' => 'project_one',
+                'label' => 'Gate approval · '.$ref,
+                'detail' => $phaseLabel,
+                'href' => '/project-one/gate-approvals?awaiting_me=1',
+                'created_at' => $gate['submitted_at'] ?? null,
+            ];
+        }
+
+        if ($user->can('ticketing:view') && Schema::connection('tenant')->hasTable('ticketing_tickets')) {
+            $tickets = TicketingTicket::query()
+                ->where('assignee_id', $user->id)
+                ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
+                ->orderByDesc('updated_at')
+                ->limit(5)
+                ->get(['id', 'ticket_number', 'title', 'priority', 'updated_at']);
+
+            foreach ($tickets as $ticket) {
+                $items[] = [
+                    'id' => 'tkt-'.$ticket->id,
+                    'module' => 'ticketing',
+                    'label' => $ticket->displayNumber().' · '.$ticket->title,
+                    'detail' => ucfirst((string) $ticket->priority).' priority',
+                    'href' => '/ticketing/tickets/'.$ticket->id,
+                    'created_at' => $ticket->updated_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+        });
+
+        $items = array_slice($items, 0, 12);
+        $totalFromActions = collect($actions)
+            ->filter(static fn (array $action): bool => in_array($action['id'] ?? '', [
+                'ws-ea-awaiting',
+                'ws-gate-approvals',
+                'ws-tickets-assigned',
+            ], true))
+            ->sum(static fn (array $action): int => (int) ($action['count'] ?? 0));
+
+        return [
+            'total' => (int) $totalFromActions,
+            'items' => array_values($items),
         ];
     }
 
@@ -258,6 +381,9 @@ final class TenantWorkspaceDashboardService
         }
         if ($user->can('e_approval:view')) {
             $links[] = ['label' => 'E-Approval', 'href' => '/e-approval'];
+        }
+        if ($user->can('ticketing:view')) {
+            $links[] = ['label' => 'Ticketing', 'href' => '/ticketing'];
         }
         if (TenantNotificationAccess::allowedModulesFor($user) !== []) {
             $links[] = ['label' => 'Notifications', 'href' => '/notifications'];

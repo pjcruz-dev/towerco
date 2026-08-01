@@ -71,5 +71,27 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertArrayHasKey('project_one', $groups);
         $this->assertArrayHasKey('e_approval', $groups);
         $this->assertArrayNotHasKey('gis', $groups);
+        $this->assertArrayNotHasKey('ai_assistant', $groups);
+    }
+
+    public function test_ai_assistant_permissions_require_module(): void
+    {
+        Config::set('toweros.tenant_modules.enabled', [
+            'core',
+            'team_access',
+            'ai_assistant',
+        ]);
+
+        $catalog = app(TenantRbacPermissionCatalog::class);
+        $enabled = $catalog->enabledPermissions();
+        $groups = $catalog->permissionGroupsForApi();
+
+        $this->assertContains('ai_assistant:use', $enabled);
+        $this->assertContains('ai_assistant:tools:use', $enabled);
+        $this->assertContains('ai_assistant:actions:execute', $enabled);
+        $this->assertContains('ai_assistant:knowledge:manage', $enabled);
+        $this->assertContains('ai_assistant:conversations:audit', $enabled);
+        $this->assertArrayHasKey('ai_assistant', $groups);
+        $this->assertSame('AI Assistant', $groups['ai_assistant']['label']);
     }
 }

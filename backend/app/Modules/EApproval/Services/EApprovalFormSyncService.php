@@ -65,6 +65,8 @@ final class EApprovalFormSyncService
             if ($name === '') {
                 continue;
             }
+            // DB column is varchar(100); long auto-slugs from labels must not 500.
+            $name = mb_substr($name, 0, 100);
 
             $match = ($payloadId !== '' && $existingById->has($payloadId))
                 ? $existingById->get($payloadId)
@@ -137,6 +139,11 @@ final class EApprovalFormSyncService
             ->all();
 
         $keptIds = [];
+
+        // Close editor gaps (e.g. 1,2,6,8 → 1,2,3,4) while keeping parallel ties.
+        $stepsPayload = EApprovalWorkflowStepDefinitionSupport::compactStepOrdersPreservingTies(
+            array_values(array_filter($stepsPayload, static fn ($step): bool => is_array($step))),
+        );
 
         foreach ($stepsPayload as $index => $step) {
             if (! is_array($step)) {
@@ -227,6 +234,7 @@ final class EApprovalFormSyncService
             'approver_field', 'from_field', 'from_approver_field' => 'field',
             'direct_manager', 'entra_manager' => 'manager',
             'field_map', 'map_field', 'mapped_field' => 'field_map',
+            'user_list', 'field_list', 'approver_list', 'from_approver_list' => 'user_list',
             default => strtolower(trim($type)),
         };
     }

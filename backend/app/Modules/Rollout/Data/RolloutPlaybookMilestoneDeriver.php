@@ -17,25 +17,33 @@ final class RolloutPlaybookMilestoneDeriver
     private const TIMELINE_MILESTONE_GROUPS = [
         'bts' => [
             'endorsement' => ['endorsement_to_hunting'],
+            // v1/v2: pre_assessment nested under hunting. v3+: explicit timeline phase.
             'site_hunting' => ['site_hunting', 'pre_assessment'],
+            'pre_assessment' => ['pre_assessment'],
+            'moc_col' => ['moc_securing', 'col_social'],
             'tssr_creation' => ['tssr_creation'],
             'tssr_mno_approval' => ['tssr_mno_approval'],
-            'moc_col' => ['moc_securing', 'col_social'],
             'pre_construction' => ['pre_construction', 'ddd', 'boq'],
             'permitting' => ['permit_prep', 'locational_clearance', 'building_permit'],
             'skom' => ['skom'],
+            // v1/v2: license + billing nested under construction. v3+: post-RFI phases.
             'construction' => ['construction', 'energization', 'rfti_submission', 'site_license', 'billing'],
+            'site_license' => ['site_license'],
+            'handover_operations' => ['handover_operations', 'billing'],
         ],
         'rtb' => [
             'endorsement' => ['endorsement_to_hunting'],
             'site_hunting' => ['site_hunting', 'pre_assessment'],
+            'pre_assessment' => ['pre_assessment'],
+            'moc_col' => ['moc_securing', 'col_social'],
             'tssr_creation' => ['tssr_creation'],
             'tssr_mno_approval' => ['tssr_mno_approval'],
-            'moc_col' => ['moc_securing', 'col_social'],
             'pre_construction' => ['pre_construction', 'ddd', 'boq'],
             'permitting' => ['permit_prep', 'locational_clearance', 'building_permit'],
             'skom' => ['skom'],
             'construction' => ['construction', 'energization', 'rfti_submission', 'site_license', 'billing'],
+            'site_license' => ['site_license'],
+            'handover_operations' => ['handover_operations', 'billing'],
         ],
         'colocation' => [
             'site_license' => ['site_license'],
@@ -66,6 +74,7 @@ final class RolloutPlaybookMilestoneDeriver
         }
 
         $groups = self::TIMELINE_MILESTONE_GROUPS[$templateKey] ?? [];
+        $groups = self::adaptGroupsForTimeline($groups, $timeline);
         $derived = [];
         $deliveryWorkingDays = (int) ($snapshot['delivery_periods'][$templateKey]['working_days'] ?? 0);
 
@@ -150,6 +159,7 @@ final class RolloutPlaybookMilestoneDeriver
         $templateKey = RolloutPlaybookMilestoneResolver::templateKey($projectType);
         $timeline = $snapshot['timeline_templates'][$templateKey] ?? [];
         $groups = self::TIMELINE_MILESTONE_GROUPS[$templateKey] ?? [];
+        $groups = self::adaptGroupsForTimeline($groups, is_array($timeline) ? $timeline : []);
 
         foreach ($timeline as $phase) {
             if (! is_array($phase)) {
@@ -157,6 +167,10 @@ final class RolloutPlaybookMilestoneDeriver
             }
 
             if (($phase['anchor'] ?? '') !== 'tssr_approved') {
+                continue;
+            }
+
+            if (array_key_exists('counts_toward_sla', $phase) && ! (bool) $phase['counts_toward_sla']) {
                 continue;
             }
 
@@ -172,6 +186,51 @@ final class RolloutPlaybookMilestoneDeriver
         }
 
         return RolloutPlaybookMilestoneResolver::legacyPostDayOneStartKey($projectType);
+    }
+
+    /**
+     * When finer timeline phases exist (v3+), drop nested segment keys from coarser parents
+     * so milestones are not duplicated (e.g. pre_assessment under site_hunting).
+     *
+     * @param  array<string, list<string>>  $groups
+     * @param  list<mixed>  $timeline
+     * @return array<string, list<string>>
+     */
+    private static function adaptGroupsForTimeline(array $groups, array $timeline): array
+    {
+        $timelineKeys = [];
+        foreach ($timeline as $phase) {
+            if (! is_array($phase)) {
+                continue;
+            }
+            $key = (string) ($phase['phase_key'] ?? '');
+            if ($key !== '') {
+                $timelineKeys[$key] = true;
+            }
+        }
+
+        if (isset($timelineKeys['pre_assessment'], $groups['site_hunting'])) {
+            $groups['site_hunting'] = array_values(array_filter(
+                $groups['site_hunting'],
+                static fn (string $key): bool => $key !== 'pre_assessment',
+            ));
+        }
+
+        if (isset($timelineKeys['site_license'], $groups['construction'])) {
+            $groups['construction'] = array_values(array_filter(
+                $groups['construction'],
+                static fn (string $key): bool => ! in_array($key, ['site_license', 'billing'], true),
+            ));
+        }
+
+        if (isset($timelineKeys['handover_operations'], $groups['construction'])) {
+            $groups['construction'] = array_values(array_filter(
+                $groups['construction'],
+                static fn (string $key): bool => $key !== 'billing',
+            ));
+        }
+
+        return $groups;
     }
 
     /**

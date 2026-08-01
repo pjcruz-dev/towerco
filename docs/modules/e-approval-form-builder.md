@@ -472,7 +472,7 @@ UI: gallery on **Forms** list and **New form → Setup**.
 
 **Tenant template admin** — `/e-approval/forms/templates` stores custom definitions in `e_approval_settings` (`tenant_form_templates` JSON). System templates from config remain read-only.
 
-**Admin statistics** — `GET /e-approval/admin/stats` (requires `e_approval:forms:manage`) shown on the Forms list page.
+Volume, status mix, and top-form analytics live under **Reports** (`/e-approval/reports`). The Forms list focuses on template design and management.
 
 ## Version history
 
@@ -524,7 +524,7 @@ Server: `EApprovalSubmissionValuesValidator`.
 - P1: Create wizard, 2–4 column rows, mobile properties dialog, catalog drag-and-drop
 - P2: Conditional visibility, revision restore, unsaved-changes warning
 - P3: Rating / location / tags fields, signature draw pad, plan-gated file uploads
-- Post-P3: Revision diff, tenant template admin, admin stats panel
+- Post-P3: Revision diff, tenant template admin; analytics moved to Reports
 - Requestor UX: draft save (server + local), section progress, inline validation + toasts, focused submit route
 
 ### Plan-gated file uploads

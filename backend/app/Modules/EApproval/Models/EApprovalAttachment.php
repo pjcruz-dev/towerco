@@ -19,7 +19,18 @@ class EApprovalAttachment extends Model
         'field_name',
         'file_path',
         'file_name',
+        'metadata',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 
     /** @return BelongsTo<EApprovalSubmission, $this> */
     public function submission(): BelongsTo

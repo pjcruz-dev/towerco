@@ -39,7 +39,7 @@ final class ManualTrackerImportService
     /** @var array<string, string> */
     private const PHASE_START_FIELDS = [
         'phase_construction_start' => 'construction',
-        'phase_site_license_start' => 'permitting',
+        'phase_site_license_start' => 'site_license',
     ];
 
     public function __construct(

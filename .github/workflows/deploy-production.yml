@@ -1,0 +1,202 @@
+name: Deploy Production
+
+# Phase 3: git tag v* → retag ECR digests from that commit (no rebuild) → ECS production.
+# Requires GitHub Environment "production" (recommend required reviewers).
+# See docs/infrastructure/cicd-phase-3.md
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to promote (e.g. v1.0.5). Leave empty to use github.ref_name."
+        required: false
+        type: string
+      dry_run:
+        description: "Plan only (no ECR retag / no ECS update)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY || secrets.ECR_REGISTRY }}
+  ECR_API_REPO: ${{ vars.ECR_API_REPO || 'toweros-api' }}
+  ECR_WEB_REPO: ${{ vars.ECR_WEB_REPO || 'toweros-web' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER_PRODUCTION || 'toweros-production' }}
+  ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API_PRODUCTION || 'toweros-api' }}
+  ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB_PRODUCTION || 'toweros-web' }}
+  ECS_SERVICE_WORKER: ${{ vars.ECS_SERVICE_WORKER_PRODUCTION || 'toweros-worker' }}
+  ECS_MIGRATE_TASK: ${{ vars.ECS_MIGRATE_TASK_PRODUCTION || 'toweros-migrate' }}
+  ECS_SUBNETS: ${{ vars.ECS_SUBNETS_PRODUCTION }}
+  ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS_PRODUCTION }}
+  RDS_CLUSTER: ${{ vars.RDS_DB_CLUSTER_IDENTIFIER_PRODUCTION }}
+  RDS_INSTANCE: ${{ vars.RDS_DB_INSTANCE_IDENTIFIER_PRODUCTION }}
+
+jobs:
+  gate:
+    name: CD gate
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      sha_short: ${{ steps.meta.outputs.sha_short }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: meta
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            FULL=$(git rev-list -n 1 "$TAG")
+          else
+            FULL="$GITHUB_SHA"
+          fi
+          echo "sha_short=${FULL:0:12}" >> "$GITHUB_OUTPUT"
+          echo "Promoting tag=${TAG} sha=${FULL:0:12}"
+
+      - id: check
+        run: |
+          if [ "${{ vars.TOWEROS_CD_ENABLED }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+              echo "::warning::AWS_ROLE_ARN empty — production deploy dry-run / skip AWS."
+              echo "enabled=dry" >> "$GITHUB_OUTPUT"
+            else
+              echo "enabled=yes" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "TOWEROS_CD_ENABLED is not true — skipping production deploy."
+            echo "enabled=no" >> "$GITHUB_OUTPUT"
+          fi
+
+  promote:
+    name: Promote digests to production
+    needs: gate
+    if: needs.gate.outputs.enabled != 'no'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        if: needs.gate.outputs.enabled == 'yes'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Retag ECR images (no rebuild)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        env:
+          SHA: ${{ needs.gate.outputs.sha_short }}
+          TAG: ${{ needs.gate.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          retag() {
+            local repo="$1"
+            echo "Retagging ${repo}:${SHA} → ${TAG} and :production"
+            MANIFEST=$(aws ecr batch-get-image \
+              --repository-name "$repo" \
+              --image-ids imageTag="$SHA" \
+              --query 'images[0].imageManifest' --output text)
+            if [ -z "$MANIFEST" ] || [ "$MANIFEST" = "None" ]; then
+              echo "::error::Missing image ${repo}:${SHA}. Deploy that commit to Staging first."
+              exit 1
+            fi
+            aws ecr put-image --repository-name "$repo" --image-tag "$TAG" --image-manifest "$MANIFEST" >/dev/null || true
+            aws ecr put-image --repository-name "$repo" --image-tag production --image-manifest "$MANIFEST" >/dev/null || true
+          }
+          retag "$ECR_API_REPO"
+          retag "$ECR_WEB_REPO"
+
+      - name: Dry-run summary
+        if: needs.gate.outputs.enabled == 'dry' || inputs.dry_run == true
+        run: |
+          echo "Would retag ECR ${ECR_API_REPO} and ${ECR_WEB_REPO}"
+          echo "  :${{ needs.gate.outputs.sha_short }} → :${{ needs.gate.outputs.release_tag }} and :production"
+          echo "Would deploy ECS cluster=${ECS_CLUSTER}"
+
+      - name: Pre-migrate DB snapshot (Phase 4)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        env:
+          TAG: ${{ needs.gate.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "${{ vars.RDS_SNAPSHOT_ENABLED }}" != "true" ]; then
+            echo "RDS_SNAPSHOT_ENABLED is not true — skipping snapshot (Phase 4)."
+            exit 0
+          fi
+          SAFE_TAG=$(echo "$TAG" | tr './' '-')
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          SNAPSHOT_ID="toweros-pre-migrate-${SAFE_TAG}-${STAMP}"
+          if [ -n "${RDS_CLUSTER:-}" ]; then
+            aws rds create-db-cluster-snapshot \
+              --db-cluster-identifier "$RDS_CLUSTER" \
+              --db-cluster-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created Aurora cluster snapshot $SNAPSHOT_ID"
+          elif [ -n "${RDS_INSTANCE:-}" ]; then
+            aws rds create-db-snapshot \
+              --db-instance-identifier "$RDS_INSTANCE" \
+              --db-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created RDS instance snapshot $SNAPSHOT_ID"
+          else
+            echo "::warning::RDS_SNAPSHOT_ENABLED=true but no cluster/instance identifier set."
+          fi
+
+      - name: Run production migrations (ECS one-off)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        run: |
+          set -euo pipefail
+          if [ -z "${ECS_SUBNETS:-}" ] || [ -z "${ECS_SECURITY_GROUPS:-}" ]; then
+            echo "::warning::ECS_SUBNETS_PRODUCTION / ECS_SECURITY_GROUPS_PRODUCTION not set — skipping migrate task."
+            exit 0
+          fi
+          NETWORK="awsvpcConfiguration={subnets=[${ECS_SUBNETS}],securityGroups=[${ECS_SECURITY_GROUPS}],assignPublicIp=DISABLED}"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$ECS_MIGRATE_TASK" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"php\",\"artisan\",\"toweros:migrate\",\"--force\"]}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migrate task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          EXIT=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::Migrate task failed with exit $EXIT"
+            exit 1
+          fi
+
+      - name: Force new ECS deployment (production)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        run: |
+          set -euo pipefail
+          for SVC in "$ECS_SERVICE_API" "$ECS_SERVICE_WEB" "$ECS_SERVICE_WORKER"; do
+            echo "Updating $SVC on $ECS_CLUSTER"
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$SVC" --force-new-deployment >/dev/null
+          done
+          echo "Production promote complete for ${{ needs.gate.outputs.release_tag }} (sha ${{ needs.gate.outputs.sha_short }})"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Production promote"
+            echo "- Tag: \`${{ needs.gate.outputs.release_tag }}\`"
+            echo "- Commit SHA (12): \`${{ needs.gate.outputs.sha_short }}\`"
+            echo "- Mode: \`${{ needs.gate.outputs.enabled }}\`"
+            echo "- Rollback: Actions → Deploy Rollback with previous tag (Phase 4)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -100,6 +100,7 @@ final class EApprovalSubmissionPrintService
                 'id' => (string) $a->id,
                 'file_name' => $a->file_name,
                 'field_name' => $a->field_name,
+                'metadata' => is_array($a->metadata) ? $a->metadata : null,
             ])->values()->all(),
             'template' => $template,
             'show_approval_trail' => count($submission->approvals) > 0,

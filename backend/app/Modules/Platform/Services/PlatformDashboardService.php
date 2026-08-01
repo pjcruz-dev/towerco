@@ -7,6 +7,7 @@ namespace App\Modules\Platform\Services;
 use App\Models\Tenant;
 use App\Modules\Platform\Models\RolloutPlaybookVersion;
 use App\Modules\Platform\Models\TenantPlaybookBinding;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -21,6 +22,24 @@ final class PlatformDashboardService
      * @return array<string, mixed>
      */
     public function build(): array
+    {
+        // Cheap signature query so the cache busts as soon as any tenant row changes.
+        $signature = Tenant::query()
+            ->selectRaw('COUNT(*) as tenant_count, MAX(updated_at) as latest_update')
+            ->first();
+        $key = sprintf(
+            'platform:dashboard:%d:%s',
+            (int) ($signature->tenant_count ?? 0),
+            (string) ($signature->latest_update ?? 'none'),
+        );
+
+        return TenantScopedCache::remember($key, 90, fn (): array => $this->buildUncached());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(): array
     {
         $tenants = Tenant::query()
             ->with(['domains:id,domain,tenant_id'])

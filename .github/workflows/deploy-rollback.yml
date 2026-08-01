@@ -1,0 +1,176 @@
+name: Deploy Rollback
+
+# Phase 4: emergency re-promote of a previous release tag to Production (no rebuild).
+# Prefer this when the latest v* promote is bad. Skips migrate by default.
+# See docs/infrastructure/hardening-phase-4.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_tag:
+        description: "Last known good tag (e.g. v1.0.4)"
+        required: true
+        type: string
+      run_migrate:
+        description: "Run DB migrate (usually false on rollback)"
+        type: boolean
+        default: false
+      take_snapshot:
+        description: "Take DB snapshot before any migrate"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Plan only"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY || secrets.ECR_REGISTRY }}
+  ECR_API_REPO: ${{ vars.ECR_API_REPO || 'toweros-api' }}
+  ECR_WEB_REPO: ${{ vars.ECR_WEB_REPO || 'toweros-web' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER_PRODUCTION || 'toweros-production' }}
+  ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API_PRODUCTION || 'toweros-api' }}
+  ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB_PRODUCTION || 'toweros-web' }}
+  ECS_SERVICE_WORKER: ${{ vars.ECS_SERVICE_WORKER_PRODUCTION || 'toweros-worker' }}
+  ECS_MIGRATE_TASK: ${{ vars.ECS_MIGRATE_TASK_PRODUCTION || 'toweros-migrate' }}
+  ECS_SUBNETS: ${{ vars.ECS_SUBNETS_PRODUCTION }}
+  ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS_PRODUCTION }}
+  RDS_CLUSTER: ${{ vars.RDS_DB_CLUSTER_IDENTIFIER_PRODUCTION }}
+  RDS_INSTANCE: ${{ vars.RDS_DB_INSTANCE_IDENTIFIER_PRODUCTION }}
+
+jobs:
+  rollback:
+    name: Rollback production to previous tag
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          TAG="${{ inputs.previous_tag }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Unknown git tag $TAG"
+            exit 1
+          fi
+          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-list -n 1 "$TAG" | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - name: Gate AWS
+        id: gate
+        run: |
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "enabled=dry" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.gate.outputs.enabled == 'yes'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Optional pre-migrate snapshot
+        if: steps.gate.outputs.enabled == 'yes' && inputs.dry_run != true && inputs.run_migrate == true && inputs.take_snapshot == true
+        env:
+          TAG: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if [ "${{ vars.RDS_SNAPSHOT_ENABLED }}" != "true" ]; then
+            echo "RDS_SNAPSHOT_ENABLED is not true — skipping snapshot."
+            exit 0
+          fi
+          SAFE_TAG=$(echo "$TAG" | tr './' '-')
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          SNAPSHOT_ID="toweros-pre-migrate-${SAFE_TAG}-${STAMP}"
+          if [ -n "${RDS_CLUSTER:-}" ]; then
+            aws rds create-db-cluster-snapshot \
+              --db-cluster-identifier "$RDS_CLUSTER" \
+              --db-cluster-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created cluster snapshot $SNAPSHOT_ID"
+          elif [ -n "${RDS_INSTANCE:-}" ]; then
+            aws rds create-db-snapshot \
+              --db-instance-identifier "$RDS_INSTANCE" \
+              --db-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created instance snapshot $SNAPSHOT_ID"
+          else
+            echo "::warning::No RDS cluster/instance identifier set — snapshot skipped."
+          fi
+
+      - name: Retag ECR images to production
+        if: steps.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        env:
+          TAG: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          retag() {
+            local repo="$1"
+            MANIFEST=$(aws ecr batch-get-image \
+              --repository-name "$repo" \
+              --image-ids imageTag="$TAG" \
+              --query 'images[0].imageManifest' --output text)
+            if [ -z "$MANIFEST" ] || [ "$MANIFEST" = "None" ]; then
+              echo "::error::Missing image ${repo}:${TAG}. Ensure that release was pushed to ECR."
+              exit 1
+            fi
+            aws ecr put-image --repository-name "$repo" --image-tag production --image-manifest "$MANIFEST" >/dev/null || true
+            echo "Pointed ${repo}:production at ${TAG}"
+          }
+          retag "$ECR_API_REPO"
+          retag "$ECR_WEB_REPO"
+
+      - name: Run migrations (optional)
+        if: steps.gate.outputs.enabled == 'yes' && inputs.dry_run != true && inputs.run_migrate == true
+        run: |
+          set -euo pipefail
+          if [ -z "${ECS_SUBNETS:-}" ] || [ -z "${ECS_SECURITY_GROUPS:-}" ]; then
+            echo "::warning::Subnets/SGs missing — skip migrate."
+            exit 0
+          fi
+          NETWORK="awsvpcConfiguration={subnets=[${ECS_SUBNETS}],securityGroups=[${ECS_SECURITY_GROUPS}],assignPublicIp=DISABLED}"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$ECS_MIGRATE_TASK" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"php\",\"artisan\",\"toweros:migrate\",\"--force\"]}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          EXIT=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::Migrate failed ($EXIT)"
+            exit 1
+          fi
+
+      - name: Force ECS redeploy
+        if: steps.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        run: |
+          set -euo pipefail
+          for SVC in "$ECS_SERVICE_API" "$ECS_SERVICE_WEB" "$ECS_SERVICE_WORKER"; do
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$SVC" --force-new-deployment >/dev/null
+          done
+
+      - name: Summary
+        run: |
+          {
+            echo "## Emergency rollback"
+            echo "- Previous tag: \`${{ steps.meta.outputs.release_tag }}\`"
+            echo "- SHA: \`${{ steps.meta.outputs.sha_short }}\`"
+            echo "- Migrate: \`${{ inputs.run_migrate }}\`"
+            echo "- Dry run: \`${{ inputs.dry_run }}\`"
+            echo "- Next: verify /up + login on production hosts"
+          } >> "$GITHUB_STEP_SUMMARY"

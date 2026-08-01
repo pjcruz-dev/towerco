@@ -9,6 +9,7 @@ use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\AzureGraphService;
 use App\Modules\Identity\Services\AzureGroupRoleMapper;
+use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantSsoConfigService;
 use App\Modules\Identity\Services\TenantUserProvisioningService;
@@ -29,6 +30,7 @@ class TenantSsoController extends AbstractApiController
         private readonly AuthSessionService $sessionService,
         private readonly RefreshTokenService $refreshTokenService,
         private readonly AuthAuditService $auditService,
+        private readonly MfaService $mfaService,
     ) {}
 
     public function redirect(Request $request): RedirectResponse|JsonResponse
@@ -106,7 +108,11 @@ class TenantSsoController extends AbstractApiController
         $this->roleMapper->syncRolesForGroups($user, $groupIds);
 
         $sessionId = $this->sessionService->start((string) $user->id, 'azure_sso');
-        $this->sessionService->markMfaVerified($sessionId);
+        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId);
+        if ($mfaState['mark_verified']) {
+            $this->sessionService->markMfaVerified($sessionId);
+        }
+
         $accessToken = $user->createToken(
             'access',
             ['*', 'session:'.$sessionId],
@@ -117,13 +123,16 @@ class TenantSsoController extends AbstractApiController
         $this->auditService->log('auth.sso.azure.success', (string) $user->id, $sessionId, [
             'email' => $socialUser->getEmail(),
             'group_count' => count($groupIds),
+            'mfa_required' => $mfaState['mfa_required'],
         ]);
 
         $payload = [
             'access_token' => $accessToken,
             'refresh_token' => $refresh['token'],
             'session_id' => $sessionId,
-            'mfa_required' => false,
+            'mfa_required' => $mfaState['mfa_required'],
+            'mfa_enrollment_required' => $mfaState['mfa_enrollment_required'],
+            'mfa_challenge' => $mfaState['mfa_challenge'],
             'user' => app(\App\Modules\Identity\Services\TenantAuthUserPayloadBuilder::class)->build($user),
         ];
 

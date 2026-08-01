@@ -43,6 +43,7 @@ trait InteractsWithInMemoryTenantApi
             $table->timestamps();
             $table->json('data')->nullable();
             $table->boolean('mfa_required')->default(false);
+            $table->unsignedSmallInteger('mfa_trust_days')->default(7);
             $table->string('plan_tier', 32)->default('starter');
             $table->string('subscription_status', 32)->default('active');
             $table->unsignedInteger('seat_limit')->default(25);

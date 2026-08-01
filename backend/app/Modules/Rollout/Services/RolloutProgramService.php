@@ -15,6 +15,14 @@ use App\Modules\Rollout\Models\SiteProfitabilityRecord;
 use App\Modules\Rollout\Models\TenantPublicHoliday;
 use App\Modules\Rollout\Models\TenantRolloutPlaybookConfig;
 use App\Modules\Rollout\Support\RolloutCoordinateRules;
+use App\Modules\Rollout\Support\RolloutEndorsementGuard;
+use App\Modules\Rollout\Support\RolloutBuildReadinessGuard;
+use App\Modules\Rollout\Support\RolloutCloseOutGuard;
+use App\Modules\Rollout\Support\RolloutConstructionRfiGuard;
+use App\Modules\Rollout\Support\RolloutMocColGuard;
+use App\Modules\Rollout\Support\RolloutPreAssessmentGuard;
+use App\Modules\Rollout\Support\RolloutSaqSelectGuard;
+use App\Modules\Rollout\Support\RolloutTssrDayOneGuard;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -97,6 +105,13 @@ final class RolloutProgramService
             'project_type' => $program->project_type,
         ]);
 
+        $program = $program->fresh(['timelinePhases', 'profitability', 'site']);
+
+        if ($program->endorsement_date !== null) {
+            $program = $this->slaRecalculation->recalculateProgram($program);
+            $program = $this->completeSiteTrackerEnrolment($program);
+        }
+
         return $program->fresh(['timelinePhases', 'profitability', 'site']);
     }
 
@@ -162,7 +177,7 @@ final class RolloutProgramService
 
     public function setDoaExecution(RolloutProgram $program, Carbon $doaExecutionDate): RolloutProgram
     {
-        $deliveryStart = $this->calendarFactory->make($program->region)->addWorkingDays($doaExecutionDate, 15);
+        $deliveryStart = $this->calendarFactory->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program))->addWorkingDays($doaExecutionDate, 15);
 
         return $this->applyDeliveryPeriodStart($program, $deliveryStart, [
             'doa_execution_date' => $doaExecutionDate,
@@ -187,6 +202,8 @@ final class RolloutProgramService
         array $dates,
         string $triggerType,
     ): RolloutProgram {
+        RolloutTssrDayOneGuard::assertReadyForDayOne($program);
+
         foreach ($dates as $field => $value) {
             $program->{$field} = $value;
         }
@@ -198,6 +215,7 @@ final class RolloutProgramService
         $program->save();
 
         $updated = $this->slaRecalculation->recalculateProgram($program->fresh(['timelinePhases']));
+        $updated = $this->completeTssrMnoOnDayOne($updated, $deliveryStart);
 
         $this->audit->log('rollout.day_one_set', $updated, [
             'date' => $deliveryStart->toDateString(),
@@ -205,6 +223,33 @@ final class RolloutProgramService
         ]);
 
         return $updated;
+    }
+
+    /**
+     * P5 — Recording Day-1 (TSSR MNO approval date) completes the TSSR MNO gate.
+     */
+    public function completeTssrMnoOnDayOne(RolloutProgram $program, Carbon $dayOne): RolloutProgram
+    {
+        $program->loadMissing('timelinePhases');
+        $phase = $program->timelinePhases->firstWhere('phase_key', 'tssr_mno_approval');
+
+        if ($phase === null || $phase->gate_status === 'passed') {
+            return $program;
+        }
+
+        $phase->gate_status = 'passed';
+        if ($phase->actual_end_date === null) {
+            $phase->actual_end_date = $dayOne->toDateString();
+        }
+        $phase->save();
+
+        $this->audit->log('rollout.gate_updated', $program, [
+            'phase_key' => 'tssr_mno_approval',
+            'gate_status' => 'passed',
+            'via' => 'day_one_recorded',
+        ]);
+
+        return $program->fresh(['timelinePhases']);
     }
 
     public function updatePhaseGateStatus(
@@ -220,6 +265,58 @@ final class RolloutProgramService
 
         $phase->load('rolloutProgram');
         $program = $phase->rolloutProgram;
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'site_hunting') {
+            RolloutSaqSelectGuard::assertSiteHuntingGateReady($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'pre_assessment') {
+            RolloutPreAssessmentGuard::assertReadyForPreAssessment($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'moc_col') {
+            RolloutMocColGuard::assertReadyForMocCol($program);
+        }
+
+        if (
+            $gateStatus === 'passed'
+            && $program !== null
+            && $phase->phase_key === 'tssr_creation'
+        ) {
+            RolloutTssrDayOneGuard::assertReadyForTssrCreation($program);
+        }
+
+        if (
+            $gateStatus === 'passed'
+            && $program !== null
+            && $phase->phase_key === 'tssr_mno_approval'
+        ) {
+            RolloutTssrDayOneGuard::assertReadyForTssrMnoGate($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'pre_construction') {
+            RolloutBuildReadinessGuard::assertReadyForPreConstruction($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'permitting') {
+            RolloutBuildReadinessGuard::assertReadyForPermitting($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'skom') {
+            RolloutBuildReadinessGuard::assertReadyForSkom($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'construction') {
+            RolloutConstructionRfiGuard::assertReadyForConstruction($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'site_license') {
+            RolloutCloseOutGuard::assertReadyForSiteLicense($program);
+        }
+
+        if ($gateStatus === 'passed' && $program !== null && $phase->phase_key === 'handover_operations') {
+            RolloutCloseOutGuard::assertReadyForHandover($program);
+        }
 
         if ($gateStatus === 'passed' && $program !== null && $phase->gate_label !== null) {
             $policy = app(RolloutGateApprovalPolicyService::class)->policyForPhase(
@@ -312,15 +409,11 @@ final class RolloutProgramService
             ]);
         }
 
-        if ($program->tssr_approved_date === null) {
-            throw ValidationException::withMessages([
-                'actual_rfi_date' => [__('Set delivery period start (Day-1) before recording RFI.')],
-            ]);
-        }
+        RolloutConstructionRfiGuard::assertReadyForRfi($program);
 
         $deliveryStart = Carbon::parse($program->tssr_approved_date);
         $elapsedWorkingDays = $this->calendarFactory
-            ->make($program->region)
+            ->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program))
             ->workingDaysBetween($deliveryStart, $actualRfiDate);
 
         $central = $this->resolveCentralTenant();
@@ -338,6 +431,7 @@ final class RolloutProgramService
         }
 
         $updated = $program->fresh(['timelinePhases']);
+        $updated = $this->completeConstructionOnRfi($updated, $actualRfiDate);
 
         $this->audit->log('rollout.rfi_recorded', $updated, [
             'actual_rfi_date' => $actualRfiDate->toDateString(),
@@ -345,6 +439,98 @@ final class RolloutProgramService
         ]);
 
         return $updated;
+    }
+
+    /**
+     * P7 — Recording RFI (site ready) completes the Construction gate (RFI Certificate).
+     */
+    public function completeConstructionOnRfi(RolloutProgram $program, Carbon $rfiDate): RolloutProgram
+    {
+        $program->loadMissing('timelinePhases');
+        $phase = $program->timelinePhases->firstWhere('phase_key', 'construction');
+
+        if ($phase === null || $phase->gate_status === 'passed') {
+            return $program;
+        }
+
+        $phase->gate_status = 'passed';
+        if ($phase->actual_end_date === null) {
+            $phase->actual_end_date = $rfiDate->toDateString();
+        }
+        $phase->save();
+
+        $this->audit->log('rollout.gate_updated', $program, [
+            'phase_key' => 'construction',
+            'gate_status' => 'passed',
+            'via' => 'rfi_recorded',
+        ]);
+
+        return $program->fresh(['timelinePhases']);
+    }
+
+    /**
+     * P8 — Record site license executed date (post–RFI close-out; outside delivery SLA).
+     */
+    public function recordSiteLicense(
+        RolloutProgram $program,
+        Carbon $siteLicenseDate,
+        ?string $remarks = null,
+    ): RolloutProgram {
+        if ($program->status === 'batch') {
+            throw ValidationException::withMessages([
+                'site_license_executed_date' => [__('Site license cannot be recorded on a batch container rollout.')],
+            ]);
+        }
+
+        if ($program->status === 'cancelled') {
+            throw ValidationException::withMessages([
+                'site_license_executed_date' => [__('Site license cannot be recorded on a cancelled rollout.')],
+            ]);
+        }
+
+        RolloutCloseOutGuard::assertReadyForSiteLicense($program);
+
+        $program->site_license_executed_date = $siteLicenseDate->toDateString();
+        if ($remarks !== null) {
+            $trimmed = trim($remarks);
+            $program->site_license_remarks = $trimmed !== '' ? $trimmed : null;
+        }
+        $program->save();
+
+        $updated = $this->completeSiteLicenseOnExecuted($program->fresh(['timelinePhases']), $siteLicenseDate);
+
+        $this->audit->log('rollout.site_license_recorded', $updated, [
+            'site_license_executed_date' => $siteLicenseDate->toDateString(),
+        ]);
+
+        return $updated;
+    }
+
+    /**
+     * P8 — Recording site license executed completes the Site License gate.
+     */
+    public function completeSiteLicenseOnExecuted(RolloutProgram $program, Carbon $executedDate): RolloutProgram
+    {
+        $program->loadMissing('timelinePhases');
+        $phase = $program->timelinePhases->firstWhere('phase_key', 'site_license');
+
+        if ($phase === null || $phase->gate_status === 'passed') {
+            return $program;
+        }
+
+        $phase->gate_status = 'passed';
+        if ($phase->actual_end_date === null) {
+            $phase->actual_end_date = $executedDate->toDateString();
+        }
+        $phase->save();
+
+        $this->audit->log('rollout.gate_updated', $program, [
+            'phase_key' => 'site_license',
+            'gate_status' => 'passed',
+            'via' => 'site_license_recorded',
+        ]);
+
+        return $program->fresh(['timelinePhases']);
     }
 
     /**
@@ -407,6 +593,9 @@ final class RolloutProgramService
 
         if (array_key_exists('endorsement_date', $changes)) {
             $updated = $this->slaRecalculation->recalculateProgram($updated->load('timelinePhases'));
+            if ($updated->endorsement_date !== null) {
+                $updated = $this->completeSiteTrackerEnrolment($updated);
+            }
         }
 
         $this->audit->log('rollout.metadata_updated', $updated, [
@@ -414,6 +603,40 @@ final class RolloutProgramService
         ]);
 
         return $updated;
+    }
+
+    /**
+     * P1 — Setting the MNO endorsement date completes Site Tracker enrolment
+     * (endorsement timeline gate) without a separate formal approval request.
+     */
+    public function completeSiteTrackerEnrolment(RolloutProgram $program): RolloutProgram
+    {
+        $program->loadMissing('timelinePhases');
+        $phase = $program->timelinePhases->firstWhere('phase_key', 'endorsement');
+
+        if ($phase === null || $phase->gate_status === 'passed') {
+            return $program;
+        }
+
+        if ($program->endorsement_date === null && ! RolloutEndorsementGuard::isEstablished($program)) {
+            return $program;
+        }
+
+        $phase->gate_status = 'passed';
+        if ($phase->actual_end_date === null) {
+            $phase->actual_end_date = $program->endorsement_date
+                ? Carbon::parse((string) $program->endorsement_date)
+                : Carbon::today();
+        }
+        $phase->save();
+
+        $this->audit->log('rollout.gate_updated', $program, [
+            'phase_key' => 'endorsement',
+            'gate_status' => 'passed',
+            'via' => 'site_tracker_enrolment',
+        ]);
+
+        return $program->fresh(['timelinePhases']);
     }
 
     /**
@@ -448,7 +671,7 @@ final class RolloutProgramService
 
         if ($program->actual_rfi_date !== null && $program->tssr_approved_date !== null) {
             $elapsedWorkingDays = $this->calendarFactory
-                ->make($program->region)
+                ->make(\App\Modules\Rollout\Support\RolloutOpsGeography::forProgram($program))
                 ->workingDaysBetween(
                     Carbon::parse((string) $program->tssr_approved_date),
                     Carbon::parse((string) $program->actual_rfi_date),

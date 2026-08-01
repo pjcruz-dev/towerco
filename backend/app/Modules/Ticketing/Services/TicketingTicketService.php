@@ -32,42 +32,69 @@ final class TicketingTicketService
         private readonly TicketingSourceCatalog $sources,
         private readonly TicketingCategoryCatalog $categories,
         private readonly TicketingSlaCalculator $sla,
+        private readonly TicketingAssignmentService $assignment,
     ) {}
 
-  /**
-   * @param  array{
-   *   page?: int,
-   *   per_page?: int,
-   *   search?: string|null,
-   *   status?: string|null,
-   *   priority?: string|null,
-   *   assignee_id?: string|null,
-   *   source_module?: string|null,
-   *   source_reference_id?: string|null,
-   *   mine?: bool,
-   *   sort?: string|null
-   * }  $query
-   */
+    /**
+     * @param  array{
+     *   page?: int,
+     *   per_page?: int,
+     *   search?: string|null,
+     *   status?: string|null,
+     *   priority?: string|null,
+     *   category?: string|null,
+     *   assignee_id?: string|null,
+     *   source_module?: string|null,
+     *   source_reference_id?: string|null,
+     *   linked_module?: string|null,
+     *   linked_id?: string|null,
+     *   mine?: bool,
+     *   assigned_me?: bool,
+     *   sort?: string|null
+     * }  $query
+     */
     public function paginate(TenantUser $viewer, array $query): LengthAwarePaginator
     {
         $canManage = $viewer->can('ticketing:tickets:manage');
         $search = isset($query['search']) ? trim((string) $query['search']) : '';
         $status = isset($query['status']) ? trim((string) $query['status']) : '';
         $priority = isset($query['priority']) ? trim((string) $query['priority']) : '';
+        $category = isset($query['category']) ? trim((string) $query['category']) : '';
         $assigneeId = isset($query['assignee_id']) ? trim((string) $query['assignee_id']) : '';
         $sourceModule = isset($query['source_module']) ? trim((string) $query['source_module']) : '';
         $sourceReferenceId = isset($query['source_reference_id']) ? trim((string) $query['source_reference_id']) : '';
+        $linkedModule = isset($query['linked_module']) ? trim((string) $query['linked_module']) : '';
+        $linkedId = isset($query['linked_id']) ? trim((string) $query['linked_id']) : '';
         $mine = (bool) ($query['mine'] ?? false);
+        $assignedMe = (bool) ($query['assigned_me'] ?? false);
 
         $builder = TicketingTicket::query()
             ->with(['requester:id,name,email', 'assignee:id,name,email'])
             ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->when($priority !== '', fn ($q) => $q->where('priority', $priority))
+            ->when($category !== '', fn ($q) => $q->where('category', $category))
             ->when($assigneeId !== '', fn ($q) => $q->where('assignee_id', $assigneeId))
+            ->when($assignedMe, fn ($q) => $q->where('assignee_id', $viewer->id)->whereIn('status', [
+                TicketingTicket::STATUS_OPEN,
+                TicketingTicket::STATUS_IN_PROGRESS,
+            ]))
             ->when($sourceModule !== '', fn ($q) => $q->where('source_module', $sourceModule))
             ->when($sourceReferenceId !== '', fn ($q) => $q->where('source_reference_id', $sourceReferenceId))
+            ->when($linkedId !== '', function ($q) use ($linkedId, $linkedModule): void {
+                // Match tickets sourced from the record OR linked to it (e.g. a GRN-sourced
+                // ticket that links its parent PO shows up on the PO's related tickets).
+                $q->where(function ($outer) use ($linkedId, $linkedModule): void {
+                    $outer->where('source_reference_id', $linkedId)
+                        ->orWhereHas('links', function ($link) use ($linkedId, $linkedModule): void {
+                            $link->where('link_id', $linkedId);
+                            if ($linkedModule !== '') {
+                                $link->where('link_module', $linkedModule);
+                            }
+                        });
+                });
+            })
             ->when($mine, fn ($q) => $q->where('requester_id', $viewer->id))
-            ->when(! $canManage && ! $mine, fn ($q) => $q->where('requester_id', $viewer->id))
+            ->when(! $canManage && ! $mine && ! $assignedMe, fn ($q) => $q->where('requester_id', $viewer->id))
             ->when($search !== '', function ($q) use ($search): void {
                 $q->where(function ($inner) use ($search): void {
                     $inner->where('title', 'like', '%'.$search.'%')
@@ -201,6 +228,11 @@ final class TicketingTicketService
         }
 
         return DB::transaction(function () use ($requester, $data, $sourceModule, $category): TicketingTicket {
+            $assigneeId = $data['assignee_id'] ?? null;
+            if (($assigneeId === null || $assigneeId === '') && is_string($category)) {
+                $assigneeId = $this->assignment->resolveAssigneeId($category);
+            }
+
             $ticket = TicketingTicket::query()->create([
                 'id' => (string) Str::uuid(),
                 'ticket_number' => $this->nextTicketNumber(),
@@ -214,7 +246,7 @@ final class TicketingTicketService
                 'source_reference_id' => $data['source_reference_id'] ?? null,
                 'source_label' => $data['source_label'] ?? null,
                 'requester_id' => $requester->id,
-                'assignee_id' => $data['assignee_id'] ?? null,
+                'assignee_id' => $assigneeId,
             ]);
 
             foreach ($data['links'] ?? [] as $link) {
@@ -281,6 +313,7 @@ final class TicketingTicketService
             $updates['priority'] = $nextPriority;
         }
 
+        $categoryChanged = false;
         if (array_key_exists('category', $data) && $canManage) {
             $nextCategory = $data['category'];
             if ($nextCategory !== null && ! $this->categories->isValid((string) $nextCategory)) {
@@ -288,7 +321,12 @@ final class TicketingTicketService
                     'category' => [__('Invalid ticket category.')],
                 ]);
             }
-            $updates['category'] = $nextCategory;
+            $previousCategory = $ticket->category !== null ? (string) $ticket->category : null;
+            $normalizedNext = $nextCategory !== null && $nextCategory !== '' ? (string) $nextCategory : null;
+            if ($normalizedNext !== $previousCategory) {
+                $categoryChanged = true;
+            }
+            $updates['category'] = $normalizedNext;
         }
 
         if (array_key_exists('assignee_id', $data) && $canManage) {
@@ -347,8 +385,10 @@ final class TicketingTicketService
         if ($updates !== []) {
             $ticket->update($updates);
             $ticket = $ticket->fresh();
-            if ($priorityChanged) {
-                $this->syncSla($ticket, true);
+            if ($priorityChanged || $categoryChanged || array_key_exists('status', $updates)) {
+                // Reset windows only when SLA inputs (priority/category) change; a status
+                // change just recomputes due date + denormalized status.
+                $this->syncSla($ticket, $priorityChanged || $categoryChanged);
             }
         }
 
@@ -418,7 +458,11 @@ final class TicketingTicketService
         if ($resetFlags) {
             $payload['sla_reminder_sent_at'] = null;
             $payload['sla_escalated_at'] = null;
+            // Reflect the reset on the instance so statusFor() sees the cleared flags.
+            $ticket->sla_reminder_sent_at = null;
+            $ticket->sla_escalated_at = null;
         }
+        $payload['sla_status'] = $this->sla->statusFor($ticket);
         $ticket->update($payload);
     }
 

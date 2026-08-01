@@ -10,6 +10,52 @@ use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 final class EApprovalWorkflowStepDefinitionSupport
 {
     /**
+     * Remap distinct step_order values to 1..N while keeping parallel siblings
+     * that share the same original order on the same compacted order.
+     *
+     * @param  list<array<string, mixed>>  $steps
+     * @return list<array<string, mixed>>
+     */
+    public static function compactStepOrdersPreservingTies(array $steps): array
+    {
+        if ($steps === []) {
+            return [];
+        }
+
+        $uniqueOrders = [];
+        foreach (array_values($steps) as $index => $step) {
+            if (! is_array($step)) {
+                continue;
+            }
+            $order = (int) ($step['step_order'] ?? $index + 1);
+            if (! in_array($order, $uniqueOrders, true)) {
+                $uniqueOrders[] = $order;
+            }
+        }
+
+        sort($uniqueOrders);
+
+        $orderMap = [];
+        foreach (array_values($uniqueOrders) as $index => $oldOrder) {
+            $orderMap[$oldOrder] = $index + 1;
+        }
+
+        $compacted = [];
+        foreach (array_values($steps) as $index => $step) {
+            if (! is_array($step)) {
+                continue;
+            }
+            $oldOrder = (int) ($step['step_order'] ?? $index + 1);
+            $compacted[] = [
+                ...$step,
+                'step_order' => $orderMap[$oldOrder] ?? ($index + 1),
+            ];
+        }
+
+        return $compacted;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     public static function definitionsFromForm(EApprovalForm $form): array
@@ -82,9 +128,29 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['default_approver_id'] = $condition['default_approver_id'] ?? null;
         }
 
+        $fallback = $condition['fallback_approver_id'] ?? null;
+        if (is_string($fallback) && trim($fallback) !== '') {
+            $definition['fallback_approver_id'] = trim($fallback);
+        }
+
+        $mode = EApprovalParallelMode::fromCondition($condition);
+        if ($mode !== EApprovalParallelMode::ALL) {
+            $definition['parallel_mode'] = $mode;
+            if ($mode === EApprovalParallelMode::N_OF_M) {
+                $quorum = is_numeric($condition['parallel_quorum'] ?? null)
+                    ? max(1, (int) $condition['parallel_quorum'])
+                    : 1;
+                $definition['parallel_quorum'] = $quorum;
+            }
+        }
+
         $when = self::whenFromDefinition($definition, $condition);
         if ($when !== []) {
             $definition['when'] = $when;
+            $logic = EApprovalWhenLogic::fromDefinition($definition, $condition);
+            if ($logic === EApprovalWhenLogic::OR) {
+                $definition['when_logic'] = EApprovalWhenLogic::OR;
+            }
         }
 
         return $definition;
@@ -101,6 +167,7 @@ final class EApprovalWorkflowStepDefinitionSupport
             'approver_field', 'from_field', 'from_approver_field' => 'field',
             'direct_manager', 'entra_manager' => 'manager',
             'field_map', 'map_field', 'mapped_field' => 'field_map',
+            'user_list', 'field_list', 'approver_list', 'from_approver_list' => 'user_list',
             default => strtolower(trim((string) ($step['type'] ?? $step['approver_type'] ?? 'user'))),
         };
 
@@ -124,9 +191,31 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['default_approver_id'] = $step['default_approver_id'] ?? $condition['default_approver_id'] ?? null;
         }
 
+        $fallback = $step['fallback_approver_id'] ?? $condition['fallback_approver_id'] ?? null;
+        if (is_string($fallback) && trim($fallback) !== '') {
+            $definition['fallback_approver_id'] = trim($fallback);
+        }
+
+        $mode = EApprovalParallelMode::normalize(
+            isset($step['parallel_mode'])
+                ? (string) $step['parallel_mode']
+                : (isset($condition['parallel_mode']) ? (string) $condition['parallel_mode'] : null),
+        );
+        if ($mode !== EApprovalParallelMode::ALL) {
+            $definition['parallel_mode'] = $mode;
+            if ($mode === EApprovalParallelMode::N_OF_M) {
+                $raw = $step['parallel_quorum'] ?? $condition['parallel_quorum'] ?? 1;
+                $definition['parallel_quorum'] = max(1, (int) $raw);
+            }
+        }
+
         $when = self::whenFromDefinition($step, $condition);
         if ($when !== []) {
             $definition['when'] = $when;
+            $logic = EApprovalWhenLogic::fromDefinition($step, $condition);
+            if ($logic === EApprovalWhenLogic::OR) {
+                $definition['when_logic'] = EApprovalWhenLogic::OR;
+            }
         }
 
         return $definition;
@@ -186,10 +275,40 @@ final class EApprovalWorkflowStepDefinitionSupport
             );
         }
 
+        $fallback = $step['fallback_approver_id'] ?? $condition['fallback_approver_id'] ?? null;
+        if (is_string($fallback) && trim($fallback) !== '') {
+            $condition['fallback_approver_id'] = trim($fallback);
+        } else {
+            unset($condition['fallback_approver_id']);
+        }
+
+        $mode = EApprovalParallelMode::normalize(
+            isset($step['parallel_mode'])
+                ? (string) $step['parallel_mode']
+                : (isset($condition['parallel_mode']) ? (string) $condition['parallel_mode'] : null),
+        );
+        if ($mode === EApprovalParallelMode::ALL) {
+            unset($condition['parallel_mode'], $condition['parallel_quorum']);
+        } else {
+            $condition['parallel_mode'] = $mode;
+            if ($mode === EApprovalParallelMode::N_OF_M) {
+                $raw = $step['parallel_quorum'] ?? $condition['parallel_quorum'] ?? 1;
+                $condition['parallel_quorum'] = max(1, (int) $raw);
+            } else {
+                unset($condition['parallel_quorum']);
+            }
+        }
+
         if ($when !== []) {
             $condition['when'] = $when;
+            $logic = EApprovalWhenLogic::fromDefinition($step, $condition);
+            if ($logic === EApprovalWhenLogic::OR) {
+                $condition['when_logic'] = EApprovalWhenLogic::OR;
+            } else {
+                unset($condition['when_logic']);
+            }
         } else {
-            unset($condition['when']);
+            unset($condition['when'], $condition['when_logic']);
         }
 
         return $condition === [] ? null : $condition;

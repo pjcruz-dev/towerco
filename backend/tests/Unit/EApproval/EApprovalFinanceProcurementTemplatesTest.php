@@ -17,10 +17,26 @@ final class EApprovalFinanceProcurementTemplatesTest extends TestCase
             'cash_advance',
             'liquidation',
             'reimbursement',
+            'request_for_payment',
             'purchase_requisition',
             'purchase_order',
             'vendor_registration',
         ];
+    }
+
+    public function test_request_for_payment_template_has_stepped_review_compose(): void
+    {
+        $templates = config('e_approval.form_templates', []);
+        $template = $templates['request_for_payment'] ?? [];
+        $fields = collect($template['fields'] ?? [])->pluck('name')->all();
+
+        $this->assertContains('payee', $fields);
+        $this->assertContains('payment_amount', $fields);
+        $this->assertContains('service_invoice', $fields);
+        $this->assertContains('cost_application', $fields);
+        $this->assertTrue((bool) ($template['metadata_json']['compose']['include_review_step'] ?? false));
+        $this->assertSame('Payee & payment details', collect($template['fields'] ?? [])->firstWhere('name', 'section_payee')['label'] ?? null);
+        $this->assertSame('Bank & cost charge', collect($template['fields'] ?? [])->firstWhere('name', 'section_bank_cost')['label'] ?? null);
     }
 
     public function test_finance_procurement_templates_are_registered(): void

@@ -134,6 +134,7 @@ final class RolloutAuditLogger
             'rollout.gate_approval_rejected' => 'Gate approval rejected',
             'rollout.gate_approval_escalated' => 'Gate approval escalated',
             'rollout.rfi_recorded' => 'RFI certificate recorded',
+            'rollout.site_license_recorded' => 'Site license executed recorded',
             'rollout.candidate_selected' => 'Site candidate selected',
             'rollout.metadata_updated' => 'Rollout metadata updated',
             'rollout.bulk_metadata_updated' => 'Bulk rollout metadata updated',

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
-use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -50,6 +50,7 @@ class TicketingTicket extends Model
         'sla_due_at',
         'sla_reminder_sent_at',
         'sla_escalated_at',
+        'sla_status',
     ];
 
     protected function casts(): array

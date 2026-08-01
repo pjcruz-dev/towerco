@@ -23,6 +23,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'created_at',
             'updated_at',
             'mfa_required',
+            'mfa_trust_days',
             'theme_tokens',
             'plan_tier',
             'subscription_status',
@@ -51,6 +52,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
     {
         return [
             'mfa_required' => 'boolean',
+            'mfa_trust_days' => 'integer',
             'theme_tokens' => 'array',
             'billing_overrides' => 'array',
             'enabled_modules' => 'array',

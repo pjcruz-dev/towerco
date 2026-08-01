@@ -1,0 +1,198 @@
+name: Deploy Staging
+
+# Phase 3: push to main (when CD enabled) or manual dispatch → build/push ECR → migrate → ECS staging.
+# Enable with repository variable TOWEROS_CD_ENABLED=true after AWS OIDC + ECR + ECS exist.
+# See docs/infrastructure/cicd-phase-3.md
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_migrate:
+        description: "Skip ECS migrate one-off task"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Plan only (no push / no ECS update)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY || secrets.ECR_REGISTRY }}
+  ECR_API_REPO: ${{ vars.ECR_API_REPO || 'toweros-api' }}
+  ECR_WEB_REPO: ${{ vars.ECR_WEB_REPO || 'toweros-web' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER_STAGING || 'toweros-staging' }}
+  ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API_STAGING || 'toweros-api' }}
+  ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB_STAGING || 'toweros-web' }}
+  ECS_SERVICE_WORKER: ${{ vars.ECS_SERVICE_WORKER_STAGING || 'toweros-worker' }}
+  ECS_MIGRATE_TASK: ${{ vars.ECS_MIGRATE_TASK_STAGING || 'toweros-migrate' }}
+  ECS_SUBNETS: ${{ vars.ECS_SUBNETS_STAGING }}
+  ECS_SECURITY_GROUPS: ${{ vars.ECS_SECURITY_GROUPS_STAGING }}
+  RDS_CLUSTER: ${{ vars.RDS_DB_CLUSTER_IDENTIFIER_STAGING }}
+  RDS_INSTANCE: ${{ vars.RDS_DB_INSTANCE_IDENTIFIER_STAGING }}
+
+jobs:
+  gate:
+    name: CD gate
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.check.outputs.enabled }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ vars.TOWEROS_CD_ENABLED }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+              echo "::warning::AWS_ROLE_ARN secret is empty. Staging deploy will dry-run / skip AWS steps."
+              echo "enabled=dry" >> "$GITHUB_OUTPUT"
+            else
+              echo "enabled=yes" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "TOWEROS_CD_ENABLED is not true — skipping staging deploy (Phase 3 gated)."
+            echo "enabled=no" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-deploy:
+    name: Build, push, deploy staging
+    needs: gate
+    if: needs.gate.outputs.enabled != 'no'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          SHA_SHORT="${GITHUB_SHA::12}"
+          echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "api_image=${ECR_REGISTRY}/${ECR_API_REPO}" >> "$GITHUB_OUTPUT"
+          echo "web_image=${ECR_REGISTRY}/${ECR_WEB_REPO}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        if: needs.gate.outputs.enabled == 'yes'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: needs.gate.outputs.enabled == 'yes'
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push API image
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.api_image }}:${{ steps.meta.outputs.sha_short }}
+            ${{ steps.meta.outputs.api_image }}:staging
+          cache-from: type=gha,scope=toweros-api
+          cache-to: type=gha,mode=max,scope=toweros-api
+
+      - name: Build & push Web image
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.web_image }}:${{ steps.meta.outputs.sha_short }}
+            ${{ steps.meta.outputs.web_image }}:staging
+          cache-from: type=gha,scope=toweros-web
+          cache-to: type=gha,mode=max,scope=toweros-web
+
+      - name: Dry-run summary
+        if: needs.gate.outputs.enabled == 'dry' || inputs.dry_run == true
+        run: |
+          echo "Would build/push:"
+          echo "  ${{ steps.meta.outputs.api_image }}:${{ steps.meta.outputs.sha_short }} (+ :staging)"
+          echo "  ${{ steps.meta.outputs.web_image }}:${{ steps.meta.outputs.sha_short }} (+ :staging)"
+          echo "Would deploy ECS cluster=${ECS_CLUSTER} services=${ECS_SERVICE_API},${ECS_SERVICE_WEB},${ECS_SERVICE_WORKER}"
+
+      - name: Pre-migrate DB snapshot (Phase 4)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true && inputs.skip_migrate != true
+        env:
+          SHA: ${{ steps.meta.outputs.sha_short }}
+        run: |
+          set -euo pipefail
+          if [ "${{ vars.RDS_SNAPSHOT_ENABLED }}" != "true" ]; then
+            echo "RDS_SNAPSHOT_ENABLED is not true — skipping staging snapshot."
+            exit 0
+          fi
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          SNAPSHOT_ID="toweros-staging-pre-migrate-${SHA}-${STAMP}"
+          if [ -n "${RDS_CLUSTER:-}" ]; then
+            aws rds create-db-cluster-snapshot \
+              --db-cluster-identifier "$RDS_CLUSTER" \
+              --db-cluster-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created Aurora cluster snapshot $SNAPSHOT_ID"
+          elif [ -n "${RDS_INSTANCE:-}" ]; then
+            aws rds create-db-snapshot \
+              --db-instance-identifier "$RDS_INSTANCE" \
+              --db-snapshot-identifier "$SNAPSHOT_ID"
+            echo "Created RDS instance snapshot $SNAPSHOT_ID"
+          else
+            echo "No staging RDS identifier set — snapshot skipped."
+          fi
+
+      - name: Run migrations (ECS one-off)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true && inputs.skip_migrate != true
+        env:
+          IMAGE: ${{ steps.meta.outputs.api_image }}:${{ steps.meta.outputs.sha_short }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ECS_SUBNETS:-}" ] || [ -z "${ECS_SECURITY_GROUPS:-}" ]; then
+            echo "::warning::ECS_SUBNETS_STAGING / ECS_SECURITY_GROUPS_STAGING not set — skipping migrate task. Run migrations manually."
+            exit 0
+          fi
+          NETWORK="awsvpcConfiguration={subnets=[${ECS_SUBNETS}],securityGroups=[${ECS_SECURITY_GROUPS}],assignPublicIp=DISABLED}"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$ECS_MIGRATE_TASK" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK" \
+            --overrides "{\"containerOverrides\":[{\"name\":\"api\",\"command\":[\"php\",\"artisan\",\"toweros:migrate\",\"--force\"]}]}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migrate task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+          EXIT=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT" != "0" ]; then
+            echo "::error::Migrate task failed with exit $EXIT"
+            exit 1
+          fi
+
+      - name: Force new ECS deployment (staging)
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        run: |
+          set -euo pipefail
+          for SVC in "$ECS_SERVICE_API" "$ECS_SERVICE_WEB" "$ECS_SERVICE_WORKER"; do
+            echo "Updating $SVC on $ECS_CLUSTER"
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$SVC" --force-new-deployment >/dev/null
+          done
+          echo "Staging deploy requested for sha=${{ steps.meta.outputs.sha_short }}"
+          echo "Ensure task definitions reference :staging or :${{ steps.meta.outputs.sha_short }} images."
+
+      - name: Write staging digest markers
+        if: needs.gate.outputs.enabled == 'yes' && inputs.dry_run != true
+        run: |
+          echo "STAGING_SHA=${{ steps.meta.outputs.sha_short }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Promote to production with git tag on this commit, then workflow Deploy Production." >> "$GITHUB_STEP_SUMMARY"

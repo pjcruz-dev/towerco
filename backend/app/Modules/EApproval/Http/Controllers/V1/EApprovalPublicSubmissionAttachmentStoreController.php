@@ -25,9 +25,18 @@ class EApprovalPublicSubmissionAttachmentStoreController extends AbstractApiCont
             'upload_token' => ['required', 'string', 'max:128'],
             'file' => ['required', 'file', 'max:10240'],
             'field_name' => ['nullable', 'string', 'max:255'],
+            'metadata' => ['nullable'],
         ]);
 
         $link = $links->resolveActiveLink($token, $data['access_password'] ?? null);
+
+        $rawMetadata = $data['metadata'] ?? null;
+        if (is_string($rawMetadata)) {
+            $decoded = json_decode($rawMetadata, true);
+            $rawMetadata = is_array($decoded) ? $decoded : null;
+        } elseif (! is_array($rawMetadata)) {
+            $rawMetadata = null;
+        }
 
         $attachment = $submissions->storeAttachment(
             $link,
@@ -35,12 +44,14 @@ class EApprovalPublicSubmissionAttachmentStoreController extends AbstractApiCont
             $data['upload_token'],
             $data['file'],
             $data['field_name'] ?? null,
+            $rawMetadata,
         );
 
         return $this->created([
             'id' => (string) $attachment->id,
             'file_name' => $attachment->file_name,
             'field_name' => $attachment->field_name,
+            'metadata' => $attachment->metadata,
         ]);
     }
 }

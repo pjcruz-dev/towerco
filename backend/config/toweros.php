@@ -120,6 +120,8 @@ return [
      */
     'tenant_mfa' => [
         'global_required' => env('TENANT_MFA_REQUIRED', false),
+        /** Default “remember this browser” window after successful MFA (0 = every login). */
+        'default_trust_days' => (int) env('TENANT_MFA_TRUST_DAYS', 7),
     ],
 
     /**
@@ -314,12 +316,13 @@ return [
 
     /**
      * Tenant modules enabled for RBAC provisioning and the Team & Access role editor.
-     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, sites, documents (plus optional gis, tower_one, fiber_one, asset_one).
+     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, sites, documents, ai_assistant
+     * (plus optional gis, tower_one, fiber_one, asset_one).
      */
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents,document_register')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents,document_register,ai_assistant')),
         ))),
     ],
 

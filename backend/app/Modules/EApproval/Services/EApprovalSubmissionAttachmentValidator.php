@@ -19,6 +19,7 @@ final class EApprovalSubmissionAttachmentValidator
         EApprovalSubmission $submission,
         UploadedFile $file,
         ?string $fieldName,
+        ?array $metadata = null,
     ): void {
         $this->files->assertUploadAllowed($file);
 
@@ -30,28 +31,41 @@ final class EApprovalSubmissionAttachmentValidator
         $field = $submission->form?->fields
             ->first(static fn (EApprovalFormField $candidate) => (string) $candidate->name === $fieldName);
 
-        if ($field === null || (string) $field->type !== 'file') {
+        $type = $field !== null ? (string) $field->type : '';
+        if ($field === null || ! in_array($type, ['file', 'camera'], true)) {
             throw ValidationException::withMessages([
-                'field_name' => [__('Uploaded file does not match a file field on this form.')],
+                'field_name' => [__('Uploaded file does not match a file or camera field on this form.')],
             ]);
         }
 
         $validation = is_array($field->validation) ? $field->validation : [];
+        $options = is_array($field->options) ? $field->options : [];
         $this->assertFieldMaxSize($file, $validation, $fieldName, $field->label);
         $this->assertFieldMinSize($file, $validation, $fieldName, $field->label);
 
-        $allowed = $this->normalizeAllowedTypes($validation['allowedFileTypes'] ?? null);
-        if (! $this->matchesAllowedTypes($file, $allowed)) {
-            $label = trim((string) $field->label) ?: $fieldName;
-            throw ValidationException::withMessages([
-                'file' => [__(
-                    ':label allows only :types.',
-                    ['label' => $label, 'types' => implode(', ', array_map('strtoupper', $allowed))],
-                )],
-            ]);
+        if ($type === 'camera') {
+            if (! $this->isImageUpload($file)) {
+                $label = trim((string) $field->label) ?: $fieldName;
+                throw ValidationException::withMessages([
+                    'file' => [__(':label accepts image files only (JPEG, PNG, WebP, GIF).', ['label' => $label])],
+                ]);
+            }
+            $this->assertCameraMetadata($metadata, $options, $fieldName, $field->label);
+            $maxFiles = $this->normalizeCameraMax($options['max'] ?? $validation['maxFiles'] ?? null);
+        } else {
+            $allowed = $this->normalizeAllowedTypes($validation['allowedFileTypes'] ?? null);
+            if (! $this->matchesAllowedTypes($file, $allowed)) {
+                $label = trim((string) $field->label) ?: $fieldName;
+                throw ValidationException::withMessages([
+                    'file' => [__(
+                        ':label allows only :types.',
+                        ['label' => $label, 'types' => implode(', ', array_map('strtoupper', $allowed))],
+                    )],
+                ]);
+            }
+            $maxFiles = $this->normalizeMaxFiles($validation['maxFiles'] ?? null);
         }
 
-        $maxFiles = $this->normalizeMaxFiles($validation['maxFiles'] ?? null);
         $existing = $submission->attachments
             ->filter(static fn ($attachment) => (string) ($attachment->field_name ?? '') === $fieldName)
             ->count();
@@ -65,6 +79,136 @@ final class EApprovalSubmissionAttachmentValidator
                 )],
             ]);
         }
+    }
+
+    /**
+     * Normalize and return validated camera metadata for persistence.
+     *
+     * @param  array<string, mixed>|null  $raw
+     * @return array<string, mixed>|null
+     */
+    public function normalizeMetadata(?array $raw): ?array
+    {
+        if ($raw === null || $raw === []) {
+            return null;
+        }
+
+        $out = [];
+
+        if (array_key_exists('lat', $raw) && is_numeric($raw['lat'])) {
+            $lat = (float) $raw['lat'];
+            if ($lat >= -90 && $lat <= 90) {
+                $out['lat'] = $lat;
+            }
+        }
+        if (array_key_exists('lng', $raw) && is_numeric($raw['lng'])) {
+            $lng = (float) $raw['lng'];
+            if ($lng >= -180 && $lng <= 180) {
+                $out['lng'] = $lng;
+            }
+        }
+        if (isset($raw['captured_at']) && is_string($raw['captured_at']) && trim($raw['captured_at']) !== '') {
+            $out['captured_at'] = mb_substr(trim($raw['captured_at']), 0, 64);
+        }
+        if (isset($raw['caption']) && is_string($raw['caption'])) {
+            $caption = trim($raw['caption']);
+            if ($caption !== '') {
+                $out['caption'] = mb_substr($caption, 0, 500);
+            }
+        }
+        if (isset($raw['slot']) && is_string($raw['slot'])) {
+            $slot = trim($raw['slot']);
+            if ($slot !== '') {
+                $out['slot'] = mb_substr($slot, 0, 120);
+            }
+        }
+
+        return $out !== [] ? $out : null;
+    }
+
+    private function isImageUpload(UploadedFile $file): bool
+    {
+        $mime = strtolower((string) $file->getMimeType());
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+
+        return in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)
+            || in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $metadata
+     * @param  array<string, mixed>  $options
+     */
+    private function assertCameraMetadata(
+        ?array $metadata,
+        array $options,
+        string $fieldName,
+        ?string $fieldLabel,
+    ): void {
+        $label = trim((string) $fieldLabel) ?: $fieldName;
+        $slots = $this->normalizeSlots($options['slots'] ?? null);
+
+        if ($slots !== [] && $metadata !== null) {
+            $slot = isset($metadata['slot']) ? trim((string) $metadata['slot']) : '';
+            if ($slot !== '' && ! in_array($slot, $slots, true)) {
+                throw ValidationException::withMessages([
+                    'metadata.slot' => [__(':label slot must be one of the configured capture slots.', ['label' => $label])],
+                ]);
+            }
+        }
+
+        if ($metadata === null) {
+            return;
+        }
+
+        if (array_key_exists('lat', $metadata) && $metadata['lat'] !== null && $metadata['lat'] !== '') {
+            if (! is_numeric($metadata['lat']) || (float) $metadata['lat'] < -90 || (float) $metadata['lat'] > 90) {
+                throw ValidationException::withMessages([
+                    'metadata.lat' => [__('Latitude must be a number between -90 and 90.')],
+                ]);
+            }
+        }
+        if (array_key_exists('lng', $metadata) && $metadata['lng'] !== null && $metadata['lng'] !== '') {
+            if (! is_numeric($metadata['lng']) || (float) $metadata['lng'] < -180 || (float) $metadata['lng'] > 180) {
+                throw ValidationException::withMessages([
+                    'metadata.lng' => [__('Longitude must be a number between -180 and 180.')],
+                ]);
+            }
+        }
+        if (isset($metadata['caption']) && is_string($metadata['caption']) && mb_strlen($metadata['caption']) > 500) {
+            throw ValidationException::withMessages([
+                'metadata.caption' => [__('Photo caption must be at most 500 characters.')],
+            ]);
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeSlots(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $slots = [];
+        foreach ($raw as $item) {
+            $slot = trim((string) $item);
+            if ($slot !== '') {
+                $slots[] = mb_substr($slot, 0, 120);
+            }
+        }
+
+        return array_values(array_unique($slots));
+    }
+
+    private function normalizeCameraMax(mixed $raw): int
+    {
+        if (! is_numeric($raw)) {
+            return 20;
+        }
+
+        return max(1, min(50, (int) $raw));
     }
 
     /**

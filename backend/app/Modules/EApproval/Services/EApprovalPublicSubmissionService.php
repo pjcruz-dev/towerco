@@ -138,12 +138,14 @@ final class EApprovalPublicSubmissionService
         string $uploadToken,
         UploadedFile $file,
         ?string $fieldName,
+        ?array $metadata = null,
     ): EApprovalAttachment {
         $this->assertUploadSession($link, $submission, $uploadToken);
         $this->planFeatures->assertCanUploadAttachment();
-        $this->attachmentValidator->assertCanStore($submission, $file, $fieldName);
+        $normalized = $this->attachmentValidator->normalizeMetadata($metadata);
+        $this->attachmentValidator->assertCanStore($submission, $file, $fieldName, $normalized);
 
-        return $this->files->store($submission, $file, $fieldName);
+        return $this->files->store($submission, $file, $fieldName, $normalized);
     }
 
     public function assertUploadSession(

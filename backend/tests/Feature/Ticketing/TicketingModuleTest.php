@@ -13,6 +13,7 @@ use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Ticketing\Notifications\TicketingTicketMailNotification;
 use App\Modules\Ticketing\Services\TicketingSettingsService;
 use App\Modules\Ticketing\Services\TicketingSlaRunnerService;
+use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -400,20 +401,52 @@ final class TicketingModuleTest extends TestCase
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->putJson('/api/v1/ticketing/settings', [
-                'categories' => ['general', 'noc', 'field_ops'],
+                'categories' => [
+                    ['id' => 'general', 'label' => 'General'],
+                    ['id' => 'noc', 'label' => 'NOC operations'],
+                    ['id' => 'field_ops', 'label' => 'Field operations'],
+                ],
                 'sla_response_minutes' => 60,
                 'sla_escalation_minutes' => 120,
                 'sla_enabled' => true,
             ])
             ->assertOk()
             ->assertJsonPath('data.categories', ['general', 'noc', 'field_ops'])
+            ->assertJsonPath('data.category_options.1.label', 'NOC operations')
             ->assertJsonPath('data.sla_response_minutes', 60);
 
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->getJson('/api/v1/ticketing/metadata')
             ->assertOk()
-            ->assertJsonFragment(['noc']);
+            ->assertJsonFragment(['id' => 'noc', 'label' => 'NOC operations']);
+    }
+
+    public function test_apply_enterprise_it_category_pack_merges_categories(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->putJson('/api/v1/ticketing/settings', [
+                'apply_category_pack' => TicketingCategoryPackCatalog::PACK_ENTERPRISE_IT,
+            ]);
+
+        $response->assertOk();
+        $categories = $response->json('data.categories');
+        $this->assertContains('hw_workstations', $categories);
+        $this->assertContains('id_security_incident', $categories);
+        $this->assertContains('wp_office_printing', $categories);
+
+        $packs = collect($response->json('data.category_packs'));
+        $this->assertTrue($packs->contains(fn (array $pack): bool => $pack['id'] === TicketingCategoryPackCatalog::PACK_ENTERPRISE_IT));
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/metadata')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => 'hw_workstations',
+                'label' => 'Hardware · Workstations',
+            ]);
     }
 
     public function test_sla_runner_sends_reminder_for_overdue_ticket(): void
@@ -501,5 +534,78 @@ final class TicketingModuleTest extends TestCase
             ->withHeaders($this->tenantApiHeaders())
             ->getJson("/api/v1/ticketing/tickets/{$adminTicket}")
             ->assertForbidden();
+    }
+
+    public function test_category_sla_override_and_auto_assign_on_create(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $assignee = TenantUser::query()->create([
+            'name' => 'IT Assignee',
+            'email' => 'assignee@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $assigneeId = (string) $assignee->id;
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->putJson('/api/v1/ticketing/settings', [
+                'categories' => [
+                    [
+                        'id' => 'general',
+                        'label' => 'General',
+                        'sla_response_minutes' => null,
+                        'sla_escalation_minutes' => null,
+                    ],
+                    [
+                        'id' => 'id_security_incident',
+                        'label' => 'Identity · Security incident',
+                        'sla_response_minutes' => 30,
+                        'sla_escalation_minutes' => 60,
+                    ],
+                ],
+                'sla_response_minutes' => 480,
+                'sla_escalation_minutes' => 1440,
+                'assignment_rules' => [
+                    [
+                        'category' => 'id_security_incident',
+                        'assignee_id' => $assigneeId,
+                        'enabled' => true,
+                    ],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.category_options.1.sla_response_minutes', 30)
+            ->assertJsonPath('data.assignment_rules.0.assignee_id', $assigneeId);
+
+        $ticketId = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Security lockout',
+                'category' => 'id_security_incident',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.assignee.id', $assigneeId)
+            ->json('data.id');
+
+        tenancy()->initialize($this->testTenant);
+        $ticket = TicketingTicket::query()->findOrFail($ticketId);
+        $dueAt = app(\App\Modules\Ticketing\Services\TicketingSlaCalculator::class)->dueAt($ticket);
+        $this->assertNotNull($dueAt);
+        $this->assertSame(60, (int) $ticket->created_at->diffInMinutes($dueAt));
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/dashboard')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['by_category' => [['category', 'label', 'open']]]]);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/tickets?category=id_security_incident')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
     }
 }

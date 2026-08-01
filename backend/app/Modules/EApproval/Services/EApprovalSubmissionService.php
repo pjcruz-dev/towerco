@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Core\Support\AllowlistedSort;
+use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
 use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
 use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
 use App\Modules\ProcurementOne\Services\ProcurementVendorPoPolicyGuard;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -374,6 +375,7 @@ final class EApprovalSubmissionService
             $values,
             true,
             $this->attachmentCountsByFieldName($submission),
+            $this->attachmentSlotsByFieldName($submission),
         );
         $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
@@ -482,28 +484,106 @@ final class EApprovalSubmissionService
             $values,
             true,
             $this->attachmentCountsByFieldName($submission),
+            $this->attachmentSlotsByFieldName($submission),
         );
         $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
-        return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $actor, $overspendWarning) {
-            EApprovalRequestApproval::query()->where('submission_id', $submission->id)->delete();
+        $previousValues = $this->currentValuesMap($submission);
+        $revisionConfig = EApprovalRevisionRouting::fromFormMetadata(
+            is_array($form->metadata_json) ? $form->metadata_json : [],
+        );
+        $routingDecision = $this->resolveRevisionResubmitRouting(
+            $submission,
+            $form,
+            $values,
+            $previousValues,
+            $revisionConfig,
+        );
+
+        return DB::connection('tenant')->transaction(function () use (
+            $submission,
+            $form,
+            $values,
+            $actor,
+            $overspendWarning,
+            $routingDecision,
+        ) {
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
 
             $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
+            $currentCycle = max(1, (int) ($submission->approval_cycle ?: 1));
+            $willResume = $routingDecision['routed'] === EApprovalRevisionRouting::RESUME_RETURNING_STEP;
+            $nextCycle = $willResume ? $currentCycle : $currentCycle + 1;
+
             $submission->fill([
                 'status' => EApprovalSubmissionStatus::PENDING,
-                'current_step' => 1,
                 'schema_snapshot_json' => $prepared['schema_snapshot_json'],
                 'workflow_snapshot_json' => $prepared['workflow_snapshot_json'],
                 'workflow_version_id' => $prepared['workflow_version_id'],
                 'approval_policy_version_id' => $prepared['approval_policy_version_id'],
                 'approval_policy_label' => $prepared['approval_policy_label'],
+                'approval_cycle' => $nextCycle,
+                'last_revision_routing' => $routingDecision['routed'],
+                'last_revision_routing_reason' => $routingDecision['reason'],
+                'force_full_restart' => false,
             ]);
-            $submission->save();
 
-            $this->persistValues($submission, $form, $values);
-            $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
-            $this->audit->log('submission_resubmitted', $submission->id, null, $actor);
+            if ($willResume) {
+                $submission->current_step = (int) $routingDecision['target_step'];
+                $submission->save();
+                $this->persistValues($submission, $form, $values);
+
+                $resumeResult = $this->workflow->resumeWorkflowAtStep(
+                    $submission,
+                    $form,
+                    $values,
+                    (int) $routingDecision['target_step'],
+                    $prepared['steps'],
+                );
+                $submission->last_revision_routing = $resumeResult['routed'];
+                $submission->last_revision_routing_reason = $resumeResult['reason'];
+                $submission->returned_from_step = null;
+                $submission->save();
+            } else {
+                // Prior-cycle decisions become historical; rebuild pending queue from step 1.
+                EApprovalRequestApproval::query()
+                    ->where('submission_id', $submission->id)
+                    ->whereIn('status', [
+                        EApprovalApprovalStatus::APPROVED,
+                        EApprovalApprovalStatus::PENDING,
+                        EApprovalApprovalStatus::INVALIDATED,
+                        EApprovalApprovalStatus::CANCELLED,
+                    ])
+                    ->update([
+                        'status' => EApprovalApprovalStatus::SUPERSEDED,
+                        'remarks' => __('Superseded by full workflow restart.'),
+                        'acted_at' => now(),
+                    ]);
+
+                $submission->current_step = 1;
+                $submission->returned_from_step = null;
+                $submission->save();
+                $this->persistValues($submission, $form, $values);
+                $this->workflow->initiateWorkflow(
+                    $submission,
+                    $form,
+                    $values,
+                    $prepared['steps'],
+                    preserveHistoricalApprovals: true,
+                );
+            }
+
+            $this->audit->log(
+                'submission_resubmitted',
+                $submission->id,
+                sprintf(
+                    'routing=%s reason=%s step=%s',
+                    (string) $submission->last_revision_routing,
+                    (string) $submission->last_revision_routing_reason,
+                    (string) $submission->current_step,
+                ),
+                $actor,
+            );
             if ($prepared['approval_policy_label'] !== null) {
                 $this->audit->log(
                     'approval_policy_applied',
@@ -516,6 +596,124 @@ final class EApprovalSubmissionService
 
             return $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $newValues
+     * @param  array<string, mixed>  $previousValues
+     * @param  array{routing: string, material_fields: list<string>, approver_can_force_full_restart: bool}  $revisionConfig
+     * @return array{routed: string, reason: string, target_step: int|null}
+     */
+    private function resolveRevisionResubmitRouting(
+        EApprovalSubmission $submission,
+        EApprovalForm $form,
+        array $newValues,
+        array $previousValues,
+        array $revisionConfig,
+    ): array {
+        // Rejected submissions always restart.
+        if ((string) $submission->status === EApprovalSubmissionStatus::REJECTED) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_DEFAULT,
+                'target_step' => 1,
+            ];
+        }
+
+        if ($revisionConfig['routing'] !== EApprovalRevisionRouting::RESUME_RETURNING_STEP) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_FORM_SETTING,
+                'target_step' => 1,
+            ];
+        }
+
+        if ((bool) $submission->force_full_restart) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_FORCE_FLAG,
+                'target_step' => 1,
+            ];
+        }
+
+        $returnedFromStep = (int) ($submission->returned_from_step ?? 0);
+        if ($returnedFromStep < 1) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_MISSING_RETURN_STEP,
+                'target_step' => 1,
+            ];
+        }
+
+        if ($this->materialFieldsChanged($revisionConfig['material_fields'], $previousValues, $newValues)) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_MATERIAL_FIELDS,
+                'target_step' => 1,
+            ];
+        }
+
+        if (! $this->workflow->stepOrderIsActivatable($submission, $form, $newValues, $returnedFromStep)) {
+            return [
+                'routed' => EApprovalRevisionRouting::RESTART_FROM_START,
+                'reason' => EApprovalRevisionRouting::REASON_STEP_CONDITION,
+                'target_step' => 1,
+            ];
+        }
+
+        return [
+            'routed' => EApprovalRevisionRouting::RESUME_RETURNING_STEP,
+            'reason' => EApprovalRevisionRouting::REASON_RESUME,
+            'target_step' => $returnedFromStep,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $materialFields
+     * @param  array<string, mixed>  $previousValues
+     * @param  array<string, mixed>  $newValues
+     */
+    private function materialFieldsChanged(array $materialFields, array $previousValues, array $newValues): bool
+    {
+        foreach ($materialFields as $field) {
+            $before = $this->normalizeComparableValue($previousValues[$field] ?? null);
+            $after = $this->normalizeComparableValue($newValues[$field] ?? null);
+            if ($before !== $after) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeComparableValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+
+        return (string) json_encode($value);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function currentValuesMap(EApprovalSubmission $submission): array
+    {
+        $submission->loadMissing('values.field');
+        $map = [];
+        foreach ($submission->values as $row) {
+            $key = $row->field?->name ?? (string) $row->field_id;
+            $map[$key] = $row->value;
+        }
+
+        return $map;
     }
 
     /**
@@ -546,9 +744,20 @@ final class EApprovalSubmissionService
                 'field_name' => $a->field_name,
                 'file_name' => $a->file_name,
                 'file_path' => $a->file_path,
+                'metadata' => is_array($a->metadata) ? $a->metadata : null,
             ])->values()->all(),
             'viewer_is_requestor' => $viewerContext['viewer_is_requestor'],
             'viewer_pending_approval_id' => $viewerContext['viewer_pending_approval_id'],
+            'revision_config' => EApprovalRevisionRouting::fromFormMetadata(
+                is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [],
+            ),
+            'revision_routing_applied' => $submission->last_revision_routing
+                ? [
+                    'routing' => $submission->last_revision_routing,
+                    'reason' => $submission->last_revision_routing_reason,
+                    'current_step' => $submission->current_step,
+                ]
+                : null,
             ...$this->revisionFeedbackMeta($submission),
         ]);
     }
@@ -930,5 +1139,34 @@ final class EApprovalSubmissionService
         }
 
         return $counts;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function attachmentSlotsByFieldName(EApprovalSubmission $submission): array
+    {
+        $submission->loadMissing('attachments');
+        $slots = [];
+
+        foreach ($submission->attachments as $attachment) {
+            $fieldName = trim((string) ($attachment->field_name ?? ''));
+            if ($fieldName === '') {
+                continue;
+            }
+
+            $metadata = is_array($attachment->metadata) ? $attachment->metadata : [];
+            $slot = isset($metadata['slot']) ? trim((string) $metadata['slot']) : '';
+            if ($slot === '') {
+                continue;
+            }
+
+            $slots[$fieldName] ??= [];
+            if (! in_array($slot, $slots[$fieldName], true)) {
+                $slots[$fieldName][] = $slot;
+            }
+        }
+
+        return $slots;
     }
 }

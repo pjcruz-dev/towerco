@@ -97,6 +97,13 @@ final class TenantRbacPermissionCatalog
             'documents:controlled:manage',
             'documents:controlled:import',
         ],
+        'ai_assistant' => [
+            'ai_assistant:use',
+            'ai_assistant:tools:use',
+            'ai_assistant:actions:execute',
+            'ai_assistant:knowledge:manage',
+            'ai_assistant:conversations:audit',
+        ],
     ];
 
     /** @var array<string, string> */
@@ -115,6 +122,7 @@ final class TenantRbacPermissionCatalog
         'asset_one' => 'Asset-One',
         'documents' => 'Documents',
         'document_register' => 'Document register',
+        'ai_assistant' => 'AI Assistant',
     ];
 
     /**

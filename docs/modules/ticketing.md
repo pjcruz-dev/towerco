@@ -67,6 +67,7 @@ TowerOS does **not** support runtime upload of PHP/JS module code. The recommend
 | Raise from Sites | Site detail (`/sites/{id}`) with **Raise ticket** + related tickets |
 | Raise from Tower-One | Tower detail (`/tower-one/towers/{id}`) with **Raise ticket** + related tickets |
 | Raise from Asset-One | Asset detail (`/asset-one/assets/{id}`) with **Raise ticket** + related tickets |
+| Raise from Procurement-One | PR, PO, GRN, AP invoice, and vendor detail pages with **Raise ticket**; smart prefills (delivery-delay, GRN mismatch, invoice dispute, vendor issue) + `procurement_one` category pack |
 | Registry links | Site, tower, and asset list rows link to detail pages |
 | Internal comments | IT can post **internal notes**; hidden from requestors; badge in UI |
 | Show APIs | `GET /sites/{id}`, `GET /tower-one/towers/{id}`, `GET /asset-one/assets/{id}` |
@@ -75,7 +76,7 @@ TowerOS does **not** support runtime upload of PHP/JS module code. The recommend
 
 | Feature | Behavior |
 |---------|----------|
-| Category pack | Tenant-configurable category list in settings; validated on create/update |
+| Category pack | Tenant-configurable category list in settings; validated on create/update. Built-in packs: **Enterprise IT** (`enterprise_it` — hardware, software, identity/security, workplace IT) and **Procurement-One** (`procurement_one`). Apply via `PUT /ticketing/settings` `{ "apply_category_pack": "enterprise_it" }` (merges; does not replace). Categories support custom **labels** (`{ "id": "noc", "label": "NOC operations" }`). Settings UI allows add/edit/remove. Metadata includes `category_options` (`id` + label). |
 | SLA tracking | `sla_due_at` and `sla_status` (`on_track`, `at_risk`, `breached`) on tickets |
 | SLA scheduler | `php artisan ticketing:sla-run` every 5 minutes (Laravel schedule) |
 | SLA reminders | In-app + optional Teams webhook when response window elapses |
@@ -86,14 +87,23 @@ TowerOS does **not** support runtime upload of PHP/JS module code. The recommend
 
 After tenant deploy, run `php artisan tenants:migrate` for SLA columns (`sla_due_at`, `sla_reminder_sent_at`, `sla_escalated_at`).
 
+## Phase 5 (complete)
+
+| Feature | Behavior |
+|---------|----------|
+| Per-category SLA | Optional `sla_response_minutes` / `sla_escalation_minutes` on each category option; blank inherits tenant defaults, then priority multipliers apply |
+| Auto-assign rules | Settings `assignment_rules`: category → assignee. Applied on create when `assignee_id` is empty |
+| Category analytics | Dashboard `by_category`: open, in progress, resolved (7d), SLA at risk, avg resolve hours |
+| Category list filter | `GET /ticketing/tickets?category=` |
+| Manage triage | Ticket detail Manage panel edits priority + category (resyncs SLA) |
+
 ## Future enhancements (not scheduled)
 
 | Item | Scope |
 |------|-------|
-| Per-category SLA templates | Different response/escalation per category |
 | Generic outbound webhooks | Beyond Teams MessageCard format |
 | SLA audit history | Timeline of reminders and escalations |
-| Auto-assign / triage queues | Rules-based routing to IT groups |
+| Queue teams / round-robin | Multi-member queues beyond single-user auto-assign rules |
 
 ## API (tenant)
 
@@ -128,8 +138,9 @@ After tenant deploy, run `php artisan tenants:migrate` for SLA columns (`sla_due
 | Query param | Description |
 |-------------|-------------|
 | `status`, `priority`, `assignee_id`, `mine`, `search` | Standard list filters |
-| `source_module` | Filter by originating module (e.g. `e_approval`, `project_one`, `sites`) |
+| `source_module` | Filter by originating module (e.g. `e_approval`, `project_one`, `sites`, `procurement_one`) |
 | `source_reference_id` | Filter by linked record UUID |
+| `linked_id` (+ optional `linked_module`) | Match tickets **sourced from** the record OR **linked to** it via `ticketing_links`. Used on parent records (e.g. a PO surfaces tickets raised from its child GRNs/invoices that link back to the PO). |
 
 ### Raising from another module (dynamic source)
 

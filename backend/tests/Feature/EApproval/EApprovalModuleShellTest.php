@@ -49,6 +49,8 @@ final class EApprovalModuleShellTest extends TestCase
                 'data' => [
                     'kpis',
                     'actions',
+                    'queues',
+                    'capabilities',
                     'message',
                 ],
             ]);

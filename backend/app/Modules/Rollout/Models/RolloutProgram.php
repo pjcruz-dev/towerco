@@ -48,6 +48,8 @@ class RolloutProgram extends Model
         'target_rfi_working_date',
         'actual_rfi_date',
         'sla_variance_working_days',
+        'sla_remaining_working_days',
+        'sla_risk_computed_on',
         'saq_owner_id',
         'cme_pm_id',
         'pmo_owner_id',
@@ -67,6 +69,8 @@ class RolloutProgram extends Model
             'cancelled_at' => 'datetime',
             'sla_working_days' => 'integer',
             'sla_variance_working_days' => 'integer',
+            'sla_remaining_working_days' => 'integer',
+            'sla_risk_computed_on' => 'date',
         ];
     }
 

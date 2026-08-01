@@ -56,9 +56,169 @@ class MfaService
         return 'toweros:tenant:mfa_required:'.$tenantId;
     }
 
+    public function userHasVerifiedFactor(TenantUser $user): bool
+    {
+        return DB::table('mfa_factors')
+            ->where('user_id', $user->id)
+            ->whereNull('disabled_at')
+            ->whereNotNull('verified_at')
+            ->exists();
+    }
+
+    /**
+     * Challenge MFA when org policy requires it, or when this user already enrolled TOTP.
+     * Personal enrollment must protect the account even if org-wide MFA is optional.
+     */
     public function isMfaRequired(TenantUser $user): bool
     {
-        return $this->isTenantMfaPolicyActive();
+        if ($this->isTenantMfaPolicyActive()) {
+            return true;
+        }
+
+        return $this->userHasVerifiedFactor($user);
+    }
+
+    /**
+     * API middleware gate: session must complete MFA when policy or enrolled factor applies.
+     */
+    public function sessionRequiresMfaVerification(TenantUser $user): bool
+    {
+        return $this->isMfaRequired($user);
+    }
+
+    /**
+     * How long a browser/device stays trusted after a successful MFA challenge.
+     * 0 = challenge on every sign-in. Clamped to 0–90 days.
+     */
+    public function trustDays(): int
+    {
+        $tenantKey = tenant()?->getTenantKey();
+        if ($tenantKey === null) {
+            return (int) config('toweros.tenant_mfa.default_trust_days', 7);
+        }
+
+        return (int) Cache::remember(
+            $this->tenantTrustDaysCacheKey((string) $tenantKey),
+            300,
+            static function () use ($tenantKey): int {
+                /** @var Tenant|null $record */
+                $record = Tenant::query()->find($tenantKey);
+                $days = $record?->mfa_trust_days;
+                if ($days === null) {
+                    $days = (int) config('toweros.tenant_mfa.default_trust_days', 7);
+                }
+
+                return max(0, min(90, (int) $days));
+            },
+        );
+    }
+
+    public function forgetTenantTrustDaysCache(string $tenantId): void
+    {
+        Cache::forget($this->tenantTrustDaysCacheKey($tenantId));
+    }
+
+    private function tenantTrustDaysCacheKey(string $tenantId): string
+    {
+        return 'toweros:tenant:mfa_trust_days:'.$tenantId;
+    }
+
+    public function currentDeviceFingerprint(): string
+    {
+        return hash('sha256', (string) (request()->userAgent() ?? ''));
+    }
+
+    public function currentDeviceIsTrusted(string $userId): bool
+    {
+        if ($this->trustDays() <= 0) {
+            return false;
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
+            return false;
+        }
+
+        $device = DB::connection('tenant')->table('auth_devices')
+            ->where('user_id', $userId)
+            ->where('device_fingerprint_hash', $this->currentDeviceFingerprint())
+            ->first();
+
+        if ($device === null || empty($device->mfa_trusted_until)) {
+            return false;
+        }
+
+        return now()->lessThanOrEqualTo($device->mfa_trusted_until);
+    }
+
+    public function trustCurrentDevice(string $userId): void
+    {
+        $days = $this->trustDays();
+        if ($days <= 0) {
+            return;
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
+            return;
+        }
+
+        $until = now()->addDays($days);
+        DB::connection('tenant')->table('auth_devices')
+            ->where('user_id', $userId)
+            ->where('device_fingerprint_hash', $this->currentDeviceFingerprint())
+            ->update([
+                'trust_level' => 'mfa',
+                'mfa_trusted_until' => $until,
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * Decide whether login should challenge MFA, force enrollment, or skip via device trust.
+     *
+     * @return array{
+     *     mfa_required: bool,
+     *     mfa_enrollment_required: bool,
+     *     mfa_challenge: array{id: string, expires_at: string}|null,
+     *     mark_verified: bool
+     * }
+     */
+    public function resolveLoginMfaState(TenantUser $user, string $sessionId): array
+    {
+        $policyOrEnrolled = $this->isMfaRequired($user);
+        if (! $policyOrEnrolled) {
+            return [
+                'mfa_required' => false,
+                'mfa_enrollment_required' => false,
+                'mfa_challenge' => null,
+                'mark_verified' => true,
+            ];
+        }
+
+        $enrolled = $this->userHasVerifiedFactor($user);
+        if (! $enrolled) {
+            return [
+                'mfa_required' => true,
+                'mfa_enrollment_required' => true,
+                'mfa_challenge' => $this->createChallenge($sessionId),
+                'mark_verified' => false,
+            ];
+        }
+
+        if ($this->currentDeviceIsTrusted((string) $user->id)) {
+            return [
+                'mfa_required' => false,
+                'mfa_enrollment_required' => false,
+                'mfa_challenge' => null,
+                'mark_verified' => true,
+            ];
+        }
+
+        return [
+            'mfa_required' => true,
+            'mfa_enrollment_required' => false,
+            'mfa_challenge' => $this->createChallenge($sessionId),
+            'mark_verified' => false,
+        ];
     }
 
     /**

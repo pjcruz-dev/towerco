@@ -114,6 +114,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('08:00')
             ->withoutOverlapping();
 
+        $schedule->command('rollout:recompute-sla-risk')
+            ->dailyAt('01:30')
+            ->withoutOverlapping();
+
         $schedule->command('e-approval:sla-run')
             ->everyFiveMinutes()
             ->withoutOverlapping();
@@ -132,6 +136,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $schedule->command('procurement:export-run-scheduled')
             ->hourly()
+            ->withoutOverlapping();
+
+        $schedule->command('e-approval:reports-run-scheduled')
+            ->hourly()
+            ->withoutOverlapping();
+
+        $schedule->command('e-approval:exports-prune')
+            ->dailyAt('03:15')
             ->withoutOverlapping();
 
         $schedule->command('procurement:rfq-reminders')

@@ -36,7 +36,9 @@ final class TicketingSlaRunnerService
                 continue;
             }
 
-            $responseAt = $ticket->created_at->copy()->addMinutes($this->sla->responseMinutesFor((string) $ticket->priority));
+            $responseAt = $ticket->created_at->copy()->addMinutes(
+                $this->sla->responseMinutesFor((string) $ticket->priority, $ticket->category),
+            );
             if (
                 $ticket->sla_reminder_sent_at === null
                 && now()->greaterThanOrEqualTo($responseAt)
@@ -48,7 +50,9 @@ final class TicketingSlaRunnerService
                 $reminders++;
             }
 
-            $escalationAt = $ticket->created_at->copy()->addMinutes($this->sla->escalationMinutesFor((string) $ticket->priority));
+            $escalationAt = $ticket->created_at->copy()->addMinutes(
+                $this->sla->escalationMinutesFor((string) $ticket->priority, $ticket->category),
+            );
             if (
                 $ticket->sla_escalated_at === null
                 && now()->greaterThanOrEqualTo($escalationAt)
@@ -58,6 +62,13 @@ final class TicketingSlaRunnerService
                 $ticket->sla_due_at = $this->sla->dueAt($ticket);
                 $ticket->save();
                 $escalations++;
+            }
+
+            // Keep the denormalized SLA status fresh so dashboards aggregate in SQL.
+            $status = $this->sla->statusFor($ticket);
+            if ($ticket->sla_status !== $status) {
+                $ticket->sla_status = $status;
+                $ticket->save();
             }
         }
 

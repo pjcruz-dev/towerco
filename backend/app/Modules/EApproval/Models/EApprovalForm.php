@@ -7,7 +7,9 @@ namespace App\Modules\EApproval\Models;
 use App\Modules\EApproval\Services\EApprovalFileStorageService;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalFormSnapshotSanitizer;
+use App\Modules\EApproval\Support\EApprovalParallelMode;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
+use App\Modules\EApproval\Support\EApprovalWhenLogic;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -164,9 +166,25 @@ class EApprovalForm extends Model
                 $payload['default_approver_id'] = $condition['default_approver_id'] ?? null;
             }
 
+            $fallback = $condition['fallback_approver_id'] ?? null;
+            if (is_string($fallback) && trim($fallback) !== '') {
+                $payload['fallback_approver_id'] = trim($fallback);
+            }
+
+            $mode = EApprovalParallelMode::fromCondition($condition);
+            if ($mode !== EApprovalParallelMode::ALL) {
+                $payload['parallel_mode'] = $mode;
+                if ($mode === EApprovalParallelMode::N_OF_M) {
+                    $payload['parallel_quorum'] = EApprovalParallelMode::quorumFromCondition($condition, 99);
+                }
+            }
+
             $when = EApprovalWorkflowStepDefinitionSupport::whenFromDefinition([], $condition);
             if ($when !== []) {
                 $payload['when'] = $when;
+                if (EApprovalWhenLogic::fromDefinition(null, $condition) === EApprovalWhenLogic::OR) {
+                    $payload['when_logic'] = EApprovalWhenLogic::OR;
+                }
             }
 
             return $payload;

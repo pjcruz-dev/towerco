@@ -13,7 +13,11 @@ class TicketingAssignableUsersController extends AbstractApiController
 {
     public function __invoke(Request $request): JsonResponse
     {
-        abort_unless($request->user()?->can('ticketing:tickets:manage'), 403);
+        $user = $request->user();
+        abort_unless(
+            $user?->can('ticketing:tickets:manage') || $user?->can('ticketing:settings:manage'),
+            403,
+        );
 
         $users = TenantUser::query()
             ->where('is_active', true)

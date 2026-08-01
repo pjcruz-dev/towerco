@@ -18,6 +18,7 @@ class EApprovalSubmission extends Model
     protected $table = 'e_approval_submissions';
 
     protected $fillable = [
+        'id',
         'document_no',
         'form_id',
         'requestor_id',
@@ -31,6 +32,11 @@ class EApprovalSubmission extends Model
         'external_user_agent',
         'status',
         'current_step',
+        'returned_from_step',
+        'force_full_restart',
+        'approval_cycle',
+        'last_revision_routing',
+        'last_revision_routing_reason',
         'parent_submission_id',
         'schema_snapshot_json',
         'workflow_snapshot_json',
@@ -43,6 +49,9 @@ class EApprovalSubmission extends Model
     {
         return [
             'current_step' => 'integer',
+            'returned_from_step' => 'integer',
+            'force_full_restart' => 'boolean',
+            'approval_cycle' => 'integer',
         ];
     }
 
@@ -141,6 +150,11 @@ class EApprovalSubmission extends Model
             'document_no' => $this->document_no,
             'status' => $this->status,
             'current_step' => $this->current_step,
+            'returned_from_step' => $this->returned_from_step,
+            'force_full_restart' => (bool) $this->force_full_restart,
+            'approval_cycle' => (int) ($this->approval_cycle ?: 1),
+            'last_revision_routing' => $this->last_revision_routing,
+            'last_revision_routing_reason' => $this->last_revision_routing_reason,
             'form_id' => (string) $this->form_id,
             'form_name' => $this->form?->name,
             'submission_source' => $this->submission_source ?? 'internal',

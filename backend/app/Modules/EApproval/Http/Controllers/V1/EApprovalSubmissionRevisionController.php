@@ -23,9 +23,15 @@ class EApprovalSubmissionRevisionController extends AbstractApiController
 
         $data = $request->validate([
             'remarks' => ['required', 'string', 'min:5'],
+            'force_full_restart' => ['sometimes', 'boolean'],
         ]);
 
-        $lifecycle->requestRevision($submission, $data['remarks'], $request->user());
+        $lifecycle->requestRevision(
+            $submission,
+            $data['remarks'],
+            $request->user(),
+            (bool) ($data['force_full_restart'] ?? false),
+        );
 
         return $this->ok($submissions->toDetailPayload($submission->fresh()));
     }

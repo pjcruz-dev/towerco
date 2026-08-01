@@ -33,8 +33,13 @@ class TicketingSettingsUpdateController extends AbstractApiController
             'notify_teams_on_create' => ['sometimes', 'boolean'],
             'notify_teams_on_sla_reminder' => ['sometimes', 'boolean'],
             'notify_teams_on_sla_escalation' => ['sometimes', 'boolean'],
-            'categories' => ['sometimes', 'array'],
-            'categories.*' => ['string', 'max:64'],
+            'categories' => ['sometimes', 'array', 'min:1'],
+            'categories.*.sla_response_minutes' => ['nullable', 'integer', 'min:1', 'max:525600'],
+            'categories.*.sla_escalation_minutes' => ['nullable', 'integer', 'min:1', 'max:525600'],
+            'assignment_rules' => ['sometimes', 'array'],
+            'assignment_rules.*.category' => ['required', 'string', 'max:64'],
+            'assignment_rules.*.assignee_id' => ['required', 'uuid', 'exists:users,id'],
+            'assignment_rules.*.enabled' => ['sometimes', 'boolean'],
             'apply_category_pack' => ['sometimes', 'string', 'max:64'],
         ]);
 

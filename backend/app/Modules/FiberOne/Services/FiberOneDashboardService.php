@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\FiberOne\Services;
 
 use App\Modules\FiberOne\Models\FiberRoute;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 
 final class FiberOneDashboardService
 {
@@ -12,6 +13,20 @@ final class FiberOneDashboardService
      * @return array<string, mixed>
      */
     public function build(): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "fiber_one:dashboard:{$tenantId}",
+            30,
+            fn (): array => $this->buildUncached(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(): array
     {
         $total = FiberRoute::query()->count();
         $active = FiberRoute::query()->where('status', 'active')->count();

@@ -1,17 +1,27 @@
 {
   "format": "atc-form-export",
   "formatVersion": 1,
-  "exportedAt": "2026-06-03T00:00:00.000Z",
+  "exportedAt": "2026-07-31T00:00:00.000Z",
   "form": {
-    "name": "Payment Request",
-    "description": "Request payment approval with payee, amount, and manager sign-off.",
+    "name": "Request For Payment",
+    "description": "Vendor or non-PO payment against a service invoice. Stepped: payee details → bank & cost charge → review summary.",
     "category": "finance",
-    "metadata_json": {},
+    "metadata_json": {
+      "form_family": "request_for_payment",
+      "compose": {
+        "mode": "stepped",
+        "step_source": "sections",
+        "show_progress": true,
+        "validate_on_next": true,
+        "allow_back": true,
+        "include_review_step": true
+      }
+    },
     "restricted_to": null,
     "status": "draft",
     "schema_version": 1,
-    "owner_code": "GEN",
-    "doc_type_code": "F",
+    "owner_code": "FIN",
+    "doc_type_code": "RFP",
     "doc_no_custom_enabled": false,
     "doc_no_template": null,
     "doc_no_seq_start": null,
@@ -21,32 +31,70 @@
     "related_form_ids": [],
     "fields": [
       {
+        "type": "section",
+        "name": "section_payee",
+        "label": "Payee & payment details",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {},
+        "options": {},
+        "step_order": 1
+      },
+      {
         "type": "text",
         "name": "payee",
         "label": "Payee",
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
-        },
-        "options": [],
-        "step_order": 0
+        "validation": { "required": true },
+        "options": {},
+        "step_order": 2
       },
       {
         "type": "text",
-        "name": "amount",
-        "label": "Amount",
+        "name": "vat_registration_no",
+        "label": "TIN / VAT registration no.",
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
-        },
-        "options": [],
-        "step_order": 1
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_tax", "slot": 0 } },
+        "step_order": 3
+      },
+      {
+        "type": "currency",
+        "name": "payment_amount",
+        "label": "Payment amount",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_tax", "slot": 1 } },
+        "step_order": 4
+      },
+      {
+        "type": "text",
+        "name": "contact_person",
+        "label": "Contact person",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_contact", "slot": 0 } },
+        "step_order": 5
+      },
+      {
+        "type": "phone",
+        "name": "tel_no",
+        "label": "Tel no.",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_contact", "slot": 1 } },
+        "step_order": 6
       },
       {
         "type": "select",
@@ -55,46 +103,193 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 4 },
-          "required": true
+        "validation": { "required": true },
+        "options": {
+          "choices": [
+            { "value": "PHP", "label": "PHP" },
+            { "value": "USD", "label": "USD" }
+          ],
+          "layout": { "width": "half", "row_id": "rfp_currency", "slot": 0 }
         },
-        "options": ["PHP|PHP", "USD|USD"],
-        "step_order": 2
-      },
-      {
-        "type": "select",
-        "name": "department",
-        "label": "Department",
-        "semantic_type": "department",
-        "behavior": {},
-        "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 8 },
-          "required": true
-        },
-        "options": [
-          "Financial Accounting Department|FAD",
-          "Human Resource Department|HRD",
-          "Operation and Maintenance|OMD",
-          "Project Management Office|PMO"
-        ],
-        "step_order": 3
+        "step_order": 7
       },
       {
         "type": "text",
-        "name": "purpose",
-        "label": "Purpose / description",
+        "name": "non_po",
+        "label": "PO no. / Non-PO reference",
         "semantic_type": null,
         "behavior": {},
         "formula": null,
         "validation": {
-          "_layout": { "layoutSpan": 12 },
           "required": true,
-          "min": 10
+          "help_text": "Enter the PO number, or Non-PO with a short reason."
         },
-        "options": [],
-        "step_order": 4
+        "options": { "layout": { "width": "half", "row_id": "rfp_currency", "slot": 1 } },
+        "step_order": 8
+      },
+      {
+        "type": "textarea",
+        "name": "payment_purpose",
+        "label": "Payment purpose",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": true,
+          "placeholder": "Describe what this payment covers"
+        },
+        "options": {},
+        "step_order": 9
+      },
+      {
+        "type": "text",
+        "name": "passenger",
+        "label": "Passenger (if travel)",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {},
+        "options": { "layout": { "width": "half", "row_id": "rfp_travel", "slot": 0 } },
+        "step_order": 10
+      },
+      {
+        "type": "text",
+        "name": "location",
+        "label": "Location / site",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {},
+        "options": { "layout": { "width": "half", "row_id": "rfp_travel", "slot": 1 } },
+        "step_order": 11
+      },
+      {
+        "type": "date_range",
+        "name": "service_period",
+        "label": "Service / travel period",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_dates", "slot": 0 } },
+        "step_order": 12
+      },
+      {
+        "type": "instruction",
+        "name": "payment_terms_note",
+        "label": "Payment terms",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {},
+        "options": {
+          "body": "Note: 100% full payment — upon submission of Service Invoice."
+        },
+        "step_order": 13
+      },
+      {
+        "type": "file",
+        "name": "service_invoice",
+        "label": "Service invoice",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": true,
+          "help_text": "Attach the service invoice required for payment release.",
+          "maxFiles": 5,
+          "allowedFileTypes": ["pdf", "image"]
+        },
+        "options": {},
+        "step_order": 14
+      },
+      {
+        "type": "file",
+        "name": "supporting_documents",
+        "label": "Supporting documents",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {
+          "required": false,
+          "maxFiles": 10,
+          "allowedFileTypes": ["pdf", "image"]
+        },
+        "options": {},
+        "step_order": 15
+      },
+      {
+        "type": "section",
+        "name": "section_bank_cost",
+        "label": "Bank & cost charge",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": {},
+        "options": {},
+        "step_order": 16
+      },
+      {
+        "type": "text",
+        "name": "bank_name",
+        "label": "Name of bank",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": {},
+        "step_order": 17
+      },
+      {
+        "type": "text",
+        "name": "bank_account_name",
+        "label": "Bank account name",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_bank", "slot": 0 } },
+        "step_order": 18
+      },
+      {
+        "type": "text",
+        "name": "bank_account_no",
+        "label": "Bank account no.",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": { "layout": { "width": "half", "row_id": "rfp_bank", "slot": 1 } },
+        "step_order": 19
+      },
+      {
+        "type": "checklist_matrix",
+        "name": "cost_application",
+        "label": "Cost application",
+        "semantic_type": null,
+        "behavior": {},
+        "formula": null,
+        "validation": { "required": true },
+        "options": {
+          "row_select_label": "Cost Application",
+          "rows": [
+            { "value": "saq_site_survey", "label": "SAQ-Site Survey" },
+            { "value": "saq_permitting", "label": "SAQ-Permitting" },
+            { "value": "saq_soil_testing", "label": "SAQ-Soil Testing" },
+            { "value": "cme_materials", "label": "CME-Materials" },
+            { "value": "cme_labor", "label": "CME-Labor" },
+            { "value": "logistics", "label": "Logistics" },
+            { "value": "various_department", "label": "Various Department" },
+            { "value": "finance_and_accounting", "label": "Finance and Accounting" },
+            { "value": "others", "label": "Others" }
+          ],
+          "columns": [
+            { "value": "project_site_no", "label": "Project Site No", "type": "text" },
+            { "value": "ref_no", "label": "Ref No", "type": "text" },
+            { "value": "or_no", "label": "OR No.", "type": "text" }
+          ]
+        },
+        "step_order": 20
       },
       {
         "type": "approver",
@@ -103,29 +298,9 @@
         "semantic_type": null,
         "behavior": {},
         "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 6 },
-          "required": true
-        },
-        "options": [],
-        "step_order": 5
-      },
-      {
-        "type": "file",
-        "name": "attachments",
-        "label": "Supporting documents",
-        "semantic_type": null,
-        "behavior": {},
-        "formula": null,
-        "validation": {
-          "_layout": { "layoutSpan": 12 },
-          "required": false,
-          "maxFiles": 5,
-          "maxFileSizeMb": 20,
-          "allowedFileTypes": ["pdf", "image"]
-        },
-        "options": [],
-        "step_order": 6
+        "validation": { "required": true },
+        "options": {},
+        "step_order": 21
       }
     ],
     "steps": [

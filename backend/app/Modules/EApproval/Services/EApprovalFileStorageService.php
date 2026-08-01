@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalAttachment;
+use App\Modules\EApproval\Models\EApprovalExportHistory;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
@@ -26,11 +27,17 @@ final class EApprovalFileStorageService
         EApprovalSubmission $submission,
         UploadedFile $file,
         ?string $fieldName,
+        ?array $metadata = null,
     ): EApprovalAttachment {
         $this->assertUploadAllowed($file);
 
         $existing = $this->findExistingByOriginalName($submission, $file->getClientOriginalName(), $fieldName);
         if ($existing !== null) {
+            if ($metadata !== null && $metadata !== [] && empty($existing->metadata)) {
+                $existing->metadata = $metadata;
+                $existing->save();
+            }
+
             return $existing;
         }
 
@@ -62,6 +69,7 @@ final class EApprovalFileStorageService
             'field_name' => $fieldName,
             'file_path' => $storedPath,
             'file_name' => $file->getClientOriginalName(),
+            'metadata' => $metadata,
         ]);
     }
 
@@ -236,6 +244,92 @@ final class EApprovalFileStorageService
         }
 
         return $disk->response($attachment->file_path, $attachment->file_name);
+    }
+
+    /**
+     * Persist a generated export file under the tenant files disk.
+     *
+     * @return array{path: string, disk: string, byte_size: int}
+     */
+    public function storeExport(string $localPath, string $userId, string $historyId, string $filename): array
+    {
+        $diskName = $this->disk();
+        $safeName = basename($filename);
+        $storedPath = sprintf(
+            '%s/e-approval/exports/%s/%s/%s',
+            $this->tenantStoragePrefix(),
+            $userId,
+            $historyId,
+            $safeName,
+        );
+
+        $stream = fopen($localPath, 'rb');
+        if ($stream === false) {
+            throw new \RuntimeException('Unable to open the generated export file for storage.');
+        }
+
+        try {
+            $stored = Storage::disk($diskName)->put($storedPath, $stream);
+        } finally {
+            fclose($stream);
+        }
+
+        if ($stored === false) {
+            throw new \RuntimeException('Unable to store the export file.');
+        }
+
+        return [
+            'path' => $storedPath,
+            'disk' => $diskName,
+            'byte_size' => (int) filesize($localPath),
+        ];
+    }
+
+    /**
+     * @return array{url: string, stream: bool}|null
+     */
+    public function exportDownloadInfo(EApprovalExportHistory $history): ?array
+    {
+        $path = (string) ($history->file_path ?? '');
+        $diskName = (string) ($history->disk ?: $this->disk());
+        if ($path === '' || ! Storage::disk($diskName)->exists($path)) {
+            return null;
+        }
+
+        if ($history->expires_at !== null && $history->expires_at->isPast()) {
+            return null;
+        }
+
+        if ($diskName === 's3') {
+            $minutes = (int) config('toweros.tenant_files.signed_url_minutes', 60);
+
+            return [
+                'url' => Storage::disk($diskName)->temporaryUrl($path, now()->addMinutes($minutes)),
+                'stream' => false,
+            ];
+        }
+
+        return [
+            'url' => '/e-approval/export-history/'.$history->id.'/download',
+            'stream' => true,
+        ];
+    }
+
+    public function downloadExport(EApprovalExportHistory $history): StreamedResponse
+    {
+        $path = (string) ($history->file_path ?? '');
+        $diskName = (string) ($history->disk ?: $this->disk());
+        $disk = Storage::disk($diskName);
+
+        if ($path === '' || ! $disk->exists($path)) {
+            abort(404);
+        }
+
+        if ($history->expires_at !== null && $history->expires_at->isPast()) {
+            abort(410, 'This export download has expired.');
+        }
+
+        return $disk->response($path, (string) ($history->filename ?: 'export'));
     }
 
     public function deleteAttachment(EApprovalAttachment $attachment): void

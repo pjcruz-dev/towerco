@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\TowerOne\Services;
 
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use App\Modules\TowerOne\Models\Tower;
 
 final class TowerOneDashboardService
@@ -12,6 +13,20 @@ final class TowerOneDashboardService
      * @return array<string, mixed>
      */
     public function build(): array
+    {
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        return TenantScopedCache::remember(
+            "tower_one:dashboard:{$tenantId}",
+            30,
+            fn (): array => $this->buildUncached(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildUncached(): array
     {
         $total = Tower::query()->count();
         $operational = Tower::query()->where('status', 'operational')->count();

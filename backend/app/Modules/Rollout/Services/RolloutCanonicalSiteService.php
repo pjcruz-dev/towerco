@@ -65,9 +65,8 @@ final class RolloutCanonicalSiteService
             return $program;
         }
 
-        $program->tco_site_id = $this->tcoSiteIdGenerator->generate(
-            (string) ($program->region ?? 'ncr'),
-            (string) $program->mno,
+        $program->tco_site_id = $this->tcoSiteIdGenerator->generateForProgram(
+            $program,
             $tenantSequencePrefix,
         );
         $program->save();

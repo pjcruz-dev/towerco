@@ -24,6 +24,8 @@ final class TicketingSourceCatalog
 
     public const MODULE_GIS = 'gis';
 
+    public const MODULE_AI_ASSISTANT = 'ai_assistant';
+
     /**
      * @return list<string>
      */
@@ -39,6 +41,7 @@ final class TicketingSourceCatalog
             self::MODULE_FIBER_ONE,
             self::MODULE_ASSET_ONE,
             self::MODULE_GIS,
+            self::MODULE_AI_ASSISTANT,
         ];
     }
 
@@ -57,6 +60,7 @@ final class TicketingSourceCatalog
             self::MODULE_FIBER_ONE => 'Fiber-One',
             self::MODULE_ASSET_ONE => 'Asset-One',
             self::MODULE_GIS => 'GIS',
+            self::MODULE_AI_ASSISTANT => 'AI Assistant',
         ];
     }
 

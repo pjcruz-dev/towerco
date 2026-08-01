@@ -14,9 +14,16 @@ namespace App\Modules\Tenancy\Support;
  */
 final class TenantRbacModuleRoleTemplates
 {
+    /**
+     * Roles that must NOT receive the in-app AI Assistant (SaaS billing-only access).
+     *
+     * @var list<string>
+     */
+    private const ASSISTANT_EXCLUDED_ROLES = ['billing'];
+
     public static function all(): array
     {
-        return array_merge(
+        $roles = array_merge(
             self::coreRoles(),
             self::projectOneRoles(),
             self::ticketingRoles(),
@@ -26,9 +33,35 @@ final class TenantRbacModuleRoleTemplates
             self::documentsRoles(),
             self::controlledDocumentsRoles(),
             self::sitesRoles(),
+            self::aiAssistantRoles(),
             self::disciplineAddons(),
             self::legacyAliases(),
         );
+
+        return self::withAssistantBaseline($roles);
+    }
+
+    /**
+     * Grant `ai_assistant:use` to every functional role so any workspace user gets in-app help.
+     * The RBAC baseline service filters this against enabled permissions, so it only takes
+     * effect when the ai_assistant module is enabled for the tenant.
+     *
+     * @param  array<string, list<string>>  $roles
+     * @return array<string, list<string>>
+     */
+    private static function withAssistantBaseline(array $roles): array
+    {
+        foreach ($roles as $roleName => $permissions) {
+            if (in_array($roleName, self::ASSISTANT_EXCLUDED_ROLES, true)) {
+                continue;
+            }
+            if (! in_array('ai_assistant:use', $permissions, true)) {
+                $permissions[] = 'ai_assistant:use';
+                $roles[$roleName] = array_values($permissions);
+            }
+        }
+
+        return $roles;
     }
 
     /** @return array<string, list<string>> */
@@ -36,7 +69,10 @@ final class TenantRbacModuleRoleTemplates
     {
         return [
             // Global read-only landing — no module sidebar groups.
-            'viewer' => ['dashboard:view'],
+            'viewer' => [
+                'dashboard:view',
+                'ai_assistant:use',
+            ],
             // SaaS billing only — not tenant administration (users/roles/settings).
             'billing' => [
                 'dashboard:view',
@@ -45,6 +81,7 @@ final class TenantRbacModuleRoleTemplates
             ],
             'manager' => [
                 'dashboard:view',
+                'ai_assistant:use',
                 'project_one:view',
                 'project_one:manage',
                 'project_one:rollout:view',
@@ -397,6 +434,27 @@ final class TenantRbacModuleRoleTemplates
             'sites_viewer' => [
                 'dashboard:view',
                 'sites:view',
+            ],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private static function aiAssistantRoles(): array
+    {
+        return [
+            'ai_assistant_user' => [
+                'dashboard:view',
+                'ai_assistant:use',
+                'ai_assistant:tools:use',
+                'ai_assistant:actions:execute',
+            ],
+            'ai_assistant_admin' => [
+                'dashboard:view',
+                'ai_assistant:use',
+                'ai_assistant:tools:use',
+                'ai_assistant:actions:execute',
+                'ai_assistant:knowledge:manage',
+                'ai_assistant:conversations:audit',
             ],
         ];
     }
