@@ -89,6 +89,13 @@ final class EApprovalApprovalRerouteService
                     __('Approval for :doc was rerouted to another approver.', ['doc' => $submission->document_no]),
                     submission: $submission,
                     actor: $actor,
+                    bodyPreview: $reason,
+                );
+                $this->mail->dispatchApprovalRerouted(
+                    $submission,
+                    $previousApproverId,
+                    $actor->name,
+                    $reason,
                 );
             }
         }

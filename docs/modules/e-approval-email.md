@@ -10,18 +10,48 @@ Related: [e-approval.md](./e-approval.md) · [e-approval-go-live-checklist.md](.
 
 | Event | Recipient | When |
 |--------|-----------|------|
-| `submitted` | Requestor | After submit / draft submit when workflow is pending |
-| `approval_assigned` | Approver | Step activated (submit, next step, reroute) |
+| `submitted` | Requestor | First submit / draft submit when workflow is pending |
+| `resubmitted_resume` | Requestor | Resubmit after revision when routing **resumes** at the return step |
+| `resubmitted_restart` | Requestor | Resubmit after revision when routing does a **full restart** from step 1 |
+| `approval_assigned` | Approver | Step activated on first submit, normal advance, or reroute (new assignee). **Parallel bands:** every activated peer is notified. |
+| `approval_assigned_revised` | Approver | Step activated after revision resubmit (resume or full restart) |
+| `approval_rerouted` | Previous approver | Admin reroutes a pending approval — email + in-app (no further action) |
+| `workflow_steps_skipped` | Requestor | Exclusive path skip digest when condition-gated step orders are skipped |
 | `approved` | Requestor | Final approval (or auto-approved with no matching steps) |
 | `rejected` | Requestor | Rejection |
-| `returned` | Requestor | Revision requested |
+| `returned` | Requestor | Revision requested — body includes resume vs restart outlook |
 | `awaiting_dcf` | Requestor | Document control gate |
-| `sla_reminder` | Approver | `php artisan e-approval:sla-run` (scheduled) |
+| `manual_follow_up` | Current pending approver(s) | Requestor sends follow-up; **all pending peers on the current step** (parallel included) |
+| `cancelled` | Requestor + pending approvers | Requestor cancels draft / pending / returned request |
+| `approval_no_longer_needed` | Cleared parallel peers | Parallel `any` / `n_of_m` quorum met — remaining pending peers invalidated |
+| `sla_reminder` | Approver | `php artisan e-approval:sla-run` (scheduled); each pending row independently |
 | `sla_escalation` | Configured users | SLA runner escalation |
 
 **In-app** bell notifications are separate; users still see actions in TowerOS if email is misconfigured.
 
 **Comments** do not send email (in-app only).
+
+### Revision-aware copy
+
+| Situation | Requestor email | Approver email |
+|-----------|-----------------|----------------|
+| Returned for revision | `returned` — subject “Revision requested”; body states whether resubmit will resume or restart | — |
+| Resubmit with resume | `resubmitted_resume` — “Request resubmitted — resumed” | `approval_assigned_revised` — “Revised approval required” |
+| Resubmit with full restart | `resubmitted_restart` — “Request resubmitted — full restart” | `approval_assigned_revised` — “Revised approval required” |
+| First submit | `submitted` | `approval_assigned` |
+
+### Parallel bands
+
+- On step activation, each pending peer receives `approval_assigned` or `approval_assigned_revised` (email + in-app).
+- When parallel mode is **any** or **N of M** and quorum is met, remaining pending peers receive `approval_no_longer_needed` so their inbox is not left stale.
+- Manual follow-up fans out to every pending approver on the current step (same cooldown for the band).
+
+### Reroute and exclusive skip path
+
+| Situation | Email / in-app |
+|-----------|----------------|
+| Admin reroutes pending approval | New assignee: `approval_assigned`. Previous assignee: `approval_rerouted` (reason included). |
+| Exclusive If/Else or ladder skips unmatched step orders | Requestor: `workflow_steps_skipped` digest (skipped step numbers + now awaiting step). Fired after compile on submit/resubmit when condition-gated steps are omitted, and on advance when intermediate orders are skipped. |
 
 ---
 

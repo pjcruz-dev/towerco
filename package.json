@@ -31,7 +31,8 @@
     "test:team-access": "powershell -ExecutionPolicy Bypass -File scripts/test.ps1 scenario team-access",
     "test:e-approval": "powershell -ExecutionPolicy Bypass -File scripts/test.ps1 scenario e-approval",
     "test:rollout": "powershell -ExecutionPolicy Bypass -File scripts/test.ps1 scenario rollout",
-    "profile:local": "node scripts/profile-local-page-apis.mjs && powershell -ExecutionPolicy Bypass -File scripts/profile-local-benchmark.ps1"
+    "profile:local": "node scripts/profile-local-page-apis.mjs && powershell -ExecutionPolicy Bypass -File scripts/profile-local-benchmark.ps1",
+    "mfa:health": "powershell -ExecutionPolicy Bypass -File scripts/mfa-health-check.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

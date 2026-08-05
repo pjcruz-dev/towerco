@@ -6,6 +6,7 @@ namespace App\Modules\Platform\Services;
 
 use App\Models\User;
 use App\Modules\Identity\Services\TotpService;
+use App\Modules\Identity\Support\MfaSecretCipher;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -141,10 +142,22 @@ final class PlatformMfaService
         $valid = false;
         if ($challenge->factor_id) {
             $factor = DB::table('platform_mfa_factors')->where('id', $challenge->factor_id)->first();
-            if ($factor && ! $factor->disabled_at) {
-                $secret = decrypt((string) $factor->secret_encrypted);
-                $valid = $this->totpService->verify($secret, $code);
+            if (! $factor || $factor->disabled_at) {
+                throw ValidationException::withMessages([
+                    'code' => [__(
+                        'No verified authenticator is available for this sign-in. Complete MFA enrollment or use a recovery code.'
+                    )],
+                ]);
             }
+
+            $secret = MfaSecretCipher::decryptOrFail((string) $factor->secret_encrypted, 'platform.mfa.verify');
+            $valid = $this->totpService->verify($secret, $code);
+        } else {
+            throw ValidationException::withMessages([
+                'code' => [__(
+                    'No verified authenticator is available for this sign-in. Complete MFA enrollment or use a recovery code.'
+                )],
+            ]);
         }
 
         if (! $valid) {
@@ -247,7 +260,7 @@ final class PlatformMfaService
             throw ValidationException::withMessages(['code' => [__('No pending MFA enrollment found.')]]);
         }
 
-        $secret = decrypt((string) $factor->secret_encrypted);
+        $secret = MfaSecretCipher::decryptOrFail((string) $factor->secret_encrypted, 'platform.mfa.enroll');
         if (! $this->totpService->verify($secret, $code)) {
             throw ValidationException::withMessages(['code' => [__('Invalid TOTP code.')]]);
         }

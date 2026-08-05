@@ -12,14 +12,18 @@ use App\Modules\Notifications\Support\SafeMailNotificationSender;
 
 final class EApprovalNotificationDispatcher
 {
-    public function dispatchApprovalAssigned(EApprovalSubmission $submission, string $approverUserId): void
-    {
+    public function dispatchApprovalAssigned(
+        EApprovalSubmission $submission,
+        string $approverUserId,
+        bool $revised = false,
+    ): void {
         $user = TenantUser::query()->find($approverUserId);
         if ($user === null) {
             return;
         }
 
-        $this->sendAfterResponse($user, new EApprovalSubmissionNotification($submission, 'approval_assigned'));
+        $event = $revised ? 'approval_assigned_revised' : 'approval_assigned';
+        $this->sendAfterResponse($user, new EApprovalSubmissionNotification($submission, $event));
     }
 
     public function dispatchToRequestor(EApprovalSubmission $submission, string $event, ?string $actorName = null): void
@@ -66,6 +70,73 @@ final class EApprovalNotificationDispatcher
         $this->sendAfterResponse(
             $user,
             new EApprovalSubmissionNotification($submission, 'manual_follow_up', $requestorName),
+        );
+    }
+
+    public function dispatchCancelled(EApprovalSubmission $submission, string $recipientUserId, ?string $actorName = null): void
+    {
+        $user = TenantUser::query()->find($recipientUserId);
+        if ($user === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $user,
+            new EApprovalSubmissionNotification($submission, 'cancelled', $actorName),
+        );
+    }
+
+    public function dispatchApprovalNoLongerNeeded(EApprovalSubmission $submission, string $approverUserId): void
+    {
+        $user = TenantUser::query()->find($approverUserId);
+        if ($user === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $user,
+            new EApprovalSubmissionNotification($submission, 'approval_no_longer_needed'),
+        );
+    }
+
+    public function dispatchApprovalRerouted(
+        EApprovalSubmission $submission,
+        string $previousApproverId,
+        ?string $actorName = null,
+        ?string $reason = null,
+    ): void {
+        $user = TenantUser::query()->find($previousApproverId);
+        if ($user === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $user,
+            new EApprovalSubmissionNotification(
+                $submission,
+                'approval_rerouted',
+                $actorName,
+                detail: $reason,
+            ),
+        );
+    }
+
+    public function dispatchWorkflowStepsSkipped(
+        EApprovalSubmission $submission,
+        string $detail,
+    ): void {
+        $submission->loadMissing('requestor');
+        if ($submission->requestor === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $submission->requestor,
+            new EApprovalSubmissionNotification(
+                $submission,
+                'workflow_steps_skipped',
+                detail: $detail,
+            ),
         );
     }
 

@@ -25,7 +25,7 @@ final class EApprovalNotificationCategoryTest extends TestCase
     public function test_it_builds_hrefs_for_approval_inbox_and_submission_tabs(): void
     {
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=workflow',
+            '/e-approval/submissions/sub-1?tab=decide',
             EApprovalNotificationCategory::hrefFor('approval_assigned', 'sub-1'),
         );
         $this->assertSame(
@@ -33,24 +33,32 @@ final class EApprovalNotificationCategoryTest extends TestCase
             EApprovalNotificationCategory::hrefFor('approval_assigned', null),
         );
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=workflow',
+            '/e-approval/submissions/sub-1?tab=decide',
             EApprovalNotificationCategory::hrefFor('manual_follow_up', 'sub-1'),
         );
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=actions',
+            '/e-approval/submissions/sub-1?tab=decide',
             EApprovalNotificationCategory::hrefFor('returned', 'sub-1'),
         );
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=workflow',
+            '/e-approval/submissions/sub-1?tab=approvals',
             EApprovalNotificationCategory::hrefFor('approved', 'sub-1'),
         );
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=comments',
+            '/e-approval/submissions/sub-1?tab=approvals',
+            EApprovalNotificationCategory::hrefFor('approval_rerouted', 'sub-1'),
+        );
+        $this->assertSame(
+            '/e-approval/submissions/sub-1?tab=approvals',
+            EApprovalNotificationCategory::hrefFor('workflow_steps_skipped', 'sub-1'),
+        );
+        $this->assertSame(
+            '/e-approval/submissions/sub-1?tab=activity',
             EApprovalNotificationCategory::hrefFor('comment_added', 'sub-1'),
         );
         $this->assertSame(EApprovalNotificationCategory::UPDATE, EApprovalNotificationCategory::forType('comment_added'));
         $this->assertSame(
-            '/e-approval/submissions/sub-1?tab=comments',
+            '/e-approval/submissions/sub-1?tab=activity',
             EApprovalNotificationCategory::hrefFor('comment_replied', 'sub-1'),
         );
     }
@@ -72,6 +80,7 @@ final class EApprovalNotificationCategoryTest extends TestCase
             ['approved'],
             ['rejected'],
             ['approval_rerouted'],
+            ['workflow_steps_skipped'],
             ['comment_added'],
             ['comment_replied'],
         ];

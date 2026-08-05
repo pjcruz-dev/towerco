@@ -196,6 +196,7 @@ final class EApprovalSubmissionService
 
             $this->persistValues($submission, $form, $values);
             $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
+            $this->workflow->notifyCompiledExclusiveSkips($submission, $prepared['skipped_steps']);
             $this->audit->log('submission_created', $submission->id, $documentNo, $requestor);
             if ($prepared['approval_policy_label'] !== null) {
                 $this->audit->log(
@@ -402,6 +403,7 @@ final class EApprovalSubmissionService
 
             $this->persistValues($submission, $form, $values);
             $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
+            $this->workflow->notifyCompiledExclusiveSkips($submission, $prepared['skipped_steps']);
             $this->audit->log('submission_created', $submission->id, $documentNo, $requestor);
             if ($prepared['approval_policy_label'] !== null) {
                 $this->audit->log(
@@ -434,16 +436,38 @@ final class EApprovalSubmissionService
             ]);
         }
 
-        if (! in_array($submission->status, [EApprovalSubmissionStatus::PENDING, EApprovalSubmissionStatus::DRAFT], true)) {
+        $cancellable = [
+            EApprovalSubmissionStatus::PENDING,
+            EApprovalSubmissionStatus::DRAFT,
+            EApprovalSubmissionStatus::RETURNED,
+        ];
+        if (! in_array($submission->status, $cancellable, true)) {
             throw ValidationException::withMessages([
-                'status' => [__('Only pending or draft submissions can be cancelled.')],
+                'status' => [__('Only draft, pending, or returned submissions can be cancelled.')],
             ]);
         }
 
+        $wasPending = $submission->status === EApprovalSubmissionStatus::PENDING
+            || $submission->status === EApprovalSubmissionStatus::RETURNED;
+
+        $pendingApproverIds = [];
+        if ($wasPending) {
+            $pendingApproverIds = EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->whereNotNull('approver_id')
+                ->pluck('approver_id')
+                ->map(static fn ($id) => (string) $id)
+                ->unique()
+                ->values()
+                ->all();
+        }
+
         $submission->status = EApprovalSubmissionStatus::CANCELLED;
+        $submission->current_step = 0;
         $submission->save();
 
-        if ($submission->status === EApprovalSubmissionStatus::PENDING) {
+        if ($wasPending) {
             EApprovalRequestApproval::query()
                 ->where('submission_id', $submission->id)
                 ->where('status', EApprovalApprovalStatus::PENDING)
@@ -453,9 +477,40 @@ final class EApprovalSubmissionService
         $this->audit->log('submission_cancelled', $submission->id, null, $actor);
 
         $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
+        $this->notifySubmissionCancelled($fresh, $actor, $pendingApproverIds);
         $this->procurementPrHook->afterSubmissionMutation($fresh, $actor);
 
         return $fresh;
+    }
+
+    /**
+     * @param  list<string>  $pendingApproverIds
+     */
+    private function notifySubmissionCancelled(
+        EApprovalSubmission $submission,
+        TenantUser $actor,
+        array $pendingApproverIds,
+    ): void {
+        $requestorId = (string) ($submission->requestor_id ?? '');
+        $recipientIds = $pendingApproverIds;
+        if ($requestorId !== '') {
+            $recipientIds[] = $requestorId;
+        }
+
+        $recipientIds = array_values(array_unique(array_filter($recipientIds)));
+        $actorName = $actor->name;
+
+        foreach ($recipientIds as $recipientId) {
+            $this->inApp->notify(
+                $recipientId,
+                'cancelled',
+                (string) $submission->id,
+                __('Request :doc was cancelled.', ['doc' => $submission->document_no]),
+                submission: $submission,
+                actor: $actor,
+            );
+            $this->mail->dispatchCancelled($submission, $recipientId, $actorName);
+        }
     }
 
     /**
@@ -570,8 +625,11 @@ final class EApprovalSubmissionService
                     $values,
                     $prepared['steps'],
                     preserveHistoricalApprovals: true,
+                    notifyMode: 'restart',
                 );
             }
+
+            $this->workflow->notifyCompiledExclusiveSkips($submission, $prepared['skipped_steps']);
 
             $this->audit->log(
                 'submission_resubmitted',
@@ -824,25 +882,57 @@ final class EApprovalSubmissionService
 
         $viewerIsRequestor = (string) $submission->requestor_id === (string) $viewer->id;
         $viewerPendingApprovalId = null;
-
-        /** @var EApprovalRequestApproval|null $pending */
-        $pending = $submission->approvals->first(
-            static fn (EApprovalRequestApproval $approval): bool => $approval->status === EApprovalApprovalStatus::PENDING
-                && (int) ($approval->step?->step_order ?? 0) === (int) $submission->current_step,
+        $viewerId = (string) $viewer->id;
+        $currentStep = (int) $submission->current_step;
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $delegation = app(EApprovalDelegationService::class);
+        $activeStepIds = array_fill_keys(
+            app(EApprovalSubmissionWorkflowResolver::class)->currentCompiledStepIds($submission),
+            true,
         );
 
-        if ($pending !== null) {
-            $assignedId = (string) ($pending->approver_id ?? '');
-            $canAct = $assignedId !== ''
-                && (
-                    $assignedId === (string) $viewer->id
-                    || app(EApprovalDelegationService::class)->canActForApprover($viewer, $assignedId)
-                    || $viewer->can('e_approval:forms:manage')
-                );
+        $pendingAtStep = $submission->approvals
+            ->filter(
+                static function (EApprovalRequestApproval $approval) use ($currentStep, $cycle, $activeStepIds): bool {
+                    if ($approval->status !== EApprovalApprovalStatus::PENDING) {
+                        return false;
+                    }
+                    if ((int) ($approval->step?->step_order ?? 0) !== $currentStep) {
+                        return false;
+                    }
+                    $approvalCycle = (int) ($approval->approval_cycle ?: 1);
+                    if ($approvalCycle !== $cycle) {
+                        return false;
+                    }
+                    if ($activeStepIds !== [] && ! isset($activeStepIds[(string) $approval->step_id])) {
+                        return false;
+                    }
 
-            if ($canAct) {
-                $viewerPendingApprovalId = (string) $pending->id;
-            }
+                    return true;
+                },
+            )
+            ->values();
+
+        // Prefer the viewer's own pending row (critical for parallel any/all/N-of-M bands).
+        /** @var EApprovalRequestApproval|null $pending */
+        $pending = $pendingAtStep->first(
+            static fn (EApprovalRequestApproval $approval): bool => (string) ($approval->approver_id ?? '') === $viewerId,
+        );
+
+        if ($pending === null) {
+            $pending = $pendingAtStep->first(
+                static fn (EApprovalRequestApproval $approval): bool => ($assignedId = (string) ($approval->approver_id ?? '')) !== ''
+                    && $delegation->canActForApprover($viewer, $assignedId),
+            );
+        }
+
+        // Forms managers may act on any pending member of the current step.
+        if ($pending === null && $viewer->can('e_approval:forms:manage')) {
+            $pending = $pendingAtStep->first();
+        }
+
+        if ($pending !== null) {
+            $viewerPendingApprovalId = (string) $pending->id;
         }
 
         return [

@@ -23,6 +23,14 @@ final class EApprovalSubmissionWorkflowResolver
      */
     public function stepsForAdvance(EApprovalSubmission $submission): Collection
     {
+        // Prefer the current snapshot's step IDs. Resubmit keeps prior compiled rows
+        // that are still referenced by historical approvals; advancing must not use those
+        // orphans (same step_order would re-activate and stall the band).
+        $fromSnapshotIds = $this->stepsFromSnapshotIds($submission);
+        if ($fromSnapshotIds->isNotEmpty()) {
+            return $fromSnapshotIds;
+        }
+
         $compiled = EApprovalWorkflowStep::query()
             ->where('compiled_for_submission_id', (string) $submission->id)
             ->orderBy('step_order')
@@ -33,16 +41,24 @@ final class EApprovalSubmissionWorkflowResolver
             return $compiled->values();
         }
 
-        $fromSnapshotIds = $this->stepsFromSnapshotIds($submission);
-        if ($fromSnapshotIds->isNotEmpty()) {
-            return $fromSnapshotIds;
-        }
-
         $submission->loadMissing(['form.workflowTemplate.steps']);
 
         return ($submission->form?->workflowTemplate?->steps ?? collect())
             ->sortBy('step_order')
             ->values();
+    }
+
+    /**
+     * Step IDs from the submission's current compiled snapshot (empty when unavailable).
+     *
+     * @return list<string>
+     */
+    public function currentCompiledStepIds(EApprovalSubmission $submission): array
+    {
+        return $this->stepsForAdvance($submission)
+            ->map(static fn (EApprovalWorkflowStep $step): string => (string) $step->id)
+            ->values()
+            ->all();
     }
 
     /**

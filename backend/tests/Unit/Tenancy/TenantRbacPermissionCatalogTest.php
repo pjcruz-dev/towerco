@@ -20,16 +20,35 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertContains('dashboard:view', $enabled);
         $this->assertContains('user:manage', $enabled);
         $this->assertContains('user:impersonate', $enabled);
-        $this->assertContains('billing:view', $enabled);
-        $this->assertContains('billing:manage', $enabled);
         $this->assertContains('project_one:view', $enabled);
         $this->assertContains('e_approval:view', $enabled);
 
+        $this->assertNotContains('billing:view', $enabled);
+        $this->assertNotContains('billing:manage', $enabled);
         $this->assertNotContains('gis:view', $enabled);
         $this->assertNotContains('sites:view', $enabled);
         $this->assertNotContains('tower_one:view', $enabled);
         $this->assertNotContains('fiber_one:view', $enabled);
         $this->assertNotContains('asset_one:view', $enabled);
+    }
+
+    public function test_billing_permissions_require_billings_module(): void
+    {
+        Config::set('toweros.tenant_modules.enabled', [
+            'core',
+            'team_access',
+            'billings',
+        ]);
+
+        $catalog = app(TenantRbacPermissionCatalog::class);
+        $enabled = $catalog->enabledPermissions();
+        $groups = $catalog->permissionGroupsForApi();
+
+        $this->assertContains('billing:view', $enabled);
+        $this->assertContains('billing:manage', $enabled);
+        $this->assertArrayHasKey('billings', $groups);
+        $this->assertSame('Billings', $groups['billings']['label']);
+        $this->assertNotContains('billing:view', $groups['team_access']['permissions'] ?? []);
     }
 
     public function test_permission_groups_split_documents_and_document_register(): void

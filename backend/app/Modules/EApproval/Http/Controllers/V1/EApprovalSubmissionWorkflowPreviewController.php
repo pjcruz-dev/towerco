@@ -19,9 +19,10 @@ class EApprovalSubmissionWorkflowPreviewController extends AbstractApiController
         EApprovalSubmissionService $submissions,
         EApprovalSubmissionWorkflowPreviewService $preview,
     ): JsonResponse {
-        abort_unless($request->user()?->can('e_approval:forms:manage'), 403);
+        abort_unless($request->user()?->can('e_approval:submissions:view'), 403);
 
-        $submissions->assertCanView($submission, $request->user(), true);
+        $canViewAll = (bool) $request->user()?->can('e_approval:forms:manage');
+        $submissions->assertCanView($submission, $request->user(), $canViewAll);
 
         return $this->ok($preview->preview($submission));
     }

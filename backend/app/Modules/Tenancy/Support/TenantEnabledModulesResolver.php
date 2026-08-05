@@ -23,6 +23,7 @@ final class TenantEnabledModulesResolver
         'ticketing',
         'procurement_one',
         'finance_one',
+        'billings',
         'documents',
         'document_register',
         'ai_assistant',
@@ -42,6 +43,7 @@ final class TenantEnabledModulesResolver
         'ticketing' => 'Ticketing',
         'procurement_one' => 'Procurement-One',
         'finance_one' => 'Finance-One',
+        'billings' => 'Billings',
         'documents' => 'Documents',
         'document_register' => 'Document register',
         'ai_assistant' => 'AI Assistant',
@@ -49,6 +51,7 @@ final class TenantEnabledModulesResolver
 
     /** @var array<string, string> */
     public const MODULE_DESCRIPTIONS = [
+        'billings' => 'Tenant subscription, usage, and self-serve plan billing (/billing).',
         'documents' => 'Expiring leases, permits, and contracts across sites.',
         'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Approval.',
         'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',

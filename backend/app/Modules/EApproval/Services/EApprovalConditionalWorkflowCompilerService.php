@@ -63,6 +63,7 @@ final class EApprovalConditionalWorkflowCompilerService
             'applied' => true,
             'steps' => $steps,
             'snapshot' => $snapshot,
+            'skipped_steps' => $this->describeSkippedSteps($definitions, $values),
             'approval_policy_version_id' => null,
             'approval_policy_label' => __('Form workflow'),
         ];

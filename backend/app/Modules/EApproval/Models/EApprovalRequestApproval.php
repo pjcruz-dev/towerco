@@ -75,8 +75,10 @@ class EApprovalRequestApproval extends Model
 
         $cycle = (int) ($this->approval_cycle ?: 1);
         $submissionCycle = (int) ($this->submission?->approval_cycle ?: 1);
+        // Invalidated / cancelled peers stay on the current path (e.g. parallel "Not needed").
+        // Only older cycles and full-restart supersessions belong in prior-cycle history.
         $isPriorCycle = $cycle < $submissionCycle
-            || in_array((string) $this->status, ['superseded', 'invalidated'], true);
+            || (string) $this->status === 'superseded';
 
         return [
             'id' => (string) $this->id,

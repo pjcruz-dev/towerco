@@ -368,6 +368,9 @@ use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupStoreControlle
 use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupUpdateController;
 use App\Modules\Sites\Http\Controllers\V1\SiteIndexController;
 use App\Modules\Sites\Http\Controllers\V1\SiteShowController;
+use App\Modules\Identity\Http\Controllers\V1\TenantEnvironmentHandoffRedeemController;
+use App\Modules\Tenancy\Http\Controllers\V1\TenantEnvironmentHandoffMintController;
+use App\Modules\Tenancy\Http\Controllers\V1\TenantLinkedEnvironmentsController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAssignableUsersController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentDownloadController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentStoreController;
@@ -400,6 +403,9 @@ Route::prefix('auth')->group(function () {
     Route::get('sso/azure/status', TenantSsoAzureStatusController::class)->name('api.tenant.v1.auth.sso.azure.status');
     Route::get('sso/azure/redirect', [TenantSsoController::class, 'redirect'])->name('api.tenant.v1.auth.sso.azure.redirect');
     Route::get('sso/azure/callback', [TenantSsoController::class, 'callback'])->name('api.tenant.v1.auth.sso.azure.callback');
+    Route::post('environment-handoff/redeem', TenantEnvironmentHandoffRedeemController::class)
+        ->middleware('throttle:20,1')
+        ->name('api.tenant.v1.auth.environment_handoff.redeem');
 });
 
 Route::middleware(['throttle:e-approval-public'])->prefix('public/e-approval')->group(function () {
@@ -417,6 +423,11 @@ Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')
 
 Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa'])->group(function () {
     Route::get('me', [TenantAuthController::class, 'me'])->name('api.tenant.v1.auth.me');
+    Route::get('workspace/environments', TenantLinkedEnvironmentsController::class)
+        ->name('api.tenant.v1.workspace.environments');
+    Route::post('workspace/environments/handoff', TenantEnvironmentHandoffMintController::class)
+        ->middleware('throttle:20,1')
+        ->name('api.tenant.v1.workspace.environments.handoff');
     Route::post('auth/logout', [TenantAuthController::class, 'logout'])->name('api.tenant.v1.auth.logout');
     Route::post('auth/logout-all', [TenantAuthController::class, 'logoutAll'])->name('api.tenant.v1.auth.logout_all');
     Route::get('auth/sessions', [TenantAuthController::class, 'sessions'])->name('api.tenant.v1.auth.sessions');
@@ -810,14 +821,16 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
         Route::post('roles/{role}/clone', RoleCloneController::class)->name('api.tenant.v1.admin.roles.clone');
         Route::patch('roles/{role}', RoleUpdateController::class)->name('api.tenant.v1.admin.roles.update');
         Route::delete('roles/{role}', RoleDestroyController::class)->name('api.tenant.v1.admin.roles.destroy');
-        Route::get('billing', TenantBillingShowController::class)->name('api.tenant.v1.admin.billing.show');
-        Route::get('billing/usage', TenantBillingUsageShowController::class)->name('api.tenant.v1.admin.billing.usage');
-        Route::post('billing/checkout-session', TenantBillingCheckoutSessionStoreController::class)
-            ->middleware('throttle:20,1')
-            ->name('api.tenant.v1.admin.billing.checkout');
-        Route::post('billing/portal-session', TenantBillingPortalSessionStoreController::class)
-            ->middleware('throttle:20,1')
-            ->name('api.tenant.v1.admin.billing.portal');
+        Route::middleware('tenant.module:billings')->group(function () {
+            Route::get('billing', TenantBillingShowController::class)->name('api.tenant.v1.admin.billing.show');
+            Route::get('billing/usage', TenantBillingUsageShowController::class)->name('api.tenant.v1.admin.billing.usage');
+            Route::post('billing/checkout-session', TenantBillingCheckoutSessionStoreController::class)
+                ->middleware('throttle:20,1')
+                ->name('api.tenant.v1.admin.billing.checkout');
+            Route::post('billing/portal-session', TenantBillingPortalSessionStoreController::class)
+                ->middleware('throttle:20,1')
+                ->name('api.tenant.v1.admin.billing.portal');
+        });
         Route::get('settings', AdminSettingsShowController::class)->name('api.tenant.v1.admin.settings.show');
         Route::patch('settings', AdminSettingsUpdateController::class)->name('api.tenant.v1.admin.settings.update');
     });

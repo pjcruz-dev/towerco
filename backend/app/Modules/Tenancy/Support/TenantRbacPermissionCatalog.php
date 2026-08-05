@@ -27,6 +27,8 @@ final class TenantRbacPermissionCatalog
             'user:impersonate',
             'role:manage',
             'tenant:manage',
+        ],
+        'billings' => [
             'billing:view',
             'billing:manage',
         ],
@@ -115,6 +117,7 @@ final class TenantRbacPermissionCatalog
         'ticketing' => 'Ticketing',
         'procurement_one' => 'Procurement-One',
         'finance_one' => 'Finance-One',
+        'billings' => 'Billings',
         'gis' => 'GIS',
         'sites' => 'Sites',
         'tower_one' => 'Tower-One',

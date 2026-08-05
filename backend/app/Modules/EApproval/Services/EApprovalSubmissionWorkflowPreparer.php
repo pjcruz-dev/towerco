@@ -23,7 +23,8 @@ final class EApprovalSubmissionWorkflowPreparer
      *   workflow_version_id: string,
      *   approval_policy_version_id: string|null,
      *   approval_policy_label: string|null,
-     *   steps: Collection<int, EApprovalWorkflowStep>
+     *   steps: Collection<int, EApprovalWorkflowStep>,
+     *   skipped_steps: list<array<string, mixed>>
      * }
      */
     public function prepare(EApprovalForm $form, array $values, string $submissionId): array
@@ -33,6 +34,7 @@ final class EApprovalSubmissionWorkflowPreparer
 
         $workflowSnapshot = $compiled['snapshot'];
         $workflowVersionId = hash('sha256', json_encode($workflowSnapshot['steps'] ?? [], JSON_THROW_ON_ERROR));
+        $skippedSteps = is_array($compiled['skipped_steps'] ?? null) ? $compiled['skipped_steps'] : [];
 
         return [
             'schema_snapshot_json' => $base['schema_snapshot_json'],
@@ -41,6 +43,7 @@ final class EApprovalSubmissionWorkflowPreparer
             'approval_policy_version_id' => $compiled['approval_policy_version_id'],
             'approval_policy_label' => $compiled['approval_policy_label'],
             'steps' => $compiled['steps'],
+            'skipped_steps' => $skippedSteps,
         ];
     }
 }
