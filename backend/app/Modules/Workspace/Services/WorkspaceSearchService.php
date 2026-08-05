@@ -11,6 +11,8 @@ use App\Modules\Documents\Services\DocumentSearchService;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\FiberOne\Models\FiberRoute;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProjectOne\Models\Project;
@@ -49,6 +51,9 @@ final class WorkspaceSearchService
      *   title: string,
      *   subtitle: string|null,
      *   status: string|null,
+     *   status_label: string|null,
+     *   current_step: int|null,
+     *   waiting_on: string|null,
      *   href: string
      * }>
      */
@@ -68,7 +73,11 @@ final class WorkspaceSearchService
         $providers = [];
 
         if ($this->canSearchModule($enabled, $viewer, 'e_approval', 'e_approval:submissions:view')) {
-            $providers[] = fn (): array => $this->searchEApprovalSubmissions($viewer, $like, $limitPerType);
+            $providers[] = fn (): array => $this->searchEApprovalSubmissions($viewer, $search, $like, $limitPerType);
+        }
+
+        if ($this->canSearchEApprovalForms($enabled, $viewer)) {
+            $providers[] = fn (): array => $this->searchEApprovalForms($viewer, $like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'document_register', 'documents:controlled:view')) {
@@ -140,6 +149,20 @@ final class WorkspaceSearchService
         return $viewer->can($permission);
     }
 
+    /**
+     * @param  list<string>  $enabled
+     */
+    private function canSearchEApprovalForms(array $enabled, TenantUser $viewer): bool
+    {
+        if (! in_array('e_approval', $enabled, true)) {
+            return false;
+        }
+
+        return $viewer->can('e_approval:forms:manage')
+            || $viewer->can('e_approval:submissions:create')
+            || $viewer->can('e_approval:view');
+    }
+
     private function like(string $search): string
     {
         return '%'.addcslashes($search, '%_\\').'%';
@@ -153,16 +176,36 @@ final class WorkspaceSearchService
      *   title: string,
      *   subtitle: string|null,
      *   status: string|null,
+     *   status_label: string|null,
+     *   current_step: int|null,
+     *   waiting_on: string|null,
      *   href: string
      * }>
      */
-    private function searchEApprovalSubmissions(TenantUser $viewer, string $like, int $limit): array
-    {
+    private function searchEApprovalSubmissions(
+        TenantUser $viewer,
+        string $search,
+        string $like,
+        int $limit,
+    ): array {
         $canViewAll = $viewer->can('e_approval:forms:manage');
+        $statusMatches = EApprovalSubmissionStatus::statusesMatching($search);
 
         $query = EApprovalSubmission::query()
-            ->select(['id', 'document_no', 'status', 'form_id', 'requestor_id'])
-            ->with(['form:id,name']);
+            ->select(['id', 'document_no', 'status', 'form_id', 'requestor_id', 'current_step', 'approval_cycle'])
+            ->with([
+                'form:id,name',
+                'requestor:id,name,email',
+                'approvals' => static function ($approvals): void {
+                    $approvals
+                        ->select(['id', 'submission_id', 'step_id', 'approver_id', 'status', 'approval_cycle'])
+                        ->where('status', EApprovalApprovalStatus::PENDING)
+                        ->with([
+                            'approver:id,name',
+                            'step:id,step_order',
+                        ]);
+                },
+            ]);
 
         if (! $canViewAll) {
             $query->where(static function (Builder $q) use ($viewer): void {
@@ -173,27 +216,193 @@ final class WorkspaceSearchService
             });
         }
 
-        $query->where(static function (Builder $q) use ($like): void {
+        $query->where(static function (Builder $q) use ($like, $statusMatches): void {
             $q->where('document_no', 'like', $like)
                 ->orWhereIn('form_id', EApprovalForm::query()
                     ->select('id')
-                    ->where('name', 'like', $like));
+                    ->where('name', 'like', $like))
+                ->orWhereIn('requestor_id', TenantUser::query()
+                    ->select('id')
+                    ->where(static function (Builder $userQuery) use ($like): void {
+                        $userQuery->where('name', 'like', $like)
+                            ->orWhere('email', 'like', $like);
+                    }));
+
+            if ($statusMatches !== []) {
+                $q->orWhereIn('status', $statusMatches);
+            }
         });
 
         return $this->mapRows(
             $query->orderByDesc('created_at')->limit($limit)->get(),
-            static function (EApprovalSubmission $submission): array {
+            function (EApprovalSubmission $submission): array {
+                return $this->mapEApprovalSubmissionSearchResult($submission);
+            },
+        );
+    }
+
+    /**
+     * @return array{
+     *   module: string,
+     *   entity_type: string,
+     *   id: string,
+     *   title: string,
+     *   subtitle: string|null,
+     *   status: string|null,
+     *   status_label: string|null,
+     *   current_step: int|null,
+     *   waiting_on: string|null,
+     *   href: string
+     * }
+     */
+    private function mapEApprovalSubmissionSearchResult(EApprovalSubmission $submission): array
+    {
+        $formName = $submission->form?->name;
+        $requestorName = $submission->requestor?->name;
+        $rawStatus = is_string($submission->status) ? $submission->status : null;
+        $currentStep = max(0, (int) ($submission->current_step ?: 0));
+        $waitingOn = $this->eApprovalWaitingOnLabel($submission);
+
+        $subtitleParts = array_values(array_filter([
+            is_string($formName) && $formName !== '' ? $formName : null,
+            is_string($requestorName) && $requestorName !== '' ? $requestorName : null,
+            $currentStep > 0 ? 'Step '.$currentStep : null,
+            $waitingOn !== null ? 'Waiting on '.$waitingOn : null,
+        ]));
+
+        return [
+            'module' => 'e_approval',
+            'entity_type' => 'submission',
+            'id' => (string) $submission->id,
+            'title' => (string) $submission->document_no,
+            'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
+            'status' => $rawStatus,
+            'status_label' => $rawStatus !== null ? EApprovalSubmissionStatus::label($rawStatus) : null,
+            'current_step' => $currentStep > 0 ? $currentStep : null,
+            'waiting_on' => $waitingOn,
+            'href' => '/e-approval/submissions/'.$submission->id,
+        ];
+    }
+
+    /**
+     * @return list<array{
+     *   module: string,
+     *   entity_type: string,
+     *   id: string,
+     *   title: string,
+     *   subtitle: string|null,
+     *   status: string|null,
+     *   status_label: string|null,
+     *   current_step: int|null,
+     *   waiting_on: string|null,
+     *   href: string
+     * }>
+     */
+    private function searchEApprovalForms(TenantUser $viewer, string $like, int $limit): array
+    {
+        $canManage = $viewer->can('e_approval:forms:manage');
+
+        $query = EApprovalForm::query()
+            ->select(['id', 'name', 'description', 'category', 'status', 'accepts_new_submissions'])
+            ->where('status', 'published')
+            ->where(static function (Builder $q): void {
+                $q->where('accepts_new_submissions', true)->orWhereNull('accepts_new_submissions');
+            })
+            ->where(static function (Builder $q) use ($like): void {
+                $q->where('name', 'like', $like)
+                    ->orWhere('description', 'like', $like)
+                    ->orWhere('category', 'like', $like);
+            })
+            ->orderBy('name')
+            ->limit($limit);
+
+        return $this->mapRows(
+            $query->get(),
+            static function (EApprovalForm $form) use ($canManage): array {
+                $category = is_string($form->category) ? trim($form->category) : '';
+                $description = is_string($form->description) ? trim($form->description) : '';
+                if (mb_strlen($description) > 80) {
+                    $description = rtrim(mb_substr($description, 0, 77)).'…';
+                }
+
+                $subtitleParts = array_values(array_filter([
+                    $category !== '' ? $category : null,
+                    $description !== '' ? $description : null,
+                    $canManage ? 'Open form designer' : 'Start a request',
+                ]));
+
+                $href = $canManage
+                    ? '/e-approval/forms/'.$form->id
+                    : '/e-approval/request/'.$form->id;
+
                 return [
                     'module' => 'e_approval',
-                    'entity_type' => 'submission',
-                    'id' => (string) $submission->id,
-                    'title' => (string) $submission->document_no,
-                    'subtitle' => $submission->form?->name,
-                    'status' => $submission->status,
-                    'href' => '/e-approval/submissions/'.$submission->id,
+                    'entity_type' => 'form',
+                    'id' => (string) $form->id,
+                    'title' => (string) $form->name,
+                    'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
+                    'status' => 'published',
+                    'status_label' => 'Published',
+                    'current_step' => null,
+                    'waiting_on' => null,
+                    'href' => $href,
                 ];
             },
         );
+    }
+
+    private function eApprovalWaitingOnLabel(EApprovalSubmission $submission): ?string
+    {
+        $status = strtolower(trim((string) $submission->status));
+
+        if ($status === EApprovalSubmissionStatus::AWAITING_DCF) {
+            return 'document control';
+        }
+
+        if ($status !== EApprovalSubmissionStatus::PENDING) {
+            return null;
+        }
+
+        $currentStep = max(0, (int) ($submission->current_step ?: 0));
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+
+        $names = $submission->approvals
+            ->filter(static function (EApprovalRequestApproval $approval) use ($currentStep, $cycle): bool {
+                if ((string) $approval->status !== EApprovalApprovalStatus::PENDING) {
+                    return false;
+                }
+
+                $approvalCycle = (int) ($approval->approval_cycle ?: 1);
+                if ($approvalCycle !== $cycle) {
+                    return false;
+                }
+
+                if ($currentStep <= 0) {
+                    return true;
+                }
+
+                return (int) ($approval->step?->step_order ?: 0) === $currentStep;
+            })
+            ->map(static function (EApprovalRequestApproval $approval): string {
+                return trim((string) ($approval->approver?->name ?? ''));
+            })
+            ->filter(static fn (string $name): bool => $name !== '')
+            ->unique()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return null;
+        }
+
+        $maxNamed = 3;
+        if ($names->count() <= $maxNamed) {
+            return $names->implode(', ');
+        }
+
+        $shown = $names->take($maxNamed)->implode(', ');
+        $extra = $names->count() - $maxNamed;
+
+        return $shown.' +'.$extra.' more';
     }
 
     /**

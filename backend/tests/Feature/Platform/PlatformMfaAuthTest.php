@@ -121,4 +121,47 @@ final class PlatformMfaAuthTest extends TestCase
         $this->assertFalse($catalog->roleHasPermission('not-a-real-role', 'platform.tenants.manage'));
         $this->assertTrue($catalog->roleHasPermission('not-a-real-role', 'platform.console.view'));
     }
+
+    #[Test]
+    public function mfa_verify_reports_unreadable_secret_when_ciphertext_cannot_decrypt(): void
+    {
+        config(['toweros.platform_mfa.required' => true]);
+
+        $user = User::factory()->create([
+            'email' => 'broken-mfa@toweros.local',
+            'password' => bcrypt('password'),
+            'is_platform_admin' => true,
+            'platform_role' => 'superadmin',
+        ]);
+
+        $factorId = (string) str()->uuid();
+        DB::table('platform_mfa_factors')->insert([
+            'id' => $factorId,
+            'user_id' => $user->id,
+            'type' => 'totp',
+            'secret_encrypted' => 'corrupt-not-encrypted',
+            'is_primary' => true,
+            'verified_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $login = $this->postJson('/api/v1/platform/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertOk();
+
+        $challengeId = (string) $login->json('data.mfa_challenge.id');
+        $loginSessionId = (string) $login->json('data.login_session_id');
+        $this->assertNotSame('', $challengeId);
+        $this->assertNotSame('', $loginSessionId);
+
+        $this->postJson('/api/v1/platform/mfa/verify', [
+            'login_session_id' => $loginSessionId,
+            'challenge_id' => $challengeId,
+            'code' => '123456',
+        ])
+            ->assertStatus(422)
+            ->assertJsonFragment(['MFA authenticator secret is unreadable (encryption key mismatch). Use a recovery code, then re-enroll MFA in Security settings.']);
+    }
 }

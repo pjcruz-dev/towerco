@@ -57,6 +57,45 @@ final class FrontendDevUrl
         return "https://{$hostname}/login";
     }
 
+    /**
+     * Target-host login URL that asks the login page to auto-start Microsoft SSO (Phase 2).
+     */
+    public static function tenantSsoSwitchLoginUrl(string $hostname, string $environment = 'local'): string
+    {
+        $loginUrl = self::tenantLoginUrl($hostname, $environment);
+        $separator = str_contains($loginUrl, '?') ? '&' : '?';
+
+        return $loginUrl.$separator.'sso=1';
+    }
+
+    /**
+     * Absolute API URL that starts Azure SSO for the given tenant hostname.
+     */
+    public static function tenantSsoRedirectUrl(string $hostname): string
+    {
+        $apiBase = rtrim((string) config('app.url'), '/').'/api/v1';
+
+        return $apiBase.'/auth/sso/azure/redirect?'.http_build_query([
+            'tenant_domain' => $hostname,
+        ]);
+    }
+
+    /**
+     * Target-host redeem page for Phase 3 environment switch tickets.
+     */
+    public static function tenantEnvironmentHandoffUrl(
+        string $hostname,
+        string $plainTicket,
+        string $environment = 'local',
+    ): string {
+        $loginUrl = self::tenantLoginUrl($hostname, $environment);
+        $base = preg_replace('#/login(?:\?.*)?$#', '', $loginUrl) ?: $loginUrl;
+
+        return rtrim($base, '/').'/auth/environment-handoff?'.http_build_query([
+            'ticket' => $plainTicket,
+        ]);
+    }
+
     public static function withPortSuffix(string $hostname): string
     {
         return self::authority($hostname);

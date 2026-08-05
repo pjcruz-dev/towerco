@@ -146,14 +146,87 @@ final class EApprovalCompiledWorkflowAdvanceTest extends TestCase
         $this->assertSame(0, $liveLinked, 'No approval may attach to live template steps');
     }
 
+    public function test_full_restart_resubmit_advances_past_orphan_compiled_steps(): void
+    {
+        $formId = $this->createAmountLadderForm();
+
+        $create = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => [
+                    'title' => 'Restart path',
+                    'non_po' => '12000',
+                    'approver_list' => json_encode([
+                        (string) $this->listA->id,
+                        (string) $this->listB->id,
+                    ], JSON_THROW_ON_ERROR),
+                ],
+            ]);
+        $create->assertCreated();
+        $submissionId = (string) $create->json('data.id');
+
+        $this->approvePendingFor($submissionId, (string) $this->midApprover->id); // step 1
+        $this->approvePendingFor($submissionId, (string) $this->midApprover->id); // step 2
+        $this->assertPendingApprovers($submissionId, 3, [
+            (string) $this->lowApprover->id,
+            (string) $this->midApprover->id,
+        ]);
+
+        $compiledBefore = EApprovalWorkflowStep::query()
+            ->where('compiled_for_submission_id', $submissionId)
+            ->count();
+        $this->assertGreaterThan(0, $compiledBefore);
+
+        $revision = $this->actingAs($this->lowApprover, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/revision", [
+                'remarks' => 'Please revise amount details.',
+            ]);
+        $revision->assertOk();
+
+        $resubmit = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->putJson("/api/v1/e-approval/submissions/{$submissionId}/resubmit", [
+                'values' => [
+                    'title' => 'Restart path v2',
+                    'non_po' => '12000',
+                    'approver_list' => json_encode([
+                        (string) $this->listA->id,
+                        (string) $this->listB->id,
+                    ], JSON_THROW_ON_ERROR),
+                ],
+            ]);
+        $resubmit->assertOk();
+
+        $compiledAfter = EApprovalWorkflowStep::query()
+            ->where('compiled_for_submission_id', $submissionId)
+            ->count();
+        $this->assertGreaterThan($compiledBefore, $compiledAfter, 'Resubmit should retain prior compiled steps for history');
+
+        $this->approvePendingFor($submissionId, (string) $this->midApprover->id); // step 1 again
+        $this->approvePendingFor($submissionId, (string) $this->midApprover->id); // step 2 again
+
+        $submission = EApprovalSubmission::query()->findOrFail($submissionId);
+        $this->assertSame(3, (int) $submission->current_step, 'Must advance to parallel step 3, not stall on orphan step 2');
+        $this->assertPendingApprovers($submissionId, 3, [
+            (string) $this->lowApprover->id,
+            (string) $this->midApprover->id,
+        ]);
+    }
+
     /**
      * @param  list<string>  $approverIds
      */
     private function assertPendingApprovers(string $submissionId, int $stepOrder, array $approverIds): void
     {
+        $cycle = max(1, (int) (EApprovalSubmission::query()->findOrFail($submissionId)->approval_cycle ?: 1));
         $pending = EApprovalRequestApproval::query()
             ->where('submission_id', $submissionId)
             ->where('status', EApprovalApprovalStatus::PENDING)
+            ->where(function ($query) use ($cycle): void {
+                $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+            })
             ->with('step')
             ->get();
 

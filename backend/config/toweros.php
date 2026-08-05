@@ -316,13 +316,13 @@ return [
 
     /**
      * Tenant modules enabled for RBAC provisioning and the Team & Access role editor.
-     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, sites, documents, ai_assistant
-     * (plus optional gis, tower_one, fiber_one, asset_one).
+     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, finance_one, billings,
+     * sites, documents, document_register, ai_assistant (plus optional gis, tower_one, fiber_one, asset_one).
      */
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,sites,documents,document_register,ai_assistant')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,billings,sites,documents,document_register,ai_assistant')),
         ))),
     ],
 
@@ -331,6 +331,15 @@ return [
      */
     'e_approval' => [
         'legacy_connection' => env('LEGACY_FORMBUILDER_DB_CONNECTION', 'legacy_formbuilder'),
+    ],
+
+    /**
+     * Cross-environment workspace handoff (Phase 3).
+     * Mints a short-lived central ticket; target host redeems into a new Sanctum session.
+     */
+    'environment_switch' => [
+        'enabled' => (bool) env('TOWEROS_ENVIRONMENT_SWITCH_ENABLED', true),
+        'ticket_ttl_seconds' => max(30, (int) env('TOWEROS_ENVIRONMENT_SWITCH_TTL_SECONDS', 90)),
     ],
 
 ];

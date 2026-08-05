@@ -338,6 +338,18 @@ TOWEROS_WEB_MODE=prod
 
 Do **not** put `APP_KEY` in `.env.docker` — only in `backend/.env`.
 
+**Critical for MFA:** Authenticator secrets are encrypted with `APP_KEY`. If the key changes after users enroll, TOTP codes stop working until they use a recovery code and re-enroll. Generate once, store in Secrets Manager / sealed `backend/.env`, and never regenerate on container boot.
+
+Local/ops diagnostic (also works against a running API container):
+
+```bash
+docker compose --env-file .env.docker exec api php artisan toweros:mfa-health
+# or from repo root on Windows:
+npm run mfa:health
+```
+
+Compare the printed `APP_KEY fingerprint` across deploys — it must stay stable.
+
 ---
 
 ## 4. Start services (RDS, not container MySQL)
@@ -463,6 +475,39 @@ docker compose --env-file .env.docker exec api php artisan config:cache
 docker compose --env-file .env.docker exec api php artisan queue:restart
 sudo systemctl restart toweros-worker
 ```
+
+After every deploy that touches env/secrets, confirm MFA prerequisites:
+
+```bash
+docker compose --env-file .env.docker exec api php artisan toweros:mfa-health
+# fingerprint must match the previous release
+```
+
+---
+
+## 10b. MFA incident recovery (already deployed)
+
+If users suddenly see **Invalid MFA code** or **MFA authenticator secret is unreadable** after a deploy/restart:
+
+| Symptom | Likely cause | Action |
+|---------|--------------|--------|
+| Exact TOTP rejected | Host/container clock skew | Fix NTP; retry with a fresh code |
+| “secret is unreadable” | `APP_KEY` changed | Restore the **previous** `APP_KEY` from Secrets Manager / backup `.env`, then `config:cache` + restart API. Do **not** invent a new key. |
+| Recovery codes work, TOTP does not after restore | Ciphertext was written under a different key than restored | Users must recover → re-enroll; admin may disable broken factors |
+| All MFA rows gone | Wrong DB / restored empty schema | Restore RDS from snapshot; do not re-seed production |
+
+**Break-glass (per user, no key restore needed):**
+
+1. Sign in with password → MFA screen → enter a **recovery code**.
+2. In Security settings, remove/re-enroll authenticator and save new recovery codes offline.
+3. If the user has no recovery codes and TOTP is dead because `APP_KEY` was lost: platform/tenant admin must clear that user’s MFA factors (or temporarily disable tenant `mfa_required`) so they can sign in and re-enroll — then turn policy back on.
+
+**Prevention**
+
+- Pin `APP_KEY` in AWS Secrets Manager; inject into `backend/.env` / task definition. Never put it only in an ephemeral container layer.
+- Do not run `php artisan key:generate` in production pipelines.
+- Redis/session restarts are safe for MFA secrets (DB-backed). RDS + stable `APP_KEY` are the durable pair.
+- Keep printed recovery codes offline at enroll time.
 
 ---
 

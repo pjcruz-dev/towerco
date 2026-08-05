@@ -12,6 +12,7 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalSubmissionFollowup;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
@@ -53,14 +54,14 @@ final class EApprovalSubmissionLifecycleService
         }
 
         $form = EApprovalForm::query()->find($submission->form_id);
-        $revisionConfig = \App\Modules\EApproval\Support\EApprovalRevisionRouting::fromFormMetadata(
+        $revisionConfig = EApprovalRevisionRouting::fromFormMetadata(
             is_array($form?->metadata_json) ? $form->metadata_json : [],
         );
         if (! $revisionConfig['approver_can_force_full_restart']) {
             $forceFullRestart = false;
         }
 
-        DB::connection('tenant')->transaction(function () use ($submission, $remarks, $actor, $forceFullRestart): void {
+        DB::connection('tenant')->transaction(function () use ($submission, $remarks, $actor, $forceFullRestart, $form): void {
             $returnedFromStep = max(0, (int) $submission->current_step);
 
             EApprovalRequestApproval::query()
@@ -105,11 +106,15 @@ final class EApprovalSubmissionLifecycleService
                 $actor,
                 notifyStakeholders: false,
             );
+            $outlook = $this->revisionOutlookMessage($submission, $form);
             $this->inApp->notify(
                 (string) $submission->requestor_id,
                 'returned',
                 $submission->id,
-                __('Your request :doc was returned for revision.', ['doc' => $submission->document_no]),
+                __('Your request :doc was returned for revision. :outlook', [
+                    'doc' => $submission->document_no,
+                    'outlook' => $outlook,
+                ]),
                 submission: $submission,
                 actor: $actor,
                 bodyPreview: $remarks !== '' ? $remarks : null,
@@ -190,13 +195,32 @@ final class EApprovalSubmissionLifecycleService
             ]);
         }
 
-        $pending = EApprovalRequestApproval::query()
+        $pendingQuery = EApprovalRequestApproval::query()
             ->where('submission_id', $submission->id)
             ->where('status', EApprovalApprovalStatus::PENDING)
-            ->orderBy('created_at')
-            ->first();
+            ->whereNotNull('approver_id')
+            ->orderBy('created_at');
 
-        if ($pending === null || $pending->approver_id === null) {
+        $currentStep = (int) ($submission->current_step ?? 0);
+        if ($currentStep > 0) {
+            $onCurrentStep = (clone $pendingQuery)
+                ->whereHas('step', static fn ($q) => $q->where('step_order', $currentStep))
+                ->get();
+            $pendingRows = $onCurrentStep->isNotEmpty()
+                ? $onCurrentStep
+                : $pendingQuery->get();
+        } else {
+            $pendingRows = $pendingQuery->get();
+        }
+
+        $approverIds = $pendingRows
+            ->pluck('approver_id')
+            ->map(static fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($approverIds === []) {
             throw ValidationException::withMessages([
                 'submission' => [__('No pending approver found.')],
             ]);
@@ -220,34 +244,50 @@ final class EApprovalSubmissionLifecycleService
 
         $note = $note !== null ? trim(mb_substr($note, 0, 2000)) : '';
 
-        EApprovalSubmissionFollowup::query()->create([
-            'id' => (string) Str::uuid(),
-            'submission_id' => $submission->id,
-            'requestor_id' => $actor->id,
-            'approver_id' => $pending->approver_id,
-            'message' => $note !== '' ? $note : null,
-        ]);
+        foreach ($approverIds as $approverId) {
+            EApprovalSubmissionFollowup::query()->create([
+                'id' => (string) Str::uuid(),
+                'submission_id' => $submission->id,
+                'requestor_id' => $actor->id,
+                'approver_id' => $approverId,
+                'message' => $note !== '' ? $note : null,
+            ]);
+        }
 
+        $approverCount = count($approverIds);
         $commentText = $note !== ''
             ? "[Manual follow-up] {$note}"
-            : '[Manual follow-up] Requestor sent a reminder to the current approver.';
+            : ($approverCount > 1
+                ? '[Manual follow-up] Requestor sent a reminder to the current approvers.'
+                : '[Manual follow-up] Requestor sent a reminder to the current approver.');
         $this->comments->add($submission, $commentText, $actor, notifyStakeholders: false);
 
-        $this->inApp->notify(
-            (string) $pending->approver_id,
-            'manual_follow_up',
+        foreach ($approverIds as $approverId) {
+            $this->inApp->notify(
+                $approverId,
+                'manual_follow_up',
+                $submission->id,
+                __(':name sent a manual follow-up for :doc.', ['name' => $actor->name, 'doc' => $submission->document_no]),
+                submission: $submission,
+                actor: $actor,
+                bodyPreview: $note !== '' ? $note : null,
+            );
+
+            $this->mail->dispatchManualFollowUp($submission, $approverId, $actor->name);
+        }
+
+        $this->audit->log(
+            'submission_manual_follow_up',
             $submission->id,
-            __(':name sent a manual follow-up for :doc.', ['name' => $actor->name, 'doc' => $submission->document_no]),
-            submission: $submission,
-            actor: $actor,
-            bodyPreview: $note !== '' ? $note : null,
+            'To approver(s) '.implode(', ', $approverIds),
+            $actor,
         );
 
-        $this->mail->dispatchManualFollowUp($submission, (string) $pending->approver_id, $actor->name);
-
-        $this->audit->log('submission_manual_follow_up', $submission->id, "To approver {$pending->approver_id}", $actor);
-
-        return ['ok' => true, 'cooldown_minutes' => $cooldown];
+        return [
+            'ok' => true,
+            'cooldown_minutes' => $cooldown,
+            'notified_approver_count' => $approverCount,
+        ];
     }
 
     /**
@@ -313,6 +353,24 @@ final class EApprovalSubmissionLifecycleService
         }
 
         return false;
+    }
+
+    private function revisionOutlookMessage(EApprovalSubmission $submission, ?EApprovalForm $form): string
+    {
+        if ((bool) $submission->force_full_restart) {
+            return __('After you resubmit, the workflow will restart from step 1 (full re-approval required).');
+        }
+
+        $config = EApprovalRevisionRouting::fromFormMetadata(
+            is_array($form?->metadata_json) ? $form->metadata_json : [],
+        );
+        $returnStep = (int) ($submission->returned_from_step ?: 0);
+
+        if ($config['routing'] === EApprovalRevisionRouting::RESUME_RETURNING_STEP && $returnStep > 0) {
+            return __('After you resubmit, approval will typically resume at step :step.', ['step' => $returnStep]);
+        }
+
+        return __('After you resubmit, the workflow will restart from step 1.');
     }
 
     /**

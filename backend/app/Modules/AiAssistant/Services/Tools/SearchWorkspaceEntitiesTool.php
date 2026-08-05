@@ -22,7 +22,8 @@ final class SearchWorkspaceEntitiesTool implements AssistantToolInterface
 
     public function description(): string
     {
-        return 'RBAC-aware workspace entity search (sites, tickets, submissions, etc.).';
+        return 'RBAC-aware workspace entity search (sites, tickets, e-approval submissions and published forms, etc.). '
+            .'Each hit may include status, status_label, current_step, and waiting_on for operational context.';
     }
 
     public function requiredModule(): ?string
@@ -56,6 +57,10 @@ final class SearchWorkspaceEntitiesTool implements AssistantToolInterface
                 'id' => $hit['id'] ?? null,
                 'title' => $hit['title'] ?? null,
                 'subtitle' => $hit['subtitle'] ?? null,
+                'status' => $hit['status'] ?? null,
+                'status_label' => $hit['status_label'] ?? null,
+                'current_step' => $hit['current_step'] ?? null,
+                'waiting_on' => $hit['waiting_on'] ?? null,
                 'href' => $hit['href'] ?? null,
             ];
         }, $slice);

@@ -152,6 +152,69 @@ final class EApprovalParallelWorkflowTest extends TestCase
 
         $this->assertSame(EApprovalApprovalStatus::INVALIDATED, $finance->status);
         $this->assertSame('approved', EApprovalSubmission::query()->findOrFail($submissionId)->status);
+
+        Notification::assertSentTo(
+            $this->finance,
+            \App\Modules\EApproval\Notifications\EApprovalSubmissionNotification::class,
+            static fn ($notification): bool => $notification->eventName() === 'approval_no_longer_needed',
+        );
+
+        $preview = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview");
+
+        $preview->assertOk();
+        $stepOne = collect($preview->json('data.resolved_steps'))
+            ->where('step_order', 1)
+            ->values();
+        $this->assertCount(2, $stepOne);
+        $byUser = $stepOne->keyBy('resolved_user_id');
+        $this->assertSame('approved', $byUser[(string) $this->legal->id]['runtime_status'] ?? null);
+        $this->assertSame('invalidated', $byUser[(string) $this->finance->id]['runtime_status'] ?? null);
+        $this->assertSame(
+            (string) $this->finance->id,
+            $byUser[(string) $this->finance->id]['runtime_approver']['id'] ?? null,
+        );
+    }
+
+    public function test_parallel_band_detail_returns_viewer_pending_for_each_member(): void
+    {
+        $formId = $this->createParallelForm(mode: 'any');
+
+        $subRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Decide tab for each parallel peer'],
+            ]);
+
+        $subRes->assertCreated();
+        $submissionId = (string) $subRes->json('data.id');
+
+        $financeApprovalId = (string) EApprovalRequestApproval::query()
+            ->where('submission_id', $submissionId)
+            ->where('approver_id', (string) $this->finance->id)
+            ->value('id');
+
+        $legalApprovalId = (string) EApprovalRequestApproval::query()
+            ->where('submission_id', $submissionId)
+            ->where('approver_id', (string) $this->legal->id)
+            ->value('id');
+
+        $this->assertNotSame('', $financeApprovalId);
+        $this->assertNotSame('', $legalApprovalId);
+
+        $this->actingAs($this->finance, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}")
+            ->assertOk()
+            ->assertJsonPath('data.viewer_pending_approval_id', $financeApprovalId);
+
+        $this->actingAs($this->legal, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}")
+            ->assertOk()
+            ->assertJsonPath('data.viewer_pending_approval_id', $legalApprovalId);
     }
 
     public function test_parallel_n_of_m_advances_after_quorum(): void
@@ -299,6 +362,32 @@ final class EApprovalParallelWorkflowTest extends TestCase
             $this->assertSame(2, (int) ($step['parallel_quorum'] ?? 0));
             $this->assertSame(1, (int) $step['step_order']);
         }
+    }
+
+    public function test_manual_follow_up_notifies_all_pending_parallel_approvers(): void
+    {
+        $formId = $this->createParallelForm();
+
+        $subRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Need both'],
+            ]);
+
+        $subRes->assertCreated();
+        $submissionId = (string) $subRes->json('data.id');
+
+        Notification::fake();
+
+        $followUp = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/manual-follow-up");
+
+        $followUp->assertOk()->assertJsonPath('data.notified_approver_count', 2);
+
+        Notification::assertSentTo($this->legal, \App\Modules\EApproval\Notifications\EApprovalSubmissionNotification::class);
+        Notification::assertSentTo($this->finance, \App\Modules\EApproval\Notifications\EApprovalSubmissionNotification::class);
     }
 
     /**

@@ -46,4 +46,21 @@ class TenantEnabledModulesResolverTest extends TestCase
 
         $this->assertSame(['core', 'team_access', 'project_one', 'e_approval'], $resolver->resolveForTenant($tenant));
     }
+
+    public function test_billings_is_toggleable_when_in_platform_catalog(): void
+    {
+        Config::set('toweros.tenant_modules.enabled', [
+            'core',
+            'team_access',
+            'billings',
+            'e_approval',
+        ]);
+
+        $resolver = app(TenantEnabledModulesResolver::class);
+        $catalog = $resolver->catalogForPlatformApi();
+
+        $this->assertContains('billings', $resolver->toggleableModules());
+        $this->assertSame('Billings', $catalog['labels']['billings']);
+        $this->assertArrayHasKey('billings', $catalog['descriptions']);
+    }
 }

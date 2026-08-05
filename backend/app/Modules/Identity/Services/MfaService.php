@@ -6,6 +6,7 @@ namespace App\Modules\Identity\Services;
 
 use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Identity\Support\MfaSecretCipher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -279,12 +280,24 @@ class MfaService
         $valid = false;
         if ($challenge->factor_id) {
             $factor = DB::table('mfa_factors')->where('id', $challenge->factor_id)->first();
-            if ($factor && ! $factor->disabled_at) {
-                $secret = decrypt((string) $factor->secret_encrypted);
-                $valid = $this->totpService->verify($secret, $code);
+            if (! $factor || $factor->disabled_at) {
+                throw ValidationException::withMessages([
+                    'code' => [__(
+                        'No verified authenticator is available for this sign-in. Complete MFA enrollment or use a recovery code.'
+                    )],
+                ]);
             }
+
+            $secret = MfaSecretCipher::decryptOrFail((string) $factor->secret_encrypted, 'tenant.mfa.verify');
+            $valid = $this->totpService->verify($secret, $code);
         } elseif ($challenge->code_hash) {
             $valid = hash_equals((string) $challenge->code_hash, hash('sha256', $code));
+        } else {
+            throw ValidationException::withMessages([
+                'code' => [__(
+                    'No verified authenticator is available for this sign-in. Complete MFA enrollment or use a recovery code.'
+                )],
+            ]);
         }
 
         if (! $valid) {
@@ -345,7 +358,7 @@ class MfaService
             throw ValidationException::withMessages(['code' => [__('No pending MFA enrollment found.')]]);
         }
 
-        $secret = decrypt((string) $factor->secret_encrypted);
+        $secret = MfaSecretCipher::decryptOrFail((string) $factor->secret_encrypted, 'tenant.mfa.enroll');
         if (! $this->totpService->verify($secret, $code)) {
             throw ValidationException::withMessages(['code' => [__('Invalid TOTP code.')]]);
         }

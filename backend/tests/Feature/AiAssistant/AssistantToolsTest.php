@@ -388,4 +388,61 @@ final class AssistantToolsTest extends TestCase
         $this->assertFalse((bool) $response->json('data.used_live_data'));
         $this->assertStringNotContainsStringIgnoringCase('Secret Site', (string) $response->json('data.answer'));
     }
+
+    public function test_search_workspace_entities_returns_forms_and_submission_operational_fields(): void
+    {
+        config([
+            'toweros.notifications_mail_mailer' => 'array',
+            'mail.default' => 'array',
+            'queue.default' => 'sync',
+        ]);
+
+        tenancy()->initialize($this->testTenant);
+        app(TenantRbacBaselineService::class)->ensure();
+
+        $form = \App\Modules\EApproval\Models\EApprovalForm::query()->create([
+            'id' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'AI Search Parity Form',
+            'description' => 'Published form for assistant search parity',
+            'category' => 'Ops',
+            'status' => 'published',
+            'schema_version' => 1,
+            'owner_code' => 'GEN',
+            'doc_type_code' => 'F',
+            'accepts_new_submissions' => true,
+        ]);
+
+        \App\Modules\EApproval\Models\EApprovalSubmission::query()->create([
+            'document_no' => 'GEN-F-AISEARCH',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => 'pending',
+            'current_step' => 2,
+            'approval_cycle' => 1,
+        ]);
+
+        $result = app(AssistantToolExecutor::class)->executeOne(
+            $this->testTenantAdmin,
+            new ToolCallRequest('search_workspace_entities', ['query' => 'AI Search Parity']),
+        );
+
+        $this->assertTrue($result->ok);
+        $rows = collect($result->data['results'] ?? []);
+        $this->assertTrue($rows->contains(
+            static fn (array $row): bool => ($row['entity_type'] ?? null) === 'form'
+                && ($row['id'] ?? null) === (string) $form->id
+                && ($row['status_label'] ?? null) === 'Published',
+        ));
+
+        $submissionHit = $rows->first(
+            static fn (array $row): bool => ($row['entity_type'] ?? null) === 'submission'
+                && ($row['title'] ?? null) === 'GEN-F-AISEARCH',
+        );
+        $this->assertIsArray($submissionHit);
+        $this->assertSame('pending', $submissionHit['status'] ?? null);
+        $this->assertSame('Pending', $submissionHit['status_label'] ?? null);
+        $this->assertSame(2, $submissionHit['current_step'] ?? null);
+
+        tenancy()->end();
+    }
 }

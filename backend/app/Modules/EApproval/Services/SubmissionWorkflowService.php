@@ -40,12 +40,16 @@ final class SubmissionWorkflowService
      * @param  array<string, mixed>  $values
      * @param  Collection<int, EApprovalWorkflowStep>|null  $stepsOverride
      */
+    /**
+     * @param  'initial'|'restart'  $notifyMode
+     */
     public function initiateWorkflow(
         EApprovalSubmission $submission,
         EApprovalForm $form,
         array $values,
         ?Collection $stepsOverride = null,
         bool $preserveHistoricalApprovals = false,
+        string $notifyMode = 'initial',
     ): void {
         if ($preserveHistoricalApprovals) {
             EApprovalRequestApproval::query()
@@ -116,14 +120,7 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->inApp->notify(
-                $approverId,
-                'approval_assigned',
-                $submission->id,
-                __('You have a new approval request for :doc.', ['doc' => $submission->document_no]),
-                submission: $submission,
-            );
-            $this->mail->dispatchApprovalAssigned($submission, $approverId);
+            $this->notifyApproverAssigned($submission, $approverId, revised: $notifyMode === 'restart');
         }
 
         if ($activated > 0) {
@@ -131,7 +128,7 @@ final class SubmissionWorkflowService
             $submission->current_step = (int) $currentOrder;
             $submission->save();
             $this->audit->log('workflow_initiated', $submission->id, "Activated {$activated} step(s) at order {$currentOrder}");
-            $this->notifyRequestorSubmitted($submission);
+            $this->notifyRequestorSubmitted($submission, $notifyMode === 'restart' ? 'restart' : 'initial');
         } else {
             throw ValidationException::withMessages([
                 'workflow' => array_values(array_filter([
@@ -200,14 +197,7 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->inApp->notify(
-                $approverId,
-                'approval_assigned',
-                $submission->id,
-                __('You have a revised approval request for :doc.', ['doc' => $submission->document_no]),
-                submission: $submission,
-            );
-            $this->mail->dispatchApprovalAssigned($submission, $approverId);
+            $this->notifyApproverAssigned($submission, $approverId, revised: true);
         }
 
         if ($activated > 0) {
@@ -219,7 +209,7 @@ final class SubmissionWorkflowService
                 $submission->id,
                 "Resumed at step order {$stepOrder} ({$activated} pending)",
             );
-            $this->notifyRequestorSubmitted($submission);
+            $this->notifyRequestorSubmitted($submission, 'resume');
 
             return [
                 'routed' => 'resume_returning_step',
@@ -233,7 +223,7 @@ final class SubmissionWorkflowService
         $submission->current_step = $stepOrder;
         $submission->save();
 
-        $hasMore = $this->triggerNextStep($submission, $stepOrder);
+        $hasMore = $this->triggerNextStep($submission, $stepOrder, revisedAssign: true);
         $submission->refresh();
 
         if ($hasMore || $submission->approvals()->where('status', EApprovalApprovalStatus::PENDING)->exists()) {
@@ -242,7 +232,7 @@ final class SubmissionWorkflowService
                 $submission->id,
                 "Return step {$stepOrder} not applicable; advanced to step {$submission->current_step}",
             );
-            $this->notifyRequestorSubmitted($submission);
+            $this->notifyRequestorSubmitted($submission, 'resume');
 
             return [
                 'routed' => 'resume_returning_step',
@@ -287,7 +277,10 @@ final class SubmissionWorkflowService
         return false;
     }
 
-    private function notifyRequestorSubmitted(EApprovalSubmission $submission): void
+    /**
+     * @param  'initial'|'resume'|'restart'  $mode
+     */
+    private function notifyRequestorSubmitted(EApprovalSubmission $submission, string $mode = 'initial'): void
     {
         $requestorId = (string) $submission->requestor_id;
         if ($requestorId === '') {
@@ -296,18 +289,130 @@ final class SubmissionWorkflowService
 
         $isExternal = ($submission->submission_source ?? EApprovalSubmissionSource::INTERNAL) === EApprovalSubmissionSource::EXTERNAL;
 
-        if (! $isExternal) {
-            $this->inApp->notify(
-                $requestorId,
-                'submitted',
-                $submission->id,
-                __('Your request :doc was submitted and is pending approval.', ['doc' => $submission->document_no]),
-                submission: $submission,
-            );
-            $this->mail->dispatchToRequestor($submission, 'submitted');
-        } else {
+        if ($isExternal) {
             $this->mail->dispatchToRequestor($submission, 'external_received');
+
+            return;
         }
+
+        $documentNo = (string) $submission->document_no;
+        $step = max(1, (int) ($submission->current_step ?: 1));
+
+        [$event, $message] = match ($mode) {
+            'resume' => [
+                'resubmitted_resume',
+                __('Your revised request :doc was resubmitted. Approval resumed at step :step.', [
+                    'doc' => $documentNo,
+                    'step' => $step,
+                ]),
+            ],
+            'restart' => [
+                'resubmitted_restart',
+                __('Your revised request :doc was resubmitted. The workflow restarted from step 1.', [
+                    'doc' => $documentNo,
+                ]),
+            ],
+            default => [
+                'submitted',
+                __('Your request :doc was submitted and is pending approval.', ['doc' => $documentNo]),
+            ],
+        };
+
+        $this->inApp->notify(
+            $requestorId,
+            $event,
+            $submission->id,
+            $message,
+            submission: $submission,
+        );
+        $this->mail->dispatchToRequestor($submission, $event);
+    }
+
+    private function notifyApproverAssigned(
+        EApprovalSubmission $submission,
+        string $approverId,
+        bool $revised = false,
+    ): void {
+        $event = $revised ? 'approval_assigned_revised' : 'approval_assigned';
+        $message = $revised
+            ? __('You have a revised approval request for :doc.', ['doc' => $submission->document_no])
+            : __('You have a new approval request for :doc.', ['doc' => $submission->document_no]);
+
+        $this->inApp->notify(
+            $approverId,
+            $event,
+            $submission->id,
+            $message,
+            submission: $submission,
+        );
+        $this->mail->dispatchApprovalAssigned($submission, $approverId, $revised);
+    }
+
+    /**
+     * Notify requestor when exclusive-band / condition-gated steps were omitted from the compiled path.
+     *
+     * @param  list<array<string, mixed>>  $skippedSteps
+     */
+    public function notifyCompiledExclusiveSkips(EApprovalSubmission $submission, array $skippedSteps): void
+    {
+        $orders = [];
+        foreach ($skippedSteps as $step) {
+            if (! is_array($step)) {
+                continue;
+            }
+            $order = (int) ($step['step_order'] ?? 0);
+            if ($order > 0) {
+                $orders[] = $order;
+            }
+        }
+
+        $this->notifyRequestorStepsSkipped(
+            $submission,
+            $orders,
+            max(1, (int) ($submission->current_step ?: 1)),
+        );
+    }
+
+    /**
+     * @param  list<int>  $skippedOrders
+     */
+    private function notifyRequestorStepsSkipped(
+        EApprovalSubmission $submission,
+        array $skippedOrders,
+        int $nowAtStep,
+    ): void {
+        $skippedOrders = array_values(array_unique(array_filter(
+            $skippedOrders,
+            static fn (int $order): bool => $order > 0,
+        )));
+        sort($skippedOrders);
+
+        if ($skippedOrders === []) {
+            return;
+        }
+
+        $requestorId = (string) $submission->requestor_id;
+        if ($requestorId === '') {
+            return;
+        }
+
+        $stepsLabel = implode(', ', array_map(static fn (int $order): string => (string) $order, $skippedOrders));
+        $detail = __('Skipped step(s) :steps. Now awaiting step :current.', [
+            'steps' => $stepsLabel,
+            'current' => $nowAtStep,
+        ]);
+
+        $this->inApp->notify(
+            $requestorId,
+            'workflow_steps_skipped',
+            $submission->id,
+            __('Workflow path updated for :doc. :detail', [
+                'doc' => $submission->document_no,
+                'detail' => $detail,
+            ]),
+            submission: $submission,
+        );
+        $this->mail->dispatchWorkflowStepsSkipped($submission, $detail);
     }
 
     private function notifyRequestorOutcome(EApprovalSubmission $submission, string $event, ?string $actorName): void
@@ -332,18 +437,57 @@ final class SubmissionWorkflowService
         $this->mail->dispatchToRequestor($submission, $event, $actorName);
     }
 
-    public function triggerNextStep(EApprovalSubmission $submission, int $completedStepOrder): bool
-    {
+    /**
+     * @param  list<int>  $conditionSkippedOrders
+     */
+    public function triggerNextStep(
+        EApprovalSubmission $submission,
+        int $completedStepOrder,
+        bool $revisedAssign = false,
+        array $conditionSkippedOrders = [],
+    ): bool {
         $this->settleParallelBandIfQuorumMet($submission, $completedStepOrder);
 
-        $pendingSameOrder = EApprovalRequestApproval::query()
-            ->where('submission_id', $submission->id)
-            ->whereHas('step', static fn ($q) => $q->where('step_order', $completedStepOrder))
-            ->where('status', EApprovalApprovalStatus::PENDING)
-            ->exists();
+        $workflowSteps = $this->workflowResolver->stepsForAdvance($submission);
+        $activeStepIds = $workflowSteps
+            ->map(static fn (EApprovalWorkflowStep $step): string => (string) $step->id)
+            ->all();
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
 
-        if ($pendingSameOrder) {
+        // Only pending rows on the current compile count — orphan compiled steps from a
+        // prior resubmit must not block advancement.
+        $pendingSameOrderQuery = EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->where(function ($query) use ($cycle): void {
+                $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+            })
+            ->whereHas('step', static fn ($q) => $q->where('step_order', $completedStepOrder));
+
+        if ($activeStepIds !== []) {
+            $pendingSameOrderQuery->whereIn('step_id', $activeStepIds);
+        }
+
+        if ($pendingSameOrderQuery->exists()) {
             return true;
+        }
+
+        // Heal stuck submissions created before snapshot-scoped advance: orphan
+        // pending rows on prior compiled steps must not remain actionable.
+        if ($activeStepIds !== []) {
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->where(function ($query) use ($cycle): void {
+                    $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+                })
+                ->whereHas('step', static fn ($q) => $q->where('step_order', $completedStepOrder))
+                ->whereNotIn('step_id', $activeStepIds)
+                ->update([
+                    'status' => EApprovalApprovalStatus::INVALIDATED,
+                    'remarks' => __('Cleared stale approval from a prior workflow compile.'),
+                    'acted_at' => now(),
+                ]);
         }
 
         if ($this->documentControl->tryEnterGate($submission, $completedStepOrder)) {
@@ -352,8 +496,6 @@ final class SubmissionWorkflowService
 
         $submission->loadMissing(['form.workflowTemplate.steps', 'values.field']);
         $values = $this->valuesMap($submission);
-
-        $workflowSteps = $this->workflowResolver->stepsForAdvance($submission);
         $nextSteps = $workflowSteps
             ->where('step_order', '>', $completedStepOrder)
             ->sortBy('step_order')
@@ -366,7 +508,7 @@ final class SubmissionWorkflowService
 
         $nextOrder = (int) $nextSteps->first()->step_order;
         $activated = 0;
-        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $conditionSkipsInBand = 0;
 
         foreach ($nextSteps as $step) {
             if ($step->step_order !== $nextOrder) {
@@ -374,6 +516,7 @@ final class SubmissionWorkflowService
             }
 
             if (! $this->evaluateCondition($step->condition, $values)) {
+                $conditionSkipsInBand++;
                 $this->audit->log('skip_step', $submission->id, "Condition not met for step {$step->step_order}");
 
                 continue;
@@ -397,25 +540,29 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->inApp->notify(
-                $approverId,
-                'approval_assigned',
-                $submission->id,
-                __('You have a new approval request for :doc.', ['doc' => $submission->document_no]),
-                submission: $submission,
-            );
-            $this->mail->dispatchApprovalAssigned($submission, $approverId);
+            $this->notifyApproverAssigned($submission, $approverId, revised: $revisedAssign);
         }
 
         if ($activated > 0) {
             $submission->current_step = $nextOrder;
             $submission->status = EApprovalSubmissionStatus::PENDING;
             $submission->save();
+            $this->notifyRequestorStepsSkipped($submission, $conditionSkippedOrders, $nextOrder);
 
             return true;
         }
 
-        return $this->triggerNextStep($submission, $nextOrder);
+        if ($conditionSkipsInBand > 0) {
+            $conditionSkippedOrders[] = $nextOrder;
+            $conditionSkippedOrders = array_values(array_unique($conditionSkippedOrders));
+        }
+
+        return $this->triggerNextStep(
+            $submission,
+            $nextOrder,
+            revisedAssign: $revisedAssign,
+            conditionSkippedOrders: $conditionSkippedOrders,
+        );
     }
 
     /**
@@ -425,14 +572,21 @@ final class SubmissionWorkflowService
     public function settleParallelBandIfQuorumMet(EApprovalSubmission $submission, int $stepOrder): void
     {
         $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
-        $bandApprovals = EApprovalRequestApproval::query()
+        $activeStepIds = $this->workflowResolver->currentCompiledStepIds($submission);
+
+        $bandApprovalsQuery = EApprovalRequestApproval::query()
             ->where('submission_id', $submission->id)
             ->where(function ($query) use ($cycle): void {
                 $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
             })
             ->whereHas('step', static fn ($q) => $q->where('step_order', $stepOrder))
-            ->with('step')
-            ->get();
+            ->with('step');
+
+        if ($activeStepIds !== []) {
+            $bandApprovalsQuery->whereIn('step_id', $activeStepIds);
+        }
+
+        $bandApprovals = $bandApprovalsQuery->get();
 
         if ($bandApprovals->count() < 2) {
             return;
@@ -479,14 +633,20 @@ final class SubmissionWorkflowService
             return;
         }
 
-        $pendingIds = $bandApprovals
-            ->where('status', EApprovalApprovalStatus::PENDING)
-            ->pluck('id')
-            ->all();
+        $pendingRows = $bandApprovals->where('status', EApprovalApprovalStatus::PENDING)->values();
+        $pendingIds = $pendingRows->pluck('id')->all();
 
         if ($pendingIds === []) {
             return;
         }
+
+        $clearedApproverIds = $pendingRows
+            ->pluck('approver_id')
+            ->map(static fn ($id) => (string) $id)
+            ->filter(static fn (string $id): bool => $id !== '')
+            ->unique()
+            ->values()
+            ->all();
 
         EApprovalRequestApproval::query()
             ->whereIn('id', $pendingIds)
@@ -503,6 +663,19 @@ final class SubmissionWorkflowService
             $submission->id,
             "Step {$stepOrder} parallel mode {$mode} met quorum {$quorum}/{$memberCount}; invalidated ".count($pendingIds).' pending approval(s).',
         );
+
+        foreach ($clearedApproverIds as $approverId) {
+            $this->inApp->notify(
+                $approverId,
+                'approval_no_longer_needed',
+                (string) $submission->id,
+                __('Your approval for :doc is no longer needed — another approver completed this parallel step.', [
+                    'doc' => $submission->document_no,
+                ]),
+                submission: $submission,
+            );
+            $this->mail->dispatchApprovalNoLongerNeeded($submission, $approverId);
+        }
     }
 
     /**

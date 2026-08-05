@@ -74,7 +74,7 @@ npm run dev:fresh
 ### Backend APIs
 
 - `GET/POST /e-approval/forms`, `GET/PUT/DELETE /e-approval/forms/{form}`, `POST .../publish`, `POST /e-approval/forms/validate`
-- `GET/POST /e-approval/submissions`, `GET .../submissions/{submission}`, `GET .../submissions/{submission}/workflow-preview` (admin `e_approval:forms:manage` — runs/skips path for this request), `POST .../cancel`, `PUT .../resubmit`
+- `GET/POST /e-approval/submissions`, `GET .../submissions/{submission}`, `GET .../submissions/{submission}/workflow-preview` (submission viewers — runs/skips path + runtime status for this request), `POST .../cancel`, `PUT .../resubmit`
 - `GET/POST .../submissions/{submission}/comments`, `POST .../attachments`, `GET /e-approval/attachments/{attachment}`
 - `GET /e-approval/approvals`, `POST /e-approval/approvals/{approval}/decide`
 - `GET /e-approval/notifications`, unread count, mark read / mark all read
@@ -177,7 +177,9 @@ Step conditions combine with `when_logic`:
 | `and` (default) | Every condition must match |
 | `or` | Any one condition can match |
 
-Example: escalate when `urgent = yes` **OR** `amount > 5000`. Nested BPM-style OR trees, goto/jump targets, and a full graph canvas remain out of scope — model complex forks with exclusive bands, field map, or parallel groups instead.
+Example: escalate when `urgent = yes` **OR** `amount > 5000`. Nested BPM-style OR trees and goto/jump targets remain out of scope — model complex forks with exclusive bands, field map, or parallel groups instead.
+
+**Path diagram:** Form Workflow create canvas, Preview workflow, and submission Approvals → Workflow path share the same Start → runs → End visual. On create, click a step to open a **right-side config sheet** (path stays visible). **If/Else** and **threshold ladders** render side-by-side in a sky band (like parallel’s violet band); each card is a case, and only one case runs at runtime. Parallel stays violet. Drag / trash act on the whole band. Use **Add** to insert a step, If/Else, ladder, or parallel. On a submission, the path is the primary Approvals view for requestors and approvers; **Approval trail** is a secondary collapsible audit list (remarks / times; signature on hover over approver name). Preview and submission path views stay read-only (with runtime status). True goto remains out of scope.
 
 | Step | Condition | Approver |
 |------|-----------|----------|
@@ -277,12 +279,23 @@ Workflow steps with `type: manager` resolve the requestor's direct manager via M
 
 **Deep dive:** [e-approval-form-builder.md](./e-approval-form-builder.md) — tabs, layout model, templates, versions, validation, and requestor submit routes.
 
+### Workflow diagram phases
+
+| Phase | Status | Scope |
+|-------|--------|--------|
+| **1** | **Done** | Read-only path diagram (boxes + connectors) on form preview and submission Approvals (all viewers) |
+| **2** | **Done** | Drag (or up/down) to reorder bands; list/`step_order` model preserved; parallel ties stay together |
+| **3** | **Done** | Create canvas matches path-diagram visual; click-to-edit selected step; add step / branch / parallel from canvas (still `step_order` + `when`, no goto engine) |
+
+True goto / free-form jump edges remain deferred (engine is linear).
+
 ### Still deferred (optional backlog)
 
 | Priority | Item |
 |----------|------|
 | Medium | Visual template builder (tenant templates use JSON admin at `/e-approval/forms/templates` today) |
 | Medium | Central **platform** E-Approval analytics (tenant-level stats exist on `/e-approval/forms`) |
+| Low | True goto / free-form jump edges (engine rewrite) |
 | Low | Advanced formulas / calculated fields UI |
 | Low | Richer revision diff (field-level compare beyond snapshot summary) |
 | Low | Server-generated PDF (today: browser print from layout JSON) |

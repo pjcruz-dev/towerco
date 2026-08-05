@@ -56,7 +56,16 @@ final class EApprovalSubmissionWorkflowPreviewService
             $definitions['definitions'],
         );
 
-        $approvalsByStep = $this->currentCycleApprovalsByStep($submission);
+        $activeStepIds = array_fill_keys(
+            app(EApprovalSubmissionWorkflowResolver::class)->currentCompiledStepIds($submission),
+            true,
+        );
+        $approvalsByStep = $this->currentCycleApprovalsByStep($submission, $activeStepIds);
+        $returnedFromStep = (int) ($submission->returned_from_step ?? 0);
+        $isReturned = (string) $submission->status === 'returned';
+        $submissionStatus = (string) $submission->status;
+        $currentStep = (int) ($submission->current_step ?? 0);
+        $isTerminal = in_array($submissionStatus, ['approved', 'rejected', 'cancelled'], true);
 
         $resolved = [];
         foreach ($preview['resolved_steps'] ?? [] as $step) {
@@ -67,13 +76,42 @@ final class EApprovalSubmissionWorkflowPreviewService
             $order = (int) ($step['step_order'] ?? 0);
             $userId = isset($step['resolved_user_id']) ? (string) $step['resolved_user_id'] : '';
             $match = $this->matchApproval($approvalsByStep[$order] ?? [], $userId);
+            $runtimeStatus = $match?->status;
+            // Revision clears the return step as invalidated — show Returned, not Not needed.
+            if (
+                $isReturned
+                && $returnedFromStep > 0
+                && $order === $returnedFromStep
+                && $runtimeStatus === 'invalidated'
+            ) {
+                $runtimeStatus = 'returned';
+            }
+
+            $pathReason = __('Conditions matched — step runs for this submission.');
+            $warning = $step['warning'] ?? null;
+
+            // Engine skips steps with empty/unresolved approvers. Do not show those as
+            // "Not started" with form-builder "preview sample" copy on a live submission.
+            if (
+                $match === null
+                && $userId === ''
+                && $this->shouldShowUnresolvedStepAsSkipped($order, $currentStep, $isTerminal, $step)
+            ) {
+                $runtimeStatus = 'skipped';
+                $pathReason = $this->unresolvedSkipReason($step);
+                $warning = null;
+            }
 
             $resolved[] = [
                 ...$step,
-                'path_reason' => __('Conditions matched — step runs for this submission.'),
-                'runtime_status' => $match?->status,
+                'warning' => $warning,
+                'path_reason' => $pathReason,
+                'runtime_status' => $runtimeStatus,
                 'approval_id' => $match?->id !== null ? (string) $match->id : null,
                 'acted_at' => $match?->acted_at?->toIso8601String(),
+                'signature' => is_string($match?->signature) && $match->signature !== ''
+                    ? $match->signature
+                    : null,
                 'runtime_approver' => $match?->approver ? [
                     'id' => (string) $match->approver->id,
                     'name' => $match->approver->name,
@@ -167,9 +205,49 @@ final class EApprovalSubmissionWorkflowPreviewService
     }
 
     /**
+     * @param  array<string, mixed>  $step
+     */
+    private function shouldShowUnresolvedStepAsSkipped(
+        int $order,
+        int $currentStep,
+        bool $isTerminal,
+        array $step,
+    ): bool {
+        // Past this order, or submission already finished without activating the step.
+        if ($isTerminal || ($currentStep > 0 && $order < $currentStep)) {
+            return true;
+        }
+
+        // Empty dynamic approver field / list can never activate — show Skipped early.
+        $type = (string) ($step['type'] ?? '');
+        if (in_array($type, ['field', 'user_list', 'field_map', 'role'], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     */
+    private function unresolvedSkipReason(array $step): string
+    {
+        $type = (string) ($step['type'] ?? '');
+
+        return match ($type) {
+            'field' => __('Skipped — approver field was empty.'),
+            'user_list' => __('Skipped — approver list was empty.'),
+            'field_map' => __('Skipped — no approver mapping for the selected value.'),
+            'role' => __('Skipped — no active approver found for this role.'),
+            default => __('Skipped — no approver could be assigned.'),
+        };
+    }
+
+    /**
+     * @param  array<string, true>  $activeStepIds
      * @return array<int, list<EApprovalRequestApproval>>
      */
-    private function currentCycleApprovalsByStep(EApprovalSubmission $submission): array
+    private function currentCycleApprovalsByStep(EApprovalSubmission $submission, array $activeStepIds = []): array
     {
         $cycle = (int) ($submission->approval_cycle ?: 1);
         $grouped = [];
@@ -184,7 +262,20 @@ final class EApprovalSubmissionWorkflowPreviewService
                 continue;
             }
 
-            if (in_array((string) $approval->status, ['superseded', 'invalidated'], true)) {
+            // Keep invalidated rows so parallel "any / N of M" peers still diagram
+            // as Not needed — do not collapse every card onto the one approved peer.
+            if (in_array((string) $approval->status, ['superseded'], true)) {
+                continue;
+            }
+
+            // Resume recompiles steps with new IDs. Drop only stale *pending* rows on
+            // orphan compiles — keep approved/returned/invalidated so earlier steps
+            // still show as Approved after "resume at returning step".
+            if (
+                $activeStepIds !== []
+                && ! isset($activeStepIds[(string) $approval->step_id])
+                && (string) $approval->status === 'pending'
+            ) {
                 continue;
             }
 
@@ -205,14 +296,39 @@ final class EApprovalSubmissionWorkflowPreviewService
             return null;
         }
 
+        $candidates = $approvals;
         if ($userId !== '') {
-            foreach ($approvals as $approval) {
-                if ((string) $approval->approver_id === $userId) {
-                    return $approval;
-                }
+            $candidates = array_values(array_filter(
+                $approvals,
+                static fn (EApprovalRequestApproval $approval): bool => (string) $approval->approver_id === $userId,
+            ));
+
+            // Never attach another peer's approval when this slot has a known user.
+            if ($candidates === []) {
+                return null;
             }
+        } elseif (count($candidates) !== 1) {
+            return null;
         }
 
-        return count($approvals) === 1 ? $approvals[0] : null;
+        usort(
+            $candidates,
+            fn (EApprovalRequestApproval $left, EApprovalRequestApproval $right): int => $this->approvalMatchRank($left) <=> $this->approvalMatchRank($right),
+        );
+
+        return $candidates[0] ?? null;
+    }
+
+    private function approvalMatchRank(EApprovalRequestApproval $approval): int
+    {
+        return match ((string) $approval->status) {
+            'pending' => 0,
+            'approved' => 1,
+            'returned' => 2,
+            'rejected' => 3,
+            'invalidated' => 4,
+            'cancelled' => 5,
+            default => 9,
+        };
     }
 }

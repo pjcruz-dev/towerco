@@ -61,9 +61,32 @@ final class EApprovalSubmissionWorkflowPreviewTest extends TestCase
         $this->assertSame('user', $preview->json('data.skipped_steps.0.type'));
     }
 
-    public function test_non_admin_cannot_preview_submission_workflow_path(): void
+    public function test_requestor_can_preview_submission_workflow_path(): void
     {
         $approver = $this->createAdditionalTenantUser('approver.path@towerone.test', 'Path Approver');
+        $formId = $this->createSimpleForm($approver);
+        $requestor = $this->createViewerUser('path.requestor@towerone.test', withCreate: true);
+
+        $create = $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Need access'],
+            ]);
+
+        $create->assertCreated();
+        $submissionId = (string) $create->json('data.id');
+
+        $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview")
+            ->assertOk()
+            ->assertJsonPath('data.resolved_steps.0.runtime_status', 'pending');
+    }
+
+    public function test_unrelated_viewer_cannot_preview_submission_workflow_path(): void
+    {
+        $approver = $this->createAdditionalTenantUser('approver.path2@towerone.test', 'Path Approver 2');
         $formId = $this->createSimpleForm($approver);
 
         $create = $this->actingAsTenantAdmin()
@@ -76,27 +99,31 @@ final class EApprovalSubmissionWorkflowPreviewTest extends TestCase
         $create->assertCreated();
         $submissionId = (string) $create->json('data.id');
 
-        $viewer = $this->createViewerUser();
+        $viewer = $this->createViewerUser('path.unrelated@towerone.test');
 
         $this->actingAs($viewer, 'sanctum')
             ->withHeaders($this->tenantApiHeaders())
             ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview")
-            ->assertForbidden();
+            ->assertUnprocessable();
     }
 
-    private function createViewerUser(): TenantUser
+    private function createViewerUser(string $email = 'path.viewer@towerone.test', bool $withCreate = false): TenantUser
     {
         tenancy()->initialize($this->testTenant);
         $user = TenantUser::query()->create([
             'name' => 'Path Viewer',
-            'email' => 'path.viewer@towerone.test',
+            'email' => $email,
             'password' => 'password',
             'is_active' => true,
         ]);
-        $user->givePermissionTo([
+        $permissions = [
             'e_approval:view',
             'e_approval:submissions:view',
-        ]);
+        ];
+        if ($withCreate) {
+            $permissions[] = 'e_approval:submissions:create';
+        }
+        $user->givePermissionTo($permissions);
         tenancy()->end();
 
         return $user;

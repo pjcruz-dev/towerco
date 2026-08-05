@@ -265,6 +265,11 @@ class RoleCatalogService
             return true;
         }
 
+        // Billing-only role is tied to the Billings workspace module (not always-on Team & Access).
+        if ($roleName === 'billing') {
+            return in_array('billings', $enabledModules, true);
+        }
+
         if (TenantRbacSystemRoles::isCoreBaseline($roleName)) {
             return true;
         }

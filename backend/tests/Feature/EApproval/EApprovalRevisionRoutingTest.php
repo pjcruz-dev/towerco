@@ -55,6 +55,38 @@ final class EApprovalRevisionRoutingTest extends TestCase
         tenancy()->end();
     }
 
+    public function test_returned_step_preview_shows_returned_not_not_needed(): void
+    {
+        [, $submissionId] = $this->createTwoStepSubmission();
+
+        $this->approvePendingAs($this->approverOne);
+        $this->requestRevisionAs($this->approverTwo, $submissionId, 'Please fix the reason text.');
+
+        $preview = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview");
+
+        $preview->assertOk();
+        $steps = collect($preview->json('data.resolved_steps'));
+        $this->assertSame('returned', $steps->firstWhere('step_order', 2)['runtime_status'] ?? null);
+        $this->assertSame('approved', $steps->firstWhere('step_order', 1)['runtime_status'] ?? null);
+    }
+
+    public function test_requestor_can_cancel_returned_submission(): void
+    {
+        [, $submissionId] = $this->createTwoStepSubmission();
+
+        $this->approvePendingAs($this->approverOne);
+        $this->requestRevisionAs($this->approverTwo, $submissionId, 'Please fix the reason text.');
+
+        $cancel = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/cancel");
+
+        $cancel->assertOk()->assertJsonPath('data.status', 'cancelled');
+        $this->assertSame('cancelled', EApprovalSubmission::query()->findOrFail($submissionId)->status);
+    }
+
     public function test_default_resubmit_restarts_from_step_one(): void
     {
         [$formId, $submissionId] = $this->createTwoStepSubmission();
@@ -127,6 +159,15 @@ final class EApprovalRevisionRoutingTest extends TestCase
             ->first();
         $this->assertNotNull($pendingStep);
         $this->assertSame(2, (int) $pendingStep->step?->step_order);
+
+        // Path must keep earlier approvals visible after resume recompiles new step IDs.
+        $preview = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview");
+        $preview->assertOk();
+        $steps = collect($preview->json('data.resolved_steps'));
+        $this->assertSame('approved', $steps->firstWhere('step_order', 1)['runtime_status'] ?? null);
+        $this->assertSame('pending', $steps->firstWhere('step_order', 2)['runtime_status'] ?? null);
     }
 
     public function test_material_field_change_forces_restart_when_resume_enabled(): void

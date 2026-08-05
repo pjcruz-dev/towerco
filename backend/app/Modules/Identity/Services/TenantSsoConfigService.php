@@ -56,6 +56,31 @@ final class TenantSsoConfigService
     }
 
     /**
+     * @param  list<string>  $tenantIds
+     * @return list<string> Tenant IDs with an enabled SSO config for the provider.
+     */
+    public function enabledTenantIds(array $tenantIds, string $provider = 'azure'): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $id): string => trim((string) $id),
+            $tenantIds,
+        ))));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->ssoConfigs()
+            ->whereIn('tenant_id', $ids)
+            ->where('provider', $provider)
+            ->where('enabled', true)
+            ->pluck('tenant_id')
+            ->map(static fn (mixed $id): string => (string) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array{
      *     enabled: bool,
      *     provider: string,

@@ -17,6 +17,7 @@ final class EApprovalNotificationCategory
     {
         return [
             'approval_assigned',
+            'approval_assigned_revised',
             'sla_reminder',
             'sla_escalation',
             'returned',
@@ -32,9 +33,15 @@ final class EApprovalNotificationCategory
 
     public static function hrefFor(string $type, ?string $submissionId): string
     {
-        if (in_array($type, ['approval_assigned', 'sla_reminder', 'sla_escalation', 'manual_follow_up'], true)) {
+        if (in_array($type, [
+            'approval_assigned',
+            'approval_assigned_revised',
+            'sla_reminder',
+            'sla_escalation',
+            'manual_follow_up',
+        ], true)) {
             if ($submissionId !== null && $submissionId !== '') {
-                return "/e-approval/submissions/{$submissionId}?tab=workflow";
+                return "/e-approval/submissions/{$submissionId}?tab=decide";
             }
 
             return '/e-approval/approvals?awaiting_me=1';
@@ -42,10 +49,12 @@ final class EApprovalNotificationCategory
 
         if ($submissionId !== null && $submissionId !== '') {
             $tab = match ($type) {
-                'returned', 'awaiting_dcf' => 'actions',
-                'approved', 'rejected' => 'workflow',
-                'comment_added', 'comment_replied' => 'comments',
-                default => 'workflow',
+                'returned', 'awaiting_dcf' => 'decide',
+                'approved', 'rejected', 'cancelled', 'approval_no_longer_needed',
+                'approval_rerouted', 'workflow_steps_skipped',
+                'resubmitted_resume', 'resubmitted_restart' => 'approvals',
+                'comment_added', 'comment_replied' => 'activity',
+                default => 'approvals',
             };
 
             return "/e-approval/submissions/{$submissionId}?tab={$tab}";
