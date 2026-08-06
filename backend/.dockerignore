@@ -11,3 +11,7 @@ storage/framework/views/*
 bootstrap/cache/*
 .phpunit.result.cache
 tests
+# Local tenant DB snapshots / dumps must not bloat image builds
+/database/tenant*
+/database/*.sqlite
+/database/*.sqlite-journal

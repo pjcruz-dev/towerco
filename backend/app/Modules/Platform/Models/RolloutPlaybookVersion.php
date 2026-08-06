@@ -26,6 +26,7 @@ class RolloutPlaybookVersion extends Model
         'milestone_cycle_targets',
         'form_schemas',
         'changelog',
+        'milestone_derived_from_timeline',
         'published_at',
     ];
 
@@ -33,6 +34,7 @@ class RolloutPlaybookVersion extends Model
     {
         return [
             'sla_working_days_only' => 'boolean',
+            'milestone_derived_from_timeline' => 'boolean',
             'delivery_periods' => 'array',
             'timeline_templates' => 'array',
             'milestone_cycle_targets' => 'array',

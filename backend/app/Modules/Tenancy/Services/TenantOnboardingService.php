@@ -11,6 +11,8 @@ use App\Modules\Platform\Models\TenantPlaybookBinding;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
 use App\Modules\Platform\Services\RolloutPolicyBundleService;
 use App\Modules\Rollout\Services\TenantPlaybookSyncService;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
+use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +28,8 @@ class TenantOnboardingService
         private readonly TenantPlaybookSyncService $playbookSync,
         private readonly TenantRolloutBootstrapService $rolloutBootstrap,
         private readonly TenantDocumentsBootstrapService $documentsBootstrap,
+        private readonly TenantEnabledModulesResolver $enabledModulesResolver,
+        private readonly TenantModuleRbacSyncService $moduleRbacSync,
     ) {}
 
     /**
@@ -38,6 +42,7 @@ class TenantOnboardingService
      *   tco_sequence_prefix?: string|null,
      *   playbook_version_id?: string|null,
      *   rollout_policy_bundle_id?: string|null,
+     *   enabled_modules?: list<string>|null,
      *   migrate?: bool,
      *   seed?: bool
      * }  $input
@@ -78,6 +83,10 @@ class TenantOnboardingService
             $planTier = 'starter';
         }
 
+        $enabledModules = array_key_exists('enabled_modules', $input)
+            ? TenantEnabledModulesValidator::validate($input['enabled_modules'], $this->enabledModulesResolver)
+            : null;
+
         /** @var Tenant $tenant */
         $tenant = Tenant::create([
             'id' => $tenantId,
@@ -88,6 +97,7 @@ class TenantOnboardingService
             'mfa_required' => (bool) config('toweros.tenant_provisioning.default_mfa_required', false),
             'plan_tier' => $planTier,
             'seat_limit' => (int) ($input['seat_limit'] ?? 25),
+            'enabled_modules' => $enabledModules,
         ]);
 
         app(\App\Modules\Billing\Services\TenantSubscriptionLifecycleService::class)
@@ -138,6 +148,10 @@ class TenantOnboardingService
         $initialAdmin = $this->adminBootstrap->bootstrap($tenant, $domain);
 
         $this->documentsBootstrap->provisionSiteDocumentReviewForm($tenant);
+
+        if ($enabledModules !== null) {
+            $this->moduleRbacSync->syncForTenant($tenant);
+        }
 
         return [
             'tenant' => $tenant->fresh(['domains']),
