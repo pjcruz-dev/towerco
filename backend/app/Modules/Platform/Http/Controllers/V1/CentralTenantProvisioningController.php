@@ -32,12 +32,14 @@ class CentralTenantProvisioningController extends AbstractApiController
             'tco_sequence_prefix' => ['sometimes', 'nullable', 'string', 'max:8'],
             'playbook_version_id' => ['sometimes', 'nullable', 'uuid'],
             'rollout_policy_bundle_id' => ['sometimes', 'nullable', 'uuid'],
+            'enabled_modules' => ['sometimes', 'nullable', 'array'],
+            'enabled_modules.*' => ['string', 'max:64'],
             'migrate' => ['sometimes', 'boolean'],
             'seed' => ['sometimes', 'boolean'],
         ]);
 
         try {
-            $result = $onboarding->createTenant([
+            $payload = [
                 'tenant_id' => $data['tenant_id'] ?? null,
                 'domain' => $data['domain'],
                 'slug' => $data['slug'] ?? null,
@@ -47,7 +49,12 @@ class CentralTenantProvisioningController extends AbstractApiController
                 'playbook_version_id' => $data['playbook_version_id'] ?? null,
                 'migrate' => (bool) ($data['migrate'] ?? true),
                 'seed' => (bool) ($data['seed'] ?? false),
-            ]);
+            ];
+            if (array_key_exists('enabled_modules', $data)) {
+                $payload['enabled_modules'] = $data['enabled_modules'];
+            }
+
+            $result = $onboarding->createTenant($payload);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages([
                 'domain' => [$e->getMessage()],
