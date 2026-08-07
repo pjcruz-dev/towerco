@@ -107,6 +107,18 @@ class EApprovalForm extends Model
         return $this->hasMany(EApprovalFormField::class, 'form_id')->orderBy('step_order');
     }
 
+    /** @return HasMany<EApprovalPublicFormLink, $this> */
+    public function publicLinks(): HasMany
+    {
+        return $this->hasMany(EApprovalPublicFormLink::class, 'form_id');
+    }
+
+    /** @return HasMany<EApprovalFormOutboundFile, $this> */
+    public function outboundFiles(): HasMany
+    {
+        return $this->hasMany(EApprovalFormOutboundFile::class, 'form_id')->orderBy('created_at');
+    }
+
     /** @return HasOne<EApprovalWorkflowTemplate, $this> */
     public function workflowTemplate(): HasOne
     {
@@ -124,6 +136,10 @@ class EApprovalForm extends Model
      */
     public function toListRow(): array
     {
+        $hasShareable = array_key_exists('has_shareable_public_link', $this->attributes)
+            ? (bool) $this->attributes['has_shareable_public_link']
+            : null;
+
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
@@ -135,6 +151,7 @@ class EApprovalForm extends Model
             'doc_type_code' => $this->doc_type_code,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+            'has_shareable_public_link' => $hasShareable,
         ];
     }
 

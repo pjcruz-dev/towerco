@@ -41,7 +41,7 @@ final class TenantSeatLimitServiceTest extends TestCase
     public function test_viewer_does_not_count_toward_seat_limit(): void
     {
         tenancy()->initialize($this->testTenant);
-        $this->testTenant->seat_limit = 1;
+        $this->testTenant->seat_limit = 2;
         $this->testTenant->save();
         tenancy()->end();
 
@@ -52,7 +52,24 @@ final class TenantSeatLimitServiceTest extends TestCase
 
         $seats = app(TenantSeatLimitService::class);
         $this->assertSame(1, $seats->activeSeatCount());
-        $this->assertSame(0, $seats->seatsAvailable());
+        $this->assertSame(1, $seats->seatsAvailable());
+
+        tenancy()->end();
+    }
+
+    public function test_viewer_create_blocked_when_paid_seat_limit_reached(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $this->testTenant->seat_limit = 1;
+        $this->testTenant->save();
+        tenancy()->end();
+
+        tenancy()->initialize($this->testTenant);
+
+        $service = app(TenantUserAdminService::class);
+
+        $this->expectException(ValidationException::class);
+        $service->create('Read Only', 'viewer-blocked@test.localhost', ['viewer']);
 
         tenancy()->end();
     }
@@ -72,6 +89,28 @@ final class TenantSeatLimitServiceTest extends TestCase
         $count = app(TenantSeatLimitService::class)->activeSeatCount();
 
         $this->assertSame(1, $count);
+
+        tenancy()->end();
+    }
+
+    public function test_promoting_viewer_to_paid_role_blocked_when_seat_limit_reached(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $this->testTenant->seat_limit = 1;
+        $this->testTenant->save();
+
+        $viewer = TenantUser::query()->create([
+            'name' => 'Viewer Two',
+            'email' => 'viewer2@test.localhost',
+            'password' => 'x',
+            'is_active' => true,
+        ]);
+        $viewer->assignRole('viewer');
+
+        $service = app(TenantUserAdminService::class);
+
+        $this->expectException(ValidationException::class);
+        $service->update($viewer, null, null, ['manager'], null);
 
         tenancy()->end();
     }

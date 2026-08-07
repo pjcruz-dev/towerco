@@ -10,6 +10,8 @@ use App\Modules\Platform\Models\TenantPlaybookBinding;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
 use App\Modules\Platform\Services\RolloutPolicyBundleService;
 use App\Modules\Rollout\Services\TenantPlaybookSyncService;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
+use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -25,6 +27,8 @@ final class TenantEnvironmentProvisioningService
         private readonly TenantRolloutBootstrapService $rolloutBootstrap,
         private readonly TenantAdminBootstrapService $adminBootstrap,
         private readonly TenantDocumentsBootstrapService $documentsBootstrap,
+        private readonly TenantEnabledModulesResolver $enabledModulesResolver,
+        private readonly TenantModuleRbacSyncService $moduleRbacSync,
     ) {}
 
     /**
@@ -32,7 +36,9 @@ final class TenantEnvironmentProvisioningService
      *   environment: string,
      *   domain?: string|null,
      *   migrate?: bool,
-     *   seed?: bool
+     *   seed?: bool,
+     *   enabled_modules?: list<string>|null,
+     *   admin_password?: string|null
      * }  $input
      * @return array<string, mixed>
      */
@@ -49,6 +55,13 @@ final class TenantEnvironmentProvisioningService
         if ($sourceTenant->environment === $environment) {
             throw ValidationException::withMessages([
                 'environment' => [__('Source tenant is already in this environment.')],
+            ]);
+        }
+
+        $adminPassword = isset($input['admin_password']) ? trim((string) $input['admin_password']) : '';
+        if ($adminPassword !== '' && strlen($adminPassword) < 12) {
+            throw ValidationException::withMessages([
+                'admin_password' => [__('Admin password must be at least 12 characters.')],
             ]);
         }
 
@@ -80,6 +93,10 @@ final class TenantEnvironmentProvisioningService
             ]);
         }
 
+        $enabledModules = array_key_exists('enabled_modules', $input)
+            ? TenantEnabledModulesValidator::validate($input['enabled_modules'], $this->enabledModulesResolver)
+            : $sourceTenant->enabled_modules;
+
         /** @var Tenant $tenant */
         $tenant = Tenant::create([
             'id' => (string) Str::uuid(),
@@ -93,6 +110,7 @@ final class TenantEnvironmentProvisioningService
             'plan_tier' => $orgRoot->plan_tier ?? config('toweros.tenant_provisioning.default_plan_tier', 'starter'),
             'subscription_status' => $orgRoot->subscription_status ?? 'active',
             'seat_limit' => $orgRoot->seat_limit ?? 25,
+            'enabled_modules' => $enabledModules,
         ]);
 
         $tenant->createDomain($domain);
@@ -124,9 +142,17 @@ final class TenantEnvironmentProvisioningService
         }
 
         // Stancl creates the tenant DB on createDomain(); always ensure admin@{domain} exists.
-        $initialAdmin = $this->adminBootstrap->bootstrap($tenant, $domain);
+        $initialAdmin = $this->adminBootstrap->bootstrap(
+            $tenant,
+            $domain,
+            $adminPassword !== '' ? $adminPassword : null,
+        );
 
         $this->documentsBootstrap->provisionSiteDocumentReviewForm($tenant);
+
+        if ($enabledModules !== null) {
+            $this->moduleRbacSync->syncForTenant($tenant);
+        }
 
         return [
             'tenant' => $tenant->fresh(['domains']),

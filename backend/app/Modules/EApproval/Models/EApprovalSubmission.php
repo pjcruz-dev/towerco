@@ -28,6 +28,8 @@ class EApprovalSubmission extends Model
         'public_link_id',
         'external_upload_token_hash',
         'external_upload_token_expires_at',
+        'external_resubmit_token_hash',
+        'external_resubmit_token_expires_at',
         'external_client_ip',
         'external_user_agent',
         'status',
@@ -52,6 +54,8 @@ class EApprovalSubmission extends Model
             'returned_from_step' => 'integer',
             'force_full_restart' => 'boolean',
             'approval_cycle' => 'integer',
+            'external_upload_token_expires_at' => 'datetime',
+            'external_resubmit_token_expires_at' => 'datetime',
         ];
     }
 

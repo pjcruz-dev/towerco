@@ -28,6 +28,18 @@ final class EApprovalSettingsService
 
     public const PO_MAX_OVERSPEND_PERCENT = 'po_max_overspend_percent';
 
+    public const NOTIFY_EXTERNAL_ON_RECEIVED = 'notify_external_on_received';
+
+    public const NOTIFY_EXTERNAL_ON_APPROVED = 'notify_external_on_approved';
+
+    public const NOTIFY_EXTERNAL_ON_REJECTED = 'notify_external_on_rejected';
+
+    public const NOTIFY_EXTERNAL_ON_RETURNED = 'notify_external_on_returned';
+
+    public const TEAMS_WEBHOOK_URL = 'teams_webhook_url';
+
+    public const NOTIFY_TEAMS_ON_EXTERNAL_SUBMIT = 'notify_teams_on_external_submit';
+
     public function getString(string $key, ?string $default = null): ?string
     {
         $row = DB::connection('tenant')->table('e_approval_settings')->where('key', $key)->first();
@@ -99,6 +111,12 @@ final class EApprovalSettingsService
             self::LIQUIDATION_MAX_OVERSPEND_PERCENT,
             self::PO_OVERSPEND_MODE,
             self::PO_MAX_OVERSPEND_PERCENT,
+            self::NOTIFY_EXTERNAL_ON_RECEIVED,
+            self::NOTIFY_EXTERNAL_ON_APPROVED,
+            self::NOTIFY_EXTERNAL_ON_REJECTED,
+            self::NOTIFY_EXTERNAL_ON_RETURNED,
+            self::TEAMS_WEBHOOK_URL,
+            self::NOTIFY_TEAMS_ON_EXTERNAL_SUBMIT,
         ];
 
         foreach ($allowed as $key) {
@@ -107,6 +125,36 @@ final class EApprovalSettingsService
             }
             $this->setString($key, (string) $values[$key]);
         }
+    }
+
+    public function notifyExternalOnReceived(): bool
+    {
+        return $this->getBool(self::NOTIFY_EXTERNAL_ON_RECEIVED, false);
+    }
+
+    public function notifyExternalOnApproved(): bool
+    {
+        return $this->getBool(self::NOTIFY_EXTERNAL_ON_APPROVED, false);
+    }
+
+    public function notifyExternalOnRejected(): bool
+    {
+        return $this->getBool(self::NOTIFY_EXTERNAL_ON_REJECTED, false);
+    }
+
+    public function notifyExternalOnReturned(): bool
+    {
+        return $this->getBool(self::NOTIFY_EXTERNAL_ON_RETURNED, false);
+    }
+
+    public function notifyTeamsOnExternalSubmit(): bool
+    {
+        return $this->getBool(self::NOTIFY_TEAMS_ON_EXTERNAL_SUBMIT, false);
+    }
+
+    public function teamsWebhookUrl(): string
+    {
+        return trim((string) $this->getString(self::TEAMS_WEBHOOK_URL, ''));
     }
 
     public function userSignatureKey(string $userId): string

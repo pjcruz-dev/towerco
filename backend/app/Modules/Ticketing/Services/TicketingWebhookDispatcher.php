@@ -6,10 +6,9 @@ namespace App\Modules\Ticketing\Services;
 
 use App\Models\TicketingTicket;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
-use App\Modules\Ticketing\Support\TeamsWebhookCardFactory;
+use App\Modules\Notifications\Support\TeamsWebhookCardFactory;
+use App\Modules\Notifications\Support\TeamsWebhookHttpPoster;
 use App\Modules\Ticketing\Support\TicketingNotificationCategory;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 final class TicketingWebhookDispatcher
 {
@@ -62,15 +61,16 @@ final class TicketingWebhookDispatcher
             actionLabel: __('Open ticket'),
         );
 
-        try {
-            Http::timeout(10)->post($url, $payload)->throw();
-        } catch (\Throwable $e) {
-            Log::warning('ticketing.webhook_failed', [
+        TeamsWebhookHttpPoster::postOrLog(
+            $url,
+            $payload,
+            10,
+            'ticketing.webhook_failed',
+            [
                 'event' => $event,
                 'ticket_id' => $ticket->id,
-                'message' => $e->getMessage(),
-            ]);
-        }
+            ],
+        );
     }
 
     private function shouldSend(string $event): bool

@@ -12,6 +12,7 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalSubmissionFollowup;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -32,6 +33,7 @@ final class EApprovalSubmissionLifecycleService
         private readonly EApprovalCommentService $comments,
         private readonly EApprovalDocumentLinkService $documentLinks,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
+        private readonly EApprovalExternalResubmitTokenService $externalResubmitTokens,
     ) {}
 
     public function requestRevision(
@@ -120,6 +122,17 @@ final class EApprovalSubmissionLifecycleService
                 bodyPreview: $remarks !== '' ? $remarks : null,
             );
             $this->mail->dispatchToRequestor($submission, 'returned', $actor->name);
+
+            if ($submission->isExternalSubmission()) {
+                $minted = $this->externalResubmitTokens->mint($submission);
+                $this->mail->dispatchToExternalSubmitter(
+                    $submission,
+                    EApprovalExternalMailEvent::RETURNED,
+                    $actor->name,
+                    $remarks,
+                    $minted['revise_url'],
+                );
+            }
         });
     }
 

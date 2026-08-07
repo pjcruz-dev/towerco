@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
-use App\Modules\Ticketing\Support\TeamsWebhookCardFactory;
-use Illuminate\Support\Facades\Http;
+use App\Modules\Notifications\Support\TeamsWebhookCardFactory;
+use App\Modules\Notifications\Support\TeamsWebhookHttpPoster;
 use Illuminate\Validation\ValidationException;
 
 final class TicketingSettingsTestWebhookService
@@ -22,10 +22,14 @@ final class TicketingSettingsTestWebhookService
             ]);
         }
 
-        Http::timeout(10)->post($url, TeamsWebhookCardFactory::build(
-            title: __('TowerOS Ticketing test'),
-            bodyText: __('This is a test message from the Ticketing module webhook integration.'),
-        ))->throw();
+        TeamsWebhookHttpPoster::postOrThrow(
+            $url,
+            TeamsWebhookCardFactory::build(
+                title: __('TowerOS Ticketing test'),
+                bodyText: __('This is a test message from the Ticketing module webhook integration.'),
+            ),
+            10,
+        );
 
         return ['sent' => true];
     }

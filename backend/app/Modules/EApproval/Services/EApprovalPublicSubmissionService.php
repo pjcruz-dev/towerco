@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalAttachment;
+use App\Modules\EApproval\Models\EApprovalComment;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalPublicFormLink;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -30,10 +32,14 @@ final class EApprovalPublicSubmissionService
         private readonly EApprovalSubmissionAttachmentValidator $attachmentValidator,
         private readonly EApprovalPlanFeaturesService $planFeatures,
         private readonly EApprovalInAppNotificationService $inApp,
+        private readonly EApprovalNotificationDispatcher $mail,
+        private readonly EApprovalWebhookDispatcher $webhooks,
+        private readonly EApprovalExternalResubmitTokenService $resubmitTokens,
     ) {}
 
     /**
      * @param  array<string, mixed>  $values
+     * @param  array<string, int>  $pendingAttachmentCounts  Field name → selected file count (uploaded after create).
      * @return array{
      *     submission_id: string,
      *     document_no: string,
@@ -48,6 +54,7 @@ final class EApprovalPublicSubmissionService
         string $submitterEmail,
         ?string $clientIp,
         ?string $userAgent,
+        array $pendingAttachmentCounts = [],
     ): array {
         $form = $link->form;
         if ($form === null) {
@@ -61,7 +68,8 @@ final class EApprovalPublicSubmissionService
         /** @var TenantUser $sponsor */
         $sponsor = $link->sponsor ?? TenantUser::query()->findOrFail($link->sponsor_user_id);
 
-        $this->valuesValidator->validate($form, $values);
+        // Public attachments are uploaded after create via upload_token; count declared selections here.
+        $this->valuesValidator->validate($form, $values, true, $pendingAttachmentCounts);
 
         $uploadPlain = Str::random(40);
         $uploadMinutes = (int) config('e_approval.public_links.upload_token_minutes', 60);
@@ -123,6 +131,12 @@ final class EApprovalPublicSubmissionService
 
             $this->links->incrementSubmissions($link);
 
+            $fresh = $submission->fresh();
+            if ($fresh !== null) {
+                $this->mail->dispatchToExternalSubmitter($fresh, EApprovalExternalMailEvent::RECEIVED);
+                $this->webhooks->dispatchExternalSubmittedIfEnabled($fresh);
+            }
+
             return [
                 'submission_id' => (string) $submission->id,
                 'document_no' => $documentNo,
@@ -130,6 +144,106 @@ final class EApprovalPublicSubmissionService
                 'upload_token_expires_at' => $submission->external_upload_token_expires_at?->toIso8601String() ?? '',
             ];
         });
+    }
+
+    /**
+     * @return array{
+     *     submission_id: string,
+     *     document_no: string,
+     *     status: string,
+     *     revision_notes: string|null,
+     *     submitter_name: string|null,
+     *     submitter_email: string|null,
+     *     values: array<string, string>,
+     *     form: array<string, mixed>
+     * }
+     */
+    public function showForRevise(EApprovalSubmission $submission, string $resubmitToken): array
+    {
+        $this->resubmitTokens->assertValid($submission, $resubmitToken);
+
+        $submission->loadMissing(['form.fields', 'values.field', 'publicLink.form.fields', 'publicLink.sponsor']);
+        $link = $submission->publicLink;
+        if ($link === null) {
+            throw ValidationException::withMessages(['submission' => [__('Public form link is no longer available.')]]);
+        }
+
+        $values = [];
+        foreach ($submission->values as $row) {
+            $name = $row->field?->name;
+            if (is_string($name) && $name !== '') {
+                $values[$name] = (string) $row->value;
+            }
+        }
+
+        $revisionNotes = null;
+        $latestComment = EApprovalComment::query()
+            ->where('submission_id', $submission->id)
+            ->where('message', 'like', 'Revision requested:%')
+            ->orderByDesc('created_at')
+            ->first();
+        if ($latestComment !== null) {
+            $revisionNotes = preg_replace('/^Revision requested:\s*/i', '', (string) $latestComment->message) ?: null;
+        }
+
+        $payload = $this->links->publicFormPayload($link);
+
+        $uploadPlain = Str::random(40);
+        $uploadMinutes = max(1, (int) config('e_approval.public_links.upload_token_minutes', 60));
+        $submission->external_upload_token_hash = hash('sha256', $uploadPlain);
+        $submission->external_upload_token_expires_at = now()->addMinutes($uploadMinutes);
+        $submission->save();
+
+        return [
+            'submission_id' => (string) $submission->id,
+            'document_no' => (string) $submission->document_no,
+            'status' => (string) $submission->status,
+            'revision_notes' => $revisionNotes,
+            'submitter_name' => $submission->external_submitter_name,
+            'submitter_email' => $submission->external_submitter_email,
+            'values' => $values,
+            'upload_token' => $uploadPlain,
+            'upload_token_expires_at' => $submission->external_upload_token_expires_at?->toIso8601String() ?? '',
+            'requires_password' => $payload['requires_password'],
+            'sponsor_label' => $payload['sponsor_label'],
+            'plan_features' => $payload['plan_features'],
+            'approver_options' => $payload['approver_options'],
+            'form' => $payload['form'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array{
+     *     submission_id: string,
+     *     document_no: string,
+     *     upload_token: string,
+     *     upload_token_expires_at: string
+     * }
+     */
+    public function resubmit(EApprovalSubmission $submission, string $resubmitToken, array $values): array
+    {
+        $this->resubmitTokens->assertValid($submission, $resubmitToken);
+
+        /** @var TenantUser $sponsor */
+        $sponsor = TenantUser::query()->findOrFail($submission->requestor_id);
+
+        // Lazy resolve to avoid constructor cycles with SubmissionService → LifecycleService.
+        $updated = app(EApprovalSubmissionService::class)->resubmit($submission, $values, $sponsor);
+
+        $uploadPlain = Str::random(40);
+        $uploadMinutes = max(1, (int) config('e_approval.public_links.upload_token_minutes', 60));
+        $updated->external_upload_token_hash = hash('sha256', $uploadPlain);
+        $updated->external_upload_token_expires_at = now()->addMinutes($uploadMinutes);
+        $updated->save();
+        $this->resubmitTokens->clear($updated);
+
+        return [
+            'submission_id' => (string) $updated->id,
+            'document_no' => (string) $updated->document_no,
+            'upload_token' => $uploadPlain,
+            'upload_token_expires_at' => $updated->external_upload_token_expires_at?->toIso8601String() ?? '',
+        ];
     }
 
     public function storeAttachment(
@@ -148,6 +262,24 @@ final class EApprovalPublicSubmissionService
         return $this->files->store($submission, $file, $fieldName, $normalized);
     }
 
+    /**
+     * Upload using the short-lived upload token only (revise / post-resubmit without form link token).
+     */
+    public function storeAttachmentByUploadToken(
+        EApprovalSubmission $submission,
+        string $uploadToken,
+        UploadedFile $file,
+        ?string $fieldName,
+        ?array $metadata = null,
+    ): EApprovalAttachment {
+        $this->assertUploadToken($submission, $uploadToken);
+        $this->planFeatures->assertCanUploadAttachment();
+        $normalized = $this->attachmentValidator->normalizeMetadata($metadata);
+        $this->attachmentValidator->assertCanStore($submission, $file, $fieldName, $normalized);
+
+        return $this->files->store($submission, $file, $fieldName, $normalized);
+    }
+
     public function assertUploadSession(
         EApprovalPublicFormLink $link,
         EApprovalSubmission $submission,
@@ -155,6 +287,17 @@ final class EApprovalPublicSubmissionService
     ): void {
         if ($submission->submission_source !== EApprovalSubmissionSource::EXTERNAL
             || (string) $submission->public_link_id !== (string) $link->id) {
+            throw ValidationException::withMessages([
+                'submission' => [__('Invalid upload session.')],
+            ]);
+        }
+
+        $this->assertUploadToken($submission, $uploadToken);
+    }
+
+    public function assertUploadToken(EApprovalSubmission $submission, string $uploadToken): void
+    {
+        if ($submission->submission_source !== EApprovalSubmissionSource::EXTERNAL) {
             throw ValidationException::withMessages([
                 'submission' => [__('Invalid upload session.')],
             ]);

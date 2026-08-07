@@ -29,15 +29,26 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             'domain' => ['sometimes', 'nullable', 'string', 'max:255'],
             'migrate' => ['sometimes', 'boolean'],
             'seed' => ['sometimes', 'boolean'],
+            'enabled_modules' => ['sometimes', 'nullable', 'array'],
+            'enabled_modules.*' => ['string', 'max:64'],
+            'admin_password' => ['sometimes', 'nullable', 'string', 'min:12', 'max:128'],
         ]);
 
         try {
-            $result = $environments->createFromTenant($tenant, [
+            $payload = [
                 'environment' => $data['environment'],
                 'domain' => $data['domain'] ?? null,
                 'migrate' => (bool) ($data['migrate'] ?? true),
                 'seed' => (bool) ($data['seed'] ?? false),
-            ]);
+            ];
+            if (array_key_exists('enabled_modules', $data)) {
+                $payload['enabled_modules'] = $data['enabled_modules'];
+            }
+            if (! empty($data['admin_password'])) {
+                $payload['admin_password'] = $data['admin_password'];
+            }
+
+            $result = $environments->createFromTenant($tenant, $payload);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages([
                 'domain' => [$e->getMessage()],

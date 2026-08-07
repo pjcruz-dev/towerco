@@ -20,14 +20,17 @@ use App\Modules\AdminOne\Http\Controllers\V1\TenantSecuritySettingsUpdateControl
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserActivityIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkAssignRoleController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkDeactivateController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkResetPasswordController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserDeactivateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserDestroyController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserExportController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserImpersonateController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantUserIdsController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserImportController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserReactivateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserRevokeSessionsController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantUserSeatUsageController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserUpdateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantWorkspaceDashboardController;
@@ -150,17 +153,27 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalNotificationUnreadCountCo
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutDestroyController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutUpdateController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormOutboundFileDestroyController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormOutboundFileIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormOutboundFileStoreController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormPublicShareUrlController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkRevealController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkRevokeController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkRotateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormShowController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicPackageDownloadController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionAttachmentStoreController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionResubmitController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSubmissionAttachmentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSubmissionStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPurchaseRequisitionOpenController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSettingsPublicController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSettingsShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSettingsTestEmailController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSettingsTestWebhookController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSettingsUpdateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionAttachmentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionCancelController;
@@ -413,6 +426,14 @@ Route::middleware(['throttle:e-approval-public'])->prefix('public/e-approval')->
     Route::post('forms/{token}/submissions', EApprovalPublicSubmissionStoreController::class)->name('api.tenant.v1.e_approval.public.submissions.store');
     Route::post('forms/{token}/submissions/{submission}/attachments', EApprovalPublicSubmissionAttachmentStoreController::class)
         ->name('api.tenant.v1.e_approval.public.submissions.attachments.store');
+    Route::get('submissions/{submission}/revise', EApprovalPublicRevisionShowController::class)
+        ->name('api.tenant.v1.e_approval.public.submissions.revise.show');
+    Route::put('submissions/{submission}/resubmit', EApprovalPublicRevisionResubmitController::class)
+        ->name('api.tenant.v1.e_approval.public.submissions.resubmit');
+    Route::post('submissions/{submission}/attachments', EApprovalPublicRevisionAttachmentStoreController::class)
+        ->name('api.tenant.v1.e_approval.public.submissions.attachments.token_store');
+    Route::get('package-downloads/{token}', EApprovalPublicPackageDownloadController::class)
+        ->name('api.tenant.v1.e_approval.public.package_downloads.show');
 });
 
 Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')->group(function () {
@@ -729,8 +750,13 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
     Route::post('e-approval/forms/{form}/publish', EApprovalFormPublishController::class)->name('api.tenant.v1.e_approval.forms.publish');
     Route::get('e-approval/forms/{form}/public-links', EApprovalPublicFormLinkIndexController::class)->name('api.tenant.v1.e_approval.forms.public_links.index');
     Route::post('e-approval/forms/{form}/public-links', EApprovalPublicFormLinkStoreController::class)->name('api.tenant.v1.e_approval.forms.public_links.store');
+    Route::get('e-approval/forms/{form}/public-share-url', EApprovalFormPublicShareUrlController::class)->name('api.tenant.v1.e_approval.forms.public_share_url');
+    Route::get('e-approval/forms/{form}/outbound-files', EApprovalFormOutboundFileIndexController::class)->name('api.tenant.v1.e_approval.forms.outbound_files.index');
+    Route::post('e-approval/forms/{form}/outbound-files', EApprovalFormOutboundFileStoreController::class)->name('api.tenant.v1.e_approval.forms.outbound_files.store');
+    Route::delete('e-approval/outbound-files/{outboundFile}', EApprovalFormOutboundFileDestroyController::class)->name('api.tenant.v1.e_approval.outbound_files.destroy');
     Route::post('e-approval/public-links/{publicLink}/revoke', EApprovalPublicFormLinkRevokeController::class)->name('api.tenant.v1.e_approval.public_links.revoke');
     Route::post('e-approval/public-links/{publicLink}/rotate', EApprovalPublicFormLinkRotateController::class)->name('api.tenant.v1.e_approval.public_links.rotate');
+    Route::post('e-approval/public-links/{publicLink}/reveal', EApprovalPublicFormLinkRevealController::class)->name('api.tenant.v1.e_approval.public_links.reveal');
     Route::get('e-approval/forms/{form}/logo', EApprovalFormLogoShowController::class)->name('api.tenant.v1.e_approval.forms.logo.show');
     Route::post('e-approval/forms/{form}/logo', EApprovalFormLogoStoreController::class)->name('api.tenant.v1.e_approval.forms.logo');
     Route::get('e-approval/forms/{form}/export', EApprovalFormExportController::class)->name('api.tenant.v1.e_approval.forms.export');
@@ -762,6 +788,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
     Route::get('e-approval/cash-advances/open', EApprovalCashAdvanceOpenController::class)->name('api.tenant.v1.e_approval.cash_advances.open');
     Route::get('e-approval/purchase-requisitions/open', EApprovalPurchaseRequisitionOpenController::class)->name('api.tenant.v1.e_approval.purchase_requisitions.open');
     Route::get('e-approval/settings', EApprovalSettingsShowController::class)->name('api.tenant.v1.e_approval.settings.show');
+    Route::post('e-approval/settings/test-webhook', EApprovalSettingsTestWebhookController::class)
+        ->name('api.tenant.v1.e_approval.settings.test_webhook');
     Route::post('e-approval/settings/test-email', EApprovalSettingsTestEmailController::class)
         ->name('api.tenant.v1.e_approval.settings.test_email');
     Route::put('e-approval/settings', EApprovalSettingsUpdateController::class)->name('api.tenant.v1.e_approval.settings.update');
@@ -800,11 +828,14 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
         Route::get('security', TenantSecuritySettingsShowController::class)->name('api.tenant.v1.admin.security.show');
         Route::patch('security', TenantSecuritySettingsUpdateController::class)->name('api.tenant.v1.admin.security.update');
         Route::get('users', TenantUserIndexController::class)->name('api.tenant.v1.admin.users.index');
+        Route::get('users/ids', TenantUserIdsController::class)->name('api.tenant.v1.admin.users.ids');
+        Route::get('users/seat-usage', TenantUserSeatUsageController::class)->name('api.tenant.v1.admin.users.seat_usage');
         Route::get('users/export', TenantUserExportController::class)->name('api.tenant.v1.admin.users.export');
         Route::post('users', TenantUserStoreController::class)->name('api.tenant.v1.admin.users.store');
         Route::post('users/import', TenantUserImportController::class)->name('api.tenant.v1.admin.users.import');
         Route::post('users/bulk-deactivate', TenantUserBulkDeactivateController::class)->name('api.tenant.v1.admin.users.bulk_deactivate');
         Route::post('users/bulk-assign-role', TenantUserBulkAssignRoleController::class)->name('api.tenant.v1.admin.users.bulk_assign_role');
+        Route::post('users/bulk-reset-password', TenantUserBulkResetPasswordController::class)->name('api.tenant.v1.admin.users.bulk_reset_password');
         Route::patch('users/{user}', TenantUserUpdateController::class)->name('api.tenant.v1.admin.users.update');
         Route::get('users/{user}/activity', TenantUserActivityIndexController::class)->name('api.tenant.v1.admin.users.activity');
         Route::post('users/{user}/revoke-sessions', TenantUserRevokeSessionsController::class)->name('api.tenant.v1.admin.users.revoke_sessions');

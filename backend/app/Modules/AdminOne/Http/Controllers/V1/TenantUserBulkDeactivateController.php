@@ -17,7 +17,7 @@ class TenantUserBulkDeactivateController extends AbstractApiController
         abort_unless($request->user()?->can('user:manage'), 403);
 
         $data = $request->validate([
-            'user_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'user_ids' => ['required', 'array', 'min:1', 'max:500'],
             'user_ids.*' => ['uuid'],
         ]);
 

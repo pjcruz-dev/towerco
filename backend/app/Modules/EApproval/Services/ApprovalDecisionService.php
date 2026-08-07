@@ -8,6 +8,7 @@ use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
@@ -36,6 +37,7 @@ final class ApprovalDecisionService
         private readonly ProcurementPrEApprovalHookService $procurementPrHook,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalCommentService $comments,
+        private readonly EApprovalExternalPackageService $externalPackages,
     ) {}
 
     public function paginate(
@@ -210,6 +212,16 @@ final class ApprovalDecisionService
                         actor: $actor,
                     );
                     $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
+                    if ($submission->isExternalSubmission() && $this->settings->notifyExternalOnApproved()) {
+                        $package = $this->externalPackages->mintPackageLinks($submission);
+                        $this->mail->dispatchToExternalSubmitter(
+                            $submission,
+                            EApprovalExternalMailEvent::APPROVED,
+                            $actor->name,
+                            packageLinks: $package['links'],
+                            packageNote: $package['note'],
+                        );
+                    }
                     $this->audit->log('request_approved_final', $submission->id, null, $actor);
                     $submission->loadMissing(['form', 'values.field']);
                     $this->vendorMasterData->syncApprovedRegistration($submission, $actor);
@@ -259,6 +271,14 @@ final class ApprovalDecisionService
                 bodyPreview: $remarks !== '' ? $remarks : null,
             );
             $this->mail->dispatchToRequestor($submission, 'rejected', $actor->name);
+            if ($submission->isExternalSubmission()) {
+                $this->mail->dispatchToExternalSubmitter(
+                    $submission,
+                    EApprovalExternalMailEvent::REJECTED,
+                    $actor->name,
+                    $remarks,
+                );
+            }
             $this->audit->log('request_rejected', $submission->id, $remarks, $actor);
             $this->comments->add(
                 $submission,

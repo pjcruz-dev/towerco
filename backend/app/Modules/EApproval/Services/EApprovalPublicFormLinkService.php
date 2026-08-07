@@ -9,9 +9,12 @@ use App\Modules\EApproval\Models\EApprovalPublicFormLink;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 final class EApprovalPublicFormLinkService
 {
@@ -19,6 +22,7 @@ final class EApprovalPublicFormLinkService
         private readonly TenantAppUrlResolver $tenantUrls,
         private readonly EApprovalPlanFeaturesService $planFeatures,
         private readonly EApprovalAssignableUsersService $assignableUsers,
+        private readonly EApprovalFormFieldChoicesResolver $fieldChoices,
     ) {}
 
     /**
@@ -72,6 +76,7 @@ final class EApprovalPublicFormLinkService
 
         [, $plainToken, $tokenHash] = $this->generateTokenPair((string) $link->id);
         $link->token_hash = $tokenHash;
+        $link->token_ciphertext = Crypt::encryptString($plainToken);
         $link->save();
 
         $encoded = $this->encodeAccessToken($plainToken);
@@ -98,6 +103,7 @@ final class EApprovalPublicFormLinkService
 
         [, $plainToken, $tokenHash] = $this->generateTokenPair((string) $link->id);
         $link->token_hash = $tokenHash;
+        $link->token_ciphertext = Crypt::encryptString($plainToken);
         $link->revoked_at = null;
         $link->is_enabled = true;
         $link->save();
@@ -109,6 +115,103 @@ final class EApprovalPublicFormLinkService
             'public_url' => $this->publicUrl($plainToken),
             'token' => $encoded,
         ];
+    }
+
+    /**
+     * Re-copy a managed link URL (forms:manage).
+     *
+     * @return array{public_url: string, link: array<string, mixed>}
+     */
+    public function revealUrl(EApprovalPublicFormLink $link): array
+    {
+        if (! $link->isActive()) {
+            throw ValidationException::withMessages([
+                'link' => [__('This public form link is no longer available.')],
+            ]);
+        }
+
+        $plainToken = $this->decryptStoredToken($link);
+
+        return [
+            'public_url' => $this->publicUrl($plainToken),
+            'link' => $link->fresh(['sponsor'])->toAdminRow(),
+        ];
+    }
+
+    /**
+     * Newest active shareable link for a form (submissions:create or forms:manage).
+     *
+     * @return array{
+     *     public_url: string,
+     *     label: string|null,
+     *     requires_password: bool,
+     *     link_id: string
+     * }
+     */
+    public function primaryShareUrl(EApprovalForm $form): array
+    {
+        /** @var EApprovalPublicFormLink|null $link */
+        $link = $this->shareableLinksQuery()
+            ->where('form_id', $form->id)
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($link === null) {
+            throw ValidationException::withMessages([
+                'form' => [__('No active external share link is available for this form. Ask a form admin to create or rotate one under External sharing.')],
+            ]);
+        }
+
+        $plainToken = $this->decryptStoredToken($link);
+
+        return [
+            'public_url' => $this->publicUrl($plainToken),
+            'label' => $link->label,
+            'requires_password' => $link->password_hash !== null,
+            'link_id' => (string) $link->id,
+        ];
+    }
+
+    public function shareableLinksQuery(): Builder
+    {
+        return EApprovalPublicFormLink::query()
+            ->where('is_enabled', true)
+            ->whereNull('revoked_at')
+            ->whereNotNull('token_ciphertext')
+            ->where('token_ciphertext', '!=', '')
+            ->where(static function (Builder $q): void {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->where(static function (Builder $q): void {
+                $q->whereNull('max_submissions')
+                    ->orWhereColumn('submissions_count', '<', 'max_submissions');
+            });
+    }
+
+    private function decryptStoredToken(EApprovalPublicFormLink $link): string
+    {
+        $ciphertext = trim((string) ($link->token_ciphertext ?? ''));
+        if ($ciphertext === '') {
+            throw ValidationException::withMessages([
+                'link' => [__('This link was created before re-copy support. Rotate it once to enable copying the URL again.')],
+            ]);
+        }
+
+        try {
+            $plainToken = Crypt::decryptString($ciphertext);
+        } catch (Throwable) {
+            throw ValidationException::withMessages([
+                'link' => [__('Could not restore this link URL. Rotate the link to mint a new one.')],
+            ]);
+        }
+
+        if (! is_string($plainToken) || trim($plainToken) === '') {
+            throw ValidationException::withMessages([
+                'link' => [__('Could not restore this link URL. Rotate the link to mint a new one.')],
+            ]);
+        }
+
+        return $plainToken;
     }
 
     public function revoke(EApprovalPublicFormLink $link): EApprovalPublicFormLink
@@ -267,18 +370,22 @@ final class EApprovalPublicFormLinkService
         $detail = $form->toDetailPayload();
         unset($detail['submissions_count'], $detail['revisions']);
 
+        /** @var list<array<string, mixed>> $fields */
+        $fields = is_array($detail['fields'] ?? null) ? $detail['fields'] : [];
+        $fields = $this->fieldChoices->hydrateFieldsForPublicPayload($fields);
+
         return [
             'requires_password' => $link->password_hash !== null,
             'sponsor_label' => $link->sponsor?->name,
             'plan_features' => $this->planFeaturesSnapshot(),
-            'approver_options' => $this->approverOptionsForPublicForm($detail['fields'] ?? []),
+            'approver_options' => $this->approverOptionsForPublicForm($fields),
             'form' => [
                 'id' => $detail['id'],
                 'name' => $detail['name'],
                 'description' => $detail['description'],
                 'brand_logo_url' => $detail['brand_logo_url'],
                 'brand_primary_color' => $detail['brand_primary_color'],
-                'fields' => $detail['fields'],
+                'fields' => $fields,
             ],
         ];
     }

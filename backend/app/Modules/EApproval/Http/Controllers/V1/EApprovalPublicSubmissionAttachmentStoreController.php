@@ -20,10 +20,11 @@ class EApprovalPublicSubmissionAttachmentStoreController extends AbstractApiCont
         EApprovalPublicFormLinkService $links,
         EApprovalPublicSubmissionService $submissions,
     ): JsonResponse {
+        $maxKb = (int) config('toweros.tenant_files.max_size_kb', 25600);
         $data = $request->validate([
             'access_password' => ['sometimes', 'nullable', 'string', 'max:128'],
             'upload_token' => ['required', 'string', 'max:128'],
-            'file' => ['required', 'file', 'max:10240'],
+            'file' => ['required', 'file', 'max:'.$maxKb],
             'field_name' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable'],
         ]);

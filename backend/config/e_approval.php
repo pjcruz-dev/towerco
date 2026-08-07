@@ -5,7 +5,18 @@ declare(strict_types=1);
 return [
     'public_links' => [
         'upload_token_minutes' => (int) env('E_APPROVAL_PUBLIC_UPLOAD_TOKEN_MINUTES', 60),
+        'resubmit_token_minutes' => (int) env('E_APPROVAL_PUBLIC_RESUBMIT_TOKEN_MINUTES', 10080),
         'rate_limit_per_minute' => (int) env('E_APPROVAL_PUBLIC_RATE_LIMIT', 30),
+    ],
+
+    'external_package' => [
+        'download_token_minutes' => (int) env('E_APPROVAL_EXTERNAL_PACKAGE_DOWNLOAD_TOKEN_MINUTES', 10080),
+        'max_files' => (int) env('E_APPROVAL_EXTERNAL_PACKAGE_MAX_FILES', 25),
+        'max_total_bytes' => (int) env('E_APPROVAL_EXTERNAL_PACKAGE_MAX_TOTAL_BYTES', 52428800),
+    ],
+
+    'teams' => [
+        'http_timeout_seconds' => (int) env('E_APPROVAL_TEAMS_HTTP_TIMEOUT_SECONDS', 10),
     ],
     /*
     | Plan tier entitlements live in config/billing.php (TenantPlanEntitlementsService).
