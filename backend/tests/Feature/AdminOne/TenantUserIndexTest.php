@@ -80,6 +80,26 @@ final class TenantUserIndexTest extends TestCase
         $this->assertNotContains((string) $enrolled->id, $ids);
     }
 
+    public function test_user_ids_endpoint_returns_matching_ids(): void
+    {
+        $first = $this->createTenantUser('ids.one@towerone.test', 'Ids One');
+        $second = $this->createTenantUser('ids.two@towerone.test', 'Ids Two');
+        $this->createTenantUser('other@towerone.test', 'Other User');
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users/ids?search=ids.');
+
+        $response->assertOk()
+            ->assertJsonPath('data.truncated', false);
+
+        $ids = $response->json('data.ids');
+        $this->assertIsArray($ids);
+        $this->assertContains((string) $first->id, $ids);
+        $this->assertContains((string) $second->id, $ids);
+        $this->assertSame(2, $response->json('data.total'));
+    }
+
     private function createTenantUser(string $email, string $name): TenantUser
     {
         tenancy()->initialize($this->testTenant);

@@ -539,7 +539,8 @@ Tier comes from central `tenants.plan_tier` (exposed on `GET /e-approval/metadat
 
 ### External sharing (public links)
 
-- Form editor **Setup → External sharing** (published forms only)
+- Form editor **Setup → External sharing** (published forms only) — create / copy / rotate / revoke
+- Ops users: **Submissions → New submission → Copy external link** (when a shareable link exists)
 - Public page: `/public/e-approval/{token}`
 - See [e-approval-external-forms.md](./e-approval-external-forms.md)
 

@@ -7,9 +7,12 @@ namespace App\Modules\AdminOne\Services;
 use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 
 class TenantUserIndexService
 {
+    public const IDS_MAX = 2000;
+
     private const SORTABLE = [
         'name',
         'email',
@@ -39,6 +42,50 @@ class TenantUserIndexService
                 'permissions:id,name',
             ]);
 
+        $this->applyListConstraints($query, $search, $filters, $sort);
+
+        return $query->paginate($perPage, ['*'], 'page', $page);
+    }
+
+    /**
+     * IDs for the current Team & Access filters (select-all across pages).
+     *
+     * @return array{ids: list<string>, total: int, truncated: bool}
+     */
+    public function ids(
+        string $search,
+        ?TenantUserIndexFilters $filters = null,
+        ?string $sort = null,
+        int $limit = self::IDS_MAX,
+    ): array {
+        $filters ??= new TenantUserIndexFilters;
+        $limit = max(1, min($limit, self::IDS_MAX));
+
+        $base = TenantUser::query();
+        $this->applyListConstraints($base, $search, $filters, $sort);
+
+        $total = (clone $base)->count();
+        $ids = $base->limit($limit)->pluck('id')
+            ->map(static fn ($id): string => (string) $id)
+            ->values()
+            ->all();
+
+        return [
+            'ids' => $ids,
+            'total' => $total,
+            'truncated' => $total > count($ids),
+        ];
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyListConstraints(
+        Builder $query,
+        string $search,
+        TenantUserIndexFilters $filters,
+        ?string $sort,
+    ): void {
         $this->queryFilters->apply($query, $filters);
 
         if ($search !== '') {
@@ -56,8 +103,6 @@ class TenantUserIndexService
             'asc',
         );
         $query->orderBy($column, $direction);
-
-        return $query->paginate($perPage, ['*'], 'page', $page);
     }
 
     /**

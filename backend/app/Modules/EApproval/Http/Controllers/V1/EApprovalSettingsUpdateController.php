@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Services\EApprovalSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class EApprovalSettingsUpdateController extends AbstractApiController
 {
@@ -26,7 +27,23 @@ class EApprovalSettingsUpdateController extends AbstractApiController
             'liquidation_max_overspend_percent' => ['sometimes', 'integer', 'min:0', 'max:25'],
             'po_overspend_mode' => ['sometimes', 'in:block,warn'],
             'po_max_overspend_percent' => ['sometimes', 'integer', 'min:0', 'max:25'],
+            'notify_external_on_received' => ['sometimes', 'in:true,false'],
+            'notify_external_on_approved' => ['sometimes', 'in:true,false'],
+            'notify_external_on_rejected' => ['sometimes', 'in:true,false'],
+            'notify_external_on_returned' => ['sometimes', 'in:true,false'],
+            'teams_webhook_url' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'notify_teams_on_external_submit' => ['sometimes', 'in:true,false'],
         ]);
+
+        if (array_key_exists('teams_webhook_url', $data)) {
+            $url = trim((string) ($data['teams_webhook_url'] ?? ''));
+            if ($url !== '' && ! filter_var($url, FILTER_VALIDATE_URL)) {
+                throw ValidationException::withMessages([
+                    'teams_webhook_url' => [__('Enter a valid webhook URL or leave blank.')],
+                ]);
+            }
+            $data['teams_webhook_url'] = $url;
+        }
 
         $payload = [];
         foreach ($data as $key => $value) {

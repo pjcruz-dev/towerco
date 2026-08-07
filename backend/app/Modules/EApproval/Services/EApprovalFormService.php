@@ -10,6 +10,7 @@ use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -73,6 +74,25 @@ final class EApprovalFormService
             'desc',
         );
         $query->orderBy($column, $direction);
+
+        // Skip until tenant migration adds token_ciphertext (avoids 500 on forms index).
+        if (Schema::hasColumn('e_approval_public_form_links', 'token_ciphertext')) {
+            $query->withExists([
+                'publicLinks as has_shareable_public_link' => static function ($q): void {
+                    $q->where('is_enabled', true)
+                        ->whereNull('revoked_at')
+                        ->whereNotNull('token_ciphertext')
+                        ->where('token_ciphertext', '!=', '')
+                        ->where(static function ($inner): void {
+                            $inner->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                        })
+                        ->where(static function ($inner): void {
+                            $inner->whereNull('max_submissions')
+                                ->orWhereColumn('submissions_count', '<', 'max_submissions');
+                        });
+                },
+            ]);
+        }
 
         return $query->paginate($perPage, ['*'], 'page', $page);
     }

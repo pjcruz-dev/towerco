@@ -6,12 +6,19 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Notifications\EApprovalExternalSubmissionNotification;
 use App\Modules\EApproval\Notifications\EApprovalSubmissionNotification;
+use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\SafeMailNotificationSender;
+use Illuminate\Support\Facades\Notification;
 
 final class EApprovalNotificationDispatcher
 {
+    public function __construct(
+        private readonly EApprovalSettingsService $settings,
+    ) {}
+
     public function dispatchApprovalAssigned(
         EApprovalSubmission $submission,
         string $approverUserId,
@@ -36,6 +43,55 @@ final class EApprovalNotificationDispatcher
         $this->sendAfterResponse(
             $submission->requestor,
             new EApprovalSubmissionNotification($submission, $event, $actorName),
+        );
+    }
+
+    /**
+     * Opt-in mail to the anonymous external submitter. Does not affect tenant-user mail.
+     *
+     * @param  list<array{file_name: string, url: string}>  $packageLinks
+     */
+    public function dispatchToExternalSubmitter(
+        EApprovalSubmission $submission,
+        string $event,
+        ?string $actorName = null,
+        ?string $detail = null,
+        ?string $reviseUrl = null,
+        array $packageLinks = [],
+        ?string $packageNote = null,
+    ): void {
+        if (! $submission->isExternalSubmission()) {
+            return;
+        }
+
+        $email = trim((string) $submission->external_submitter_email);
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $enabled = match ($event) {
+            EApprovalExternalMailEvent::RECEIVED => $this->settings->notifyExternalOnReceived(),
+            EApprovalExternalMailEvent::APPROVED => $this->settings->notifyExternalOnApproved(),
+            EApprovalExternalMailEvent::REJECTED => $this->settings->notifyExternalOnRejected(),
+            EApprovalExternalMailEvent::RETURNED => $this->settings->notifyExternalOnReturned(),
+            default => false,
+        };
+
+        if (! $enabled) {
+            return;
+        }
+
+        SafeMailNotificationSender::sendAfterResponse(
+            [Notification::route('mail', $email)],
+            new EApprovalExternalSubmissionNotification(
+                $submission,
+                $event,
+                $actorName,
+                $detail,
+                $reviseUrl,
+                $packageLinks,
+                $packageNote,
+            ),
         );
     }
 

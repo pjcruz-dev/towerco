@@ -20,6 +20,7 @@ class EApprovalPublicFormLink extends Model
         'form_id',
         'label',
         'token_hash',
+        'token_ciphertext',
         'password_hash',
         'sponsor_user_id',
         'created_by_user_id',
@@ -95,6 +96,8 @@ class EApprovalPublicFormLink extends Model
             'submissions_count' => $this->submissions_count,
             'revoked_at' => $this->revoked_at?->toIso8601String(),
             'last_used_at' => $this->last_used_at?->toIso8601String(),
+            'can_reveal_url' => is_string($this->token_ciphertext) && trim($this->token_ciphertext) !== '',
+            'requires_password' => $this->password_hash !== null,
             'sponsor' => $this->sponsor ? [
                 'id' => (string) $this->sponsor->id,
                 'name' => $this->sponsor->name,

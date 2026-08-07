@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Services;
 
 use App\Models\Tenant;
+use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\Schema;
 final class PlatformTenantInsightService
 {
     private const CACHE_SECONDS = 90;
+
+    public function __construct(
+        private readonly TenantPlanEntitlementsService $entitlements,
+    ) {}
 
     /**
      * @param  Collection<int, Tenant>  $tenants
@@ -75,8 +80,8 @@ final class PlatformTenantInsightService
 
             $healthy++;
 
-            $seatUsed = $this->countTenantUsers($tenant);
-            $seatLimit = (int) ($tenant->seat_limit ?? 25);
+            $seatUsed = $this->countPaidActiveSeats($tenant);
+            $seatLimit = $this->entitlements->effectiveSeatLimit($tenant);
             $utilization = $seatLimit > 0 ? (int) round(($seatUsed / $seatLimit) * 100) : 0;
 
             $seatRows[] = [
@@ -142,7 +147,7 @@ final class PlatformTenantInsightService
         return $tenant->slug ?? $domain ?? substr((string) $tenant->id, 0, 8);
     }
 
-    private function countTenantUsers(Tenant $tenant): int
+    private function countPaidActiveSeats(Tenant $tenant): int
     {
         try {
             return (int) $tenant->run(function (): int {
@@ -150,7 +155,15 @@ final class PlatformTenantInsightService
                     return 0;
                 }
 
-                return TenantUser::query()->count();
+                return TenantUser::query()
+                    ->where('is_active', true)
+                    ->where(function ($paid): void {
+                        $paid->whereDoesntHave('roles')
+                            ->orWhereHas('roles', function ($roles): void {
+                                $roles->where('name', '!=', 'viewer');
+                            });
+                    })
+                    ->count();
             });
         } catch (\Throwable) {
             return 0;

@@ -92,14 +92,24 @@ class TenantUserAdminService
 
         if (is_string($password) && $password !== '') {
             $user->password = Hash::make($password);
+            $passwordChanged = true;
+        } else {
+            $passwordChanged = false;
         }
 
         $user->save();
 
         if ($roles !== null) {
             $this->assertRolesExist($roles);
+            $this->seatLimits->assertCanTransitionToRoles($user, $roles !== [] ? $roles : ['viewer']);
             $user->syncRoles($roles);
             app(PermissionRegistrar::class)->forgetCachedPermissions();
+        }
+
+        if ($passwordChanged) {
+            $this->sessionService->revokeAllForUser((string) $user->id);
+            $this->refreshTokenService->revokeAllForUser((string) $user->id);
+            $user->tokens()->delete();
         }
 
         return $user->fresh(['roles']);
@@ -273,6 +283,32 @@ class TenantUserAdminService
             }
 
             $changed = false;
+            $currentRoles = $target->getRoleNames()->all();
+            $nextRoles = $currentRoles;
+
+            if ($mode === 'replace' && $roles !== []) {
+                $nextRoles = $roles;
+            } elseif ($roles !== []) {
+                $nextRoles = array_values(array_unique(array_merge($currentRoles, $roles)));
+            }
+
+            if ($removeRoles !== []) {
+                $nextRoles = array_values(array_diff($nextRoles, $removeRoles));
+            }
+
+            try {
+                $this->seatLimits->assertCanTransitionToRoles(
+                    $target,
+                    $nextRoles !== [] ? $nextRoles : ['viewer'],
+                );
+            } catch (ValidationException $e) {
+                $errors[] = [
+                    'user_id' => (string) $target->id,
+                    'message' => (string) collect($e->errors())->flatten()->first(),
+                ];
+
+                continue;
+            }
 
             if ($mode === 'replace' && $roles !== []) {
                 if ($target->getRoleNames()->sort()->values()->all() !== collect($roles)->sort()->values()->all()) {
@@ -320,6 +356,87 @@ class TenantUserAdminService
         }
 
         return compact('processed', 'skipped', 'errors');
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     * @return array{
+     *   processed: int,
+     *   skipped: int,
+     *   errors: list<array{user_id: string, message: string}>,
+     *   passwords: list<array{user_id: string, email: string, name: string, temporary_password: string}>
+     * }
+     */
+    public function bulkResetPasswords(
+        TenantUser $actor,
+        array $userIds,
+        ?string $sharedPassword = null,
+        bool $revokeSessions = true,
+    ): array {
+        $processed = 0;
+        $skipped = 0;
+        $errors = [];
+        $passwords = [];
+        $shared = is_string($sharedPassword) && $sharedPassword !== '' ? $sharedPassword : null;
+
+        foreach ($userIds as $userId) {
+            if ((string) $actor->id === (string) $userId) {
+                $errors[] = [
+                    'user_id' => $userId,
+                    'message' => (string) __('You cannot bulk-reset your own password.'),
+                ];
+
+                continue;
+            }
+
+            $target = TenantUser::query()->find($userId);
+            if ($target === null) {
+                $errors[] = [
+                    'user_id' => $userId,
+                    'message' => (string) __('User not found.'),
+                ];
+
+                continue;
+            }
+
+            if (! $target->isActive()) {
+                $skipped++;
+
+                continue;
+            }
+
+            $plain = $shared ?? Str::password(16);
+            $target->password = Hash::make($plain);
+            $target->save();
+
+            if ($revokeSessions) {
+                $this->sessionService->revokeAllForUser((string) $target->id);
+                $this->refreshTokenService->revokeAllForUser((string) $target->id);
+                $target->tokens()->delete();
+            }
+
+            $this->auditService->log(
+                'auth.admin.password_reset',
+                (string) $target->id,
+                null,
+                [
+                    'revoked_by' => (string) $actor->id,
+                    'bulk' => true,
+                    'sessions_revoked' => $revokeSessions,
+                ],
+                'medium',
+            );
+
+            $passwords[] = [
+                'user_id' => (string) $target->id,
+                'email' => (string) $target->email,
+                'name' => (string) $target->name,
+                'temporary_password' => $plain,
+            ];
+            $processed++;
+        }
+
+        return compact('processed', 'skipped', 'errors', 'passwords');
     }
 
     public function destroyPermanently(TenantUser $actor, TenantUser $target): void
@@ -371,6 +488,7 @@ class TenantUserAdminService
         $created = 0;
         $skipped = 0;
         $errors = [];
+        $paidSeatErrors = 0;
 
         foreach ($rows as $index => $row) {
             $line = $index + 1;
@@ -389,26 +507,35 @@ class TenantUserAdminService
                 continue;
             }
 
-            if ($this->seatLimits->activeSeatCount() >= $this->seatLimits->seatLimit()) {
-                $errors[] = "Row {$line}: ".__(
-                    'Seat limit reached (:used / :limit).',
-                    ['used' => $this->seatLimits->activeSeatCount(), 'limit' => $this->seatLimits->seatLimit()],
-                );
-
-                continue;
-            }
-
             $role = trim((string) ($row['role'] ?? 'viewer'));
             if ($role === '') {
                 $role = 'viewer';
             }
 
             try {
+                $this->seatLimits->assertCanAddActiveUser([$role]);
                 $this->create($name, $email, [$role]);
                 $created++;
             } catch (ValidationException $e) {
-                $errors[] = "Row {$line}: ".collect($e->errors())->flatten()->first();
+                $message = (string) collect($e->errors())->flatten()->first();
+                if (str_contains(strtolower($message), 'seat limit')) {
+                    $paidSeatErrors++;
+                    if ($paidSeatErrors === 1) {
+                        $errors[] = "Row {$line}: {$message}";
+                    }
+
+                    continue;
+                }
+
+                $errors[] = "Row {$line}: {$message}";
             }
+        }
+
+        if ($paidSeatErrors > 1) {
+            $errors[] = __(
+                ':count additional row(s) skipped because the paid seat limit was reached.',
+                ['count' => $paidSeatErrors - 1],
+            );
         }
 
         return compact('created', 'skipped', 'errors');

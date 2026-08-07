@@ -30,6 +30,12 @@ class EApprovalSettingsShowController extends AbstractApiController
             'provision_manager_users' => $settings->provisionManagerUsers() ? 'true' : 'false',
             'notifications_mailer' => $mailer,
             'notifications_mailer_ready' => $mailer !== 'log' && $mailer !== 'array',
+            'notify_external_on_received' => $settings->notifyExternalOnReceived() ? 'true' : 'false',
+            'notify_external_on_approved' => $settings->notifyExternalOnApproved() ? 'true' : 'false',
+            'notify_external_on_rejected' => $settings->notifyExternalOnRejected() ? 'true' : 'false',
+            'notify_external_on_returned' => $settings->notifyExternalOnReturned() ? 'true' : 'false',
+            'teams_webhook_url' => $settings->teamsWebhookUrl(),
+            'notify_teams_on_external_submit' => $settings->notifyTeamsOnExternalSubmit() ? 'true' : 'false',
             'finance_procurement_policy' => $procurementPolicy->snapshot(),
             ...$procurementPolicy->snapshot(),
         ]);

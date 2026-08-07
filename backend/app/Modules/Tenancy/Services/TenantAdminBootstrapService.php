@@ -20,19 +20,24 @@ class TenantAdminBootstrapService
     /**
      * @return array{email: string, password: string, password_generated: bool}
      */
-    public function bootstrap(Tenant $tenant, string $normalizedDomain): array
+    public function bootstrap(Tenant $tenant, string $normalizedDomain, ?string $password = null): array
     {
-        return $tenant->run(function () use ($normalizedDomain) {
+        return $tenant->run(function () use ($normalizedDomain, $password) {
             $this->rbacBaseline->ensure();
 
             $email = 'admin@'.$normalizedDomain;
             $name = (string) config('toweros.tenant_bootstrap_admin_name', 'Tenant administrator');
 
-            $configured = config('toweros.tenant_bootstrap_admin_password');
-            $plain = is_string($configured) && $configured !== ''
-                ? $configured
-                : Str::password(24);
-            $passwordGenerated = ! is_string($configured) || $configured === '';
+            if (is_string($password) && $password !== '') {
+                $plain = $password;
+                $passwordGenerated = false;
+            } else {
+                $configured = config('toweros.tenant_bootstrap_admin_password');
+                $plain = is_string($configured) && $configured !== ''
+                    ? $configured
+                    : Str::password(24);
+                $passwordGenerated = ! is_string($configured) || $configured === '';
+            }
 
             $user = TenantUser::query()->updateOrCreate(
                 ['email' => $email],

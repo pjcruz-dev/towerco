@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Models\EApprovalExportHistory;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalFormOutboundFile;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\UploadedFile;
@@ -244,6 +245,52 @@ final class EApprovalFileStorageService
         }
 
         return $disk->response($attachment->file_path, $attachment->file_name);
+    }
+
+    /**
+     * @return array{path: string, name: string, byte_size: int}
+     */
+    public function storeFormOutboundFile(EApprovalForm $form, UploadedFile $file): array
+    {
+        $this->assertUploadAllowed($file);
+
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $filename = Str::uuid()->toString().'.'.$extension;
+        $storedPath = sprintf(
+            '%s/e-approval/forms/%s/outbound/%s',
+            $this->tenantStoragePrefix(),
+            $form->id,
+            $filename,
+        );
+
+        $stored = Storage::disk($this->disk())->putFileAs(
+            dirname($storedPath),
+            $file,
+            basename($storedPath),
+        );
+
+        if ($stored === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('File could not be stored. Check storage configuration and try again.')],
+            ]);
+        }
+
+        return [
+            'path' => $storedPath,
+            'name' => $file->getClientOriginalName(),
+            'byte_size' => (int) $file->getSize(),
+        ];
+    }
+
+    public function downloadFormOutboundFile(EApprovalFormOutboundFile $file): StreamedResponse
+    {
+        $disk = Storage::disk($this->disk());
+
+        if (! $disk->exists($file->file_path)) {
+            abort(404);
+        }
+
+        return $disk->response($file->file_path, $file->file_name);
     }
 
     /**

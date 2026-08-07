@@ -27,6 +27,19 @@ Related: [e-approval.md](./e-approval.md) · [e-approval-go-live-checklist.md](.
 | `sla_reminder` | Approver | `php artisan e-approval:sla-run` (scheduled); each pending row independently |
 | `sla_escalation` | Configured users | SLA runner escalation |
 
+### External submitter (opt-in, anonymous mail route)
+
+All default **off** in `e_approval_settings`. Recipients are `external_submitter_email` via `Notification::route('mail', …)` — not tenant users. CTAs never point at authenticated `/e-approval/...` paths.
+
+| Event | Setting key | When |
+|--------|-------------|------|
+| `external_status_received` | `notify_external_on_received` | Public form submitted |
+| `external_status_approved` | `notify_external_on_approved` | Final approve; may include clickable secure download links for form **External deliverables** uploads when `metadata.outbound.email_package_on_approve` is on |
+| `external_status_rejected` | `notify_external_on_rejected` | Rejected |
+| `external_status_returned` | `notify_external_on_returned` | Returned for revision; includes public revise URL |
+
+Internal sponsor/approver mails above are unchanged when these toggles are enabled.
+
 **In-app** bell notifications are separate; users still see actions in TowerOS if email is misconfigured.
 
 **Comments** do not send email (in-app only).
