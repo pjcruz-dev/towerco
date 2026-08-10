@@ -214,6 +214,8 @@ final class CorsAllowedOriginResolver
         if (
             app()->environment('local')
             || str_ends_with($hostname, '.localhost')
+            || str_ends_with($hostname, '.lan')
+            || str_ends_with($hostname, '.local')
             || in_array($hostname, ['localhost', '127.0.0.1', '::1'], true)
         ) {
             return 'http';

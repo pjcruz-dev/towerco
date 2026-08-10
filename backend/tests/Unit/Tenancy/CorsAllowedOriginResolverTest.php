@@ -35,4 +35,18 @@ final class CorsAllowedOriginResolverTest extends TestCase
         $this->assertSame(['#^https://.*\.example\.com$#i'], $patterns);
         $this->assertSame(1, preg_match($patterns[0], 'https://app.example.com'));
     }
+
+    public function test_it_uses_http_origins_for_lan_hosts(): void
+    {
+        Config::set('toweros.cors.allowed_origin_cache_ttl', 0);
+        Config::set('toweros.tenant_app_url', 'http://192.168.90.24');
+        Config::set('app.url', 'http://192.168.90.24:8000');
+        Config::set('toweros.cors.allowed_origin_extras', 'staging.atc.toweros.lan,app.atc.alliance.lan');
+
+        $origins = app(CorsAllowedOriginResolver::class)->resolve();
+
+        $this->assertContains('http://staging.atc.toweros.lan', $origins);
+        $this->assertContains('http://app.atc.alliance.lan', $origins);
+        $this->assertNotContains('https://staging.atc.toweros.lan', $origins);
+    }
 }
