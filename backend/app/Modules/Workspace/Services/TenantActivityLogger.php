@@ -10,6 +10,7 @@ use App\Modules\Workspace\Models\TenantActivityLog;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use App\Modules\Workspace\Support\WorkspaceAuditTaxonomy;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class TenantActivityLogger
@@ -48,14 +49,11 @@ final class TenantActivityLogger
         $resolvedSeverity = WorkspaceAuditTaxonomy::normalizeSeverity($severity) ?? $classified['severity'];
         $resolvedReason = $reason !== null && trim($reason) !== '' ? trim($reason) : null;
 
-        $log = TenantActivityLog::query()->create([
+        $payload = [
             'id' => (string) Str::uuid(),
             'module' => $module,
             'action' => $action,
-            'category' => $resolvedCategory,
-            'severity' => $resolvedSeverity,
             'summary' => $summary,
-            'reason' => $resolvedReason,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'entity_label' => $entityLabel,
@@ -63,7 +61,16 @@ final class TenantActivityLogger
             'ip_address' => request()->ip(),
             'metadata_json' => $metadata === [] ? null : $metadata,
             'created_at' => now(),
-        ]);
+        ];
+
+        // Taxonomy columns land via tenant migration; keep writes working pre-migrate.
+        if ($this->hasTaxonomyColumns()) {
+            $payload['category'] = $resolvedCategory;
+            $payload['severity'] = $resolvedSeverity;
+            $payload['reason'] = $resolvedReason;
+        }
+
+        $log = TenantActivityLog::query()->create($payload);
 
         $this->structuredAudit->write('tenant.workspace', $action, [
             'tenant_id' => tenant()?->getTenantKey(),
@@ -81,5 +88,22 @@ final class TenantActivityLogger
         ]);
 
         return $log;
+    }
+
+    private function hasTaxonomyColumns(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        try {
+            $cached = Schema::connection('tenant')->hasColumn('tenant_activity_logs', 'category');
+        } catch (\Throwable) {
+            $cached = false;
+        }
+
+        return $cached;
     }
 }
