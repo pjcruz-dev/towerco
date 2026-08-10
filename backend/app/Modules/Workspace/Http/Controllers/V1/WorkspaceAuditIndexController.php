@@ -7,8 +7,10 @@ namespace App\Modules\Workspace\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Services\WorkspaceAuditIndexService;
+use App\Modules\Workspace\Support\WorkspaceAuditTaxonomy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 final class WorkspaceAuditIndexController extends AbstractApiController
 {
@@ -23,20 +25,34 @@ final class WorkspaceAuditIndexController extends AbstractApiController
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'module' => ['sometimes', 'nullable', 'string', 'max:50'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'actor' => ['sometimes', 'nullable', 'string', 'max:255'],
             'from' => ['sometimes', 'nullable', 'date'],
             'to' => ['sometimes', 'nullable', 'date'],
             'sort' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'category' => ['sometimes', 'nullable', 'string', Rule::in([...WorkspaceAuditTaxonomy::categories(), 'all'])],
+            'severity' => ['sometimes', 'nullable', 'string', Rule::in([...WorkspaceAuditTaxonomy::severities(), 'all'])],
+            'action_family' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'entity_type' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'entity_id' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         $paginator = $audit->paginate(
             $user,
             (int) ($validated['page'] ?? 1),
             (int) ($validated['per_page'] ?? 50),
-            $validated['module'] ?? null,
-            $validated['search'] ?? null,
-            $validated['from'] ?? null,
-            $validated['to'] ?? null,
-            $validated['sort'] ?? null,
+            [
+                'module' => $validated['module'] ?? null,
+                'search' => $validated['search'] ?? null,
+                'from' => $validated['from'] ?? null,
+                'to' => $validated['to'] ?? null,
+                'sort' => $validated['sort'] ?? null,
+                'actor' => $validated['actor'] ?? null,
+                'category' => $validated['category'] ?? null,
+                'severity' => $validated['severity'] ?? null,
+                'action_family' => $validated['action_family'] ?? null,
+                'entity_type' => $validated['entity_type'] ?? null,
+                'entity_id' => $validated['entity_id'] ?? null,
+            ],
         );
 
         return $this->okWithMeta($audit->asPayload($paginator), [

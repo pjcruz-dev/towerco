@@ -22,7 +22,10 @@ class TenantActivityLog extends Model
     protected $fillable = [
         'module',
         'action',
+        'category',
+        'severity',
         'summary',
+        'reason',
         'entity_type',
         'entity_id',
         'entity_label',

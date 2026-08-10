@@ -401,6 +401,8 @@ use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketUpdateController;
 use App\Modules\TowerOne\Http\Controllers\V1\TowerIndexController;
 use App\Modules\TowerOne\Http\Controllers\V1\TowerOneDashboardController;
 use App\Modules\TowerOne\Http\Controllers\V1\TowerShowController;
+use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditEntityIndexController;
+use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditExportController;
 use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditIndexController;
 use App\Modules\Workspace\Http\Controllers\V1\WorkspaceSearchController;
 use Illuminate\Support\Facades\Route;
@@ -496,6 +498,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
     Route::post('notifications/{notification}/read', TenantNotificationMarkReadController::class)->name('api.tenant.v1.notifications.read');
     Route::get('dashboard', TenantWorkspaceDashboardController::class)->name('api.tenant.v1.dashboard');
     Route::get('workspace/search', WorkspaceSearchController::class)->name('api.tenant.v1.workspace.search');
+    Route::get('workspace/audit/export', WorkspaceAuditExportController::class)->name('api.tenant.v1.workspace.audit.export');
+    Route::get('workspace/audit/entity', WorkspaceAuditEntityIndexController::class)->name('api.tenant.v1.workspace.audit.entity');
     Route::get('workspace/audit', WorkspaceAuditIndexController::class)->name('api.tenant.v1.workspace.audit.index');
     Route::middleware(['tenant.module:ai_assistant', 'throttle:assistant'])->group(function () {
         Route::post('assistant/ask', AssistantAskController::class)->name('api.tenant.v1.assistant.ask');

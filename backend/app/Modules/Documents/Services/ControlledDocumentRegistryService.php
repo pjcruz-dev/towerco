@@ -10,6 +10,7 @@ use App\Modules\Documents\Models\ControlledDocumentRevision;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -88,6 +89,7 @@ final class ControlledDocumentRegistryService
             return $document;
         }
 
+        $previousStatus = (string) $document->status;
         $document->status = ControlledDocumentStatus::OBSOLETE;
         $document->save();
 
@@ -99,6 +101,12 @@ final class ControlledDocumentRegistryService
             entityId: (string) $document->id,
             entityLabel: $document->document_code,
             actor: $actor,
+            changes: WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => $previousStatus,
+                    'to' => ControlledDocumentStatus::OBSOLETE,
+                ],
+            ]),
         );
 
         return $document->fresh();

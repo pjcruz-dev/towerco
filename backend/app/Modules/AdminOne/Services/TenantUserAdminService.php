@@ -9,8 +9,11 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +26,7 @@ class TenantUserAdminService
         private readonly AuthSessionService $sessionService,
         private readonly RefreshTokenService $refreshTokenService,
         private readonly AuthAuditService $auditService,
+        private readonly TenantActivityLogger $activity,
     ) {}
 
     /**
@@ -63,8 +67,31 @@ class TenantUserAdminService
         $user->syncRoles($roles !== [] ? $roles : ['viewer']);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
+        $fresh = $user->fresh(['roles']);
+        $roleNames = $fresh->getRoleNames()->values()->all();
+        $actor = Auth::user();
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.user_created',
+            summary: 'User created · '.$fresh->email,
+            entityType: 'user',
+            entityId: (string) $fresh->id,
+            entityLabel: $fresh->email,
+            actor: $actor instanceof TenantUser ? $actor : null,
+            changes: WorkspaceAuditChanges::of([
+                'roles' => [
+                    'from' => null,
+                    'to' => $roleNames,
+                ],
+                'status' => [
+                    'from' => null,
+                    'to' => 'active',
+                ],
+            ]),
+        );
+
         return [
-            'user' => $user->fresh(['roles']),
+            'user' => $fresh,
             'generated_password' => $generated ? $plain : null,
         ];
     }
@@ -99,6 +126,7 @@ class TenantUserAdminService
 
         $user->save();
 
+        $beforeRoles = $user->getRoleNames()->sort()->values()->all();
         if ($roles !== null) {
             $this->assertRolesExist($roles);
             $this->seatLimits->assertCanTransitionToRoles($user, $roles !== [] ? $roles : ['viewer']);
@@ -112,7 +140,30 @@ class TenantUserAdminService
             $user->tokens()->delete();
         }
 
-        return $user->fresh(['roles']);
+        $fresh = $user->fresh(['roles']);
+        $afterRoles = $fresh->getRoleNames()->sort()->values()->all();
+        $changes = WorkspaceAuditChanges::of([
+            'roles' => [
+                'from' => $beforeRoles,
+                'to' => $afterRoles,
+            ],
+        ]);
+        if ($changes !== [] || $passwordChanged) {
+            $actor = Auth::user();
+            $this->activity->record(
+                module: 'team_access',
+                action: 'rbac.user_updated',
+                summary: 'User updated · '.$fresh->email,
+                entityType: 'user',
+                entityId: (string) $fresh->id,
+                entityLabel: $fresh->email,
+                actor: $actor instanceof TenantUser ? $actor : null,
+                metadata: $passwordChanged ? ['password_rotated' => true] : [],
+                changes: $changes,
+            );
+        }
+
+        return $fresh;
     }
 
     public function deactivate(TenantUser $actor, TenantUser $target): void
@@ -137,6 +188,22 @@ class TenantUserAdminService
         $target->deactivated_at = now();
         $target->save();
         $target->tokens()->delete();
+
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.user_deactivated',
+            summary: 'User deactivated · '.$target->email,
+            entityType: 'user',
+            entityId: (string) $target->id,
+            entityLabel: $target->email,
+            actor: $actor,
+            changes: WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => 'active',
+                    'to' => 'inactive',
+                ],
+            ]),
+        );
     }
 
     public function revokeAllSessions(TenantUser $actor, TenantUser $target): void
@@ -167,7 +234,25 @@ class TenantUserAdminService
         $target->deactivated_at = null;
         $target->save();
 
-        return $target->fresh(['roles']);
+        $fresh = $target->fresh(['roles']);
+        $actor = Auth::user();
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.user_reactivated',
+            summary: 'User reactivated · '.$fresh->email,
+            entityType: 'user',
+            entityId: (string) $fresh->id,
+            entityLabel: $fresh->email,
+            actor: $actor instanceof TenantUser ? $actor : null,
+            changes: WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => 'inactive',
+                    'to' => 'active',
+                ],
+            ]),
+        );
+
+        return $fresh;
     }
 
     /**

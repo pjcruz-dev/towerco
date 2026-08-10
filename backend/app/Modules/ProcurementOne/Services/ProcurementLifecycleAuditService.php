@@ -8,10 +8,16 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProcurementOne\Models\ProcurementLifecycleEvent;
 use App\Modules\ProcurementOne\Models\ProcurementPoPrLink;
 use App\Modules\ProcurementOne\Support\ProcurementPoStatus;
+use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Support\Str;
 
 final class ProcurementLifecycleAuditService
 {
+    public function __construct(
+        private readonly TenantActivityLogger $activity,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $metadata
      */
@@ -24,7 +30,7 @@ final class ProcurementLifecycleAuditService
         ?string $reason = null,
         array $metadata = [],
     ): ProcurementLifecycleEvent {
-        return ProcurementLifecycleEvent::query()->create([
+        $event = ProcurementLifecycleEvent::query()->create([
             'id' => (string) Str::uuid(),
             'document_type' => $documentType,
             'document_id' => $documentId,
@@ -34,6 +40,31 @@ final class ProcurementLifecycleAuditService
             'actor_user_id' => $actor !== null ? (string) $actor->id : null,
             'metadata_json' => $metadata === [] ? null : $metadata,
         ]);
+
+        $changes = [];
+        if (isset($metadata['changes']) && is_array($metadata['changes'])) {
+            $changes = $metadata['changes'];
+            unset($metadata['changes']);
+        }
+
+        $summary = $reason !== null && trim($reason) !== ''
+            ? trim($reason)
+            : ucfirst(str_replace('_', ' ', $action)).($documentNo ? ' · '.$documentNo : '');
+
+        $this->activity->record(
+            module: 'procurement_one',
+            action: $documentType.'.'.$action,
+            summary: $summary,
+            entityType: $documentType,
+            entityId: $documentId,
+            entityLabel: $documentNo,
+            actor: $actor,
+            metadata: $metadata === [] ? [] : $metadata,
+            changes: WorkspaceAuditChanges::of($changes),
+            reason: $reason !== null && trim($reason) !== '' ? trim($reason) : null,
+        );
+
+        return $event;
     }
 
     /**

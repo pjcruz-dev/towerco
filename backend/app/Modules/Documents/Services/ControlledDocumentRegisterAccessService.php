@@ -8,6 +8,7 @@ use App\Modules\Documents\Support\ControlledDocumentAccessPolicy;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Validation\ValidationException;
 
 final class ControlledDocumentRegisterAccessService
@@ -76,6 +77,8 @@ final class ControlledDocumentRegisterAccessService
             $sync = ['enabled' => true];
         }
 
+        $previousPolicy = $this->forms->resolveAccessPolicy();
+
         $policy = ControlledDocumentAccessPolicy::parse([
             'viewerRoles' => $input['viewer_roles'] ?? [],
             'fullAccessRoles' => $input['full_access_roles'] ?? null,
@@ -108,12 +111,20 @@ final class ControlledDocumentRegisterAccessService
             entityId: (string) $form->id,
             entityLabel: $form->name,
             actor: $actor,
-            metadata: [
-                'viewer_roles' => $policy->viewerRoles,
-                'full_access_roles' => $policy->fullAccessRoles,
-                'own_only_roles' => $policy->ownOnlyRoles,
-                'role_department_map' => $policy->roleDepartmentMap,
-            ],
+            changes: WorkspaceAuditChanges::of([
+                'viewer_roles' => [
+                    'from' => $previousPolicy->viewerRoles,
+                    'to' => $policy->viewerRoles,
+                ],
+                'full_access_roles' => [
+                    'from' => $previousPolicy->fullAccessRoles,
+                    'to' => $policy->fullAccessRoles,
+                ],
+                'own_only_roles' => [
+                    'from' => $previousPolicy->ownOnlyRoles,
+                    'to' => $policy->ownOnlyRoles,
+                ],
+            ]),
         );
 
         return $this->payload();

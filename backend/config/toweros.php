@@ -20,6 +20,8 @@ return [
         'audit_channel' => env('TOWEROS_AUDIT_LOG_CHANNEL', 'audit'),
         /** Mirror platform audit rows to structured JSON logs (Loki / OpenSearch / CloudWatch via sidecar). */
         'audit_structured_enabled' => env('TOWEROS_AUDIT_STRUCTURED_ENABLED', true),
+        /** Days to keep tenant workspace audit trail rows (workspace:audit-prune). */
+        'workspace_audit_retention_days' => (int) env('TOWEROS_WORKSPACE_AUDIT_RETENTION_DAYS', 365),
     ],
 
     'platform_mfa' => [

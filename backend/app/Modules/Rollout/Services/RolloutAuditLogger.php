@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Rollout\Services;
 
+use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Rollout\Models\RolloutProgram;
+use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -13,6 +16,7 @@ final class RolloutAuditLogger
 {
     public function __construct(
         private readonly RolloutBroadcaster $broadcaster,
+        private readonly TenantActivityLogger $activity,
     ) {}
 
     /**
@@ -20,9 +24,9 @@ final class RolloutAuditLogger
      */
     public function log(string $event, RolloutProgram $program, array $properties = [], ?Authenticatable $causer = null): void
     {
-        if ($this->canPersist()) {
-            $actor = $causer ?? Auth::user();
+        $actor = $causer ?? Auth::user();
 
+        if ($this->canPersist()) {
             activity('rollout')
                 ->event($event)
                 ->performedOn($program)
@@ -34,6 +38,7 @@ final class RolloutAuditLogger
                 ->log($this->description($event));
         }
 
+        $this->writeWorkspace($event, $program, $properties, $actor);
         $this->broadcaster->fromAuditEvent($program, $event, $properties);
     }
 
@@ -43,7 +48,7 @@ final class RolloutAuditLogger
      */
     public function logBulkMetadataUpdated(array $rolloutIds, array $changes, ?Authenticatable $causer = null): void
     {
-        if ($rolloutIds === [] || ! $this->canPersist()) {
+        if ($rolloutIds === []) {
             return;
         }
 
@@ -55,16 +60,29 @@ final class RolloutAuditLogger
 
         $actor = $causer ?? Auth::user();
 
-        activity('rollout')
-            ->event('rollout.bulk_metadata_updated')
-            ->performedOn($anchor)
-            ->causedBy($actor)
-            ->withProperties([
+        if ($this->canPersist()) {
+            activity('rollout')
+                ->event('rollout.bulk_metadata_updated')
+                ->performedOn($anchor)
+                ->causedBy($actor)
+                ->withProperties([
+                    'rollout_ids' => $rolloutIds,
+                    'rollout_count' => count($rolloutIds),
+                    'changes' => $changes,
+                ])
+                ->log('Bulk rollout metadata updated');
+        }
+
+        $this->writeWorkspace(
+            'rollout.bulk_metadata_updated',
+            $anchor,
+            [
                 'rollout_ids' => $rolloutIds,
                 'rollout_count' => count($rolloutIds),
                 'changes' => $changes,
-            ])
-            ->log('Bulk rollout metadata updated');
+            ],
+            $actor,
+        );
 
         foreach ($rolloutIds as $rolloutId) {
             /** @var RolloutProgram|null $program */
@@ -87,7 +105,7 @@ final class RolloutAuditLogger
         bool $markGatePassed,
         ?Authenticatable $causer = null,
     ): void {
-        if ($rolloutIds === [] || ! $this->canPersist()) {
+        if ($rolloutIds === []) {
             return;
         }
 
@@ -99,17 +117,31 @@ final class RolloutAuditLogger
 
         $actor = $causer ?? Auth::user();
 
-        activity('rollout')
-            ->event('rollout.bulk_phase_dates_backfilled')
-            ->performedOn($anchor)
-            ->causedBy($actor)
-            ->withProperties([
+        if ($this->canPersist()) {
+            activity('rollout')
+                ->event('rollout.bulk_phase_dates_backfilled')
+                ->performedOn($anchor)
+                ->causedBy($actor)
+                ->withProperties([
+                    'rollout_ids' => $rolloutIds,
+                    'rollout_count' => count($rolloutIds),
+                    'phases' => $phases,
+                    'mark_gate_passed' => $markGatePassed,
+                ])
+                ->log('Bulk timeline phase dates backfilled');
+        }
+
+        $this->writeWorkspace(
+            'rollout.bulk_phase_dates_backfilled',
+            $anchor,
+            [
                 'rollout_ids' => $rolloutIds,
                 'rollout_count' => count($rolloutIds),
                 'phases' => $phases,
                 'mark_gate_passed' => $markGatePassed,
-            ])
-            ->log('Bulk timeline phase dates backfilled');
+            ],
+            $actor,
+        );
 
         foreach ($rolloutIds as $rolloutId) {
             /** @var RolloutProgram|null $program */
@@ -120,6 +152,45 @@ final class RolloutAuditLogger
 
             $this->broadcaster->rolloutUpdated($program, 'rollout.timeline_updated');
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $properties
+     */
+    private function writeWorkspace(
+        string $event,
+        RolloutProgram $program,
+        array $properties,
+        Authenticatable|TenantUser|null $actor,
+    ): void {
+        $changes = [];
+        if (isset($properties['changes']) && is_array($properties['changes'])) {
+            $raw = $properties['changes'];
+            // Bulk metadata may already be field => {from,to} or field => value.
+            $looksLikeDiff = false;
+            foreach ($raw as $value) {
+                if (is_array($value) && array_key_exists('from', $value) && array_key_exists('to', $value)) {
+                    $looksLikeDiff = true;
+                    break;
+                }
+            }
+            if ($looksLikeDiff) {
+                $changes = $raw;
+                unset($properties['changes']);
+            }
+        }
+
+        $this->activity->record(
+            module: 'project_one',
+            action: $event,
+            summary: $this->description($event).($program->rollout_ref ? ' · '.$program->rollout_ref : ''),
+            entityType: 'rollout',
+            entityId: (string) $program->id,
+            entityLabel: $program->rollout_ref,
+            actor: $actor instanceof Authenticatable || $actor instanceof TenantUser ? $actor : null,
+            metadata: $properties,
+            changes: WorkspaceAuditChanges::of($changes),
+        );
     }
 
     private function description(string $event): string
@@ -141,6 +212,9 @@ final class RolloutAuditLogger
             'rollout.phase_actual_backfilled' => 'Timeline phase actual date backfilled',
             'rollout.bulk_phase_dates_backfilled' => 'Bulk timeline phase dates backfilled',
             'rollout.cancelled' => 'Rollout cancelled',
+            'rollout.import_backfilled' => 'Rollout import backfilled',
+            'rollout.site_profile_updated' => 'Site profile updated',
+            'permits_updated' => 'Permits updated',
             default => 'Rollout event recorded',
         };
     }

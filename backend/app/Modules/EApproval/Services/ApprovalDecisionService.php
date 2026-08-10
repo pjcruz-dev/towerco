@@ -13,6 +13,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -183,6 +184,9 @@ final class ApprovalDecisionService
         TenantUser $actor,
     ): EApprovalRequestApproval {
         return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor) {
+            $previousApprovalStatus = (string) $approval->status;
+            $previousSubmissionStatus = (string) $submission->status;
+
             $approval->status = EApprovalApprovalStatus::APPROVED;
             $approval->remarks = $remarks;
             $approval->signature = $signature;
@@ -222,14 +226,42 @@ final class ApprovalDecisionService
                             packageNote: $package['note'],
                         );
                     }
-                    $this->audit->log('request_approved_final', $submission->id, null, $actor);
+                    $this->audit->log(
+                        'request_approved_final',
+                        $submission->id,
+                        $submission->document_no,
+                        $actor,
+                        WorkspaceAuditChanges::of([
+                            'status' => [
+                                'from' => $previousSubmissionStatus,
+                                'to' => EApprovalSubmissionStatus::APPROVED,
+                            ],
+                            'approval_status' => [
+                                'from' => $previousApprovalStatus,
+                                'to' => EApprovalApprovalStatus::APPROVED,
+                            ],
+                        ]),
+                        entityLabel: $submission->document_no,
+                    );
                     $submission->loadMissing(['form', 'values.field']);
                     $this->vendorMasterData->syncApprovedRegistration($submission, $actor);
                     $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
                     $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             } else {
-                $this->audit->log('request_approved_step', $submission->id, "Step {$stepOrder}", $actor);
+                $this->audit->log(
+                    'request_approved_step',
+                    $submission->id,
+                    "Step {$stepOrder}",
+                    $actor,
+                    WorkspaceAuditChanges::of([
+                        'approval_status' => [
+                            'from' => $previousApprovalStatus,
+                            'to' => EApprovalApprovalStatus::APPROVED,
+                        ],
+                    ]),
+                    entityLabel: $submission->document_no,
+                );
             }
 
             return $approval->fresh(['submission.form', 'approver', 'step']);
@@ -243,6 +275,9 @@ final class ApprovalDecisionService
         TenantUser $actor,
     ): EApprovalRequestApproval {
         return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $actor) {
+            $previousApprovalStatus = (string) $approval->status;
+            $previousSubmissionStatus = (string) $submission->status;
+
             $approval->status = EApprovalApprovalStatus::REJECTED;
             $approval->remarks = $remarks;
             $approval->acted_at = now();
@@ -279,7 +314,23 @@ final class ApprovalDecisionService
                     $remarks,
                 );
             }
-            $this->audit->log('request_rejected', $submission->id, $remarks, $actor);
+            $this->audit->log(
+                'request_rejected',
+                $submission->id,
+                $remarks,
+                $actor,
+                WorkspaceAuditChanges::of([
+                    'status' => [
+                        'from' => $previousSubmissionStatus,
+                        'to' => EApprovalSubmissionStatus::REJECTED,
+                    ],
+                    'approval_status' => [
+                        'from' => $previousApprovalStatus,
+                        'to' => EApprovalApprovalStatus::REJECTED,
+                    ],
+                ]),
+                entityLabel: $submission->document_no,
+            );
             $this->comments->add(
                 $submission,
                 __('Rejected: :remarks', ['remarks' => $remarks]),

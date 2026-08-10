@@ -146,6 +146,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:15')
             ->withoutOverlapping();
 
+        $schedule->command('workspace:audit-prune')
+            ->dailyAt('03:40')
+            ->withoutOverlapping();
+
         $schedule->command('procurement:rfq-reminders')
             ->dailyAt('08:30')
             ->withoutOverlapping();

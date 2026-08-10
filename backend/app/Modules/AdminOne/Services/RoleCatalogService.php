@@ -10,6 +10,9 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
 use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
+use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -42,6 +45,7 @@ class RoleCatalogService
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,
         private readonly TenantRbacPermissionCatalog $permissionCatalog,
+        private readonly TenantActivityLogger $activity,
     ) {}
 
     public function ensureBaseline(): void
@@ -143,7 +147,25 @@ class RoleCatalogService
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        return $role->fresh(['permissions']);
+        $fresh = $role->fresh(['permissions']);
+        $actor = Auth::user();
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.role_created',
+            summary: 'Role created · '.$normalized,
+            entityType: 'role',
+            entityId: (string) $fresh->id,
+            entityLabel: $normalized,
+            actor: $actor instanceof TenantUser ? $actor : null,
+            changes: WorkspaceAuditChanges::of([
+                'permissions_count' => [
+                    'from' => null,
+                    'to' => count($permissions),
+                ],
+            ]),
+        );
+
+        return $fresh;
     }
 
     public function cloneRole(TenantRole $source, string $name): TenantRole
@@ -178,10 +200,29 @@ class RoleCatalogService
         }
 
         $this->assertPermissionsExist($permissions);
+        $beforeCount = $role->permissions()->count();
         $role->syncPermissions($permissions);
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        return $role->fresh(['permissions']);
+        $fresh = $role->fresh(['permissions']);
+        $actor = Auth::user();
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.role_permissions_updated',
+            summary: 'Role permissions updated · '.$role->name,
+            entityType: 'role',
+            entityId: (string) $role->id,
+            entityLabel: (string) $role->name,
+            actor: $actor instanceof TenantUser ? $actor : null,
+            changes: WorkspaceAuditChanges::of([
+                'permissions_count' => [
+                    'from' => $beforeCount,
+                    'to' => count($permissions),
+                ],
+            ]),
+        );
+
+        return $fresh;
     }
 
     public function deleteCustomRole(TenantRole $role): void
@@ -199,10 +240,29 @@ class RoleCatalogService
             ]);
         }
 
+        $roleName = (string) $role->name;
+        $roleId = (string) $role->id;
         $role->syncPermissions([]);
         $role->delete();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $actor = Auth::user();
+        $this->activity->record(
+            module: 'team_access',
+            action: 'rbac.role_deleted',
+            summary: 'Role deleted · '.$roleName,
+            entityType: 'role',
+            entityId: $roleId,
+            entityLabel: $roleName,
+            actor: $actor instanceof TenantUser ? $actor : null,
+            changes: WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => 'active',
+                    'to' => 'deleted',
+                ],
+            ]),
+        );
     }
 
     /**
