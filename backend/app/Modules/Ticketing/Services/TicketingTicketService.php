@@ -11,6 +11,8 @@ use App\Models\TicketingTicket;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingSourceCatalog;
+use App\Modules\Workspace\Services\TenantActivityLogger;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,6 +35,7 @@ final class TicketingTicketService
         private readonly TicketingCategoryCatalog $categories,
         private readonly TicketingSlaCalculator $sla,
         private readonly TicketingAssignmentService $assignment,
+        private readonly TenantActivityLogger $activity,
     ) {}
 
     /**
@@ -266,6 +269,22 @@ final class TicketingTicketService
 
             $this->syncSla($ticket, true);
 
+            $this->activity->record(
+                module: 'ticketing',
+                action: 'ticket.created',
+                summary: 'Ticket created · '.$ticket->ticket_number,
+                entityType: 'ticket',
+                entityId: (string) $ticket->id,
+                entityLabel: $ticket->ticket_number,
+                actor: $requester,
+                changes: WorkspaceAuditChanges::of([
+                    'status' => [
+                        'from' => null,
+                        'to' => TicketingTicket::STATUS_OPEN,
+                    ],
+                ]),
+            );
+
             return $ticket->fresh();
         });
     }
@@ -294,6 +313,8 @@ final class TicketingTicketService
         $assigneeChanged = false;
         $newAssignee = null;
         $previousAssigneeId = $ticket->assignee_id !== null ? (string) $ticket->assignee_id : null;
+        $previousStatus = (string) $ticket->status;
+        $previousPriority = (string) $ticket->priority;
         $updates = [];
 
         if (array_key_exists('title', $data) && ($canManage || $isRequester)) {
@@ -389,6 +410,39 @@ final class TicketingTicketService
                 // Reset windows only when SLA inputs (priority/category) change; a status
                 // change just recomputes due date + denormalized status.
                 $this->syncSla($ticket, $priorityChanged || $categoryChanged);
+            }
+
+            $changes = WorkspaceAuditChanges::diff(
+                [
+                    'status' => $previousStatus,
+                    'priority' => $previousPriority,
+                    'assignee_id' => $previousAssigneeId,
+                ],
+                [
+                    'status' => (string) $ticket->status,
+                    'priority' => (string) $ticket->priority,
+                    'assignee_id' => $ticket->assignee_id !== null ? (string) $ticket->assignee_id : null,
+                ],
+                ['status', 'priority', 'assignee_id'],
+            );
+
+            if ($changes !== []) {
+                $action = match ($lifecycleEvent) {
+                    'resolved' => 'ticket.resolved',
+                    'reopened' => 'ticket.reopened',
+                    default => 'ticket.updated',
+                };
+
+                $this->activity->record(
+                    module: 'ticketing',
+                    action: $action,
+                    summary: ($lifecycleEvent !== null ? ucfirst($lifecycleEvent) : 'Ticket updated').' · '.$ticket->ticket_number,
+                    entityType: 'ticket',
+                    entityId: (string) $ticket->id,
+                    entityLabel: $ticket->ticket_number,
+                    actor: $actor,
+                    changes: $changes,
+                );
             }
         }
 

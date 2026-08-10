@@ -16,6 +16,7 @@ use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -90,6 +91,9 @@ final class EApprovalSubmissionLifecycleService
                     'acted_at' => now(),
                 ]);
 
+            $previousStatus = (string) $submission->status;
+            $previousForceFullRestart = (bool) $submission->force_full_restart;
+
             $submission->status = EApprovalSubmissionStatus::RETURNED;
             $submission->returned_from_step = $returnedFromStep > 0 ? $returnedFromStep : null;
             $submission->force_full_restart = $forceFullRestart;
@@ -101,7 +105,23 @@ final class EApprovalSubmissionLifecycleService
                 $auditRemarks .= ' [force_full_restart=1]';
             }
 
-            $this->audit->log('revision_requested', $submission->id, $auditRemarks, $actor);
+            $this->audit->log(
+                'revision_requested',
+                $submission->id,
+                $auditRemarks,
+                $actor,
+                WorkspaceAuditChanges::of([
+                    'status' => [
+                        'from' => $previousStatus,
+                        'to' => EApprovalSubmissionStatus::RETURNED,
+                    ],
+                    'force_full_restart' => [
+                        'from' => $previousForceFullRestart,
+                        'to' => $forceFullRestart,
+                    ],
+                ]),
+                entityLabel: $submission->document_no,
+            );
             $this->comments->add(
                 $submission,
                 __('Revision requested: :remarks', ['remarks' => $remarks]),

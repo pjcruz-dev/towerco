@@ -8,6 +8,7 @@ use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -150,7 +151,20 @@ final class EApprovalFormService
                 $this->publish->publish($form, $actor);
             }
 
-            $this->audit->log('form_created', $form->id, $form->name, $actor);
+            $this->audit->log(
+                'form_created',
+                $form->id,
+                $form->name,
+                $actor,
+                WorkspaceAuditChanges::of([
+                    'status' => [
+                        'from' => null,
+                        'to' => $form->status,
+                    ],
+                ]),
+                entityType: 'form',
+                entityLabel: $form->name,
+            );
 
             return ['form' => $form->fresh(['fields', 'workflowTemplate.steps']), 'warnings' => $warnings];
         });
@@ -184,6 +198,15 @@ final class EApprovalFormService
         }
 
         return DB::connection('tenant')->transaction(function () use ($form, $payload, $actor, $status, $warnings) {
+            $before = [
+                'name' => $form->name,
+                'status' => $form->status,
+                'category' => $form->category,
+                'accepts_new_submissions' => (bool) $form->accepts_new_submissions,
+                'owner_code' => $form->owner_code,
+                'doc_type_code' => $form->doc_type_code,
+            ];
+
             $form->fill([
                 'name' => trim((string) ($payload['name'] ?? $form->name)),
                 'description' => $payload['description'] ?? $form->description,
@@ -218,7 +241,24 @@ final class EApprovalFormService
                 $this->publish->publish($form->fresh(['fields', 'workflowTemplate.steps']), $actor);
             }
 
-            $this->audit->log('form_updated', $form->id, $form->name, $actor);
+            $after = [
+                'name' => $form->name,
+                'status' => $form->status,
+                'category' => $form->category,
+                'accepts_new_submissions' => (bool) $form->accepts_new_submissions,
+                'owner_code' => $form->owner_code,
+                'doc_type_code' => $form->doc_type_code,
+            ];
+
+            $this->audit->log(
+                'form_updated',
+                $form->id,
+                $form->name,
+                $actor,
+                WorkspaceAuditChanges::diff($before, $after, array_keys($before)),
+                entityType: 'form',
+                entityLabel: $form->name,
+            );
 
             return ['form' => $form->fresh(['fields', 'workflowTemplate.steps']), 'warnings' => $warnings];
         });
@@ -275,7 +315,20 @@ final class EApprovalFormService
         ];
 
         $result = $this->update($form, $payload, $actor, true);
-        $this->audit->log('form_revision_restored', $form->id, $form->name.' (rev '.$revision.')', $actor);
+        $this->audit->log(
+            'form_revision_restored',
+            $form->id,
+            $form->name.' (rev '.$revision.')',
+            $actor,
+            WorkspaceAuditChanges::of([
+                'revision' => [
+                    'from' => null,
+                    'to' => $revision,
+                ],
+            ]),
+            entityType: 'form',
+            entityLabel: $form->name,
+        );
 
         return $result;
     }
@@ -288,8 +341,24 @@ final class EApprovalFormService
             ]);
         }
 
+        $previousStatus = (string) $form->status;
+        $name = (string) $form->name;
+        $id = (string) $form->id;
         $form->delete();
-        $this->audit->log('form_deleted', $form->id, $form->name, $actor);
+        $this->audit->log(
+            'form_deleted',
+            $id,
+            $name,
+            $actor,
+            WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => $previousStatus,
+                    'to' => null,
+                ],
+            ]),
+            entityType: 'form',
+            entityLabel: $name,
+        );
     }
 
     /**

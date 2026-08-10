@@ -17,6 +17,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
 use App\Modules\ProcurementOne\Services\ProcurementVendorPoPolicyGuard;
+use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -449,6 +450,7 @@ final class EApprovalSubmissionService
 
         $wasPending = $submission->status === EApprovalSubmissionStatus::PENDING
             || $submission->status === EApprovalSubmissionStatus::RETURNED;
+        $previousStatus = (string) $submission->status;
 
         $pendingApproverIds = [];
         if ($wasPending) {
@@ -474,7 +476,19 @@ final class EApprovalSubmissionService
                 ->update(['status' => EApprovalApprovalStatus::CANCELLED]);
         }
 
-        $this->audit->log('submission_cancelled', $submission->id, null, $actor);
+        $this->audit->log(
+            'submission_cancelled',
+            $submission->id,
+            $submission->document_no,
+            $actor,
+            WorkspaceAuditChanges::of([
+                'status' => [
+                    'from' => $previousStatus,
+                    'to' => EApprovalSubmissionStatus::CANCELLED,
+                ],
+            ]),
+            entityLabel: $submission->document_no,
+        );
 
         $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
         $this->notifySubmissionCancelled($fresh, $actor, $pendingApproverIds);
