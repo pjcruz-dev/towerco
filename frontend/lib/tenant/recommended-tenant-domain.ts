@@ -27,7 +27,10 @@ export function recommendedTenantDomain(
 
   switch (environment) {
     case "local":
-      return `${normalizedSlug}.localhost`;
+      // LAN / office platform (e.g. http://192.168.90.24/platform): use brand DNS, not *.localhost
+      return useLocalDevHosts
+        ? `${normalizedSlug}.localhost`
+        : `local.${normalizedSlug}.${brand}`;
     case "test":
       return useLocalDevHosts
         ? `test.${normalizedSlug}.localhost`

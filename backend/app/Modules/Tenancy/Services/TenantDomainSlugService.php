@@ -12,10 +12,17 @@ use Illuminate\Support\Str;
 /**
  * Recommended hostname patterns for TowerCo tenants.
  *
- * Local:   {slug}.localhost
- * Test:    test.{slug}.{brand_domain}
- * Staging: staging.{slug}.{brand_domain}
- * App/Prod: app.{slug}.{brand_domain}  OR  {slug}.{brand_domain}
+ * When the platform frontend is on localhost (developer laptop):
+ *   Local:   {slug}.localhost
+ *   Test:    test.{slug}.localhost
+ *   Staging: staging.{slug}.localhost
+ *   App/Prod: app.{slug}.localhost
+ *
+ * When the platform frontend is on LAN/IP/public DNS (e.g. http://192.168.90.24):
+ *   Local:   local.{slug}.{brand_domain}
+ *   Test:    test.{slug}.{brand_domain}
+ *   Staging: staging.{slug}.{brand_domain}
+ *   App/Prod: app.{slug}.{brand_domain}  (+ optional {slug}.{brand_domain})
  */
 final class TenantDomainSlugService
 {
@@ -35,18 +42,22 @@ final class TenantDomainSlugService
         }
 
         $brandDomain = $this->normalizeBrandDomain($brandDomain ?? (string) ($tenant->brand_domain ?? 'toweros.app'));
+        $useLocalhostHosts = $this->useLocalhostStyleHosts();
         $endpoints = match (true) {
-            app()->environment('local') && $environment === 'test' => [
+            $useLocalhostHosts && $environment === 'test' => [
                 ['purpose' => 'test', 'hostname' => "test.{$slug}.localhost", 'is_primary' => true],
             ],
-            app()->environment('local') && $environment === 'staging' => [
+            $useLocalhostHosts && $environment === 'staging' => [
                 ['purpose' => 'staging', 'hostname' => "staging.{$slug}.localhost", 'is_primary' => true],
             ],
-            app()->environment('local') && $environment === 'production' => [
+            $useLocalhostHosts && $environment === 'production' => [
                 ['purpose' => 'app', 'hostname' => "app.{$slug}.localhost", 'is_primary' => true],
             ],
-            $environment === 'local' => [
+            $useLocalhostHosts && $environment === 'local' => [
                 ['purpose' => 'local', 'hostname' => "{$slug}.localhost", 'is_primary' => true],
+            ],
+            $environment === 'local' => [
+                ['purpose' => 'local', 'hostname' => "local.{$slug}.{$brandDomain}", 'is_primary' => true],
             ],
             $environment === 'test' => [
                 ['purpose' => 'test', 'hostname' => "test.{$slug}.{$brandDomain}", 'is_primary' => true],
@@ -100,6 +111,25 @@ final class TenantDomainSlugService
         $domain = preg_replace('#^https?://#', '', $domain) ?? $domain;
 
         return trim($domain, '/');
+    }
+
+    /**
+     * Prefer *.localhost hostnames only when the configured tenant/frontend base is a local browser host.
+     * LAN deploys (http://192.168.90.24, http://*.toweros.lan) must use brand_domain even if APP_ENV=local.
+     */
+    private function useLocalhostStyleHosts(): bool
+    {
+        $base = (string) (
+            config('toweros.tenant_app_url')
+            ?: config('app.url')
+            ?: ''
+        );
+        $host = strtolower((string) (parse_url($base, PHP_URL_HOST) ?: ''));
+
+        return $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '::1'
+            || str_ends_with($host, '.localhost');
     }
 
     private function deriveSlugFromDomain(string $domain): string
