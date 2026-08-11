@@ -1,0 +1,55 @@
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body {
+    margin: 0 !important;
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .eapproval-print-toolbar {
+    display: none !important;
+  }
+
+  .eapproval-attachment-only-print {
+    min-height: auto !important;
+    background: #fff !important;
+  }
+
+  .eapproval-attachment-approval-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .eapproval-print-attachment-page {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  .eapproval-print-attachment-page:not(:last-child) {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  /* Hide old wrapper footer if present */
+  .eapproval-print-document,
+  .eapproval-print-fixed-footer {
+    display: none !important;
+  }
+}
+
+@media screen {
+  .eapproval-print-toolbar {
+    display: flex;
+  }
+
+  .eapproval-attachment-only-print {
+    background: #fff;
+  }
+}

@@ -1,0 +1,142 @@
+const STORAGE_KEY = "toweros_dev_tenant_domain";
+
+export function parseCentralHostnames(): string[] {
+  const raw = process.env.NEXT_PUBLIC_CENTRAL_DOMAINS?.trim();
+  if (raw) {
+    return raw
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return ["localhost", "127.0.0.1"];
+}
+
+export function isCentralHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (host === "") {
+    return true;
+  }
+  // Tenant dev hosts: atc.localhost, staging.quantum.localhost, etc. (never the platform host).
+  if (host.endsWith(".localhost")) {
+    return false;
+  }
+  return parseCentralHostnames().includes(host);
+}
+
+export function tenantDomainFromBrowserHostname(hostname: string): string | null {
+  const host = hostname.trim().toLowerCase();
+  if (!host || isCentralHostname(host)) {
+    return null;
+  }
+  return host;
+}
+
+export function rememberDevTenantDomain(domain: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) {
+    return;
+  }
+  window.sessionStorage.setItem(STORAGE_KEY, normalized);
+}
+
+export function readDevTenantDomain(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const value = window.sessionStorage.getItem(STORAGE_KEY)?.trim().toLowerCase();
+  return value || null;
+}
+
+export function clearDevTenantDomain(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.sessionStorage.removeItem(STORAGE_KEY);
+}
+
+/**
+ * Hostname used to resolve tenant context for API calls.
+ * Prefer the browser host; on central dev hosts fall back to sessionStorage / query param.
+ */
+export function resolveTenantDomainForApi(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const fromBrowser = tenantDomainFromBrowserHostname(window.location.hostname);
+  if (fromBrowser !== null) {
+    return fromBrowser;
+  }
+
+  return readDevTenantDomain();
+}
+
+export function resolveDevAppPort(fallback = ""): string {
+  const fromEnv = process.env.NEXT_PUBLIC_DEV_APP_PORT?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  if (typeof window !== "undefined" && window.location.port) {
+    return window.location.port;
+  }
+
+  return fallback;
+}
+
+function portSuffix(port: string): string {
+  if (!port || port === "80" || port === "443") {
+    return "";
+  }
+
+  return `:${port}`;
+}
+
+/** Login URL for hostname preview (platform create-tenant sidebar). */
+export function previewTenantLoginUrl(hostname: string, port?: string): string {
+  const host = hostname.trim().toLowerCase();
+  if (!host) {
+    return "/login";
+  }
+
+  const portPart = portSuffix(port ?? resolveDevAppPort());
+
+  if (host.endsWith(".localhost") || host === "localhost") {
+    return `http://${host}${portPart}/login`;
+  }
+
+  return `https://${host}/login`;
+}
+
+export function tenantLoginUrl(domain: string, port?: string): string {
+  const host = domain.trim().toLowerCase();
+  if (!host) {
+    return "/login";
+  }
+
+  const email = `admin@${host}`;
+  const resolvedPort = port ?? resolveDevAppPort();
+
+  const tpl = process.env.NEXT_PUBLIC_TENANT_LOGIN_URL_TEMPLATE?.trim();
+  if (tpl) {
+    const base = tpl
+      .replaceAll("{host}", host)
+      .replaceAll("{domain}", host)
+      .replaceAll("{port}", resolvedPort);
+    const separator = base.includes("?") ? "&" : "?";
+    return `${base}${separator}email=${encodeURIComponent(email)}`;
+  }
+
+  const portPart = portSuffix(resolvedPort);
+
+  if (typeof window !== "undefined") {
+    const { protocol } = window.location;
+
+    return `${protocol}//${host}${portPart}/login?email=${encodeURIComponent(email)}`;
+  }
+
+  return `http://${host}${portPart}/login?email=${encodeURIComponent(email)}`;
+}

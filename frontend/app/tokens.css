@@ -1,0 +1,183 @@
+@theme {
+  /* Breakpoints (responsive enterprise dashboard defaults) */
+  --breakpoint-xs: 30rem; /* 480px */
+  --breakpoint-sm: 40rem; /* 640px */
+  --breakpoint-md: 48rem; /* 768px */
+  --breakpoint-lg: 64rem; /* 1024px */
+  --breakpoint-xl: 80rem; /* 1280px */
+  --breakpoint-2xl: 96rem; /* 1536px */
+  --breakpoint-3xl: 112rem; /* 1792px */
+
+  /* Typography scale (operational readability) */
+  --font-size-label: 0.75rem; /* 12px */
+  --font-size-body: 0.875rem; /* 14px */
+  --font-size-table: 0.8125rem; /* 13px */
+  --font-size-card-title: 1rem; /* 16px */
+  --font-size-section-title: 1.25rem; /* 20px */
+  --font-size-page-title: 1.5rem; /* 24px — uiux-theme text-2xl */
+
+  --line-height-label: 1rem;
+  --line-height-body: 1.25rem;
+  --line-height-table: 1.125rem;
+  --line-height-card-title: 1.5rem;
+  --line-height-section-title: 1.75rem;
+  --line-height-page-title: 1.75rem;
+
+  /* Spacing scale extensions */
+  --spacing-18: 4.5rem;
+  --spacing-22: 5.5rem;
+  --spacing-26: 6.5rem;
+  --spacing-30: 7.5rem;
+  --spacing-34: 8.5rem;
+  --spacing-38: 9.5rem;
+  --spacing-42: 10.5rem;
+  --spacing-46: 11.5rem;
+  --spacing-50: 12.5rem;
+  --spacing-54: 13.5rem;
+  --spacing-58: 14.5rem;
+  --spacing-62: 15.5rem;
+  --spacing-66: 16.5rem;
+  --spacing-70: 17.5rem;
+  --spacing-74: 18.5rem;
+  --spacing-78: 19.5rem;
+  --spacing-82: 20.5rem;
+  --spacing-86: 21.5rem;
+  --spacing-90: 22.5rem;
+
+  /* Enterprise color aliases */
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Layout sizing tokens */
+  --spacing-shell-header-h: var(--shell-header-h);
+  --spacing-shell-content-gutter: var(--shell-content-gutter);
+  --spacing-shell-content-max-w: var(--shell-content-max-w);
+
+  --spacing-sidebar-collapsed-w: var(--sidebar-collapsed-w);
+  --spacing-sidebar-default-w: var(--sidebar-default-w);
+  --spacing-sidebar-expanded-w: var(--sidebar-expanded-w);
+
+  --spacing-dashboard-gap: var(--dashboard-gap);
+  --spacing-dashboard-section-gap: var(--dashboard-section-gap);
+  --spacing-dashboard-kpi-gap: var(--dashboard-kpi-gap);
+
+  --spacing-card-padding-sm: var(--card-padding-sm);
+  --spacing-card-padding-md: var(--card-padding-md);
+  --spacing-card-padding-lg: var(--card-padding-lg);
+
+  --spacing-map-panel-min-h: var(--map-panel-min-h);
+  --spacing-table-panel-min-h: var(--table-panel-min-h);
+
+  /* Radius tokens */
+  --radius-card: var(--radius-card);
+  --radius-panel: var(--radius-panel);
+  --radius-interactive: var(--radius-interactive);
+
+  /* Shadow tokens */
+  --shadow-surface: var(--elevation-surface);
+  --shadow-card: var(--elevation-card);
+  --shadow-overlay: var(--elevation-overlay);
+
+  /* Z-index tokens */
+  --z-base: var(--layer-base);
+  --z-sticky: var(--layer-sticky);
+  --z-dropdown: var(--layer-dropdown);
+  --z-drawer: var(--layer-drawer);
+  --z-modal: var(--layer-modal);
+  --z-toast: var(--layer-toast);
+  --z-max: var(--layer-max);
+}
+
+:root {
+  /* Brand scale (Azure/ServiceNow-style enterprise blue) */
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8a;
+
+  /* Semantic status colors */
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0ea5e9;
+
+  /* Layout sizing */
+  --shell-header-h: 3.5rem;
+  --shell-content-gutter: 1.25rem;
+  --shell-content-max-w: 120rem;
+
+  --sidebar-collapsed-w: 4.5rem;
+  --sidebar-default-w: 16rem;
+  --sidebar-expanded-w: 18rem;
+
+  --dashboard-gap: 1rem;
+  --dashboard-section-gap: 1.25rem;
+  --dashboard-kpi-gap: 0.75rem;
+
+  --card-padding-sm: 0.75rem;
+  --card-padding-md: 1rem;
+  --card-padding-lg: 1.25rem;
+
+  --map-panel-min-h: 22rem;
+  --table-panel-min-h: 20rem;
+
+  /* Radius */
+  --radius-card: 0.75rem;
+  --radius-panel: 0.875rem;
+  --radius-interactive: 0.5rem;
+
+  /* Shadows */
+  --elevation-surface: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --elevation-card: 0 4px 14px -8px rgb(15 23 42 / 0.12);
+  --elevation-overlay: 0 24px 48px -16px rgb(15 23 42 / 0.35);
+
+  /* Z-index */
+  --layer-base: 0;
+  --layer-sticky: 20;
+  --layer-dropdown: 30;
+  --layer-drawer: 40;
+  --layer-modal: 50;
+  --layer-toast: 60;
+  --layer-max: 999;
+}
+
+.dark {
+  --brand-50: #1e3a8a;
+  --brand-100: #1e40af;
+  --brand-200: #1d4ed8;
+  --brand-300: #2563eb;
+  --brand-400: #3b82f6;
+  --brand-500: #60a5fa;
+  --brand-600: #93c5fd;
+  --brand-700: #bfdbfe;
+  --brand-800: #dbeafe;
+  --brand-900: #eff6ff;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #38bdf8;
+
+  --elevation-surface: 0 1px 2px 0 rgb(2 6 23 / 0.5);
+  --elevation-card: 0 8px 24px -12px rgb(2 6 23 / 0.65);
+  --elevation-overlay: 0 28px 56px -16px rgb(2 6 23 / 0.9);
+}
