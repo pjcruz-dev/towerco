@@ -126,7 +126,7 @@ Application secrets remain in AWS Secrets Manager per environment.
 
 ## Local vs cloud parity
 
-| Concern | Local (`dev.cmd`) | AWS |
+| Concern | Local (`npm run dev`) | AWS |
 |---------|-------------------|-----|
 | Database | Docker MySQL 3307 | Aurora MySQL |
 | Cache/queue | Optional Redis | ElastiCache / SQS |

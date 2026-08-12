@@ -2,7 +2,7 @@
 
 Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular monolith: **Laravel API** + **Next.js** tenant workspace + **platform superadmin console**.
 
-**Board reference:** [`Rules/TowerOS_Board_Presentation.pdf`](Rules/TowerOS_Board_Presentation.pdf) — module names, phases, and roadmap.
+**Board reference:** [`docs/Rules/TowerOS_Board_Presentation.pdf`](docs/Rules/TowerOS_Board_Presentation.pdf) — module names, phases, and roadmap.
 
 ---
 
@@ -59,7 +59,7 @@ Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular mon
 
 Roadmap modules (TASK-ONE, VENDOR-ONE, etc.) are in the board deck; not all are in the tenant shell yet.
 
-**Deep dives:** [PROJECT-ONE](docs/project-one-roadmap.md) · [E-Approval](docs/modules/e-approval.md) · [E-Approval form builder](docs/modules/e-approval-form-builder.md) · [E-Approval go-live](docs/modules/e-approval-go-live-checklist.md)
+**Deep dives:** [PROJECT-ONE](docs/roadmaps/project-one-roadmap.md) · [E-Approval](docs/modules/e-approval.md) · [E-Approval form builder](docs/modules/e-approval-form-builder.md) · [E-Approval go-live](docs/modules/e-approval-go-live-checklist.md)
 
 ---
 
@@ -69,14 +69,20 @@ Roadmap modules (TASK-ONE, VENDOR-ONE, etc.) are in the board deck; not all are 
 TowerOS/
 ├── backend/              Laravel API (central + tenant routes)
 ├── frontend/             Next.js tenant app + platform console
-├── docs/                 Architecture, modules, runbooks
-├── legacy/               Archived reference (not deployed)
-├── Rules/                Board presentation
+├── docs/                 All non-prod docs: phases, Rules, guides, rollout
+│   ├── Rules/            Board deck + rollout playbook
+│   ├── archives/         Local scratch only (gitignored)
+│   ├── guides/           Docker / Podman / performance
+│   ├── roadmaps/         Product roadmaps
+│   ├── rollout/          Playbook + gate-approval phases
+│   └── local-dev/        Optional Windows launchers (use npm run … day-to-day)
 ├── docker-compose.yml    mysql, api, web, phpmyadmin
 ├── env.docker.example    Root Docker ports & MySQL credentials
 ├── package.json          npm scripts (dev, dev:fresh, …)
 └── scripts/              Docker helpers (grants, fresh reset)
 ```
+
+**AWS note:** Deploy builds Docker images from `backend/` and `frontend/` only. The entire `docs/` tree is **not** included in production/staging images. See [`docs/README.md`](docs/README.md).
 
 **Docker service names** (use these in `docker compose exec`):
 
@@ -274,7 +280,7 @@ SSO and tenant settings live in **central** DB table `tenant_sso_configs`, not i
 | Full local reset | `npm run dev:fresh` |
 | Restart API | `docker compose restart api` |
 
-**Detailed walkthrough:** [`docs/local-development-docker-guide.md`](docs/local-development-docker-guide.md)
+**Detailed walkthrough:** [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md)
 
 ---
 
@@ -392,7 +398,7 @@ After login on a tenant host (e.g. `atc.localhost`):
 | Sessions | `/settings/sessions` |
 | MFA | `/settings/security/mfa` |
 
-**E-Approval** runs inside this Next.js app only. Legacy formbuilder under `legacy/atcformbuiilder/` is not deployed.
+**E-Approval** runs inside this Next.js app only. Standalone formbuilder is decommissioned (historical only; not in this repo or deploy).
 
 ---
 
@@ -557,7 +563,7 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 | Microsoft login: tenant context | Sign in from **tenant URL** (`atc.localhost`), not platform host |
 | Account not provisioned (SSO) | Add user in Team & Access or enable auto-provision |
 
-**More:** [`docs/local-development-docker-guide.md`](docs/local-development-docker-guide.md#troubleshooting)
+**More:** [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md#troubleshooting)
 
 ---
 
@@ -565,7 +571,7 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 
 | Document | Description |
 |----------|-------------|
-| [`docs/local-development-docker-guide.md`](docs/local-development-docker-guide.md) | Step-by-step Docker setup (printable checklist) |
+| [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md) | Step-by-step Docker setup (printable checklist) |
 | [`docs/infrastructure/aws-ec2-rds-production.md`](docs/infrastructure/aws-ec2-rds-production.md) | **Production:** EC2 t3.large + RDS MySQL Multi-AZ (confirmed AWS stack) |
 | [`backend/.env.production.example`](backend/.env.production.example) | Production env template (RDS, S3, Redis, SES, CloudFront) |
 | [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md) | Scale path: AWS ECS, Aurora, CI/CD |
@@ -575,9 +581,12 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 | [`docs/infrastructure/tenant-environments-phase-2.md`](docs/infrastructure/tenant-environments-phase-2.md) | Phase 2: Staging + production tenant workspaces |
 | [`docs/infrastructure/tenant-domain-slugs.md`](docs/infrastructure/tenant-domain-slugs.md) | Hostnames per environment |
 | [`docs/architecture/tenant-isolation-mysql.md`](docs/architecture/tenant-isolation-mysql.md) | Multi-tenant MySQL |
-| [`docs/design-system/toweros-design-system.md`](docs/design-system/toweros-design-system.md) | UI tokens and components |
+| [`docs/README.md`](docs/README.md) | Docs home (phases, Rules, archives) — not deployed to AWS |
+| [`docs/Rules/TowerOS_Board_Presentation.pdf`](docs/Rules/TowerOS_Board_Presentation.pdf) | Board / investor module map |
+| [`docs/design-system/DESIGN_SYSTEM.md`](docs/design-system/DESIGN_SYSTEM.md) | Full UI design system |
+| [`docs/design-system/toweros-design-system.md`](docs/design-system/toweros-design-system.md) | Token / component summary |
 | [`docs/modules/e-approval.md`](docs/modules/e-approval.md) | E-Approval module |
-| [`docs/project-one-roadmap.md`](docs/project-one-roadmap.md) | PROJECT-ONE / rollouts |
+| [`docs/roadmaps/project-one-roadmap.md`](docs/roadmaps/project-one-roadmap.md) | PROJECT-ONE / rollouts |
 | [`.cursor/rules/toweros.mdc`](.cursor/rules/toweros.mdc) | Coding standards |
 | [`.cursor/rules/uiux-theme.mdc`](.cursor/rules/uiux-theme.mdc) | UI/UX rules |
 
@@ -588,7 +597,7 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 - **Font:** Geist  
 - **Style:** Operational minimalism (Azure Portal / ServiceNow-inspired)  
 - **Layout:** Left sidebar, top header, module-first navigation  
-- **Details:** [`docs/design-system/toweros-design-system.md`](docs/design-system/toweros-design-system.md)
+- **Details:** [`docs/design-system/DESIGN_SYSTEM.md`](docs/design-system/DESIGN_SYSTEM.md)
 
 ---
 
@@ -604,10 +613,10 @@ Running the API on host PHP avoids ~1.5–2 s/request of Docker-on-Windows overh
 
 Switch back to Docker API: stop the host `php artisan serve`, then `docker compose --env-file .env.docker up -d api` (compose overrides `DB_HOST=mysql` automatically).
 
-Prefer full Docker (`npm run dev`) for the least setup; prefer host mode for the fastest requests. Full step-by-step: [`docs/local-development-docker-guide.md`](docs/local-development-docker-guide.md#run-modes--performance-updated-jul-2026).
+Prefer full Docker (`npm run dev`) for the least setup; prefer host mode for the fastest requests. Full step-by-step: [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md#run-modes--performance-updated-jul-2026).
 
 ---
 
 ## License & support
 
-Proprietary — Alliance / TowerOS. For internal setup questions, use this README and `docs/local-development-docker-guide.md` first, then check API logs: `npm run dev:logs:api`.
+Proprietary — Alliance / TowerOS. For internal setup questions, use this README and `docs/guides/local-development-docker-guide.md` first, then check API logs: `npm run dev:logs:api`.

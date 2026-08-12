@@ -532,4 +532,4 @@ If users suddenly see **Invalid MFA code** or **MFA authenticator secret is unre
 - Env template: [`backend/.env.production.example`](../../backend/.env.production.example)
 - Release process: [release-runbook.md](./release-runbook.md)
 - ECS scale path: [aws-ecs-cicd.md](./aws-ecs-cicd.md)
-- Performance: [`docs/performance-runbook.md`](../performance-runbook.md)
+- Performance: [`docs/guides/performance-runbook.md`](../guides/performance-runbook.md)

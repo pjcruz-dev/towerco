@@ -1,6 +1,6 @@
 # E-APPROVAL module
 
-TowerOS tenant module for digital forms, multi-step approvals, and audit — ported from `legacy/atcformbuiilder/` into the modular monolith (one deployment, all tenants).
+TowerOS tenant module for digital forms, multi-step approvals, and audit — ported from the former standalone formbuilder into the modular monolith (one deployment, all tenants).
 
 **Auth:** TowerOS tenant users + Microsoft Entra only (no standalone formbuilder login).  
 **Users:** Administration → Users + Spatie roles (`e_approval_admin`, `e_approval_approver`, `e_approval_requestor`).  
@@ -233,9 +233,9 @@ Publish checklist also warns on: near-miss If/Else thresholds, all-conditional w
 
 ## P4 (shipped) — Decommission standalone app
 
-- Standalone app moved to `legacy/atcformbuiilder/` (see `legacy/README.md`, `ARCHIVED.md`)
+- Standalone formbuilder removed from this repo (historical only)
 - Root `docker-compose.yml` has no formbuilder service
-- `docs/local-development-docker-guide.md` documents TowerOS-only local stack
+- `docs/guides/local-development-docker-guide.md` documents TowerOS-only local stack
 - Per-tenant data cutover: `php artisan e-approval:import-legacy --tenant=<uuid>` (mapping script still manual)
 
 ---
@@ -334,7 +334,7 @@ Use this checklist when implementing P1–P3:
 
 Tenant tables prefixed `e_approval_*` (see migration). **No** duplicate `users` table — all FKs reference `users.id`.
 
-Source reference: `legacy/atcformbuiilder/src/server/db.ts`
+Source reference: former standalone formbuilder DB layer (removed from repo)
 
 ---
 
