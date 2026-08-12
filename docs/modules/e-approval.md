@@ -2,6 +2,8 @@
 
 TowerOS tenant module for digital forms, multi-step approvals, and audit — ported from the former standalone formbuilder into the modular monolith (one deployment, all tenants).
 
+**End users (requestors / approvers):** [e-approval-end-user-guide.md](./e-approval-end-user-guide.md) — step-by-step from login through submit, approve, and resubmit.
+
 **Auth:** TowerOS tenant users + Microsoft Entra only (no standalone formbuilder login).  
 **Users:** Administration → Users + Spatie roles (`e_approval_admin`, `e_approval_approver`, `e_approval_requestor`).  
 **Mail:** Laravel notifications via `TOWEROS_NOTIFICATIONS_MAIL_MAILER` (Microsoft 365 SMTP or AWS SES). See [e-approval-email.md](./e-approval-email.md). No legacy formbuilder Graph sidecar.

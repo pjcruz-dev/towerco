@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { EApprovalSignaturePad } from "@/components/e-approval/e-approval-signature-pad";
 import { EApprovalSignaturePreview } from "@/components/e-approval/e-approval-signature-preview";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,10 +20,13 @@ import {
   signatureModeForValue,
   type SignatureInputMode,
 } from "@/modules/e-approval/signature";
+import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL } from "@/modules/e-approval/signature-consent";
 
 type Props = {
   value: string | null;
   onChange: (value: string | null) => void;
+  consentAccepted: boolean;
+  onConsentChange: (accepted: boolean) => void;
   disabled?: boolean;
   error?: string | null;
   onErrorChange?: (error: string | null) => void;
@@ -32,6 +36,8 @@ type Props = {
 export function EApprovalApprovalSignatureField({
   value,
   onChange,
+  consentAccepted,
+  onConsentChange,
   disabled,
   error,
   onErrorChange,
@@ -191,6 +197,25 @@ export function EApprovalApprovalSignatureField({
         </TabsContent>
       </Tabs>
 
+      <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={consentAccepted}
+          onCheckedChange={(checked) => {
+            onConsentChange(checked === true);
+            onErrorChange?.(null);
+          }}
+          disabled={disabled}
+          aria-describedby="ea-approval-signature-consent-hint"
+        />
+        <span>
+          <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+          <span id="ea-approval-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+            {SIGNATURE_CONSENT_HINT}
+          </span>
+        </span>
+      </label>
+
       {error && !uploadError ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
@@ -198,4 +223,8 @@ export function EApprovalApprovalSignatureField({
 
 export function validateApprovalSignature(signature: string | null): string | null {
   return hasSignatureValue(signature) ? null : "Add your signature before approving.";
+}
+
+export function validateApprovalSignatureConsent(accepted: boolean): string | null {
+  return accepted ? null : "Accept the electronic signature consent before approving.";
 }

@@ -105,7 +105,7 @@ Run on the **pilot tenant** before wider cutover.
 | 2 | **Submissions → New** | Published form list; fields render (text, select, date, etc.) |
 | 3 | Submit a test request | Document number assigned; status pending; requestor + approver receive email (if SMTP configured) |
 | 4 | Open submission detail | Values visible; cancel/follow-up if applicable |
-| 5 | **My profile** | Save signature (optional) |
+| 5 | **My profile** | Save signature + accept consent (optional but recommended) |
 
 ### B. Approver (`e_approval_approver`)
 

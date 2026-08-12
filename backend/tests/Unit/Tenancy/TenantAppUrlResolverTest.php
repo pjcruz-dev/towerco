@@ -41,4 +41,32 @@ final class TenantAppUrlResolverTest extends TestCase
         $this->assertSame('http://test.localhost/project-one/gate-approvals', $url);
         $this->assertNull(tenant());
     }
+
+    public function test_mail_brand_label_uses_tenant_slug_not_app_name(): void
+    {
+        $this->testTenant->slug = 'atc';
+        $this->testTenant->save();
+
+        tenancy()->initialize($this->testTenant);
+
+        $resolver = app(TenantAppUrlResolver::class);
+
+        $this->assertSame('ATC', $resolver->mailBrandLabel());
+        $this->assertSame('[ATC]', $resolver->subjectPrefix());
+        $this->assertStringNotContainsString('TowerOS', $resolver->subjectPrefix());
+
+        tenancy()->end();
+    }
+
+    public function test_mail_brand_label_falls_back_to_domain_when_slug_empty(): void
+    {
+        $this->testTenant->slug = null;
+        $this->testTenant->save();
+
+        tenancy()->initialize($this->testTenant);
+
+        $this->assertSame('TEST', app(TenantAppUrlResolver::class)->mailBrandLabel());
+
+        tenancy()->end();
+    }
 }

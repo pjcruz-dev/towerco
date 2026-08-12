@@ -41,6 +41,7 @@ docs/
 |------|------|
 | Local Docker guide | [guides/local-development-docker-guide.md](./guides/local-development-docker-guide.md) |
 | Production (EC2 + RDS) | [infrastructure/aws-ec2-rds-production.md](./infrastructure/aws-ec2-rds-production.md) |
+| E-Approval end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
 | PROJECT-ONE roadmap | [roadmaps/project-one-roadmap.md](./roadmaps/project-one-roadmap.md) |
 | Rollout playbooks | [rollout/](./rollout/) |
 | Board presentation | [Rules/TowerOS_Board_Presentation.pdf](./Rules/TowerOS_Board_Presentation.pdf) |

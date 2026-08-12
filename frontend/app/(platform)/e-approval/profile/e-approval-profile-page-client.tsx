@@ -111,7 +111,7 @@ export function EApprovalProfilePageClient() {
           </EApprovalSectionCard>
         ) : canDelegate ? (
           <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-sm">
-            Out-of-office delegation is disabled for this tenant. An administrator can enable it under{" "}
+            Out-of-office delegation is disabled for this organization. An administrator can enable it under{" "}
             <Link href="/e-approval/settings" className="text-primary hover:underline">
               module settings
             </Link>

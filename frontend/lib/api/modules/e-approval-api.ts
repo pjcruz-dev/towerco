@@ -544,7 +544,12 @@ export async function fetchEApprovalApprovalsIndex(params: {
 
 export async function decideEApprovalApproval(
   id: string,
-  payload: { decision: "approved" | "rejected"; remarks?: string; signature?: string | null },
+  payload: {
+    decision: "approved" | "rejected";
+    remarks?: string;
+    signature?: string | null;
+    signature_consent?: boolean;
+  },
 ): Promise<void> {
   await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);
 }
@@ -1098,8 +1103,14 @@ export async function fetchEApprovalMeProfile(): Promise<EApprovalMeProfile> {
   return response.data.data;
 }
 
-export async function updateEApprovalMeSignature(signature: string | null): Promise<void> {
-  await apiClient.put("/e-approval/me/signature", { signature });
+export async function updateEApprovalMeSignature(
+  signature: string | null,
+  options?: { signatureConsent?: boolean },
+): Promise<void> {
+  await apiClient.put("/e-approval/me/signature", {
+    signature,
+    ...(options?.signatureConsent === true ? { signature_consent: true } : {}),
+  });
 }
 
 export async function createEApprovalDelegation(payload: {

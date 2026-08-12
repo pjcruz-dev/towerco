@@ -71,6 +71,7 @@ final class EApprovalExternalSubmissionNotification extends Notification impleme
 
             $message = (new MailMessage())
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
+                ->from((string) config('mail.from.address'), $brand)
                 ->subject($subject)
                 ->greeting("{$brand}")
                 ->line(__('Hello :name,', ['name' => $submitter['name']]))
