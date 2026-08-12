@@ -13,7 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { EApprovalApprovalSignatureField, validateApprovalSignature } from "@/components/e-approval/e-approval-approval-signature-field";
+import { EApprovalApprovalSignatureField, validateApprovalSignature, validateApprovalSignatureConsent } from "@/components/e-approval/e-approval-approval-signature-field";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
@@ -121,6 +121,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [forceFullRestart, setForceFullRestart] = useState(false);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
+  const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
   const [rerouteUserId, setRerouteUserId] = useState("");
   const [rerouteReason, setRerouteReason] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
@@ -258,6 +259,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         decision,
         remarks: decisionRemarks.trim() || undefined,
         signature: decision === "approved" ? signature : undefined,
+        signature_consent: decision === "approved" ? true : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["e-approval"] });
@@ -267,6 +269,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       setDecisionRemarks("");
       setApprovalSignature(null);
       setApprovalSignatureError(null);
+      setSignatureConsentAccepted(false);
     },
     onError: (e) => push({ level: "error", title: "Decision failed", message: getErrorMessage(e) }),
   });
@@ -782,6 +785,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       <EApprovalApprovalSignatureField
                         value={approvalSignature}
                         onChange={setApprovalSignature}
+                        consentAccepted={signatureConsentAccepted}
+                        onConsentChange={setSignatureConsentAccepted}
                         disabled={decideMutation.isPending || revisionMutation.isPending}
                         error={approvalSignatureError}
                         onErrorChange={setApprovalSignatureError}
@@ -820,9 +825,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         <Button
                           size="sm"
                           onClick={() => {
-                            const error = validateApprovalSignature(approvalSignature);
-                            if (error) {
-                              setApprovalSignatureError(error);
+                            const signatureError = validateApprovalSignature(approvalSignature);
+                            if (signatureError) {
+                              setApprovalSignatureError(signatureError);
+                              return;
+                            }
+                            const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
+                            if (consentError) {
+                              setApprovalSignatureError(consentError);
                               return;
                             }
                             decideMutation.mutate({
@@ -831,7 +841,11 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               signature: approvalSignature!.trim(),
                             });
                           }}
-                          disabled={decideMutation.isPending || revisionMutation.isPending}
+                          disabled={
+                            decideMutation.isPending ||
+                            revisionMutation.isPending ||
+                            !signatureConsentAccepted
+                          }
                         >
                           Approve
                         </Button>

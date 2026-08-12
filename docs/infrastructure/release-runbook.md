@@ -143,5 +143,5 @@ Footer version in the UI (if shown) should match the deployed tag when you wire 
 - [`aws-ecs-cicd.md`](./aws-ecs-cicd.md) — target AWS pipeline
 - [`tenant-domain-slugs.md`](./tenant-domain-slugs.md) — staging vs production hosts / tenants
 - [`tenant-environments-phase-2.md`](./tenant-environments-phase-2.md) — Add environment checklist
-- [`../local-development-docker-guide.md`](../local-development-docker-guide.md) — local Docker
+- [`../local-development-docker-guide.md`](../guides/local-development-docker-guide.md) — local Docker
 - Root [`README.md`](../../README.md) — production deployment overview

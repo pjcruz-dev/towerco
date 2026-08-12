@@ -2,6 +2,8 @@
 
 A friendly walkthrough for everyday users: sign in, add your signature, submit a Document Approval, track it, check files, and approve / reject / ask for changes.
 
+For the **general E-Approval** walkthrough (any form, not only Document Approval), see [e-approval-end-user-guide.md](./e-approval-end-user-guide.md).
+
 ---
 
 ## Who should read what?

@@ -1,10 +1,12 @@
 # TowerOS enterprise SaaS design system
 
+> **Canonical full design system:** [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md). This file is the shorter token / component summary for day-to-day UI work.
+
 **Audience:** Product, design, and engineering (Next.js 14 + Tailwind + shadcn/ui).  
 **Style:** Telecom enterprise SaaS, modern ERP, operational clarity — aligned with Azure Portal, ServiceNow, Atlassian Jira.  
 **Philosophy:** Operational minimalism (see `.cursor/rules/uiux-theme.mdc`). Data-first, map-first where relevant, low motion.
 
-**Board presentation alignment:** Add `Rules/TowerOS_Board_Presentation.pdf` (or `docs/Rules/TowerOS_Board_Presentation.pdf`) to the repository to lock module naming and information architecture. Until then, the app follows the **Infrastructure** / **Governance** grouping and module labels defined in `app-sidebar.tsx` and `platform-console-sidebar.tsx`.
+**Board presentation alignment:** Use [`docs/Rules/TowerOS_Board_Presentation.pdf`](../Rules/TowerOS_Board_Presentation.pdf) to lock module naming and information architecture. The app follows the **Infrastructure** / **Governance** grouping and module labels defined in `app-sidebar.tsx` and `platform-console-sidebar.tsx`.
 
 ---
 

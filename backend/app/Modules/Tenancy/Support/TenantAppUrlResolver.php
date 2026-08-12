@@ -32,7 +32,7 @@ final class TenantAppUrlResolver
         return $configured.$normalizedPath;
     }
 
-    /** Tenant slug for mail subjects/headers (e.g. ATC), not the platform product name. */
+    /** Tenant slug/domain for mail subjects/headers (e.g. ATC), not the platform product name. */
     public function mailBrandLabel(): string
     {
         $tenant = tenant();
@@ -40,6 +40,14 @@ final class TenantAppUrlResolver
             $slug = trim((string) ($tenant->slug ?? ''));
             if ($slug !== '') {
                 return strtoupper($slug);
+            }
+
+            $domain = Domain::query()->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
+            if (is_string($domain) && $domain !== '') {
+                $hostLabel = $this->hostLabelFromDomain($domain);
+                if ($hostLabel !== null) {
+                    return $hostLabel;
+                }
             }
         }
 
@@ -49,6 +57,23 @@ final class TenantAppUrlResolver
     public function subjectPrefix(): string
     {
         return '['.$this->mailBrandLabel().']';
+    }
+
+    /** First hostname label suitable for branding (e.g. atc.localhost → ATC). */
+    private function hostLabelFromDomain(string $domain): ?string
+    {
+        $host = strtolower(trim($domain));
+        if ($host === '' || $host === 'localhost') {
+            return null;
+        }
+
+        $label = explode('.', $host)[0] ?? '';
+        $label = trim($label);
+        if ($label === '' || $label === 'www' || $label === 'localhost') {
+            return null;
+        }
+
+        return strtoupper($label);
     }
 
     /**

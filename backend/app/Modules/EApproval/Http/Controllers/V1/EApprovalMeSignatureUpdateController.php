@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Services\EApprovalUserProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class EApprovalMeSignatureUpdateController extends AbstractApiController
 {
@@ -17,10 +18,19 @@ class EApprovalMeSignatureUpdateController extends AbstractApiController
 
         $data = $request->validate([
             'signature' => ['nullable', 'string', 'max:500000'],
+            'signature_consent' => ['sometimes', 'boolean'],
         ]);
 
-        $profiles->updateSignature($request->user(), $data['signature'] ?? null, $request->user());
+        $signature = $data['signature'] ?? null;
+        $hasSignature = is_string($signature) && trim($signature) !== '';
+        if ($hasSignature && ! ($data['signature_consent'] ?? false)) {
+            throw ValidationException::withMessages([
+                'signature_consent' => [__('You must accept the electronic signature consent before saving a signature.')],
+            ]);
+        }
 
-        return $this->ok(['ok' => true]);
+        $profiles->updateSignature($request->user(), $signature, $request->user());
+
+        return $this->ok();
     }
 }

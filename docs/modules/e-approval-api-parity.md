@@ -1,6 +1,6 @@
 # E-Approval — legacy API parity (P4 sign-off)
 
-Standalone `legacy/atcformbuiilder` is **decommissioned**. TowerOS E-Approval is the only supported surface for forms, submissions, and approvals.
+Standalone formbuilder is **decommissioned**. TowerOS E-Approval is the only supported surface for forms, submissions, and approvals.
 
 **Sign-off criteria:** All production workflows use TowerOS routes below. Intentional gaps are documented and accepted.
 
@@ -50,7 +50,7 @@ Standalone `legacy/atcformbuiilder` is **decommissioned**. TowerOS E-Approval is
 ## Deployment checklist (P4)
 
 - [x] Root `docker-compose.yml` — no formbuilder service
-- [x] `legacy/atcformbuiilder/` — archived, not in CI/deploy path
+- [x] Standalone formbuilder — removed from repo; not in CI/deploy path
 - [x] Tenant module routes under `/api/v1/e-approval/*`
 - [x] Frontend `/e-approval/*` in main Next.js app
 - [ ] Production tenants migrated (run `e-approval:import-legacy` per tenant if needed)

@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Models\Tenant;
 use App\Modules\EApproval\Notifications\EApprovalMailTestNotification;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 
 final class EApprovalSettingsTestEmailService
 {
+    public function __construct(
+        private readonly TenantAppUrlResolver $tenantUrls,
+    ) {}
+
     /**
      * @return array{sent_to: string, mailer: string}
      */
@@ -33,7 +37,7 @@ final class EApprovalSettingsTestEmailService
             ]);
         }
 
-        $tenantLabel = $this->tenantLabel();
+        $tenantLabel = $this->tenantUrls->mailBrandLabel();
 
         Notification::send($user, new EApprovalMailTestNotification($tenantLabel));
 
@@ -41,20 +45,5 @@ final class EApprovalSettingsTestEmailService
             'sent_to' => $email,
             'mailer' => $mailer,
         ];
-    }
-
-    private function tenantLabel(): string
-    {
-        $tenant = tenant();
-        if ($tenant instanceof Tenant) {
-            $slug = trim((string) ($tenant->slug ?? ''));
-            if ($slug !== '') {
-                return $slug;
-            }
-
-            return (string) $tenant->id;
-        }
-
-        return 'unknown';
     }
 }

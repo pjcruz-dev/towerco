@@ -89,6 +89,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
 
             $message = (new MailMessage())
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
+                ->from((string) config('mail.from.address'), $brand)
                 ->subject($subject)
                 ->greeting("{$brand} — ".__('E-Approval'))
                 ->line(__('Document: **:document**', ['document' => $documentNo]))

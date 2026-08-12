@@ -139,7 +139,7 @@ Typography must be:
 - enterprise-grade
 - **low visual weight** (operational calm): default to `font-normal`/`font-medium` for data; reserve `font-semibold` for page titles and primary actions only
 
-**Board / investor materials:** If `docs/Rules/TowerOS_Board_Presentation.pdf` (or `Rules/TowerOS_Board_Presentation.pdf`) is added to the workspace, keep module names, grouping (Infrastructure vs Governance), and hierarchy aligned with that document.
+**Board / investor materials:** Keep module names, grouping (Infrastructure vs Governance), and hierarchy aligned with `docs/Rules/TowerOS_Board_Presentation.pdf`.
 
 ---
 

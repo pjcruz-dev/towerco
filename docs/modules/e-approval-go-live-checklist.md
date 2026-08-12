@@ -1,6 +1,6 @@
 # E-Approval — tenant go-live checklist
 
-Use this checklist when moving a tenant from standalone `legacy/atcformbuiilder` to TowerOS E-Approval.
+Use this checklist when moving a tenant from the former standalone formbuilder to TowerOS E-Approval.
 
 Related: [e-approval.md](./e-approval.md) · [e-approval-api-parity.md](./e-approval-api-parity.md)
 
@@ -105,7 +105,7 @@ Run on the **pilot tenant** before wider cutover.
 | 2 | **Submissions → New** | Published form list; fields render (text, select, date, etc.) |
 | 3 | Submit a test request | Document number assigned; status pending; requestor + approver receive email (if SMTP configured) |
 | 4 | Open submission detail | Values visible; cancel/follow-up if applicable |
-| 5 | **My profile** | Save signature (optional) |
+| 5 | **My profile** | Save signature + accept consent (optional but recommended) |
 
 ### B. Approver (`e_approval_approver`)
 
@@ -159,7 +159,7 @@ docker compose exec backend php artisan test --filter=EApproval
 - [ ] Communicate new URL (TowerOS tenant app, **E-APPROVAL** sidebar)
 - [ ] Disable standalone formbuilder hosts (nginx/pm2/DNS)
 - [ ] Monitor first 48h: failed jobs, mail delivery, Graph manager failures in logs
-- [ ] Keep `legacy/atcformbuiilder/` DB read-only backup until sign-off
+- [ ] Keep any former formbuilder DB read-only backup until sign-off
 
 ---
 

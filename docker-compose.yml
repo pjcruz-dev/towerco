@@ -1,4 +1,4 @@
-# TowerOS local/production stack only. Legacy formbuilder: legacy/atcformbuiilder/ (not a service here).
+# TowerOS local/production stack only (API + web + MySQL + Redis + Soketi).
 name: toweros
 
 services:

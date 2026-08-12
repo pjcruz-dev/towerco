@@ -8,6 +8,7 @@ import { EApprovalSignaturePad } from "@/components/e-approval/e-approval-signat
 import { EApprovalSignaturePreview } from "@/components/e-approval/e-approval-signature-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,6 +21,7 @@ import {
   isImageSignature,
   signatureModeForValue,
 } from "@/modules/e-approval/signature";
+import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL } from "@/modules/e-approval/signature-consent";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const MAX_SIGNATURE_DATA_URL_LENGTH = 480_000;
@@ -60,6 +62,7 @@ export function EApprovalMeSignaturePanel() {
   const [savedSource, setSavedSource] = useState<EApprovalMeProfile["signature_source"]>(null);
   const [uploadFileName, setUploadFileName] = useState<string | null>(null);
   const [isReadingUpload, setIsReadingUpload] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["e-approval", "me", "profile"],
@@ -76,25 +79,35 @@ export function EApprovalMeSignaturePanel() {
     setSavedSource(profile.signature_source ?? null);
     setMode(signatureModeForValue(nextSignature));
     setUploadFileName(null);
+    setConsentAccepted(false);
   }, [profileQuery.data]);
 
   const isDirty = useMemo(() => (draft ?? "") !== (saved ?? ""), [draft, saved]);
+  const savingSignature = hasSignatureValue(draft);
 
   const saveMutation = useMutation({
-    mutationFn: () => updateEApprovalMeSignature(hasSignatureValue(draft) ? draft!.trim() : null),
+    mutationFn: () =>
+      updateEApprovalMeSignature(hasSignatureValue(draft) ? draft!.trim() : null, {
+        signatureConsent: hasSignatureValue(draft) ? true : undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["e-approval", "me", "profile"] });
       setSaved(draft);
       setSavedSource("profile");
+      setConsentAccepted(false);
       push({ level: "success", title: "Signature saved" });
     },
     onError: (error) =>
       push({ level: "error", title: "Signature save failed", message: getErrorMessage(error) }),
   });
 
+  const canSave =
+    isDirty && (!savingSignature || consentAccepted) && !profileQuery.isLoading && !saveMutation.isPending;
+
   const handleClear = () => {
     setDraft(null);
     setUploadFileName(null);
+    setConsentAccepted(false);
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   };
 
@@ -234,22 +247,37 @@ export function EApprovalMeSignaturePanel() {
             </TabsContent>
           </Tabs>
 
-          <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-            <Button
-              size="sm"
-              onClick={() => saveMutation.mutate()}
-              disabled={profileQuery.isLoading || saveMutation.isPending || !isDirty}
-            >
-              {saveMutation.isPending ? "Saving…" : "Save signature"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleClear}
-              disabled={profileQuery.isLoading || saveMutation.isPending || !hasSignatureValue(draft)}
-            >
-              Clear
-            </Button>
+          <div className="space-y-3 border-t border-border pt-4">
+            {savingSignature ? (
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <Checkbox
+                  className="mt-0.5"
+                  checked={consentAccepted}
+                  onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+                  disabled={profileQuery.isLoading || saveMutation.isPending}
+                  aria-describedby="ea-signature-consent-hint"
+                />
+                <span>
+                  <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+                  <span id="ea-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+                    {SIGNATURE_CONSENT_HINT}
+                  </span>
+                </span>
+              </label>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => saveMutation.mutate()} disabled={!canSave}>
+                {saveMutation.isPending ? "Saving…" : "Save signature"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClear}
+                disabled={profileQuery.isLoading || saveMutation.isPending || !hasSignatureValue(draft)}
+              >
+                Clear
+              </Button>
+            </div>
           </div>
         </div>
 

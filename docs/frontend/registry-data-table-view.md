@@ -62,6 +62,6 @@ For non-paginated lists (roles, operators, form pickers), set `manualSorting={fa
 
 ## Related UI
 
-- Design system §4 (tables): `docs/design-system/toweros-design-system.md`
+- Design system §4 (tables): `docs/design-system/DESIGN_SYSTEM.md`
 - Styling utilities: `RegistryTableScroll` / registry table classes
 - Row selection: `createRowSelectionColumn` + `rowSelection` props
