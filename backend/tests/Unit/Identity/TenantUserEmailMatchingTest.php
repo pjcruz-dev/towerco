@@ -62,4 +62,30 @@ final class TenantUserEmailMatchingTest extends TestCase
         $this->assertTrue($matched->hasRole('e_approval_approver'));
         tenancy()->end();
     }
+
+    public function test_import_assigns_comma_separated_roles(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $this->testTenant->seat_limit = 50;
+        $this->testTenant->save();
+
+        $service = app(TenantUserAdminService::class);
+        $result = $service->importRows([
+            [
+                'email' => 'multi.role@example.com',
+                'name' => 'Multi Role',
+                'role' => 'e_approval_approver,e_approval_requestor,e_approval_viewer',
+            ],
+        ]);
+
+        $this->assertSame(1, $result['created']);
+        $this->assertSame([], $result['errors']);
+
+        $user = TenantUser::query()->where('email', 'multi.role@example.com')->first();
+        $this->assertNotNull($user);
+        $this->assertTrue($user->hasRole('e_approval_approver'));
+        $this->assertTrue($user->hasRole('e_approval_requestor'));
+        $this->assertTrue($user->hasRole('e_approval_viewer'));
+        tenancy()->end();
+    }
 }

@@ -35,6 +35,7 @@ class TenantUserImportController extends AbstractApiController
         $emailIdx = array_search('email', $columns, true);
         $nameIdx = array_search('name', $columns, true);
         $roleIdx = array_search('role', $columns, true);
+        $rolesIdx = array_search('roles', $columns, true);
 
         if ($emailIdx === false || $nameIdx === false) {
             fclose($handle);
@@ -47,10 +48,20 @@ class TenantUserImportController extends AbstractApiController
             if (! is_array($line)) {
                 continue;
             }
+            $roleRaw = 'viewer';
+            if ($rolesIdx !== false) {
+                $roleRaw = $this->joinCsvRoleCells($line, $rolesIdx);
+            } elseif ($roleIdx !== false) {
+                $roleRaw = $this->joinCsvRoleCells($line, $roleIdx);
+            }
+            if ($roleRaw === '') {
+                $roleRaw = 'viewer';
+            }
+
             $rows[] = [
                 'email' => strtolower(trim((string) ($line[$emailIdx] ?? ''))),
                 'name' => trim((string) ($line[$nameIdx] ?? '')),
-                'role' => $roleIdx !== false ? trim((string) ($line[$roleIdx] ?? 'viewer')) : 'viewer',
+                'role' => $roleRaw,
             ];
         }
         fclose($handle);
@@ -60,8 +71,27 @@ class TenantUserImportController extends AbstractApiController
         return $this->ok([
             ...$result,
             'hint' => __(
-                'Users are matched by email (case-insensitive). Microsoft sign-in reuses imported accounts — duplicate CSV rows and matching emails are skipped. Roles from import are kept unless Entra group mapping adds roles on sign-in.',
+                'Users are matched by email (case-insensitive). Microsoft sign-in reuses imported accounts — duplicate CSV rows and matching emails are skipped. Roles from import are kept unless Entra group mapping adds roles on sign-in. Multiple roles: comma-separate in the role column (quote the cell in Excel).',
             ),
         ]);
+    }
+
+    /**
+     * Read the role cell and any trailing fragments (unquoted Excel multi-role exports).
+     *
+     * @param  list<int|string|null>  $line
+     */
+    private function joinCsvRoleCells(array $line, int $startIdx): string
+    {
+        $parts = [];
+        for ($i = $startIdx; $i < count($line); $i++) {
+            $part = trim((string) ($line[$i] ?? ''));
+            if ($part === '') {
+                continue;
+            }
+            $parts[] = $part;
+        }
+
+        return implode(',', $parts);
     }
 }

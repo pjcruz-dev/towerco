@@ -741,8 +741,10 @@ export function UsersPageClient() {
           <p className="mt-1 text-sm text-muted-foreground">
             Upload a CSV with columns <span className="font-mono text-xs">email</span>,{" "}
             <span className="font-mono text-xs">name</span>, and optional{" "}
-            <span className="font-mono text-xs">role</span>. Passwords are generated automatically. Existing emails are
-            skipped.
+            <span className="font-mono text-xs">role</span>. Multiple roles: comma-separate in one cell (quote the cell
+            in Excel), e.g.{" "}
+            <span className="font-mono text-xs">e_approval_approver,e_approval_requestor,e_approval_viewer</span>.
+            Passwords are generated automatically. Existing emails are skipped.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={downloadImportTemplate}>

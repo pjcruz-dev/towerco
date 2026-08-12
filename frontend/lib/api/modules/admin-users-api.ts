@@ -310,12 +310,12 @@ export async function stopImpersonation(): Promise<void> {
   await apiClient.post("/auth/impersonation/stop");
 }
 
-/** Sample rows for Team & Access CSV import. Role must match an existing Spatie role name. */
+/** Sample rows for Team & Access CSV import. Role names must exist; use commas for multiple roles. */
 export const ADMIN_USERS_IMPORT_TEMPLATE_CSV = [
   "email,name,role",
   "jane.doe@example.com,Jane Doe,viewer",
   "approver@example.com,E Approval Approver,e_approval_approver",
   "viewer@example.com,E Approval Viewer,e_approval_viewer",
-  // Create/submit tier is requestor (not contributor) in TowerOS RBAC.
   "requestor@example.com,E Approval Requestor,e_approval_requestor",
+  'multi.role@example.com,Multi Role User,"e_approval_approver,e_approval_requestor,e_approval_viewer"',
 ].join("\n") + "\n";

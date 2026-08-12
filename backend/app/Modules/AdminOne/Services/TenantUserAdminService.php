@@ -565,7 +565,7 @@ class TenantUserAdminService
     }
 
     /**
-     * @param  list<array{email: string, name: string, role?: string}>  $rows
+     * @param  list<array{email: string, name: string, role?: string, roles?: string|list<string>}>  $rows
      * @return array{created: int, skipped: int, errors: list<string>}
      */
     public function importRows(array $rows): array
@@ -592,14 +592,14 @@ class TenantUserAdminService
                 continue;
             }
 
-            $role = trim((string) ($row['role'] ?? 'viewer'));
-            if ($role === '') {
-                $role = 'viewer';
+            $roles = $this->parseImportRoles($row['roles'] ?? $row['role'] ?? 'viewer');
+            if ($roles === []) {
+                $roles = ['viewer'];
             }
 
             try {
-                $this->seatLimits->assertCanAddActiveUser([$role]);
-                $this->create($name, $email, [$role]);
+                $this->seatLimits->assertCanAddActiveUser($roles);
+                $this->create($name, $email, $roles);
                 $created++;
             } catch (ValidationException $e) {
                 $message = (string) collect($e->errors())->flatten()->first();
@@ -624,6 +624,37 @@ class TenantUserAdminService
         }
 
         return compact('created', 'skipped', 'errors');
+    }
+
+    /**
+     * Accept a single role, comma/semicolon/pipe-separated roles, or a roles list.
+     *
+     * @param  mixed  $raw
+     * @return list<string>
+     */
+    private function parseImportRoles(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            $parts = $raw;
+        } else {
+            $value = trim((string) $raw);
+            if ($value === '') {
+                return [];
+            }
+            $parts = preg_split('/[,;|]+/', $value) ?: [];
+        }
+
+        $roles = [];
+        foreach ($parts as $part) {
+            $role = strtolower(trim((string) $part));
+            $role = str_replace(' ', '_', $role);
+            if ($role === '') {
+                continue;
+            }
+            $roles[] = $role;
+        }
+
+        return array_values(array_unique($roles));
     }
 
     /**
