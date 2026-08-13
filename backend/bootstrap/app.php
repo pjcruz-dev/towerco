@@ -5,6 +5,7 @@ use App\Core\Http\Middleware\AssignCorrelationId;
 use App\Core\Http\Middleware\ConfigureTenantSanctumProvider;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Core\Http\Middleware\EnsurePasskeyEnrollment;
 use App\Core\Http\Middleware\EnsurePlatformAdmin;
 use App\Core\Http\Middleware\EnsurePlatformMfaVerified;
 use App\Core\Http\Middleware\EnsurePlatformPermission;
@@ -32,7 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withBroadcasting(
         __DIR__.'/../routes/channels.php',
-        ['prefix' => 'api/v1', 'middleware' => ['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']],
+        ['prefix' => 'api/v1', 'middleware' => ['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa', 'auth.passkey']],
     )
     ->withCommands()
     ->withMiddleware(function (Middleware $middleware): void {
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.sanctum' => ConfigureTenantSanctumProvider::class,
             'auth.session' => EnsureActiveSession::class,
             'auth.mfa' => EnsureMfaVerified::class,
+            'auth.passkey' => EnsurePasskeyEnrollment::class,
             'platform.admin' => EnsurePlatformAdmin::class,
             'platform.permission' => EnsurePlatformPermission::class,
             'platform.mfa' => EnsurePlatformMfaVerified::class,

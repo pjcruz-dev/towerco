@@ -162,6 +162,16 @@ final class ApprovalDecisionService
             throw ValidationException::withMessages(['approval' => [__('Submission not found.')]]);
         }
 
+        if (in_array((string) $submission->status, [
+            EApprovalSubmissionStatus::CANCELLED,
+            EApprovalSubmissionStatus::APPROVED,
+            EApprovalSubmissionStatus::REJECTED,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'approval' => [__('This submission is no longer awaiting a decision.')],
+            ]);
+        }
+
         if ($decision === 'rejected') {
             $remarks = trim((string) $remarks);
             if (strlen($remarks) < 5) {

@@ -6,6 +6,7 @@ namespace App\Modules\Identity\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Identity\Services\TenantAuthPolicyService;
+use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Services\TenantSsoConfigService;
 use Illuminate\Http\JsonResponse;
 
@@ -17,12 +18,14 @@ final class TenantSsoAzureStatusController extends AbstractApiController
     public function __invoke(
         TenantSsoConfigService $service,
         TenantAuthPolicyService $authPolicy,
+        TenantPasskeysPolicyService $passkeysPolicy,
     ): JsonResponse {
         $tenantId = tenant('id');
         if ($tenantId === null) {
             return $this->ok([
                 'microsoft_sign_in' => null,
                 'password_login' => null,
+                'passkeys' => null,
             ]);
         }
 
@@ -31,6 +34,7 @@ final class TenantSsoAzureStatusController extends AbstractApiController
         return $this->ok([
             'microsoft_sign_in' => $service->publicStatus($tenantId),
             'password_login' => $authPolicy->publicPasswordLoginStatus($tenantId),
+            'passkeys' => $passkeysPolicy->publicStatus(),
         ]);
     }
 }

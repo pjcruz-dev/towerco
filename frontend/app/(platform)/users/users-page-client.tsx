@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Download, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AdminUserBulkResetPasswordDialog } from "@/components/admin/admin-user-bulk-reset-password-dialog";
 import { AdminUserDetailDrawer } from "@/components/admin/admin-user-detail-drawer";
 import { AdminUserFormSheet } from "@/components/admin/admin-user-form-sheet";
 import { AdminUserImpersonateDialog } from "@/components/admin/admin-user-impersonate-dialog";
@@ -146,6 +147,7 @@ export function UsersPageClient() {
   const [bulkPasswordResults, setBulkPasswordResults] = useState<
     Array<{ email: string; name: string; temporary_password: string }> | null
   >(null);
+  const [bulkResetPasswordOpen, setBulkResetPasswordOpen] = useState(false);
 
   const rolesQuery = useAdminRoleCatalog();
   const seatUsageQuery = useQuery({
@@ -326,10 +328,15 @@ export function UsersPageClient() {
   });
 
   const bulkResetPasswordMutation = useMutation({
-    mutationFn: () => bulkResetPasswordAdminUsers(selectedIdList),
+    mutationFn: (password?: string) =>
+      bulkResetPasswordAdminUsers(
+        selectedIdList,
+        password ? { password } : undefined,
+      ),
     onSuccess: (result) => {
       invalidateUsers();
       clearSelection();
+      setBulkResetPasswordOpen(false);
       setBulkPasswordResults(result.passwords.map(({ email, name, temporary_password }) => ({
         email,
         name,
@@ -343,7 +350,16 @@ export function UsersPageClient() {
       );
     },
     onError: (error) => {
-      notify({ level: "error", title: "Bulk password reset failed", message: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      const timedOut =
+        typeof message === "string" && message.toLowerCase().includes("timed out");
+      notify({
+        level: "error",
+        title: "Bulk password reset failed",
+        message: timedOut
+          ? "The request timed out. Try again with a smaller selection (about 20 users at a time), then download each CSV before the next batch."
+          : message,
+      });
     },
   });
 
@@ -383,13 +399,7 @@ export function UsersPageClient() {
   };
 
   const handleBulkResetPassword = () => {
-    if (
-      window.confirm(
-        `Reset passwords for ${selectedCount} selected user${selectedCount === 1 ? "" : "s"}? Unique temporary passwords will be generated and shown once. Active sessions will be revoked.`,
-      )
-    ) {
-      bulkResetPasswordMutation.mutate();
-    }
+    setBulkResetPasswordOpen(true);
   };
 
   const downloadBulkPasswordsCsv = () => {
@@ -836,6 +846,16 @@ export function UsersPageClient() {
             </ul>
           </div>
         ) : null}
+
+        <AdminUserBulkResetPasswordDialog
+          open={bulkResetPasswordOpen}
+          selectedCount={selectedCount}
+          pending={bulkResetPasswordMutation.isPending}
+          onOpenChange={setBulkResetPasswordOpen}
+          onConfirm={({ mode, password }) => {
+            bulkResetPasswordMutation.mutate(mode === "shared" ? password : undefined);
+          }}
+        />
 
         <AdminUserImpersonateDialog
           user={impersonateTarget}

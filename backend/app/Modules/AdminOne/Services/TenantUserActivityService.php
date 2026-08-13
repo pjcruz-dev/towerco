@@ -71,6 +71,12 @@ final class TenantUserActivityService
             'auth.logout_all' => __('Signed out all sessions'),
             'auth.session.revoked' => __('Session revoked'),
             'auth.admin.sessions_revoked' => __('All sessions revoked by administrator'),
+            'auth.admin.webauthn_revoked' => __('All passkeys revoked by administrator'),
+            'auth.webauthn.register' => __('Passkey enrolled'),
+            'auth.webauthn.revoke' => __('Passkey removed'),
+            'auth.webauthn.login' => __('Signed in with passkey'),
+            'auth.webauthn.login.failed' => __('Passkey sign-in failed'),
+            'auth.webauthn.register.failed' => __('Passkey enrollment failed'),
             default => str_replace(['auth.', '_'], ['', ' '], $event),
         };
     }

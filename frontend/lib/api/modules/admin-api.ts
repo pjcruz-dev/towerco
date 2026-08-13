@@ -40,9 +40,17 @@ export type PasswordLoginPublicStatus = {
   restricted_when_sso_enabled: boolean;
 } | null;
 
+export type PasskeysPublicStatus = {
+  enabled: boolean;
+  label: string;
+  policy: "allow" | "prefer" | "require";
+  satisfies_mfa: boolean;
+} | null;
+
 export type TenantAuthPublicStatus = {
   microsoft_sign_in: MicrosoftSignInPublicStatus;
   password_login: PasswordLoginPublicStatus;
+  passkeys: PasskeysPublicStatus;
 };
 
 export async function fetchTenantMicrosoftSsoConfig(): Promise<TenantMicrosoftSsoConfig | null> {
@@ -81,6 +89,11 @@ export type TenantSecuritySettings = {
   mfa_trust_days: number;
   mfa_global_enabled: boolean;
   mfa_policy_active: boolean;
+  passkeys_enabled: boolean;
+  passkeys_global_enabled: boolean;
+  passkeys_default_enabled: boolean;
+  passkeys_policy: "allow" | "prefer" | "require";
+  passkeys_satisfies_mfa: boolean;
 };
 
 export async function fetchTenantSecuritySettings(): Promise<TenantSecuritySettings> {
@@ -91,6 +104,9 @@ export async function fetchTenantSecuritySettings(): Promise<TenantSecuritySetti
 export async function updateTenantSecuritySettings(payload: {
   mfa_required: boolean;
   mfa_trust_days?: number;
+  passkeys_enabled?: boolean;
+  passkeys_policy?: "allow" | "prefer" | "require";
+  passkeys_satisfies_mfa?: boolean;
 }): Promise<TenantSecuritySettings> {
   const response = await apiClient.patch<{ data: TenantSecuritySettings }>("/admin/security", payload);
   return response.data.data;

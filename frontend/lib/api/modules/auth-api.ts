@@ -134,3 +134,91 @@ export async function regenerateRecoveryCodes(): Promise<{ recovery_codes: strin
   );
   return response.data.data;
 }
+
+export type WebAuthnCredentialRow = {
+  id: string;
+  label: string | null;
+  transports: string[] | null;
+  attestation_format: string | null;
+  last_used_at: string | null;
+  created_at: string | null;
+};
+
+export type WebAuthnCeremonyOptions = {
+  challenge_id: string;
+  publicKey: Record<string, unknown>;
+  rp_id: string;
+};
+
+export async function fetchWebAuthnCredentials(): Promise<{
+  enabled: boolean;
+  policy: "allow" | "prefer" | "require";
+  satisfies_mfa: boolean;
+  enrollment_required: boolean;
+  credentials: WebAuthnCredentialRow[];
+  rp_id: string;
+}> {
+  const response = await apiClient.get<{
+    data: {
+      enabled: boolean;
+      policy: "allow" | "prefer" | "require";
+      satisfies_mfa: boolean;
+      enrollment_required: boolean;
+      credentials: WebAuthnCredentialRow[];
+      rp_id: string;
+    };
+  }>("/auth/webauthn/credentials");
+  return response.data.data;
+}
+
+export async function webAuthnRegisterOptions(label?: string): Promise<WebAuthnCeremonyOptions> {
+  const response = await apiClient.post<{ data: WebAuthnCeremonyOptions }>(
+    "/auth/webauthn/register/options",
+    label ? { label } : {},
+  );
+  return response.data.data;
+}
+
+export async function webAuthnRegisterVerify(payload: {
+  challengeId: string;
+  credential: Record<string, unknown>;
+  label?: string;
+}): Promise<WebAuthnCredentialRow> {
+  const response = await apiClient.post<{ data: { credential: WebAuthnCredentialRow } }>(
+    "/auth/webauthn/register/verify",
+    {
+      challenge_id: payload.challengeId,
+      credential: payload.credential,
+      ...(payload.label ? { label: payload.label } : {}),
+    },
+  );
+  return response.data.data.credential;
+}
+
+export async function revokeWebAuthnCredential(id: string): Promise<void> {
+  await apiClient.delete(`/auth/webauthn/credentials/${id}`);
+}
+
+export async function webAuthnLoginOptions(email?: string): Promise<WebAuthnCeremonyOptions> {
+  const response = await apiClient.post<{ data: WebAuthnCeremonyOptions }>(
+    "/auth/webauthn/login/options",
+    email ? { email } : {},
+    { timeout: 60_000 },
+  );
+  return response.data.data;
+}
+
+export async function webAuthnLoginVerify(payload: {
+  challengeId: string;
+  credential: Record<string, unknown>;
+}): Promise<AuthSession> {
+  const response = await apiClient.post<{ data: unknown }>(
+    "/auth/webauthn/login/verify",
+    {
+      challenge_id: payload.challengeId,
+      credential: payload.credential,
+    },
+    { timeout: 60_000 },
+  );
+  return normalizeAuthSession(response.data.data);
+}

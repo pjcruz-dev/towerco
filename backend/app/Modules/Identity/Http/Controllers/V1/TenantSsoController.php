@@ -108,7 +108,7 @@ class TenantSsoController extends AbstractApiController
         $this->roleMapper->syncRolesForGroups($user, $groupIds);
 
         $sessionId = $this->sessionService->start((string) $user->id, 'azure_sso');
-        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId);
+        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId, 'azure_sso');
         if ($mfaState['mark_verified']) {
             $this->sessionService->markMfaVerified($sessionId);
         }
@@ -126,6 +126,8 @@ class TenantSsoController extends AbstractApiController
             'mfa_required' => $mfaState['mfa_required'],
         ]);
 
+        $passkeyFlags = app(\App\Modules\Identity\Services\TenantPasskeysPolicyService::class)->loginFlags($user);
+
         $payload = [
             'access_token' => $accessToken,
             'refresh_token' => $refresh['token'],
@@ -134,6 +136,7 @@ class TenantSsoController extends AbstractApiController
             'mfa_enrollment_required' => $mfaState['mfa_enrollment_required'],
             'mfa_challenge' => $mfaState['mfa_challenge'],
             'user' => app(\App\Modules\Identity\Services\TenantAuthUserPayloadBuilder::class)->build($user),
+            ...$passkeyFlags,
         ];
 
         if ($request->boolean('redirect', true)) {

@@ -14,6 +14,7 @@ use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -463,9 +464,19 @@ class TenantUserAdminService
         $errors = [];
         $passwords = [];
         $shared = is_string($sharedPassword) && $sharedPassword !== '' ? $sharedPassword : null;
+        $actorId = (string) $actor->id;
+        $revokedUserIds = [];
+
+        /** @var Collection<string, TenantUser> $targetsById */
+        $targetsById = TenantUser::query()
+            ->whereIn('id', $userIds)
+            ->get()
+            ->keyBy(static fn (TenantUser $user): string => (string) $user->id);
 
         foreach ($userIds as $userId) {
-            if ((string) $actor->id === (string) $userId) {
+            $userId = (string) $userId;
+
+            if ($actorId === $userId) {
                 $errors[] = [
                     'user_id' => $userId,
                     'message' => (string) __('You cannot bulk-reset your own password.'),
@@ -474,8 +485,8 @@ class TenantUserAdminService
                 continue;
             }
 
-            $target = TenantUser::query()->find($userId);
-            if ($target === null) {
+            $target = $targetsById->get($userId);
+            if (! $target instanceof TenantUser) {
                 $errors[] = [
                     'user_id' => $userId,
                     'message' => (string) __('User not found.'),
@@ -494,18 +505,12 @@ class TenantUserAdminService
             $target->password = Hash::make($plain);
             $target->save();
 
-            if ($revokeSessions) {
-                $this->sessionService->revokeAllForUser((string) $target->id);
-                $this->refreshTokenService->revokeAllForUser((string) $target->id);
-                $target->tokens()->delete();
-            }
-
             $this->auditService->log(
                 'auth.admin.password_reset',
                 (string) $target->id,
                 null,
                 [
-                    'revoked_by' => (string) $actor->id,
+                    'revoked_by' => $actorId,
                     'bulk' => true,
                     'sessions_revoked' => $revokeSessions,
                 ],
@@ -518,7 +523,17 @@ class TenantUserAdminService
                 'name' => (string) $target->name,
                 'temporary_password' => $plain,
             ];
+            $revokedUserIds[] = (string) $target->id;
             $processed++;
+        }
+
+        if ($revokeSessions && $revokedUserIds !== []) {
+            $this->sessionService->revokeAllForUsers($revokedUserIds);
+            $this->refreshTokenService->revokeAllForUsers($revokedUserIds);
+            DB::connection('tenant')->table('personal_access_tokens')
+                ->where('tokenable_type', TenantUser::class)
+                ->whereIn('tokenable_id', $revokedUserIds)
+                ->delete();
         }
 
         return compact('processed', 'skipped', 'errors', 'passwords');

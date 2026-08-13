@@ -93,6 +93,9 @@ export function TenantSettingsPageClient() {
   const [redirectUri, setRedirectUri] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaTrustDays, setMfaTrustDays] = useState(7);
+  const [passkeysEnabled, setPasskeysEnabled] = useState(true);
+  const [passkeysPolicy, setPasskeysPolicy] = useState<"allow" | "prefer" | "require">("allow");
+  const [passkeysSatisfiesMfa, setPasskeysSatisfiesMfa] = useState(true);
 
   const configQuery = useQuery({
     queryKey: ["admin", "sso", "microsoft"],
@@ -126,6 +129,9 @@ export function TenantSettingsPageClient() {
     if (securityQuery.data) {
       setMfaRequired(securityQuery.data.mfa_required);
       setMfaTrustDays(securityQuery.data.mfa_trust_days ?? 7);
+      setPasskeysEnabled(securityQuery.data.passkeys_enabled);
+      setPasskeysPolicy(securityQuery.data.passkeys_policy ?? "allow");
+      setPasskeysSatisfiesMfa(securityQuery.data.passkeys_satisfies_mfa ?? true);
     }
   }, [securityQuery.data]);
 
@@ -170,11 +176,15 @@ export function TenantSettingsPageClient() {
       updateTenantSecuritySettings({
         mfa_required: mfaRequired,
         mfa_trust_days: mfaTrustDays,
+        passkeys_enabled: passkeysEnabled,
+        passkeys_policy: passkeysPolicy,
+        passkeys_satisfies_mfa: passkeysSatisfiesMfa,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "security"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      push({ level: "success", title: "MFA policy saved" });
+      void queryClient.invalidateQueries({ queryKey: ["auth", "public", "status"] });
+      push({ level: "success", title: "Security settings saved" });
     },
     onError: (error) =>
       push({ level: "error", title: "Save failed", message: getErrorMessage(error) }),
@@ -286,6 +296,91 @@ export function TenantSettingsPageClient() {
               disabled={securitySaveMutation.isPending || securityQuery.isLoading}
             >
               {securitySaveMutation.isPending ? "Saving…" : "Save MFA policy"}
+            </Button>
+          </div>
+        </EApprovalSectionCard>
+
+        <EApprovalSectionCard
+          title="Passkeys"
+          description="Allow fingerprint, Face ID, or Windows Hello sign-in via WebAuthn passkeys."
+        >
+          <div className="mt-4 space-y-4">
+            <div className="flex gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+              <p>
+                Password and Microsoft sign-in remain available for recovery. Admins can revoke a
+                user’s passkeys from Team &amp; Access → user → Activity. Platform kill switch:{" "}
+                <code className="rounded bg-muted px-1 text-xs">TOWEROS_TENANT_PASSKEYS_ENABLED</code>.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-1 size-4"
+                checked={passkeysEnabled}
+                onCheckedChange={(v) => setPasskeysEnabled(v === true)}
+                disabled={securityQuery.isLoading || security?.passkeys_global_enabled === false}
+              />
+              <span>
+                <span className="font-medium text-foreground">Enable passkey sign-in</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {security?.passkeys_global_enabled === false
+                    ? "Platform master switch is off — passkeys cannot be enabled for this organization."
+                    : "When on, users can enroll under My security → Passkeys and use Sign in with passkey on the login page."}
+                </span>
+              </span>
+            </label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="passkeys-policy">Passkey policy</Label>
+              <select
+                id="passkeys-policy"
+                className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 text-sm"
+                value={passkeysPolicy}
+                disabled={!passkeysEnabled || securityQuery.isLoading}
+                onChange={(e) =>
+                  setPasskeysPolicy(e.target.value as "allow" | "prefer" | "require")
+                }
+              >
+                <option value="allow">Allow — optional</option>
+                <option value="prefer">Prefer — recommend on login</option>
+                <option value="require">Require — must enroll after sign-in</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Require still allows password/Microsoft for recovery, then blocks the workspace until a
+                passkey is enrolled (break-glass admins exempt).
+              </p>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-1 size-4"
+                checked={passkeysSatisfiesMfa}
+                onCheckedChange={(v) => setPasskeysSatisfiesMfa(v === true)}
+                disabled={!passkeysEnabled || securityQuery.isLoading}
+              />
+              <span>
+                <span className="font-medium text-foreground">
+                  Passkey sign-in satisfies authenticator MFA
+                </span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  When on, signing in with a passkey skips the TOTP challenge (platform authenticator
+                  already verified the user). Password and Microsoft sign-in still follow MFA policy.
+                </span>
+              </span>
+            </label>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => securitySaveMutation.mutate()}
+              disabled={
+                securitySaveMutation.isPending ||
+                securityQuery.isLoading ||
+                security?.passkeys_global_enabled === false
+              }
+            >
+              {securitySaveMutation.isPending ? "Saving…" : "Save passkey policy"}
             </Button>
           </div>
         </EApprovalSectionCard>

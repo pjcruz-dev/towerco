@@ -53,6 +53,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return [
             'mfa_required' => 'boolean',
             'mfa_trust_days' => 'integer',
+            // passkeys_enabled lives in virtual `data` (null = platform default); do not cast boolean (null→false).
             'theme_tokens' => 'array',
             'billing_overrides' => 'array',
             'enabled_modules' => 'array',

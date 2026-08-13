@@ -11,6 +11,7 @@ import { FormInput } from "@/components/forms/form-input";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import {
   requestMfaChallenge,
   verifyMfaChallenge,
@@ -49,7 +50,7 @@ export function MfaPageClient() {
       setSession(nextSession);
       setPendingMfa(null);
       setSessionCookie();
-      router.replace("/dashboard");
+      router.replace(tenantPostLoginPath(nextSession));
     },
     onError: (error) =>
       notify({
@@ -89,7 +90,7 @@ export function MfaPageClient() {
       setSession(nextSession);
       setPendingMfa(null);
       setSessionCookie();
-      router.replace("/dashboard");
+      router.replace(tenantPostLoginPath(nextSession));
     },
     onError: (error) =>
       notify({

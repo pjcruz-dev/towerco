@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Fingerprint } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useForm, type FieldErrors } from "react-hook-form";
@@ -12,9 +13,10 @@ import { LoginNoticeBanner } from "@/components/feedback/login-notice-banner";
 import { Button } from "@/components/ui/button";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchTenantAuthPublicStatus } from "@/lib/api/modules/admin-api";
-import { login } from "@/lib/api/modules/auth-api";
+import { login, webAuthnLoginOptions, webAuthnLoginVerify } from "@/lib/api/modules/auth-api";
 import {
   consumeLoginNotice,
   type LoginNotice,
@@ -26,6 +28,12 @@ import {
   tenantDomainFromBrowserHostname,
   tenantLoginUrl,
 } from "@/lib/tenant/resolve-tenant-domain";
+import {
+  isWebAuthnSupported,
+  serializeAssertion,
+  toRequestOptions,
+  webAuthnUserMessage,
+} from "@/lib/webauthn/browser";
 import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -129,6 +137,8 @@ function LoginPageContent() {
 
   const microsoftSignIn = authStatusQuery.data?.microsoft_sign_in;
   const passwordLoginAvailable = authStatusQuery.data?.password_login?.available ?? true;
+  const passkeysAvailable = authStatusQuery.data?.passkeys?.enabled ?? false;
+  const passkeysPolicy = authStatusQuery.data?.passkeys?.policy ?? "allow";
   const authStatusReady =
     onCentralHost || !tenantDomain || authStatusQuery.isFetched;
   const passwordLoginRestricted =
@@ -185,34 +195,69 @@ function LoginPageContent() {
     isSubmitting,
   } = form.formState;
 
+  const applyAuthSession = (session: Parameters<typeof setSession>[0]) => {
+    if (session.mfaRequired) {
+      beginMfaLogin(session);
+      notify({
+        level: "info",
+        title: "MFA required",
+        message: session.mfaEnrollmentRequired
+          ? "Complete authenticator setup to finish signing in."
+          : "Enter your verification code to finish signing in.",
+      });
+      if (session.mfaEnrollmentRequired) {
+        router.replace("/login/mfa/enroll");
+        return;
+      }
+      router.replace("/login/mfa");
+      return;
+    }
+    setSession(session);
+    setSessionCookie();
+    window.location.assign(tenantPostLoginPath(session));
+  };
+
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: (session) => {
-      if (session.mfaRequired) {
-        beginMfaLogin(session);
-        notify({
-          level: "info",
-          title: "MFA required",
-          message: session.mfaEnrollmentRequired
-            ? "Complete authenticator setup to finish signing in."
-            : "Enter your verification code to finish signing in.",
-        });
-        if (session.mfaEnrollmentRequired) {
-          router.replace("/login/mfa/enroll");
-          return;
-        }
-        router.replace("/login/mfa");
-        return;
-      }
-      setSession(session);
-      setSessionCookie();
-      window.location.assign("/dashboard");
+      applyAuthSession(session);
     },
     onError: (error) => {
       showLoginNotice({
         level: "error",
         title: "Login failed",
         message: getErrorMessage(error),
+      });
+    },
+  });
+
+  const passkeyMutation = useMutation({
+    mutationFn: async () => {
+      if (!isWebAuthnSupported()) {
+        throw new Error("This browser does not support passkeys.");
+      }
+      const email = form.getValues("email")?.trim();
+      const options = await webAuthnLoginOptions(email || undefined);
+      const requestOptions = toRequestOptions(options.publicKey);
+      const credential = (await navigator.credentials.get({
+        publicKey: requestOptions,
+      })) as PublicKeyCredential | null;
+      if (!credential) {
+        throw new Error("No passkey was selected.");
+      }
+      return webAuthnLoginVerify({
+        challengeId: options.challenge_id,
+        credential: serializeAssertion(credential),
+      });
+    },
+    onSuccess: (session) => {
+      applyAuthSession(session);
+    },
+    onError: (error) => {
+      showLoginNotice({
+        level: "error",
+        title: "Passkey sign-in failed",
+        message: webAuthnUserMessage(error) || getErrorMessage(error),
       });
     },
   });
@@ -236,6 +281,21 @@ function LoginPageContent() {
 
     clearSession();
     mutation.mutate(values);
+  };
+
+  const onPasskeySignIn = () => {
+    setLoginNoticeState(null);
+    const host = window.location.hostname.toLowerCase();
+    if (isCentralHostname(host) && !resolveTenantDomainForApi()) {
+      showLoginNotice({
+        level: "error",
+        title: "Organization hostname required",
+        message: "Open your organization URL before using passkey sign-in.",
+      });
+      return;
+    }
+    clearSession();
+    passkeyMutation.mutate();
   };
 
   const onInvalid = (errors: FieldErrors<FormValues>) => {
@@ -295,6 +355,21 @@ function LoginPageContent() {
     !authStatusReady || passwordLoginAvailable || showBreakGlassLogin;
   const showMicrosoftPrimary =
     passwordLoginRestricted && !showBreakGlassLogin;
+  const passkeyBusy = passkeyMutation.isPending;
+  const authBusy = mutation.isPending || isSubmitting || passkeyBusy;
+
+  const passkeySignInButton = passkeysAvailable ? (
+    <Button
+      className="w-full gap-1.5"
+      type="button"
+      variant="outline"
+      disabled={authBusy || authStatusQuery.isLoading || onCentralHost}
+      onClick={onPasskeySignIn}
+    >
+      <Fingerprint className="h-4 w-4" aria-hidden />
+      {passkeyBusy ? "Waiting for passkey…" : "Sign in with passkey"}
+    </Button>
+  ) : null;
 
   return (
     <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -306,6 +381,18 @@ function LoginPageContent() {
         <div className="mt-4">
           <LoginNoticeBanner notice={loginNotice} onDismiss={() => setLoginNoticeState(null)} />
         </div>
+      ) : null}
+
+      {passkeysAvailable && passkeysPolicy === "prefer" ? (
+        <p className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Your organization recommends signing in with a passkey when available.
+        </p>
+      ) : null}
+      {passkeysAvailable && passkeysPolicy === "require" ? (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+          Passkeys are required. You can still use password or Microsoft once, then enroll a passkey
+          under My security.
+        </p>
       ) : null}
 
       {clientReady && onCentralHost ? (
@@ -365,6 +452,7 @@ function LoginPageContent() {
               {microsoftSignIn?.label ?? "Sign in with Microsoft"}
             </Button>
           )}
+          {passkeySignInButton}
           <Button
             className="w-full"
             type="button"
@@ -428,7 +516,7 @@ function LoginPageContent() {
               <Button
                 className="w-full"
                 type="submit"
-                disabled={mutation.isPending || isSubmitting || authStatusQuery.isLoading}
+                disabled={authBusy || authStatusQuery.isLoading}
               >
                 {mutation.isPending || isSubmitting ? "Signing in..." : "Sign in"}
               </Button>
@@ -437,12 +525,17 @@ function LoginPageContent() {
             <p className="text-center text-sm text-muted-foreground">Loading sign-in options…</p>
           ) : null}
 
+          {passkeySignInButton}
+          <p className="text-center text-xs text-muted-foreground">
+            Passkeys must be enrolled under My security after you sign in once.
+          </p>
+
           {microsoftSignIn?.enabled ? (
             <Button
               className="w-full"
               variant={showPasswordFields ? "outline" : "default"}
               type="button"
-              disabled={authStatusQuery.isLoading}
+              disabled={authBusy || authStatusQuery.isLoading}
               onClick={redirectToMicrosoftSignIn}
             >
               {microsoftSignIn.label ?? "Sign in with Microsoft"}

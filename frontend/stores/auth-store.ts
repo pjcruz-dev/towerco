@@ -79,6 +79,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   sessionId: null,
   mfaRequired: false,
   mfaEnrollmentRequired: false,
+  passkeyEnrollmentRequired: false,
   mfaChallenge: null,
   user: null,
   tenantDomain: null,
@@ -86,7 +87,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
   pendingMfa: null,
   isHydrated: false,
   permissionsReady: false,
-  setSession: ({ accessToken, refreshToken, sessionId, mfaRequired, mfaEnrollmentRequired, mfaChallenge, user }) => {
+  setSession: ({
+    accessToken,
+    refreshToken,
+    sessionId,
+    mfaRequired,
+    mfaEnrollmentRequired,
+    passkeyEnrollmentRequired,
+    mfaChallenge,
+    user,
+  }) => {
     const activeTenantId = resolveActiveTenantId(user);
     const tenantDomain = resolveTenantDomainForSession(user);
 
@@ -100,6 +110,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
           sessionId: sessionId ?? null,
           mfaRequired: mfaRequired ?? false,
           mfaEnrollmentRequired: mfaEnrollmentRequired ?? false,
+          passkeyEnrollmentRequired: passkeyEnrollmentRequired ?? false,
           mfaChallenge: mfaChallenge ?? null,
           user,
           tenantDomain,
@@ -113,6 +124,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       sessionId: sessionId ?? null,
       mfaRequired: mfaRequired ?? false,
       mfaEnrollmentRequired: mfaEnrollmentRequired ?? false,
+      passkeyEnrollmentRequired: passkeyEnrollmentRequired ?? false,
       mfaChallenge: mfaChallenge ?? null,
       user,
       tenantDomain,
@@ -153,6 +165,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       sessionId: null,
       mfaRequired: false,
       mfaEnrollmentRequired: false,
+      passkeyEnrollmentRequired: false,
       mfaChallenge: null,
       user: null,
       tenantDomain,
@@ -176,6 +189,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       sessionId: null,
       mfaRequired: false,
       mfaEnrollmentRequired: false,
+      passkeyEnrollmentRequired: false,
       mfaChallenge: null,
       user: null,
       tenantDomain: null,
@@ -196,6 +210,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
             sessionId: state.sessionId,
             mfaRequired: state.mfaRequired,
             mfaEnrollmentRequired: state.mfaEnrollmentRequired,
+            passkeyEnrollmentRequired: state.passkeyEnrollmentRequired,
             mfaChallenge: state.mfaChallenge,
             user,
             tenantDomain: state.tenantDomain,
@@ -292,6 +307,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
             sessionId: parsed.sessionId ?? null,
             mfaRequired: parsed.mfaRequired ?? false,
             mfaEnrollmentRequired: parsed.mfaEnrollmentRequired ?? false,
+            passkeyEnrollmentRequired: parsed.passkeyEnrollmentRequired ?? false,
             mfaChallenge: parsed.mfaChallenge ?? null,
             user: parsed.user,
             tenantDomain: parsed.tenantDomain ?? null,

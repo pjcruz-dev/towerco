@@ -102,6 +102,9 @@ export type AdminUserListFilterParams = {
 };
 
 const BULK_USER_IDS_CHUNK = 500;
+/** Password reset is bcrypt-heavy; keep chunks small so each request stays under API/proxy timeouts. */
+const BULK_PASSWORD_RESET_CHUNK = 20;
+const BULK_PASSWORD_RESET_TIMEOUT_MS = 120_000;
 
 function listFilterParams(params: AdminUserListFilterParams) {
   return {
@@ -246,7 +249,7 @@ export async function bulkResetPasswordAdminUsers(
   const errors: AdminUserBulkResetPasswordResult["errors"] = [];
   const passwords: AdminUserBulkResetPasswordResult["passwords"] = [];
 
-  for (const chunk of chunkIds(userIds)) {
+  for (const chunk of chunkIds(userIds, BULK_PASSWORD_RESET_CHUNK)) {
     const response = await apiClient.post<{ data: AdminUserBulkResetPasswordResult }>(
       "/admin/users/bulk-reset-password",
       {
@@ -254,6 +257,7 @@ export async function bulkResetPasswordAdminUsers(
         password: options?.password,
         revoke_sessions: options?.revoke_sessions ?? true,
       },
+      { timeout: BULK_PASSWORD_RESET_TIMEOUT_MS },
     );
     const result = response.data.data;
     processed += result.processed;
@@ -286,6 +290,13 @@ export async function fetchAdminUserActivity(
 
 export async function revokeAdminUserSessions(userId: string): Promise<void> {
   await apiClient.post(`/admin/users/${userId}/revoke-sessions`);
+}
+
+export async function revokeAdminUserPasskeys(userId: string): Promise<{ revoked_count: number }> {
+  const response = await apiClient.post<{ data: { revoked_count: number } }>(
+    `/admin/users/${userId}/revoke-passkeys`,
+  );
+  return response.data.data;
 }
 
 export async function importAdminUsers(file: File): Promise<AdminUserImportResult> {

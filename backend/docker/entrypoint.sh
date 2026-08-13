@@ -28,6 +28,14 @@ if [ ! -f vendor/autoload.php ]; then
   composer install --no-interaction --prefer-dist
 fi
 
+# Named vendor volume can lag behind composer.json PSR-4 maps (e.g. packages/lbuchs-webauthn).
+if [ -d packages/lbuchs-webauthn/src ] && [ -f vendor/composer/autoload_psr4.php ]; then
+  if ! grep -q 'lbuchs\\\\WebAuthn' vendor/composer/autoload_psr4.php 2>/dev/null; then
+    echo "[api] Refreshing Composer autoload for vendored WebAuthn package..."
+    composer dump-autoload -o --no-interaction || echo "[api] Warning: dump-autoload failed."
+  fi
+fi
+
 wait_for_mysql() {
   echo "[api] Waiting for MySQL at ${DB_HOST}:${DB_PORT}..."
   until php -r "

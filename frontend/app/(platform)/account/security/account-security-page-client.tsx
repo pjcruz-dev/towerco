@@ -5,13 +5,15 @@ import { useMemo } from "react";
 
 import { MfaSettingsPageClient } from "@/app/(platform)/settings/security/mfa/mfa-settings-page-client";
 import { SessionsPageClient } from "@/app/(platform)/settings/sessions/sessions-page-client";
+import { PasskeysSettingsPanel } from "@/components/auth/passkeys-settings-panel";
 import { cn } from "@/lib/utils";
 
-type TabId = "sessions" | "mfa";
+type TabId = "sessions" | "mfa" | "passkeys";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "sessions", label: "Sessions" },
   { id: "mfa", label: "Authenticator" },
+  { id: "passkeys", label: "Passkeys" },
 ];
 
 export function AccountSecurityPageClient() {
@@ -20,7 +22,9 @@ export function AccountSecurityPageClient() {
 
   const activeTab = useMemo((): TabId => {
     const tab = searchParams.get("tab");
-    return tab === "mfa" ? "mfa" : "sessions";
+    if (tab === "mfa") return "mfa";
+    if (tab === "passkeys") return "passkeys";
+    return "sessions";
   }, [searchParams]);
 
   const setTab = (tab: TabId) => {
@@ -39,12 +43,12 @@ export function AccountSecurityPageClient() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">My security</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Manage your sign-in sessions and multi-factor authentication. Organization-wide policies are configured under
-          Administration → Settings.
+          Manage sessions, authenticator MFA, and passkeys (fingerprint / Windows Hello). Organization-wide
+          policies are configured under Administration → Settings.
         </p>
       </header>
 
-      <div className="inline-flex rounded-lg border border-border bg-muted/20 p-1">
+      <div className="inline-flex flex-wrap rounded-lg border border-border bg-muted/20 p-1">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -62,7 +66,13 @@ export function AccountSecurityPageClient() {
         ))}
       </div>
 
-      {activeTab === "sessions" ? <SessionsPageClient embedded /> : <MfaSettingsPageClient embedded />}
+      {activeTab === "sessions" ? (
+        <SessionsPageClient embedded />
+      ) : activeTab === "mfa" ? (
+        <MfaSettingsPageClient embedded />
+      ) : (
+        <PasskeysSettingsPanel embedded />
+      )}
     </div>
   );
 }

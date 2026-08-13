@@ -22,6 +22,8 @@ export type { ApprovalTrailHistoryScope };
 type Props = {
   approvals: EApprovalApprovalRow[];
   currentStep: number | null | undefined;
+  /** Parent submission status — cancelled/approved/rejected must not look like they are still waiting. */
+  submissionStatus?: string | null;
   revisionRoutingNote?: string | null;
   /** When true, signature previews stay inline and full prior history is always shown (print / PDF). */
   alwaysShowSignatures?: boolean;
@@ -42,18 +44,29 @@ function formatTimestamp(value: string): string {
 function TrailRow({
   approval,
   currentStep,
+  submissionStatus,
   alwaysShowSignatures,
   compact,
 }: {
   approval: EApprovalApprovalRow;
   currentStep: number | null | undefined;
+  submissionStatus?: string | null;
   alwaysShowSignatures?: boolean;
   /** Lighter presentation for prior-cycle / system-supersede rows. */
   compact?: boolean;
 }) {
-  const stepStatus = getEApprovalApprovalStepStatus(approval);
+  const parentStatus = (submissionStatus ?? "").trim().toLowerCase();
+  const rawStepStatus = getEApprovalApprovalStepStatus(approval);
+  const stepStatus =
+    parentStatus === "cancelled" &&
+    (rawStepStatus === "pending" || rawStepStatus === "invalidated" || rawStepStatus === "returned")
+      ? "cancelled"
+      : rawStepStatus;
   const isWaiting =
     stepStatus === "pending" &&
+    parentStatus !== "cancelled" &&
+    parentStatus !== "approved" &&
+    parentStatus !== "rejected" &&
     !approval.is_prior_cycle &&
     (currentStep == null || approval.step_order === currentStep);
   const name = approval.approver?.name?.trim() || "Approver";
@@ -102,7 +115,9 @@ function TrailRow({
           ? `Acted ${formatTimestamp(approval.acted_at)}`
           : compact
             ? "No action in this cycle"
-            : "Awaiting action"}
+            : stepStatus === "cancelled"
+              ? "Cancelled — no action taken"
+              : "Awaiting action"}
       </p>
     </li>
   );
@@ -111,6 +126,7 @@ function TrailRow({
 export function EApprovalApprovalTrail({
   approvals,
   currentStep,
+  submissionStatus = null,
   revisionRoutingNote,
   alwaysShowSignatures = false,
   defaultOpen = false,
@@ -211,6 +227,7 @@ export function EApprovalApprovalTrail({
                   key={approval.id}
                   approval={approval}
                   currentStep={currentStep}
+                  submissionStatus={submissionStatus}
                   alwaysShowSignatures={alwaysShowSignatures}
                 />
               ))}
@@ -251,6 +268,7 @@ export function EApprovalApprovalTrail({
                     key={approval.id}
                     approval={approval}
                     currentStep={currentStep}
+                    submissionStatus={submissionStatus}
                     alwaysShowSignatures={alwaysShowSignatures || !priorOpen}
                     compact
                   />
@@ -275,6 +293,7 @@ export function EApprovalApprovalTrail({
                       key={`print-${approval.id}`}
                       approval={approval}
                       currentStep={currentStep}
+                      submissionStatus={submissionStatus}
                       alwaysShowSignatures
                       compact
                     />

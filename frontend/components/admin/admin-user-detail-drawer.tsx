@@ -18,6 +18,7 @@ import {
 import type { AdminUserRow } from "@/lib/api/modules/admin-users-api";
 import {
   fetchAdminUserActivity,
+  revokeAdminUserPasskeys,
   revokeAdminUserSessions,
 } from "@/lib/api/modules/admin-users-api";
 import {
@@ -88,6 +89,23 @@ export function AdminUserDetailDrawer({
       void queryClient.invalidateQueries({ queryKey: ["admin", "users", user?.id, "activity"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       notify({ level: "success", title: "Sessions revoked", message: "All active sessions were signed out." });
+    },
+    onError: (error) =>
+      notify({ level: "error", title: "Revoke failed", message: getErrorMessage(error) }),
+  });
+
+  const revokePasskeysMutation = useMutation({
+    mutationFn: () => revokeAdminUserPasskeys(user!.id),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "users", user?.id, "activity"] });
+      notify({
+        level: "success",
+        title: "Passkeys revoked",
+        message:
+          data.revoked_count === 0
+            ? "No passkeys were registered for this user."
+            : `${data.revoked_count} passkey${data.revoked_count === 1 ? "" : "s"} removed.`,
+      });
     },
     onError: (error) =>
       notify({ level: "error", title: "Revoke failed", message: getErrorMessage(error) }),
@@ -224,21 +242,48 @@ export function AdminUserDetailDrawer({
           {tab === "activity" ? (
             <>
               {canManageUsers ? (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Revoke all sessions</p>
-                    <p className="text-xs text-muted-foreground">
-                      Signs this user out on every device immediately.
-                    </p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Revoke all sessions</p>
+                      <p className="text-xs text-muted-foreground">
+                        Signs this user out on every device immediately.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={revokeMutation.isPending}
+                      onClick={() => revokeMutation.mutate()}
+                    >
+                      {revokeMutation.isPending ? "Revoking…" : "Revoke all"}
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={revokeMutation.isPending}
-                    onClick={() => revokeMutation.mutate()}
-                  >
-                    {revokeMutation.isPending ? "Revoking…" : "Revoke all"}
-                  </Button>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Revoke all passkeys</p>
+                      <p className="text-xs text-muted-foreground">
+                        Removes enrolled fingerprint / Windows Hello credentials. User can still sign in
+                        with password or Microsoft.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={revokePasskeysMutation.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Revoke all passkeys for ${user.email}? They will need password or Microsoft sign-in until they enroll again.`,
+                          )
+                        ) {
+                          revokePasskeysMutation.mutate();
+                        }
+                      }}
+                    >
+                      {revokePasskeysMutation.isPending ? "Revoking…" : "Revoke passkeys"}
+                    </Button>
+                  </div>
                 </div>
               ) : null}
 

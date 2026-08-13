@@ -116,8 +116,21 @@ class AuthSessionService
 
     public function revokeAllForUser(string $userId): void
     {
+        $this->revokeAllForUsers([$userId]);
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     */
+    public function revokeAllForUsers(array $userIds): void
+    {
+        $ids = array_values(array_unique(array_filter($userIds, static fn (string $id): bool => $id !== '')));
+        if ($ids === []) {
+            return;
+        }
+
         DB::connection('tenant')->table('auth_sessions')
-            ->where('user_id', $userId)
+            ->whereIn('user_id', $ids)
             ->where('state', 'active')
             ->update([
                 'state' => 'revoked',

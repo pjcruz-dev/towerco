@@ -174,8 +174,9 @@ class MfaService
     }
 
     /**
-     * Decide whether login should challenge MFA, force enrollment, or skip via device trust.
+     * Decide whether login should challenge MFA, force enrollment, or skip via device trust / passkey.
      *
+     * @param  string|null  $authMethod  Session auth method (e.g. webauthn, local, azure_sso)
      * @return array{
      *     mfa_required: bool,
      *     mfa_enrollment_required: bool,
@@ -183,10 +184,20 @@ class MfaService
      *     mark_verified: bool
      * }
      */
-    public function resolveLoginMfaState(TenantUser $user, string $sessionId): array
+    public function resolveLoginMfaState(TenantUser $user, string $sessionId, ?string $authMethod = null): array
     {
         $policyOrEnrolled = $this->isMfaRequired($user);
         if (! $policyOrEnrolled) {
+            return [
+                'mfa_required' => false,
+                'mfa_enrollment_required' => false,
+                'mfa_challenge' => null,
+                'mark_verified' => true,
+            ];
+        }
+
+        // Phase 4: passkey login can satisfy MFA (user verified with platform authenticator).
+        if ($authMethod === 'webauthn' && app(TenantPasskeysPolicyService::class)->passkeySatisfiesMfa()) {
             return [
                 'mfa_required' => false,
                 'mfa_enrollment_required' => false,

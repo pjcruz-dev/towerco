@@ -94,6 +94,9 @@ export function normalizeAuthSession(payload: unknown): AuthSession {
     mfaEnrollmentRequired: Boolean(
       record.mfa_enrollment_required ?? record.mfaEnrollmentRequired,
     ),
+    passkeyEnrollmentRequired: Boolean(
+      record.passkey_enrollment_required ?? record.passkeyEnrollmentRequired,
+    ),
     mfaChallenge:
       record.mfa_challenge && typeof record.mfa_challenge === "object"
         ? {

@@ -280,10 +280,16 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     (data?.status === "returned" || data?.status === "rejected");
   const resubmitHref =
     canEditAndResubmit && data?.form_id ? eApprovalResubmitUrl(data.form_id, submissionId) : null;
+  const submissionStatus = (data?.status ?? "").trim().toLowerCase();
+  const isTerminalSubmission =
+    submissionStatus === "cancelled" ||
+    submissionStatus === "approved" ||
+    submissionStatus === "rejected";
   const showDecideTab =
-    Boolean(canApprove && data?.viewer_pending_approval_id) ||
-    Boolean(data?.viewer_is_requestor && data?.status === "pending") ||
-    data?.status === "awaiting_dcf";
+    !isTerminalSubmission &&
+    (Boolean(canApprove && data?.viewer_pending_approval_id) ||
+      Boolean(data?.viewer_is_requestor && data?.status === "pending") ||
+      data?.status === "awaiting_dcf");
   const decideBadgeCount =
     (canApprove && data?.viewer_pending_approval_id ? 1 : 0) +
     (data?.status === "awaiting_dcf" ? 1 : 0);
@@ -689,6 +695,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             <TabsContent value="approvals" className="mt-4 space-y-4">
               <EApprovalSubmissionWorkflowPathPanel
                 submissionId={submissionId}
+                submissionStatus={data.status}
                 revisionRoutingNote={
                   data.revision_routing_applied
                     ? describeRevisionRoutingApplied({
@@ -708,6 +715,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               <EApprovalApprovalTrail
                 approvals={data.approvals}
                 currentStep={data.current_step}
+                submissionStatus={data.status}
                 revisionRoutingNote={
                   data.revision_routing_applied
                     ? describeRevisionRoutingApplied({

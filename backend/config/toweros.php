@@ -127,6 +127,41 @@ return [
     ],
 
     /**
+     * Tenant WebAuthn passkeys (fingerprint / Windows Hello via platform authenticators).
+     * Master switch + per-tenant opt-in (Admin → Sign-in & security).
+     */
+    'tenant_passkeys' => [
+        /** Platform kill switch — when false, all tenants deny enroll/login. */
+        'enabled' => filter_var(env('TOWEROS_TENANT_PASSKEYS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        /**
+         * Default when tenant has not set passkeys_enabled yet.
+         * Local/dev default true so Phase 2 UI keeps working; set false in production until orgs opt in.
+         */
+        'default_enabled' => filter_var(
+            env(
+                'TOWEROS_TENANT_PASSKEYS_DEFAULT_ENABLED',
+                in_array(env('APP_ENV', 'production'), ['local', 'testing'], true),
+            ),
+            FILTER_VALIDATE_BOOLEAN,
+        ),
+        /**
+         * Comma-separated extra browser origins allowed for WebAuthn clientData.origin
+         * (e.g. staging preview URLs). RP ID remains the tenant hostname.
+         */
+        'extra_allowed_origins' => array_values(array_filter(array_map(
+            static fn (string $o): string => rtrim(trim($o), '/'),
+            explode(',', (string) env('TOWEROS_WEBAUTHN_EXTRA_ORIGINS', '')),
+        ))),
+        /** Phase 4: allow | prefer | require (when passkeys enabled). */
+        'default_policy' => env('TOWEROS_TENANT_PASSKEYS_DEFAULT_POLICY', 'allow'),
+        /** Phase 4: successful passkey login satisfies TOTP MFA when true. */
+        'default_satisfies_mfa' => filter_var(
+            env('TOWEROS_TENANT_PASSKEYS_SATISFIES_MFA', true),
+            FILTER_VALIDATE_BOOLEAN,
+        ),
+    ],
+
+    /**
      * Tenant administrator "view as user" (session override). Requires permission user:impersonate.
      */
     'tenant_impersonation' => [
