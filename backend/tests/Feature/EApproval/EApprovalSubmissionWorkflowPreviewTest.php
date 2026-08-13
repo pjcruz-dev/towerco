@@ -7,6 +7,8 @@ namespace Tests\Feature\EApproval;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -82,6 +84,45 @@ final class EApprovalSubmissionWorkflowPreviewTest extends TestCase
             ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview")
             ->assertOk()
             ->assertJsonPath('data.resolved_steps.0.runtime_status', 'pending');
+    }
+
+    public function test_cancelled_submission_workflow_path_shows_cancelled_not_pending(): void
+    {
+        Notification::fake();
+        Mail::fake();
+
+        $approver = $this->createAdditionalTenantUser('approver.cancel.path@towerone.test', 'Cancel Path Approver');
+        $formId = $this->createSimpleForm($approver);
+        $requestor = $this->createViewerUser('cancel.path.requestor@towerone.test', withCreate: true);
+
+        $create = $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['reason' => 'Will cancel'],
+            ]);
+
+        $create->assertCreated();
+        $submissionId = (string) $create->json('data.id');
+
+        $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/submissions/{$submissionId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled');
+
+        $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}/workflow-preview")
+            ->assertOk()
+            ->assertJsonPath('data.resolved_steps.0.runtime_status', 'cancelled');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submissionId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled')
+            ->assertJsonPath('data.viewer_pending_approval_id', null);
     }
 
     public function test_unrelated_viewer_cannot_preview_submission_workflow_path(): void

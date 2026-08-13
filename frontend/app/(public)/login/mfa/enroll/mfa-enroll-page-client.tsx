@@ -8,6 +8,7 @@ import { OtpauthQrCode } from "@/components/auth/otpauth-qr-code";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { completeMfaEnrollment, startMfaEnrollment } from "@/lib/api/modules/auth-api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
@@ -134,8 +135,18 @@ export function MfaEnrollPageClient() {
               </div>
             ))}
           </div>
-          <Button className="w-full" onClick={() => router.replace("/dashboard")}>
-            Continue to dashboard
+          <Button
+            className="w-full"
+            onClick={() => {
+              const state = useAuthStore.getState();
+              router.replace(
+                tenantPostLoginPath({
+                  passkeyEnrollmentRequired: state.passkeyEnrollmentRequired,
+                }),
+              );
+            }}
+          >
+            Continue
           </Button>
         </div>
       ) : null}

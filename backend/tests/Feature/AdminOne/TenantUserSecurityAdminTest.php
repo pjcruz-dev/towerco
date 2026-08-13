@@ -102,6 +102,95 @@ final class TenantUserSecurityAdminTest extends TestCase
         $this->assertTrue((bool) $this->testTenant->mfa_required);
     }
 
+    public function test_admin_can_revoke_all_passkeys_for_user(): void
+    {
+        $target = $this->createTenantUser('passkey.user@towerone.test', 'Passkey User');
+
+        tenancy()->initialize($this->testTenant);
+        \App\Modules\Identity\Models\WebAuthnCredential::query()->create([
+            'id' => (string) Str::uuid(),
+            'user_id' => (string) $target->id,
+            'credential_id' => 'admin-revoke-cred-1',
+            'public_key' => "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----",
+            'sign_count' => 0,
+            'label' => 'Phone',
+        ]);
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/admin/users/'.$target->id.'/revoke-passkeys');
+
+        $response->assertOk()
+            ->assertJsonPath('data.revoked_count', 1);
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame(
+            0,
+            \App\Modules\Identity\Models\WebAuthnCredential::query()
+                ->where('user_id', $target->id)
+                ->count(),
+        );
+        $this->assertDatabaseHas('auth_audit_logs', [
+            'user_id' => $target->id,
+            'event' => 'auth.admin.webauthn_revoked',
+        ]);
+        tenancy()->end();
+    }
+
+    public function test_tenant_admin_can_toggle_passkeys_policy(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/security', [
+                'mfa_required' => false,
+                'passkeys_enabled' => false,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.passkeys_enabled', false);
+
+        $this->testTenant->refresh();
+        $this->assertFalse(filter_var($this->testTenant->passkeys_enabled, FILTER_VALIDATE_BOOLEAN));
+    }
+
+    public function test_tenant_admin_can_set_passkeys_mfa_alignment(): void
+    {
+        config([
+            'toweros.tenant_passkeys.enabled' => true,
+            'toweros.tenant_passkeys.default_enabled' => true,
+        ]);
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/security', [
+                'mfa_required' => false,
+                'passkeys_enabled' => true,
+                'passkeys_policy' => 'prefer',
+                'passkeys_satisfies_mfa' => true,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.passkeys_policy', 'prefer')
+            ->assertJsonPath('data.passkeys_satisfies_mfa', true);
+
+        $this->testTenant->refresh();
+        $this->assertSame('prefer', (string) $this->testTenant->passkeys_policy);
+    }
+
+    public function test_require_policy_rejected_when_passkeys_disabled(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/security', [
+                'mfa_required' => false,
+                'passkeys_enabled' => false,
+                'passkeys_policy' => 'require',
+            ]);
+
+        $response->assertUnprocessable();
+    }
+
     public function test_user_index_filters_by_role(): void
     {
         $viewer = $this->createTenantUser('viewer.user@towerone.test', 'Viewer User');

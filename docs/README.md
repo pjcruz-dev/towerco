@@ -43,6 +43,12 @@ docs/
 | Production (EC2 + RDS) | [infrastructure/aws-ec2-rds-production.md](./infrastructure/aws-ec2-rds-production.md) |
 | E-Approval end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
 | PROJECT-ONE roadmap | [roadmaps/project-one-roadmap.md](./roadmaps/project-one-roadmap.md) |
+| Tenant passkeys (fingerprint / WebAuthn) | [roadmaps/tenant-passkeys-roadmap.md](./roadmaps/tenant-passkeys-roadmap.md) |
+| Passkeys Phase 1 (API) | [architecture/tenant-passkeys-phase-1.md](./architecture/tenant-passkeys-phase-1.md) |
+| Passkeys Phase 2 (UI) | [architecture/tenant-passkeys-phase-2.md](./architecture/tenant-passkeys-phase-2.md) |
+| Passkeys Phase 3 (hardening) | [architecture/tenant-passkeys-phase-3.md](./architecture/tenant-passkeys-phase-3.md) |
+| Passkeys Phase 4 (MFA policy) | [architecture/tenant-passkeys-phase-4.md](./architecture/tenant-passkeys-phase-4.md) |
+| Passkeys staging checklist | [ops/tenant-passkeys-staging-checklist.md](./ops/tenant-passkeys-staging-checklist.md) |
 | Rollout playbooks | [rollout/](./rollout/) |
 | Board presentation | [Rules/TowerOS_Board_Presentation.pdf](./Rules/TowerOS_Board_Presentation.pdf) |
 | Design system | [design-system/DESIGN_SYSTEM.md](./design-system/DESIGN_SYSTEM.md) |

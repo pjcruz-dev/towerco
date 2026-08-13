@@ -470,9 +470,13 @@ final class EApprovalSubmissionService
         $submission->save();
 
         if ($wasPending) {
+            // Clear open-path rows so the workflow diagram cannot keep showing Pending.
             EApprovalRequestApproval::query()
                 ->where('submission_id', $submission->id)
-                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->whereIn('status', [
+                    EApprovalApprovalStatus::PENDING,
+                    EApprovalApprovalStatus::INVALIDATED,
+                ])
                 ->update(['status' => EApprovalApprovalStatus::CANCELLED]);
         }
 
@@ -905,7 +909,14 @@ final class EApprovalSubmissionService
             true,
         );
 
-        $pendingAtStep = $submission->approvals
+        $submissionIsOpen = in_array(
+            (string) $submission->status,
+            EApprovalSubmissionStatus::open(),
+            true,
+        );
+
+        $pendingAtStep = $submissionIsOpen
+            ? $submission->approvals
             ->filter(
                 static function (EApprovalRequestApproval $approval) use ($currentStep, $cycle, $activeStepIds): bool {
                     if ($approval->status !== EApprovalApprovalStatus::PENDING) {
@@ -925,7 +936,8 @@ final class EApprovalSubmissionService
                     return true;
                 },
             )
-            ->values();
+            ->values()
+            : collect();
 
         // Prefer the viewer's own pending row (critical for parallel any/all/N-of-M bands).
         /** @var EApprovalRequestApproval|null $pending */

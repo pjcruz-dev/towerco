@@ -37,6 +37,8 @@ export type AuthSession = {
   sessionId?: string | null;
   mfaRequired?: boolean;
   mfaEnrollmentRequired?: boolean;
+  /** Phase 4: org requires passkey enrollment before full workspace access. */
+  passkeyEnrollmentRequired?: boolean;
   mfaChallenge?: {
     id: string;
     expires_at: string;

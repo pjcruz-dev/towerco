@@ -76,7 +76,7 @@ final class EApprovalSubmissionWorkflowPreviewService
             $order = (int) ($step['step_order'] ?? 0);
             $userId = isset($step['resolved_user_id']) ? (string) $step['resolved_user_id'] : '';
             $match = $this->matchApproval($approvalsByStep[$order] ?? [], $userId);
-            $runtimeStatus = $match?->status;
+            $runtimeStatus = is_string($match?->status) ? $match->status : null;
             // Revision clears the return step as invalidated — show Returned, not Not needed.
             if (
                 $isReturned
@@ -100,6 +100,11 @@ final class EApprovalSubmissionWorkflowPreviewService
                 $runtimeStatus = 'skipped';
                 $pathReason = $this->unresolvedSkipReason($step);
                 $warning = null;
+            }
+
+            // Cancelled submissions must not keep "Pending" / open-step chrome on the path.
+            if ($submissionStatus === 'cancelled') {
+                $runtimeStatus = $this->runtimeStatusWhenSubmissionCancelled($runtimeStatus);
             }
 
             $resolved[] = [
@@ -321,14 +326,30 @@ final class EApprovalSubmissionWorkflowPreviewService
 
     private function approvalMatchRank(EApprovalRequestApproval $approval): int
     {
+        // Prefer terminal / decided rows over stale pending when duplicates exist.
         return match ((string) $approval->status) {
-            'pending' => 0,
+            'cancelled' => 0,
             'approved' => 1,
-            'returned' => 2,
-            'rejected' => 3,
+            'rejected' => 2,
+            'returned' => 3,
             'invalidated' => 4,
-            'cancelled' => 5,
+            'pending' => 5,
             default => 9,
         };
+    }
+
+    /**
+     * Map open-path statuses to cancelled when the submission itself was cancelled.
+     * Keep historical approve/reject/skip so prior decisions remain visible.
+     */
+    private function runtimeStatusWhenSubmissionCancelled(?string $runtimeStatus): string
+    {
+        $status = is_string($runtimeStatus) ? strtolower(trim($runtimeStatus)) : '';
+
+        if (in_array($status, ['approved', 'rejected', 'skipped', 'cancelled'], true)) {
+            return $status;
+        }
+
+        return 'cancelled';
     }
 }

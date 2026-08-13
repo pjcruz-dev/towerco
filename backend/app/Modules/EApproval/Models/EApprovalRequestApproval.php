@@ -69,9 +69,16 @@ class EApprovalRequestApproval extends Model
         $this->loadMissing(['step', 'approver', 'submission.form']);
 
         $submissionStatus = $this->submission?->status;
-        $displayStatus = $this->status === 'pending'
-            ? $this->status
-            : ($submissionStatus ?? $this->status);
+        $approvalStatus = (string) $this->status;
+        $displayStatus = $approvalStatus === 'pending'
+            ? $approvalStatus
+            : ($submissionStatus ?? $approvalStatus);
+        if (
+            in_array($approvalStatus, ['pending', 'invalidated'], true)
+            && in_array((string) $submissionStatus, ['cancelled', 'approved', 'rejected'], true)
+        ) {
+            $displayStatus = (string) $submissionStatus;
+        }
 
         $cycle = (int) ($this->approval_cycle ?: 1);
         $submissionCycle = (int) ($this->submission?->approval_cycle ?: 1);

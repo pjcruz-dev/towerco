@@ -124,14 +124,47 @@ class RefreshTokenService
 
     public function revokeAllForUser(string $userId): void
     {
-        $familyIds = DB::table('refresh_token_families')
-            ->where('user_id', $userId)
-            ->where('state', 'active')
-            ->pluck('id');
+        $this->revokeAllForUsers([$userId]);
+    }
 
-        foreach ($familyIds as $familyId) {
-            $this->revokeFamily((string) $familyId);
+    /**
+     * @param  list<string>  $userIds
+     */
+    public function revokeAllForUsers(array $userIds): void
+    {
+        $ids = array_values(array_unique(array_filter($userIds, static fn (string $id): bool => $id !== '')));
+        if ($ids === []) {
+            return;
         }
+
+        $familyIds = DB::table('refresh_token_families')
+            ->whereIn('user_id', $ids)
+            ->where('state', 'active')
+            ->pluck('id')
+            ->map(static fn ($id): string => (string) $id)
+            ->all();
+
+        if ($familyIds === []) {
+            return;
+        }
+
+        $now = now();
+
+        DB::table('refresh_token_families')
+            ->whereIn('id', $familyIds)
+            ->update([
+                'state' => 'revoked',
+                'revoked_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        DB::table('refresh_tokens')
+            ->whereIn('family_id', $familyIds)
+            ->whereNull('revoked_at')
+            ->update([
+                'revoked_at' => $now,
+                'updated_at' => $now,
+            ]);
     }
 }
 

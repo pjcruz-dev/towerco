@@ -12,6 +12,7 @@ use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantAuthPolicyService;
 use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Support\TenantImpersonationContextResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,7 +74,7 @@ class TenantAuthController extends AbstractApiController
         $accessToken = $this->issueAccessToken($user, $sessionId);
         $refresh = $this->refreshTokenService->issue((string) $user->id, $sessionId);
 
-        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId);
+        $mfaState = $this->mfaService->resolveLoginMfaState($user, $sessionId, 'local');
         if ($mfaState['mark_verified']) {
             $this->sessionService->markMfaVerified($sessionId);
         }
@@ -84,6 +85,8 @@ class TenantAuthController extends AbstractApiController
             'mfa_trusted_device' => ! $mfaState['mfa_required'] && $this->mfaService->isMfaRequired($user),
         ]);
 
+        $passkeyFlags = app(TenantPasskeysPolicyService::class)->loginFlags($user);
+
         return $this->ok([
             'access_token' => $accessToken,
             'refresh_token' => $refresh['token'],
@@ -92,6 +95,7 @@ class TenantAuthController extends AbstractApiController
             'mfa_enrollment_required' => $mfaState['mfa_enrollment_required'],
             'mfa_challenge' => $mfaState['mfa_challenge'],
             'user' => $this->authUserPayload($user),
+            ...$passkeyFlags,
         ]);
     }
 

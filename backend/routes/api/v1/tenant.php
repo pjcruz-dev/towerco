@@ -30,6 +30,7 @@ use App\Modules\AdminOne\Http\Controllers\V1\TenantUserImportController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserReactivateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserRevokeSessionsController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantUserRevokePasskeysController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserSeatUsageController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserUpdateController;
@@ -203,6 +204,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionSubmitDraftCont
 use App\Modules\FiberOne\Http\Controllers\V1\FiberOneDashboardController;
 use App\Modules\FiberOne\Http\Controllers\V1\FiberRouteIndexController;
 use App\Modules\Identity\Http\Controllers\V1\TenantAuthController;
+use App\Modules\Identity\Http\Controllers\V1\TenantWebAuthnController;
 use App\Modules\Identity\Http\Controllers\V1\TenantHealthController;
 use App\Modules\Identity\Http\Controllers\V1\TenantImpersonationStopController;
 use App\Modules\Identity\Http\Controllers\V1\TenantSsoAzureStatusController;
@@ -415,6 +417,12 @@ Route::prefix('auth')->group(function () {
     Route::post('mfa/challenge', [TenantAuthController::class, 'mfaChallenge'])->name('api.tenant.v1.auth.mfa.challenge');
     Route::post('mfa/verify', [TenantAuthController::class, 'mfaVerify'])->name('api.tenant.v1.auth.mfa.verify');
     Route::post('mfa/recovery', [TenantAuthController::class, 'mfaRecovery'])->name('api.tenant.v1.auth.mfa.recovery');
+    Route::post('webauthn/login/options', [TenantWebAuthnController::class, 'loginOptions'])
+        ->middleware('throttle:20,1')
+        ->name('api.tenant.v1.auth.webauthn.login.options');
+    Route::post('webauthn/login/verify', [TenantWebAuthnController::class, 'loginVerify'])
+        ->middleware('throttle:15,1')
+        ->name('api.tenant.v1.auth.webauthn.login.verify');
     Route::get('sso/azure/status', TenantSsoAzureStatusController::class)->name('api.tenant.v1.auth.sso.azure.status');
     Route::get('sso/azure/redirect', [TenantSsoController::class, 'redirect'])->name('api.tenant.v1.auth.sso.azure.redirect');
     Route::get('sso/azure/callback', [TenantSsoController::class, 'callback'])->name('api.tenant.v1.auth.sso.azure.callback');
@@ -444,7 +452,7 @@ Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')
     Route::get('vendor-inbox/{token}', ProcurementVendorInboxShowController::class)->name('api.tenant.v1.procurement.public.vendor_inbox.show');
 });
 
-Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa'])->group(function () {
+Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa', 'auth.passkey'])->group(function () {
     Route::get('me', [TenantAuthController::class, 'me'])->name('api.tenant.v1.auth.me');
     Route::get('workspace/environments', TenantLinkedEnvironmentsController::class)
         ->name('api.tenant.v1.workspace.environments');
@@ -455,6 +463,16 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
     Route::post('auth/logout-all', [TenantAuthController::class, 'logoutAll'])->name('api.tenant.v1.auth.logout_all');
     Route::get('auth/sessions', [TenantAuthController::class, 'sessions'])->name('api.tenant.v1.auth.sessions');
     Route::delete('auth/sessions/{sessionId}', [TenantAuthController::class, 'revokeSession'])->name('api.tenant.v1.auth.sessions.revoke');
+    Route::get('auth/webauthn/credentials', [TenantWebAuthnController::class, 'index'])->name('api.tenant.v1.auth.webauthn.credentials.index');
+    Route::post('auth/webauthn/register/options', [TenantWebAuthnController::class, 'registerOptions'])
+        ->middleware('throttle:10,1')
+        ->name('api.tenant.v1.auth.webauthn.register.options');
+    Route::post('auth/webauthn/register/verify', [TenantWebAuthnController::class, 'registerVerify'])
+        ->middleware('throttle:10,1')
+        ->name('api.tenant.v1.auth.webauthn.register.verify');
+    Route::delete('auth/webauthn/credentials/{credentialId}', [TenantWebAuthnController::class, 'destroy'])
+        ->middleware('throttle:20,1')
+        ->name('api.tenant.v1.auth.webauthn.credentials.destroy');
     Route::post('auth/impersonation/stop', TenantImpersonationStopController::class)->name('api.tenant.v1.auth.impersonation.stop');
     Route::get('sites', SiteIndexController::class)->name('api.tenant.v1.sites.index');
     Route::get('sites/{site}', SiteShowController::class)->name('api.tenant.v1.sites.show');
@@ -843,6 +861,9 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa']
         Route::patch('users/{user}', TenantUserUpdateController::class)->name('api.tenant.v1.admin.users.update');
         Route::get('users/{user}/activity', TenantUserActivityIndexController::class)->name('api.tenant.v1.admin.users.activity');
         Route::post('users/{user}/revoke-sessions', TenantUserRevokeSessionsController::class)->name('api.tenant.v1.admin.users.revoke_sessions');
+        Route::post('users/{user}/revoke-passkeys', TenantUserRevokePasskeysController::class)
+            ->middleware('throttle:20,1')
+            ->name('api.tenant.v1.admin.users.revoke_passkeys');
         Route::post('users/{user}/impersonate', TenantUserImpersonateController::class)
             ->middleware('throttle:10,1')
             ->name('api.tenant.v1.admin.users.impersonate');

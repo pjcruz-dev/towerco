@@ -5,6 +5,7 @@ import { Suspense, useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { normalizeAuthSession } from "@/modules/identity/auth-normalizer";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -37,7 +38,7 @@ function SsoCallbackContent() {
 
       setSession(session);
       setSessionCookie();
-      router.replace("/dashboard");
+      router.replace(tenantPostLoginPath(session));
     } catch {
       router.replace("/login");
     }
