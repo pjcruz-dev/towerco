@@ -3,6 +3,7 @@ import type { AuthUser } from "@/types/auth";
 export const permissions = {
   dashboardView: "dashboard:view",
   workspaceAuditView: "workspace:audit:view",
+  workspaceEnvironmentsSwitch: "workspace:environments:switch",
   gisView: "gis:view",
   sitesView: "sites:view",
   tenantManage: "tenant:manage",

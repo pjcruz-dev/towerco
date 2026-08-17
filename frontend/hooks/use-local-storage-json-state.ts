@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -17,6 +17,8 @@ export function useLocalStorageJsonState<T>(
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [value, setValue] = useState<T>(defaultValue);
   const [hydrated, setHydrated] = useState(() => key === null);
+  const isValidRef = useRef(isValid);
+  isValidRef.current = isValid;
 
   useEffect(() => {
     if (key === null) {
@@ -28,15 +30,16 @@ export function useLocalStorageJsonState<T>(
       const stored = localStorage.getItem(key);
       if (stored !== null) {
         const parsed: unknown = JSON.parse(stored);
-        if (isValid ? isValid(parsed) : true) {
-          setValue(parsed as T);
+        const validate = isValidRef.current;
+        if (validate ? validate(parsed) : true) {
+          setValue((current) => (JSON.stringify(current) === stored ? current : (parsed as T)));
         }
       }
     } catch {
       // Ignore storage read errors (private mode, blocked storage).
     }
     setHydrated(true);
-  }, [isValid, key]);
+  }, [key]);
 
   useEffect(() => {
     if (!hydrated || key === null) {

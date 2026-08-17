@@ -13,6 +13,8 @@ use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
 use App\Modules\Tenancy\Support\FrontendDevUrl;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -48,6 +50,10 @@ final class TenantEnvironmentHandoffService
     ): array {
         if (! $this->enabled()) {
             throw new HttpException(503, __('Environment switch is disabled.'));
+        }
+
+        if (! $actor->can('workspace:environments:switch')) {
+            throw new HttpException(403, __('You do not have permission to switch environments.'));
         }
 
         if (! $actor->isActive()) {
@@ -314,7 +320,7 @@ final class TenantEnvironmentHandoffService
             return null;
         }
 
-        /** @var \Illuminate\Support\Collection<int, TenantUser> $matches */
+        /** @var Collection<int, TenantUser> $matches */
         $matches = TenantUser::query()
             ->where('is_active', true)
             ->whereRaw('LOWER(email) LIKE ?', [$local.'@%'])
@@ -372,7 +378,7 @@ final class TenantEnvironmentHandoffService
         return $current;
     }
 
-    private function tickets(): \Illuminate\Database\Query\Builder
+    private function tickets(): Builder
     {
         return $this->central()->table('environment_switch_tickets');
     }

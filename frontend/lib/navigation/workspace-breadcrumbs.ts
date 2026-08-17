@@ -168,6 +168,11 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
       return crumbs;
     }
 
+    if (parts[1] === "org") {
+      crumbs.push({ label: "Organization" });
+      return crumbs;
+    }
+
     pushPathSegments(parts, 1, crumbs);
     return crumbs;
   }

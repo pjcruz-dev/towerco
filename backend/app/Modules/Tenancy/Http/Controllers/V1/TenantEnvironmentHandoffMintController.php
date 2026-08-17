@@ -36,6 +36,12 @@ class TenantEnvironmentHandoffMintController extends AbstractApiController
         $user = $request->user();
         assert($user instanceof TenantUser);
 
+        abort_unless(
+            $user->can('workspace:environments:switch'),
+            403,
+            __('You do not have permission to switch environments.'),
+        );
+
         $data = $request->validate([
             'environment' => ['required', 'string', 'in:local,test,staging,production'],
         ]);

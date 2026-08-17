@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Mockery;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 final class TenantEnvironmentHandoffServiceTest extends TestCase
@@ -131,15 +133,7 @@ final class TenantEnvironmentHandoffServiceTest extends TestCase
     {
         /** @var Tenant $staging */
         $staging = Tenant::query()->with('domains')->findOrFail($this->stagingId);
-        $actor = new TenantUser;
-        $actor->forceFill([
-            'id' => (string) Str::uuid(),
-            'name' => 'Admin',
-            'email' => 'admin@staging.myapp.localhost',
-            'is_active' => true,
-        ]);
-
-        $payload = app(TenantEnvironmentHandoffService::class)->mint($staging, $actor, 'production');
+        $payload = app(TenantEnvironmentHandoffService::class)->mint($staging, $this->switchActor(), 'production');
 
         $this->assertSame('production', $payload['target_environment']);
         $this->assertSame('app.myapp.localhost', $payload['target_hostname']);
@@ -157,16 +151,26 @@ final class TenantEnvironmentHandoffServiceTest extends TestCase
     {
         /** @var Tenant $staging */
         $staging = Tenant::query()->with('domains')->findOrFail($this->stagingId);
-        $actor = new TenantUser;
-        $actor->forceFill([
-            'id' => (string) Str::uuid(),
-            'name' => 'Admin',
-            'email' => 'admin@staging.myapp.localhost',
-            'is_active' => true,
-        ]);
-
         $this->expectException(ValidationException::class);
-        app(TenantEnvironmentHandoffService::class)->mint($staging, $actor, 'staging');
+        app(TenantEnvironmentHandoffService::class)->mint($staging, $this->switchActor(), 'staging');
+    }
+
+    public function test_rejects_actor_without_switch_permission(): void
+    {
+        /** @var Tenant $staging */
+        $staging = Tenant::query()->with('domains')->findOrFail($this->stagingId);
+
+        $this->expectException(HttpException::class);
+        try {
+            app(TenantEnvironmentHandoffService::class)->mint(
+                $staging,
+                $this->switchActor(allowed: false),
+                'production',
+            );
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+            throw $e;
+        }
     }
 
     public function test_handoff_url_helper(): void
@@ -189,5 +193,22 @@ final class TenantEnvironmentHandoffServiceTest extends TestCase
             'admin@staging.myapp.localhost',
             'admin@app.myapp.localhost',
         ], $candidates);
+    }
+
+    private function switchActor(bool $allowed = true): TenantUser
+    {
+        $id = (string) Str::uuid();
+        $actor = Mockery::mock(TenantUser::class)->makePartial();
+        $actor->forceFill([
+            'id' => $id,
+            'name' => 'Admin',
+            'email' => 'admin@staging.myapp.localhost',
+            'is_active' => true,
+        ]);
+        $actor->shouldReceive('can')->with('workspace:environments:switch')->andReturn($allowed);
+        $actor->shouldReceive('isActive')->andReturn(true);
+        $actor->shouldReceive('getKey')->andReturn($id);
+
+        return $actor;
     }
 }

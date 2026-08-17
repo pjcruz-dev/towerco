@@ -304,7 +304,11 @@ function computeGridSumColumn(
     return 0;
   }
 
-  const grid = parseGridValue(gridRaw, columns.length);
+  const grid = parseGridValue(
+    gridRaw,
+    columns.length,
+    columns.map((column) => column.label),
+  );
   return grid.rows.reduce((sum, row) => sum + parseNumericCell(row[String(columnIndex)]), 0);
 }
 
@@ -321,7 +325,11 @@ function computeGridLineTotals(
     return 0;
   }
 
-  const grid = parseGridValue(gridRaw, columns.length);
+  const grid = parseGridValue(
+    gridRaw,
+    columns.length,
+    columns.map((column) => column.label),
+  );
   return grid.rows.reduce((sum, row) => {
     const qty = parseNumericCell(row[String(qtyIndex)]);
     const amount = parseNumericCell(row[String(amountIndex)]);
@@ -345,7 +353,11 @@ function computeGridLineNetTotals(
     return 0;
   }
 
-  const grid = parseGridValue(gridRaw, columns.length);
+  const grid = parseGridValue(
+    gridRaw,
+    columns.length,
+    columns.map((column) => column.label),
+  );
   return grid.rows.reduce((sum, row) => {
     const qty = parseNumericCell(row[String(qtyIndex)]);
     const unit = parseNumericCell(row[String(unitIndex)]);

@@ -8,6 +8,36 @@ export type TenantBrandingPayload = {
   dark: Record<string, string>;
 };
 
+export function resolveBrandingAssetUrl(url: string | null | undefined): string | null {
+  const trimmed = url?.trim() ?? "";
+  if (trimmed === "") {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (!trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    process.env.NEXT_PUBLIC_CENTRAL_API_BASE_URL ??
+    "http://localhost:8000/api/v1";
+
+  try {
+    const origin = new URL(
+      apiBase,
+      typeof window !== "undefined" ? window.location.href : "http://localhost:8000",
+    ).origin;
+    return `${origin}${trimmed}`;
+  } catch {
+    return trimmed;
+  }
+}
+
 export async function fetchTenantBranding(domain: string): Promise<TenantBrandingPayload> {
   const response = await apiClient.get<{ data: TenantBrandingPayload }>("/public/tenant-branding", {
     params: { domain },

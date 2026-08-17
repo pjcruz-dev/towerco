@@ -17,10 +17,7 @@ export function formRequiresParentSubmission(metadata: Record<string, unknown> |
     return true;
   }
 
-  if (
-    formMetadataString(metadata, "form_family") === "liquidation" &&
-    formMetadataString(metadata, "parent_form_family") === "cash_advance"
-  ) {
+  if (formMetadataString(metadata, "form_family") === "liquidation") {
     return true;
   }
 
@@ -31,6 +28,10 @@ export function formRequiresParentSubmission(metadata: Record<string, unknown> |
 }
 
 export function formUsesCashAdvanceParentPicker(metadata: Record<string, unknown> | null | undefined): boolean {
+  if (formMetadataString(metadata, "form_family") === "liquidation") {
+    return true;
+  }
+
   return formRequiresParentSubmission(metadata) && formMetadataString(metadata, "parent_form_family") === "cash_advance";
 }
 

@@ -3,52 +3,53 @@
 declare(strict_types=1);
 
 use App\Modules\Identity\Http\Controllers\V1\CentralHealthController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformAuthController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformMfaController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformMicrosoftAuthController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorUpdateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorDestroyController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformRoleCatalogController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingPortalSessionStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformDashboardController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseDestroyController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseShowController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseUpdateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundlePublishController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleShowController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleUpdateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookPublishController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlaybookAssignController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantDirectoryController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantShowController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingAuditIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantAuditIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformAuditIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantImpersonateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantUserIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantModulesCatalogController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformBillingCatalogUpdateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlanCatalogController;
-use App\Modules\Platform\Http\Controllers\V1\CentralPlatformBillingInsightsController;
-use App\Modules\Platform\Http\Controllers\V1\CentralStripeWebhookController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantSettingsController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantDestroyController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantProvisioningController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymDestroyController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymPublicIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymStoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymSyncDefaultsController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformAuditIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformAuthController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformBillingCatalogUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformBillingInsightsController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformDashboardController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformMfaController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformMicrosoftAuthController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPlatformRoleCatalogController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseShowController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookPublishController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundlePublishController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleShowController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralStripeWebhookController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantAuditIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingAuditIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingPortalSessionStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBrandingAssetStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantDirectoryController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantImpersonateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantModulesCatalogController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlanCatalogController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlaybookAssignController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantProvisioningController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantPublicBrandingController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantSettingsController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantShowController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantUserIndexController;
 use App\Modules\Platform\Support\PlatformRoleCatalog;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +62,10 @@ Route::post('webhooks/stripe', CentralStripeWebhookController::class)
 Route::get('public/tenant-branding', [CentralTenantPublicBrandingController::class, 'show'])
     ->middleware('throttle:120,1')
     ->name('api.central.v1.public.tenant-branding');
+Route::get('public/tenant-branding/{asset}', [CentralTenantPublicBrandingController::class, 'asset'])
+    ->where('asset', 'logo|favicon')
+    ->middleware('throttle:120,1')
+    ->name('api.central.v1.public.tenant-branding.asset');
 
 Route::get('public/operational-acronyms', CentralOperationalAcronymPublicIndexController::class)
     ->middleware('throttle:120,1')
@@ -149,6 +154,10 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::patch('tenants/{tenant}', [CentralTenantSettingsController::class, 'update'])
         ->middleware(['throttle:60,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE])
         ->name('api.central.v1.platform.tenants.update');
+    Route::post('tenants/{tenant}/branding/{asset}', CentralTenantBrandingAssetStoreController::class)
+        ->where('asset', 'logo|favicon')
+        ->middleware(['throttle:30,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE])
+        ->name('api.central.v1.platform.tenants.branding.asset');
     Route::get('tenants/{tenant}/billing-audit', CentralTenantBillingAuditIndexController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_BILLING_VIEW)
         ->name('api.central.v1.platform.tenants.billing_audit');

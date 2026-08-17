@@ -47,7 +47,7 @@ final class TenantLinkedEnvironmentsService
      *   }>
      * }
      */
-    public function listForTenant(Tenant $tenant): array
+    public function listForTenant(Tenant $tenant, bool $canSwitch = true): array
     {
         $handoffSupported = (bool) config('toweros.environment_switch.enabled', true);
         $orgRoot = $this->resolveOrgRoot($tenant);
@@ -93,7 +93,7 @@ final class TenantLinkedEnvironmentsService
                 'switch_url' => $ssoEnabled
                     ? FrontendDevUrl::tenantSsoSwitchLoginUrl($hostname, $environment)
                     : $loginUrl,
-                'handoff_available' => $handoffSupported && ! $isCurrent,
+                'handoff_available' => $handoffSupported && $canSwitch && ! $isCurrent,
                 'is_current' => $isCurrent,
             ];
         }

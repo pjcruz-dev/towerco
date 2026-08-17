@@ -9,6 +9,8 @@ use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\EntraGraphAppService;
+use App\Modules\Identity\Support\EntraDirectoryPerson;
+use App\Modules\Identity\Support\EntraManagerLookupResult;
 use Mockery;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -52,9 +54,14 @@ final class EApprovalManagerApproverTest extends TestCase
         tenancy()->end();
 
         $graph = Mockery::mock(EntraGraphAppService::class);
-        $graph->shouldReceive('getManagerEmailForUser')
+        $graph->shouldReceive('lookupManagerForEmail')
             ->with('requestor@test.localhost')
-            ->andReturn('manager@test.localhost');
+            ->andReturn(new EntraManagerLookupResult(
+                ok: true,
+                code: EntraManagerLookupResult::CODE_OK,
+                message: 'Manager found in Microsoft Entra.',
+                manager: new EntraDirectoryPerson('mgr-1', 'manager@test.localhost', 'Manager'),
+            ));
         $this->app->instance(EntraGraphAppService::class, $graph);
 
         $formRes = $this->actingAsTenantAdmin()

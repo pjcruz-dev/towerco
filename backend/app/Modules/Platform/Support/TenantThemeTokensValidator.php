@@ -14,6 +14,8 @@ use Illuminate\Validation\ValidationException;
  *     version?: int,
  *     logo_url?: string|null,
  *     favicon_url?: string|null,
+ *     logo_asset?: string|null,
+ *     favicon_asset?: string|null,
  *     light?: array<string, string>,
  *     dark?: array<string, string>
  * }
@@ -62,6 +64,10 @@ final class TenantThemeTokensValidator
 
     private const VALUE_PATTERN = '/^(oklch|hsl|hsla|rgb|rgba)\([^)]+\)$|^#[0-9A-Fa-f]{3,8}$/';
 
+    private const HOSTED_ASSET_URL = '/^\/api\/v1\/public\/tenant-branding\/(logo|favicon)\?tenant=[0-9a-f-]{36}$/i';
+
+    private const HOSTED_ASSET_PATH = '/^platform\/tenant-branding\/[0-9a-f-]{36}\/(logo|favicon)\.[a-z0-9]{2,5}$/';
+
     /**
      * @param  array<string, mixed>  $themeTokens
      * @return ThemeTokens
@@ -72,14 +78,26 @@ final class TenantThemeTokensValidator
             $themeTokens,
             [
                 'version' => ['required', 'integer', 'min:1', 'max:999'],
-                'logo_url' => ['nullable', 'string', 'max:2048', 'url', 'regex:/^https:\/\//i'],
-                'favicon_url' => ['nullable', 'string', 'max:2048', 'url', 'regex:/^https:\/\//i'],
+                'logo_url' => ['nullable', 'string', 'max:2048'],
+                'favicon_url' => ['nullable', 'string', 'max:2048'],
+                'logo_asset' => ['nullable', 'string', 'max:512', 'regex:'.self::HOSTED_ASSET_PATH],
+                'favicon_asset' => ['nullable', 'string', 'max:512', 'regex:'.self::HOSTED_ASSET_PATH],
                 'light' => ['nullable', 'array', 'max:50'],
                 'dark' => ['nullable', 'array', 'max:50'],
             ],
         );
 
         $validator->after(function ($v) use ($themeTokens): void {
+            foreach (['logo_url', 'favicon_url'] as $urlKey) {
+                $url = $themeTokens[$urlKey] ?? null;
+                if ($url === null || $url === '') {
+                    continue;
+                }
+                if (! is_string($url) || ! self::isAllowedPublicUrl($url)) {
+                    $v->errors()->add($urlKey, __('Use an HTTPS URL or upload a file in Tenant branding.'));
+                }
+            }
+
             foreach (['light', 'dark'] as $mode) {
                 if (! isset($themeTokens[$mode]) || ! is_array($themeTokens[$mode])) {
                     continue;
@@ -151,10 +169,29 @@ final class TenantThemeTokensValidator
 
         try {
             $validated = self::validate($raw);
+            unset($validated['logo_asset'], $validated['favicon_asset']);
 
             return array_merge($defaults, $validated);
         } catch (ValidationException) {
             return $defaults;
         }
+    }
+
+    public static function isAllowedPublicUrl(string $url): bool
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return true;
+        }
+
+        if (preg_match(self::HOSTED_ASSET_URL, $url) === 1) {
+            return true;
+        }
+
+        if (preg_match('/^https:\/\//i', $url) !== 1) {
+            return false;
+        }
+
+        return filter_var($url, FILTER_VALIDATE_URL) !== false;
     }
 }

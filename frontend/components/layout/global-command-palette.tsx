@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { fetchWorkspaceSearch } from "@/lib/api/modules/workspace-search-api";
 import { workspaceSearchResultsToCommandItems } from "@/lib/navigation/workspace-entity-search";
 import {
@@ -97,6 +98,7 @@ function groupEntityItemsByModule(items: WorkspaceCommandItem[]): PaletteSection
 export function GlobalCommandPalette() {
   const router = useRouter();
   const { open, setOpen } = useGlobalCommandPalette();
+  const organizationLabel = useOrganizationLabel();
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
@@ -300,7 +302,7 @@ export function GlobalCommandPalette() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent showCloseButton className="gap-0 p-0">
         <DialogHeader className="gap-0 border-b border-border px-4 py-3">
-          <DialogTitle className="sr-only">Search TowerOS</DialogTitle>
+          <DialogTitle className="sr-only">Search {organizationLabel}</DialogTitle>
           <DialogDescription className="sr-only">
             Jump to modules, pages, and quick actions across your tenant workspace.
           </DialogDescription>

@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -19,13 +21,28 @@ use Spatie\Permission\Traits\HasRoles;
 /**
  * End-user identity inside a tenant database (TowerCo staff, field users).
  */
-#[Fillable(['name', 'email', 'password', 'is_active', 'deactivated_at', 'password_login_exempt'])]
+#[Fillable([
+    'name',
+    'email',
+    'password',
+    'is_active',
+    'deactivated_at',
+    'password_login_exempt',
+    'manager_id',
+    'entra_id',
+    'job_title',
+    'entra_manager_email',
+    'entra_manager_name',
+    'entra_org_synced_at',
+])]
 #[Hidden(['password', 'remember_token'])]
 class TenantUser extends Authenticatable
 {
     use HasApiTokens;
+
     /** @use HasFactory<TenantUserFactory> */
     use HasFactory;
+
     use HasRoles;
     use HasUuids;
     use LogsActivity;
@@ -60,7 +77,18 @@ class TenantUser extends Authenticatable
             'is_active' => 'boolean',
             'password_login_exempt' => 'boolean',
             'deactivated_at' => 'datetime',
+            'entra_org_synced_at' => 'datetime',
         ];
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'manager_id');
+    }
+
+    public function directReports(): HasMany
+    {
+        return $this->hasMany(self::class, 'manager_id');
     }
 
     public function isActive(): bool

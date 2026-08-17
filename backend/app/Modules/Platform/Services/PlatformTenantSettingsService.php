@@ -6,17 +6,18 @@ namespace App\Modules\Platform\Services;
 
 use App\Models\Tenant;
 use App\Models\User;
-use App\Modules\Billing\Support\TenantBillingOverridesValidator;
 use App\Modules\Billing\Services\StripeBillingConfig;
 use App\Modules\Billing\Services\TenantPlanDowngradeGuard;
 use App\Modules\Billing\Services\TenantSubscriptionLifecycleService;
+use App\Modules\Billing\Support\TenantBillingOverridesValidator;
 use App\Modules\Identity\Services\MfaService;
-use App\Modules\Platform\Support\TenantThemeTokensValidator;
 use App\Modules\Platform\Support\PlatformTenantAuditEventType;
+use App\Modules\Platform\Support\TenantThemeTokensValidator;
 use App\Modules\Tenancy\Services\TenantModuleRbacSyncService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use App\Modules\Tenancy\Support\TenantOperatorAccessMode;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 final class PlatformTenantSettingsService
@@ -29,6 +30,7 @@ final class PlatformTenantSettingsService
         private readonly MfaService $mfa,
         private readonly TenantEnabledModulesResolver $enabledModulesResolver,
         private readonly TenantModuleRbacSyncService $moduleRbacSync,
+        private readonly TenantBrandingAssetService $brandingAssets,
     ) {}
 
     /**
@@ -47,9 +49,13 @@ final class PlatformTenantSettingsService
 
         if (array_key_exists('theme_tokens', $data)) {
             if ($data['theme_tokens'] === null) {
+                $this->brandingAssets->clear($tenant);
                 $tenant->theme_tokens = null;
             } else {
-                $tenant->theme_tokens = TenantThemeTokensValidator::validate($data['theme_tokens']);
+                $tenant->theme_tokens = $this->brandingAssets->mergeForSave(
+                    $tenant,
+                    TenantThemeTokensValidator::validate($data['theme_tokens']),
+                );
             }
         }
 
@@ -75,7 +81,7 @@ final class PlatformTenantSettingsService
         }
         if (array_key_exists('billing_meter_starts_at', $data)) {
             $tenant->billing_meter_starts_at = $data['billing_meter_starts_at'] !== null
-                ? \Illuminate\Support\Carbon::parse((string) $data['billing_meter_starts_at'])
+                ? Carbon::parse((string) $data['billing_meter_starts_at'])
                 : null;
         }
         if (array_key_exists('billing_interval', $data)) {

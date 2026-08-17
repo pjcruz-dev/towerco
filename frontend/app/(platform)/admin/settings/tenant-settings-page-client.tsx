@@ -511,8 +511,13 @@ export function TenantSettingsPageClient() {
                   id="ms-tenant-id"
                   value={tenantIdentifier}
                   onChange={(e) => setTenantIdentifier(e.target.value)}
-                  placeholder="common or your Entra directory GUID"
+                  placeholder="Entra directory (tenant) GUID"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Use the Entra <span className="font-medium text-foreground">Directory (tenant) GUID</span>, not{" "}
+                  <code className="rounded bg-muted px-1">common</code>. Sign-in can work with{" "}
+                  <code className="rounded bg-muted px-1">common</code>; manager lookup and org sync cannot.
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -524,6 +529,18 @@ export function TenantSettingsPageClient() {
                   placeholder="https://login.microsoftonline.com/…/v2.0"
                 />
               </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-3 text-sm">
+              <p className="font-medium">Graph permissions for manager and org chart</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Delegated <code className="rounded bg-muted px-1">User.Read.All</code> is used when someone signs in
+                with Microsoft (manager and direct reports on that user). E-Approval Direct manager and{" "}
+                <span className="font-medium text-foreground">Sync org chart</span> need{" "}
+                <span className="font-medium text-foreground">Application</span>{" "}
+                <code className="rounded bg-muted px-1">User.Read.All</code> with admin consent. Keep both — do not
+                replace Delegated with Application.
+              </p>
             </div>
 
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-3 text-sm">

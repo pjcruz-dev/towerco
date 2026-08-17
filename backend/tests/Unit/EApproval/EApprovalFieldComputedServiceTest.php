@@ -37,6 +37,34 @@ final class EApprovalFieldComputedServiceTest extends TestCase
         $this->assertSame('3600.00', $values['total_reimbursement']);
     }
 
+    public function test_reimbursement_total_sums_four_column_expense_lines(): void
+    {
+        $form = new EApprovalForm(['id' => 'form-lq']);
+        $form->setRelation('fields', collect([
+            $this->gridField('expense_lines', [
+                ['label' => 'Date', 'type' => 'date'],
+                ['label' => 'Category', 'type' => 'text'],
+                ['label' => 'Description', 'type' => 'text'],
+                ['label' => 'Amount', 'type' => 'currency'],
+            ]),
+            $this->currencyField('total_reimbursement'),
+        ]));
+
+        $service = new EApprovalFieldComputedService;
+        $values = $service->apply($form, [
+            'expense_lines' => json_encode([
+                'rows' => [
+                    ['0' => '2026-08-01', '1' => 'Travel', '2' => 'Taxi', '3' => '123213'],
+                    ['0' => '2026-08-02', '1' => 'Travel', '2' => 'Meal', '3' => '123213'],
+                    ['0' => '2026-08-03', '1' => 'Travel', '2' => 'Hotel', '3' => '123213'],
+                ],
+            ], JSON_THROW_ON_ERROR),
+            'total_reimbursement' => '',
+        ]);
+
+        $this->assertSame('369639.00', $values['total_reimbursement']);
+    }
+
     public function test_purchase_requisition_total_sums_qty_times_unit_price(): void
     {
         $form = new EApprovalForm(['id' => 'form-2']);

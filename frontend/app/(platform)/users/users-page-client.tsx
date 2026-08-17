@@ -31,6 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useAdminRoleCatalog } from "@/hooks/use-admin-role-catalog";
 import { useAdminUsersIndex } from "@/hooks/use-admin-users-index";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { formatLastActive } from "@/lib/admin/user-display";
 import { getErrorMessage } from "@/lib/api/error";
@@ -108,6 +109,7 @@ export function UsersPageClient() {
   const canImpersonateUsers = hasPermission(scopedUser, [permissions.userImpersonate]);
   const canManageUsers = hasPermission(scopedUser, [permissions.userManage]);
   const isImpersonating = Boolean(user?.isImpersonating);
+  const organizationLabel = useOrganizationLabel();
 
   const initialRole = searchParams.get("role") ?? "all";
   const [search, setSearch] = useState("");
@@ -231,12 +233,13 @@ export function UsersPageClient() {
       createUsersTableColumns({
         currentUserId: user?.id,
         canImpersonateUsers,
+        organizationLabel,
         onView: openView,
         onEdit: openEdit,
         onImpersonate: openImpersonate,
         onMutate: invalidateUsers,
       }),
-    [user?.id, canImpersonateUsers, isImpersonating, queryClient],
+    [user?.id, canImpersonateUsers, isImpersonating, organizationLabel, queryClient],
   );
 
   const clearSelection = () => {
@@ -519,6 +522,13 @@ export function UsersPageClient() {
                 Roles & permissions
               </Link>
             ) : null}
+            <Link
+              href="/users/org"
+              prefetch={false}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              Organization
+            </Link>
             <Button
               size="sm"
               className="gap-1.5"

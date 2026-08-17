@@ -521,6 +521,22 @@ export async function platformUpdateTenantMfa(
   };
 }
 
+export async function platformUploadTenantBrandingAsset(
+  tenantId: string,
+  asset: "logo" | "favicon",
+  file: File,
+): Promise<PlatformTenantThemeTokens> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await centralApiClient.post<{ data: { theme_tokens: PlatformTenantThemeTokens } }>(
+    `/platform/tenants/${tenantId}/branding/${asset}`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+
+  return response.data.data.theme_tokens;
+}
+
 export type PlatformTenantBillingAuditRow = {
   id: string;
   actor_email: string | null;

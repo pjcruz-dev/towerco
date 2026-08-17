@@ -15,6 +15,7 @@ import {
   parseFormComposeConfig,
   type FormComposeEditorSettings,
 } from "@/modules/e-approval/form-compose-config";
+import { applyComputedFieldValues } from "@/modules/e-approval/field-computed";
 import { fieldDefaultValue } from "@/modules/e-approval/field-validation";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
@@ -60,6 +61,10 @@ export function EApprovalFormComposePreviewDialog({
   const composeConfig = useMemo(() => parseFormComposeConfig(previewMetadata), [previewMetadata]);
   const [values, setValues] = useState<Record<string, string>>(() => initialPreviewValues(fields));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const computedValues = useMemo(
+    () => (fields.length > 0 ? applyComputedFieldValues(fields, values) : values),
+    [fields, values],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -86,7 +91,7 @@ export function EApprovalFormComposePreviewDialog({
         <DialogBody className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <EApprovalComposeFormFields
             fields={fields}
-            values={values}
+            values={computedValues}
             fieldErrors={fieldErrors}
             composeConfig={composeConfig}
             formMetadata={previewMetadata}

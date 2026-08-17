@@ -647,6 +647,11 @@ export function PlatformHomePageClient() {
               themeTokens,
             });
           }}
+          onUploaded={(themeTokens) => {
+            setBrandingTarget((current) => (current ? { ...current, theme_tokens: themeTokens } : current));
+            void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+            void queryClient.invalidateQueries({ queryKey: ["platform", "dashboard"] });
+          }}
         />
       ) : null}
 

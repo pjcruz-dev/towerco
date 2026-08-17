@@ -33,6 +33,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePermission } from "@/hooks/use-permission";
 import { logout } from "@/lib/api/modules/auth-api";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -147,6 +148,7 @@ function ThemeSegment({ onSelect }: { onSelect?: () => void }) {
 function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
   const notify = useNotificationStore((state) => state.push);
   const actorEmail = useAuthStore((state) => state.user?.email ?? null);
+  const canSwitchEnvironments = usePermission([permissions.workspaceEnvironmentsSwitch]);
   const [pendingEnvironment, setPendingEnvironment] = useState<string | null>(null);
 
   const environmentsQuery = useQuery({
@@ -219,8 +221,21 @@ function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
             );
           }
 
-          const canHandoff = handoffSupported && env.handoff_available !== false;
+          const canHandoff =
+            canSwitchEnvironments && handoffSupported && env.handoff_available !== false;
           const busy = pendingEnvironment === env.environment && handoffMutation.isPending;
+
+          if (!canSwitchEnvironments) {
+            return (
+              <div
+                key={env.environment}
+                className="flex items-center gap-2 rounded-lg border border-transparent bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+              >
+                <Layers className="size-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1 truncate font-medium">{env.label}</span>
+              </div>
+            );
+          }
 
           if (canHandoff) {
             return (
@@ -270,10 +285,16 @@ function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
           );
         })}
       </div>
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        Seamless switch needs the same email on the other environment. If that fails, we open that
-        host’s login (Microsoft SSO when enabled). Sessions stay separate per host.
-      </p>
+      {canSwitchEnvironments ? (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Seamless switch needs the same email on the other environment. If that fails, we open that
+          host’s login (Microsoft SSO when enabled). Sessions stay separate per host.
+        </p>
+      ) : (
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Environment switch is limited to users granted access in Team & Access.
+        </p>
+      )}
     </div>
   );
 }

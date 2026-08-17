@@ -9,8 +9,11 @@ use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\AzureGraphService;
 use App\Modules\Identity\Services\AzureGroupRoleMapper;
+use App\Modules\Identity\Services\EntraOrgDirectoryService;
 use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Services\TenantSsoConfigService;
 use App\Modules\Identity\Services\TenantUserProvisioningService;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +21,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
+use Stancl\Tenancy\Database\Models\Domain;
 use Symfony\Component\HttpFoundation\Response;
 
 class TenantSsoController extends AbstractApiController
@@ -44,6 +48,7 @@ class TenantSsoController extends AbstractApiController
         $this->ssoConfig->applyAzureSocialiteConfig($config);
 
         $driver = Socialite::driver('azure')->stateless();
+        $driver = $driver->scopes(['openid', 'profile', 'email', 'User.Read', 'User.Read.All']);
         $tenantDomain = $this->resolveTenantDomainForSsoState($request);
         if ($tenantDomain !== null) {
             $state = json_encode(['tenant_domain' => $tenantDomain], JSON_THROW_ON_ERROR);
@@ -65,7 +70,7 @@ class TenantSsoController extends AbstractApiController
             return null;
         }
 
-        $domain = \Stancl\Tenancy\Database\Models\Domain::query()
+        $domain = Domain::query()
             ->where('tenant_id', (string) $tenantId)
             ->value('domain');
 
@@ -104,6 +109,12 @@ class TenantSsoController extends AbstractApiController
         $groupIds = [];
         if (is_string($socialUser->token) && $socialUser->token !== '') {
             $groupIds = $this->graphService->fetchGroupIds($socialUser->token);
+            try {
+                app(EntraOrgDirectoryService::class)
+                    ->syncFromDelegatedToken($user, $socialUser->token);
+            } catch (\Throwable) {
+                // Org sync must never block Microsoft sign-in.
+            }
         }
         $this->roleMapper->syncRolesForGroups($user, $groupIds);
 
@@ -126,7 +137,7 @@ class TenantSsoController extends AbstractApiController
             'mfa_required' => $mfaState['mfa_required'],
         ]);
 
-        $passkeyFlags = app(\App\Modules\Identity\Services\TenantPasskeysPolicyService::class)->loginFlags($user);
+        $passkeyFlags = app(TenantPasskeysPolicyService::class)->loginFlags($user);
 
         $payload = [
             'access_token' => $accessToken,
@@ -135,7 +146,7 @@ class TenantSsoController extends AbstractApiController
             'mfa_required' => $mfaState['mfa_required'],
             'mfa_enrollment_required' => $mfaState['mfa_enrollment_required'],
             'mfa_challenge' => $mfaState['mfa_challenge'],
-            'user' => app(\App\Modules\Identity\Services\TenantAuthUserPayloadBuilder::class)->build($user),
+            'user' => app(TenantAuthUserPayloadBuilder::class)->build($user),
             ...$passkeyFlags,
         ];
 

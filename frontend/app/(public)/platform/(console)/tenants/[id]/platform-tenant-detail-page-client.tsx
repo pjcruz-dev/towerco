@@ -508,6 +508,11 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
             mfaRequired: tenant.mfa_required,
           })
         }
+        onUploaded={() => {
+          void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+          void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId] });
+          void queryClient.invalidateQueries({ queryKey: ["platform", "dashboard"] });
+        }}
       />
 
       <TenantPlaybookManageSheet

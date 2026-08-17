@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Identity\Services;
 
+use App\Modules\Identity\Support\EntraDirectoryPerson;
 use Illuminate\Support\Facades\Http;
 
 class AzureGraphService
 {
+    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle';
+
     /**
      * @return list<string>
      */
@@ -46,5 +49,60 @@ class AzureGraphService
 
         return array_values(array_unique($groups));
     }
-}
 
+    public function fetchMe(string $accessToken): ?EntraDirectoryPerson
+    {
+        $response = Http::timeout(15)
+            ->acceptJson()
+            ->withToken($accessToken)
+            ->get('https://graph.microsoft.com/v1.0/me?$select='.self::SELECT);
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        return EntraDirectoryPerson::fromGraph($response->json() ?? []);
+    }
+
+    public function fetchManager(string $accessToken): ?EntraDirectoryPerson
+    {
+        $response = Http::timeout(15)
+            ->acceptJson()
+            ->withToken($accessToken)
+            ->get('https://graph.microsoft.com/v1.0/me/manager?$select='.self::SELECT);
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        return EntraDirectoryPerson::fromGraph($response->json() ?? []);
+    }
+
+    /**
+     * @return list<EntraDirectoryPerson>
+     */
+    public function fetchDirectReports(string $accessToken): array
+    {
+        $response = Http::timeout(15)
+            ->acceptJson()
+            ->withToken($accessToken)
+            ->get('https://graph.microsoft.com/v1.0/me/directReports?$select='.self::SELECT.'&$top=999');
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $people = [];
+        foreach ($response->json('value') ?? [] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $person = EntraDirectoryPerson::fromGraph($row);
+            if ($person !== null) {
+                $people[] = $person;
+            }
+        }
+
+        return $people;
+    }
+}

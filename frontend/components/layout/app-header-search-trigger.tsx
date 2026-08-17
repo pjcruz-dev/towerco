@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { cn } from "@/lib/utils";
 
 function shortcutLabel(): string {
@@ -15,6 +16,8 @@ function shortcutLabel(): string {
 
 export function AppHeaderSearchTrigger({ className }: { className?: string }) {
   const { setOpen } = useGlobalCommandPalette();
+  const organizationLabel = useOrganizationLabel();
+  const searchLabel = `Search ${organizationLabel}`;
 
   return (
     <>
@@ -25,7 +28,7 @@ export function AppHeaderSearchTrigger({ className }: { className?: string }) {
           "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground md:hidden",
           className,
         )}
-        aria-label="Search TowerOS"
+        aria-label={searchLabel}
       >
         <Search className="h-4 w-4" />
       </button>
@@ -36,10 +39,10 @@ export function AppHeaderSearchTrigger({ className }: { className?: string }) {
           "hidden h-9 min-w-[220px] items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground md:flex lg:min-w-[280px]",
           className,
         )}
-        aria-label="Search TowerOS"
+        aria-label={searchLabel}
       >
         <Search className="h-4 w-4 shrink-0" />
-        <span className="flex-1 truncate">Search TowerOS…</span>
+        <span className="flex-1 truncate">{searchLabel}…</span>
         <kbd className="hidden rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium lg:inline">
           {shortcutLabel()}
         </kbd>

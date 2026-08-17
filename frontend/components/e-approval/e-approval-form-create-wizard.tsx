@@ -169,7 +169,7 @@ export function EApprovalFormCreateWizard({
         {step === "start" ? (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Choose how to start. Templates create a draft immediately.</p>
-            <EApprovalFormTemplateGallery onCreated={onTemplateCreated} />
+            <EApprovalFormTemplateGallery persistMinimize={false} onCreated={onTemplateCreated} />
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" size="sm" onClick={onOpenImport}>
                 Import JSON

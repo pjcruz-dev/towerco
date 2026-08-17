@@ -39,5 +39,9 @@ describe("resolveWorkspaceBreadcrumbs", () => {
       { label: "Team & Access", href: "/users" },
       { label: "Roles & permissions" },
     ]);
+    expect(resolveWorkspaceBreadcrumbs("/users/org")).toEqual([
+      { label: "Team & Access", href: "/users" },
+      { label: "Organization" },
+    ]);
   });
 });

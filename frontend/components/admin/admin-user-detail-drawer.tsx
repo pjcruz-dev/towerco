@@ -28,6 +28,7 @@ import {
   mfaStatusLabel,
   resolveMfaDisplayStatus,
 } from "@/lib/admin/user-display";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { getErrorMessage } from "@/lib/api/error";
 import { groupPermissionsByModule, permissionLabel } from "@/lib/rbac/permission-groups";
 import { getTenantRoleGuide } from "@/lib/rbac/tenant-role-guides";
@@ -69,6 +70,7 @@ export function AdminUserDetailDrawer({
 }: Props) {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
+  const organizationLabel = useOrganizationLabel();
   const [tab, setTab] = useState<TabId>("overview");
 
   useEffect(() => {
@@ -179,6 +181,25 @@ export function AdminUserDetailDrawer({
                 <DetailField label="MFA">{mfaStatusLabel(mfaStatus)}</DetailField>
                 <DetailField label="Created">{formatTimestamp(user.created_at)}</DetailField>
                 <DetailField label="Deactivated">{formatTimestamp(user.deactivated_at)}</DetailField>
+                <DetailField label="Job title">{user.job_title?.trim() || "—"}</DetailField>
+                <DetailField label="Reports to">
+                  {user.manager ? (
+                    <span>
+                      {user.manager.name}
+                      <span className="block text-xs text-muted-foreground">{user.manager.email}</span>
+                    </span>
+                  ) : user.entra_manager_name || user.entra_manager_email ? (
+                    <span>
+                      {user.entra_manager_name ?? user.entra_manager_email}
+                      <span className="block text-xs text-muted-foreground">
+                        {user.entra_manager_email ?? `In Microsoft Entra — not a ${organizationLabel} user yet`}
+                      </span>
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </DetailField>
+                <DetailField label="Direct reports">{user.direct_report_count ?? 0}</DetailField>
               </div>
 
               <DetailField label="Auth methods summary">{formatAuthMethods(user.auth_methods)}</DetailField>

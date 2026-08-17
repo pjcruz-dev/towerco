@@ -8,7 +8,81 @@ declare(strict_types=1);
  * Field names align with open-parent APIs when parent_submission_id is set:
  * - CA: `requested_amount` / child `total_reimbursement` (EApprovalCashAdvanceService)
  * - PR: `estimated_total` / child `total_amount` (EApprovalPurchaseRequisitionService)
+ *
+ * Cash advance, liquidation, and reimbursement share an amount ladder:
+ * Direct manager (always) → Finance ≤ 5,000 / senior > 5,000 → final approver (always).
  */
+$amountThreshold = '5000';
+
+$steppedCompose = [
+    'mode' => 'stepped',
+    'step_source' => 'sections',
+    'show_progress' => true,
+    'validate_on_next' => true,
+    'allow_back' => true,
+    'include_review_step' => true,
+];
+
+$amountWorkflow = static function (string $amountField) use ($amountThreshold): array {
+    return [
+        ['type' => 'manager', 'step_order' => 1],
+        [
+            'type' => 'field',
+            'approverId' => 'finance_approver',
+            'step_order' => 2,
+            'when' => [['field' => $amountField, 'operator' => 'lte', 'value' => $amountThreshold]],
+        ],
+        [
+            'type' => 'field',
+            'approverId' => 'senior_approver',
+            'step_order' => 3,
+            'when' => [['field' => $amountField, 'operator' => 'gt', 'value' => $amountThreshold]],
+        ],
+        ['type' => 'field', 'approverId' => 'final_approver', 'step_order' => 4],
+    ];
+};
+
+$approverFields = static function (int $startOrder) use ($amountThreshold): array {
+    return [
+        [
+            'type' => 'section',
+            'name' => 'section_approvers',
+            'label' => 'Approvers',
+            'step_order' => $startOrder,
+        ],
+        [
+            'type' => 'approver',
+            'name' => 'finance_approver',
+            'label' => 'Finance approver',
+            'step_order' => $startOrder + 1,
+            'validation' => [
+                'required' => true,
+                'help_text' => 'Used when the amount is '.$amountThreshold.' or less.',
+            ],
+        ],
+        [
+            'type' => 'approver',
+            'name' => 'senior_approver',
+            'label' => 'Senior / admin approver',
+            'step_order' => $startOrder + 2,
+            'validation' => [
+                'required' => true,
+                'help_text' => 'Used when the amount is over '.$amountThreshold.'.',
+            ],
+        ],
+        [
+            'type' => 'approver',
+            'name' => 'final_approver',
+            'label' => 'Final approver',
+            'step_order' => $startOrder + 3,
+            'validation' => [
+                'required' => true,
+                'help_text' => 'Always runs after the amount path (for example a controller or director).',
+            ],
+        ],
+    ];
+};
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -35,12 +109,13 @@ return [
 
     'cash_advance' => [
         'name' => 'Cash advance',
-        'description' => 'Request petty cash or travel advance. Use field requested_amount for open-balance tracking.',
+        'description' => 'Request petty cash or travel advance. Direct manager, then Finance (≤ 5,000) or senior admin (> 5,000), then a final approver. Field requested_amount drives open-balance tracking.',
         'category' => 'finance',
         'doc_type_code' => 'CA',
         'metadata_json' => [
             'form_family' => 'cash_advance',
             'related_template_ids' => ['liquidation', 'reimbursement'],
+            'compose' => $steppedCompose,
         ],
         'fields' => [
             [
@@ -103,28 +178,33 @@ return [
                 'validation' => ['required' => true, 'placeholder' => 'Describe why the advance is needed'],
             ],
             [
+                'type' => 'text',
+                'name' => 'location',
+                'label' => 'Location / site',
+                'step_order' => 7,
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_place', 'slot' => 0]],
+            ],
+            [
+                'type' => 'date_range',
+                'name' => 'activity_dates',
+                'label' => 'Activity / travel period',
+                'step_order' => 8,
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_place', 'slot' => 1]],
+            ],
+            [
                 'type' => 'file',
                 'name' => 'supporting_documents',
                 'label' => 'Supporting documents',
-                'step_order' => 7,
+                'step_order' => 9,
             ],
-            [
-                'type' => 'approver',
-                'name' => 'finance_approver',
-                'label' => 'Finance approver',
-                'step_order' => 8,
-                'validation' => ['required' => true],
-            ],
+            ...$approverFields(10),
         ],
-        'steps' => [
-            ['type' => 'manager', 'step_order' => 1],
-            ['type' => 'field', 'approverId' => 'finance_approver', 'step_order' => 2],
-        ],
+        'steps' => $amountWorkflow('requested_amount'),
     ],
 
     'liquidation' => [
         'name' => 'Liquidation',
-        'description' => 'Liquidate an approved cash advance with expense lines and receipts.',
+        'description' => 'Liquidate an approved cash advance with expense lines and receipts. Same approval ladder as cash advance, using the liquidation total.',
         'category' => 'finance',
         'doc_type_code' => 'LQ',
         'metadata_json' => [
@@ -132,6 +212,7 @@ return [
             'parent_form_family' => 'cash_advance',
             'requires_parent_submission' => true,
             'related_template_ids' => ['cash_advance'],
+            'compose' => $steppedCompose,
         ],
         'fields' => [
             [
@@ -145,13 +226,42 @@ return [
                 'name' => 'cash_advance_document_no',
                 'label' => 'Cash advance document no.',
                 'step_order' => 2,
-                'validation' => ['required' => true, 'placeholder' => 'e.g. CA-2026-00012'],
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'Filled automatically when you select an approved cash advance.',
+                    'placeholder' => 'Select an approved cash advance',
+                ],
+                'options' => [
+                    'read_only' => true,
+                ],
+            ],
+            [
+                'type' => 'date',
+                'name' => 'liquidation_date',
+                'label' => 'Liquidation date',
+                'step_order' => 3,
+                'validation' => ['required' => true],
+            ],
+            [
+                'type' => 'grid',
+                'name' => 'expense_lines',
+                'label' => 'Expense lines',
+                'step_order' => 4,
+                'validation' => ['required' => true],
+                'options' => [
+                    'columns' => [
+                        ['label' => 'Date', 'type' => 'date'],
+                        ['label' => 'Category', 'type' => 'text'],
+                        ['label' => 'Description', 'type' => 'text'],
+                        ['label' => 'Amount', 'type' => 'currency'],
+                    ],
+                ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total liquidation amount',
-                'step_order' => 3,
+                'step_order' => 5,
                 'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
                 'options' => [
                     'read_only' => true,
@@ -159,29 +269,6 @@ return [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
                         'column' => 'Amount',
-                    ],
-                    'layout' => ['width' => 'half', 'row_id' => 'lq_total', 'slot' => 0],
-                ],
-            ],
-            [
-                'type' => 'date',
-                'name' => 'liquidation_date',
-                'label' => 'Liquidation date',
-                'step_order' => 4,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_total', 'slot' => 1]],
-            ],
-            [
-                'type' => 'grid',
-                'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 5,
-                'validation' => ['required' => true],
-                'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
                     ],
                 ],
             ],
@@ -198,27 +285,19 @@ return [
                 'label' => 'Notes',
                 'step_order' => 7,
             ],
-            [
-                'type' => 'approver',
-                'name' => 'finance_approver',
-                'label' => 'Finance approver',
-                'step_order' => 8,
-                'validation' => ['required' => true],
-            ],
+            ...$approverFields(8),
         ],
-        'steps' => [
-            ['type' => 'manager', 'step_order' => 1],
-            ['type' => 'field', 'approverId' => 'finance_approver', 'step_order' => 2],
-        ],
+        'steps' => $amountWorkflow('total_reimbursement'),
     ],
 
     'reimbursement' => [
         'name' => 'Reimbursement',
-        'description' => 'Reimburse out-of-pocket expenses already paid by the requestor.',
+        'description' => 'Reimburse out-of-pocket expenses already paid by the requestor. Same approval ladder as cash advance, using the reimbursement total. No cash-advance parent.',
         'category' => 'finance',
         'doc_type_code' => 'RE',
         'metadata_json' => [
             'form_family' => 'reimbursement',
+            'compose' => $steppedCompose,
         ],
         'fields' => [
             [
@@ -251,10 +330,25 @@ return [
                 ],
             ],
             [
+                'type' => 'grid',
+                'name' => 'expense_lines',
+                'label' => 'Expense lines',
+                'step_order' => 4,
+                'validation' => ['required' => true],
+                'options' => [
+                    'columns' => [
+                        ['label' => 'Date', 'type' => 'date'],
+                        ['label' => 'Category', 'type' => 'text'],
+                        ['label' => 'Description', 'type' => 'text'],
+                        ['label' => 'Amount', 'type' => 'currency'],
+                    ],
+                ],
+            ],
+            [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total reimbursement amount',
-                'step_order' => 4,
+                'step_order' => 5,
                 'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
                 'options' => [
                     'read_only' => true,
@@ -262,20 +356,6 @@ return [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
                         'column' => 'Amount',
-                    ],
-                ],
-            ],
-            [
-                'type' => 'grid',
-                'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 5,
-                'validation' => ['required' => true],
-                'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
                     ],
                 ],
             ],
@@ -293,18 +373,9 @@ return [
                 'step_order' => 7,
                 'validation' => ['required' => true],
             ],
-            [
-                'type' => 'approver',
-                'name' => 'finance_approver',
-                'label' => 'Finance approver',
-                'step_order' => 8,
-                'validation' => ['required' => true],
-            ],
+            ...$approverFields(8),
         ],
-        'steps' => [
-            ['type' => 'manager', 'step_order' => 1],
-            ['type' => 'field', 'approverId' => 'finance_approver', 'step_order' => 2],
-        ],
+        'steps' => $amountWorkflow('total_reimbursement'),
     ],
 
     'request_for_payment' => [

@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { EApprovalComposeFormFields } from "@/components/e-approval/e-approval-compose-form-fields";
 import { parseFormComposeConfig } from "@/modules/e-approval/form-compose-config";
+import { applyComputedFieldValues } from "@/modules/e-approval/field-computed";
 import { fieldDefaultValue } from "@/modules/e-approval/field-validation";
+import { formUsesCashAdvanceParentPicker } from "@/modules/e-approval/parent-submission-link";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 import { E_APPROVAL_FORM_SHELL_CLASS } from "@/modules/e-approval/form-layout";
 
@@ -45,6 +47,11 @@ export function EApprovalFormPreview({ formName, formDescription, fields, approv
   }, [valuesKey, fields]);
 
   const hasFields = fields.some((f) => f.type !== "section" && f.type !== "divider");
+  const computedValues = useMemo(
+    () => (fields.length > 0 ? applyComputedFieldValues(fields, values) : values),
+    [fields, values],
+  );
+  const usesCashAdvancePicker = formUsesCashAdvanceParentPicker(formMetadata);
 
   return (
     <div className={E_APPROVAL_FORM_SHELL_CLASS}>
@@ -61,33 +68,44 @@ export function EApprovalFormPreview({ formName, formDescription, fields, approv
         {!hasFields ? (
           <p className="text-sm text-muted-foreground">Add fields on the Design tab to preview the requestor experience.</p>
         ) : (
-          <EApprovalComposeFormFields
-            fields={fields}
-            values={values}
-            fieldErrors={fieldErrors}
-            composeConfig={composeConfig}
-            onStepValidationIssues={(issues) => {
-              const map: Record<string, string> = {};
-              for (const issue of issues) {
-                map[issue.fieldName] = issue.message;
-              }
-              setFieldErrors(map);
-            }}
-            onChange={(name, next) => {
-              setValues((prev) => ({ ...prev, [name]: next }));
-              setFieldErrors((prev) => {
-                if (!prev[name]) {
-                  return prev;
+          <div className="space-y-4">
+            {usesCashAdvancePicker ? (
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+                <p className="text-sm font-medium text-foreground">Cash advance to liquidate</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  When you submit a request, you pick an approved cash advance here. The document number fills in
+                  automatically.
+                </p>
+              </div>
+            ) : null}
+            <EApprovalComposeFormFields
+              fields={fields}
+              values={computedValues}
+              fieldErrors={fieldErrors}
+              composeConfig={composeConfig}
+              onStepValidationIssues={(issues) => {
+                const map: Record<string, string> = {};
+                for (const issue of issues) {
+                  map[issue.fieldName] = issue.message;
                 }
-                const nextErrors = { ...prev };
-                delete nextErrors[name];
-                return nextErrors;
-              });
-            }}
-            approverOptions={approverOptions}
-            density="comfortable"
-            formMetadata={formMetadata}
-          />
+                setFieldErrors(map);
+              }}
+              onChange={(name, next) => {
+                setValues((prev) => ({ ...prev, [name]: next }));
+                setFieldErrors((prev) => {
+                  if (!prev[name]) {
+                    return prev;
+                  }
+                  const nextErrors = { ...prev };
+                  delete nextErrors[name];
+                  return nextErrors;
+                });
+              }}
+              approverOptions={approverOptions}
+              density="comfortable"
+              formMetadata={formMetadata}
+            />
+          </div>
         )}
       </div>
     </div>

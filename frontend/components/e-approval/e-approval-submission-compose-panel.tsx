@@ -761,13 +761,13 @@ export function EApprovalSubmissionComposePanel({
 
   const applyParentPrefill = useCallback(
     (prefillValues: Record<string, string | null | undefined> | undefined, documentNo: string, documentField: string) => {
-      const prefill = {
-        ...(prefillValues ?? {}),
-        [documentField]: documentNo,
-      };
-      setValues((prev) => applyParentPrefillValues(prev, prefill));
+      setValues((prev) => {
+        const next = applyParentPrefillValues(prev, prefillValues);
+        next[documentField] = documentNo;
+        return applyComputedFieldValues(fields, next);
+      });
     },
-    [],
+    [fields],
   );
 
   const handleCashAdvanceSelect = useCallback(
@@ -779,11 +779,13 @@ export function EApprovalSubmissionComposePanel({
         const next = { ...prev };
         delete next.parent_submission_id;
         delete next.total_reimbursement;
+        delete next.cash_advance_document_no;
         delete next._form;
         return next;
       });
 
       if (!item) {
+        setValues((prev) => ({ ...prev, cash_advance_document_no: "" }));
         return;
       }
 

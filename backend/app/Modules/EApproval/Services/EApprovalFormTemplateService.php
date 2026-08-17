@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -15,6 +16,7 @@ final class EApprovalFormTemplateService
 
     public function __construct(
         private readonly EApprovalSettingsService $settings,
+        private readonly EApprovalFormSyncService $sync,
     ) {}
 
     /**
@@ -330,6 +332,158 @@ final class EApprovalFormTemplateService
         }
 
         return array_values(array_unique($resolved));
+    }
+
+    /**
+     * Merge amount-ladder fields/steps onto existing CA, liquidation, and reimbursement forms.
+     *
+     * Keeps extra tenant fields. Replaces workflow with the template ladder.
+     */
+    public function upgradeFinanceAmountWorkflowForms(?string $formId = null): int
+    {
+        $templates = config('e_approval_finance_procurement_templates', []);
+        $count = 0;
+        $upgradedByFamily = [];
+
+        $query = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps']);
+        if (is_string($formId) && $formId !== '') {
+            $query->where('id', $formId);
+        }
+
+        foreach ($query->get() as $form) {
+            $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+            $family = $this->resolveFinanceAmountFamily($form, $metadata);
+            if ($family === null || ! is_array($templates[$family] ?? null)) {
+                continue;
+            }
+
+            $this->applyFinanceTemplateUpgrade($form, $templates[$family], $family);
+            $upgradedByFamily[$family] = $form->fresh();
+            $count++;
+        }
+
+        if ($upgradedByFamily !== []) {
+            $this->wireRelatedFormIds($upgradedByFamily);
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function resolveFinanceAmountFamily(EApprovalForm $form, array $metadata): ?string
+    {
+        $families = ['cash_advance', 'liquidation', 'reimbursement'];
+        $family = trim((string) ($metadata['form_family'] ?? $metadata['created_from_template'] ?? ''));
+        if (in_array($family, $families, true)) {
+            return $family;
+        }
+
+        $name = strtolower(preg_replace('/\s+/', ' ', trim((string) $form->name)) ?? '');
+        if ($name === '') {
+            return null;
+        }
+
+        if (str_contains($name, 'cash advance')) {
+            return 'cash_advance';
+        }
+        if (str_contains($name, 'liquidation')) {
+            return 'liquidation';
+        }
+        if (str_contains($name, 'reimbursement')) {
+            return 'reimbursement';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $template
+     */
+    private function applyFinanceTemplateUpgrade(EApprovalForm $form, array $template, string $family): void
+    {
+        $existingByName = $form->fields->keyBy(static fn (EApprovalFormField $field): string => (string) $field->name);
+        $templateFields = is_array($template['fields'] ?? null) ? $template['fields'] : [];
+        $merged = [];
+        $seen = [];
+
+        foreach ($templateFields as $templateField) {
+            if (! is_array($templateField)) {
+                continue;
+            }
+            $name = trim((string) ($templateField['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $seen[$name] = true;
+            $existing = $existingByName->get($name);
+            if ($existing instanceof EApprovalFormField) {
+                $merged[] = [
+                    ...$this->existingFieldPayload($existing),
+                    'type' => (string) ($templateField['type'] ?? $existing->type),
+                    'label' => (string) ($templateField['label'] ?? $existing->label),
+                    'validation' => is_array($templateField['validation'] ?? null)
+                        ? $templateField['validation']
+                        : $existing->validation,
+                    'options' => array_key_exists('options', $templateField)
+                        ? $templateField['options']
+                        : $existing->options,
+                    'step_order' => (int) ($templateField['step_order'] ?? $existing->step_order),
+                ];
+
+                continue;
+            }
+
+            $merged[] = $templateField;
+        }
+
+        foreach ($form->fields as $field) {
+            $name = (string) $field->name;
+            if (isset($seen[$name])) {
+                continue;
+            }
+            $merged[] = $this->existingFieldPayload($field);
+        }
+
+        $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+        $templateMeta = is_array($template['metadata_json'] ?? null) ? $template['metadata_json'] : [];
+        $metadata['form_family'] = $family;
+        $metadata['created_from_template'] = $metadata['created_from_template'] ?? $family;
+        if (isset($templateMeta['compose']) && is_array($templateMeta['compose'])) {
+            $metadata['compose'] = $templateMeta['compose'];
+        }
+        foreach (['parent_form_family', 'requires_parent_submission'] as $key) {
+            if (array_key_exists($key, $templateMeta)) {
+                $metadata[$key] = $templateMeta[$key];
+            }
+        }
+        $form->metadata_json = $metadata;
+        $form->save();
+
+        $this->sync->sync($form, [
+            'fields' => $merged,
+            'steps' => is_array($template['steps'] ?? null) ? $template['steps'] : [],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function existingFieldPayload(EApprovalFormField $field): array
+    {
+        return [
+            'id' => (string) $field->id,
+            'type' => (string) $field->type,
+            'name' => (string) $field->name,
+            'label' => (string) $field->label,
+            'semantic_type' => $field->semantic_type,
+            'behavior' => $field->behavior,
+            'formula' => $field->formula,
+            'validation' => $field->validation,
+            'options' => $field->options,
+            'step_order' => (int) $field->step_order,
+        ];
     }
 
     private function findFormForTemplate(string $templateId): ?EApprovalForm

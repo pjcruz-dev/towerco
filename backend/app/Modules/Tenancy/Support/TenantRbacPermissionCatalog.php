@@ -21,6 +21,7 @@ final class TenantRbacPermissionCatalog
         'core' => [
             'dashboard:view',
             'workspace:audit:view',
+            'workspace:environments:switch',
         ],
         'team_access' => [
             'user:manage',

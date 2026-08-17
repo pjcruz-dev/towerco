@@ -21,43 +21,38 @@ final class EApprovalManagerLookupTestService
      */
     public function preview(string $requestorEmail): array
     {
-        $requestorEmail = strtolower(trim($requestorEmail));
-        if ($requestorEmail === '' || ! filter_var($requestorEmail, FILTER_VALIDATE_EMAIL)) {
-            return [
-                'ok' => false,
-                'message' => 'Enter a valid requestor email address.',
-                'requestor_email' => $requestorEmail,
-            ];
-        }
+        $lookup = $this->graph->lookupManagerForEmail($requestorEmail);
+        $autoProvision = $this->settings->provisionManagerUsers();
 
-        $managerEmail = $this->graph->getManagerEmailForUser($requestorEmail);
-        if ($managerEmail === null) {
+        if (! $lookup->ok || $lookup->manager === null) {
             return [
                 'ok' => false,
-                'message' => 'No manager found in Microsoft Entra for this user. Verify tenant Entra settings, Graph permissions, and org chart.',
-                'requestor_email' => $requestorEmail,
+                'code' => $lookup->code,
+                'message' => $lookup->message,
+                'requestor_email' => strtolower(trim($requestorEmail)),
                 'manager_email' => null,
-                'auto_provision_enabled' => $this->settings->provisionManagerUsers(),
+                'manager_name' => null,
+                'auto_provision_enabled' => $autoProvision,
             ];
         }
 
-        $managerEmail = strtolower($managerEmail);
+        $managerEmail = $lookup->manager->email;
         $managerUser = TenantUser::query()
             ->whereRaw('LOWER(email) = ?', [$managerEmail])
             ->where('is_active', true)
             ->first();
 
-        $autoProvision = $this->settings->provisionManagerUsers();
-
         return [
             'ok' => true,
+            'code' => $lookup->code,
             'message' => $managerUser !== null
-                ? 'Manager resolved and mapped to an active TowerOS user.'
+                ? 'Manager resolved and mapped to an active TowerOS user ('.$lookup->manager->displayName.').'
                 : ($autoProvision
-                    ? 'Manager found in Entra. A TowerOS approver account will be auto-provisioned on first submission.'
-                    : 'Manager found in Entra but no matching active TowerOS user. Enable auto-provision in E-Approval settings or create the user.'),
-            'requestor_email' => $requestorEmail,
+                    ? 'Manager found in Entra ('.$lookup->manager->displayName.'). A TowerOS approver account will be auto-provisioned on first submission.'
+                    : 'Manager found in Entra ('.$lookup->manager->displayName.') but no matching active TowerOS user. Enable auto-provision in E-Approval settings or create the user.'),
+            'requestor_email' => strtolower(trim($requestorEmail)),
             'manager_email' => $managerEmail,
+            'manager_name' => $lookup->manager->displayName,
             'manager_user' => $managerUser !== null ? [
                 'id' => (string) $managerUser->id,
                 'name' => (string) $managerUser->name,

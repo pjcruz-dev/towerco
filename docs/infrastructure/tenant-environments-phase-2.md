@@ -90,6 +90,15 @@ Minimum for release discipline: **staging + production** for each go-live custom
 4. For Staging: use this host for Phase 1 smoke checklist before Production promote.
 5. For Production: never point Staging deploy validation at this host.
 
+### Environment switch (profile menu)
+
+Seamless **Switch** between Test / Staging / Production requires the tenant permission `workspace:environments:switch`.
+
+- **tenant_admin** has it by default.
+- Grant it to others in **Team & Access → Roles** (or extra user permissions).
+- Grant it on **each** environment (staging and production are separate tenant databases) if they need to switch both ways.
+- Users still need the **same email** on the target host.
+
 ---
 
 ## DNS / TLS (deployed Staging + Production)

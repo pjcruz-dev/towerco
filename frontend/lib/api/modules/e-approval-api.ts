@@ -40,9 +40,11 @@ export async function fetchEApprovalAssignableUsers(): Promise<EApprovalAssignab
 
 export type EApprovalManagerLookupTestResult = {
   ok: boolean;
+  code?: string;
   message: string;
   requestor_email?: string;
   manager_email?: string | null;
+  manager_name?: string | null;
   manager_user?: { id: string; name: string; email: string } | null;
   auto_provision_enabled?: boolean;
   would_auto_provision?: boolean;

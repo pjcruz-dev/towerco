@@ -57,6 +57,17 @@ final class EApprovalFinanceProcurementTemplatesTest extends TestCase
         $fields = collect($templates['cash_advance']['fields'] ?? [])->pluck('name')->all();
 
         $this->assertContains('requested_amount', $fields);
+        $this->assertContains('finance_approver', $fields);
+        $this->assertContains('senior_approver', $fields);
+        $this->assertContains('final_approver', $fields);
+        $this->assertCount(4, $templates['cash_advance']['steps'] ?? []);
+        $this->assertSame('manager', $templates['cash_advance']['steps'][0]['type'] ?? null);
+        $this->assertSame('lte', $templates['cash_advance']['steps'][1]['when'][0]['operator'] ?? null);
+        $this->assertSame('5000', $templates['cash_advance']['steps'][1]['when'][0]['value'] ?? null);
+        $this->assertSame('requested_amount', $templates['cash_advance']['steps'][1]['when'][0]['field'] ?? null);
+        $this->assertSame('gt', $templates['cash_advance']['steps'][2]['when'][0]['operator'] ?? null);
+        $this->assertSame('final_approver', $templates['cash_advance']['steps'][3]['approverId'] ?? null);
+        $this->assertTrue((bool) ($templates['cash_advance']['metadata_json']['compose']['include_review_step'] ?? false));
     }
 
     public function test_liquidation_and_reimbursement_use_total_reimbursement_field(): void
@@ -66,7 +77,19 @@ final class EApprovalFinanceProcurementTemplatesTest extends TestCase
         foreach (['liquidation', 'reimbursement'] as $templateId) {
             $fields = collect($templates[$templateId]['fields'] ?? [])->pluck('name')->all();
             $this->assertContains('total_reimbursement', $fields, $templateId);
+            $this->assertContains('senior_approver', $fields, $templateId);
+            $this->assertContains('final_approver', $fields, $templateId);
+            $this->assertSame('total_reimbursement', $templates[$templateId]['steps'][1]['when'][0]['field'] ?? null, $templateId);
+            $this->assertSame('final_approver', $templates[$templateId]['steps'][3]['approverId'] ?? null, $templateId);
         }
+
+        $liquidationDoc = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'cash_advance_document_no');
+        $this->assertTrue((bool) ($liquidationDoc['options']['read_only'] ?? false));
+        $this->assertTrue((bool) ($templates['liquidation']['metadata_json']['requires_parent_submission'] ?? false));
+
+        $liquidationTotalOrder = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'total_reimbursement')['step_order'] ?? 0;
+        $liquidationGridOrder = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'expense_lines')['step_order'] ?? 0;
+        $this->assertGreaterThan($liquidationGridOrder, $liquidationTotalOrder);
     }
 
     public function test_purchase_order_vendor_field_uses_master_data_key(): void

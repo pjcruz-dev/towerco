@@ -1359,7 +1359,17 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
               Test lookup
             </Button>
           </div>
-          {managerTestResult ? <p className="text-xs text-muted-foreground">{managerTestResult}</p> : null}
+          {managerTestResult ? (
+            <p
+              className={
+                managerTestMutation.data?.ok === false || (!managerTestMutation.data && managerTestResult)
+                  ? "text-xs text-destructive"
+                  : "text-xs text-muted-foreground"
+              }
+            >
+              {managerTestResult}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

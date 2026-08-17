@@ -8,6 +8,7 @@ use App\Core\Support\AllowlistedSort;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class TenantUserIndexService
 {
@@ -19,6 +20,8 @@ class TenantUserIndexService
         'created_at',
         'updated_at',
     ];
+
+    private ?bool $orgColumns = null;
 
     public function __construct(
         private readonly TenantUserImpersonationService $impersonationService,
@@ -35,12 +38,23 @@ class TenantUserIndexService
     ): LengthAwarePaginator {
         $filters ??= new TenantUserIndexFilters;
 
-        $query = TenantUser::query()
-            ->with([
-                'roles:id,name',
-                'roles.permissions:id,name',
-                'permissions:id,name',
+        $eager = [
+            'roles:id,name',
+            'roles.permissions:id,name',
+            'permissions:id,name',
+        ];
+        if ($this->hasOrgColumns()) {
+            $eager[] = 'manager:id,name,email';
+        }
+
+        $query = TenantUser::query()->with($eager);
+        if ($this->hasOrgColumns()) {
+            $query->withCount([
+                'directReports as direct_report_count' => static function ($q): void {
+                    $q->where('is_active', true);
+                },
             ]);
+        }
 
         $this->applyListConstraints($query, $search, $filters, $sort);
 
@@ -105,6 +119,11 @@ class TenantUserIndexService
         $query->orderBy($column, $direction);
     }
 
+    private function hasOrgColumns(): bool
+    {
+        return $this->orgColumns ??= Schema::connection('tenant')->hasColumn('users', 'manager_id');
+    }
+
     /**
      * @param  TenantUser|null  $viewer  Current admin listing users (for impersonation eligibility).
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
@@ -148,6 +167,16 @@ class TenantUserIndexService
                     'auth_methods' => $security['auth_methods'],
                     'mfa_enrolled' => $security['mfa_enrolled'],
                     'mfa_required' => $security['mfa_required'],
+                    'job_title' => $this->hasOrgColumns() ? $user->job_title : null,
+                    'manager' => $this->hasOrgColumns() && $user->manager !== null ? [
+                        'id' => (string) $user->manager->id,
+                        'name' => (string) $user->manager->name,
+                        'email' => (string) $user->manager->email,
+                    ] : null,
+                    'entra_manager_name' => $this->hasOrgColumns() ? $user->entra_manager_name : null,
+                    'entra_manager_email' => $this->hasOrgColumns() ? $user->entra_manager_email : null,
+                    'direct_report_count' => $this->hasOrgColumns() ? (int) ($user->direct_report_count ?? 0) : 0,
+                    'entra_org_synced_at' => $this->hasOrgColumns() ? $user->entra_org_synced_at?->toIso8601String() : null,
                 ];
             })->values()->all(),
             'meta' => [

@@ -83,6 +83,19 @@ final class TenantLinkedEnvironmentsServiceTest extends TestCase
         $this->assertTrue($payload['environments'][1]['handoff_available']);
     }
 
+    public function test_handoff_unavailable_when_viewer_cannot_switch(): void
+    {
+        [, $stagingId] = $this->seedMyappEnvironments();
+
+        /** @var Tenant $staging */
+        $staging = Tenant::query()->with('domains')->findOrFail($stagingId);
+        $payload = app(TenantLinkedEnvironmentsService::class)->listForTenant($staging, false);
+
+        $this->assertTrue($payload['handoff_supported']);
+        $this->assertFalse($payload['environments'][0]['handoff_available']);
+        $this->assertFalse($payload['environments'][1]['handoff_available']);
+    }
+
     public function test_prefers_sso_switch_url_when_sibling_sso_enabled(): void
     {
         [$productionId, $stagingId] = $this->seedMyappEnvironments();

@@ -32,6 +32,12 @@ export type AdminUserRow = {
   auth_methods: string[];
   mfa_enrolled: boolean;
   mfa_required: boolean;
+  job_title?: string | null;
+  manager?: { id: string; name: string; email: string } | null;
+  entra_manager_name?: string | null;
+  entra_manager_email?: string | null;
+  direct_report_count?: number;
+  entra_org_synced_at?: string | null;
 };
 
 export type AdminUserCreatePayload = {
@@ -319,6 +325,45 @@ export async function impersonateAdminUser(userId: string, reason: string): Prom
 
 export async function stopImpersonation(): Promise<void> {
   await apiClient.post("/auth/impersonation/stop");
+}
+
+export type AdminOrgChartPerson = {
+  id: string;
+  name: string;
+  email: string;
+  job_title: string | null;
+  manager_id: string | null;
+  manager_name: string | null;
+  manager_email?: string | null;
+  direct_report_count: number;
+};
+
+export type AdminOrgChartResponse = {
+  synced_at: string | null;
+  people: AdminOrgChartPerson[];
+};
+
+export type AdminEntraOrgSyncResult = {
+  ok: boolean;
+  code: string;
+  message: string;
+  scanned: number;
+  updated: number;
+  managers_linked: number;
+};
+
+export async function fetchAdminOrgChart(): Promise<AdminOrgChartResponse> {
+  const response = await apiClient.get<{ data: AdminOrgChartResponse }>("/admin/users/org-chart");
+  return response.data.data;
+}
+
+export async function syncAdminEntraOrg(): Promise<AdminEntraOrgSyncResult> {
+  const response = await apiClient.post<{ data: AdminEntraOrgSyncResult }>(
+    "/admin/users/entra-org-sync",
+    {},
+    { timeout: 120_000 },
+  );
+  return response.data.data;
 }
 
 /** Sample rows for Team & Access CSV import. Role names must exist; use commas for multiple roles. */

@@ -3,7 +3,7 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
-import { fetchTenantBranding } from "@/lib/api/modules/branding-api";
+import { fetchTenantBranding, resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
 import { applyTenantThemePalette, clearTenantThemeCssVariables } from "@/lib/theme/apply-tenant-theme";
 import { isCentralHostname } from "@/lib/tenant/resolve-tenant-domain";
 import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
@@ -76,7 +76,7 @@ export function TenantThemeBridge() {
         link.rel = "icon";
         document.head.appendChild(link);
       }
-      link.href = branding.favicon_url;
+      link.href = resolveBrandingAssetUrl(branding.favicon_url) ?? branding.favicon_url;
     }
   }, [branding, hostname, resolvedTheme]);
 

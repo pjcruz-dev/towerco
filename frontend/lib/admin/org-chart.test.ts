@@ -1,0 +1,92 @@
+import { describe, expect, it } from "vitest";
+
+import { buildOrgChartIndex, orgChartRoots, personInitials, pickDefaultFocus, resolveManager } from "./org-chart";
+
+const people = [
+  {
+    id: "alvin",
+    name: "Alvin Tolentino",
+    email: "alvin@example.com",
+    job_title: "Director",
+    manager_id: null,
+    manager_name: null,
+    direct_report_count: 1,
+  },
+  {
+    id: "terrence",
+    name: "Terrence Galang",
+    email: "terrence@example.com",
+    job_title: "Engineer",
+    manager_id: "alvin",
+    manager_name: null,
+    direct_report_count: 0,
+  },
+  {
+    id: "alfred",
+    name: "Alfred Kevin Sapigao",
+    email: "alfred@example.com",
+    job_title: "Analyst",
+    manager_id: null,
+    manager_name: "Maria Teresa Bandiala",
+    direct_report_count: 0,
+  },
+];
+
+describe("buildOrgChartIndex", () => {
+  it("nests TowerOS reports and external Entra managers", () => {
+    const index = buildOrgChartIndex(people);
+    expect(index.reports.get("alvin")?.map((person) => person.id)).toEqual(["terrence"]);
+    const external = [...index.byId.values()].find((node) => node.external);
+    expect(external?.name).toBe("Maria Teresa Bandiala");
+    expect(index.reports.get(external!.id)?.map((person) => person.id)).toEqual(["alfred"]);
+    expect(resolveManager(index, index.byId.get("alfred"))?.name).toBe("Maria Teresa Bandiala");
+  });
+
+  it("prefers the current user as default focus", () => {
+    const index = buildOrgChartIndex(people);
+    expect(pickDefaultFocus(index, "terrence")).toBe("terrence");
+    expect(pickDefaultFocus(index, null)).toBe("alvin");
+  });
+
+  it("shows an Entra-only manager above a person with no TowerOS manager_id", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "peter",
+        name: "Peter Joseph Cruz",
+        email: "prcruz@example.com",
+        job_title: null,
+        manager_id: null,
+        manager_name: "Terrence Galang",
+        manager_email: "trgalang@example.com",
+        direct_report_count: 0,
+      },
+    ]);
+
+    const manager = resolveManager(index, index.byId.get("peter"));
+    expect(manager?.name).toBe("Terrence Galang");
+    expect(manager?.email).toBe("trgalang@example.com");
+    expect(manager?.external).toBe(true);
+    expect(resolveManager(index, manager ?? undefined)).toBeNull();
+  });
+
+  it("treats Entra-only managers as organization roots", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "peter",
+        name: "Peter Joseph Cruz",
+        email: "prcruz@example.com",
+        job_title: null,
+        manager_id: null,
+        manager_name: "Terrence Galang",
+        manager_email: "trgalang@example.com",
+        direct_report_count: 0,
+      },
+    ]);
+    expect(orgChartRoots(index).map((node) => node.name)).toEqual(["Terrence Galang"]);
+  });
+
+  it("builds initials from first and last name", () => {
+    expect(personInitials("Peter Joseph Cruz")).toBe("PC");
+    expect(personInitials("Admin")).toBe("AD");
+  });
+});

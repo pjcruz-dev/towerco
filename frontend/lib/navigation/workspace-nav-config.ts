@@ -322,6 +322,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         permissions: ["user:manage", "role:manage"],
         items: [
           { title: "Users", href: "/users", permissions: ["user:manage"] },
+          { title: "Organization", href: "/users/org", permissions: ["user:manage"] },
           { title: "Roles & permissions", href: "/users/roles", permissions: ["role:manage"] },
         ],
       },

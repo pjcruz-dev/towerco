@@ -7,6 +7,8 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\EntraGraphAppService;
+use App\Modules\Identity\Support\EntraDirectoryPerson;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class EApprovalManagerApproverResolver
@@ -33,20 +35,16 @@ final class EApprovalManagerApproverResolver
     public function resolveForEmail(string $requestorEmail): ?string
     {
         try {
-            $managerEmail = $this->graph->getManagerEmailForUser($requestorEmail);
+            $lookup = $this->graph->lookupManagerForEmail($requestorEmail);
         } catch (\Throwable) {
             return null;
         }
 
-        if ($managerEmail === null) {
+        if (! $lookup->ok || $lookup->manager === null || $lookup->manager->email === '') {
             return null;
         }
 
-        $existing = TenantUser::query()
-            ->whereRaw('LOWER(email) = ?', [strtolower($managerEmail)])
-            ->where('is_active', true)
-            ->first();
-
+        $existing = $this->findApproverUser($lookup->manager);
         if ($existing !== null) {
             return (string) $existing->id;
         }
@@ -55,23 +53,59 @@ final class EApprovalManagerApproverResolver
             return null;
         }
 
-        return $this->provisionApprover($managerEmail);
+        return $this->provisionApprover($lookup->manager);
     }
 
-    private function provisionApprover(string $email): string
+    private function findApproverUser(EntraDirectoryPerson $manager): ?TenantUser
     {
-        $localPart = explode('@', $email)[0] ?? 'manager';
-        $name = str_replace(['.', '_'], ' ', $localPart);
-        $name = ucwords($name);
+        if ($manager->entraId !== '' && Schema::connection('tenant')->hasColumn('users', 'entra_id')) {
+            $byEntra = TenantUser::query()
+                ->where('entra_id', $manager->entraId)
+                ->where('is_active', true)
+                ->first();
+            if ($byEntra instanceof TenantUser) {
+                return $byEntra;
+            }
+        }
 
-        /** @var TenantUser $user */
-        $user = TenantUser::query()->create([
+        $byEmail = TenantUser::query()
+            ->whereRaw('LOWER(email) = ?', [TenantUser::normalizeEmail($manager->email)])
+            ->where('is_active', true)
+            ->first();
+        if ($byEmail instanceof TenantUser) {
+            return $byEmail;
+        }
+
+        $local = strstr($manager->email, '@', true);
+        if (! is_string($local) || $local === '') {
+            return null;
+        }
+
+        $matches = TenantUser::query()
+            ->where('is_active', true)
+            ->whereRaw('LOWER(email) LIKE ?', [strtolower($local).'@%'])
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
+    private function provisionApprover(EntraDirectoryPerson $manager): string
+    {
+        $payload = [
             'id' => (string) Str::uuid(),
-            'name' => $name,
-            'email' => strtolower($email),
+            'name' => $manager->displayName !== '' ? $manager->displayName : $manager->email,
+            'email' => TenantUser::normalizeEmail($manager->email),
             'password' => Str::random(32),
             'is_active' => true,
-        ]);
+        ];
+        if (Schema::connection('tenant')->hasColumn('users', 'entra_id')) {
+            $payload['entra_id'] = $manager->entraId !== '' ? $manager->entraId : null;
+            $payload['job_title'] = $manager->jobTitle;
+        }
+
+        /** @var TenantUser $user */
+        $user = TenantUser::query()->create($payload);
 
         if ($user->getRoleNames()->isEmpty()) {
             try {

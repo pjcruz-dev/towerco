@@ -58,7 +58,7 @@ export function EApprovalCashAdvancePicker({
     <EApprovalSectionCard
       className={className}
       title="Cash advance to liquidate"
-      description="Select an approved cash advance with remaining balance. This link is required before you can save or submit."
+      description="Select an approved cash advance with remaining balance. The document number fills in automatically."
     >
       {openQuery.isLoading ? (
         <div className="h-10 animate-pulse rounded-lg bg-muted/50" />

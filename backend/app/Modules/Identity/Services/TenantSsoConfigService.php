@@ -10,6 +10,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Encryption\MissingAppKeyException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -271,6 +272,10 @@ final class TenantSsoConfigService
             }
 
             $this->ssoConfigs()->where('id', $existing->id)->update($payload);
+            $this->forgetEntraAppTokens($tenantId, [
+                (string) $existing->tenant_identifier,
+                (string) $payload['tenant_identifier'],
+            ]);
 
             return;
         }
@@ -279,6 +284,17 @@ final class TenantSsoConfigService
             'id' => (string) Str::uuid(),
             'created_at' => now(),
         ]);
+        $this->forgetEntraAppTokens($tenantId, [(string) $payload['tenant_identifier']]);
+    }
+
+    /**
+     * @param  list<string>  $directories
+     */
+    private function forgetEntraAppTokens(string $tenantId, array $directories): void
+    {
+        foreach (array_unique(array_filter($directories)) as $directory) {
+            Cache::forget(EntraGraphAppService::appTokenCacheKey($tenantId, $directory));
+        }
     }
 
     public function resolveSsoCallbackFrontendUrl(): string

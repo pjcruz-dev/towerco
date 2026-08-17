@@ -158,6 +158,7 @@ export function UserRowActions({
 export function createUsersTableColumns(options: {
   currentUserId: string | undefined;
   canImpersonateUsers: boolean;
+  organizationLabel: string;
   onView: (row: AdminUserRow) => void;
   onEdit: (row: AdminUserRow) => void;
   onImpersonate: (row: AdminUserRow) => void;
@@ -184,6 +185,28 @@ export function createUsersTableColumns(options: {
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Email" />,
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.email}</span>,
+    },
+    {
+      id: "reports_to",
+      header: "Reports to",
+      cell: ({ row }) => {
+        const manager = row.original.manager;
+        const entraName = row.original.entra_manager_name ?? row.original.entra_manager_email;
+        if (manager) {
+          return <span className="text-sm text-foreground">{manager.name}</span>;
+        }
+        if (entraName) {
+          return (
+            <span
+              className="text-sm text-muted-foreground"
+              title={`In Microsoft Entra, not a ${options.organizationLabel} user yet`}
+            >
+              {entraName}
+            </span>
+          );
+        }
+        return <span className="text-sm text-muted-foreground">—</span>;
+      },
     },
     {
       id: "status",

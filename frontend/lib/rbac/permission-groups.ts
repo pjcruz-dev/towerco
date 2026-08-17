@@ -6,6 +6,7 @@ export type PermissionGroup = {
 
 const MODULE_GROUP_LABELS: Record<string, string> = {
   dashboard: "Core",
+  workspace: "Core",
   tenant: "Platform",
   user: "Team & Access",
   role: "Team & Access",
