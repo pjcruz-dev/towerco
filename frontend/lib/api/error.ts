@@ -64,6 +64,13 @@ export function getErrorMessage(error: unknown): string {
     }
 
     const apiMessage = data?.message?.trim();
+    const status = error.response?.status;
+    if (status !== undefined && status >= 500) {
+      return apiMessage && !GENERIC_VALIDATION_MESSAGES.has(apiMessage)
+        ? apiMessage
+        : "The API returned an internal error. Try again. If it keeps failing, check the Laravel log.";
+    }
+
     if (apiMessage && !GENERIC_VALIDATION_MESSAGES.has(apiMessage)) {
       if (apiMessage === "Tenant domain not found.") {
         const host =

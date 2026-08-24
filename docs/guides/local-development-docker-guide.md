@@ -2,7 +2,18 @@
 
 Step-by-step guide for **Windows** using Docker Desktop. No local PHP or Node install required.
 
-**Time:** ~15 minutes first run (image build + MySQL init). Later starts are ~1 minute.
+**Time:** ~15 minutes first run (image build + MySQL 8.4 init). Later starts are ~1 minute.
+
+**Database:** local Compose uses official `mysql:8.4` (LTS), matching production RDS MySQL 8.4 / Aurora MySQL 8.4. If you previously ran `mysql:8.0`, recreate the data volume before starting (major versions are not interchangeable on the same volume):
+
+```bash
+docker compose --env-file .env.docker stop mysql
+docker compose --env-file .env.docker rm -f mysql
+docker volume rm toweros_toweros-mysql-data
+# then: npm run dev:fresh   OR   docker compose --env-file .env.docker up -d mysql
+```
+
+Dump first if you need to keep local data.
 
 ---
 

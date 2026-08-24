@@ -7,6 +7,8 @@ namespace App\Modules\Identity\Services;
 use App\Modules\Identity\Support\EntraDirectoryPerson;
 use App\Modules\Identity\Support\EntraManagerLookupResult;
 use App\Modules\Identity\Support\EntraUserManagerMatch;
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -17,7 +19,11 @@ use Illuminate\Support\Facades\Log;
  */
 class EntraGraphAppService
 {
-    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle';
+    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle,assignedLicenses';
+
+    private const SELECT_CORE = 'id,mail,userPrincipalName,displayName,jobTitle';
+
+    private ?string $tokenFailureMessage = null;
 
     public function __construct(
         private readonly TenantSsoConfigService $tenantMicrosoft,
@@ -56,12 +62,18 @@ class EntraGraphAppService
 
     public function getAppAccessToken(bool $forceRefresh = false): ?string
     {
+        $this->tokenFailureMessage = null;
+
         if (! $this->bootstrapAzureConfig()) {
+            $this->tokenFailureMessage = 'Microsoft Entra is not configured for this organization. Add the app client ID and secret under Administration → Sign-in & security.';
+
             return null;
         }
 
         $cacheKey = $this->currentTokenCacheKey();
         if ($cacheKey === null) {
+            $this->tokenFailureMessage = 'Set Directory ID to your Entra tenant GUID (not “common”). Client-credential Graph calls require the directory ID.';
+
             return null;
         }
 
@@ -76,26 +88,38 @@ class EntraGraphAppService
         }
 
         $tenant = $this->directoryIdentifier();
-        $response = Http::asForm()
-            ->timeout(15)
-            ->post("https://login.microsoftonline.com/{$tenant}/oauth2/v2.0/token", [
-                'client_id' => config('services.azure.client_id'),
-                'client_secret' => config('services.azure.client_secret'),
-                'grant_type' => 'client_credentials',
-                'scope' => 'https://graph.microsoft.com/.default',
+        try {
+            $response = $this->microsoftHttp(20)
+                ->asForm()
+                ->post("https://login.microsoftonline.com/{$tenant}/oauth2/v2.0/token", [
+                    'client_id' => config('services.azure.client_id'),
+                    'client_secret' => config('services.azure.client_secret'),
+                    'grant_type' => 'client_credentials',
+                    'scope' => 'https://graph.microsoft.com/.default',
+                ]);
+        } catch (ConnectionException $exception) {
+            Log::warning('Entra app token request timed out', [
+                'message' => $exception->getMessage(),
             ]);
+            $this->tokenFailureMessage = $this->describeConnectionFailure($exception);
+
+            return null;
+        }
 
         if (! $response->successful()) {
             Log::warning('Entra app token request failed', [
                 'status' => $response->status(),
-                'body' => $response->json(),
+                'error' => $response->json('error'),
             ]);
+            $this->tokenFailureMessage = $this->describeTokenFailure($response);
 
             return null;
         }
 
         $token = $response->json('access_token');
         if (! is_string($token) || $token === '') {
+            $this->tokenFailureMessage = 'Microsoft returned an app token response without an access token. Check the client secret and Directory ID.';
+
             return null;
         }
 
@@ -103,6 +127,11 @@ class EntraGraphAppService
         Cache::put($cacheKey, $token, max(60, $expiresIn - 120));
 
         return $token;
+    }
+
+    public function tokenFailureMessage(): ?string
+    {
+        return $this->tokenFailureMessage;
     }
 
     /**
@@ -180,10 +209,9 @@ class EntraGraphAppService
             return [];
         }
 
-        $response = $this->graphGet(
-            $token,
-            '/users/'.rawurlencode($entraUserId).'/directReports?$select='.self::SELECT.'&$top=999',
-        );
+        $response = $this->graphGetUser($token, '/users/'.rawurlencode($entraUserId).'/directReports', [
+            '$top' => '999',
+        ]);
         if (! $response->successful()) {
             return [];
         }
@@ -210,13 +238,49 @@ class EntraGraphAppService
     }
 
     /**
+     * skuId => skuPartNumber from this tenant's subscribed SKUs.
+     *
+     * @return array<string, string>
+     */
+    public function subscribedSkuMap(string $token): array
+    {
+        $cacheKey = 'entra_subscribed_skus:'.((string) (tenant('id') ?? 'global')).':'.$this->directoryIdentifier();
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            /** @var array<string, string> $cached */
+            return $cached;
+        }
+
+        $response = $this->graphGet($token, '/subscribedSkus', [
+            '$select' => 'skuId,skuPartNumber',
+        ]);
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($response->json('value') ?? [] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $skuId = strtolower(trim((string) ($row['skuId'] ?? '')));
+            $part = trim((string) ($row['skuPartNumber'] ?? ''));
+            if ($skuId !== '' && $part !== '') {
+                $map[$skuId] = $part;
+            }
+        }
+
+        Cache::put($cacheKey, $map, now()->addHours(6));
+
+        return $map;
+    }
+
+    /**
      * One Graph round-trip: user profile plus manager (via $expand).
      */
     public function findUserWithManager(string $token, string $email, bool $retried = false): EntraUserManagerMatch|EntraManagerLookupResult
     {
-        $byKey = $this->graphGet($token, '/users/'.rawurlencode($email), [
-            '$select' => self::SELECT,
-        ]);
+        $byKey = $this->graphGetUser($token, '/users/'.rawurlencode($email));
         if ($byKey->successful()) {
             $match = $this->matchFromGraphUser($token, $byKey->json() ?? []);
             if ($match instanceof EntraManagerLookupResult) {
@@ -239,9 +303,8 @@ class EntraGraphAppService
         }
 
         $escaped = str_replace("'", "''", $email);
-        $byMail = $this->graphGet($token, '/users', [
+        $byMail = $this->graphGetUser($token, '/users', [
             '$filter' => "mail eq '{$escaped}' or userPrincipalName eq '{$escaped}'",
-            '$select' => self::SELECT,
         ]);
         if ($byMail->status() === 403) {
             if (! $retried) {
@@ -292,11 +355,20 @@ class EntraGraphAppService
         return new EntraUserManagerMatch($person, $manager);
     }
 
+    public function fetchManagerPerson(string $token, string $entraId): ?EntraDirectoryPerson
+    {
+        if (trim($entraId) === '') {
+            return null;
+        }
+
+        $manager = $this->fetchManagerByEntraId($token, $entraId);
+
+        return $manager instanceof EntraDirectoryPerson ? $manager : null;
+    }
+
     private function fetchManagerByEntraId(string $token, string $entraId): EntraDirectoryPerson|EntraManagerLookupResult|null
     {
-        $response = $this->graphGet($token, '/users/'.rawurlencode($entraId).'/manager', [
-            '$select' => self::SELECT,
-        ]);
+        $response = $this->graphGetUser($token, '/users/'.rawurlencode($entraId).'/manager');
         if ($response->status() === 404) {
             return null;
         }
@@ -376,15 +448,114 @@ class EntraGraphAppService
         return self::appTokenCacheKey((string) (tenant('id') ?? 'global'), $tenant);
     }
 
+    private function describeTokenFailure(Response $response): string
+    {
+        $error = strtolower(trim((string) ($response->json('error') ?? '')));
+        $description = trim((string) ($response->json('error_description') ?? ''));
+        $firstLine = trim(explode("\r\n", $description)[0]);
+
+        if (str_contains($description, 'AADSTS7000222')) {
+            return 'The Microsoft client secret has expired. Create a new secret in Entra → App registrations → Certificates & secrets, then paste it under Administration → Sign-in & security.';
+        }
+        if (str_contains($description, 'AADSTS7000215') || $error === 'invalid_client') {
+            return 'Microsoft rejected the client secret. Paste the current secret under Administration → Sign-in & security and save.';
+        }
+        if (str_contains($description, 'AADSTS700016') || str_contains($description, 'AADSTS90002')) {
+            return 'Microsoft did not find this app in that Directory ID. Confirm Application (client) ID and Directory (tenant) ID under Administration → Sign-in & security.';
+        }
+        if ($firstLine !== '') {
+            return 'Microsoft refused the app token. '.$firstLine;
+        }
+
+        return 'Could not get an app token from Microsoft. Check the client secret and Directory ID.';
+    }
+
+    private function describeConnectionFailure(ConnectionException $exception): string
+    {
+        $raw = $exception->getMessage();
+        if (str_contains($raw, 'Could not resolve') || str_contains($raw, 'cURL error 6')) {
+            return 'The API could not resolve login.microsoftonline.com. Recreate the API container so it uses public DNS (8.8.8.8).';
+        }
+        if (str_contains($raw, 'timed out') || str_contains($raw, 'cURL error 28')) {
+            return 'The API timed out reaching login.microsoftonline.com (Docker DNS or IPv6 is a common cause). Recreate the API container, then sync again.';
+        }
+
+        $short = trim(explode("\n", $raw)[0]);
+        if (strlen($short) > 180) {
+            $short = mb_substr($short, 0, 180);
+        }
+
+        return 'Could not reach login.microsoftonline.com from the API. '.$short;
+    }
+
+    /**
+     * Force IPv4 so Docker Desktop on Windows does not hang on IPv6 to Microsoft.
+     */
+    private function microsoftHttp(int $timeout): \Illuminate\Http\Client\PendingRequest
+    {
+        return Http::timeout($timeout)
+            ->connectTimeout(8)
+            ->withOptions([
+                'curl' => [
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                ],
+            ]);
+    }
+
+    /**
+     * @param  array<string, string>  $query
+     */
+    private function graphGetUser(string $token, string $path, array $query = []): Response
+    {
+        $response = $this->graphGet($token, $path, array_merge($query, ['$select' => self::SELECT]));
+        if ($response->status() !== 400 && ! $this->selectRejectedLicenses($response)) {
+            return $response;
+        }
+
+        return $this->graphGet($token, $path, array_merge($query, ['$select' => self::SELECT_CORE]));
+    }
+
+    private function selectRejectedLicenses(Response $response): bool
+    {
+        if ($response->status() !== 403) {
+            return false;
+        }
+
+        $body = strtolower($response->body());
+
+        return str_contains($body, 'assignedlicenses') || str_contains($body, 'license');
+    }
+
+    /**
+     * @param  array<string, string>  $query
+     */
     private function graphGet(string $token, string $path, array $query = []): Response
     {
-        $request = Http::timeout(12)
-            ->acceptJson()
-            ->withToken($token);
+        try {
+            $request = $this->microsoftHttp(12)
+                ->acceptJson()
+                ->withToken($token);
 
-        $url = 'https://graph.microsoft.com/v1.0'.$path;
+            $url = 'https://graph.microsoft.com/v1.0'.$path;
 
-        return $query === [] ? $request->get($url) : $request->get($url, $query);
+            return $query === [] ? $request->get($url) : $request->get($url, $query);
+        } catch (ConnectionException $exception) {
+            Log::warning('Entra Graph request timed out', [
+                'path' => $path,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return new Response(new Psr7Response(
+                504,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'error' => [
+                        'code' => 'Timeout',
+                        'message' => $exception->getMessage(),
+                    ],
+                ], JSON_THROW_ON_ERROR),
+            ));
+        }
     }
 
     private function bootstrapAzureConfig(): bool

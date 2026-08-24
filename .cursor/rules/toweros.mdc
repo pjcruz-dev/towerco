@@ -7,10 +7,10 @@ alwaysApply: true
 TowerOS is an enterprise-grade multi-tenant telecom SaaS platform.
 
 Architecture:
-- Backend: Laravel 11
-- Frontend: Next.js 14
+- Backend: Laravel 13
+- Frontend: Next.js 16
 #- Database: PostgreSQL 16
-- Database: MYSQL
+- Database: MySQL 8.4
 - GIS: PostGIS
 - IoT: TimescaleDB
 - Auth: Sanctum + Passport

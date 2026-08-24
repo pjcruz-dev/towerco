@@ -13,7 +13,7 @@ Copy secrets from [`backend/.env.production.example`](../../backend/.env.product
 |----------|------|-------------|
 | **Amazon EC2** | `t3.large` — 2 vCPU, 8 GB RAM, 50 GB root | Docker: API + Next.js web + Redis + queue worker (+ optional Soketi) |
 | **Amazon EBS** | 100 GB General Purpose SSD (`gp3`) | Docker images, logs, build/temp |
-| **Amazon RDS MySQL** | `db.t3.medium` — 2 vCPU, 4 GB, 50 GB, **Multi-AZ** | Central DB `toweros` + one DB per tenant (`tenant<uuid>`) |
+| **Amazon RDS MySQL** | `db.t3.medium` — 2 vCPU, 4 GB, 50 GB, **Multi-AZ**, engine **8.4** | Central DB `toweros` + one DB per tenant (`tenant<uuid>`) |
 | **Amazon S3** | Standard — 50 GB/mo; ~2M PUT/LIST + ~2M GET | Tenant documents, exports, presigned uploads |
 | **Amazon CloudFront** | CDN | Static assets, frontend resources, file downloads |
 | **Amazon Route 53** | Hosted zone | Domain + app / console / tenant subdomains |
@@ -244,7 +244,7 @@ See also [tenant-domain-slugs.md](./tenant-domain-slugs.md).
 ## 1. Provision AWS
 
 1. **VPC** — public + private subnets; RDS in private subnet only.
-2. **RDS MySQL 8.0** — `db.t3.medium`, Multi-AZ, 50 GB, DB name `toweros`; note endpoint.
+2. **RDS MySQL 8.4** — `db.t3.medium`, Multi-AZ, 50 GB, DB name `toweros`; note endpoint.
 3. **EC2 `t3.large`** — Amazon Linux 2023 (or Ubuntu 22.04); attach **100 GB gp3** EBS; SG: SSH from your IP only; `80`/`443` from ALB or internet if on-box Nginx.
 4. **S3** — e.g. `toweros-prod-files-<account-id>`; block public access; versioning on.
 5. **IAM instance role** on EC2 — `s3:GetObject` / `PutObject` / `DeleteObject` on the bucket; `ses:SendEmail` if using SES; CloudWatch agent permissions.
@@ -516,7 +516,7 @@ If users suddenly see **Invalid MFA code** or **MFA authenticator secret is unre
 | Concern | Production value |
 |---------|------------------|
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` |
-| Database | RDS MySQL 8 Multi-AZ (`DB_HOST` = RDS endpoint) |
+| Database | RDS MySQL 8.4 Multi-AZ (`DB_HOST` = RDS endpoint) |
 | Files | `TOWEROS_TENANT_FILES_DISK=s3` + `AWS_BUCKET` |
 | CDN | `AWS_URL` = CloudFront URL when enabled |
 | Redis | Docker `redis` or ElastiCache |

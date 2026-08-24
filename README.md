@@ -31,7 +31,7 @@ Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular mon
 |-------|------------|
 | Backend | Laravel 13, PHP 8.3 |
 | Frontend | Next.js 16, React 19, TypeScript |
-| Database | **MySQL 8.0** — database-per-tenant ([stancl/tenancy](https://tenancyforlaravel.com/)) |
+| Database | **MySQL 8.4** — database-per-tenant ([stancl/tenancy](https://tenancyforlaravel.com/)) |
 | Cache / queues | Redis (cache, sessions, permission cache) — local `toweros-redis`; production Docker Redis on EC2 or ElastiCache; queues `sync` locally, `redis` in prod |
 | Auth | Sanctum (tenant SPA) + Passport (platform console) |
 | SSO | Microsoft Entra ID per tenant |
@@ -105,7 +105,7 @@ There is **no** `backend` service name in Compose.
 | [Node.js](https://nodejs.org/) LTS | Root `npm run dev` scripts only |
 | Git | Clone and pull updates |
 
-**Optional (without Docker):** PHP 8.3, Composer, MySQL 8, Node 22+ — see [Host-only development](#host-only-development).
+**Optional (without Docker):** PHP 8.3, Composer, MySQL 8.4, Node 22+ — see [Host-only development](#host-only-development).
 
 ---
 
@@ -458,7 +458,7 @@ New tenants from the platform UI run tenant migrations automatically during prov
 | Staging validation | Your checklist on `staging.*` | Complete smoke + module flows |
 | Secrets & TLS | Required | `APP_KEY`, DB passwords, OAuth secrets in a vault (not git) |
 | HTTPS everywhere | Required | ACM cert + Route 53 (or ALB) |
-| Database | Required | RDS MySQL 8 Multi-AZ; app user can `CREATE DATABASE` |
+| Database | Required | RDS MySQL 8.4 Multi-AZ; app user can `CREATE DATABASE` |
 | Redis | **Required** | Queues + cache — Docker on EC2 or ElastiCache (gap vs subscription slide) |
 | Queue worker | **Required** | `php artisan queue:work` always running |
 | Scheduler | **Required** | Cron every minute: `schedule:run` |
@@ -506,7 +506,7 @@ docker compose --env-file .env.docker --profile web up -d --build web
 
 ### B. ECS Fargate (scale path)
 
-Target for multi-tenant scale: **ECS Fargate**, **Aurora MySQL 8**, **ElastiCache Redis**, **ALB + WAF**, **S3**, **Secrets Manager**.
+Target for multi-tenant scale: **ECS Fargate**, **Aurora MySQL 8.4**, **ElastiCache Redis**, **ALB + WAF**, **S3**, **Secrets Manager**.
 
 Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md)
 
@@ -521,7 +521,7 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 | `TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST` | `false` |
 | Tenant API | Same hostname as SPA (`app.customer.com/api/v1`) |
 | TLS | ACM certificates; wildcard DNS for tenant apps |
-| Database | MySQL 8; central DB + one DB per tenant |
+| Database | MySQL 8.4; central DB + one DB per tenant |
 | Queues | Redis + dedicated worker service |
 | Scheduler | Cron or ECS scheduled task: `schedule:run` |
 | Files | S3 for `TOWEROS_TENANT_FILES_DISK` |

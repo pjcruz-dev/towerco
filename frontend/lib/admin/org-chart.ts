@@ -19,6 +19,31 @@ function sortNodes(list: OrgChartNode[]): OrgChartNode[] {
   return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
+function emailsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  const a = left?.trim().toLowerCase() ?? "";
+  const b = right?.trim().toLowerCase() ?? "";
+  return a !== "" && a === b;
+}
+
+function findChartPersonId(byId: Map<string, OrgChartNode>, email?: string | null, name?: string | null): string | null {
+  const needleName = name?.trim().toLowerCase() ?? "";
+  for (const node of byId.values()) {
+    if (node.external) {
+      continue;
+    }
+    if (emailsMatch(node.email, email)) {
+      return node.id;
+    }
+  }
+  if (needleName === "") {
+    return null;
+  }
+  const named = [...byId.values()].filter(
+    (node) => !node.external && node.name.trim().toLowerCase() === needleName,
+  );
+  return named.length === 1 ? named[0]!.id : null;
+}
+
 export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex {
   const byId = new Map<string, OrgChartNode>();
   const reports = new Map<string, OrgChartNode[]>();
@@ -27,11 +52,22 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
     byId.set(person.id, { ...person, external: false });
   }
 
+  const pushReport = (managerId: string, personId: string) => {
+    const child = byId.get(personId);
+    if (!child) {
+      return;
+    }
+    const list = reports.get(managerId) ?? [];
+    if (list.some((node) => node.id === personId)) {
+      return;
+    }
+    list.push(child);
+    reports.set(managerId, list);
+  };
+
   for (const person of people) {
     if (person.manager_id && byId.has(person.manager_id)) {
-      const list = reports.get(person.manager_id) ?? [];
-      list.push(byId.get(person.id)!);
-      reports.set(person.manager_id, list);
+      pushReport(person.manager_id, person.id);
       continue;
     }
 
@@ -39,23 +75,39 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
       continue;
     }
 
+    const existingManagerId = findChartPersonId(byId, person.manager_email, person.manager_name);
+    if (existingManagerId) {
+      pushReport(existingManagerId, person.id);
+      continue;
+    }
+
+    const managerLicensed = person.manager_licensed === true || Boolean(person.manager_license_label);
+    if (!managerLicensed) {
+      continue;
+    }
+
     const extId = externalManagerId(person.manager_name ?? person.manager_email ?? "", person.manager_email);
     if (!byId.has(extId)) {
+      const parentId =
+        person.manager_parent_id && byId.has(person.manager_parent_id) ? person.manager_parent_id : null;
       byId.set(extId, {
         id: extId,
         name: person.manager_name ?? person.manager_email ?? "Manager",
         email: person.manager_email ?? "",
         job_title: null,
-        manager_id: null,
+        manager_id: parentId,
         manager_name: null,
         manager_email: null,
         direct_report_count: 0,
+        license_label: person.manager_license_label ?? null,
+        license_names: [],
         external: true,
       });
+      if (parentId) {
+        pushReport(parentId, extId);
+      }
     }
-    const list = reports.get(extId) ?? [];
-    list.push(byId.get(person.id)!);
-    reports.set(extId, list);
+    pushReport(extId, person.id);
   }
 
   for (const [id, list] of reports) {
@@ -70,12 +122,15 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
 }
 
 export function resolveManager(index: OrgChartIndex, person: OrgChartNode | undefined): OrgChartNode | null {
-  if (!person || person.external) {
+  if (!person) {
     return null;
   }
   if (person.manager_id && index.byId.has(person.manager_id)) {
     const manager = index.byId.get(person.manager_id) ?? null;
     return manager?.id === person.id ? null : manager;
+  }
+  if (person.external) {
+    return null;
   }
   const label = person.manager_name ?? person.manager_email;
   if (!label) {
@@ -145,6 +200,8 @@ export function filterOrgPeople(nodes: OrgChartNode[], query: string): OrgChartN
   }
 
   return nodes
-    .filter((node) => `${node.name} ${node.email} ${node.job_title ?? ""}`.toLowerCase().includes(needle))
+    .filter((node) =>
+      `${node.name} ${node.email} ${node.job_title ?? ""} ${node.license_label ?? ""}`.toLowerCase().includes(needle),
+    )
     .slice(0, 12);
 }

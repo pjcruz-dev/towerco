@@ -21,8 +21,8 @@ import {
   revokeAdminUserPasskeys,
   revokeAdminUserSessions,
 } from "@/lib/api/modules/admin-users-api";
-import {
-  formatAuthMethods,
+import { entraLicenseChipLabel, entraLicenseSummary } from "@/lib/admin/entra-license";
+import { formatAuthMethods,
   formatLastActive,
   formatTimestamp,
   mfaStatusLabel,
@@ -117,6 +117,8 @@ export function AdminUserDetailDrawer({
     () => groupPermissionsByModule(user?.permissions ?? []),
     [user?.permissions],
   );
+  const licenseChip = entraLicenseChipLabel(user?.entra_license_label, user?.entra_license_names);
+  const licenseSummary = entraLicenseSummary(user?.entra_license_names);
 
   if (!user) {
     return null;
@@ -182,6 +184,18 @@ export function AdminUserDetailDrawer({
                 <DetailField label="Created">{formatTimestamp(user.created_at)}</DetailField>
                 <DetailField label="Deactivated">{formatTimestamp(user.deactivated_at)}</DetailField>
                 <DetailField label="Job title">{user.job_title?.trim() || "—"}</DetailField>
+                <DetailField label="Microsoft 365 license">
+                  {licenseChip ? (
+                    <span>
+                      {licenseChip}
+                      {licenseSummary ? (
+                        <span className="block text-xs text-muted-foreground">{licenseSummary}</span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </DetailField>
                 <DetailField label="Reports to">
                   {user.manager ? (
                     <span>

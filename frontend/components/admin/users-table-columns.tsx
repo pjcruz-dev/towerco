@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { createRowSelectionColumn } from "@/components/ui/data-table-row-selection";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
+import { entraLicenseChipLabel } from "@/lib/admin/entra-license";
 import { formatLastActive } from "@/lib/admin/user-display";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -206,6 +207,25 @@ export function createUsersTableColumns(options: {
           );
         }
         return <span className="text-sm text-muted-foreground">—</span>;
+      },
+    },
+    {
+      id: "license",
+      header: "License",
+      cell: ({ row }) => {
+        const label = entraLicenseChipLabel(row.original.entra_license_label, row.original.entra_license_names);
+        if (!label) {
+          return <span className="text-sm text-muted-foreground">—</span>;
+        }
+        return (
+          <Badge
+            variant="outline"
+            className="max-w-[11rem] truncate text-[11px] font-medium"
+            title={row.original.entra_license_names?.join(", ") || label}
+          >
+            {label}
+          </Badge>
+        );
       },
     },
     {

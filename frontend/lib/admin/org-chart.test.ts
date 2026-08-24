@@ -28,6 +28,8 @@ const people = [
     job_title: "Analyst",
     manager_id: null,
     manager_name: "Maria Teresa Bandiala",
+    manager_licensed: true,
+    manager_license_label: "E3",
     direct_report_count: 0,
   },
 ];
@@ -58,6 +60,8 @@ describe("buildOrgChartIndex", () => {
         manager_id: null,
         manager_name: "Terrence Galang",
         manager_email: "trgalang@example.com",
+        manager_licensed: true,
+        manager_license_label: "E3",
         direct_report_count: 0,
       },
     ]);
@@ -79,10 +83,69 @@ describe("buildOrgChartIndex", () => {
         manager_id: null,
         manager_name: "Terrence Galang",
         manager_email: "trgalang@example.com",
+        manager_licensed: true,
+        manager_license_label: "E3",
         direct_report_count: 0,
       },
     ]);
     expect(orgChartRoots(index).map((node) => node.name)).toEqual(["Terrence Galang"]);
+  });
+
+  it("does not show an unlicensed Entra-only manager", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "peter",
+        name: "Peter Joseph Cruz",
+        email: "prcruz@example.com",
+        job_title: null,
+        manager_id: null,
+        manager_name: "Alvin Tolentino",
+        manager_email: "alvin@example.com",
+        manager_licensed: false,
+        direct_report_count: 0,
+      },
+    ]);
+
+    expect([...index.byId.values()].some((node) => node.external)).toBe(false);
+    expect(orgChartRoots(index).map((node) => node.name)).toEqual(["Peter Joseph Cruz"]);
+    expect(resolveManager(index, index.byId.get("peter"))).toBeNull();
+  });
+
+  it("nests an Entra-only manager under their MYAPP manager", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "katrina",
+        name: "Katrina Gaw",
+        email: "kcgaw@example.com",
+        job_title: "Director",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+      },
+      {
+        id: "neslie",
+        name: "Neslie Valdez",
+        email: "nvaldez@example.com",
+        job_title: "Analyst",
+        manager_id: null,
+        manager_name: "Tranquilino Sarmiento",
+        manager_email: "tmsarmiento@example.com",
+        manager_licensed: true,
+        manager_license_label: "Business Standard",
+        manager_parent_id: "katrina",
+        direct_report_count: 0,
+        license_label: "Business Standard",
+      },
+    ]);
+
+    const external = [...index.byId.values()].find((node) => node.external);
+    expect(external?.name).toBe("Tranquilino Sarmiento");
+    expect(external?.external).toBe(true);
+    expect(index.reports.get("katrina")?.map((node) => node.id)).toEqual([external!.id]);
+    expect(index.reports.get(external!.id)?.map((node) => node.id)).toEqual(["neslie"]);
+    expect(resolveManager(index, external)?.name).toBe("Katrina Gaw");
+    expect(orgChartRoots(index).map((node) => node.name)).toEqual(["Katrina Gaw"]);
   });
 
   it("builds initials from first and last name", () => {

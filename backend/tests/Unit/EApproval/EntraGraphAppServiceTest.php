@@ -6,6 +6,7 @@ namespace Tests\Unit\EApproval;
 
 use App\Modules\Identity\Services\EntraGraphAppService;
 use App\Modules\Identity\Support\EntraManagerLookupResult;
+use App\Modules\Identity\Support\EntraUserManagerMatch;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
@@ -32,6 +33,9 @@ final class EntraGraphAppServiceTest extends TestCase
                 'userPrincipalName' => 'requestor@example.com',
                 'displayName' => 'Requestor',
                 'jobTitle' => 'Engineer',
+                'assignedLicenses' => [
+                    ['skuId' => '05e9a617-0261-4cee-bb44-138d3ef5d965'],
+                ],
             ],
             manager: [
                 'id' => 'mgr-1',
@@ -49,6 +53,78 @@ final class EntraGraphAppServiceTest extends TestCase
         $this->assertSame(EntraManagerLookupResult::CODE_OK, $lookup->code);
         $this->assertSame('manager@example.com', $lookup->manager?->email);
         $this->assertSame('manager@example.com', $service->getManagerEmailForUser('requestor@example.com'));
+    }
+
+    public function test_graph_user_includes_assigned_licenses(): void
+    {
+        $this->fakeGraph(
+            user: [
+                'id' => 'req-1',
+                'mail' => 'requestor@example.com',
+                'userPrincipalName' => 'requestor@example.com',
+                'displayName' => 'Requestor',
+                'assignedLicenses' => [
+                    ['skuId' => '05e9a617-0261-4cee-bb44-138d3ef5d965'],
+                ],
+            ],
+            managerStatus: 404,
+        );
+
+        $service = app(EntraGraphAppService::class);
+        $token = $service->getAppAccessToken();
+        $this->assertNotNull($token);
+        $match = $service->findUserWithManager($token, 'requestor@example.com');
+
+        $this->assertInstanceOf(EntraUserManagerMatch::class, $match);
+        $this->assertTrue($match->person->isLicensed());
+        $this->assertSame(['05e9a617-0261-4cee-bb44-138d3ef5d965'], $match->person->assignedSkuIds);
+    }
+
+    public function test_retries_user_lookup_without_assigned_licenses_on_400(): void
+    {
+        Http::fake(function (Request $request) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response(['access_token' => 'token-abc', 'expires_in' => 3600]);
+            }
+            if (str_contains($request->url(), '/manager')) {
+                return Http::response([], 404);
+            }
+
+            $select = (string) ($request['$select'] ?? $request->data()['$select'] ?? '');
+            if (str_contains($select, 'assignedLicenses') || str_contains($request->url(), 'assignedLicenses')) {
+                return Http::response(['error' => ['code' => 'Request_UnsupportedQuery']], 400);
+            }
+
+            return Http::response([
+                'id' => 'req-1',
+                'mail' => 'requestor@example.com',
+                'userPrincipalName' => 'requestor@example.com',
+                'displayName' => 'Requestor',
+            ]);
+        });
+
+        $service = app(EntraGraphAppService::class);
+        $token = $service->getAppAccessToken();
+        $this->assertNotNull($token);
+        $match = $service->findUserWithManager($token, 'requestor@example.com');
+
+        $this->assertInstanceOf(EntraUserManagerMatch::class, $match);
+        $this->assertSame('requestor@example.com', $match->person->email);
+        $this->assertFalse($match->person->isLicensed());
+    }
+
+    public function test_token_failure_explains_invalid_client_secret(): void
+    {
+        Http::fake([
+            'https://login.microsoftonline.com/*' => Http::response([
+                'error' => 'invalid_client',
+                'error_description' => 'AADSTS7000215: Invalid client secret provided.',
+            ], 401),
+        ]);
+
+        $service = app(EntraGraphAppService::class);
+        $this->assertNull($service->getAppAccessToken());
+        $this->assertStringContainsString('rejected the client secret', (string) $service->tokenFailureMessage());
     }
 
     public function test_returns_null_when_not_configured(): void

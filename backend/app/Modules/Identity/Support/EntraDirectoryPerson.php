@@ -6,11 +6,15 @@ namespace App\Modules\Identity\Support;
 
 final class EntraDirectoryPerson
 {
+    /**
+     * @param  list<string>  $assignedSkuIds
+     */
     public function __construct(
         public readonly string $entraId,
         public readonly string $email,
         public readonly string $displayName,
         public readonly ?string $jobTitle = null,
+        public readonly array $assignedSkuIds = [],
     ) {}
 
     /**
@@ -38,6 +42,12 @@ final class EntraDirectoryPerson
             email: $email,
             displayName: $name !== '' ? $name : $email,
             jobTitle: $title !== '' ? $title : null,
+            assignedSkuIds: EntraLicenseCatalog::skuIdsFromGraph($payload),
         );
+    }
+
+    public function isLicensed(): bool
+    {
+        return $this->assignedSkuIds !== [];
     }
 }

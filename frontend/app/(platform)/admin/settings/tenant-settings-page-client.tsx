@@ -539,7 +539,8 @@ export function TenantSettingsPageClient() {
                 <span className="font-medium text-foreground">Sync org chart</span> need{" "}
                 <span className="font-medium text-foreground">Application</span>{" "}
                 <code className="rounded bg-muted px-1">User.Read.All</code> with admin consent. Keep both — do not
-                replace Delegated with Application.
+                replace Delegated with Application. If org sync cannot get an app token, the client secret is usually
+                expired or wrong: create a new secret in Entra and paste it here.
               </p>
             </div>
 

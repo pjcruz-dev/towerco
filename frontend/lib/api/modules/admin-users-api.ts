@@ -38,6 +38,9 @@ export type AdminUserRow = {
   entra_manager_email?: string | null;
   direct_report_count?: number;
   entra_org_synced_at?: string | null;
+  entra_licensed?: boolean | null;
+  entra_license_label?: string | null;
+  entra_license_names?: string[];
 };
 
 export type AdminUserCreatePayload = {
@@ -335,7 +338,12 @@ export type AdminOrgChartPerson = {
   manager_id: string | null;
   manager_name: string | null;
   manager_email?: string | null;
+  manager_licensed?: boolean;
+  manager_license_label?: string | null;
+  manager_parent_id?: string | null;
   direct_report_count: number;
+  license_label?: string | null;
+  license_names?: string[];
 };
 
 export type AdminOrgChartResponse = {
@@ -350,6 +358,7 @@ export type AdminEntraOrgSyncResult = {
   scanned: number;
   updated: number;
   managers_linked: number;
+  skipped_unlicensed?: number;
 };
 
 export async function fetchAdminOrgChart(): Promise<AdminOrgChartResponse> {
@@ -361,7 +370,7 @@ export async function syncAdminEntraOrg(): Promise<AdminEntraOrgSyncResult> {
   const response = await apiClient.post<{ data: AdminEntraOrgSyncResult }>(
     "/admin/users/entra-org-sync",
     {},
-    { timeout: 120_000 },
+    { timeout: 180_000 },
   );
   return response.data.data;
 }

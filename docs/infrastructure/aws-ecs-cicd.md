@@ -25,7 +25,7 @@ flowchart TB
   end
 
   subgraph data [Data]
-    Aurora[(Aurora MySQL 8 — central + tenant DBs)]
+    Aurora[(Aurora MySQL 8.4 — central + tenant DBs)]
     Redis[(ElastiCache Redis)]
     S3[(S3 — uploads / exports)]
   end
@@ -73,7 +73,7 @@ flowchart TB
 
 ## Aurora MySQL
 
-- **Engine:** Aurora MySQL 8.0 compatible (matches local MySQL 8 dev)
+- **Engine:** Aurora MySQL 8.4 (matches local Docker `mysql:8.4` / RDS MySQL 8.4)
 - **Topology:** writer + 1–2 readers (production)
 - **Tenancy:** database-per-tenant (stancl/tenancy); central schema on `toweros` database
 - **Backups:** automated snapshots (7–35 days by tier), point-in-time recovery enabled
@@ -128,7 +128,7 @@ Application secrets remain in AWS Secrets Manager per environment.
 
 | Concern | Local (`npm run dev`) | AWS |
 |---------|-------------------|-----|
-| Database | Docker MySQL 3307 | Aurora MySQL |
+| Database | Docker MySQL 8.4 (`3307`) | Aurora MySQL 8.4 |
 | Cache/queue | Optional Redis | ElastiCache / SQS |
 | Web port | 80 (`http://localhost`) | 443 via ALB |
 | Tenancy | `*.localhost` | `*.toweros.app` |

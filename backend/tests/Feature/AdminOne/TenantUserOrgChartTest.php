@@ -86,6 +86,41 @@ final class TenantUserOrgChartTest extends TestCase
         );
     }
 
+    public function test_org_chart_hides_unlicensed_users(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        TenantUser::query()->create([
+            'name' => 'Licensed Engineer',
+            'email' => 'licensed@example.com',
+            'password' => 'password',
+            'is_active' => true,
+            'entra_licensed' => true,
+            'entra_license_label' => 'E3',
+            'entra_license_names' => ['Microsoft 365 E3'],
+        ]);
+        TenantUser::query()->create([
+            'name' => 'No License',
+            'email' => 'nolicense@example.com',
+            'password' => 'password',
+            'is_active' => true,
+            'entra_licensed' => false,
+        ]);
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users/org-chart');
+
+        $response->assertOk();
+        $emails = collect($response->json('data.people'))->pluck('email')->all();
+        $this->assertContains('licensed@example.com', $emails);
+        $this->assertNotContains('nolicense@example.com', $emails);
+        $this->assertSame(
+            'E3',
+            collect($response->json('data.people'))->firstWhere('email', 'licensed@example.com')['license_label'],
+        );
+    }
+
     public function test_user_index_includes_manager_fields(): void
     {
         tenancy()->initialize($this->testTenant);
@@ -114,6 +149,31 @@ final class TenantUserOrgChartTest extends TestCase
             ->assertJsonPath('data.0.job_title', 'Engineer')
             ->assertJsonPath('data.0.manager.email', 'alvin@example.com')
             ->assertJsonPath('data.0.direct_report_count', 0);
+    }
+
+    public function test_user_index_includes_license_fields(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        TenantUser::query()->create([
+            'name' => 'Licensed Engineer',
+            'email' => 'licensed@example.com',
+            'password' => 'password',
+            'is_active' => true,
+            'entra_licensed' => true,
+            'entra_license_label' => 'E3',
+            'entra_license_names' => ['Microsoft 365 E3', 'Power BI Pro'],
+        ]);
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=licensed@example.com');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.email', 'licensed@example.com')
+            ->assertJsonPath('data.0.entra_licensed', true)
+            ->assertJsonPath('data.0.entra_license_label', 'E3')
+            ->assertJsonPath('data.0.entra_license_names.0', 'Microsoft 365 E3');
     }
 
     public function test_viewer_cannot_read_org_chart_or_sync(): void

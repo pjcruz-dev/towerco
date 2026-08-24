@@ -3,7 +3,7 @@
 | Field | Value |
 |--------|--------|
 | Status | Accepted |
-| Stack | Laravel, MySQL, Redis, stancl/tenancy |
+| Stack | Laravel, MySQL 8.4, Redis, stancl/tenancy |
 | Scope | TowerOS data plane and request lifecycle |
 
 ## Context

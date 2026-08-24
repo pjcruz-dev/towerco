@@ -72,13 +72,22 @@ export function OrgPageClient() {
       const timedOut =
         axios.isAxiosError(error) &&
         (error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout"));
+      const dropped =
+        axios.isAxiosError(error) &&
+        (error.code === "ERR_NETWORK" || error.message === "Network Error");
       notify({
-        level: "error",
-        title: "Sync failed",
+        level: timedOut ? "warning" : "error",
+        title: timedOut ? "Sync is still running" : "Sync failed",
         message: timedOut
-          ? "Microsoft org sync timed out. Wait a moment and refresh this page — reporting lines may already be saved."
-          : getErrorMessage(error),
+          ? "Microsoft org sync is taking longer than the browser wait. Refresh this page — licensed people and reporting lines may already be saved."
+          : dropped
+            ? "Organization sync failed before a result came back. Confirm the API is running, then try Sync again."
+            : getErrorMessage(error),
       });
+      if (timedOut) {
+        void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+        void queryClient.invalidateQueries({ queryKey: ["admin", "users", "org-chart"] });
+      }
     },
   });
 
@@ -100,7 +109,8 @@ export function OrgPageClient() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organization</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
-              manager and job title onto existing {organizationLabel} users.
+              manager, job title, and Microsoft 365 license onto existing {organizationLabel} users. People without a
+              Microsoft 365 license are hidden here.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Last synced {formatTimestamp(chartQuery.data?.synced_at)}
@@ -172,7 +182,8 @@ export function OrgPageClient() {
               <p className="px-4 py-10 text-center text-sm text-destructive">{getErrorMessage(chartQuery.error)}</p>
             ) : index.nodes.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No active users to display. Add users in Team & Access, then sync from Microsoft.
+                No licensed Microsoft 365 users to display. Sync from Microsoft to load licensed people. Unlicensed Entra
+                accounts stay hidden.
               </p>
             ) : view === "all" ? (
               <AdminOrgTreeView index={index} focusedId={focusedId} onSelect={selectPerson} />

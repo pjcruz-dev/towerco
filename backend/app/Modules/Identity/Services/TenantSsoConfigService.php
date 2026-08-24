@@ -175,9 +175,9 @@ final class TenantSsoConfigService
     public function applyAzureSocialiteConfig(stdClass $config): void
     {
         config([
-            'services.azure.client_id' => $config->client_id,
-            'services.azure.client_secret' => $this->decryptClientSecret((string) $config->client_secret_encrypted),
-            'services.azure.tenant' => $config->tenant_identifier ?: 'common',
+            'services.azure.client_id' => trim((string) $config->client_id),
+            'services.azure.client_secret' => trim($this->decryptClientSecret((string) $config->client_secret_encrypted)),
+            'services.azure.tenant' => strtolower(trim((string) ($config->tenant_identifier ?: 'common'))),
             'services.azure.redirect' => $this->redirectUri(),
         ]);
     }

@@ -152,19 +152,25 @@ export function AdminOrgTreeView({
         </Button>
       </div>
       <div className="max-h-[min(75vh,52rem)] overflow-auto">
-        <div className="flex min-w-max flex-col items-center gap-14 px-4 py-4">
-          {trees.map((root) => (
-            <OrgChartBranch
-              key={root.id}
-              person={root}
-              index={index}
-              depth={0}
-              expandedIds={expandedIds}
-              focusedId={focusedId}
-              ancestors={new Set()}
-              onToggle={toggle}
-              onSelect={onSelect}
-            />
+        <div className="flex min-w-max flex-col items-center gap-16 px-4 py-4">
+          {trees.map((root, offset) => (
+            <div key={root.id} className="flex w-full flex-col items-center">
+              {trees.length > 1 ? (
+                <p className="mb-3 text-center text-[11px] font-medium text-muted-foreground">
+                  {offset === 0 ? "Reporting line" : "Separate reporting line"} · {root.name}
+                </p>
+              ) : null}
+              <OrgChartBranch
+                person={root}
+                index={index}
+                depth={0}
+                expandedIds={expandedIds}
+                focusedId={focusedId}
+                ancestors={new Set()}
+                onToggle={toggle}
+                onSelect={onSelect}
+              />
+            </div>
           ))}
         </div>
         {unattached.length > 0 ? (

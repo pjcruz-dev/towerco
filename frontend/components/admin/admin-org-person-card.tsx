@@ -1,6 +1,8 @@
 "use client";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { entraLicenseChipLabel } from "@/lib/admin/entra-license";
 import { cn } from "@/lib/utils";
 import { personInitials, type OrgChartNode } from "@/lib/admin/org-chart";
 
@@ -16,6 +18,7 @@ export function OrgPersonCard({
   onSelect: (id: string) => void;
 }) {
   const focused = emphasis === "focus";
+  const license = entraLicenseChipLabel(person.license_label, person.license_names);
 
   return (
     <button
@@ -39,6 +42,15 @@ export function OrgPersonCard({
           </p>
           {person.job_title ? (
             <p className="truncate text-xs text-muted-foreground">{person.job_title}</p>
+          ) : null}
+          {license ? (
+            <Badge
+              variant="outline"
+              className="mt-1 max-w-full truncate text-[10px] font-medium"
+              title={person.license_names?.join(", ") || license}
+            >
+              {license}
+            </Badge>
           ) : null}
           {person.email ? <p className="truncate text-xs text-muted-foreground">{person.email}</p> : null}
           {person.external ? (

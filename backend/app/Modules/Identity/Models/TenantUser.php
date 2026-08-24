@@ -34,6 +34,12 @@ use Spatie\Permission\Traits\HasRoles;
     'entra_manager_email',
     'entra_manager_name',
     'entra_org_synced_at',
+    'entra_licensed',
+    'entra_license_label',
+    'entra_license_names',
+    'entra_manager_licensed',
+    'entra_manager_license_label',
+    'entra_manager_parent_id',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class TenantUser extends Authenticatable
@@ -78,6 +84,9 @@ class TenantUser extends Authenticatable
             'password_login_exempt' => 'boolean',
             'deactivated_at' => 'datetime',
             'entra_org_synced_at' => 'datetime',
+            'entra_licensed' => 'boolean',
+            'entra_license_names' => 'array',
+            'entra_manager_licensed' => 'boolean',
         ];
     }
 

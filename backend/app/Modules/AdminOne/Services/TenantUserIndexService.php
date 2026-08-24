@@ -23,6 +23,8 @@ class TenantUserIndexService
 
     private ?bool $orgColumns = null;
 
+    private ?bool $licenseColumns = null;
+
     public function __construct(
         private readonly TenantUserImpersonationService $impersonationService,
         private readonly TenantUserSecuritySummaryService $securitySummary,
@@ -124,6 +126,24 @@ class TenantUserIndexService
         return $this->orgColumns ??= Schema::connection('tenant')->hasColumn('users', 'manager_id');
     }
 
+    private function hasLicenseColumns(): bool
+    {
+        return $this->licenseColumns ??= Schema::connection('tenant')->hasColumn('users', 'entra_licensed');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function licenseNames(TenantUser $user): array
+    {
+        $names = $user->entra_license_names;
+        if (! is_array($names)) {
+            return [];
+        }
+
+        return array_values(array_filter($names, static fn (mixed $name): bool => is_string($name) && $name !== ''));
+    }
+
     /**
      * @param  TenantUser|null  $viewer  Current admin listing users (for impersonation eligibility).
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
@@ -177,6 +197,9 @@ class TenantUserIndexService
                     'entra_manager_email' => $this->hasOrgColumns() ? $user->entra_manager_email : null,
                     'direct_report_count' => $this->hasOrgColumns() ? (int) ($user->direct_report_count ?? 0) : 0,
                     'entra_org_synced_at' => $this->hasOrgColumns() ? $user->entra_org_synced_at?->toIso8601String() : null,
+                    'entra_licensed' => $this->hasLicenseColumns() ? $user->entra_licensed : null,
+                    'entra_license_label' => $this->hasLicenseColumns() ? $user->entra_license_label : null,
+                    'entra_license_names' => $this->hasLicenseColumns() ? $this->licenseNames($user) : [],
                 ];
             })->values()->all(),
             'meta' => [
