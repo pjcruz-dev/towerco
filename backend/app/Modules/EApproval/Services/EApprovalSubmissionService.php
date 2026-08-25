@@ -168,7 +168,7 @@ final class EApprovalSubmissionService
         $controlled = $this->controlledDocumentValues->prepareForSubmit(
             $form,
             $values,
-            fn () => $this->documentNumbers->nextDocumentNumber($form, $values),
+            fn () => $this->documentNumbers->nextDocumentNumber($form, $values, $requestor),
         );
         $values = $controlled['values'];
 
@@ -369,7 +369,7 @@ final class EApprovalSubmissionService
         $controlled = $this->controlledDocumentValues->prepareForSubmit(
             $form,
             $values,
-            fn () => $this->documentNumbers->nextDocumentNumber($form, $values),
+            fn () => $this->documentNumbers->nextDocumentNumber($form, $values, $requestor),
         );
         $values = $controlled['values'];
         $this->valuesValidator->validate(

@@ -104,8 +104,17 @@ export function deriveTenantIdentityFromHost(rawDomain: string): {
     index = 1;
   }
 
-  const slug = normalizeTenantSlug(parts[index] ?? "");
-  const brandParts = parts.slice(index + 1);
+  const remainder = parts.slice(index);
+  // Brand-only hosts: app.alliancetowers.com → slug blank, brand = alliancetowers.com
+  if (remainder.length === 2) {
+    return {
+      slug: "",
+      brandDomain: brandDomainFromHostLabels(remainder),
+    };
+  }
+
+  const slug = normalizeTenantSlug(remainder[0] ?? "");
+  const brandParts = remainder.slice(1);
   const brandDomain =
     brandParts.length > 0
       ? brandDomainFromHostLabels(brandParts)

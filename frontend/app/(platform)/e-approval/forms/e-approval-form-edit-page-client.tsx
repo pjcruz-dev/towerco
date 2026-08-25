@@ -58,6 +58,7 @@ import {
   deleteEApprovalForm,
   fetchEApprovalForm,
   fetchEApprovalFormRevisions,
+  fetchEApprovalMetadata,
   publishEApprovalForm,
   updateEApprovalForm,
   updateEApprovalPdfLayout,
@@ -193,6 +194,13 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
     enabled: !!formId,
     staleTime: 30_000,
   });
+
+  const metadataQuery = useQuery({
+    queryKey: ["e-approval", "metadata"],
+    queryFn: fetchEApprovalMetadata,
+    staleTime: 60_000,
+  });
+  const knownDepartments = metadataQuery.data?.departments ?? [];
 
   const revisionsQuery = useQuery({
     queryKey: ["e-approval", "form", formId, "revisions"],
@@ -896,6 +904,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
               value={documentNumber}
               onChange={setDocumentNumber}
               fields={fields}
+              knownDepartments={knownDepartments}
             />
 
             <EApprovalFormControlledDocumentSyncCard

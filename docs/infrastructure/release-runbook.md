@@ -28,7 +28,7 @@ Release process deploys **application code**. Tenant data stays isolated per env
 | Tier | Example host | Purpose |
 |------|----------------|---------|
 | Local / staging tenant | `staging.myapp.localhost` | Validate release |
-| Production tenant | `app.{slug}.{brand}` | Customer traffic |
+| Production tenant | `app.{brand}` | Customer traffic |
 
 ---
 

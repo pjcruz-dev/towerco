@@ -201,7 +201,7 @@ export function filterOrgPeople(nodes: OrgChartNode[], query: string): OrgChartN
 
   return nodes
     .filter((node) =>
-      `${node.name} ${node.email} ${node.job_title ?? ""} ${node.license_label ?? ""}`.toLowerCase().includes(needle),
+      `${node.name} ${node.email} ${node.job_title ?? ""} ${node.department ?? ""} ${node.license_label ?? ""}`.toLowerCase().includes(needle),
     )
     .slice(0, 12);
 }

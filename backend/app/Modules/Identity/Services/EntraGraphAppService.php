@@ -19,9 +19,9 @@ use Illuminate\Support\Facades\Log;
  */
 class EntraGraphAppService
 {
-    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle,assignedLicenses';
+    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle,department,assignedLicenses';
 
-    private const SELECT_CORE = 'id,mail,userPrincipalName,displayName,jobTitle';
+    private const SELECT_CORE = 'id,mail,userPrincipalName,displayName,jobTitle,department';
 
     private ?string $tokenFailureMessage = null;
 

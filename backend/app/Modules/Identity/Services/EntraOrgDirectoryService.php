@@ -48,6 +48,7 @@ final class EntraOrgDirectoryService
                     email: TenantUser::normalizeEmail((string) $user->email),
                     displayName: (string) $user->name,
                     jobTitle: $user->job_title,
+                    department: $this->hasDepartmentColumn() ? $user->department : null,
                 ), $skuMap, is_string($appToken) ? $appToken : null);
         }
 
@@ -56,7 +57,7 @@ final class EntraOrgDirectoryService
     }
 
     /**
-     * Match TowerOS users to Entra and copy manager / job title.
+     * Match TowerOS users to Entra and copy manager / job title / department.
      *
      * @return array{
      *     ok: bool,
@@ -199,6 +200,7 @@ final class EntraOrgDirectoryService
             'name',
             'email',
             'job_title',
+            ...($this->hasDepartmentColumn() ? ['department'] : []),
             'manager_id',
             'entra_manager_email',
             'entra_manager_name',
@@ -239,6 +241,7 @@ final class EntraOrgDirectoryService
                 'name' => (string) $user->name,
                 'email' => (string) $user->email,
                 'job_title' => $user->job_title,
+                'department' => $this->hasDepartmentColumn() ? $user->department : null,
                 'manager_id' => $managerInTenant ? $managerId : null,
                 'manager_name' => $showExternalManager
                     ? ($user->entra_manager_name ?: $user->entra_manager_email)
@@ -271,6 +274,9 @@ final class EntraOrgDirectoryService
         }
         if ($person->jobTitle !== null) {
             $user->job_title = $this->clip($person->jobTitle, 180);
+        }
+        if ($person->department !== null && $this->hasDepartmentColumn()) {
+            $user->department = $this->clip($person->department, 180);
         }
         if (trim((string) $user->name) === '' || $user->name === $user->email) {
             $user->name = $this->clip($person->displayName, 255) ?? $person->email;
@@ -399,6 +405,11 @@ final class EntraOrgDirectoryService
     private function hasOrgColumns(): bool
     {
         return Schema::connection('tenant')->hasColumn('users', 'manager_id');
+    }
+
+    private function hasDepartmentColumn(): bool
+    {
+        return Schema::connection('tenant')->hasColumn('users', 'department');
     }
 
     private function hasLicenseColumns(): bool

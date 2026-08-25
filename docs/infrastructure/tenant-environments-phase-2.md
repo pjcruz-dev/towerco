@@ -73,9 +73,9 @@ Audit event: `tenant.environment_provisioned`.
 
 | Environment | Host (deployed) | Host (local Docker) | Use for |
 |-------------|-----------------|---------------------|---------|
-| **staging** | `staging.{slug}.{brand}` | `staging.{slug}.localhost` | Release smoke (Phase 1) |
-| **production** | `app.{slug}.{brand}` | `app.{slug}.localhost` | Live users |
-| **test** (optional) | `test.{slug}.{brand}` | `test.{slug}.localhost` | UAT / training |
+| **staging** | `staging.{brand}` | `staging.{slug}.localhost` | Release smoke (Phase 1) |
+| **production** | `app.{brand}` | `app.{slug}.localhost` | Live users |
+| **test** (optional) | `test.{brand}` | `test.{slug}.localhost` | UAT / training |
 | **local** (optional) | — | `{slug}.localhost` | Engineer sandbox |
 
 Minimum for release discipline: **staging + production** for each go-live customer.
@@ -103,8 +103,8 @@ Seamless **Switch** between Test / Staging / Production requires the tenant perm
 
 ## DNS / TLS (deployed Staging + Production)
 
-- [ ] CNAME `staging.{slug}` → ALB / edge
-- [ ] CNAME `app.{slug}` → ALB / edge (or production origin)
+- [ ] CNAME `staging` → ALB / edge (`staging.alliancetowers.com`)
+- [ ] CNAME `app` → ALB / edge (`app.alliancetowers.com`, or production origin)
 - [ ] Certificate covers required names / wildcards
 - [ ] Tenant domains registered in central DB (done at provision time)
 - [ ] Sanctum stateful domains pick up tenant hosts automatically

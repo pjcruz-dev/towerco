@@ -28,10 +28,14 @@ export const DEFAULT_FORM_DOCUMENT_NUMBER: EApprovalFormDocumentNumberSettings =
 export const DOCUMENT_NUMBER_TEMPLATE_PLACEHOLDER = "ATC-{department}-{documentType}-{seq:3}";
 
 export const DOCUMENT_NUMBER_BUILTIN_TOKENS: DocumentNumberTemplateToken[] = [
+  { id: "department", label: "Department", token: "{department}", kind: "builtin" },
   { id: "ownerCode", label: "Owner code", token: "{ownerCode}", kind: "builtin" },
   { id: "docTypeCode", label: "Document type code", token: "{docTypeCode}", kind: "builtin" },
   { id: "seq", label: "Sequence (3 digits)", token: "{seq:3}", kind: "builtin" },
 ];
+
+/** Field names already covered by built-in tokens — avoid duplicate chips. */
+const BUILTIN_FIELD_TOKEN_NAMES = new Set(["department", "ownercode", "owner_code", "doctypecode", "doc_type_code"]);
 
 export const DOCUMENT_NUMBER_TEMPLATE_TOKENS = [
   "{department}",
@@ -43,7 +47,12 @@ export const DOCUMENT_NUMBER_TEMPLATE_TOKENS = [
 
 export function documentNumberFieldTokens(fields: EApprovalFormFieldInput[]): DocumentNumberTemplateToken[] {
   return fields
-    .filter((field) => TOKEN_ELIGIBLE_FIELD_TYPES.has(field.type) && field.name.trim() !== "")
+    .filter(
+      (field) =>
+        TOKEN_ELIGIBLE_FIELD_TYPES.has(field.type) &&
+        field.name.trim() !== "" &&
+        !BUILTIN_FIELD_TOKEN_NAMES.has(field.name.trim().toLowerCase()),
+    )
     .map((field) => ({
       id: `field:${field.name}`,
       label: field.label?.trim() || field.name,
@@ -81,6 +90,7 @@ export function toggleTemplateToken(template: string, token: string, enabled: bo
 export function buildDocumentNumberPreview(
   settings: EApprovalFormDocumentNumberSettings,
   fields: EApprovalFormFieldInput[],
+  options?: { sampleDepartment?: string },
 ): string {
   if (!settings.docNoCustomEnabled) {
     const owner = normalizeOwnerCode(settings.ownerCode);
@@ -90,6 +100,7 @@ export function buildDocumentNumberPreview(
 
   const template = settings.docNoTemplate.trim() || DOCUMENT_NUMBER_TEMPLATE_PLACEHOLDER;
   const sampleValues = sampleFieldValuesForPreview(fields);
+  const sampleDepartment = options?.sampleDepartment?.trim() || sampleValues.department || "HR";
 
   return template.replace(/\{([^}]+)\}/g, (match, rawToken: string) => {
     const token = rawToken.trim();
@@ -107,6 +118,9 @@ export function buildDocumentNumberPreview(
     }
     if (normalized === "documenttype" || normalized === "document_type") {
       return sanitizePreviewSegment(sampleValues.document_type ?? sampleValues.documenttype ?? "X");
+    }
+    if (normalized === "department") {
+      return sanitizePreviewSegment(sampleDepartment);
     }
 
     const raw = sampleValues[token] ?? sampleValues[normalized] ?? "";

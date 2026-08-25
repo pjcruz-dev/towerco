@@ -33,6 +33,7 @@ export type AdminUserRow = {
   mfa_enrolled: boolean;
   mfa_required: boolean;
   job_title?: string | null;
+  department?: string | null;
   manager?: { id: string; name: string; email: string } | null;
   entra_manager_name?: string | null;
   entra_manager_email?: string | null;
@@ -335,6 +336,7 @@ export type AdminOrgChartPerson = {
   name: string;
   email: string;
   job_title: string | null;
+  department?: string | null;
   manager_id: string | null;
   manager_name: string | null;
   manager_email?: string | null;

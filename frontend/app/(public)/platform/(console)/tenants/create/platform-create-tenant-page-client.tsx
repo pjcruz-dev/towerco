@@ -223,10 +223,10 @@ export function PlatformCreateTenantPageClient() {
     const brandHint = localhostBrandDefault || "example.com";
     return [
       { slug: "atc", env: "local" as const, label: `Local · atc.localhost` },
-      { slug: "atc", env: "test" as const, label: "Test · test.atc.localhost" },
-      { slug: "atc", env: "production" as const, label: `App · app.atc.${brandHint}` },
+      { slug: "atc", env: "test" as const, label: `Test · test.${brandHint}` },
+      { slug: "atc", env: "production" as const, label: `App · app.${brandHint}` },
     ];
-  }, []);
+  }, [localhostBrandDefault]);
 
   const applyQuickExample = (example: { slug: string; env: TenantEnvironment }) => {
     slugLocked.current = false;
@@ -520,9 +520,15 @@ export function PlatformCreateTenantPageClient() {
                   <Info className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
                   <div className="space-y-1">
                     <p>
-                      On this dev platform, test/staging/production use{" "}
-                      <span className="font-mono text-foreground">*.localhost</span> hostnames. Deployed
-                      platforms use <span className="font-mono text-foreground">test.slug.example.com</span>, etc.
+                      <span className="font-medium text-foreground">Slug</span> identifies the org across
+                      environments (required for environment switch). It is{" "}
+                      <span className="font-medium text-foreground">not</span> required in brand DNS URLs.
+                    </p>
+                    <p>
+                      Local: <span className="font-mono text-foreground">{"{slug}.localhost"}</span>. Staging /
+                      production with a brand domain:{" "}
+                      <span className="font-mono text-foreground">staging.example.com</span>,{" "}
+                      <span className="font-mono text-foreground">app.example.com</span>.
                     </p>
                     {localhostBrandDefault ? (
                       <p>

@@ -31,6 +31,7 @@ use Spatie\Permission\Traits\HasRoles;
     'manager_id',
     'entra_id',
     'job_title',
+    'department',
     'entra_manager_email',
     'entra_manager_name',
     'entra_org_synced_at',

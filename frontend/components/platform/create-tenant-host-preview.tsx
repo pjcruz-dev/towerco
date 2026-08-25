@@ -49,7 +49,8 @@ export function CreateTenantHostPreview({
       <p className="text-sm font-medium text-foreground">Hostname map</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Creating <span className="font-medium capitalize text-foreground">{selectedEnvironment}</span>{" "}
-        now. Add other environments later from the tenant directory — same slug and brand.
+        now. Add other environments later from the tenant directory — same slug links them for
+        environment switch. Brand DNS omits the slug (e.g. app.alliancetowers.com).
       </p>
       <ul className="mt-3 space-y-2">
         {ENV_ROWS.map(({ key, label }) => {

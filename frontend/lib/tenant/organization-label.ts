@@ -1,6 +1,10 @@
 const ENV_PREFIXES = new Set(["app", "test", "staging", "local"]);
 
-/** Resolve organization slug from a workspace hostname (e.g. app.towerone.localhost → towerone). */
+/**
+ * Resolve organization slug from a workspace hostname.
+ * Localhost keeps slug in the host (app.atc.localhost → atc).
+ * Brand hosts omit slug (app.alliancetowers.com → null; use auth tenant name).
+ */
 export function organizationSlugFromHostname(hostname: string): string | null {
   const host = hostname.trim().toLowerCase();
   if (!host || host === "localhost" || host === "127.0.0.1") {
@@ -16,8 +20,18 @@ export function organizationSlugFromHostname(hostname: string): string | null {
     return parts[0];
   }
 
-  if (parts.length >= 3 && ENV_PREFIXES.has(parts[0])) {
-    return parts[1];
+  if (parts.length >= 3 && parts[parts.length - 1] === "localhost" && ENV_PREFIXES.has(parts[0])) {
+    return parts[1] ?? null;
+  }
+
+  // Brand DNS: app.alliancetowers.com (env + brand) — no slug segment
+  if (parts.length === 3 && ENV_PREFIXES.has(parts[0])) {
+    return null;
+  }
+
+  // Legacy brand DNS with slug: app.atc.alliancetowers.com
+  if (parts.length >= 4 && ENV_PREFIXES.has(parts[0])) {
+    return parts[1] ?? null;
   }
 
   if (!ENV_PREFIXES.has(parts[0])) {

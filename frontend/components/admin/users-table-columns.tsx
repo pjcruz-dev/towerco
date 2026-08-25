@@ -188,6 +188,17 @@ export function createUsersTableColumns(options: {
       cell: ({ row }) => <span className="text-muted-foreground">{row.original.email}</span>,
     },
     {
+      id: "department",
+      header: "Department",
+      cell: ({ row }) => {
+        const department = row.original.department?.trim();
+        if (!department) {
+          return <span className="text-sm text-muted-foreground">—</span>;
+        }
+        return <span className="text-sm text-foreground">{department}</span>;
+      },
+    },
+    {
       id: "reports_to",
       header: "Reports to",
       cell: ({ row }) => {

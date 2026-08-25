@@ -109,7 +109,7 @@ export function OrgPageClient() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organization</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
-              manager, job title, and Microsoft 365 license onto existing {organizationLabel} users. People without a
+              manager, job title, department, and Microsoft 365 license onto existing {organizationLabel} users. People without a
               Microsoft 365 license are hidden here.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
@@ -138,7 +138,7 @@ export function OrgPageClient() {
                   id="org-search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Name, email, or job title"
+                  placeholder="Name, email, job title, or department"
                   className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
                 />
               </div>
@@ -165,6 +165,7 @@ export function OrgPageClient() {
                       <span className="text-sm font-medium text-foreground">{person.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {person.job_title ? `${person.job_title} · ` : ""}
+                        {person.department ? `${person.department} · ` : ""}
                         {person.email}
                         {person.external ? " · In Microsoft Entra only" : ""}
                       </span>

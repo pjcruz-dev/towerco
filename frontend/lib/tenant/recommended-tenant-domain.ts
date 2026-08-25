@@ -9,8 +9,20 @@ export function isLocalDevPlatformHost(): boolean {
   return host === "localhost" || host.endsWith(".localhost");
 }
 
+function looksLikePublicBrandDomain(brandDomain: string | null | undefined): boolean {
+  const brand = (brandDomain ?? "").trim().toLowerCase().replace(/^https?:\/\//, "");
+  if (!brand || !brand.includes(".")) {
+    return false;
+  }
+  return !brand.endsWith(".localhost");
+}
+
 /**
  * Recommended tenant hostname for an environment (matches platform add-env sheet).
+ *
+ * Localhost keeps `{slug}` so multiple orgs can coexist on one laptop.
+ * Deployed / brand DNS omits slug: `staging.alliancetowers.com`, `app.alliancetowers.com`.
+ * Slug is still required as org identity for linking environments (switch env).
  */
 export function recommendedTenantDomain(
   environment: TenantEnvironment,
@@ -23,27 +35,21 @@ export function recommendedTenantDomain(
   const brand =
     (brandDomain ?? "toweros.app").trim().toLowerCase().replace(/^https?:\/\//, "") ||
     "toweros.app";
-  const useLocalDevHosts = options?.useLocalDevHosts ?? isLocalDevPlatformHost();
+  let useLocalDevHosts = options?.useLocalDevHosts ?? isLocalDevPlatformHost();
+  if (useLocalDevHosts && environment !== "local" && looksLikePublicBrandDomain(brandDomain)) {
+    useLocalDevHosts = false;
+  }
 
   switch (environment) {
     case "local":
-      // LAN / office platform (e.g. http://192.168.90.24/platform): use brand DNS, not *.localhost
-      return useLocalDevHosts
-        ? `${normalizedSlug}.localhost`
-        : `local.${normalizedSlug}.${brand}`;
+      return useLocalDevHosts ? `${normalizedSlug}.localhost` : `local.${brand}`;
     case "test":
-      return useLocalDevHosts
-        ? `test.${normalizedSlug}.localhost`
-        : `test.${normalizedSlug}.${brand}`;
+      return useLocalDevHosts ? `test.${normalizedSlug}.localhost` : `test.${brand}`;
     case "staging":
-      return useLocalDevHosts
-        ? `staging.${normalizedSlug}.localhost`
-        : `staging.${normalizedSlug}.${brand}`;
+      return useLocalDevHosts ? `staging.${normalizedSlug}.localhost` : `staging.${brand}`;
     case "production":
-      return useLocalDevHosts
-        ? `app.${normalizedSlug}.localhost`
-        : `app.${normalizedSlug}.${brand}`;
+      return useLocalDevHosts ? `app.${normalizedSlug}.localhost` : `app.${brand}`;
     default:
-      return `app.${normalizedSlug}.${brand}`;
+      return useLocalDevHosts ? `app.${normalizedSlug}.localhost` : `app.${brand}`;
   }
 }

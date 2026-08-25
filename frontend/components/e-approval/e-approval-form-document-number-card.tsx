@@ -20,6 +20,8 @@ type Props = {
   value: EApprovalFormDocumentNumberSettings;
   onChange: (next: EApprovalFormDocumentNumberSettings) => void;
   fields: EApprovalFormFieldInput[];
+  /** Distinct departments from active users (Entra sync / profile). */
+  knownDepartments?: string[];
   disabled?: boolean;
 };
 
@@ -55,14 +57,21 @@ function TokenChip({
   );
 }
 
-export function EApprovalFormDocumentNumberCard({ value, onChange, fields, disabled }: Props) {
+export function EApprovalFormDocumentNumberCard({
+  value,
+  onChange,
+  fields,
+  knownDepartments = [],
+  disabled,
+}: Props) {
   const patch = (partial: Partial<EApprovalFormDocumentNumberSettings>) => {
     onChange({ ...value, ...partial });
   };
 
   const fieldTokens = documentNumberFieldTokens(fields);
   const template = value.docNoCustomEnabled ? value.docNoTemplate : "";
-  const preview = buildDocumentNumberPreview(value, fields);
+  const sampleDepartment = knownDepartments[0] ?? "HR";
+  const preview = buildDocumentNumberPreview(value, fields, { sampleDepartment });
 
   const handleTokenToggle = (token: string, enabled: boolean) => {
     patch({ docNoTemplate: toggleTemplateToken(template, token, enabled) });
@@ -161,12 +170,41 @@ export function EApprovalFormDocumentNumberCard({ value, onChange, fields, disab
                 />
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              <strong>Department</strong> uses the form field when present; otherwise the submitter&apos;s department
+              from Microsoft Entra / Organization sync.
+            </p>
           </div>
 
+          {knownDepartments.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground">Departments from users</p>
+              <div className="flex flex-wrap gap-1.5">
+                {knownDepartments.map((department) => (
+                  <span
+                    key={department}
+                    className="rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px] text-foreground"
+                    title="Synced from Active Directory / Microsoft Entra onto user profiles"
+                  >
+                    {department}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These values come from active users after Organization sync. Document numbers use the submitter&apos;s
+                department dynamically — not a fixed chip.
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No user departments yet. Run <strong>Organization → Sync from Microsoft</strong> so Entra department
+              values appear here.
+            </p>
+          )}
+
           <p className="text-xs text-muted-foreground">
-            Tip for ISO: tick <strong>Department</strong>, <strong>Document type</strong>, and{" "}
-            <strong>Sequence</strong>. Start the template with <code className="rounded bg-muted px-1">ATC</code> if
-            you want that prefix.
+            Tip for ISO: tick <strong>Department</strong>, a document-type form field, and <strong>Sequence</strong>.
+            Start the template with <code className="rounded bg-muted px-1">ATC</code> if you want that prefix.
           </p>
         </div>
       ) : null}

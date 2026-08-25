@@ -25,6 +25,8 @@ class TenantUserIndexService
 
     private ?bool $licenseColumns = null;
 
+    private ?bool $departmentColumn = null;
+
     public function __construct(
         private readonly TenantUserImpersonationService $impersonationService,
         private readonly TenantUserSecuritySummaryService $securitySummary,
@@ -126,6 +128,11 @@ class TenantUserIndexService
         return $this->orgColumns ??= Schema::connection('tenant')->hasColumn('users', 'manager_id');
     }
 
+    private function hasDepartmentColumn(): bool
+    {
+        return $this->departmentColumn ??= Schema::connection('tenant')->hasColumn('users', 'department');
+    }
+
     private function hasLicenseColumns(): bool
     {
         return $this->licenseColumns ??= Schema::connection('tenant')->hasColumn('users', 'entra_licensed');
@@ -188,6 +195,7 @@ class TenantUserIndexService
                     'mfa_enrolled' => $security['mfa_enrolled'],
                     'mfa_required' => $security['mfa_required'],
                     'job_title' => $this->hasOrgColumns() ? $user->job_title : null,
+                    'department' => $this->hasDepartmentColumn() ? $user->department : null,
                     'manager' => $this->hasOrgColumns() && $user->manager !== null ? [
                         'id' => (string) $user->manager->id,
                         'name' => (string) $user->manager->name,

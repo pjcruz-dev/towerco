@@ -184,6 +184,7 @@ export function AdminUserDetailDrawer({
                 <DetailField label="Created">{formatTimestamp(user.created_at)}</DetailField>
                 <DetailField label="Deactivated">{formatTimestamp(user.deactivated_at)}</DetailField>
                 <DetailField label="Job title">{user.job_title?.trim() || "—"}</DetailField>
+                <DetailField label="Department">{user.department?.trim() || "—"}</DetailField>
                 <DetailField label="Microsoft 365 license">
                   {licenseChip ? (
                     <span>

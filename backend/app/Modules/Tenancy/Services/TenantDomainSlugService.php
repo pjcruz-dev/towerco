@@ -18,11 +18,14 @@ use Illuminate\Support\Str;
  *   Staging: staging.{slug}.localhost
  *   App/Prod: app.{slug}.localhost
  *
- * When the platform frontend is on LAN/IP/public DNS (e.g. http://192.168.90.24):
- *   Local:   local.{slug}.{brand_domain}
- *   Test:    test.{slug}.{brand_domain}
- *   Staging: staging.{slug}.{brand_domain}
- *   App/Prod: app.{slug}.{brand_domain}  (+ optional {slug}.{brand_domain})
+ * When the platform frontend is on LAN/IP/public DNS (brand-owned hosts):
+ *   Local:   local.{brand_domain}
+ *   Test:    test.{brand_domain}
+ *   Staging: staging.{brand_domain}
+ *   App/Prod: app.{brand_domain}  (+ optional apex {brand_domain})
+ *
+ * Slug remains the org identity for linking staging ↔ production (environment switch).
+ * It is intentionally omitted from brand DNS so production can be app.alliancetowers.com.
  */
 final class TenantDomainSlugService
 {
@@ -43,6 +46,11 @@ final class TenantDomainSlugService
 
         $brandDomain = $this->normalizeBrandDomain($brandDomain ?? (string) ($tenant->brand_domain ?? 'toweros.app'));
         $useLocalhostHosts = $this->useLocalhostStyleHosts();
+        // Creating staging/production from a laptop console should still recommend brand DNS
+        // (app.alliancetowers.com), not app.{slug}.localhost.
+        if ($useLocalhostHosts && $environment !== 'local' && $this->looksLikePublicBrandDomain($brandDomain)) {
+            $useLocalhostHosts = false;
+        }
         $endpoints = match (true) {
             $useLocalhostHosts && $environment === 'test' => [
                 ['purpose' => 'test', 'hostname' => "test.{$slug}.localhost", 'is_primary' => true],
@@ -57,17 +65,17 @@ final class TenantDomainSlugService
                 ['purpose' => 'local', 'hostname' => "{$slug}.localhost", 'is_primary' => true],
             ],
             $environment === 'local' => [
-                ['purpose' => 'local', 'hostname' => "local.{$slug}.{$brandDomain}", 'is_primary' => true],
+                ['purpose' => 'local', 'hostname' => "local.{$brandDomain}", 'is_primary' => true],
             ],
             $environment === 'test' => [
-                ['purpose' => 'test', 'hostname' => "test.{$slug}.{$brandDomain}", 'is_primary' => true],
+                ['purpose' => 'test', 'hostname' => "test.{$brandDomain}", 'is_primary' => true],
             ],
             $environment === 'staging' => [
-                ['purpose' => 'staging', 'hostname' => "staging.{$slug}.{$brandDomain}", 'is_primary' => true],
+                ['purpose' => 'staging', 'hostname' => "staging.{$brandDomain}", 'is_primary' => true],
             ],
             default => [
-                ['purpose' => 'app', 'hostname' => "app.{$slug}.{$brandDomain}", 'is_primary' => true],
-                ['purpose' => 'root', 'hostname' => "{$slug}.{$brandDomain}", 'is_primary' => false],
+                ['purpose' => 'app', 'hostname' => "app.{$brandDomain}", 'is_primary' => true],
+                ['purpose' => 'root', 'hostname' => $brandDomain, 'is_primary' => false],
             ],
         };
 
@@ -130,6 +138,16 @@ final class TenantDomainSlugService
             || $host === '127.0.0.1'
             || $host === '::1'
             || str_ends_with($host, '.localhost');
+    }
+
+    private function looksLikePublicBrandDomain(string $brandDomain): bool
+    {
+        $brand = strtolower(trim($brandDomain));
+        if ($brand === '' || ! str_contains($brand, '.')) {
+            return false;
+        }
+
+        return ! str_ends_with($brand, '.localhost');
     }
 
     private function deriveSlugFromDomain(string $domain): string

@@ -43,6 +43,9 @@ export function OrgPersonCard({
           {person.job_title ? (
             <p className="truncate text-xs text-muted-foreground">{person.job_title}</p>
           ) : null}
+          {person.department ? (
+            <p className="truncate text-xs text-muted-foreground">{person.department}</p>
+          ) : null}
           {license ? (
             <Badge
               variant="outline"

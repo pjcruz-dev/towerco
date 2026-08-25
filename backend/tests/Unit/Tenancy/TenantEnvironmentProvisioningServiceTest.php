@@ -94,7 +94,7 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
 
     public function test_creates_linked_staging_tenant_from_production_source(): void
     {
-        $source = $this->createSourceTenant('production', 'atc', 'alliancetowers.com', 'app.atc.alliancetowers.com');
+        $source = $this->createSourceTenant('production', 'atc', 'alliancetowers.com', 'app.alliancetowers.com');
 
         $result = app(TenantEnvironmentProvisioningService::class)->createFromTenant($source, [
             'environment' => 'staging',
@@ -105,13 +105,13 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
         $this->assertSame('staging', $created->environment);
         $this->assertSame('atc', $created->slug);
         $this->assertSame($source->id, $created->parent_tenant_id);
-        $this->assertSame('staging.atc.alliancetowers.com', $created->domains()->first()?->domain);
+        $this->assertSame('staging.alliancetowers.com', $created->domains()->first()?->domain);
         $this->assertSame($source->id, $result['org_root_tenant_id']);
     }
 
     public function test_blocks_duplicate_environment_for_same_slug(): void
     {
-        $source = $this->createSourceTenant('production', 'atc', 'alliancetowers.com', 'app.atc.alliancetowers.com');
+        $source = $this->createSourceTenant('production', 'atc', 'alliancetowers.com', 'app.alliancetowers.com');
 
         app(TenantEnvironmentProvisioningService::class)->createFromTenant($source, [
             'environment' => 'staging',

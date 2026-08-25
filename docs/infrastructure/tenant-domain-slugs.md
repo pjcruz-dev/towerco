@@ -8,15 +8,19 @@
 | **test (local dev)** | `test.{slug}.localhost` | `test.atc.localhost/login` |
 | **staging (local dev)** | `staging.{slug}.localhost` | `staging.atc.localhost/login` |
 | **production (local dev)** | `app.{slug}.localhost` | `app.atc.localhost/login` |
-| **test** | `test.{slug}.{brand_domain}` | `test.atc.alliancetowers.com` |
-| **staging** | `staging.{slug}.{brand_domain}` | `staging.atc.alliancetowers.com` |
-| **production** | `app.{slug}.{brand_domain}` | `app.atc.alliancetowers.com` |
-| **production (alt)** | `{slug}.{brand_domain}` | `atc.alliancetowers.com` |
+| **test** | `test.{brand_domain}` | `test.alliancetowers.com` |
+| **staging** | `staging.{brand_domain}` | `staging.alliancetowers.com` |
+| **production** | `app.{brand_domain}` | `app.alliancetowers.com` |
+| **production (alt)** | `{brand_domain}` | `alliancetowers.com` |
+
+Slug is still required as **org identity** (links staging ↔ production for environment switch). It is omitted from **brand DNS** hostnames so production can be `app.alliancetowers.com`.
+
+Localhost keeps the slug so multiple orgs can coexist on one developer machine.
 
 ## Why not only `app.` and `test.`?
 
 - **`test.*`** — UAT, training, integration with MNO sandboxes; safe to break.
-- **`app.*`** — primary production workspace (matches common TowerCo DNS like `app.atc.alliancetowers.com`).
+- **`app.*`** — primary production workspace (e.g. `app.alliancetowers.com`).
 - **`staging.*`** — pre-prod release validation before promoting to `app.*`.
 - **`{slug}.localhost`** — local dev without `/etc/hosts` wildcards beyond one tenant.
 
@@ -26,8 +30,8 @@ When creating a tenant from the platform console:
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| `domain` | `alliance.localhost` | **Stancl primary domain** (must resolve for login today) |
-| `slug` | `atc` | Short tenant key for URL generation |
+| `domain` | `app.alliancetowers.com` | **Stancl primary domain** (must resolve for login today) |
+| `slug` | `atc` | Org key across environments (not required in the public hostname) |
 | `brand_domain` | `alliancetowers.com` | Customer-owned base domain |
 | `environment` | `local` / `test` / `staging` / `production` | Which hostname set to recommend |
 | `tco_sequence_prefix` | `A` | TCO Site ID sequence letter (Alliance → `A`) |
@@ -47,12 +51,12 @@ TowerOS uses **one tenant record per environment**. Each environment has its own
 | 3 | Pick staging / test / production and confirm the recommended domain |
 | 4 | Assign rollout policy if needed (copied from source when possible) |
 
-Linked tenants share the same slug and point to the org root via `parent_tenant_id`. Uniqueness is enforced on `(slug, environment)`.
+Linked tenants share the same slug and point to the org root via `parent_tenant_id`. Uniqueness is enforced on `(slug, environment)`. Environment switch uses that link — **not** the hostname shape — so `app.alliancetowers.com` ↔ `staging.alliancetowers.com` works the same as before.
 
 Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 
 ```json
-{ "environment": "staging", "domain": "staging.atc.alliancetowers.com", "migrate": true }
+{ "environment": "staging", "domain": "staging.alliancetowers.com", "migrate": true }
 ```
 
 ## Alliance examples
@@ -64,8 +68,8 @@ Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 | Local dev (UAT) | http://test.atc.localhost/login |
 | Local dev (staging) | http://staging.atc.localhost/login |
 | Local dev (production) | http://app.atc.localhost/login |
-| Test | https://test.atc.alliancetowers.com/login |
-| Production app | https://app.atc.alliancetowers.com/login |
+| Staging | https://staging.alliancetowers.com/login |
+| Production app | https://app.alliancetowers.com/login |
 
 ## After you create a tenant environment
 
@@ -77,9 +81,9 @@ Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 
 ## DNS checklist (test / prod)
 
-1. CNAME `test.atc` → TowerOS load balancer / CloudFront.
-2. CNAME `app.atc` → same (or separate origin for prod).
-3. TLS cert covers `*.atc.alliancetowers.com` or SAN entries.
+1. CNAME `staging` → TowerOS load balancer / CloudFront (→ `staging.alliancetowers.com`).
+2. CNAME `app` → same (or separate origin for prod) (→ `app.alliancetowers.com`).
+3. TLS cert covers `app.alliancetowers.com`, `staging.alliancetowers.com` (and optionally apex / wildcards).
 4. Tenant hostnames are registered in the central DB when you provision environments; Sanctum stateful domains are merged from that data automatically. Use `SANCTUM_STATEFUL_DOMAINS` only for optional extras (e.g. platform console hosts).
 
 ## TCO Site ID

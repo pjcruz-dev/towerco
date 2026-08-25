@@ -15,6 +15,7 @@ final class EntraDirectoryPerson
         public readonly string $displayName,
         public readonly ?string $jobTitle = null,
         public readonly array $assignedSkuIds = [],
+        public readonly ?string $department = null,
     ) {}
 
     /**
@@ -36,6 +37,7 @@ final class EntraDirectoryPerson
 
         $name = trim((string) ($payload['displayName'] ?? ''));
         $title = trim((string) ($payload['jobTitle'] ?? ''));
+        $department = trim((string) ($payload['department'] ?? ''));
 
         return new self(
             entraId: $id,
@@ -43,6 +45,7 @@ final class EntraDirectoryPerson
             displayName: $name !== '' ? $name : $email,
             jobTitle: $title !== '' ? $title : null,
             assignedSkuIds: EntraLicenseCatalog::skuIdsFromGraph($payload),
+            department: $department !== '' ? $department : null,
         );
     }
 

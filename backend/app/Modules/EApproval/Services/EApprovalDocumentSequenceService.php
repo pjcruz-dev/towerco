@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
 
 final class EApprovalDocumentSequenceService
@@ -12,10 +13,10 @@ final class EApprovalDocumentSequenceService
     /**
      * @param  array<string, mixed>  $values
      */
-    public function nextDocumentNumber(EApprovalForm $form, array $values = []): string
+    public function nextDocumentNumber(EApprovalForm $form, array $values = [], ?TenantUser $submitter = null): string
     {
         if ($form->doc_no_custom_enabled && is_string($form->doc_no_template) && trim($form->doc_no_template) !== '') {
-            return $this->nextFromTemplate($form, $values);
+            return $this->nextFromTemplate($form, $values, $submitter);
         }
 
         $owner = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($form->owner_code ?: 'GEN')) ?: 'GEN');
@@ -32,7 +33,7 @@ final class EApprovalDocumentSequenceService
     /**
      * @param  array<string, mixed>  $values
      */
-    private function nextFromTemplate(EApprovalForm $form, array $values): string
+    private function nextFromTemplate(EApprovalForm $form, array $values, ?TenantUser $submitter = null): string
     {
         $template = trim((string) $form->doc_no_template);
         $padding = 3;
@@ -42,13 +43,13 @@ final class EApprovalDocumentSequenceService
 
         $prefix = preg_replace_callback(
             '/\{([^}]+)\}/',
-            function (array $matches) use ($form, $values): string {
+            function (array $matches) use ($form, $values, $submitter): string {
                 $token = trim($matches[1]);
                 if (str_starts_with($token, 'seq')) {
                     return '';
                 }
 
-                return $this->resolveTemplateToken($token, $form, $values);
+                return $this->resolveTemplateToken($token, $form, $values, $submitter);
             },
             $template,
         ) ?? $template;
@@ -68,14 +69,14 @@ final class EApprovalDocumentSequenceService
     /**
      * @param  array<string, mixed>  $values
      */
-    private function resolveTemplateToken(string $token, EApprovalForm $form, array $values): string
+    private function resolveTemplateToken(string $token, EApprovalForm $form, array $values, ?TenantUser $submitter = null): string
     {
         $normalized = strtolower($token);
 
         $raw = match ($normalized) {
             'ownercode', 'owner_code' => (string) ($form->owner_code ?: 'GEN'),
             'doctypecode', 'doc_type_code' => (string) ($form->doc_type_code ?: 'F'),
-            'department' => (string) ($values['department'] ?? ''),
+            'department' => $this->resolveDepartment($values, $submitter),
             'documenttype', 'document_type' => (string) ($values['document_type'] ?? ''),
             default => (string) ($values[$token] ?? $values[$normalized] ?? ''),
         };
@@ -83,6 +84,25 @@ final class EApprovalDocumentSequenceService
         $sanitized = strtoupper(preg_replace('/[^A-Z0-9]/', '', $raw) ?? '');
 
         return $sanitized !== '' ? $sanitized : 'X';
+    }
+
+    /**
+     * Prefer the form field value; fall back to the submitter's synced Entra / profile department.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveDepartment(array $values, ?TenantUser $submitter): string
+    {
+        $fromForm = trim((string) ($values['department'] ?? ''));
+        if ($fromForm !== '') {
+            return $fromForm;
+        }
+
+        if ($submitter === null) {
+            return '';
+        }
+
+        return trim((string) ($submitter->department ?? ''));
     }
 
     /**

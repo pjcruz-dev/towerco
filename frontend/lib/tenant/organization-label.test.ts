@@ -13,6 +13,16 @@ describe("organizationSlugFromHostname", () => {
     expect(organizationSlugFromHostname("atc.localhost")).toBe("atc");
   });
 
+  it("returns null for brand hosts without slug", () => {
+    expect(organizationSlugFromHostname("app.alliancetowers.com")).toBeNull();
+    expect(organizationSlugFromHostname("staging.alliancetowers.com")).toBeNull();
+  });
+
+  it("parses legacy brand hosts that still include slug", () => {
+    expect(organizationSlugFromHostname("app.atc.alliancetowers.com")).toBe("atc");
+    expect(organizationSlugFromHostname("staging.atc.alliancetowers.com")).toBe("atc");
+  });
+
   it("returns null for central dev hosts", () => {
     expect(organizationSlugFromHostname("localhost")).toBeNull();
     expect(organizationSlugFromHostname("127.0.0.1")).toBeNull();
