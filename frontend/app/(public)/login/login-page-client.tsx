@@ -305,8 +305,13 @@ function LoginPageContent() {
       microsoftSignIn?.redirect_path ??
       process.env.NEXT_PUBLIC_AUTH_AZURE_REDIRECT_PATH ??
       "/auth/sso/azure/redirect";
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
-    const url = new URL(`${apiBase}${redirectPath}`);
+    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1").replace(
+      /\/$/,
+      "",
+    );
+    const path = redirectPath.startsWith("/") ? redirectPath : `/${redirectPath}`;
+    // Relative API bases (e.g. `/api/v1`) need a document origin — `new URL("/api/v1/…")` alone throws.
+    const url = new URL(`${apiBase}${path}`, window.location.origin);
     const tenantHost = resolveTenantDomainForApi();
     if (tenantHost) {
       url.searchParams.set("tenant_domain", tenantHost);
