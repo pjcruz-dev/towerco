@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Models\User;
+use App\Modules\Notifications\Mail\MicrosoftGraphMailTokenProvider;
+use App\Modules\Notifications\Mail\MicrosoftGraphTransport;
 use App\Modules\Rollout\Contracts\ReverseGeocoderInterface;
 use App\Modules\Rollout\Services\ReverseGeocodeService;
 use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
@@ -13,6 +15,7 @@ use App\Modules\Tenancy\Support\CorsAllowedOriginResolver;
 use App\Modules\Tenancy\Support\SanctumStatefulDomainResolver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -41,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
             URL::forceRootUrl($appUrl);
         }
 
+        $this->registerMicrosoftGraphMailTransport();
         $this->configureSanctumStatefulDomains();
         $this->configureCorsAllowedOrigins();
 
@@ -86,6 +90,16 @@ class AppServiceProvider extends ServiceProvider
                 return $user instanceof User && $user->isPlatformAdmin();
             });
         }
+    }
+
+    private function registerMicrosoftGraphMailTransport(): void
+    {
+        Mail::extend('microsoft-graph', function (array $config) {
+            return new MicrosoftGraphTransport(
+                $this->app->make(MicrosoftGraphMailTokenProvider::class),
+                (bool) ($config['save_to_sent_items'] ?? config('services.microsoft_graph_mail.save_to_sent_items', false)),
+            );
+        });
     }
 
     private function configureSanctumStatefulDomains(): void

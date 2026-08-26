@@ -32,7 +32,7 @@ final class EApprovalSettingsTestEmailService
         if ($mailer === 'log') {
             throw ValidationException::withMessages([
                 'mail' => [__(
-                    'Mail is set to log only. Configure TOWEROS_NOTIFICATIONS_MAIL_MAILER=smtp (Microsoft 365) or ses in the API environment.',
+                    'Mail is set to log only. Configure TOWEROS_NOTIFICATIONS_MAIL_MAILER=microsoft-graph (Graph Mail.Send), smtp, or ses in the API environment.',
                 )],
             ]);
         }

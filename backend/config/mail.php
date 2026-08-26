@@ -30,7 +30,7 @@ return [
     | your mailers below. You may also add additional mailers if needed.
     |
     | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
-    |            "postmark", "resend", "log", "array",
+    |            "postmark", "resend", "microsoft-graph", "log", "array",
     |            "failover", "roundrobin"
     |
     */
@@ -47,6 +47,16 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+        ],
+
+        /*
+         * Microsoft Graph Mail.Send (application permission). Prefer over
+         * smtp.office365.com when Security Defaults block basic SMTP AUTH.
+         * Requires Mail.Send admin consent + AZURE_* / MAIL_GRAPH_* credentials.
+         */
+        'microsoft-graph' => [
+            'transport' => 'microsoft-graph',
+            'save_to_sent_items' => filter_var(env('MAIL_GRAPH_SAVE_TO_SENT_ITEMS', false), FILTER_VALIDATE_BOOL),
         ],
 
         'ses' => [

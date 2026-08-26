@@ -35,6 +35,17 @@ return [
         'tenant' => env('AZURE_TENANT_ID', 'common'),
     ],
 
+    /*
+     * Central Microsoft Graph Mail.Send (daemon). Defaults to AZURE_* so one
+     * Entra app can cover SSO + mail; override MAIL_GRAPH_* for a dedicated mail app.
+     */
+    'microsoft_graph_mail' => [
+        'client_id' => env('MAIL_GRAPH_CLIENT_ID', env('AZURE_CLIENT_ID')),
+        'client_secret' => env('MAIL_GRAPH_CLIENT_SECRET', env('AZURE_CLIENT_SECRET')),
+        'tenant' => env('MAIL_GRAPH_TENANT_ID', env('AZURE_TENANT_ID', 'common')),
+        'save_to_sent_items' => filter_var(env('MAIL_GRAPH_SAVE_TO_SENT_ITEMS', false), FILTER_VALIDATE_BOOL),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
