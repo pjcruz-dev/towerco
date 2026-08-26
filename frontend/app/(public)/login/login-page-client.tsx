@@ -163,17 +163,10 @@ function LoginPageContent() {
   }, [onCentralHost, tenantDomain]);
 
   const defaultEmail = useMemo(() => {
-    if (queryEmail) {
-      return queryEmail;
-    }
-    if (tenantDomain) {
-      return `admin@${tenantDomain}`;
-    }
-    if (browserHostname && !isCentralHostname(browserHostname)) {
-      return `admin@${browserHostname}`;
-    }
-    return "";
-  }, [browserHostname, queryEmail, tenantDomain]);
+    // Only prefill when the URL intentionally includes ?email= (e.g. env switch soft-handoff).
+    // Do not invent admin@{host} — that looks like a default password account.
+    return queryEmail;
+  }, [queryEmail]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -181,9 +174,7 @@ function LoginPageContent() {
   });
 
   useEffect(() => {
-    if (defaultEmail) {
-      form.setValue("email", defaultEmail);
-    }
+    form.setValue("email", defaultEmail);
     if (queryPassword) {
       form.setValue("password", queryPassword);
     }
@@ -495,13 +486,7 @@ function LoginPageContent() {
                 inputMode="email"
                 autoComplete="email"
                 spellCheck={false}
-                placeholder={
-                  tenantDomain
-                    ? `admin@${tenantDomain}`
-                    : browserHostname
-                      ? `admin@${browserHostname}`
-                      : "admin@your-org.localhost"
-                }
+                placeholder="Email"
                 {...form.register("email")}
                 error={formErrors.email}
               />

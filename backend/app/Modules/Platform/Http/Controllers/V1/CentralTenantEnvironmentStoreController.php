@@ -53,6 +53,8 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             throw ValidationException::withMessages([
                 'domain' => [$e->getMessage()],
             ]);
+        } catch (ValidationException $e) {
+            throw $e;
         }
 
         $created = $result['tenant'];

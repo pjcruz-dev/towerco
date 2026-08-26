@@ -117,17 +117,14 @@ export function tenantLoginUrl(domain: string, port?: string): string {
     return "/login";
   }
 
-  const email = `admin@${host}`;
   const resolvedPort = port ?? resolveDevAppPort();
 
   const tpl = process.env.NEXT_PUBLIC_TENANT_LOGIN_URL_TEMPLATE?.trim();
   if (tpl) {
-    const base = tpl
+    return tpl
       .replaceAll("{host}", host)
       .replaceAll("{domain}", host)
       .replaceAll("{port}", resolvedPort);
-    const separator = base.includes("?") ? "&" : "?";
-    return `${base}${separator}email=${encodeURIComponent(email)}`;
   }
 
   const portPart = portSuffix(resolvedPort);
@@ -135,8 +132,8 @@ export function tenantLoginUrl(domain: string, port?: string): string {
   if (typeof window !== "undefined") {
     const { protocol } = window.location;
 
-    return `${protocol}//${host}${portPart}/login?email=${encodeURIComponent(email)}`;
+    return `${protocol}//${host}${portPart}/login`;
   }
 
-  return `http://${host}${portPart}/login?email=${encodeURIComponent(email)}`;
+  return `http://${host}${portPart}/login`;
 }

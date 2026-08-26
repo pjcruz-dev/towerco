@@ -32,6 +32,10 @@ final class TenantRolloutBootstrapService
         $seeded = 0;
 
         $tenant->run(function () use ($years, &$seeded): void {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('tenant_public_holidays')) {
+                return;
+            }
+
             foreach ($years as $year) {
                 $seeded += $this->holidays->seedPhilippinesYear($year);
             }
