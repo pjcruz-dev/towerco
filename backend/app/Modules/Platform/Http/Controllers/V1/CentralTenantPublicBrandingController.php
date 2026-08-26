@@ -29,11 +29,23 @@ class CentralTenantPublicBrandingController extends AbstractApiController
 
         /** @var Domain|null $record */
         $record = Domain::query()->where('domain', $domain)->first();
-        $raw = $record?->tenant !== null ? $record->tenant->theme_tokens : null;
+        $tenant = $record?->tenant instanceof Tenant ? $record->tenant : null;
+        $raw = $tenant !== null ? $tenant->theme_tokens : null;
 
-        return $this->ok(TenantThemeTokensValidator::sanitizeForPublic(
+        $payload = TenantThemeTokensValidator::sanitizeForPublic(
             is_array($raw) ? $raw : null,
-        ));
+        );
+
+        // Brand DNS (e.g. staging.alliancetowers.com) has no slug in the host; login UI needs this
+        // before auth so chrome does not fall back to the product name "TowerOS".
+        if ($tenant !== null) {
+            $slug = trim((string) ($tenant->slug ?? ''));
+            if ($slug !== '') {
+                $payload['organization_label'] = strtoupper($slug);
+            }
+        }
+
+        return $this->ok($payload);
     }
 
     public function asset(

@@ -6,6 +6,8 @@ export type TenantBrandingPayload = {
   favicon_url: string | null;
   light: Record<string, string>;
   dark: Record<string, string>;
+  /** From tenant slug (e.g. ATC). Present on known hosts so pre-login chrome can brand correctly. */
+  organization_label?: string | null;
 };
 
 export function resolveBrandingAssetUrl(url: string | null | undefined): string | null {
