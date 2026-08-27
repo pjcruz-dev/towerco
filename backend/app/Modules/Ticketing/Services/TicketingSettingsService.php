@@ -7,7 +7,9 @@ namespace App\Modules\Ticketing\Services;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 final class TicketingSettingsService
 {
@@ -41,6 +43,10 @@ final class TicketingSettingsService
 
     public function getString(string $key, ?string $default = null): ?string
     {
+        if (! $this->settingsTableExists()) {
+            return $default;
+        }
+
         $row = DB::connection('tenant')->table('ticketing_settings')->where('key', $key)->first();
         if ($row === null || $row->value === null) {
             return $default;
@@ -301,5 +307,22 @@ final class TicketingSettingsService
         $parts = preg_split('/[\s,;]+/', $raw) ?: [];
 
         return array_values(array_filter(array_map('trim', $parts)));
+    }
+
+    private function settingsTableExists(): bool
+    {
+        static $exists = null;
+
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        try {
+            $exists = Schema::connection('tenant')->hasTable('ticketing_settings');
+        } catch (Throwable) {
+            $exists = false;
+        }
+
+        return $exists;
     }
 }

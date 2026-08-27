@@ -11,6 +11,8 @@ use App\Modules\Ticketing\Services\TicketingPlanFeaturesService;
 use App\Modules\Ticketing\Services\TicketingTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class TicketingTicketStoreController extends AbstractApiController
 {
@@ -44,11 +46,19 @@ class TicketingTicketStoreController extends AbstractApiController
         }
 
         $ticket = $service->create($request->user(), $data);
-        $notifications->dispatchCreated($ticket, $request->user());
 
-        $ticket->loadMissing('assignee:id,name,email');
-        if ($ticket->assignee instanceof TenantUser) {
-            $notifications->dispatchAssigned($ticket, $request->user(), $ticket->assignee);
+        try {
+            $notifications->dispatchCreated($ticket, $request->user());
+
+            $ticket->loadMissing('assignee:id,name,email');
+            if ($ticket->assignee instanceof TenantUser) {
+                $notifications->dispatchAssigned($ticket, $request->user(), $ticket->assignee);
+            }
+        } catch (Throwable $exception) {
+            Log::error('Ticketing create notifications failed; ticket was still created.', [
+                'ticket_id' => (string) $ticket->id,
+                'error' => $exception->getMessage(),
+            ]);
         }
 
         return $this->created($service->asDetail($ticket, $request->user()));

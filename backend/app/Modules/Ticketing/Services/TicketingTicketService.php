@@ -15,8 +15,10 @@ use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 final class TicketingTicketService
 {
@@ -272,10 +274,10 @@ final class TicketingTicketService
             $this->activity->record(
                 module: 'ticketing',
                 action: 'ticket.created',
-                summary: 'Ticket created · '.$ticket->ticket_number,
+                summary: 'Ticket created · '.$ticket->displayNumber(),
                 entityType: 'ticket',
                 entityId: (string) $ticket->id,
-                entityLabel: $ticket->ticket_number,
+                entityLabel: $ticket->displayNumber(),
                 actor: $requester,
                 changes: WorkspaceAuditChanges::of([
                     'status' => [
@@ -436,10 +438,10 @@ final class TicketingTicketService
                 $this->activity->record(
                     module: 'ticketing',
                     action: $action,
-                    summary: ($lifecycleEvent !== null ? ucfirst($lifecycleEvent) : 'Ticket updated').' · '.$ticket->ticket_number,
+                    summary: ($lifecycleEvent !== null ? ucfirst($lifecycleEvent) : 'Ticket updated').' · '.$ticket->displayNumber(),
                     entityType: 'ticket',
                     entityId: (string) $ticket->id,
-                    entityLabel: $ticket->ticket_number,
+                    entityLabel: $ticket->displayNumber(),
                     actor: $actor,
                     changes: $changes,
                 );
@@ -508,16 +510,46 @@ final class TicketingTicketService
     private function syncSla(TicketingTicket $ticket, bool $resetFlags = false): void
     {
         $dueAt = $this->sla->dueAt($ticket);
-        $payload = ['sla_due_at' => $dueAt];
-        if ($resetFlags) {
-            $payload['sla_reminder_sent_at'] = null;
-            $payload['sla_escalated_at'] = null;
-            // Reflect the reset on the instance so statusFor() sees the cleared flags.
-            $ticket->sla_reminder_sent_at = null;
-            $ticket->sla_escalated_at = null;
+        $payload = [];
+
+        if ($this->ticketHasColumn('sla_due_at')) {
+            $payload['sla_due_at'] = $dueAt;
         }
-        $payload['sla_status'] = $this->sla->statusFor($ticket);
+        if ($resetFlags) {
+            if ($this->ticketHasColumn('sla_reminder_sent_at')) {
+                $payload['sla_reminder_sent_at'] = null;
+                // Reflect the reset on the instance so statusFor() sees the cleared flags.
+                $ticket->sla_reminder_sent_at = null;
+            }
+            if ($this->ticketHasColumn('sla_escalated_at')) {
+                $payload['sla_escalated_at'] = null;
+                $ticket->sla_escalated_at = null;
+            }
+        }
+        if ($this->ticketHasColumn('sla_status')) {
+            $payload['sla_status'] = $this->sla->statusFor($ticket);
+        }
+
+        if ($payload === []) {
+            return;
+        }
+
         $ticket->update($payload);
+    }
+
+    private function ticketHasColumn(string $column): bool
+    {
+        static $cache = [];
+
+        if (! array_key_exists($column, $cache)) {
+            try {
+                $cache[$column] = Schema::connection('tenant')->hasColumn('ticketing_tickets', $column);
+            } catch (Throwable) {
+                $cache[$column] = false;
+            }
+        }
+
+        return $cache[$column];
     }
 
     private function nextTicketNumber(): int
