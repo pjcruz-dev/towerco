@@ -37,6 +37,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands()
     ->withMiddleware(function (Middleware $middleware): void {
+        // API-first app: never redirect guests to a named web `login` route (it does not exist).
+        // Unauthenticated API calls must return 401 JSON instead of a 500 RouteNotFoundException.
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return '/login';
+        });
+
         $middleware->api(prepend: [
             AssignCorrelationId::class,
         ]);
