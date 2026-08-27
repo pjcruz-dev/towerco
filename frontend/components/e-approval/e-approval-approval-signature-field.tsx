@@ -20,7 +20,8 @@ import {
   signatureModeForValue,
   type SignatureInputMode,
 } from "@/modules/e-approval/signature";
-import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL } from "@/modules/e-approval/signature-consent";
+import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL, signatureStorageConsentLabel } from "@/modules/e-approval/signature-consent";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 
 type Props = {
   value: string | null;
@@ -43,9 +44,13 @@ export function EApprovalApprovalSignatureField({
   onErrorChange,
   enabled = true,
 }: Props) {
+  const organizationLabel = useOrganizationLabel("Alliance Towers");
+  const storageConsentLabel = signatureStorageConsentLabel(organizationLabel);
   const [mode, setMode] = useState<SignatureInputMode>("draw");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [legalConsent, setLegalConsent] = useState(false);
+  const [storageConsent, setStorageConsent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileQuery = useQuery({
@@ -65,6 +70,20 @@ export function EApprovalApprovalSignatureField({
       setMode(signatureModeForValue(profileSignature));
     }
   }, [enabled, onChange, profileQuery.data?.signature, value]);
+
+  useEffect(() => {
+    if (!consentAccepted) {
+      setLegalConsent(false);
+      setStorageConsent(false);
+    }
+  }, [consentAccepted]);
+
+  const syncConsents = (legal: boolean, storage: boolean) => {
+    setLegalConsent(legal);
+    setStorageConsent(storage);
+    onConsentChange(legal && storage);
+    onErrorChange?.(null);
+  };
 
   const handleUpload = async (file: File | null | undefined) => {
     if (!file || disabled) {
@@ -197,24 +216,45 @@ export function EApprovalApprovalSignatureField({
         </TabsContent>
       </Tabs>
 
-      <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-        <Checkbox
-          className="mt-0.5"
-          checked={consentAccepted}
-          onCheckedChange={(checked) => {
-            onConsentChange(checked === true);
-            onErrorChange?.(null);
-          }}
-          disabled={disabled}
-          aria-describedby="ea-approval-signature-consent-hint"
-        />
-        <span>
-          <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
-          <span id="ea-approval-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
-            {SIGNATURE_CONSENT_HINT}
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={legalConsent}
+            onCheckedChange={(checked) => {
+              syncConsents(checked === true, storageConsent);
+            }}
+            disabled={disabled}
+            aria-describedby="ea-approval-signature-consent-hint"
+          />
+          <span>
+            <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+            <span id="ea-approval-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+              {SIGNATURE_CONSENT_HINT}
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={storageConsent}
+            onCheckedChange={(checked) => {
+              syncConsents(legalConsent, checked === true);
+            }}
+            disabled={disabled}
+            aria-describedby="ea-approval-signature-storage-consent-hint"
+          />
+          <span>
+            <span className="font-medium text-foreground">{storageConsentLabel}</span>
+            <span
+              id="ea-approval-signature-storage-consent-hint"
+              className="mt-1 block text-xs text-muted-foreground"
+            >
+              {SIGNATURE_CONSENT_HINT}
+            </span>
+          </span>
+        </label>
+      </div>
 
       {error && !uploadError ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
@@ -226,5 +266,5 @@ export function validateApprovalSignature(signature: string | null): string | nu
 }
 
 export function validateApprovalSignatureConsent(accepted: boolean): string | null {
-  return accepted ? null : "Accept the electronic signature consent before approving.";
+  return accepted ? null : "Accept both electronic signature consents before approving.";
 }

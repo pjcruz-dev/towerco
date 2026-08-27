@@ -208,3 +208,41 @@ export async function downloadEApprovalPublicPackage(
     throw error;
   }
 }
+
+export type EApprovalPublicSharedSubmission = {
+  document_no: string;
+  status: string;
+  form_name: string | null;
+  submitted_at: string | null;
+  requestor_name: string | null;
+  values: Array<{
+    field_id: string;
+    field_name?: string | null;
+    label?: string | null;
+    value?: string | null;
+    display_value?: string | null;
+  }>;
+  approvals: Array<{
+    status: string;
+    approver_name: string | null;
+    remarks: string | null;
+    decided_at: string | null;
+  }>;
+  attachments: Array<{
+    id: string;
+    field_name: string | null;
+    file_name: string;
+    download_url: string;
+  }>;
+  expires_at: string | null;
+  brand_label: string;
+};
+
+export async function fetchEApprovalPublicSharedSubmission(
+  shareToken: string,
+): Promise<EApprovalPublicSharedSubmission> {
+  const response = await publicTenantApiClient.get<{ data: EApprovalPublicSharedSubmission }>(
+    `/public/e-approval/shared/${encodeURIComponent(shareToken)}`,
+  );
+  return response.data.data;
+}

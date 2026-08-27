@@ -551,6 +551,7 @@ export async function decideEApprovalApproval(
     remarks?: string;
     signature?: string | null;
     signature_consent?: boolean;
+    signature_storage_consent?: boolean;
   },
 ): Promise<void> {
   await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);
@@ -1091,6 +1092,44 @@ export async function sendEApprovalManualFollowUp(submissionId: string, note?: s
   await apiClient.post(`/e-approval/submissions/${submissionId}/manual-follow-up`, { note });
 }
 
+export type EApprovalSubmissionShareLinkRow = {
+  id: string;
+  submission_id: string;
+  label: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  last_accessed_at: string | null;
+  access_count: number;
+  is_active: boolean;
+  created_at: string | null;
+  created_by: { id: string; name: string; email: string } | null;
+  url?: string | null;
+};
+
+export async function fetchEApprovalSubmissionShareLinks(
+  submissionId: string,
+): Promise<EApprovalSubmissionShareLinkRow[]> {
+  const response = await apiClient.get<{ data: EApprovalSubmissionShareLinkRow[] }>(
+    `/e-approval/submissions/${submissionId}/share-links`,
+  );
+  return response.data.data;
+}
+
+export async function createEApprovalSubmissionShareLink(
+  submissionId: string,
+  payload?: { label?: string; ttl_days?: number },
+): Promise<{ link: EApprovalSubmissionShareLinkRow; url: string }> {
+  const response = await apiClient.post<{ data: { link: EApprovalSubmissionShareLinkRow; url: string } }>(
+    `/e-approval/submissions/${submissionId}/share-links`,
+    payload ?? {},
+  );
+  return response.data.data;
+}
+
+export async function revokeEApprovalSubmissionShareLink(shareLinkId: string): Promise<void> {
+  await apiClient.post(`/e-approval/share-links/${shareLinkId}/revoke`);
+}
+
 export async function fetchEApprovalSettingsPublic(): Promise<{
   feature_delegation_ui: string;
 }> {
@@ -1107,11 +1146,12 @@ export async function fetchEApprovalMeProfile(): Promise<EApprovalMeProfile> {
 
 export async function updateEApprovalMeSignature(
   signature: string | null,
-  options?: { signatureConsent?: boolean },
+  options?: { signatureConsent?: boolean; signatureStorageConsent?: boolean },
 ): Promise<void> {
   await apiClient.put("/e-approval/me/signature", {
     signature,
     ...(options?.signatureConsent === true ? { signature_consent: true } : {}),
+    ...(options?.signatureStorageConsent === true ? { signature_storage_consent: true } : {}),
   });
 }
 

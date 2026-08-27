@@ -19,6 +19,7 @@ class EApprovalMeSignatureUpdateController extends AbstractApiController
         $data = $request->validate([
             'signature' => ['nullable', 'string', 'max:500000'],
             'signature_consent' => ['sometimes', 'boolean'],
+            'signature_storage_consent' => ['sometimes', 'boolean'],
         ]);
 
         $signature = $data['signature'] ?? null;
@@ -26,6 +27,11 @@ class EApprovalMeSignatureUpdateController extends AbstractApiController
         if ($hasSignature && ! ($data['signature_consent'] ?? false)) {
             throw ValidationException::withMessages([
                 'signature_consent' => [__('You must accept the electronic signature consent before saving a signature.')],
+            ]);
+        }
+        if ($hasSignature && ! ($data['signature_storage_consent'] ?? false)) {
+            throw ValidationException::withMessages([
+                'signature_storage_consent' => [__('You must consent to storing your signature image before saving.')],
             ]);
         }
 

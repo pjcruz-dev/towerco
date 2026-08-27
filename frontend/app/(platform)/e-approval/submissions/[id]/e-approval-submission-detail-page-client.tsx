@@ -18,6 +18,7 @@ import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-appro
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { EApprovalRelatedSubmissionsPanel } from "@/components/e-approval/e-approval-related-submissions-panel";
+import { EApprovalSubmissionSharePanel } from "@/components/e-approval/e-approval-submission-share-panel";
 import {
   countStampedApprovals,
   EApprovalSubmissionAttachmentsPanel,
@@ -260,6 +261,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         remarks: decisionRemarks.trim() || undefined,
         signature: decision === "approved" ? signature : undefined,
         signature_consent: decision === "approved" ? true : undefined,
+        signature_storage_consent: decision === "approved" ? true : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["e-approval"] });
@@ -627,6 +629,10 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                   </div>
                 ) : null}
               </EApprovalSectionCard>
+
+              {data.status === "approved" && (data.viewer_is_requestor || canManage) ? (
+                <EApprovalSubmissionSharePanel submissionId={submissionId} />
+              ) : null}
 
               <EApprovalSectionCard title="Related & links" description="Linked submissions, documents, and tickets.">
                 {data.requestor?.email ? (

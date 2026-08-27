@@ -172,6 +172,8 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicPackageDownloadCont
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionAttachmentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionResubmitController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicRevisionShowController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSharedAttachmentDownloadController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSharedSubmissionShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSubmissionAttachmentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicSubmissionStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPurchaseRequisitionOpenController;
@@ -199,6 +201,9 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionManualFollowUpC
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionPrintDataController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionResubmitController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionRevisionController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShareLinkIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShareLinkRevokeController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShareLinkStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionSubmitDraftController;
@@ -446,6 +451,10 @@ Route::middleware(['throttle:e-approval-public'])->prefix('public/e-approval')->
         ->name('api.tenant.v1.e_approval.public.submissions.attachments.token_store');
     Route::get('package-downloads/{token}', EApprovalPublicPackageDownloadController::class)
         ->name('api.tenant.v1.e_approval.public.package_downloads.show');
+    Route::get('shared/{token}', EApprovalPublicSharedSubmissionShowController::class)
+        ->name('api.tenant.v1.e_approval.public.shared.show');
+    Route::get('shared/{token}/attachments/{attachment}', EApprovalPublicSharedAttachmentDownloadController::class)
+        ->name('api.tenant.v1.e_approval.public.shared.attachments.show');
 });
 
 Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')->group(function () {
@@ -841,6 +850,9 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('e-approval/submissions/{submission}/revision', EApprovalSubmissionRevisionController::class)->name('api.tenant.v1.e_approval.submissions.revision');
     Route::put('e-approval/submissions/{submission}/dcf-resubmit', EApprovalSubmissionDcfResubmitController::class)->name('api.tenant.v1.e_approval.submissions.dcf_resubmit');
     Route::post('e-approval/submissions/{submission}/manual-follow-up', EApprovalSubmissionManualFollowUpController::class)->name('api.tenant.v1.e_approval.submissions.manual_follow_up');
+    Route::get('e-approval/submissions/{submission}/share-links', EApprovalSubmissionShareLinkIndexController::class)->name('api.tenant.v1.e_approval.submissions.share_links.index');
+    Route::post('e-approval/submissions/{submission}/share-links', EApprovalSubmissionShareLinkStoreController::class)->name('api.tenant.v1.e_approval.submissions.share_links.store');
+    Route::post('e-approval/share-links/{shareLink}/revoke', EApprovalSubmissionShareLinkRevokeController::class)->name('api.tenant.v1.e_approval.share_links.revoke');
     Route::post('e-approval/submissions/{submission}/document-links', EApprovalDocumentLinkStoreController::class)->name('api.tenant.v1.e_approval.document_links.store');
     Route::delete('e-approval/document-links/{link}', EApprovalDocumentLinkDestroyController::class)->name('api.tenant.v1.e_approval.document_links.destroy');
     Route::post('auth/mfa/recovery-codes/regenerate', [TenantAuthController::class, 'mfaRecoveryCodesRegenerate'])->name('api.tenant.v1.auth.mfa.recovery_codes.regenerate');

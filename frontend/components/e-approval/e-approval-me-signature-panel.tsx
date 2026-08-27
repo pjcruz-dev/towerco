@@ -21,7 +21,12 @@ import {
   isImageSignature,
   signatureModeForValue,
 } from "@/modules/e-approval/signature";
-import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL } from "@/modules/e-approval/signature-consent";
+import {
+  SIGNATURE_CONSENT_HINT,
+  SIGNATURE_CONSENT_LABEL,
+  signatureStorageConsentLabel,
+} from "@/modules/e-approval/signature-consent";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const MAX_SIGNATURE_DATA_URL_LENGTH = 480_000;
@@ -55,6 +60,7 @@ function readImageFileAsDataUrl(file: File): Promise<string> {
 export function EApprovalMeSignaturePanel() {
   const push = useNotificationStore((s) => s.push);
   const queryClient = useQueryClient();
+  const organizationLabel = useOrganizationLabel("Alliance Towers");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<SignatureMode>("draw");
   const [draft, setDraft] = useState<string | null>(null);
@@ -63,6 +69,7 @@ export function EApprovalMeSignaturePanel() {
   const [uploadFileName, setUploadFileName] = useState<string | null>(null);
   const [isReadingUpload, setIsReadingUpload] = useState(false);
   const [consentAccepted, setConsentAccepted] = useState(false);
+  const [storageConsentAccepted, setStorageConsentAccepted] = useState(false);
 
   const profileQuery = useQuery({
     queryKey: ["e-approval", "me", "profile"],
@@ -80,21 +87,29 @@ export function EApprovalMeSignaturePanel() {
     setMode(signatureModeForValue(nextSignature));
     setUploadFileName(null);
     setConsentAccepted(false);
+    setStorageConsentAccepted(false);
   }, [profileQuery.data]);
 
   const isDirty = useMemo(() => (draft ?? "") !== (saved ?? ""), [draft, saved]);
   const savingSignature = hasSignatureValue(draft);
+  const storageConsentLabel = useMemo(
+    () => signatureStorageConsentLabel(organizationLabel),
+    [organizationLabel],
+  );
+  const allConsentsAccepted = consentAccepted && storageConsentAccepted;
 
   const saveMutation = useMutation({
     mutationFn: () =>
       updateEApprovalMeSignature(hasSignatureValue(draft) ? draft!.trim() : null, {
         signatureConsent: hasSignatureValue(draft) ? true : undefined,
+        signatureStorageConsent: hasSignatureValue(draft) ? true : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["e-approval", "me", "profile"] });
       setSaved(draft);
       setSavedSource("profile");
       setConsentAccepted(false);
+      setStorageConsentAccepted(false);
       push({ level: "success", title: "Signature saved" });
     },
     onError: (error) =>
@@ -102,12 +117,16 @@ export function EApprovalMeSignaturePanel() {
   });
 
   const canSave =
-    isDirty && (!savingSignature || consentAccepted) && !profileQuery.isLoading && !saveMutation.isPending;
+    isDirty &&
+    (!savingSignature || allConsentsAccepted) &&
+    !profileQuery.isLoading &&
+    !saveMutation.isPending;
 
   const handleClear = () => {
     setDraft(null);
     setUploadFileName(null);
     setConsentAccepted(false);
+    setStorageConsentAccepted(false);
     if (uploadInputRef.current) uploadInputRef.current.value = "";
   };
 
@@ -249,21 +268,41 @@ export function EApprovalMeSignaturePanel() {
 
           <div className="space-y-3 border-t border-border pt-4">
             {savingSignature ? (
-              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                <Checkbox
-                  className="mt-0.5"
-                  checked={consentAccepted}
-                  onCheckedChange={(checked) => setConsentAccepted(checked === true)}
-                  disabled={profileQuery.isLoading || saveMutation.isPending}
-                  aria-describedby="ea-signature-consent-hint"
-                />
-                <span>
-                  <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
-                  <span id="ea-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
-                    {SIGNATURE_CONSENT_HINT}
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={consentAccepted}
+                    onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+                    disabled={profileQuery.isLoading || saveMutation.isPending}
+                    aria-describedby="ea-signature-consent-hint"
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+                    <span id="ea-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+                      {SIGNATURE_CONSENT_HINT}
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <Checkbox
+                    className="mt-0.5"
+                    checked={storageConsentAccepted}
+                    onCheckedChange={(checked) => setStorageConsentAccepted(checked === true)}
+                    disabled={profileQuery.isLoading || saveMutation.isPending}
+                    aria-describedby="ea-signature-storage-consent-hint"
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">{storageConsentLabel}</span>
+                    <span
+                      id="ea-signature-storage-consent-hint"
+                      className="mt-1 block text-xs text-muted-foreground"
+                    >
+                      {SIGNATURE_CONSENT_HINT}
+                    </span>
+                  </span>
+                </label>
+              </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => saveMutation.mutate()} disabled={!canSave}>

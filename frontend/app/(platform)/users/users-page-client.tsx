@@ -39,6 +39,7 @@ import { filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
 import {
   ADMIN_USERS_IMPORT_TEMPLATE_CSV,
   bulkAssignRolesAdminUsers,
+  bulkRemoveRolesAdminUsers,
   bulkDeactivateAdminUsers,
   bulkResetPasswordAdminUsers,
   exportAdminUsersCsv,
@@ -330,6 +331,24 @@ export function UsersPageClient() {
     },
   });
 
+  const bulkRemoveRoleMutation = useMutation({
+    mutationFn: () => bulkRemoveRolesAdminUsers(selectedIdList, bulkRoles),
+    onSuccess: (result) => {
+      invalidateUsers();
+      clearSelection();
+      const labels = bulkRoles.map(roleLabel).join(", ");
+      notifyBulkResult(
+        notify,
+        "Role removal complete",
+        result,
+        `Removed ${labels} from {count} users.`,
+      );
+    },
+    onError: (error) => {
+      notify({ level: "error", title: "Bulk role removal failed", message: getErrorMessage(error) });
+    },
+  });
+
   const bulkResetPasswordMutation = useMutation({
     mutationFn: (password?: string) =>
       bulkResetPasswordAdminUsers(
@@ -369,6 +388,7 @@ export function UsersPageClient() {
   const bulkPending =
     bulkDeactivateMutation.isPending ||
     bulkAssignRoleMutation.isPending ||
+    bulkRemoveRoleMutation.isPending ||
     bulkResetPasswordMutation.isPending ||
     selectingAllMatching;
 
@@ -398,6 +418,25 @@ export function UsersPageClient() {
       )
     ) {
       bulkAssignRoleMutation.mutate();
+    }
+  };
+
+  const handleBulkRemoveRole = () => {
+    if (bulkRoles.length === 0) {
+      notify({
+        level: "warning",
+        title: "Choose roles",
+        message: "Select at least one role to remove.",
+      });
+      return;
+    }
+    const labels = bulkRoles.map(roleLabel).join(", ");
+    if (
+      window.confirm(
+        `Remove ${bulkRoles.length === 1 ? `the "${labels}" role` : `these roles (${labels})`} from ${selectedCount} selected user${selectedCount === 1 ? "" : "s"}? Other roles are kept. The last active tenant admin cannot lose tenant_admin.`,
+      )
+    ) {
+      bulkRemoveRoleMutation.mutate();
     }
   };
 
@@ -657,6 +696,14 @@ export function UsersPageClient() {
                     onClick={handleBulkAssignRole}
                   >
                     {bulkRoles.length > 1 ? "Add roles" : "Add role"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={bulkPending || bulkRoles.length === 0}
+                    onClick={handleBulkRemoveRole}
+                  >
+                    {bulkRoles.length > 1 ? "Remove roles" : "Remove role"}
                   </Button>
                 </div>
                 <Button variant="ghost" size="sm" disabled={bulkPending} onClick={clearSelection}>

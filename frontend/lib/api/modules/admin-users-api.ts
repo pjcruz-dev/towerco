@@ -250,6 +250,19 @@ export async function bulkAssignRolesAdminUsers(
   });
 }
 
+export async function bulkRemoveRolesAdminUsers(
+  userIds: string[],
+  roles: string[],
+): Promise<AdminUserBulkActionResult> {
+  return runBulkInChunks(userIds, async (chunk) => {
+    const response = await apiClient.post<{ data: AdminUserBulkActionResult }>("/admin/users/bulk-assign-role", {
+      user_ids: chunk,
+      remove_roles: roles,
+    });
+    return response.data.data;
+  });
+}
+
 export async function bulkResetPasswordAdminUsers(
   userIds: string[],
   options?: { password?: string; revoke_sessions?: boolean },

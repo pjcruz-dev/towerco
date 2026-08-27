@@ -9,7 +9,8 @@ use App\Modules\Identity\Models\TenantUser;
 final class EApprovalAssignableUsersService
 {
     /**
-     * Active tenant users for approver pickers (minimal fields, no permission dump).
+     * Active users who can approve (permission e_approval:approve) for form/workflow pickers.
+     * Includes e_approval_approver, e_approval_admin, tenant_admin, and other roles granted approve.
      *
      * @return list<array{id: string, name: string, email: string, roles: list<string>}>
      */
@@ -17,6 +18,7 @@ final class EApprovalAssignableUsersService
     {
         return TenantUser::query()
             ->where('is_active', true)
+            ->permission('e_approval:approve')
             ->orderBy('name')
             ->get()
             ->map(static function (TenantUser $user): array {

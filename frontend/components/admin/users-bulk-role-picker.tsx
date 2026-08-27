@@ -70,7 +70,7 @@ export function UsersBulkRolePicker({ roleOptions, value, onChange, disabled, id
               size="sm"
               className="h-9 min-w-[10rem] justify-between gap-2 font-normal"
               disabled={disabled}
-              aria-label="Roles to add"
+              aria-label="Roles for bulk add or remove"
             >
               <span className="truncate">{summary}</span>
               <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />

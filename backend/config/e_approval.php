@@ -15,6 +15,11 @@ return [
         'max_total_bytes' => (int) env('E_APPROVAL_EXTERNAL_PACKAGE_MAX_TOTAL_BYTES', 52428800),
     ],
 
+    'submission_share' => [
+        'ttl_days' => (int) env('E_APPROVAL_SUBMISSION_SHARE_TTL_DAYS', 14),
+        'max_ttl_days' => (int) env('E_APPROVAL_SUBMISSION_SHARE_MAX_TTL_DAYS', 90),
+    ],
+
     'teams' => [
         'http_timeout_seconds' => (int) env('E_APPROVAL_TEAMS_HTTP_TIMEOUT_SECONDS', 10),
     ],
