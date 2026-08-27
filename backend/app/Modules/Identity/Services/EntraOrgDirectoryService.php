@@ -54,6 +54,7 @@ final class EntraOrgDirectoryService
 
         $user->entra_org_synced_at = now();
         $user->save();
+        $this->propagateDepartmentsFromManagers();
     }
 
     /**
@@ -163,11 +164,16 @@ final class EntraOrgDirectoryService
             }
         }
 
+        $inherited = $this->propagateDepartmentsFromManagers();
+
         $message = $updated === 0
             ? 'No '.$this->workspaceLabel().' users matched Microsoft Entra mailboxes.'
             : "Updated {$updated} user".($updated === 1 ? '' : 's').' from Microsoft Entra.';
         if ($skippedUnlicensed > 0) {
             $message .= ' Hidden '.$skippedUnlicensed.' unlicensed account'.($skippedUnlicensed === 1 ? '' : 's').' from the organization chart.';
+        }
+        if ($inherited > 0) {
+            $message .= ' Inherited department for '.$inherited.' report'.($inherited === 1 ? '' : 's').' from their manager.';
         }
 
         return [
@@ -204,6 +210,7 @@ final class EntraOrgDirectoryService
             'manager_id',
             'entra_manager_email',
             'entra_manager_name',
+            ...($this->hasManagerDepartmentColumn() ? ['entra_manager_department'] : []),
             'entra_org_synced_at',
             ...($this->hasLicenseColumns() ? ['entra_license_label', 'entra_license_names'] : []),
             ...($this->hasManagerLicenseColumns() ? ['entra_manager_licensed', 'entra_manager_license_label'] : []),
@@ -211,6 +218,17 @@ final class EntraOrgDirectoryService
         ]);
 
         $ids = $users->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+        $departmentsById = [];
+        if ($this->hasDepartmentColumn()) {
+            $departmentsById = $users
+                ->mapWithKeys(static function (TenantUser $user): array {
+                    $dept = is_string($user->department) ? trim($user->department) : '';
+
+                    return [(string) $user->id => $dept !== '' ? $dept : null];
+                })
+                ->all();
+        }
+
         $reportQuery = TenantUser::query()
             ->where('is_active', true)
             ->whereNotNull('manager_id');
@@ -230,11 +248,17 @@ final class EntraOrgDirectoryService
             $syncedAt = Carbon::parse($latestSync)->toIso8601String();
         }
 
-        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts): array {
+        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts, $departmentsById): array {
             $managerId = $user->manager_id !== null ? (string) $user->manager_id : null;
             $managerInTenant = $managerId !== null && in_array($managerId, $ids, true);
             $showExternalManager = $this->externalManagerVisible($user, $managerInTenant);
             $parentId = $user->entra_manager_parent_id !== null ? (string) $user->entra_manager_parent_id : null;
+            $managerDepartment = null;
+            if ($managerInTenant && $managerId !== null) {
+                $managerDepartment = $departmentsById[$managerId] ?? null;
+            } elseif ($showExternalManager && $this->hasManagerDepartmentColumn()) {
+                $managerDepartment = $this->clip($user->entra_manager_department, 180);
+            }
 
             return [
                 'id' => (string) $user->id,
@@ -247,6 +271,7 @@ final class EntraOrgDirectoryService
                     ? ($user->entra_manager_name ?: $user->entra_manager_email)
                     : null,
                 'manager_email' => $showExternalManager ? $user->entra_manager_email : null,
+                'manager_department' => $managerDepartment,
                 'manager_licensed' => $showExternalManager,
                 'manager_license_label' => $showExternalManager ? $user->entra_manager_license_label : null,
                 'manager_parent_id' => ($showExternalManager && $parentId !== null && in_array($parentId, $ids, true))
@@ -311,6 +336,7 @@ final class EntraOrgDirectoryService
             $user->manager_id = null;
             $user->entra_manager_email = null;
             $user->entra_manager_name = null;
+            $this->clearManagerDepartment($user);
             $this->clearManagerLicense($user);
             $this->clearManagerParent($user);
 
@@ -319,12 +345,14 @@ final class EntraOrgDirectoryService
 
         $user->entra_manager_email = $this->clip($manager->email, 255);
         $user->entra_manager_name = $this->clip($manager->displayName, 180);
+        $this->storeManagerDepartment($user, $manager);
         $this->applyManagerLicense($user, $manager, $skuMap);
 
         $managerUser = $this->findManagerUser($manager);
         if ($managerUser === null || (string) $managerUser->id === (string) $user->id) {
             $user->manager_id = null;
             $this->linkEntraOnlyManagerParent($user, $manager, $token);
+            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -333,6 +361,7 @@ final class EntraOrgDirectoryService
 
         if ($this->wouldCreateCycle((string) $user->id, (string) $managerUser->id)) {
             $user->manager_id = null;
+            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -349,6 +378,124 @@ final class EntraOrgDirectoryService
                 ]);
             }
         }
+
+        $this->inheritDepartmentIfEmpty($user, $manager, $managerUser);
+    }
+
+    /**
+     * When Entra has no department on the report, copy the manager's department
+     * so operators do not need every employee populated in Active Directory.
+     */
+    private function inheritDepartmentIfEmpty(
+        TenantUser $user,
+        ?EntraDirectoryPerson $manager,
+        ?TenantUser $managerUser,
+    ): void {
+        if (! $this->hasDepartmentColumn()) {
+            return;
+        }
+        if ($this->clip($user->department, 180) !== null) {
+            return;
+        }
+
+        $fromGraph = $manager !== null ? $this->clip($manager->department, 180) : null;
+        if ($fromGraph !== null) {
+            $user->department = $fromGraph;
+
+            return;
+        }
+
+        if ($managerUser !== null) {
+            $fromManagerUser = $this->clip($managerUser->department, 180);
+            if ($fromManagerUser !== null) {
+                $user->department = $fromManagerUser;
+            }
+        }
+    }
+
+    /**
+     * Fill empty departments from TowerOS manager chain (handles sync order + depth).
+     *
+     * @return int Number of users updated
+     */
+    private function propagateDepartmentsFromManagers(): int
+    {
+        if (! $this->hasDepartmentColumn()) {
+            return 0;
+        }
+
+        $total = 0;
+        for ($pass = 0; $pass < 8; $pass++) {
+            $changed = 0;
+            $reports = TenantUser::query()
+                ->where('is_active', true)
+                ->whereNotNull('manager_id')
+                ->where(static function ($query): void {
+                    $query->whereNull('department')->orWhere('department', '');
+                })
+                ->get(['id', 'manager_id', 'department']);
+
+            foreach ($reports as $report) {
+                $managerDept = TenantUser::query()
+                    ->where('id', $report->manager_id)
+                    ->value('department');
+                $clipped = $this->clip(is_string($managerDept) ? $managerDept : null, 180);
+                if ($clipped === null) {
+                    continue;
+                }
+                $report->department = $clipped;
+                $report->save();
+                $changed++;
+            }
+
+            // Entra-only managers: use stored Graph manager department.
+            if ($this->hasManagerDepartmentColumn()) {
+                $externalReports = TenantUser::query()
+                    ->where('is_active', true)
+                    ->whereNull('manager_id')
+                    ->whereNotNull('entra_manager_department')
+                    ->where('entra_manager_department', '!=', '')
+                    ->where(static function ($query): void {
+                        $query->whereNull('department')->orWhere('department', '');
+                    })
+                    ->get(['id', 'department', 'entra_manager_department']);
+
+                foreach ($externalReports as $report) {
+                    $clipped = $this->clip($report->entra_manager_department, 180);
+                    if ($clipped === null) {
+                        continue;
+                    }
+                    $report->department = $clipped;
+                    $report->save();
+                    $changed++;
+                }
+            }
+
+            $total += $changed;
+            if ($changed === 0) {
+                break;
+            }
+        }
+
+        return $total;
+    }
+
+    private function storeManagerDepartment(TenantUser $user, EntraDirectoryPerson $manager): void
+    {
+        if (! $this->hasManagerDepartmentColumn()) {
+            return;
+        }
+
+        $user->entra_manager_department = $this->clip($manager->department, 180);
+    }
+
+    private function clearManagerDepartment(TenantUser $user): void
+    {
+        if (! $this->hasManagerDepartmentColumn()) {
+            return;
+        }
+
+        $user->entra_manager_department = null;
     }
 
     private function findManagerUser(EntraDirectoryPerson $manager): ?TenantUser
@@ -410,6 +557,11 @@ final class EntraOrgDirectoryService
     private function hasDepartmentColumn(): bool
     {
         return Schema::connection('tenant')->hasColumn('users', 'department');
+    }
+
+    private function hasManagerDepartmentColumn(): bool
+    {
+        return Schema::connection('tenant')->hasColumn('users', 'entra_manager_department');
     }
 
     private function hasLicenseColumns(): bool

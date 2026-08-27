@@ -34,6 +34,7 @@ use Spatie\Permission\Traits\HasRoles;
     'department',
     'entra_manager_email',
     'entra_manager_name',
+    'entra_manager_department',
     'entra_org_synced_at',
     'entra_licensed',
     'entra_license_label',

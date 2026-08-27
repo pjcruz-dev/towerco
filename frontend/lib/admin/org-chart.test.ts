@@ -73,6 +73,28 @@ describe("buildOrgChartIndex", () => {
     expect(resolveManager(index, manager ?? undefined)).toBeNull();
   });
 
+  it("copies Entra manager department onto the external manager card", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "peter",
+        name: "Peter Joseph Cruz",
+        email: "prcruz@example.com",
+        job_title: "IT Lead",
+        department: "Technology and Quality",
+        manager_id: null,
+        manager_name: "Terrence Galang",
+        manager_email: "trgalang@example.com",
+        manager_department: "Technology and Quality",
+        manager_licensed: true,
+        manager_license_label: "Business Standard",
+        direct_report_count: 0,
+      },
+    ]);
+
+    const manager = resolveManager(index, index.byId.get("peter"));
+    expect(manager?.department).toBe("Technology and Quality");
+  });
+
   it("treats Entra-only managers as organization roots", () => {
     const index = buildOrgChartIndex([
       {

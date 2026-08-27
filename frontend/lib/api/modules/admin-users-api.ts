@@ -340,6 +340,7 @@ export type AdminOrgChartPerson = {
   manager_id: string | null;
   manager_name: string | null;
   manager_email?: string | null;
+  manager_department?: string | null;
   manager_licensed?: boolean;
   manager_license_label?: string | null;
   manager_parent_id?: string | null;

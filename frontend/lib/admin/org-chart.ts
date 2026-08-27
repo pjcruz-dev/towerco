@@ -95,6 +95,7 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
         name: person.manager_name ?? person.manager_email ?? "Manager",
         email: person.manager_email ?? "",
         job_title: null,
+        department: person.manager_department ?? null,
         manager_id: parentId,
         manager_name: null,
         manager_email: null,
@@ -105,6 +106,11 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
       });
       if (parentId) {
         pushReport(parentId, extId);
+      }
+    } else {
+      const existing = byId.get(extId);
+      if (existing && !existing.department && person.manager_department) {
+        existing.department = person.manager_department;
       }
     }
     pushReport(extId, person.id);

@@ -279,6 +279,125 @@ final class EntraOrgDirectoryServiceTest extends TestCase
         tenancy()->end();
     }
 
+    public function test_app_sync_inherits_department_from_manager_when_report_has_none(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $manager = TenantUser::query()->create([
+            'name' => 'Alvin',
+            'email' => 'alvin@example.com',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $report = TenantUser::query()->create([
+            'name' => 'Terrence',
+            'email' => 'terrence@example.com',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+
+        $alvin = new EntraDirectoryPerson(
+            'entra-alvin',
+            'alvin@example.com',
+            'Alvin Tolentino',
+            'Director',
+            [],
+            'Technology and Quality',
+        );
+        $terrence = new EntraDirectoryPerson(
+            'entra-terrence',
+            'terrence@example.com',
+            'Terrence Galang',
+            'Engineer',
+            [],
+            null,
+        );
+
+        $graph = Mockery::mock(EntraGraphAppService::class);
+        $graph->shouldReceive('isConfigured')->andReturn(true);
+        $graph->shouldReceive('directoryIdentifier')->andReturn('11111111-1111-1111-1111-111111111111');
+        $graph->shouldReceive('getAppAccessToken')->andReturn('token');
+        $graph->shouldReceive('subscribedSkuMap')->andReturn([]);
+        $graph->shouldReceive('fetchManagerPerson')->andReturn(null);
+        $graph->shouldReceive('findUserWithManager')->andReturnUsing(function (string $token, string $email) use ($alvin, $terrence) {
+            return match ($email) {
+                'alvin@example.com' => new EntraUserManagerMatch($alvin, null),
+                'terrence@example.com' => new EntraUserManagerMatch($terrence, $alvin),
+                default => EntraManagerLookupResult::fail(EntraManagerLookupResult::CODE_USER_NOT_FOUND, 'missing'),
+            };
+        });
+        $this->app->instance(EntraGraphAppService::class, $graph);
+
+        $result = app(EntraOrgDirectoryService::class)->syncDirectoryFromApp();
+
+        $this->assertTrue($result['ok']);
+        $report->refresh();
+        $manager->refresh();
+        $this->assertSame((string) $manager->id, (string) $report->manager_id);
+        $this->assertSame('Technology and Quality', $manager->department);
+        $this->assertSame('Technology and Quality', $report->department);
+        $this->assertSame('Technology and Quality', $report->entra_manager_department);
+
+        tenancy()->end();
+    }
+
+    public function test_app_sync_does_not_overwrite_report_department_from_entra(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        TenantUser::query()->create([
+            'name' => 'Alvin',
+            'email' => 'alvin@example.com',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $report = TenantUser::query()->create([
+            'name' => 'Terrence',
+            'email' => 'terrence@example.com',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+
+        $alvin = new EntraDirectoryPerson(
+            'entra-alvin',
+            'alvin@example.com',
+            'Alvin Tolentino',
+            'Director',
+            [],
+            'Technology and Quality',
+        );
+        $terrence = new EntraDirectoryPerson(
+            'entra-terrence',
+            'terrence@example.com',
+            'Terrence Galang',
+            'Engineer',
+            [],
+            'Field Operations',
+        );
+
+        $graph = Mockery::mock(EntraGraphAppService::class);
+        $graph->shouldReceive('isConfigured')->andReturn(true);
+        $graph->shouldReceive('directoryIdentifier')->andReturn('11111111-1111-1111-1111-111111111111');
+        $graph->shouldReceive('getAppAccessToken')->andReturn('token');
+        $graph->shouldReceive('subscribedSkuMap')->andReturn([]);
+        $graph->shouldReceive('fetchManagerPerson')->andReturn(null);
+        $graph->shouldReceive('findUserWithManager')->andReturnUsing(function (string $token, string $email) use ($alvin, $terrence) {
+            return match ($email) {
+                'alvin@example.com' => new EntraUserManagerMatch($alvin, null),
+                'terrence@example.com' => new EntraUserManagerMatch($terrence, $alvin),
+                default => EntraManagerLookupResult::fail(EntraManagerLookupResult::CODE_USER_NOT_FOUND, 'missing'),
+            };
+        });
+        $this->app->instance(EntraGraphAppService::class, $graph);
+
+        app(EntraOrgDirectoryService::class)->syncDirectoryFromApp();
+
+        $report->refresh();
+        $this->assertSame('Field Operations', $report->department);
+
+        tenancy()->end();
+    }
+
     public function test_app_sync_skips_duplicate_entra_id_and_clips_long_fields(): void
     {
         tenancy()->initialize($this->testTenant);
