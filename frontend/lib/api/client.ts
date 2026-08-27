@@ -215,6 +215,12 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${nextToken}`;
         return apiClient(config);
       }
+
+      // Refresh failed: UI may still show a cached user — force a clean sign-in.
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        useAuthStore.getState().clearSession();
+        window.location.assign("/login?reason=session_expired");
+      }
     }
 
     if (status === 403 && useAuthStore.getState().pendingMfa) {
