@@ -21,6 +21,7 @@ use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorIndexControl
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorStoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformRoleCatalogController;
+use App\Modules\Platform\Http\Controllers\V1\CentralPublicClientIpController;
 use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseDestroyController;
 use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseShowController;
@@ -54,6 +55,10 @@ use App\Modules\Platform\Support\PlatformRoleCatalog;
 use Illuminate\Support\Facades\Route;
 
 Route::get('health', CentralHealthController::class)->name('api.central.v1.health');
+
+Route::get('public/client-ip', CentralPublicClientIpController::class)
+    ->middleware('throttle:60,1')
+    ->name('api.central.v1.public.client-ip');
 
 Route::post('webhooks/stripe', CentralStripeWebhookController::class)
     ->middleware('throttle:240,1')

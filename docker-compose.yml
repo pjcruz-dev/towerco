@@ -103,6 +103,8 @@ services:
       TOWEROS_DOCKER: "1"
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
       TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-1}
+      # Survive config:cache. Quote "*" — bare * is special in YAML.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-"*"}
       DB_HOST: mysql
       DB_PORT: "3306"
       CENTRAL_DB_PORT: "3306"

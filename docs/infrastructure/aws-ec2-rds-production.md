@@ -426,17 +426,22 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     location / {
         proxy_pass http://127.0.0.1:80;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 }
 ```
 
 Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
+
+**Audit IP note:** If Activity log shows `172.18.0.1` / `127.0.0.1`, the API only sees the Docker/nginx hop. Host nginx **must** send `X-Forwarded-For` (as above), `TRUSTED_PROXIES=*` must be set, then recreate API + `php artisan config:cache`. Your public IP (e.g. from whatismyip) should then appear on **new** rows.
 
 ---
 

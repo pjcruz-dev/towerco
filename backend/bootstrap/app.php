@@ -47,16 +47,18 @@ return Application::configure(basePath: dirname(__DIR__))
             return '/login';
         });
 
-        // Nginx / ALB terminate TLS and connect to PHP on loopback or the Docker network.
-        // Without trusting X-Forwarded-For, audit logs and rate limits record 127.0.0.1.
-        $trustedProxies = env('TRUSTED_PROXIES', '*');
+        // Nginx / ALB / Docker bridge terminate TLS and peer as 172.18.0.1 or 127.0.0.1.
+        // Prefer process env (Docker) so this still works after `php artisan config:cache`.
+        $trustedProxies = $_ENV['TRUSTED_PROXIES']
+            ?? $_SERVER['TRUSTED_PROXIES']
+            ?? env('TRUSTED_PROXIES', '*');
         if (is_string($trustedProxies) && $trustedProxies !== '*' && $trustedProxies !== '') {
             $trustedProxies = array_values(array_filter(array_map(
                 static fn (string $value): string => trim($value),
                 explode(',', $trustedProxies),
             )));
         }
-        if ($trustedProxies === '' || $trustedProxies === []) {
+        if ($trustedProxies === '' || $trustedProxies === [] || $trustedProxies === null) {
             $trustedProxies = '*';
         }
         $middleware->trustProxies(

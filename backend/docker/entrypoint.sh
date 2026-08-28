@@ -145,12 +145,22 @@ if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
     echo "    listen 8000;"
     echo "    server_name _;"
     echo "    client_max_body_size 64m;"
+    # Docker publishes host→container via the bridge gateway (e.g. 172.18.0.1).
+    # Trust that hop so X-Forwarded-For from the EC2 nginx keeps the real client IP.
+    echo "    set_real_ip_from 10.0.0.0/8;"
+    echo "    set_real_ip_from 172.16.0.0/12;"
+    echo "    set_real_ip_from 192.168.0.0/16;"
+    echo "    set_real_ip_from 127.0.0.1;"
+    echo "    real_ip_header X-Forwarded-For;"
+    echo "    real_ip_recursive on;"
     echo "    location / {"
     echo "        proxy_http_version 1.1;"
     echo "        proxy_set_header Host \$http_host;"
+    # Prefer outer proxy headers; do not overwrite X-Real-IP with the Docker bridge address.
     echo "        proxy_set_header X-Real-IP \$remote_addr;"
     echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
-    echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
+    echo "        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;"
+    echo "        proxy_set_header X-Forwarded-Host \$host;"
     echo "        proxy_read_timeout 300s;"
     echo "        proxy_pass http://toweros_api_workers;"
     echo "    }"
