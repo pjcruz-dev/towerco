@@ -47,6 +47,28 @@ return Application::configure(basePath: dirname(__DIR__))
             return '/login';
         });
 
+        // Nginx / ALB terminate TLS and connect to PHP on loopback or the Docker network.
+        // Without trusting X-Forwarded-For, audit logs and rate limits record 127.0.0.1.
+        $trustedProxies = env('TRUSTED_PROXIES', '*');
+        if (is_string($trustedProxies) && $trustedProxies !== '*' && $trustedProxies !== '') {
+            $trustedProxies = array_values(array_filter(array_map(
+                static fn (string $value): string => trim($value),
+                explode(',', $trustedProxies),
+            )));
+        }
+        if ($trustedProxies === '' || $trustedProxies === []) {
+            $trustedProxies = '*';
+        }
+        $middleware->trustProxies(
+            at: $trustedProxies,
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO
+                | Request::HEADER_X_FORWARDED_PREFIX
+                | Request::HEADER_X_FORWARDED_AWS_ELB,
+        );
+
         $middleware->api(prepend: [
             AssignCorrelationId::class,
         ]);
