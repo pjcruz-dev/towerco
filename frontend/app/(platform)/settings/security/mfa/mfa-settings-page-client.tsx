@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { OtpauthQrCode } from "@/components/auth/otpauth-qr-code";
 import { Button } from "@/components/ui/button";
+import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   completeMfaEnrollment,
@@ -14,8 +15,10 @@ import {
 import { useNotificationStore } from "@/stores/notification-store";
 
 /** Non-enrollable preview for tours / empty state — secret is intentionally invalid for real TOTP. */
-const MFA_SAMPLE_OTPAUTH_URI =
-  "otpauth://totp/TowerOS:sample-preview?secret=SAMPLEONLYNOTREAL&issuer=TowerOS";
+function sampleMfaOtpauthUri(issuer: string): string {
+  const safe = encodeURIComponent(issuer || "TowerOS");
+  return `otpauth://totp/${safe}:sample-preview?secret=SAMPLEONLYNOTREAL&issuer=${safe}`;
+}
 
 type Props = {
   embedded?: boolean;
@@ -23,6 +26,7 @@ type Props = {
 
 export function MfaSettingsPageClient({ embedded = false }: Props) {
   const notify = useNotificationStore((state) => state.push);
+  const organizationLabel = useOrganizationLabel();
   const [setup, setSetup] = useState<{ secret: string; otpauth_uri: string } | null>(null);
   const [code, setCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
@@ -103,7 +107,7 @@ export function MfaSettingsPageClient({ embedded = false }: Props) {
                   Sample preview — do not scan. Your real QR appears after Start setup.
                 </p>
                 <OtpauthQrCode
-                  otpauthUri={MFA_SAMPLE_OTPAUTH_URI}
+                  otpauthUri={sampleMfaOtpauthUri(organizationLabel)}
                   size={148}
                   hint="Example only. Click Start setup below for your personal code."
                 />

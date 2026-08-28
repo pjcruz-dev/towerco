@@ -293,7 +293,7 @@ class TenantAuthController extends AbstractApiController
         $user = $request->user();
         assert($user instanceof TenantUser);
 
-        $setup = $this->mfaService->startEnrollment($user, 'TowerOS');
+        $setup = $this->mfaService->startEnrollment($user);
         $this->auditService->log('auth.mfa.enrollment.started', (string) $user->id, (string) $request->attributes->get('auth_session_id', ''), []);
 
         return $this->ok($setup);

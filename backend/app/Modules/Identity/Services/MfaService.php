@@ -331,10 +331,11 @@ class MfaService
     /**
      * @return array{secret: string, otpauth_uri: string}
      */
-    public function startEnrollment(TenantUser $user, string $issuer = 'TowerOS'): array
+    public function startEnrollment(TenantUser $user, ?string $issuer = null): array
     {
         $secret = $this->totpService->generateSecret();
         $factorId = (string) Str::uuid();
+        $resolvedIssuer = $this->resolveTotpIssuer($issuer);
 
         DB::table('mfa_factors')->insert([
             'id' => $factorId,
@@ -346,11 +347,32 @@ class MfaService
             'updated_at' => now(),
         ]);
 
-        $label = rawurlencode(sprintf('%s:%s', $issuer, $user->email));
-        $issuerParam = rawurlencode($issuer);
+        $label = rawurlencode(sprintf('%s:%s', $resolvedIssuer, $user->email));
+        $issuerParam = rawurlencode($resolvedIssuer);
         $uri = sprintf('otpauth://totp/%s?secret=%s&issuer=%s', $label, $secret, $issuerParam);
 
         return ['secret' => $secret, 'otpauth_uri' => $uri];
+    }
+
+    /**
+     * Authenticator app account title — prefer tenant slug (e.g. ATC), not the product name.
+     */
+    private function resolveTotpIssuer(?string $issuer): string
+    {
+        $candidate = trim((string) ($issuer ?? ''));
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        $tenant = tenant();
+        if ($tenant instanceof Tenant) {
+            $slug = trim((string) ($tenant->slug ?? ''));
+            if ($slug !== '') {
+                return strtoupper($slug);
+            }
+        }
+
+        return (string) config('app.name', 'TowerOS');
     }
 
     /**
