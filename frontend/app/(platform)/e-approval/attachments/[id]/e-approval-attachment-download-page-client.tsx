@@ -27,12 +27,13 @@ export function EApprovalAttachmentDownloadPageClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!permissionsReady || !user || !attachmentId || status !== "idle") {
+    if (!permissionsReady || !user || !attachmentId) {
       return;
     }
 
     let cancelled = false;
     setStatus("loading");
+    setError(null);
 
     void (async () => {
       try {
@@ -59,7 +60,9 @@ export function EApprovalAttachmentDownloadPageClient() {
     return () => {
       cancelled = true;
     };
-  }, [attachmentId, permissionsReady, status, suggestedName, user]);
+    // Do not depend on `status`: setting loading re-ran this effect, cancelled the
+    // in-flight download, then blocked forever on "Preparing download…".
+  }, [attachmentId, permissionsReady, suggestedName, user]);
 
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalSubmissionsView]}>
