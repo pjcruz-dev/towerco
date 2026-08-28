@@ -1,5 +1,5 @@
 import { passkeysLiveTour } from "@/lib/help/passkeys-live-tour";
-import { mfaLiveTour } from "@/lib/help/mfa-live-tour";
+import { mfaLiveTour, mfaLoginEnrollLiveTour } from "@/lib/help/mfa-live-tour";
 
 export type LiveTourAudience = "all" | "approver" | "requestor";
 
@@ -370,6 +370,9 @@ export function tourById(id: string): LiveTourDefinition | null {
   }
   if (id === mfaLiveTour.id) {
     return mfaLiveTour;
+  }
+  if (id === mfaLoginEnrollLiveTour.id) {
+    return mfaLoginEnrollLiveTour;
   }
   return null;
 }

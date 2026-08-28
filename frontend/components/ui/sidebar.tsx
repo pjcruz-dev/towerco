@@ -66,6 +66,11 @@ function useSidebar() {
   return context
 }
 
+/** Safe for login / public pages that mount the live tour without a sidebar shell. */
+function useSidebarOptional() {
+  return React.useContext(SidebarContext)
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -751,4 +756,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  useSidebarOptional,
 }

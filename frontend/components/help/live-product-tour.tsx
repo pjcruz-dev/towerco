@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useSidebar } from "@/components/ui/sidebar";
+import { useSidebarOptional } from "@/components/ui/sidebar";
 import { dismissLiveTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
 import {
   E_APPROVAL_TOUR_SAMPLE_DETAIL_PATH,
@@ -29,7 +29,7 @@ import {
   PASSKEYS_TOUR_HELP_PATH,
   isPasskeysTourId,
 } from "@/lib/help/passkeys-live-tour";
-import { isMfaTourId } from "@/lib/help/mfa-live-tour";
+import { isMfaLoginTourId, isMfaTourId } from "@/lib/help/mfa-live-tour";
 import { markEApprovalTourChapterComplete } from "@/lib/help/e-approval-tour-chapter-progress";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
@@ -275,7 +275,9 @@ export function LiveProductTour() {
   const stepParam = searchParams.get(LIVE_TOUR_STEP_QUERY);
   const chapterParam = searchParams.get(LIVE_TOUR_CHAPTER_QUERY);
   const isMobile = useIsMobile();
-  const { setOpenMobile, openMobile } = useSidebar();
+  const sidebar = useSidebarOptional();
+  const setOpenMobile = sidebar?.setOpenMobile;
+  const openMobile = sidebar?.openMobile ?? false;
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const capabilities = useMemo(
@@ -332,7 +334,7 @@ export function LiveProductTour() {
 
   // Mobile: sidebar links live in a closed Sheet — open it for nav steps, close otherwise.
   useEffect(() => {
-    if (!tour || !step) {
+    if (!tour || !step || !setOpenMobile) {
       return;
     }
     if (!isMobile) {
@@ -346,20 +348,26 @@ export function LiveProductTour() {
   }, [isMobile, setOpenMobile, step, tour]);
 
   const returnToVisualGuide = useCallback(() => {
-    if (isMobile) {
+    if (isMobile && setOpenMobile) {
       setOpenMobile(false);
     }
     if (tourId) {
       const { user, activeTenantId } = useAuthStore.getState();
       dismissLiveTourPrompt(tourId, user?.id ?? null, activeTenantId);
     }
+    if (isMfaLoginTourId(tourId)) {
+      const next = clearTourSearch(searchParams);
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+      return;
+    }
     router.replace(
       isPasskeysTourId(tourId) || isMfaTourId(tourId) ? PASSKEYS_TOUR_HELP_PATH : E_APPROVAL_VISUAL_GUIDE_PATH,
     );
-  }, [isMobile, router, setOpenMobile, tourId]);
+  }, [isMobile, pathname, router, searchParams, setOpenMobile, tourId]);
 
   const endTour = useCallback(() => {
-    if (isMobile) {
+    if (isMobile && setOpenMobile) {
       setOpenMobile(false);
     }
     if (activeChapterId) {
@@ -367,11 +375,16 @@ export function LiveProductTour() {
       return;
     }
     if (tourId) {
-      const { user, activeTenantId } = useAuthStore.getState();
-      dismissLiveTourPrompt(tourId, user?.id ?? null, activeTenantId);
+      const { user, activeTenantId, pendingMfa } = useAuthStore.getState();
+      dismissLiveTourPrompt(
+        tourId,
+        user?.id ?? pendingMfa?.user?.id ?? (isMfaLoginTourId(tourId) ? "mfa-enroll" : null),
+        activeTenantId ?? pendingMfa?.user?.tenantId ?? null,
+      );
     }
-    const nextPath =
-      isPasskeysTourId(tourId) || isMfaTourId(tourId)
+    const nextPath = isMfaLoginTourId(tourId)
+      ? pathname
+      : isPasskeysTourId(tourId) || isMfaTourId(tourId)
         ? PASSKEYS_TOUR_HELP_PATH
         : eApprovalTourExitPath(pathname);
     const next = clearTourSearch(searchParams);

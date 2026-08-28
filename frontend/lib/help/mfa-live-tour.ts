@@ -1,7 +1,10 @@
 import type { LiveTourDefinition } from "@/lib/help/e-approval-live-tour";
 
-/** Standalone product tour — MFA first-time setup (not part of E-Approval). */
+/** Standalone product tour — MFA first-time setup under My security (workspace). */
 export const MFA_LIVE_TOUR_ID = "mfa";
+
+/** Coach marks on the first-login Set up MFA screen (`/login/mfa/enroll`). */
+export const MFA_LOGIN_LIVE_TOUR_ID = "mfa-login";
 
 export const MFA_TOUR_HELP_PATH = "/help";
 
@@ -44,7 +47,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       query: { tab: "mfa" },
       target: "ea-security-page",
       title: "After you sign in",
-      body: "Whether you sign in with email & password, Sign in with passkey, or Sign in with Microsoft — if MFA is required and you have not enrolled yet, TowerOS sends you to Set up MFA before the workspace opens.",
+      body: "If MFA is required and you have not enrolled yet, TowerOS opens Set up MFA right after email, Microsoft, or passkey sign-in — with its own short guided tour on that screen before the workspace opens.",
     },
     {
       id: "mfa-tab",
@@ -61,8 +64,8 @@ export const mfaLiveTour: LiveTourDefinition = {
       entryPath: "/account/security",
       query: { tab: "mfa" },
       target: "ea-mfa-start",
-      title: "Start setup",
-      body: "Click Start setup to create a QR code. Use Microsoft Authenticator, Google Authenticator, or 1Password on your phone.",
+      title: "Step 1 — Start setup",
+      body: "Click Start setup first. That creates your personal QR code. The gray sample above is only a preview — do not scan it.",
       missingHint: "If you already enrolled, you may see Re-enroll authenticator instead.",
     },
     {
@@ -70,10 +73,10 @@ export const mfaLiveTour: LiveTourDefinition = {
       path: "/account/security",
       entryPath: "/account/security",
       query: { tab: "mfa" },
-      target: "ea-mfa-enroll",
-      title: "Scan and verify",
-      body: "After Start setup, scan the QR code in your authenticator app, then enter the 6-digit code and choose Verify and enable. On first login, the same steps appear on the Set up MFA screen.",
-      missingHint: "Click Start setup first so the QR code and code field appear.",
+      target: "ea-mfa-sample-qr",
+      title: "Step 2 — Scan your real QR",
+      body: "Before Start setup you see a labeled sample. After Start setup, the real QR appears here — scan that with Microsoft Authenticator (or similar), enter the 6-digit code, then Verify and enable. First login uses the same flow on Set up MFA.",
+      missingHint: "Stay on the Authenticator tab. Click Start setup if you still only see the sample preview.",
     },
     {
       id: "mfa-recovery",
@@ -81,7 +84,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       entryPath: "/account/security",
       query: { tab: "mfa" },
       target: "ea-mfa-recovery",
-      title: "Save recovery codes",
+      title: "Step 3 — Save recovery codes",
       body: "After enrollment, store recovery codes in a safe place. You need one if you lose your phone. Password, Microsoft, and passkey remain available — MFA is an extra step after those when the org requires it.",
     },
     {
@@ -96,12 +99,86 @@ export const mfaLiveTour: LiveTourDefinition = {
   ],
 };
 
+/** First-login Set up MFA screen — short coach marks (no workspace chrome). */
+export const mfaLoginEnrollLiveTour: LiveTourDefinition = {
+  id: MFA_LOGIN_LIVE_TOUR_ID,
+  title: "First-login MFA",
+  steps: [
+    {
+      id: "mfa-login-why",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-enroll",
+      title: "Why this screen",
+      body: "Your organization requires an authenticator app before the workspace opens. This appears after email & password, Microsoft, or passkey when you have not enrolled yet.",
+    },
+    {
+      id: "mfa-login-qr",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-qr",
+      title: "Scan this QR",
+      body: "Open Microsoft Authenticator, Google Authenticator, or 1Password on your phone. Add an account and scan this QR. This is your real enrollment code — not a sample.",
+      missingHint: "Wait a moment for Preparing enrollment… to finish, then continue.",
+    },
+    {
+      id: "mfa-login-manual",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-manual",
+      title: "Can’t scan?",
+      body: "Expand Can’t scan? Enter key manually and type the secret into your authenticator app instead of using the camera.",
+      missingHint: "Wait for the QR to appear, then expand the manual entry section.",
+    },
+    {
+      id: "mfa-login-code",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-code",
+      title: "Enter the 6-digit code",
+      body: "Your app shows a rotating 6-digit code. Type it here, then choose Verify and continue.",
+      missingHint: "Wait for the enrollment form to load.",
+    },
+    {
+      id: "mfa-login-verify",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-verify",
+      title: "Verify and continue",
+      body: "After a successful code, recovery codes appear. Save them, then Continue into the workspace. Skip tour anytime if you already know these steps.",
+      missingHint: "Wait for the Verify button to appear after the QR loads.",
+    },
+    {
+      id: "mfa-login-recovery",
+      path: "/login/mfa/enroll",
+      entryPath: "/login/mfa/enroll",
+      target: "ea-mfa-login-recovery",
+      title: "Save recovery codes",
+      body: "After verify, store these one-time codes somewhere safe. You need one if you lose your phone. Then click Continue.",
+      missingHint: "Complete Verify and continue first — recovery codes appear only after enrollment succeeds.",
+    },
+  ],
+};
+
 /** Start on Dashboard so the tour begins at the account menu. */
 export function mfaTourStartHref(stepIndex = 0): string {
   const clamped = Math.max(0, Math.min(stepIndex, mfaLiveTour.steps.length - 1));
   return `/dashboard?tour=${MFA_LIVE_TOUR_ID}&tourStep=${clamped}`;
 }
 
+export function mfaLoginTourStartHref(stepIndex = 0): string {
+  const clamped = Math.max(0, Math.min(stepIndex, mfaLoginEnrollLiveTour.steps.length - 1));
+  return `/login/mfa/enroll?tour=${MFA_LOGIN_LIVE_TOUR_ID}&tourStep=${clamped}`;
+}
+
 export function isMfaTourId(tourId: string | null | undefined): boolean {
   return tourId === MFA_LIVE_TOUR_ID;
+}
+
+export function isMfaLoginTourId(tourId: string | null | undefined): boolean {
+  return tourId === MFA_LOGIN_LIVE_TOUR_ID;
+}
+
+export function isAnyMfaTourId(tourId: string | null | undefined): boolean {
+  return isMfaTourId(tourId) || isMfaLoginTourId(tourId);
 }

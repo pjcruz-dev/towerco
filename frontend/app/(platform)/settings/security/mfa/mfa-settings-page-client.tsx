@@ -13,6 +13,10 @@ import {
 } from "@/lib/api/modules/auth-api";
 import { useNotificationStore } from "@/stores/notification-store";
 
+/** Non-enrollable preview for tours / empty state — secret is intentionally invalid for real TOTP. */
+const MFA_SAMPLE_OTPAUTH_URI =
+  "otpauth://totp/TowerOS:sample-preview?secret=SAMPLEONLYNOTREAL&issuer=TowerOS";
+
 type Props = {
   embedded?: boolean;
 };
@@ -89,17 +93,40 @@ export function MfaSettingsPageClient({ embedded = false }: Props) {
         ) : null}
 
         {!setup ? (
-          <Button
-            className="mt-4"
-            onClick={() => startMutation.mutate()}
-            disabled={startMutation.isPending}
-            data-help="ea-mfa-start"
-          >
-            {startMutation.isPending ? "Preparing..." : enrolled ? "Re-enroll authenticator" : "Start setup"}
-          </Button>
+          <div className="mt-4 space-y-4">
+            {!enrolled ? (
+              <div
+                className="rounded-xl border border-dashed border-border bg-muted/20 p-4"
+                data-help="ea-mfa-sample-qr"
+              >
+                <p className="mb-3 text-xs font-medium text-muted-foreground">
+                  Sample preview — do not scan. Your real QR appears after Start setup.
+                </p>
+                <OtpauthQrCode
+                  otpauthUri={MFA_SAMPLE_OTPAUTH_URI}
+                  size={148}
+                  hint="Example only. Click Start setup below for your personal code."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground" data-help="ea-mfa-sample-qr">
+                You already enrolled. Choose Re-enroll authenticator to generate a new personal QR.
+              </p>
+            )}
+            <Button
+              onClick={() => startMutation.mutate()}
+              disabled={startMutation.isPending}
+              data-help="ea-mfa-start"
+            >
+              {startMutation.isPending ? "Preparing..." : enrolled ? "Re-enroll authenticator" : "Start setup"}
+            </Button>
+          </div>
         ) : (
           <div className="mt-4 space-y-4" data-help="ea-mfa-verify">
-            <OtpauthQrCode otpauthUri={setup.otpauth_uri} />
+            <div data-help="ea-mfa-sample-qr">
+              <p className="mb-2 text-xs font-medium text-foreground">Your authenticator QR</p>
+              <OtpauthQrCode otpauthUri={setup.otpauth_uri} />
+            </div>
             <details className="rounded-lg border border-border bg-muted/20 px-3 py-2">
               <summary className="cursor-pointer text-sm font-medium text-foreground">
                 Can&apos;t scan? Enter key manually
