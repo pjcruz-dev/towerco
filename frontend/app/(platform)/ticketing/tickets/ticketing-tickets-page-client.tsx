@@ -7,8 +7,11 @@ import { useSearchParams } from "next/navigation";
 import { Plus, RefreshCw } from "lucide-react";
 
 import { FilterSelect } from "@/components/forms/filter-select";
+import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entry-actions";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
+import { TicketingTourSampleNotice } from "@/components/help/ticketing-tour-fixtures";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
-import { ticketingTicketsTableColumns } from "@/components/ticketing/ticketing-tickets-table-columns";
+import { ticketingTicketsTableColumns, createTicketingTicketsTableColumns } from "@/components/ticketing/ticketing-tickets-table-columns";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -20,12 +23,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { fetchTicketingMetadata, fetchTicketingTickets } from "@/lib/api/modules/ticketing-api";
+import {
+  TICKETING_TOUR_SAMPLE_TICKET_ID,
+  isTicketingTourActive,
+  ticketingTourSampleListRow,
+} from "@/lib/help/ticketing-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 
 const DEFAULT_SORT = "updated_at:desc";
 
 export function TicketingTicketsPageClient() {
   const searchParams = useSearchParams();
+  const tourActive = isTicketingTourActive(searchParams);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [category, setCategory] = useState("");
@@ -74,7 +83,23 @@ export function TicketingTicketsPageClient() {
       }),
   });
 
-  const tickets = query.data?.data ?? [];
+  const tickets = useMemo(() => {
+    const rows = query.data?.data ?? [];
+    if (!tourActive) {
+      return rows;
+    }
+    if (rows.some((row) => row.id === TICKETING_TOUR_SAMPLE_TICKET_ID)) {
+      return rows;
+    }
+    return [ticketingTourSampleListRow, ...rows];
+  }, [query.data?.data, tourActive]);
+  const columns = useMemo(
+    () =>
+      tourActive
+        ? createTicketingTicketsTableColumns({ tourQuery: searchParams.toString() })
+        : ticketingTicketsTableColumns,
+    [searchParams, tourActive],
+  );
   const meta = query.data?.meta;
   const statusOptions = useMemo(() => metadata?.statuses ?? [], [metadata]);
   const categoryOptions = useMemo(
@@ -89,19 +114,30 @@ export function TicketingTicketsPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <TicketingPageHeader
           title="Tickets"
           description="Operational issue queue for your workspace."
           actions={
-            <Button size="sm" render={<Link href="/ticketing/tickets/new" />}>
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-              New ticket
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <TicketingHelpEntryActions />
+              <Button
+                size="sm"
+                data-help="tk-tickets-new"
+                data-tour-nav="/ticketing/tickets/new"
+                render={<Link href="/ticketing/tickets/new" />}
+              >
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+                New ticket
+              </Button>
+            </div>
           }
         />
 
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:flex-row lg:items-end">
-          <Input
+        <div
+          data-help="tk-tickets-filters"
+          className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:flex-row lg:items-end"
+        >          <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by title, description, or ticket #…"
@@ -186,24 +222,31 @@ export function TicketingTicketsPageClient() {
         ) : null}
 
         {!query.isError ? (
-          <DataListCard>
-            <RegistryDataTableView
-              columns={ticketingTicketsTableColumns}
-              data={tickets}
-              getRowId={(row) => row.id}
-              isLoading={query.isLoading || (query.isFetching && tickets.length === 0)}
-              isEmpty={!query.isLoading && tickets.length === 0}
-              emptyMessage={emptyMessage}
-              enableColumnVisibility
-              columnVisibilityStorageKey="toweros.table.columns.ticketing.tickets"
-              sorting={sorting}
-              onSortingChange={onSortingChange}
-              manualSorting={manualSorting}
-            />
-            {meta && meta.last_page > 1 ? (
-              <PaginatedListFooter meta={meta} onPageChange={setPage} isPending={query.isFetching} />
-            ) : null}
-          </DataListCard>
+          <div data-help="tk-tickets-table">
+            <DataListCard>
+              {tourActive ? (
+                <div className="border-b border-border px-4 pt-4">
+                  <TicketingTourSampleNotice />
+                </div>
+              ) : null}
+              <RegistryDataTableView
+                columns={columns}
+                data={tickets}
+                getRowId={(row) => row.id}
+                isLoading={query.isLoading || (query.isFetching && tickets.length === 0)}
+                isEmpty={!query.isLoading && tickets.length === 0}
+                emptyMessage={emptyMessage}
+                enableColumnVisibility
+                columnVisibilityStorageKey="toweros.table.columns.ticketing.tickets"
+                sorting={sorting}
+                onSortingChange={onSortingChange}
+                manualSorting={manualSorting}
+              />
+              {meta && meta.last_page > 1 ? (
+                <PaginatedListFooter meta={meta} onPageChange={setPage} isPending={query.isFetching} />
+              ) : null}
+            </DataListCard>
+          </div>
         ) : null}
       </div>
     </PermissionGate>

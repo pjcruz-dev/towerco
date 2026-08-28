@@ -8,6 +8,7 @@ import { Paperclip, X } from "lucide-react";
 
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { formatFileSize, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,7 @@ export function TicketingNewTicketPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingTicketsCreate]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <TicketingPageHeader
           eyebrow={
             <Link href="/ticketing/tickets" className="hover:text-primary">
@@ -123,7 +125,7 @@ export function TicketingNewTicketPageClient() {
             createMutation.mutate();
           }}
         >
-          <section className="space-y-4">
+          <section data-help="tk-compose-title" className="space-y-4">
             <h2 className="text-sm font-medium text-foreground">Issue details</h2>
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
@@ -147,7 +149,7 @@ export function TicketingNewTicketPageClient() {
             </div>
           </section>
 
-          <section className="space-y-2 border-t border-border pt-5">
+          <section data-help="tk-compose-category" className="space-y-2 border-t border-border pt-5">
             <Label htmlFor="category">Category</Label>
             <Select
               id="category"
@@ -170,7 +172,7 @@ export function TicketingNewTicketPageClient() {
             <p className="text-xs text-muted-foreground">IT will set priority during triage.</p>
           </section>
 
-          <section className="space-y-3 border-t border-border pt-5">
+          <section data-help="tk-compose-attachments" className="space-y-3 border-t border-border pt-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-medium text-foreground">Attachments</h2>
@@ -223,9 +225,11 @@ export function TicketingNewTicketPageClient() {
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <div className="flex flex-wrap gap-2 border-t border-border pt-5">
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Submitting…" : "Submit ticket"}
-            </Button>
+            <span data-help="tk-compose-submit" className="inline-flex">
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Submitting…" : "Submit ticket"}
+              </Button>
+            </span>
             <Button variant="outline" render={<Link href="/ticketing/tickets" />}>
               Cancel
             </Button>

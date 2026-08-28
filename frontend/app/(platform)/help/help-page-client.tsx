@@ -9,10 +9,11 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchPublishedHelpGuides, type HelpGuideListRow } from "@/lib/api/modules/help-guides-api";
-import { dismissEApprovalTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
+import { dismissEApprovalTourPrompt, dismissTicketingTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
 import { passkeysTourStartHref } from "@/lib/help/passkeys-live-tour";
 import { mfaTourStartHref } from "@/lib/help/mfa-live-tour";
+import { ticketingTourStartHref, TICKETING_TOUR_GUIDE_PATH } from "@/lib/help/ticketing-live-tour";
 import { permissions } from "@/lib/rbac/permissions";
 import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
 import { useAuthStore } from "@/stores/auth-store";
@@ -36,8 +37,8 @@ function groupGuidesByModule(guides: HelpGuideListRow[]): Array<{ moduleKey: str
   const map = new Map<string, HelpGuideListRow[]>();
 
   for (const guide of guides) {
-    // E-Approval uses Visual guide + live tour instead of written role cards.
-    if (guide.module_key === "e_approval") {
+    // E-Approval / Ticketing use Visual guide + live tour instead of written role cards.
+    if (guide.module_key === "e_approval" || guide.module_key === "ticketing") {
       continue;
     }
     const key = guide.module_key || "other";
@@ -60,15 +61,15 @@ function EApprovalVisualGuideCard() {
       href="/help/e-approval/visual"
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
-      <p className="text-xs font-medium text-muted-foreground">Visual</p>
-      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval visual guide</h3>
+      <p className="text-xs font-medium text-muted-foreground">Guide</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval tour guide</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Annotated screenshots with numbered callouts — overview, submissions, compose, decide, and
-        returns. Print-friendly for desk training.
+        Annotated screenshots plus jump-into-chapter starts — overview, submissions, compose, decide,
+        cancel, and follow-up. Print-friendly for desk training.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <BookOpen className="h-3.5 w-3.5" aria-hidden />
-        Open visual guide →
+        Open tour guide →
       </p>
     </Link>
   );
@@ -94,11 +95,75 @@ function EApprovalTourGuideCard() {
       <h3 className="mt-2 text-base font-medium text-foreground">E-Approval product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Walk the real screens with coach marks. Sample UI appears while the tour runs and is never
-        saved — jump into chapters from the visual guide anytime.
+        saved — jump into chapters from the tour guide anytime.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <Play className="h-3.5 w-3.5" aria-hidden />
-        Start tour →
+        Start full tour →
+      </p>
+    </Link>
+  );
+}
+
+function TicketingTourGuideCard() {
+  const canView = usePermission([permissions.ticketingView]);
+
+  if (!canView) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={TICKETING_TOUR_GUIDE_PATH}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Guide</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Ticketing tour guide</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Annotated screenshots plus jump-into-chapter starts — overview, queue, create, and detail.
+        Print-friendly for desk training.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <BookOpen className="h-3.5 w-3.5" aria-hidden />
+        Open tour guide →
+      </p>
+    </Link>
+  );
+}
+
+function TicketingFullTourGuideCard() {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const tenantId = useAuthStore((state) => state.activeTenantId);
+  const canView = usePermission([permissions.ticketingView]);
+  const canCreate = usePermission([permissions.ticketingTicketsCreate]);
+  const canManage = usePermission([permissions.ticketingTicketsManage]);
+  const canSettings = usePermission([permissions.ticketingSettingsManage]);
+  const isAdmin = canManage || canSettings;
+  const liveTourHref = useMemo(
+    () => ticketingTourStartHref(0, { canCreate, canManage, canSettings }),
+    [canCreate, canManage, canSettings],
+  );
+
+  if (!canView) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={liveTourHref}
+      onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Interactive</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Ticketing product tour</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {isAdmin
+          ? "Walk the real screens with coach marks. Sample UI appears while the tour runs and is never saved."
+          : "Walk Overview, the ticket queue, and raising a ticket. Sample UI appears while the tour runs and is never saved."}
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <Play className="h-3.5 w-3.5" aria-hidden />
+        Start full tour →
       </p>
     </Link>
   );
@@ -151,6 +216,7 @@ export function HelpPageClient() {
   });
 
   const groups = groupGuidesByModule(query.data ?? []);
+  const canViewTicketing = usePermission([permissions.ticketingView]);
 
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalView]}>
@@ -158,7 +224,7 @@ export function HelpPageClient() {
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Help</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Product tours and guides for E-Approval and account security.
+            Product tours and guides for E-Approval, Ticketing, and account security.
           </p>
         </header>
 
@@ -177,6 +243,15 @@ export function HelpPageClient() {
           </div>
         </section>
 
+        {canViewTicketing ? (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">Ticketing</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TicketingTourGuideCard />
+              <TicketingFullTourGuideCard />
+            </div>
+          </section>
+        ) : null}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-foreground">Account &amp; security</h2>
           <div className="grid gap-4 sm:grid-cols-2">

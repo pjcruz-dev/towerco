@@ -125,8 +125,10 @@ function TourSampleDetailInner() {
   const searchParams = useSearchParams();
   const tourActive = isEApprovalTourActive(searchParams);
   const canApprove = usePermission([permissions.eApprovalApprove]);
+  const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
+  const showDecideTab = canApprove || canCreate;
   const rawTab = searchParams.get("tab") ?? "request";
-  const tab = rawTab === "decide" && !canApprove ? "request" : rawTab;
+  const tab = rawTab === "decide" && !showDecideTab ? "request" : rawTab;
 
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
@@ -245,13 +247,15 @@ function TourSampleDetailInner() {
               {commentsBadgeCount}
             </Badge>
           </TabsTrigger>
-          {canApprove ? (
+          {showDecideTab ? (
             <TabsTrigger value="decide" className="gap-1.5" data-help="ea-detail-decide-tab">
               <Zap className="h-3.5 w-3.5" />
               Decide
-              <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1 text-[10px]">
-                1
-              </Badge>
+              {canApprove ? (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1 text-[10px]">
+                  1
+                </Badge>
+              ) : null}
             </TabsTrigger>
           ) : null}
         </TabsList>
@@ -318,8 +322,36 @@ function TourSampleDetailInner() {
           </EApprovalSectionCard>
         </TabsContent>
 
-        {canApprove ? (
-          <TabsContent value="decide" className="mt-4">
+        {showDecideTab ? (
+          <TabsContent value="decide" className="mt-4 space-y-4">
+            {canCreate ? (
+              <EApprovalSectionCard
+                dataHelp="ea-detail-requestor-actions"
+                title="Requestor actions"
+                description="While pending, cancel the request or remind waiting approvers. Sample only — actions do not save."
+              >
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <span data-help="ea-detail-cancel" className="inline-flex">
+                      <Button size="sm" variant="outline" type="button" disabled>
+                        Cancel request
+                      </Button>
+                    </span>
+                    <span data-help="ea-detail-follow-up" className="inline-flex">
+                      <Button size="sm" variant="secondary" type="button" disabled>
+                        Send follow-up to approver
+                      </Button>
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Follow-up emails and notifies every pending approver on the current step
+                    (including parallel peers). A cooldown may apply between reminders.
+                  </p>
+                </div>
+              </EApprovalSectionCard>
+            ) : null}
+
+            {canApprove ? (
             <EApprovalSectionCard
               dataHelp="ea-decide-panel"
               title="Your decision"
@@ -370,6 +402,7 @@ function TourSampleDetailInner() {
                 </div>
               </div>
             </EApprovalSectionCard>
+            ) : null}
           </TabsContent>
         ) : null}
       </Tabs>

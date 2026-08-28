@@ -52,6 +52,8 @@ export function createLinkColumn<TData>(
     label: (row: TData) => ReactNode;
     className?: string;
     enableSorting?: boolean;
+    /** Optional live-tour coach target / auto-nav source for a row. */
+    dataHelp?: (row: TData) => string | undefined;
   },
 ): ColumnDef<TData, unknown> {
   return {
@@ -63,11 +65,20 @@ export function createLinkColumn<TData>(
     header: options.enableSorting
       ? ({ column }) => <DataTableColumnHeader column={column} title={header} />
       : header,
-    cell: ({ row }) => (
-      <Link href={options.href(row.original)} className={options.className ?? "text-primary hover:underline"}>
-        {options.label(row.original)}
-      </Link>
-    ),
+    cell: ({ row }) => {
+      const href = options.href(row.original);
+      const dataHelp = options.dataHelp?.(row.original);
+      return (
+        <Link
+          href={href}
+          className={options.className ?? "text-primary hover:underline"}
+          data-help={dataHelp}
+          data-tour-nav={dataHelp ? href : undefined}
+        >
+          {options.label(row.original)}
+        </Link>
+      );
+    },
     enableSorting: options.enableSorting ?? false,
   };
 }

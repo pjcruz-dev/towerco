@@ -1,27 +1,6 @@
-export type VisualCallout = {
-  n: number;
-  title: string;
-  body: string;
-  /** Percent from left / top of the screenshot (0–100). */
-  x: number;
-  y: number;
-};
+import type { VisualGuideTab } from "@/lib/help/visual-guide";
 
-export type VisualGuideSection = {
-  id: string;
-  title: string;
-  description: string;
-  imageSrc: string;
-  imageAlt: string;
-  callouts: VisualCallout[];
-  tip?: string;
-};
-
-export type VisualGuideTab = {
-  id: string;
-  label: string;
-  sections: VisualGuideSection[];
-};
+export type { VisualCallout, VisualGuideSection, VisualGuideTab } from "@/lib/help/visual-guide";
 
 /**
  * Diagrams-first E-Approval visual guide.
@@ -254,6 +233,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
             y: 82,
           },
         ],
+        tip: "While the request is still Pending, open Decide as the requestor to Cancel the request or Send follow-up to approver (manual reminder with cooldown).",
       },
       {
         id: "detail-approvals",

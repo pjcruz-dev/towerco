@@ -1,4 +1,4 @@
-import type { VisualCallout, VisualGuideSection } from "@/lib/help/e-approval-visual-guide";
+import type { VisualCallout, VisualGuideSection } from "@/lib/help/visual-guide";
 import { cn } from "@/lib/utils";
 
 type VisualGuideFigureProps = {

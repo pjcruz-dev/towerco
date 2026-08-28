@@ -31,6 +31,12 @@ import {
 } from "@/lib/help/passkeys-live-tour";
 import { isMfaLoginTourId, isMfaTourId } from "@/lib/help/mfa-live-tour";
 import { markEApprovalTourChapterComplete } from "@/lib/help/e-approval-tour-chapter-progress";
+import { markTicketingTourChapterComplete } from "@/lib/help/ticketing-tour-chapter-progress";
+import {
+  TICKETING_LIVE_TOUR_ID,
+  TICKETING_TOUR_GUIDE_PATH,
+} from "@/lib/help/ticketing-live-tour";
+import { TICKETING_TOUR_SAMPLE_DETAIL_PATH } from "@/lib/help/ticketing-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/hooks/use-permission";
@@ -52,7 +58,7 @@ const PANEL_EST_HEIGHT = 220;
 const SIDEBAR_TRIGGER_HELP = "ea-sidebar-trigger";
 
 function isSidebarNavTarget(target: string): boolean {
-  return target.startsWith("ea-nav-") || target === SIDEBAR_TRIGGER_HELP;
+  return target.startsWith("ea-nav-") || target.startsWith("tk-nav-") || target === SIDEBAR_TRIGGER_HELP;
 }
 
 function spotlightPadForTarget(target: string, rect: TargetRect): number {
@@ -62,17 +68,36 @@ function spotlightPadForTarget(target: string, rect: TargetRect): number {
   return PAD;
 }
 
-function readTargetRect(target: string): TargetRect | null {
+function readTargetElement(target: string): HTMLElement | null {
   const el = document.querySelector<HTMLElement>(`[data-help="${CSS.escape(target)}"]`);
   if (!el) {
     return null;
   }
   const rect = el.getBoundingClientRect();
+  // Collapsed / unmounted visual (e.g. closed sheet content) — treat as absent.
   if (rect.width < 2 && rect.height < 2) {
     return null;
   }
-  // Off-screen / closed sheet: ignore until the menu is open.
-  if (rect.bottom < 0 || rect.top > window.innerHeight || rect.right < 0 || rect.left > window.innerWidth) {
+  return el;
+}
+
+function isRectInViewport(rect: DOMRectReadOnly, pad = 4): boolean {
+  return (
+    rect.bottom > pad &&
+    rect.top < window.innerHeight - pad &&
+    rect.right > pad &&
+    rect.left < window.innerWidth - pad
+  );
+}
+
+function readTargetRect(target: string): TargetRect | null {
+  const el = readTargetElement(target);
+  if (!el) {
+    return null;
+  }
+  const rect = el.getBoundingClientRect();
+  // Off-screen / closed sheet: ignore until scrolled into view or the menu is open.
+  if (!isRectInViewport(rect)) {
     return null;
   }
   return {
@@ -81,6 +106,11 @@ function readTargetRect(target: string): TargetRect | null {
     width: rect.width,
     height: rect.height,
   };
+}
+
+/** True when the tour target exists in the DOM (even if below the fold). */
+function tourTargetExists(target: string): boolean {
+  return readTargetElement(target) != null;
 }
 
 function findSubmissionDetailPath(): string | null {
@@ -125,6 +155,42 @@ function findSubmissionDetailPath(): string | null {
   return null;
 }
 
+function findTicketDetailPath(): string | null {
+  const sample = document.querySelector<HTMLAnchorElement>(
+    `a[href*="${TICKETING_TOUR_SAMPLE_DETAIL_PATH}"]`,
+  );
+  if (sample) {
+    try {
+      return new URL(sample.getAttribute("href") ?? "", window.location.origin).pathname;
+    } catch {
+      return TICKETING_TOUR_SAMPLE_DETAIL_PATH;
+    }
+  }
+
+  const anchors = document.querySelectorAll<HTMLAnchorElement>('a[href*="/ticketing/tickets/"]');
+  for (const anchor of anchors) {
+    try {
+      const url = new URL(anchor.getAttribute("href") ?? "", window.location.origin);
+      if (
+        !pathMatchesTourStep(url.pathname, {
+          id: "_",
+          path: "/ticketing/tickets/",
+          pathMatch: "prefix",
+          target: "_",
+          title: "",
+          body: "",
+        })
+      ) {
+        continue;
+      }
+      return url.pathname;
+    } catch {
+      // ignore bad hrefs
+    }
+  }
+  return TICKETING_TOUR_SAMPLE_DETAIL_PATH;
+}
+
 function resolveStepHref(
   step: LiveTourStep,
   tourId: string,
@@ -162,6 +228,13 @@ function resolveStepHref(
 
   if (step.pathMatch === "prefix" && step.path.startsWith("/e-approval/submissions/")) {
     const detail = findSubmissionDetailPath();
+    if (detail) {
+      return `${detail}?${params.toString()}`;
+    }
+  }
+
+  if (step.pathMatch === "prefix" && step.path.startsWith("/ticketing/tickets/")) {
+    const detail = findTicketDetailPath();
     if (detail) {
       return `${detail}?${params.toString()}`;
     }
@@ -254,11 +327,66 @@ function findTourScrollRoot(): HTMLElement | null {
   if (typeof document === "undefined") {
     return null;
   }
-  return (
+  const main =
     document.querySelector<HTMLElement>("main.overflow-y-auto") ??
-    document.querySelector<HTMLElement>("main.scrollbar-hide") ??
-    document.scrollingElement
-  );
+    document.querySelector<HTMLElement>("main.scrollbar-hide");
+  if (main) {
+    return main;
+  }
+  const scrolling = document.scrollingElement;
+  return scrolling instanceof HTMLElement ? scrolling : null;
+}
+
+/** Nearest ancestor that actually scrolls (sidebar overflow, main, etc.). */
+function findScrollableAncestor(el: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = el.parentElement;
+  while (node && node !== document.body) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    const canScrollY =
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      node.scrollHeight > node.clientHeight + 1;
+    if (canScrollY) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return findTourScrollRoot();
+}
+
+/**
+ * Workspace content scrolls inside `<main overflow-y-auto>`, not the window.
+ * Sidebar nav targets scroll inside the sidebar overflow container.
+ */
+function scrollTourElementIntoView(
+  el: HTMLElement,
+  block: "start" | "center" | "end" = "center",
+): void {
+  const root = findScrollableAncestor(el);
+  if (!root) {
+    el.scrollIntoView({ block, behavior: "smooth", inline: "nearest" });
+    return;
+  }
+
+  const rootRect = root.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+  const margin = 28;
+  const elTopInContent = elRect.top - rootRect.top + root.scrollTop;
+  const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+
+  let nextTop: number;
+  if (block === "start") {
+    nextTop = elTopInContent - margin;
+  } else if (block === "end") {
+    nextTop = elTopInContent + elRect.height - root.clientHeight + margin;
+  } else {
+    nextTop = elTopInContent - (root.clientHeight - elRect.height) / 2;
+  }
+
+  root.scrollTo({
+    top: Math.max(0, Math.min(nextTop, maxScroll)),
+    behavior: "smooth",
+  });
 }
 
 function absorbOutsideClick(event: MouseEvent | PointerEvent) {
@@ -280,9 +408,18 @@ export function LiveProductTour() {
   const openMobile = sidebar?.openMobile ?? false;
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
+  const canCreateTickets = usePermission([permissions.ticketingTicketsCreate]);
+  const canManageTickets = usePermission([permissions.ticketingTicketsManage]);
+  const canManageTicketingSettings = usePermission([permissions.ticketingSettingsManage]);
   const capabilities = useMemo(
-    () => ({ canApprove, canCreate }),
-    [canApprove, canCreate],
+    () => ({
+      canApprove,
+      canCreate,
+      canCreateTickets,
+      canManageTickets,
+      canManageTicketingSettings,
+    }),
+    [canApprove, canCreate, canCreateTickets, canManageTickets, canManageTicketingSettings],
   );
 
   const tour = useMemo(
@@ -361,6 +498,10 @@ export function LiveProductTour() {
       router.replace(qs ? `${pathname}?${qs}` : pathname);
       return;
     }
+    if (tourId === TICKETING_LIVE_TOUR_ID) {
+      router.replace(TICKETING_TOUR_GUIDE_PATH);
+      return;
+    }
     router.replace(
       isPasskeysTourId(tourId) || isMfaTourId(tourId) ? PASSKEYS_TOUR_HELP_PATH : E_APPROVAL_VISUAL_GUIDE_PATH,
     );
@@ -386,7 +527,11 @@ export function LiveProductTour() {
       ? pathname
       : isPasskeysTourId(tourId) || isMfaTourId(tourId)
         ? PASSKEYS_TOUR_HELP_PATH
-        : eApprovalTourExitPath(pathname);
+        : tourId === TICKETING_LIVE_TOUR_ID
+          ? pathname.startsWith("/ticketing")
+            ? pathname
+            : "/ticketing"
+          : eApprovalTourExitPath(pathname);
     const next = clearTourSearch(searchParams);
     const qs = next.toString();
     router.replace(qs ? `${nextPath}?${qs}` : nextPath);
@@ -407,16 +552,20 @@ export function LiveProductTour() {
       return;
     }
     const { user, activeTenantId } = useAuthStore.getState();
-    markEApprovalTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
+    if (tourId === TICKETING_LIVE_TOUR_ID) {
+      markTicketingTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
+    } else {
+      markEApprovalTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
+    }
     returnToVisualGuide();
-  }, [activeChapterId, endTour, returnToVisualGuide]);
+  }, [activeChapterId, endTour, returnToVisualGuide, tourId]);
 
   const finishFullTour = useCallback(() => {
     if (!tour) {
       endTour();
       return;
     }
-    if (tour.id === "e-approval") {
+    if (tour.id === "e-approval" || tour.id === TICKETING_LIVE_TOUR_ID) {
       const { user, activeTenantId } = useAuthStore.getState();
       const seen = new Set<LiveTourChapterId>();
       for (const entry of tour.steps) {
@@ -426,7 +575,11 @@ export function LiveProductTour() {
         }
       }
       for (const chapterId of seen) {
-        markEApprovalTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
+        if (tour.id === TICKETING_LIVE_TOUR_ID) {
+          markTicketingTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
+        } else {
+          markEApprovalTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
+        }
       }
     }
     endTour();
@@ -483,16 +636,23 @@ export function LiveProductTour() {
 
     let targetId = step.target;
     let next = readTargetRect(targetId);
+    const exists = tourTargetExists(targetId);
 
     // While the mobile Sheet animates open, spotlight the menu button until the nav item exists.
-    if (!next && isMobile && isSidebarNavTarget(step.target)) {
+    if (!exists && isMobile && isSidebarNavTarget(step.target)) {
       targetId = SIDEBAR_TRIGGER_HELP;
       next = readTargetRect(SIDEBAR_TRIGGER_HELP);
+      setSpotlightTarget(targetId);
+      setRect(next);
+      // Waiting for sheet — not a permanent miss.
+      setMissing(next == null && !tourTargetExists(SIDEBAR_TRIGGER_HELP));
+      return;
     }
 
     setSpotlightTarget(targetId);
     setRect(next);
-    setMissing(next == null);
+    // Element below the fold still "exists" — keep scrolling; don't show the yellow miss hint yet.
+    setMissing(!exists);
   }, [isMobile, pathname, step]);
 
   const bringTargetIntoView = useCallback(() => {
@@ -500,26 +660,33 @@ export function LiveProductTour() {
       return;
     }
     const targetId =
-      isMobile && isSidebarNavTarget(step.target) && readTargetRect(step.target) == null
+      isMobile && isSidebarNavTarget(step.target) && !tourTargetExists(step.target)
         ? SIDEBAR_TRIGGER_HELP
         : step.target;
-    const el = document.querySelector<HTMLElement>(`[data-help="${CSS.escape(targetId)}"]`);
+    const el = readTargetElement(targetId);
     if (!el) {
       return;
     }
     const targetRect = el.getBoundingClientRect();
+    if (isRectInViewport(targetRect, 24)) {
+      return;
+    }
     const isDecideAction =
       step.target === "ea-decide-actions" ||
       step.target === "ea-decide-remarks" ||
       step.target === "ea-decide-signature-consent";
     const tall = targetRect.height > window.innerHeight * 0.65;
-    const nearBottom = targetRect.top > window.innerHeight * 0.5;
-    el.scrollIntoView({
-      // Keep Decide actions mid-viewport so the coach panel can sit just above them.
-      block: isDecideAction ? "center" : tall ? "start" : nearBottom ? "end" : "center",
-      behavior: "smooth",
-      inline: "nearest",
-    });
+    const fullyBelow = targetRect.top >= window.innerHeight - 8;
+    const fullyAbove = targetRect.bottom <= 8;
+    const nearBottom = !fullyBelow && targetRect.top > window.innerHeight * 0.5;
+    const block = isDecideAction
+      ? "center"
+      : tall || fullyBelow
+        ? "start"
+        : fullyAbove || nearBottom
+          ? "end"
+          : "center";
+    scrollTourElementIntoView(el, block);
   }, [isMobile, pathname, step]);
 
   // Empty tenant / no forms / no submissions: skip data-dependent steps after settle.
@@ -529,7 +696,7 @@ export function LiveProductTour() {
     }
     const timer = window.setTimeout(() => {
       const targetPresent =
-        pathMatchesTourStep(pathname, step) && readTargetRect(step.target) != null;
+        pathMatchesTourStep(pathname, step) && tourTargetExists(step.target);
       if (targetPresent) {
         return;
       }
@@ -617,6 +784,13 @@ export function LiveProductTour() {
             return;
           }
         }
+        if (step.pathMatch === "prefix" && step.path.startsWith("/ticketing/tickets/")) {
+          const detail = findTicketDetailPath();
+          if (detail) {
+            router.replace(resolveStepHref(step, tour.id, stepIndex, pathname, searchParams));
+            return;
+          }
+        }
         setRect(null);
         setMissing(true);
         return;
@@ -644,14 +818,29 @@ export function LiveProductTour() {
     // Scroll into view only when landing on / advancing to this step — not on later scroll events.
     bringTargetIntoView();
     measureTarget();
-    // Mobile Sheet needs a beat to mount nav targets after setOpenMobile(true).
-    const t1 = window.setTimeout(measureTarget, 120);
+    // Smooth scroll + mobile Sheet need time before the spotlight can attach.
+    const t1 = window.setTimeout(() => {
+      bringTargetIntoView();
+      measureTarget();
+    }, 120);
     const t2 = window.setTimeout(measureTarget, 320);
-    const t3 = window.setTimeout(measureTarget, 700);
+    const t3 = window.setTimeout(() => {
+      bringTargetIntoView();
+      measureTarget();
+    }, 550);
+    const t4 = window.setTimeout(measureTarget, 900);
+    const t5 = window.setTimeout(() => {
+      bringTargetIntoView();
+      measureTarget();
+    }, 1600);
+    const t6 = window.setTimeout(measureTarget, 2400);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       window.clearTimeout(t3);
+      window.clearTimeout(t4);
+      window.clearTimeout(t5);
+      window.clearTimeout(t6);
     };
   }, [
     bringTargetIntoView,
@@ -664,6 +853,42 @@ export function LiveProductTour() {
     stepIndex,
     tour,
   ]);
+
+  // Remeasure when async page content mounts the tour target after the settle timers.
+  useEffect(() => {
+    if (!tour || !step || !missing) {
+      return;
+    }
+    if (!pathMatchesTourStep(pathname, step)) {
+      return;
+    }
+
+    let cancelled = false;
+    const tryMeasure = () => {
+      if (cancelled) {
+        return;
+      }
+      if (tourTargetExists(step.target)) {
+        bringTargetIntoView();
+        measureTarget();
+      }
+    };
+
+    const observer = new MutationObserver(tryMeasure);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const poll = window.setInterval(tryMeasure, 400);
+    const stop = window.setTimeout(() => {
+      observer.disconnect();
+      window.clearInterval(poll);
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+      window.clearInterval(poll);
+      window.clearTimeout(stop);
+    };
+  }, [bringTargetIntoView, measureTarget, missing, pathname, step, tour]);
 
   useEffect(() => {
     if (!tour || !step) {

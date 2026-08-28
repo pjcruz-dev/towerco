@@ -24,10 +24,13 @@ export function KpiStrip({
   items,
   isLoading = false,
   skeletonCount = 4,
+  dataHelp,
 }: {
   items: KpiStripItem[];
   isLoading?: boolean;
   skeletonCount?: number;
+  /** Stable hook for live Help tours (`[data-help="…"]`). */
+  dataHelp?: string;
 }) {
   if (isLoading) {
     return <KpiStripSkeleton count={skeletonCount} />;
@@ -35,14 +38,17 @@ export function KpiStrip({
 
   if (items.length === 0) {
     return (
-      <section className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+      <section
+        data-help={dataHelp}
+        className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"
+      >
         KPI data will appear here once the dashboard endpoint is connected.
       </section>
     );
   }
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section data-help={dataHelp} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {items.map((item) => (
         <article key={kpiKey(item)} className="rounded-xl border bg-card p-4 shadow-sm">
           <p className="text-xs font-medium text-muted-foreground">

@@ -1,16 +1,26 @@
 import { passkeysLiveTour } from "@/lib/help/passkeys-live-tour";
 import { mfaLiveTour, mfaLoginEnrollLiveTour } from "@/lib/help/mfa-live-tour";
+import { ticketingLiveTour } from "@/lib/help/ticketing-live-tour";
 
-export type LiveTourAudience = "all" | "approver" | "requestor";
+export type LiveTourAudience =
+  | "all"
+  | "approver"
+  | "requestor"
+  | "ticket_creator"
+  | "ticket_manager"
+  | "ticket_settings";
 
 export type LiveTourChapterId =
   | "overview"
   | "track"
   | "create"
   | "view"
+  | "follow_up"
   | "approvals"
   | "signature"
   | "decide"
+  | "manage"
+  | "settings"
   | "complete";
 
 export const LIVE_TOUR_CHAPTER_LABELS: Record<LiveTourChapterId, string> = {
@@ -18,9 +28,12 @@ export const LIVE_TOUR_CHAPTER_LABELS: Record<LiveTourChapterId, string> = {
   track: "Track requests",
   create: "Create a request",
   view: "View a request",
+  follow_up: "Cancel & follow-up",
   approvals: "Approvals inbox",
   signature: "Add your signature",
   decide: "Decide on a request",
+  manage: "Manage tickets",
+  settings: "Settings",
   complete: "Finish",
 };
 
@@ -52,6 +65,11 @@ export const E_APPROVAL_TOUR_CHAPTER_STARTS: EApprovalTourChapterStart[] = [
     id: "view",
     how: "Open submission → detail / print",
     audience: "all",
+  },
+  {
+    id: "follow_up",
+    how: "E-Approval → Submissions → open pending → Decide → Cancel / Follow-up",
+    audience: "requestor",
   },
   {
     id: "approvals",
@@ -109,6 +127,7 @@ export type LiveTourStep = {
    * Who should see this step. Default `all`.
    * - `approver`: requires e_approval:approve
    * - `requestor`: requires e_approval:submissions:create
+   * - `ticket_creator` / `ticket_manager` / `ticket_settings`: Ticketing permissions
    */
   audience?: LiveTourAudience;
   /**
@@ -154,9 +173,16 @@ export type EApprovalTourCapabilities = {
   canCreate: boolean;
 };
 
+/** Unified capabilities for role-filtered live tours (E-Approval + Ticketing). */
+export type LiveTourCapabilities = EApprovalTourCapabilities & {
+  canCreateTickets?: boolean;
+  canManageTickets?: boolean;
+  canManageTicketingSettings?: boolean;
+};
+
 export function stepVisibleForCapabilities(
   step: LiveTourStep,
-  capabilities: EApprovalTourCapabilities,
+  capabilities: LiveTourCapabilities,
 ): boolean {
   const audience = step.audience ?? "all";
   if (audience === "approver") {
@@ -164,6 +190,15 @@ export function stepVisibleForCapabilities(
   }
   if (audience === "requestor") {
     return capabilities.canCreate;
+  }
+  if (audience === "ticket_creator") {
+    return capabilities.canCreateTickets ?? false;
+  }
+  if (audience === "ticket_manager") {
+    return capabilities.canManageTickets ?? false;
+  }
+  if (audience === "ticket_settings") {
+    return capabilities.canManageTicketingSettings ?? false;
   }
   return true;
 }
@@ -195,7 +230,17 @@ export function chapterForEApprovalStepId(stepId: string): LiveTourChapterId {
     return "create";
   }
   if (stepId.startsWith("after-submit-") || stepId.startsWith("detail-")) {
+    if (
+      stepId === "detail-requestor-actions" ||
+      stepId === "detail-cancel" ||
+      stepId === "detail-follow-up"
+    ) {
+      return "follow_up";
+    }
     return "view";
+  }
+  if (stepId.startsWith("follow-up-")) {
+    return "follow_up";
   }
   if (stepId === "nav-e-approval-approvals" || stepId.startsWith("approvals-")) {
     return "approvals";
@@ -291,7 +336,7 @@ export function buildTourSearchParams(
 export function liveTourStartHref(
   tourId: string,
   stepIndex = 0,
-  capabilities?: EApprovalTourCapabilities,
+  capabilities?: LiveTourCapabilities,
   options?: { chapterId?: LiveTourChapterId },
 ): string {
   const tour = capabilities
@@ -364,6 +409,9 @@ export function eApprovalTourChaptersForCapabilities(
 export function tourById(id: string): LiveTourDefinition | null {
   if (id === eApprovalLiveTour.id) {
     return eApprovalLiveTour;
+  }
+  if (id === ticketingLiveTour.id) {
+    return ticketingLiveTour;
   }
   if (id === passkeysLiveTour.id) {
     return passkeysLiveTour;
@@ -699,6 +747,98 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       missingHint: "Skipped until a submission detail page is available.",
     },
     {
+      id: "follow-up-nav-e-approval",
+      path: "/e-approval",
+      entryPath: "/e-approval",
+      target: "ea-nav-e-approval",
+      chapter: "follow_up",
+      title: "Open E-Approval",
+      body: "In the sidebar, open E-Approval. Cancel and follow-up start from your submissions list.",
+      audience: "requestor",
+      missingHint: "On a phone, open the menu (☰) first. Expand E-Approval if it is collapsed, then continue.",
+    },
+    {
+      id: "follow-up-nav-submissions",
+      path: "/e-approval",
+      entryPath: "/e-approval",
+      target: "ea-nav-e-approval-submissions",
+      chapter: "follow_up",
+      title: "Open Submissions",
+      body: "Under E-Approval, click Submissions to find a pending request you own.",
+      audience: "requestor",
+      missingHint: "Expand E-Approval in the sidebar to see Submissions.",
+    },
+    {
+      id: "follow-up-open-request",
+      path: "/e-approval/submissions",
+      entryPath: "/e-approval/submissions",
+      autoNavFrom: "ea-nav-e-approval-submissions",
+      target: "ea-submissions-card-actions",
+      chapter: "follow_up",
+      title: "Open a pending request",
+      body: "Open the sample pending request (or any pending request you own). Next continues on the detail page.",
+      audience: "requestor",
+      listViewMode: "gallery",
+      missingHint: "Sample Open link appears while the tour is active.",
+    },
+    {
+      id: "follow-up-decide-tab",
+      path: "/e-approval/submissions/",
+      pathMatch: "prefix",
+      entryPath: "/e-approval/submissions/tour-sample",
+      autoNavFrom: "ea-submissions-card-actions",
+      query: { tab: "decide" },
+      target: "ea-detail-decide-tab",
+      chapter: "follow_up",
+      title: "Open Decide",
+      body: "On a pending request you own, open the Decide tab. That is where Cancel and Follow-up live.",
+      audience: "requestor",
+      missingHint: "Open the sample submission, then select the Decide tab.",
+      skipIfMissing: true,
+    },
+    {
+      id: "detail-requestor-actions",
+      path: "/e-approval/submissions/",
+      pathMatch: "prefix",
+      entryPath: "/e-approval/submissions/tour-sample",
+      query: { tab: "decide" },
+      target: "ea-detail-requestor-actions",
+      chapter: "follow_up",
+      title: "Requestor actions",
+      body: "While a request is still pending, use this panel to cancel it or nudge waiting approvers.",
+      audience: "requestor",
+      missingHint: "Open the sample submission Decide tab as a requestor to see Cancel and Follow-up.",
+      skipIfMissing: true,
+    },
+    {
+      id: "detail-cancel",
+      path: "/e-approval/submissions/",
+      pathMatch: "prefix",
+      entryPath: "/e-approval/submissions/tour-sample",
+      query: { tab: "decide" },
+      target: "ea-detail-cancel",
+      chapter: "follow_up",
+      title: "Cancel the request",
+      body: "Cancel withdraws a pending request so approvers no longer need to act. Use this when the work is no longer needed.",
+      audience: "requestor",
+      missingHint: "Cancel appears on Decide → Requestor actions for pending requests you own.",
+      skipIfMissing: true,
+    },
+    {
+      id: "detail-follow-up",
+      path: "/e-approval/submissions/",
+      pathMatch: "prefix",
+      entryPath: "/e-approval/submissions/tour-sample",
+      query: { tab: "decide" },
+      target: "ea-detail-follow-up",
+      chapter: "follow_up",
+      title: "Manual follow-up",
+      body: "Send follow-up to approver notifies every pending approver on the current step by email and in-app (including parallel peers). A cooldown may apply between reminders.",
+      audience: "requestor",
+      missingHint: "Follow-up appears on Decide → Requestor actions for pending requests you own.",
+      skipIfMissing: true,
+    },
+    {
       id: "nav-e-approval-approvals",
       path: "/e-approval/submissions",
       entryPath: "/e-approval/submissions",
@@ -945,7 +1085,7 @@ export function resolveEApprovalTourSteps(
 
 export function resolveLiveTour(
   tourId: string | null,
-  capabilities: EApprovalTourCapabilities,
+  capabilities: LiveTourCapabilities,
 ): LiveTourDefinition | null {
   if (!tourId) {
     return null;
@@ -954,11 +1094,37 @@ export function resolveLiveTour(
   if (!base) {
     return null;
   }
-  if (base.id !== eApprovalLiveTour.id) {
-    return base;
+  if (base.id === eApprovalLiveTour.id) {
+    return {
+      ...base,
+      steps: resolveEApprovalTourSteps(capabilities),
+    };
   }
-  return {
-    ...base,
-    steps: resolveEApprovalTourSteps(capabilities),
-  };
+  if (base.id === ticketingLiveTour.id) {
+    const steps = ticketingLiveTour.steps
+      .filter((step) => stepVisibleForCapabilities(step, capabilities))
+      .map((step) => {
+        if (step.id !== "tour-complete") {
+          return step;
+        }
+        if (capabilities.canManageTickets) {
+          return {
+            ...step,
+            body: "You’re finished. You can raise tickets, work the queue, and update status from ticket detail anytime. Click Finish tour to close.",
+          };
+        }
+        if (capabilities.canCreateTickets) {
+          return {
+            ...step,
+            body: "You’re finished. You can raise tickets and track them from Overview and Tickets. Manage steps were skipped for your role. Click Finish tour to close.",
+          };
+        }
+        return {
+          ...step,
+          body: "You’re finished. You can browse Overview and the ticket queue for your role. Click Finish tour to close.",
+        };
+      });
+    return { ...base, steps };
+  }
+  return base;
 }

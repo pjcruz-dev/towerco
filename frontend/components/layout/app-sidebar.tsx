@@ -30,6 +30,7 @@ import {
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
 import { useProcurementPlanFeatures } from "@/hooks/use-procurement-plan-features";
 import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
 import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
 import { workspaceNavGroups } from "@/lib/navigation/workspace-nav-config";
@@ -100,7 +101,7 @@ function SidebarNavLink({
 
 export function AppSidebar() {
   const searchParams = useSearchParams();
-  const tourActive = isEApprovalTourActive(searchParams);
+  const tourActive = isEApprovalTourActive(searchParams) || isTicketingTourActive(searchParams);
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
@@ -244,10 +245,15 @@ export function AppSidebar() {
                         ? "ea-nav-settings"
                         : item.title === "E-Approval"
                           ? "ea-nav-e-approval"
-                          : undefined
+                          : item.title === "Ticketing"
+                            ? "tk-nav-ticketing"
+                            : undefined
                     }
                     forceOpen={
-                      tourActive && (item.title === "Settings" || item.title === "E-Approval")
+                      tourActive &&
+                      (item.title === "Settings" ||
+                        item.title === "E-Approval" ||
+                        item.title === "Ticketing")
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {
                       const pathOnly = href.split("?")[0] ?? href;
@@ -270,19 +276,38 @@ export function AppSidebar() {
                                     tourNav: "/e-approval/profile",
                                   }
                                 : null;
+                      const ticketingNav =
+                        pathOnly === "/ticketing"
+                          ? { dataHelp: "tk-nav-ticketing-overview", tourNav: "/ticketing" }
+                          : pathOnly === "/ticketing/tickets"
+                            ? {
+                                dataHelp: "tk-nav-ticketing-tickets",
+                                tourNav: "/ticketing/tickets",
+                              }
+                            : pathOnly === "/ticketing/tickets/new"
+                              ? {
+                                  dataHelp: "tk-nav-ticketing-new",
+                                  tourNav: "/ticketing/tickets/new",
+                                }
+                              : pathOnly === "/ticketing/settings"
+                                ? {
+                                    dataHelp: "tk-nav-ticketing-settings",
+                                    tourNav: "/ticketing/settings",
+                                  }
+                                : null;
+                      const tourNavMeta = eApprovalNav ?? ticketingNav;
                       return {
                         title,
                         href,
                         exact,
                         section,
                         badge,
-                        dataHelp: eApprovalNav?.dataHelp,
-                        tourNav: eApprovalNav?.tourNav,
+                        dataHelp: tourNavMeta?.dataHelp,
+                        tourNav: tourNavMeta?.tourNav,
                       };
                     })}
                     buttonClassName={navButtonClass}
-                  />
-                ) : (
+                  />                ) : (
                   <SidebarNavLink
                     key={item.title}
                     title={item.title}

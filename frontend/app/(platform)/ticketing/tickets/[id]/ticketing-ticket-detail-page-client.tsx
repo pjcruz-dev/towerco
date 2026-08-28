@@ -9,6 +9,7 @@ import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticke
 import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { formatFileSize, formatTicketingDate, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { WorkspaceEntityActivityPanel } from "@/components/governance/workspace-entity-activity-panel";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Badge } from "@/components/ui/badge";
@@ -115,6 +116,7 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <TicketingPageHeader
           eyebrow={
             <>
@@ -152,7 +154,10 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
         {ticket ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
             <div className="space-y-6">
-              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <section
+                data-help="tk-detail-header"
+                className="rounded-xl border border-border bg-card p-5 shadow-sm"
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <TicketingStatusBadge status={ticket.status} />
                   <TicketingPriorityBadge priority={ticket.priority} />
@@ -163,12 +168,13 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-4 text-sm font-medium text-foreground">Description</h2>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                  {ticket.description?.trim() || "No description provided."}
-                </p>
+                <div data-help="tk-detail-description">
+                  <h2 className="mt-4 text-sm font-medium text-foreground">Description</h2>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                    {ticket.description?.trim() || "No description provided."}
+                  </p>
+                </div>
               </section>
-
               <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-sm font-medium text-foreground">Attachments</h2>
@@ -220,9 +226,11 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                 </ul>
               </section>
 
-              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                <h2 className="text-sm font-medium text-foreground">Activity</h2>
-                <ul className="mt-3 space-y-3">
+              <section
+                data-help="tk-detail-activity"
+                className="rounded-xl border border-border bg-card p-5 shadow-sm"
+              >
+                <h2 className="text-sm font-medium text-foreground">Activity</h2>                <ul className="mt-3 space-y-3">
                   {ticket.comments.length === 0 ? (
                     <li className="text-sm text-muted-foreground">No comments yet.</li>
                   ) : (
@@ -362,9 +370,11 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
               ) : null}
 
               {canManage ? (
-                <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
-                  <h3 className="text-sm font-medium text-foreground">Manage</h3>
-                  <div className="space-y-2">
+                <div
+                  data-help="tk-detail-manage"
+                  className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3"
+                >
+                  <h3 className="text-sm font-medium text-foreground">Manage</h3>                  <div className="space-y-2">
                     <Label htmlFor="status-update">Status</Label>
                     <Select
                       id="status-update"

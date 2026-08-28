@@ -11,20 +11,20 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermission } from "@/hooks/use-permission";
+import { dismissTicketingTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
+import type { LiveTourAudience, LiveTourChapterId } from "@/lib/help/e-approval-live-tour";
 import {
-  getCompletedEApprovalTourChapters,
-  subscribeEApprovalTourChapterProgress,
-} from "@/lib/help/e-approval-tour-chapter-progress";
-import { dismissEApprovalTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
+  getCompletedTicketingTourChapters,
+  subscribeTicketingTourChapterProgress,
+} from "@/lib/help/ticketing-tour-chapter-progress";
 import {
-  LIVE_TOUR_CHAPTER_LABELS,
-  eApprovalTourChaptersForCapabilities,
-  liveTourChapterStartHref,
-  liveTourStartHref,
-  type LiveTourAudience,
-  type LiveTourChapterId,
-} from "@/lib/help/e-approval-live-tour";
-import { eApprovalVisualGuideTabs } from "@/lib/help/e-approval-visual-guide";
+  TICKETING_TOUR_CHAPTER_LABELS,
+  ticketingTourChapterStartHref,
+  ticketingTourChaptersForCapabilities,
+  ticketingTourStartHref,
+  type TicketingTourChapterStart,
+} from "@/lib/help/ticketing-live-tour";
+import { ticketingVisualGuideTabs } from "@/lib/help/ticketing-visual-guide";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -37,10 +37,10 @@ function useCompletedTourChapters(
 
   useEffect(() => {
     const sync = () => {
-      setCompleted(getCompletedEApprovalTourChapters(userId, tenantId));
+      setCompleted(getCompletedTicketingTourChapters(userId, tenantId));
     };
     sync();
-    return subscribeEApprovalTourChapterProgress(sync);
+    return subscribeTicketingTourChapterProgress(sync);
   }, [tenantId, userId]);
 
   return completed;
@@ -49,75 +49,78 @@ function useCompletedTourChapters(
 function TourChapterAudienceBadges({ audience }: { audience?: LiveTourAudience }) {
   const role = audience ?? "all";
 
-  if (role === "requestor") {
+  if (role === "ticket_creator") {
     return (
       <Badge
         variant="outline"
         className="border-sky-200 bg-sky-50 text-[11px] font-medium text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
       >
-        Requestor
+        Requester
       </Badge>
     );
   }
 
-  if (role === "approver") {
+  if (role === "ticket_manager" || role === "ticket_settings") {
     return (
       <Badge
         variant="outline"
         className="border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
       >
-        Approver
+        Admin
       </Badge>
     );
   }
 
   return (
-    <span className="flex flex-wrap gap-1">
-      <Badge
-        variant="outline"
-        className="border-sky-200 bg-sky-50 text-[11px] font-medium text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
-      >
-        Requestor
-      </Badge>
-      <Badge
-        variant="outline"
-        className="border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
-      >
-        Approver
-      </Badge>
-    </span>
+    <Badge
+      variant="outline"
+      className="border-sky-200 bg-sky-50 text-[11px] font-medium text-sky-800 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100"
+    >
+      All users
+    </Badge>
   );
 }
 
-export function EApprovalVisualGuidePageClient() {
-  const defaultTab = eApprovalVisualGuideTabs[0]?.id ?? "overview";
+function chapterLabel(chapter: TicketingTourChapterStart): string {
+  return TICKETING_TOUR_CHAPTER_LABELS[chapter.id];
+}
+
+export function TicketingTourGuidePageClient() {
+  const defaultTab = ticketingVisualGuideTabs[0]?.id ?? "overview";
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const tenantId = useAuthStore((state) => state.activeTenantId);
-  const canApprove = usePermission([permissions.eApprovalApprove]);
-  const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
+  const canCreate = usePermission([permissions.ticketingTicketsCreate]);
+  const canManage = usePermission([permissions.ticketingTicketsManage]);
+  const canSettings = usePermission([permissions.ticketingSettingsManage]);
   const capabilities = useMemo(
-    () => ({ canApprove, canCreate }),
-    [canApprove, canCreate],
+    () => ({ canCreate, canManage, canSettings }),
+    [canCreate, canManage, canSettings],
   );
-  const liveTourHref = liveTourStartHref("e-approval", 0, capabilities);
+  const liveTourHref = useMemo(
+    () => ticketingTourStartHref(0, capabilities),
+    [capabilities],
+  );
   const chapterStarts = useMemo(
-    () => eApprovalTourChaptersForCapabilities(capabilities),
+    () => ticketingTourChaptersForCapabilities(capabilities),
     [capabilities],
   );
   const completedChapters = useCompletedTourChapters(userId, tenantId);
 
+  const visibleTabs = ticketingVisualGuideTabs;
+
   return (
-    <PermissionGate requiredPermissions={[permissions.eApprovalView]}>
+    <PermissionGate requiredPermissions={[permissions.ticketingView]}>
       <div className="mx-auto max-w-5xl space-y-6 print:max-w-none">
         <div className="flex flex-wrap items-start justify-between gap-3 print:block">
           <header className="min-w-0 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">E-Approval</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Tour guide
-            </h1>
+            <p className="text-xs font-medium text-muted-foreground">Ticketing</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tour guide</h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
               Diagrams first — numbered callouts explain each screen. Jump into a chapter below, or use
-              Start full tour for a live walkthrough (including cancel and manual follow-up).
+              Start full tour for a live walkthrough.
+              {canManage || canSettings
+                ? " Admin chapters (manage and settings) appear only for your role."
+                : ""}
             </p>
           </header>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -127,7 +130,7 @@ export function EApprovalVisualGuidePageClient() {
             <Link
               href={liveTourHref}
               className={cn(buttonVariants({ size: "sm" }))}
-              onClick={() => dismissEApprovalTourPrompt(userId, tenantId)}
+              onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
             >
               <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               Start full tour
@@ -140,9 +143,9 @@ export function EApprovalVisualGuidePageClient() {
           <div className="space-y-1">
             <h2 className="text-base font-medium text-foreground">Jump into a tour chapter</h2>
             <p className="text-sm text-muted-foreground">
-              Start only the part you need. Badges show whether a chapter is for requestors,
-              approvers, or both. After a chapter finishes you return here to pick another.
-              Sample UI appears while the tour runs and is never saved.
+              Start only the part you need. Badges show whether a chapter is for all users, requesters,
+              or admins. After a chapter finishes you return here to pick another. Sample UI appears
+              while the tour runs and is never saved.
             </p>
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border">
@@ -151,15 +154,13 @@ export function EApprovalVisualGuidePageClient() {
               return (
                 <li key={chapter.id}>
                   <Link
-                    href={liveTourChapterStartHref(chapter.id, capabilities)}
-                    onClick={() => dismissEApprovalTourPrompt(userId, tenantId)}
+                    href={ticketingTourChapterStartHref(chapter.id, capabilities)}
+                    onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
                     className="flex flex-col gap-1 px-3 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                   >
                     <div className="min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">
-                          {LIVE_TOUR_CHAPTER_LABELS[chapter.id]}
-                        </p>
+                        <p className="text-sm font-medium text-foreground">{chapterLabel(chapter)}</p>
                         <TourChapterAudienceBadges audience={chapter.audience} />
                       </div>
                       <p className="text-xs text-muted-foreground">{chapter.how}</p>
@@ -197,7 +198,7 @@ export function EApprovalVisualGuidePageClient() {
             <Link
               href={liveTourHref}
               className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
-              onClick={() => dismissEApprovalTourPrompt(userId, tenantId)}
+              onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
             >
               Start full tour
             </Link>{" "}
@@ -207,14 +208,14 @@ export function EApprovalVisualGuidePageClient() {
 
         <Tabs defaultValue={defaultTab} className="gap-4 print:hidden">
           <TabsList variant="default" className="h-auto w-full flex-wrap justify-start gap-1">
-            {eApprovalVisualGuideTabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <TabsTrigger key={tab.id} value={tab.id} className="px-3 py-1.5">
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {eApprovalVisualGuideTabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <TabsContent key={tab.id} value={tab.id} className="space-y-6">
               {tab.sections.map((section) => (
                 <VisualGuideFigure key={section.id} section={section} />
@@ -223,9 +224,8 @@ export function EApprovalVisualGuidePageClient() {
           ))}
         </Tabs>
 
-        {/* Full guide for Print / Save as PDF — all tabs, not only the active one. */}
         <div className="hidden print:block">
-          {eApprovalVisualGuideTabs.map((tab, tabIndex) => (
+          {visibleTabs.map((tab, tabIndex) => (
             <section
               key={tab.id}
               className={cn("space-y-6", tabIndex > 0 && "break-before-page pt-2")}

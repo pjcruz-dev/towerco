@@ -778,20 +778,32 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 ) : null}
 
                 {data.status === "pending" && data.viewer_is_requestor ? (
-                  <EApprovalSectionCard title="Requestor actions">
+                  <EApprovalSectionCard
+                    dataHelp="ea-detail-requestor-actions"
+                    title="Requestor actions"
+                  >
                     <div className="mt-3 space-y-2">
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
-                          Cancel request
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => followUpMutation.mutate()}
-                          disabled={followUpMutation.isPending || !!data.manual_follow_up_next_allowed_at}
-                        >
-                          Send follow-up to approver
-                        </Button>
+                        <span data-help="ea-detail-cancel" className="inline-flex">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => cancelMutation.mutate()}
+                            disabled={cancelMutation.isPending}
+                          >
+                            Cancel request
+                          </Button>
+                        </span>
+                        <span data-help="ea-detail-follow-up" className="inline-flex">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => followUpMutation.mutate()}
+                            disabled={followUpMutation.isPending || !!data.manual_follow_up_next_allowed_at}
+                          >
+                            Send follow-up to approver
+                          </Button>
+                        </span>
                       </div>
                       {data.manual_follow_up_next_allowed_at ? (
                         <p className="text-xs text-muted-foreground">

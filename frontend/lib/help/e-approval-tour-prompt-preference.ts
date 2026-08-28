@@ -3,6 +3,7 @@
 const STORAGE_PREFIX = "toweros.help.liveTourPrompt.dismissed";
 
 export const E_APPROVAL_LIVE_TOUR_ID = "e-approval";
+export const TICKETING_LIVE_TOUR_ID = "ticketing";
 
 function storageKey(tourId: string, userId: string, tenantId: string | null): string {
   const tenant = tenantId && tenantId.length > 0 ? tenantId : "none";
@@ -52,3 +53,18 @@ export function dismissEApprovalTourPrompt(
 ): void {
   dismissLiveTourPrompt(E_APPROVAL_LIVE_TOUR_ID, userId, tenantId);
 }
+
+export function dismissTicketingTourPrompt(
+  userId: string | null | undefined,
+  tenantId: string | null | undefined,
+): void {
+  dismissLiveTourPrompt(TICKETING_LIVE_TOUR_ID, userId, tenantId);
+}
+
+export function hasDismissedTicketingTourPrompt(
+  userId: string | null | undefined,
+  tenantId: string | null | undefined,
+): boolean {
+  return hasDismissedLiveTourPrompt(TICKETING_LIVE_TOUR_ID, userId, tenantId);
+}
+

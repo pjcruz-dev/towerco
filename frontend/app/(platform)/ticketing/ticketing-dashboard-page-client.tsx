@@ -2,11 +2,19 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, LifeBuoy, Plus, Ticket } from "lucide-react";
 
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { countBy, DASHBOARD_CHART, kpiSeries } from "@/components/dashboard/dashboard-chart-utils";
+import {
+  TicketingTourCompleteAnchor,
+  TicketingTourOverviewRecentFixtures,
+} from "@/components/help/ticketing-tour-fixtures";
+import { TicketingTourSoftPrompt } from "@/components/help/ticketing-tour-soft-prompt";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
+import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entry-actions";
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { formatTicketingDate } from "@/components/ticketing/ticketing-utils";
@@ -17,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useTicketingDashboard } from "@/hooks/use-ticketing-dashboard";
 import { getErrorMessage } from "@/lib/api/error";
+import { isTicketingTourActive } from "@/lib/help/ticketing-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +45,8 @@ const NAV_TILES = [
 ] as const;
 
 export function TicketingDashboardPageClient() {
+  const searchParams = useSearchParams();
+  const tourActive = isTicketingTourActive(searchParams);
   const { data, isFetching, isError, error, isPlaceholderData, refetch } = useTicketingDashboard();
   const showSkeleton = isFetching && isPlaceholderData;
 
@@ -84,6 +95,7 @@ export function TicketingDashboardPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <TicketingPageHeader
           title="Ticketing"
           description={
@@ -92,6 +104,7 @@ export function TicketingDashboardPageClient() {
           }
           actions={
             <>
+              <TicketingHelpEntryActions />
               <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
                 {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
                 Refresh
@@ -104,6 +117,9 @@ export function TicketingDashboardPageClient() {
           }
         />
 
+        <TicketingTourSoftPrompt />
+        <TicketingTourCompleteAnchor />
+
         {showSkeleton ? <DashboardContentSkeleton /> : null}
         {isError ? (
           <p className="text-sm text-destructive">
@@ -113,7 +129,7 @@ export function TicketingDashboardPageClient() {
 
         {!showSkeleton ? (
           <>
-            <KpiStrip items={data?.kpis ?? []} />
+            <KpiStrip items={data?.kpis ?? []} dataHelp="tk-overview-kpis" />
 
             <div className="grid gap-4 lg:grid-cols-2">
               <DashboardBarChart
@@ -184,7 +200,7 @@ export function TicketingDashboardPageClient() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div data-help="tk-overview-quick-actions" className="grid gap-4 sm:grid-cols-2">
               {NAV_TILES.map((tile) => {
                 const Icon = tile.icon;
                 return (
@@ -209,7 +225,10 @@ export function TicketingDashboardPageClient() {
               })}
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div
+              data-help="tk-overview-recent"
+              className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+            >
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <h2 className="text-sm font-medium text-foreground">Recent tickets</h2>
                 <Link href="/ticketing/tickets" className="text-xs text-primary hover:underline">
@@ -230,7 +249,27 @@ export function TicketingDashboardPageClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.recent_tickets ?? []).length === 0 ? (
+                    <TicketingTourOverviewRecentFixtures />
+                    {(data?.recent_tickets ?? []).map((ticket) => (
+                      <tr key={ticket.id} className="border-b border-border last:border-0 hover:bg-muted/20">
+                        <td className="px-4 py-2.5 font-mono text-xs">
+                          <Link href={`/ticketing/tickets/${ticket.id}`} className="text-primary hover:underline">
+                            {ticket.ticket_number}
+                          </Link>
+                        </td>
+                        <td className="max-w-xs truncate px-4 py-2.5 text-foreground">{ticket.title}</td>
+                        <td className="px-4 py-2.5">
+                          <TicketingStatusBadge status={ticket.status} />
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <TicketingPriorityBadge priority={ticket.priority} />
+                        </td>
+                        <td className="hidden px-4 py-2.5 text-xs text-muted-foreground md:table-cell">
+                          {formatTicketingDate(ticket.updated_at)}
+                        </td>
+                      </tr>
+                    ))}
+                    {!tourActive && (data?.recent_tickets ?? []).length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
                           No tickets yet.{" "}
@@ -239,27 +278,7 @@ export function TicketingDashboardPageClient() {
                           </Link>
                         </td>
                       </tr>
-                    ) : (
-                      (data?.recent_tickets ?? []).map((ticket) => (
-                        <tr key={ticket.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                          <td className="px-4 py-2.5 font-mono text-xs">
-                            <Link href={`/ticketing/tickets/${ticket.id}`} className="text-primary hover:underline">
-                              {ticket.ticket_number}
-                            </Link>
-                          </td>
-                          <td className="max-w-xs truncate px-4 py-2.5 text-foreground">{ticket.title}</td>
-                          <td className="px-4 py-2.5">
-                            <TicketingStatusBadge status={ticket.status} />
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <TicketingPriorityBadge priority={ticket.priority} />
-                          </td>
-                          <td className="hidden px-4 py-2.5 text-xs text-muted-foreground md:table-cell">
-                            {formatTicketingDate(ticket.updated_at)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ) : null}
                   </tbody>
                 </table>
               </div>

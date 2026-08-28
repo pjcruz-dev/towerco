@@ -9,7 +9,7 @@ import { TicketingAssignmentRulesEditor } from "@/components/ticketing/ticketing
 import { TicketingCategoriesEditor } from "@/components/ticketing/ticketing-categories-editor";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { slugifyTicketingCategory } from "@/components/ticketing/ticketing-utils";
-import { SettingsPageSkeleton } from "@/components/ui/page-skeletons";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -179,6 +179,7 @@ export function TicketingSettingsPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingSettingsManage]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <TicketingPageHeader
           eyebrow={
             <Link href="/ticketing" className="hover:text-primary">
@@ -194,15 +195,25 @@ export function TicketingSettingsPageClient() {
           }
         />
 
-        {settingsQuery.isLoading ? <SettingsPageSkeleton /> : null}
-
         {settingsQuery.isError ? (
           <p className="text-sm text-destructive">Could not load module settings.</p>
         ) : null}
 
-        {!settingsQuery.isLoading && !settingsQuery.isError ? (
-          <div className="space-y-6">
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="space-y-6">
+          <section
+            data-help="tk-settings-categories"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+          >
+            {settingsQuery.isLoading || settingsQuery.isError ? (
+              <div>
+                <h2 className="text-sm font-medium text-foreground">Categories</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {settingsQuery.isLoading
+                    ? "Loading category options…"
+                    : "Categories appear after settings load."}
+                </p>
+              </div>
+            ) : (
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                   <Layers className="h-4 w-4" />
@@ -217,8 +228,10 @@ export function TicketingSettingsPageClient() {
                   />
                 </div>
               </div>
-            </section>
+            )}
+          </section>
 
+          {!settingsQuery.isLoading && !settingsQuery.isError ? (
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -234,8 +247,20 @@ export function TicketingSettingsPageClient() {
                 </div>
               </div>
             </section>
+          ) : null}
 
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <section
+            data-help="tk-settings-sla"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+          >
+            {settingsQuery.isLoading || settingsQuery.isError ? (
+              <div>
+                <h2 className="text-sm font-medium text-foreground">SLA & escalation</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {settingsQuery.isLoading ? "Loading SLA defaults…" : "SLA settings appear after load."}
+                </p>
+              </div>
+            ) : (
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">
                   <Clock className="h-4 w-4" />
@@ -279,9 +304,23 @@ export function TicketingSettingsPageClient() {
                   </div>
                 </div>
               </div>
-            </section>
+            )}
+          </section>
 
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <section
+            data-help="tk-settings-notify"
+            className="rounded-xl border border-border bg-card p-5 shadow-sm"
+          >
+            {settingsQuery.isLoading || settingsQuery.isError ? (
+              <div>
+                <h2 className="text-sm font-medium text-foreground">Notifications</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {settingsQuery.isLoading
+                    ? "Loading notification settings…"
+                    : "Notification settings appear after load."}
+                </p>
+              </div>
+            ) : (
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Mail className="h-4 w-4" />
@@ -317,88 +356,113 @@ export function TicketingSettingsPageClient() {
                   </Button>
                 </div>
               </div>
-            </section>
+            )}
+          </section>
 
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-sm font-medium text-foreground">Email notification toggles</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Control which events send email from Ticketing.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 text-sm text-foreground">
-                    <Checkbox checked={notifyItOnCreate} onCheckedChange={(v) => setNotifyItOnCreate(v === true)} />
-                    Email IT group when a ticket is created
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-foreground">
-                    <Checkbox checked={notifyItOnReopen} onCheckedChange={(v) => setNotifyItOnReopen(v === true)} />
-                    Email IT group when a requester reopens a ticket
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-foreground">
-                    <Checkbox checked={notifyRequestorOnResolve} onCheckedChange={(v) => setNotifyRequestorOnResolve(v === true)} />
-                    Email requester when a ticket is resolved
-                  </label>
-                  <label className="flex items-center gap-3 text-sm text-foreground">
-                    <Checkbox checked={notifyAssigneeOnAssign} onCheckedChange={(v) => setNotifyAssigneeOnAssign(v === true)} />
-                    Email assignee when a ticket is assigned to them
-                  </label>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Webhook className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1 space-y-4">
+          {!settingsQuery.isLoading && !settingsQuery.isError ? (
+            <>
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <div className="space-y-4">
                   <div>
-                    <h2 className="text-sm font-medium text-foreground">Teams / webhook</h2>
+                    <h2 className="text-sm font-medium text-foreground">Email notification toggles</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Paste the Teams Workflows “Copy webhook link” URL (Power Automate). Click{" "}
-                      <span className="font-medium text-foreground">Save settings</span> so ticket
-                      events keep using it; Test can use the URL in this field immediately.
+                      Control which events send email from Ticketing.
                     </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="teams-webhook">Webhook URL</Label>
-                    <Input
-                      id="teams-webhook"
-                      value={teamsWebhookUrl}
-                      onChange={(e) => setTeamsWebhookUrl(e.target.value)}
-                      placeholder="https://prod-XX.westus.logic.azure.com/workflows/... (Power Automate Workflows URL)"
-                    />
                   </div>
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 text-sm text-foreground">
-                      <Checkbox checked={notifyTeamsOnCreate} onCheckedChange={(v) => setNotifyTeamsOnCreate(v === true)} />
-                      Post when a ticket is created
+                      <Checkbox
+                        checked={notifyItOnCreate}
+                        onCheckedChange={(v) => setNotifyItOnCreate(v === true)}
+                      />
+                      Email IT group when a ticket is created
                     </label>
                     <label className="flex items-center gap-3 text-sm text-foreground">
-                      <Checkbox checked={notifyTeamsOnSlaReminder} onCheckedChange={(v) => setNotifyTeamsOnSlaReminder(v === true)} />
-                      Post on SLA reminder
+                      <Checkbox
+                        checked={notifyItOnReopen}
+                        onCheckedChange={(v) => setNotifyItOnReopen(v === true)}
+                      />
+                      Email IT group when a requester reopens a ticket
                     </label>
                     <label className="flex items-center gap-3 text-sm text-foreground">
-                      <Checkbox checked={notifyTeamsOnSlaEscalation} onCheckedChange={(v) => setNotifyTeamsOnSlaEscalation(v === true)} />
-                      Post on SLA escalation
+                      <Checkbox
+                        checked={notifyRequestorOnResolve}
+                        onCheckedChange={(v) => setNotifyRequestorOnResolve(v === true)}
+                      />
+                      Email requester when a ticket is resolved
+                    </label>
+                    <label className="flex items-center gap-3 text-sm text-foreground">
+                      <Checkbox
+                        checked={notifyAssigneeOnAssign}
+                        onCheckedChange={(v) => setNotifyAssigneeOnAssign(v === true)}
+                      />
+                      Email assignee when a ticket is assigned to them
                     </label>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={testWebhookMutation.isPending || !teamsWebhookUrl.trim()}
-                    onClick={() => testWebhookMutation.mutate()}
-                  >
-                    {testWebhookMutation.isPending ? "Sending…" : "Send test webhook"}
-                  </Button>
                 </div>
-              </div>
-            </section>
-          </div>
-        ) : null}
+              </section>
+
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <Webhook className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div>
+                      <h2 className="text-sm font-medium text-foreground">Teams / webhook</h2>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Paste the Teams Workflows “Copy webhook link” URL (Power Automate). Click{" "}
+                        <span className="font-medium text-foreground">Save settings</span> so ticket
+                        events keep using it; Test can use the URL in this field immediately.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="teams-webhook">Webhook URL</Label>
+                      <Input
+                        id="teams-webhook"
+                        value={teamsWebhookUrl}
+                        onChange={(e) => setTeamsWebhookUrl(e.target.value)}
+                        placeholder="https://prod-XX.westus.logic.azure.com/workflows/... (Power Automate Workflows URL)"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-3 text-sm text-foreground">
+                        <Checkbox
+                          checked={notifyTeamsOnCreate}
+                          onCheckedChange={(v) => setNotifyTeamsOnCreate(v === true)}
+                        />
+                        Post when a ticket is created
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-foreground">
+                        <Checkbox
+                          checked={notifyTeamsOnSlaReminder}
+                          onCheckedChange={(v) => setNotifyTeamsOnSlaReminder(v === true)}
+                        />
+                        Post on SLA reminder
+                      </label>
+                      <label className="flex items-center gap-3 text-sm text-foreground">
+                        <Checkbox
+                          checked={notifyTeamsOnSlaEscalation}
+                          onCheckedChange={(v) => setNotifyTeamsOnSlaEscalation(v === true)}
+                        />
+                        Post on SLA escalation
+                      </label>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={testWebhookMutation.isPending || !teamsWebhookUrl.trim()}
+                      onClick={() => testWebhookMutation.mutate()}
+                    >
+                      {testWebhookMutation.isPending ? "Sending…" : "Send test webhook"}
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : null}
+        </div>
       </div>
     </PermissionGate>
   );
