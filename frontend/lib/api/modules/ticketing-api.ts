@@ -149,8 +149,12 @@ export async function sendTicketingSettingsTestEmail(): Promise<TicketingTestEma
   return response.data.data;
 }
 
-export async function sendTicketingSettingsTestWebhook(): Promise<{ message: string }> {
-  const response = await apiClient.post<{ data: { message: string } }>("/ticketing/settings/test-webhook");
+export async function sendTicketingSettingsTestWebhook(
+  teamsWebhookUrl?: string,
+): Promise<{ message: string }> {
+  const response = await apiClient.post<{ data: { message: string } }>("/ticketing/settings/test-webhook", {
+    teams_webhook_url: teamsWebhookUrl?.trim() || undefined,
+  });
   return response.data.data;
 }
 

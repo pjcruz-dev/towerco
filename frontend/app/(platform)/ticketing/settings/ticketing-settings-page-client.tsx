@@ -155,7 +155,7 @@ export function TicketingSettingsPageClient() {
   });
 
   const testWebhookMutation = useMutation({
-    mutationFn: sendTicketingSettingsTestWebhook,
+    mutationFn: () => sendTicketingSettingsTestWebhook(teamsWebhookUrl),
     onSuccess: (result) => {
       push({ level: "success", title: "Test webhook sent", message: result.message });
     },
@@ -357,7 +357,9 @@ export function TicketingSettingsPageClient() {
                   <div>
                     <h2 className="text-sm font-medium text-foreground">Teams / webhook</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Optional Microsoft Teams incoming webhook URL for operational alerts.
+                      Paste the Teams Workflows “Copy webhook link” URL (Power Automate). Click{" "}
+                      <span className="font-medium text-foreground">Save settings</span> so ticket
+                      events keep using it; Test can use the URL in this field immediately.
                     </p>
                   </div>
                   <div className="space-y-2">

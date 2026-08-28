@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Notifications\Support;
 
+use App\Modules\Notifications\Support\TeamsWebhookUrl;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -20,13 +21,13 @@ final class TeamsWebhookHttpPoster
         string $logKey,
         array $context = [],
     ): void {
-        $url = trim($url);
-        if ($url === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+        $url = TeamsWebhookUrl::normalize($url);
+        if (! TeamsWebhookUrl::isValid($url)) {
             return;
         }
 
         try {
-            Http::timeout(max(1, $timeoutSeconds))->post($url, $payload)->throw();
+            Http::timeout(max(1, $timeoutSeconds))->asJson()->post($url, $payload)->throw();
         } catch (\Throwable $e) {
             Log::warning($logKey, array_merge($context, [
                 'message' => $e->getMessage(),
@@ -39,6 +40,7 @@ final class TeamsWebhookHttpPoster
      */
     public static function postOrThrow(string $url, array $payload, int $timeoutSeconds): void
     {
-        Http::timeout(max(1, $timeoutSeconds))->post($url, $payload)->throw();
+        $url = TeamsWebhookUrl::normalize($url);
+        Http::timeout(max(1, $timeoutSeconds))->asJson()->post($url, $payload)->throw();
     }
 }

@@ -20,7 +20,11 @@ class TicketingSettingsTestWebhookController extends AbstractApiController
         abort_unless($request->user()?->can('ticketing:settings:manage'), 403);
         $planFeatures->assertModuleEnabled();
 
-        $service->send();
+        $data = $request->validate([
+            'teams_webhook_url' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
+
+        $service->send(isset($data['teams_webhook_url']) ? (string) $data['teams_webhook_url'] : null);
 
         return $this->ok([
             'message' => __('Test webhook sent. Check your Teams channel for the TowerOS Ticketing test message.'),

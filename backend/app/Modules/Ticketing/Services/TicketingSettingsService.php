@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
+use App\Modules\Notifications\Support\TeamsWebhookUrl;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use Illuminate\Support\Facades\DB;
@@ -267,10 +268,10 @@ final class TicketingSettingsService
         }
 
         if (array_key_exists('teams_webhook_url', $values)) {
-            $url = trim((string) $values['teams_webhook_url']);
-            if ($url !== '' && ! filter_var($url, FILTER_VALIDATE_URL)) {
+            $url = TeamsWebhookUrl::normalize((string) $values['teams_webhook_url']);
+            if ($url !== '' && ! TeamsWebhookUrl::isValid($url)) {
                 throw ValidationException::withMessages([
-                    'teams_webhook_url' => [__('Enter a valid Teams or webhook URL.')],
+                    'teams_webhook_url' => [__('Enter a valid Teams Workflows (Power Automate) webhook URL.')],
                 ]);
             }
             $this->setString(self::TEAMS_WEBHOOK_URL, $url);
