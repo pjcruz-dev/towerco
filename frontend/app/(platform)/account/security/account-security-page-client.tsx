@@ -6,14 +6,15 @@ import { useMemo } from "react";
 import { MfaSettingsPageClient } from "@/app/(platform)/settings/security/mfa/mfa-settings-page-client";
 import { SessionsPageClient } from "@/app/(platform)/settings/sessions/sessions-page-client";
 import { PasskeysSettingsPanel } from "@/components/auth/passkeys-settings-panel";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { cn } from "@/lib/utils";
 
 type TabId = "sessions" | "mfa" | "passkeys";
 
-const TABS: { id: TabId; label: string }[] = [
+const TABS: { id: TabId; label: string; helpId?: string }[] = [
   { id: "sessions", label: "Sessions" },
-  { id: "mfa", label: "Authenticator" },
-  { id: "passkeys", label: "Passkeys" },
+  { id: "mfa", label: "Authenticator", helpId: "ea-security-tab-mfa" },
+  { id: "passkeys", label: "Passkeys", helpId: "ea-security-tab-passkeys" },
 ];
 
 export function AccountSecurityPageClient() {
@@ -39,7 +40,8 @@ export function AccountSecurityPageClient() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-help="ea-security-page">
+      <LiveProductTourHost />
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">My security</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -54,6 +56,7 @@ export function AccountSecurityPageClient() {
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
+            data-help={tab.helpId}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               activeTab === tab.id

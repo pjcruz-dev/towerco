@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { BookOpen, Play } from "lucide-react";
+import { BookOpen, Fingerprint, Play, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -11,6 +11,8 @@ import { getErrorMessage } from "@/lib/api/error";
 import { fetchPublishedHelpGuides, type HelpGuideListRow } from "@/lib/api/modules/help-guides-api";
 import { dismissEApprovalTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
+import { passkeysTourStartHref } from "@/lib/help/passkeys-live-tour";
+import { mfaTourStartHref } from "@/lib/help/mfa-live-tour";
 import { permissions } from "@/lib/rbac/permissions";
 import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
 import { useAuthStore } from "@/stores/auth-store";
@@ -102,6 +104,46 @@ function EApprovalTourGuideCard() {
   );
 }
 
+function PasskeysTourGuideCard() {
+  return (
+    <Link
+      href={passkeysTourStartHref(0)}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Interactive</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Add a passkey</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Starts from your account menu → My security → Passkeys. Enroll fingerprint, Face ID, or
+        Windows Hello on this organization host.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <Fingerprint className="h-3.5 w-3.5" aria-hidden />
+        Start passkey tour →
+      </p>
+    </Link>
+  );
+}
+
+function MfaTourGuideCard() {
+  return (
+    <Link
+      href={mfaTourStartHref(0)}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Interactive</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Set up MFA (first time)</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        After email, Microsoft, or passkey sign-in — enroll authenticator under My security when MFA
+        is required. Covers QR scan, verify, and recovery codes.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+        Start MFA tour →
+      </p>
+    </Link>
+  );
+}
+
 export function HelpPageClient() {
   const query = useQuery({
     queryKey: ["help", "guides"],
@@ -116,7 +158,7 @@ export function HelpPageClient() {
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Help</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Learn E-Approval with diagrams or an interactive tour on the live product.
+            Product tours and guides for E-Approval and account security.
           </p>
         </header>
 
@@ -132,6 +174,14 @@ export function HelpPageClient() {
           <div className="grid gap-4 sm:grid-cols-2">
             <EApprovalVisualGuideCard />
             <EApprovalTourGuideCard />
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold text-foreground">Account &amp; security</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MfaTourGuideCard />
+            <PasskeysTourGuideCard />
           </div>
         </section>
 

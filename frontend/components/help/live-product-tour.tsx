@@ -25,6 +25,11 @@ import {
   type LiveTourChapterId,
   type LiveTourStep,
 } from "@/lib/help/e-approval-live-tour";
+import {
+  PASSKEYS_TOUR_HELP_PATH,
+  isPasskeysTourId,
+} from "@/lib/help/passkeys-live-tour";
+import { isMfaTourId } from "@/lib/help/mfa-live-tour";
 import { markEApprovalTourChapterComplete } from "@/lib/help/e-approval-tour-chapter-progress";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
@@ -315,7 +320,10 @@ export function LiveProductTour() {
 
   const step = tour?.steps[stepIndex] ?? null;
   const chapterProgress = useMemo(
-    () => (tour ? getLiveTourChapterProgress(tour.steps, stepIndex) : null),
+    () =>
+      tour && (tour.id === "e-approval")
+        ? getLiveTourChapterProgress(tour.steps, stepIndex)
+        : null,
     [tour, stepIndex],
   );
   const [rect, setRect] = useState<TargetRect | null>(null);
@@ -345,7 +353,9 @@ export function LiveProductTour() {
       const { user, activeTenantId } = useAuthStore.getState();
       dismissLiveTourPrompt(tourId, user?.id ?? null, activeTenantId);
     }
-    router.replace(E_APPROVAL_VISUAL_GUIDE_PATH);
+    router.replace(
+      isPasskeysTourId(tourId) || isMfaTourId(tourId) ? PASSKEYS_TOUR_HELP_PATH : E_APPROVAL_VISUAL_GUIDE_PATH,
+    );
   }, [isMobile, router, setOpenMobile, tourId]);
 
   const endTour = useCallback(() => {
@@ -360,7 +370,10 @@ export function LiveProductTour() {
       const { user, activeTenantId } = useAuthStore.getState();
       dismissLiveTourPrompt(tourId, user?.id ?? null, activeTenantId);
     }
-    const nextPath = eApprovalTourExitPath(pathname);
+    const nextPath =
+      isPasskeysTourId(tourId) || isMfaTourId(tourId)
+        ? PASSKEYS_TOUR_HELP_PATH
+        : eApprovalTourExitPath(pathname);
     const next = clearTourSearch(searchParams);
     const qs = next.toString();
     router.replace(qs ? `${nextPath}?${qs}` : nextPath);
@@ -390,16 +403,18 @@ export function LiveProductTour() {
       endTour();
       return;
     }
-    const { user, activeTenantId } = useAuthStore.getState();
-    const seen = new Set<LiveTourChapterId>();
-    for (const entry of tour.steps) {
-      const chapterId = stepChapterId(entry);
-      if (chapterId !== "complete") {
-        seen.add(chapterId);
+    if (tour.id === "e-approval") {
+      const { user, activeTenantId } = useAuthStore.getState();
+      const seen = new Set<LiveTourChapterId>();
+      for (const entry of tour.steps) {
+        const chapterId = stepChapterId(entry);
+        if (chapterId !== "complete") {
+          seen.add(chapterId);
+        }
       }
-    }
-    for (const chapterId of seen) {
-      markEApprovalTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
+      for (const chapterId of seen) {
+        markEApprovalTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
+      }
     }
     endTour();
   }, [endTour, tour]);

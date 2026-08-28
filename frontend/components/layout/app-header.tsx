@@ -9,6 +9,7 @@ import { TenantNotificationBell } from "@/components/notifications/tenant-notifi
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { hasPermission, permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
+import { Suspense } from "react";
 
 export function AppHeader() {
   const user = useAuthStore((state) => state.user);
@@ -40,7 +41,9 @@ export function AppHeader() {
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <AppHeaderSearchTrigger />
         {canViewNotifications ? <TenantNotificationBell /> : null}
-        <UserProfileMenu />
+        <Suspense fallback={null}>
+          <UserProfileMenu />
+        </Suspense>
       </div>
     </header>
   );

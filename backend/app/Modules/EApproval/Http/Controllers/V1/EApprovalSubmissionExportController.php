@@ -10,6 +10,7 @@ use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Services\EApprovalReportService;
 use App\Modules\EApproval\Services\EApprovalSubmissionExportService;
+use App\Modules\EApproval\Support\EApprovalExportViewerScope;
 use App\Modules\EApproval\Support\SimpleXlsxWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,8 @@ class EApprovalSubmissionExportController extends AbstractApiController
         EApprovalSubmissionExportService $export,
         EApprovalReportService $reports,
     ): Response|JsonResponse {
-        abort_unless($request->user()?->can('e_approval:audit:view'), 403);
+        $user = $request->user();
+        abort_unless($user !== null && EApprovalExportViewerScope::userCanExport($user), 403);
 
         $query = $this->validatedTenantListQuery($request);
         $validated = $request->validate([
@@ -40,11 +42,13 @@ class EApprovalSubmissionExportController extends AbstractApiController
             'layout' => ['sometimes', 'string', 'in:submissions,line_items'],
             'grid_field' => ['sometimes', 'uuid'],
             'async' => ['sometimes', 'boolean'],
+            'viewer_scope' => ['sometimes', 'string', 'in:mine,all'],
         ]);
 
         $format = $validated['format'] ?? 'csv';
         $layout = $validated['layout'] ?? 'submissions';
         $forceAsync = (bool) ($validated['async'] ?? false);
+        $viewerScope = (string) ($validated['viewer_scope'] ?? 'all');
 
         // When a single form is selected, resolve it so its live custom fields are
         // available as columns (parity with the workspace export). Leaving it null
@@ -60,12 +64,15 @@ class EApprovalSubmissionExportController extends AbstractApiController
             'from' => isset($validated['from']) ? (string) $validated['from'] : null,
             'to' => isset($validated['to']) ? (string) $validated['to'] : null,
             'search' => $query['search'] !== '' ? $query['search'] : null,
+            'viewer_scope' => $viewerScope,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         $includeFields = $form !== null;
-        $scope = $form !== null
-            ? ['form' => $form, 'include_fields' => true, 'can_view_all' => true]
-            : null;
+        $viewerBits = EApprovalExportViewerScope::forUser($user, $viewerScope);
+        $scope = array_merge($viewerBits, [
+            'form' => $form,
+            'include_fields' => $includeFields,
+        ]);
 
         $selectedColumns = ! empty($validated['columns']) ? array_values($validated['columns']) : null;
 
@@ -89,7 +96,7 @@ class EApprovalSubmissionExportController extends AbstractApiController
 
         if ($reports->shouldQueue($totalMatching, $forceAsync)) {
             $history = $reports->queueAdHocExport(
-                $request->user(),
+                $user,
                 $filters,
                 $selectedColumns,
                 $layout,
@@ -112,7 +119,7 @@ class EApprovalSubmissionExportController extends AbstractApiController
         $exportedRows = min($totalMatching, EApprovalSubmissionExportService::SYNC_MAX_ROWS);
 
         $history = $reports->recordAdHocExport(
-            $request->user(),
+            $user,
             $filters,
             $selectedColumns,
             $layout,

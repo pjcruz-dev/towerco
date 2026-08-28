@@ -23,6 +23,9 @@ import { permissions } from "@/lib/rbac/permissions";
 import type { EApprovalFinanceProcurementPolicy } from "@/modules/e-approval/finance-procurement-policy";
 
 type SettingsForm = {
+  sla_reminder_minutes: number;
+  sla_escalation_minutes: number;
+  sla_use_working_days: boolean;
   liquidation_requires_parent: boolean;
   liquidation_overspend_mode: "block" | "warn";
   liquidation_max_overspend_percent: number;
@@ -37,6 +40,9 @@ type SettingsForm = {
 };
 
 const defaultForm: SettingsForm = {
+  sla_reminder_minutes: 2880,
+  sla_escalation_minutes: 4320,
+  sla_use_working_days: true,
   liquidation_requires_parent: true,
   liquidation_overspend_mode: "block",
   liquidation_max_overspend_percent: 0,
@@ -55,6 +61,9 @@ function parseSettings(data: Record<string, string | number | EApprovalFinancePr
   const source = typeof nested === "object" && nested !== null ? nested : data;
 
   return {
+    sla_reminder_minutes: toInt(data.sla_reminder_minutes, 2880),
+    sla_escalation_minutes: toInt(data.sla_escalation_minutes, 4320),
+    sla_use_working_days: toBool(data.sla_use_working_days, true),
     liquidation_requires_parent: toBool(source.liquidation_requires_parent, true),
     liquidation_overspend_mode: source.liquidation_overspend_mode === "warn" ? "warn" : "block",
     liquidation_max_overspend_percent: toInt(source.liquidation_max_overspend_percent, 0),
@@ -101,6 +110,9 @@ export function EApprovalSettingsPageClient() {
   const saveMutation = useMutation({
     mutationFn: () =>
       updateEApprovalSettings({
+        sla_reminder_minutes: form.sla_reminder_minutes,
+        sla_escalation_minutes: form.sla_escalation_minutes,
+        sla_use_working_days: form.sla_use_working_days ? "true" : "false",
         liquidation_requires_parent: form.liquidation_requires_parent ? "true" : "false",
         liquidation_overspend_mode: form.liquidation_overspend_mode,
         liquidation_max_overspend_percent: form.liquidation_max_overspend_percent,
@@ -139,7 +151,7 @@ export function EApprovalSettingsPageClient() {
       <div className="space-y-6">
         <EApprovalPageHeader
           title="E-Approval settings"
-          description="Tenant finance controls, external submitter notifications, and Teams webhooks."
+          description="SLA timers, tenant finance controls, external submitter notifications, and Teams webhooks."
           actions={
             <Button
               size="sm"
@@ -160,6 +172,60 @@ export function EApprovalSettingsPageClient() {
         {saved ? <p className="text-sm text-green-600 dark:text-green-400">Settings saved.</p> : null}
         {webhookMessage ? <p className="text-sm text-green-600 dark:text-green-400">{webhookMessage}</p> : null}
         {isLoading && !data ? <p className="text-sm text-muted-foreground">Loading settings…</p> : null}
+
+        <EApprovalSectionCard
+          title="Approval SLA"
+          description="Reminder and escalation thresholds for pending approvals. Working days skip weekends and tenant public holidays (same calendar as Project-One rollout)."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sla-reminder">Reminder after (minutes)</Label>
+              <Input
+                id="sla-reminder"
+                type="number"
+                min={1}
+                value={form.sla_reminder_minutes}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    sla_reminder_minutes: toInt(event.target.value, current.sla_reminder_minutes),
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">Default 2880 = 48 hours.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sla-escalation">Escalation after (minutes)</Label>
+              <Input
+                id="sla-escalation"
+                type="number"
+                min={1}
+                value={form.sla_escalation_minutes}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    sla_escalation_minutes: toInt(event.target.value, current.sla_escalation_minutes),
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">Default 4320 = 72 hours.</p>
+            </div>
+          </div>
+          <label className="mt-4 flex items-center gap-3 text-sm text-foreground">
+            <Switch
+              checked={form.sla_use_working_days}
+              onCheckedChange={(checked) =>
+                setForm((current) => ({ ...current, sla_use_working_days: checked }))
+              }
+            />
+            <span>
+              Count working days only
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Recommended for production. When off, SLA uses continuous wall-clock time.
+              </span>
+            </span>
+          </label>
+        </EApprovalSectionCard>
 
         <EApprovalSectionCard
           title="External submitter email"

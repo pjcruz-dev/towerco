@@ -78,7 +78,9 @@ function filterSub(
       return false;
     }
 
-    return can(item.permissions);
+    return item.permissionsMatch === "any"
+      ? canAccessAny(can, item.permissions)
+      : can(item.permissions);
   });
 }
 

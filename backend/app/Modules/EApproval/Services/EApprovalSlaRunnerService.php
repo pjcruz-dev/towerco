@@ -14,6 +14,7 @@ final class EApprovalSlaRunnerService
 {
     public function __construct(
         private readonly EApprovalSettingsService $settings,
+        private readonly EApprovalSlaClock $slaClock,
         private readonly EApprovalInAppNotificationService $inApp,
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalAuditLogger $audit,
@@ -28,16 +29,20 @@ final class EApprovalSlaRunnerService
         $reminderMinutes = $this->settings->getInt(EApprovalSettingsService::SLA_REMINDER_MINUTES, 48 * 60);
         $escalationMinutes = $this->settings->getInt(EApprovalSettingsService::SLA_ESCALATION_MINUTES, 72 * 60);
         $reminderRepeat = max(1, $reminderMinutes);
+        $now = now();
+        $reminderCutoff = $this->slaClock->thresholdBefore($now, $reminderMinutes);
+        $reminderRepeatCutoff = $this->slaClock->thresholdBefore($now, $reminderRepeat);
+        $escalationCutoff = $this->slaClock->thresholdBefore($now, $escalationMinutes);
 
         $reminders = 0;
         $escalations = 0;
 
         $overdue = EApprovalRequestApproval::query()
             ->where('status', EApprovalApprovalStatus::PENDING)
-            ->where('created_at', '<=', now()->subMinutes($reminderMinutes))
-            ->where(function ($q) use ($reminderRepeat): void {
+            ->where('created_at', '<=', $reminderCutoff)
+            ->where(function ($q) use ($reminderRepeatCutoff): void {
                 $q->whereNull('last_reminder_at')
-                    ->orWhere('last_reminder_at', '<=', now()->subMinutes($reminderRepeat));
+                    ->orWhere('last_reminder_at', '<=', $reminderRepeatCutoff);
             })
             ->get();
 
@@ -67,7 +72,7 @@ final class EApprovalSlaRunnerService
 
         $escalationTargets = EApprovalRequestApproval::query()
             ->where('status', EApprovalApprovalStatus::PENDING)
-            ->where('created_at', '<=', now()->subMinutes($escalationMinutes))
+            ->where('created_at', '<=', $escalationCutoff)
             ->whereNull('escalated_at')
             ->get();
 

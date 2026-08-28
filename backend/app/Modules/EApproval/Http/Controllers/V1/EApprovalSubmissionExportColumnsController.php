@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Services\EApprovalSubmissionExportService;
+use App\Modules\EApproval\Support\EApprovalExportViewerScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,7 +15,8 @@ class EApprovalSubmissionExportColumnsController extends AbstractApiController
 {
     public function __invoke(Request $request, EApprovalSubmissionExportService $export): JsonResponse
     {
-        abort_unless($request->user()?->can('e_approval:audit:view'), 403);
+        $user = $request->user();
+        abort_unless($user !== null && EApprovalExportViewerScope::userCanExport($user), 403);
 
         $validated = $request->validate([
             'form_id' => ['sometimes', 'uuid'],
@@ -33,7 +35,7 @@ class EApprovalSubmissionExportColumnsController extends AbstractApiController
             ])->values()->all()
             : [];
 
-        // Export picker needs every form (published or not) under audit permission —
+        // Export picker needs every form (published or not) under export permission —
         // not the submissions form-index endpoint (different RBAC + per_page caps).
         $forms = EApprovalForm::query()
             ->orderBy('name')
@@ -46,10 +48,13 @@ class EApprovalSubmissionExportColumnsController extends AbstractApiController
             ->values()
             ->all();
 
+        $canViewAll = $user->can('e_approval:audit:view') || $user->can('e_approval:forms:manage');
+
         return response()->json([
             'data' => $export->columns($form, $form !== null),
             'grids' => $grids,
             'forms' => $forms,
+            'can_view_all' => $canViewAll,
         ]);
     }
 }

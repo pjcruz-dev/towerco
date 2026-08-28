@@ -30,6 +30,7 @@ export type WorkspaceSubNavItem = {
   exact?: boolean;
   section?: string;
   permissions: string[];
+  permissionsMatch?: "all" | "any";
   badge?: number;
   module?: string;
   procurementPlanFeature?: ProcurementPlanFeatureKey;
@@ -301,7 +302,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           { title: "Forms", href: "/e-approval/forms", section: "Operate", permissions: ["e_approval:forms:manage"] },
           { title: "Submissions", href: "/e-approval/submissions", section: "Operate", permissions: ["e_approval:submissions:view"] },
           { title: "Approvals", href: "/e-approval/approvals?awaiting_me=1", section: "Decide", permissions: ["e_approval:approve"] },
-          { title: "Reports", href: "/e-approval/reports", section: "Operate", permissions: ["e_approval:audit:view"] },
+          { title: "Reports", href: "/e-approval/reports", section: "Operate", permissions: ["e_approval:audit:view", "e_approval:submissions:view"], permissionsMatch: "any" },
         ],
       },
       {

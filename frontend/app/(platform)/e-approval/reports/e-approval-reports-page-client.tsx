@@ -2,18 +2,19 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Play, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { EApprovalAnalyticsPanel } from "@/components/e-approval/e-approval-analytics-panel";
 import { EApprovalExportReportCard } from "@/components/e-approval/e-approval-export-report-card";
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
-import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { usePermission } from "@/hooks/use-permission";
 import {
   deleteEApprovalReport,
   downloadEApprovalExportHistoryFile,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { permissions } from "@/lib/rbac/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 
 function saveBlob(blob: Blob, filename: string) {
@@ -47,11 +49,35 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 type HubTab = "analytics" | "exports";
 
 export function EApprovalReportsPageClient() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<HubTab>("analytics");
+  const permissionsReady = useAuthStore((state) => state.permissionsReady);
+  const canAudit = usePermission([permissions.eApprovalAuditView]);
+  const canViewSubmissions = usePermission([permissions.eApprovalSubmissionsView]);
+  const canAccess = canAudit || canViewSubmissions;
+  const [tab, setTab] = useState<HubTab>("exports");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!permissionsReady) return;
+    if (!canAccess) {
+      router.replace("/dashboard");
+    }
+  }, [canAccess, permissionsReady, router]);
+
+  useEffect(() => {
+    if (permissionsReady && canAudit) {
+      setTab("analytics");
+    }
+  }, [canAudit, permissionsReady]);
+
+  useEffect(() => {
+    if (!canAudit && tab === "analytics") {
+      setTab("exports");
+    }
+  }, [canAudit, tab]);
 
   const reportsQuery = useQuery({
     queryKey: ["e-approval", "reports"],
@@ -160,19 +186,28 @@ export function EApprovalReportsPageClient() {
   });
 
   return (
-    <PermissionGate requiredPermissions={[permissions.eApprovalAuditView]}>
       <div className="space-y-6">
         <EApprovalPageHeader
           title="Reports"
-          description="Analytics, exports, saved report definitions, and download history."
+          description={
+            canAudit
+              ? "Analytics, exports, saved report definitions, and download history."
+              : "Export your own submissions. Attachment columns include download links."
+          }
         />
 
+        {!permissionsReady || !canAccess ? (
+          <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        ) : (
+          <>
         <div className="inline-flex rounded-lg border border-border bg-card p-1">
           {(
             [
-              { id: "analytics", label: "Analytics" },
-              { id: "exports", label: "Exports" },
-            ] as const
+              ...(canAudit ? [{ id: "analytics" as const, label: "Analytics" }] : []),
+              { id: "exports" as const, label: "Exports" },
+            ]
           ).map((item) => (
             <button
               key={item.id}
@@ -190,7 +225,7 @@ export function EApprovalReportsPageClient() {
           ))}
         </div>
 
-        {tab === "analytics" ? <EApprovalAnalyticsPanel /> : null}
+        {tab === "analytics" && canAudit ? <EApprovalAnalyticsPanel /> : null}
 
         {tab === "exports" ? (
           <>
@@ -387,8 +422,9 @@ export function EApprovalReportsPageClient() {
             </EApprovalSectionCard>
           </>
         ) : null}
+          </>
+        )}
       </div>
-    </PermissionGate>
   );
 }
 

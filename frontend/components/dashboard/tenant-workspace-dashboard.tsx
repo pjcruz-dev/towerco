@@ -7,6 +7,7 @@ import { AwaitingMeHub } from "@/components/dashboard/awaiting-me-hub";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { chartColorAt, kpiSeries } from "@/components/dashboard/dashboard-chart-utils";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { ActionableWidgets } from "@/components/project-one/actionable-widgets";
 import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,7 @@ export function TenantWorkspaceDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
+      <LiveProductTourHost />
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>

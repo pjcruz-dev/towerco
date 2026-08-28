@@ -24,8 +24,10 @@ class EApprovalAttachmentDownloadController
         $submission = $attachment->submission;
         abort_if($submission === null, 404);
 
-        $canViewAll = $request->user()->can('e_approval:forms:manage');
-        $submissions->assertCanView($submission, $request->user(), $canViewAll);
+        $user = $request->user();
+        $canViewAll = $user->can('e_approval:forms:manage')
+            || $user->can('e_approval:audit:view');
+        $submissions->assertCanView($submission, $user, $canViewAll);
 
         return $files->download($attachment);
     }

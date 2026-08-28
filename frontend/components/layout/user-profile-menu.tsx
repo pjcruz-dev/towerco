@@ -16,7 +16,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { forwardRef, useEffect, useMemo, useState } from "react";
 
@@ -24,6 +24,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import {
+  LIVE_TOUR_QUERY,
+  LIVE_TOUR_STEP_QUERY,
+} from "@/lib/help/e-approval-live-tour";
+import { MFA_LIVE_TOUR_ID } from "@/lib/help/mfa-live-tour";
+import { PASSKEYS_LIVE_TOUR_ID } from "@/lib/help/passkeys-live-tour";
 import {
   Sheet,
   SheetContent,
@@ -81,6 +87,7 @@ const ProfileTrigger = forwardRef<
         className,
       )}
       aria-label="Open account menu"
+      data-help="ea-account-menu"
       {...props}
     >
       <Avatar size="sm">
@@ -436,6 +443,10 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
                     key={link.href}
                     href={link.href}
                     onClick={onNavigate}
+                    data-help={link.href === "/account/security" ? "ea-account-security" : undefined}
+                    data-tour-nav={
+                      link.href === "/account/security" ? "/account/security" : undefined
+                    }
                     className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                   >
                     <Icon className="size-4 text-muted-foreground" aria-hidden />
@@ -472,13 +483,37 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function UserProfileMenu() {
   const isMobile = useIsMobile();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+
+  const accountSecurityTourStep = useMemo(() => {
+    const tour = searchParams.get(LIVE_TOUR_QUERY);
+    if (tour !== PASSKEYS_LIVE_TOUR_ID && tour !== MFA_LIVE_TOUR_ID) {
+      return null;
+    }
+    const parsed = Number.parseInt(searchParams.get(LIVE_TOUR_STEP_QUERY) ?? "", 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }, [searchParams]);
+
+  // Early steps spotlight the account menu / My security link — keep the menu open.
+  useEffect(() => {
+    if (accountSecurityTourStep === 0 || accountSecurityTourStep === 1) {
+      setOpen(true);
+    }
+  }, [accountSecurityTourStep]);
 
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger render={<ProfileTrigger compact />} />
-        <SheetContent side="bottom" className="max-h-[85vh] rounded-t-xl px-0 pb-6" showCloseButton>
+        <SheetContent
+          side="bottom"
+          className={cn(
+            "max-h-[85vh] rounded-t-xl px-0 pb-6",
+            accountSecurityTourStep !== null && accountSecurityTourStep <= 1 && "z-[100]",
+          )}
+          showCloseButton
+        >
           <SheetHeader className="px-4 text-left">
             <SheetTitle>Account</SheetTitle>
             <SheetDescription>Workspace, appearance, and session controls.</SheetDescription>
@@ -492,7 +527,11 @@ export function UserProfileMenu() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<ProfileTrigger />} />
-      <PopoverContent align="end" sideOffset={8} className="w-80">
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className={cn("w-80", accountSecurityTourStep !== null && accountSecurityTourStep <= 1 && "z-[100]")}
+      >
         <ProfileMenuContent onNavigate={() => setOpen(false)} />
       </PopoverContent>
     </Popover>

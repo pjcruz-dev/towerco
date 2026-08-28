@@ -25,6 +25,7 @@ class EApprovalSettingsShowController extends AbstractApiController
         return $this->ok([
             'sla_reminder_minutes' => $settings->getInt(EApprovalSettingsService::SLA_REMINDER_MINUTES, 2880),
             'sla_escalation_minutes' => $settings->getInt(EApprovalSettingsService::SLA_ESCALATION_MINUTES, 4320),
+            'sla_use_working_days' => $settings->getBool(EApprovalSettingsService::SLA_USE_WORKING_DAYS, true) ? 'true' : 'false',
             'manual_follow_up_cooldown_minutes' => $settings->getInt(EApprovalSettingsService::MANUAL_FOLLOW_UP_COOLDOWN_MINUTES, 720),
             'feature_delegation_ui' => $settings->getString(EApprovalSettingsService::FEATURE_DELEGATION_UI, 'false'),
             'provision_manager_users' => $settings->provisionManagerUsers() ? 'true' : 'false',

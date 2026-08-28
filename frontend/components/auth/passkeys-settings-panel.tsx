@@ -177,9 +177,12 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <section
+        className="rounded-xl border border-border bg-card p-4 shadow-sm"
+        data-help="ea-passkey-enroll"
+      >
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1 space-y-1.5">
+          <div className="min-w-[200px] flex-1 space-y-1.5" data-help="ea-passkey-label">
             <Label htmlFor="passkey-label">Device label</Label>
             <Input
               id="passkey-label"
@@ -195,6 +198,7 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
             className="gap-1.5"
             disabled={!canEnroll || enrollMutation.isPending}
             onClick={() => enrollMutation.mutate()}
+            data-help="ea-passkey-add"
           >
             <Fingerprint className="h-4 w-4" aria-hidden />
             {enrollMutation.isPending ? "Waiting for device…" : "Add passkey"}
@@ -206,7 +210,10 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
         </p>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <section
+        className="rounded-xl border border-border bg-card p-4 shadow-sm"
+        data-help="ea-passkey-list"
+      >
         <h3 className="text-sm font-medium text-foreground">Registered passkeys</h3>
         {listQuery.isLoading ? (
           <p className="mt-3 text-sm text-muted-foreground">Loading…</p>

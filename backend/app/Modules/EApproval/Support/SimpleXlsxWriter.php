@@ -124,6 +124,15 @@ final class SimpleXlsxWriter
     {
         $style = $isHeader ? ' s="1"' : '';
 
+        if (! $isHeader && str_starts_with($value, '=HYPERLINK(')) {
+            $formula = ltrim($value, '=');
+            $label = $this->hyperlinkLabelFromFormula($value);
+
+            return '<c r="'.$ref.'"'.$style.' t="str"><f>'
+                .$this->escape($formula)
+                .'</f><v>'.$this->escape($label).'</v></c>';
+        }
+
         if (! $isHeader && $this->isSafeNumber($value)) {
             return '<c r="'.$ref.'"'.$style.'><v>'.$value.'</v></c>';
         }
@@ -131,6 +140,15 @@ final class SimpleXlsxWriter
         return '<c r="'.$ref.'"'.$style.' t="inlineStr"><is><t xml:space="preserve">'
             .$this->escape($value)
             .'</t></is></c>';
+    }
+
+    private function hyperlinkLabelFromFormula(string $formula): string
+    {
+        if (preg_match('/^=HYPERLINK\("(?:[^"]|"")*","((?:[^"]|"")*)"\)$/', $formula, $matches) === 1) {
+            return str_replace('""', '"', $matches[1]);
+        }
+
+        return 'Open attachment';
     }
 
     private function isSafeNumber(string $value): bool

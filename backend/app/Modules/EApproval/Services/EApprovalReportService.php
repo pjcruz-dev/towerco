@@ -9,6 +9,7 @@ use App\Modules\EApproval\Models\EApprovalExportHistory;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalReportDefinition;
 use App\Modules\EApproval\Support\EApprovalExportHistoryStatus;
+use App\Modules\EApproval\Support\EApprovalExportViewerScope;
 use App\Modules\EApproval\Support\SimpleXlsxWriter;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\CarbonImmutable;
@@ -148,6 +149,7 @@ final class EApprovalReportService
             gridFieldId: $report->grid_field_id,
             nameHint: (string) $report->name,
             rowLimit: $limit,
+            viewer: $user,
         );
 
         $history = $this->recordHistory(
@@ -207,7 +209,7 @@ final class EApprovalReportService
         string $triggeredBy = 'manual',
     ): EApprovalExportHistory {
         $filters = is_array($report->filters_json) ? $report->filters_json : [];
-        $matched = $this->countForFilters($filters);
+        $matched = $this->countForFilters($filters, $user);
 
         $history = $this->recordHistory(
             user: $user,
@@ -285,9 +287,9 @@ final class EApprovalReportService
     /**
      * @param  array<string, mixed>  $filters
      */
-    public function countMatchingFilters(array $filters): int
+    public function countMatchingFilters(array $filters, ?TenantUser $viewer = null): int
     {
-        return $this->countForFilters($filters);
+        return $this->countForFilters($filters, $viewer);
     }
 
     public function findHistoryForUser(TenantUser $user, string $historyId): EApprovalExportHistory
@@ -336,6 +338,7 @@ final class EApprovalReportService
                 gridFieldId: $history->grid_field_id,
                 nameHint: (string) ($history->name ?: 'export'),
                 rowLimit: EApprovalSubmissionExportService::ASYNC_MAX_ROWS,
+                viewer: $user,
             );
 
             $this->attachStoredFile($history, $result['path'], $result['content_type'], $user);
@@ -536,7 +539,7 @@ final class EApprovalReportService
             throw new \RuntimeException('Scheduled report owner is missing.');
         }
 
-        $matched = $this->countForFilters(is_array($report->filters_json) ? $report->filters_json : []);
+        $matched = $this->countForFilters(is_array($report->filters_json) ? $report->filters_json : [], $owner);
         if ($this->shouldQueue($matched)) {
             $history = $this->queueReportRun($owner, $report, 'schedule');
             $schedule = is_array($report->schedule_json) ? $report->schedule_json : [];
@@ -694,6 +697,7 @@ final class EApprovalReportService
         ?string $gridFieldId,
         string $nameHint = 'export',
         ?int $rowLimit = null,
+        ?TenantUser $viewer = null,
     ): array {
         $limit = $rowLimit ?? EApprovalSubmissionExportService::SYNC_MAX_ROWS;
         $formId = isset($filters['form_id']) ? (string) $filters['form_id'] : null;
@@ -702,9 +706,8 @@ final class EApprovalReportService
             : null;
 
         $includeFields = $form !== null;
-        $scope = $form !== null
-            ? ['form' => $form, 'include_fields' => true, 'can_view_all' => true]
-            : null;
+        $viewerScope = isset($filters['viewer_scope']) ? (string) $filters['viewer_scope'] : 'all';
+        $scope = $this->buildExportScope($form, $includeFields, $viewer, $viewerScope);
 
         $queryFilters = array_filter([
             'status' => $filters['status'] ?? null,
@@ -780,6 +783,29 @@ final class EApprovalReportService
             'exported_rows' => $exported,
             'truncated' => $truncated,
         ];
+    }
+
+    /**
+     * @return array{viewer?: TenantUser, can_view_all?: bool, created_only?: bool, form?: EApprovalForm|null, include_fields?: bool}|null
+     */
+    private function buildExportScope(
+        ?EApprovalForm $form,
+        bool $includeFields,
+        ?TenantUser $viewer,
+        string $viewerScope,
+    ): ?array {
+        if ($viewer === null) {
+            return $form !== null
+                ? ['form' => $form, 'include_fields' => $includeFields, 'can_view_all' => true]
+                : null;
+        }
+
+        $viewerBits = EApprovalExportViewerScope::forUser($viewer, $viewerScope);
+
+        return array_merge($viewerBits, [
+            'form' => $form,
+            'include_fields' => $includeFields,
+        ]);
     }
 
     /**
@@ -864,15 +890,14 @@ final class EApprovalReportService
     /**
      * @param  array<string, mixed>  $filters
      */
-    private function countForFilters(array $filters): int
+    private function countForFilters(array $filters, ?TenantUser $viewer = null): int
     {
         $formId = isset($filters['form_id']) ? (string) $filters['form_id'] : null;
         $form = $formId !== null && $formId !== ''
             ? EApprovalForm::query()->find($formId)
             : null;
-        $scope = $form !== null
-            ? ['form' => $form, 'include_fields' => true, 'can_view_all' => true]
-            : null;
+        $viewerScope = isset($filters['viewer_scope']) ? (string) $filters['viewer_scope'] : 'all';
+        $scope = $this->buildExportScope($form, $form !== null, $viewer, $viewerScope);
 
         $queryFilters = array_filter([
             'status' => $filters['status'] ?? null,
@@ -922,6 +947,7 @@ final class EApprovalReportService
             'to' => $filters['to'] ?? null,
             'search' => $filters['search'] ?? null,
             'scope' => $filters['scope'] ?? null,
+            'viewer_scope' => $filters['viewer_scope'] ?? null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
     }
 

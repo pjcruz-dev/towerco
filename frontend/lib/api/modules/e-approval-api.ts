@@ -601,6 +601,7 @@ export type EApprovalExportColumnsResult = {
   columns: EApprovalExportColumn[];
   grids: EApprovalExportGridField[];
   forms: Array<{ id: string; name: string; status: string }>;
+  canViewAll: boolean;
 };
 
 export async function fetchEApprovalSubmissionsExportColumns(
@@ -610,6 +611,7 @@ export async function fetchEApprovalSubmissionsExportColumns(
     data: EApprovalExportColumn[];
     grids?: EApprovalExportGridField[];
     forms?: Array<{ id: string; name: string; status: string }>;
+    can_view_all?: boolean;
   }>("/e-approval/submissions/export/columns", {
     params: { form_id: formId || undefined },
   });
@@ -617,6 +619,7 @@ export async function fetchEApprovalSubmissionsExportColumns(
     columns: response.data.data,
     grids: response.data.grids ?? [],
     forms: response.data.forms ?? [],
+    canViewAll: response.data.can_view_all === true,
   };
 }
 
@@ -728,6 +731,7 @@ export async function downloadEApprovalSubmissionsExport(
     layout?: "submissions" | "line_items";
     grid_field?: string;
     async?: boolean;
+    viewer_scope?: "mine" | "all";
   } = {},
 ): Promise<EApprovalExportResult> {
   const statuses = (params.statuses ?? []).filter((value) => value && value !== "all");
@@ -745,6 +749,7 @@ export async function downloadEApprovalSubmissionsExport(
         layout: params.layout && params.layout !== "submissions" ? params.layout : undefined,
         grid_field: params.layout === "line_items" ? params.grid_field || undefined : undefined,
         async: params.async ? 1 : undefined,
+        viewer_scope: params.viewer_scope === "mine" ? "mine" : params.viewer_scope === "all" ? "all" : undefined,
       },
       paramsSerializer: {
         indexes: null,
@@ -777,6 +782,7 @@ export type EApprovalReportDefinition = {
     to?: string;
     search?: string;
     scope?: string;
+    viewer_scope?: "mine" | "all";
   };
   columns: string[] | null;
   layout: "submissions" | "line_items";

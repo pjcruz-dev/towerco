@@ -74,7 +74,7 @@ export function MfaSettingsPageClient({ embedded = false }: Props) {
         </div>
       )}
 
-      <section className="rounded-xl border bg-card p-4">
+      <section className="rounded-xl border bg-card p-4" data-help="ea-mfa-enroll">
         {!embedded ? <h2 className="text-lg font-semibold">TOTP Enrollment</h2> : null}
         <p className={embedded ? "text-sm text-muted-foreground" : "text-xs text-muted-foreground"}>
           Use Microsoft Authenticator, 1Password, or Google Authenticator. Prefer scanning the QR code
@@ -83,17 +83,22 @@ export function MfaSettingsPageClient({ embedded = false }: Props) {
 
         {enrolled || recoveryCodes.length > 0 ? (
           <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
-            Authenticator is enabled for this account. After you sign out, the next login (password or
-            Microsoft) will ask for a 6-digit code from the app.
+            Authenticator is enabled for this account. After you sign out, the next login (password,
+            Microsoft, or passkey when MFA still applies) will ask for a 6-digit code from the app.
           </p>
         ) : null}
 
         {!setup ? (
-          <Button className="mt-4" onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
+          <Button
+            className="mt-4"
+            onClick={() => startMutation.mutate()}
+            disabled={startMutation.isPending}
+            data-help="ea-mfa-start"
+          >
             {startMutation.isPending ? "Preparing..." : enrolled ? "Re-enroll authenticator" : "Start setup"}
           </Button>
         ) : (
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-4" data-help="ea-mfa-verify">
             <OtpauthQrCode otpauthUri={setup.otpauth_uri} />
             <details className="rounded-lg border border-border bg-muted/20 px-3 py-2">
               <summary className="cursor-pointer text-sm font-medium text-foreground">
@@ -126,7 +131,7 @@ export function MfaSettingsPageClient({ embedded = false }: Props) {
         )}
       </section>
 
-      <section className="rounded-xl border bg-card p-4">
+      <section className="rounded-xl border bg-card p-4" data-help="ea-mfa-recovery">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Recovery Codes</h2>

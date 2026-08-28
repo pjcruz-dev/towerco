@@ -12,6 +12,8 @@ final class EApprovalSettingsService
 
     public const SLA_ESCALATION_MINUTES = 'sla_escalation_minutes';
 
+    public const SLA_USE_WORKING_DAYS = 'sla_use_working_days';
+
     public const MANUAL_FOLLOW_UP_COOLDOWN_MINUTES = 'manual_follow_up_cooldown_minutes';
 
     public const FEATURE_DELEGATION_UI = 'feature_delegation_ui';
@@ -103,6 +105,7 @@ final class EApprovalSettingsService
         $allowed = [
             self::SLA_REMINDER_MINUTES,
             self::SLA_ESCALATION_MINUTES,
+            self::SLA_USE_WORKING_DAYS,
             self::MANUAL_FOLLOW_UP_COOLDOWN_MINUTES,
             self::FEATURE_DELEGATION_UI,
             self::PROVISION_MANAGER_USERS,

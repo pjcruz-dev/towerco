@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalReportDefinition;
 use App\Modules\EApproval\Services\EApprovalReportService;
 use App\Modules\EApproval\Services\EApprovalSubmissionExportService;
+use App\Modules\EApproval\Support\EApprovalExportViewerScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,7 +20,8 @@ class EApprovalReportRunController extends AbstractApiController
         string $report,
         EApprovalReportService $reports,
     ): Response|JsonResponse {
-        abort_unless($request->user()?->can('e_approval:audit:view'), 403);
+        $user = $request->user();
+        abort_unless($user !== null && EApprovalExportViewerScope::userCanExport($user), 403);
 
         $validated = $request->validate([
             'async' => ['sometimes', 'boolean'],
@@ -27,13 +29,13 @@ class EApprovalReportRunController extends AbstractApiController
         $forceAsync = (bool) ($validated['async'] ?? false);
 
         $model = EApprovalReportDefinition::query()->findOrFail($report);
-        abort_unless((string) $model->user_id === (string) $request->user()->id, 403);
+        abort_unless((string) $model->user_id === (string) $user->id, 403);
 
         $filters = is_array($model->filters_json) ? $model->filters_json : [];
-        $matchedRows = $reports->countMatchingFilters($filters);
+        $matchedRows = $reports->countMatchingFilters($filters, $user);
 
         if ($reports->shouldQueue($matchedRows, $forceAsync)) {
-            $history = $reports->queueReportRun($request->user(), $model, 'manual');
+            $history = $reports->queueReportRun($user, $model, 'manual');
 
             return $this->ok([
                 'async' => true,
@@ -45,7 +47,7 @@ class EApprovalReportRunController extends AbstractApiController
         }
 
         try {
-            $result = $reports->run($request->user(), $model, 'manual');
+            $result = $reports->run($user, $model, 'manual');
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }

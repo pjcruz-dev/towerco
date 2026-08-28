@@ -84,9 +84,10 @@ export function MfaEnrollPageClient() {
   return (
     <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Set up MFA</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Your organization requires multi-factor authentication. Scan the QR code with Microsoft
-        Authenticator (or another TOTP app), then enter the 6-digit code to finish sign-in.
+      <p className="mt-2 text-sm text-muted-foreground" data-help="ea-mfa-login-enroll">
+        Your organization requires multi-factor authentication. This screen appears after email &amp;
+        password, Microsoft, or passkey sign-in when you have not enrolled yet. Scan the QR code with
+        Microsoft Authenticator (or another TOTP app), then enter the 6-digit code to finish sign-in.
       </p>
 
       {startMutation.isPending && !setup ? (

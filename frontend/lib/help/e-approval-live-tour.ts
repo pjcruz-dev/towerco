@@ -1,3 +1,6 @@
+import { passkeysLiveTour } from "@/lib/help/passkeys-live-tour";
+import { mfaLiveTour } from "@/lib/help/mfa-live-tour";
+
 export type LiveTourAudience = "all" | "approver" | "requestor";
 
 export type LiveTourChapterId =
@@ -361,6 +364,12 @@ export function eApprovalTourChaptersForCapabilities(
 export function tourById(id: string): LiveTourDefinition | null {
   if (id === eApprovalLiveTour.id) {
     return eApprovalLiveTour;
+  }
+  if (id === passkeysLiveTour.id) {
+    return passkeysLiveTour;
+  }
+  if (id === mfaLiveTour.id) {
+    return mfaLiveTour;
   }
   return null;
 }

@@ -29,6 +29,7 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Scope = "all" | "one";
+type ViewerScope = "mine" | "all";
 type Format = "csv" | "xlsx";
 type Layout = "submissions" | "line_items";
 
@@ -49,6 +50,7 @@ type Props = {
 
 export function EApprovalExportReportCard({ showSave = false, onSaved, onExported }: Props) {
   const [scope, setScope] = useState<Scope>("all");
+  const [viewerScope, setViewerScope] = useState<ViewerScope>("all");
   const [formId, setFormId] = useState<string>("");
   const [format, setFormat] = useState<Format>("csv");
   const [layout, setLayout] = useState<Layout>("submissions");
@@ -64,13 +66,21 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Forms for the picker come from the export/columns endpoint (audit:view), not /forms
+  // Forms for the picker come from the export/columns endpoint (export RBAC), not /forms
   // which has a different permission gate and rejects per_page > 100.
   const formsCatalogQuery = useQuery({
     queryKey: ["e-approval", "export", "forms-catalog"],
     queryFn: () => fetchEApprovalSubmissionsExportColumns(undefined),
     staleTime: 60_000,
   });
+
+  const canViewAll = formsCatalogQuery.data?.canViewAll === true;
+
+  useEffect(() => {
+    if (formsCatalogQuery.data && !canViewAll) {
+      setViewerScope("mine");
+    }
+  }, [formsCatalogQuery.data, canViewAll]);
 
   const columnFormId = scope === "one" ? formId : "";
   const columnsReady = scope === "all" || (scope === "one" && formId !== "");
@@ -144,6 +154,7 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
     const isLineItems = layout === "line_items" && hasGrids;
     const columns =
       !isLineItems && selectedColumns && !allColumnsSelected ? selectedColumns : undefined;
+    const effectiveViewerScope: ViewerScope = canViewAll ? viewerScope : "mine";
     return {
       isLineItems,
       columns,
@@ -154,10 +165,12 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
         to: to || undefined,
         search: search.trim() || undefined,
         scope,
+        viewer_scope: effectiveViewerScope,
       },
       layout: (isLineItems ? "line_items" : "submissions") as Layout,
       format,
       grid_field_id: isLineItems ? gridField || null : null,
+      viewer_scope: effectiveViewerScope,
     };
   };
 
@@ -177,6 +190,7 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
         columns: config.columns,
         layout: config.layout,
         grid_field: config.grid_field_id ?? undefined,
+        viewer_scope: config.viewer_scope,
       });
 
       if (result.mode === "async") {
@@ -241,11 +255,27 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
   return (
     <EApprovalSectionCard
       title="Export report"
-      description="Download submissions as CSV or Excel. Choose all forms for base columns, or a single form to include its custom fields."
+      description="Download submissions as CSV or Excel. Prefer Excel for clickable attachment links. Links open the app download page (works locally and in production with S3)."
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-1.5">
-          <Label htmlFor="export-scope">Scope</Label>
+          <Label htmlFor="export-viewer-scope">Data scope</Label>
+          <Select
+            id="export-viewer-scope"
+            value={canViewAll ? viewerScope : "mine"}
+            onChange={(event) => setViewerScope(event.target.value as ViewerScope)}
+            disabled={!canViewAll}
+          >
+            <option value="mine">My submissions only</option>
+            {canViewAll ? <option value="all">All submissions</option> : null}
+          </Select>
+          {!canViewAll ? (
+            <p className="text-xs text-muted-foreground">Limited to requests you created.</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="export-scope">Form scope</Label>
           <Select
             id="export-scope"
             value={scope}

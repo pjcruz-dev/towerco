@@ -88,4 +88,63 @@ final class WorkingDaysCalendar
 
         return $cursor;
     }
+
+    /**
+     * Walk backward by wall-clock minutes that fall on working days only
+     * (weekends/holidays skipped; full 24h counted on each working day).
+     */
+    public function subWorkingMinutes(CarbonInterface $from, int $minutes): Carbon
+    {
+        if ($minutes <= 0) {
+            return Carbon::parse($from);
+        }
+
+        $cursor = Carbon::parse($from);
+        $left = $minutes;
+        $guard = 0;
+        $maxIterations = max(10_000, $minutes + 10_000);
+
+        while ($left > 0 && $guard < $maxIterations) {
+            $guard++;
+
+            if (! $this->isWorkingDay($cursor)) {
+                $cursor = $cursor->copy()->startOfDay()->subSecond();
+
+                continue;
+            }
+
+            $dayStart = $cursor->copy()->startOfDay();
+            $minutesFromStart = (int) $dayStart->diffInMinutes($cursor);
+
+            if ($minutesFromStart > 0) {
+                if ($minutesFromStart >= $left) {
+                    return $cursor->copy()->subMinutes($left);
+                }
+
+                $left -= $minutesFromStart;
+                $cursor = $dayStart;
+
+                continue;
+            }
+
+            // At midnight on a working day: consume prior working days via exclusive next-midnight.
+            $prev = $dayStart->copy()->subDay();
+            while (! $this->isWorkingDay($prev) && $guard < $maxIterations) {
+                $prev->subDay();
+                $guard++;
+            }
+
+            $prevEndExclusive = $prev->copy()->startOfDay()->addDay();
+            $fullDayMinutes = 24 * 60;
+
+            if ($fullDayMinutes >= $left) {
+                return $prevEndExclusive->subMinutes($left);
+            }
+
+            $left -= $fullDayMinutes;
+            $cursor = $prev->copy()->startOfDay();
+        }
+
+        return $cursor;
+    }
 }

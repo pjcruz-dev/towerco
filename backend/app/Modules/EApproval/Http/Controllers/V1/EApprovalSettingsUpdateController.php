@@ -19,6 +19,7 @@ class EApprovalSettingsUpdateController extends AbstractApiController
         $data = $request->validate([
             'sla_reminder_minutes' => ['sometimes', 'integer', 'min:1'],
             'sla_escalation_minutes' => ['sometimes', 'integer', 'min:1'],
+            'sla_use_working_days' => ['sometimes', 'in:true,false'],
             'manual_follow_up_cooldown_minutes' => ['sometimes', 'integer', 'min:1'],
             'feature_delegation_ui' => ['sometimes', 'in:true,false'],
             'provision_manager_users' => ['sometimes', 'in:true,false'],

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Generator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -40,6 +42,13 @@ final class EApprovalSubmissionExportService
         'signature',
     ];
 
+    /** Field types that store downloadable files (exported as HTTPS links, not raw paths). */
+    private const ATTACHMENT_FIELD_TYPES = [
+        'file',
+        'camera',
+        'attachment',
+    ];
+
     /** @var array<string, string> */
     private const BASE_COLUMN_LABELS = [
         'id' => 'ID',
@@ -53,6 +62,7 @@ final class EApprovalSubmissionExportService
         'current_step' => 'Current Step',
         'parent_submission_id' => 'Parent Submission ID',
         'created_at' => 'Created At',
+        'attachment_urls' => 'Attachment links',
     ];
 
     /** Summary workflow columns (always available). */
@@ -68,6 +78,7 @@ final class EApprovalSubmissionExportService
 
     public function __construct(
         private readonly EApprovalFormValueDisplayService $valueDisplay,
+        private readonly TenantAppUrlResolver $tenantUrls,
     ) {}
 
     /**
@@ -127,6 +138,16 @@ final class EApprovalSubmissionExportService
                     'group' => 'field',
                 ];
             }
+
+            foreach ($this->attachmentFields($form) as $field) {
+                $label = trim((string) ($field->label ?? ''));
+                $title = $label !== '' ? $label : (string) $field->name;
+                $columns[] = [
+                    'key' => 'field:'.$field->id.':attachments',
+                    'label' => $title.' (file links)',
+                    'group' => 'attachment',
+                ];
+            }
         }
 
         return $columns;
@@ -145,7 +166,7 @@ final class EApprovalSubmissionExportService
 
     /**
      * @param  array{status?: string, statuses?: list<string>, form_id?: string, form_ids?: list<string>, from?: string, to?: string, search?: string}  $filters
-     * @param  array{viewer?: TenantUser, can_view_all?: bool, form?: EApprovalForm, include_fields?: bool}|null  $scope
+     * @param  array{viewer?: TenantUser, can_view_all?: bool, created_only?: bool, form?: EApprovalForm, include_fields?: bool}|null  $scope
      * @param  list<string>|null  $selectedKeys
      * @return Generator<int, list<string>>
      */
@@ -155,10 +176,12 @@ final class EApprovalSubmissionExportService
         $form = $scope['form'] ?? null;
         $includeFields = ($scope['include_fields'] ?? true) === true;
         $exportFields = $form !== null && $includeFields ? $this->exportableFields($form) : collect();
+        $attachmentFields = $form !== null && $includeFields ? $this->attachmentFields($form) : collect();
 
         $columns = $this->resolveColumns($form, $includeFields, $selectedKeys);
         $orderedKeys = array_map(static fn (array $column): string => $column['key'], $columns);
         $needsApprovals = $this->selectionNeedsApprovals($orderedKeys);
+        $needsAttachments = $this->selectionNeedsAttachments($orderedKeys);
 
         $query = $this->buildQuery($filters, $scope, true, $limit);
         $with = [];
@@ -169,12 +192,22 @@ final class EApprovalSubmissionExportService
             $with[] = 'approvals.approver:id,name,email';
             $with[] = 'approvals.step:id,step_order';
         }
+        if ($needsAttachments) {
+            $with[] = 'attachments';
+        }
         if ($with !== []) {
             $query->with($with);
         }
 
         foreach ($query->lazy($limit) as $submission) {
-            $keyed = $this->submissionRowMap($submission, $exportFields, $needsApprovals, $form);
+            $keyed = $this->submissionRowMap(
+                $submission,
+                $exportFields,
+                $needsApprovals,
+                $form,
+                $attachmentFields,
+                $needsAttachments,
+            );
             yield array_map(static fn (string $key): string => $keyed[$key] ?? '', $orderedKeys);
         }
     }
@@ -346,7 +379,7 @@ final class EApprovalSubmissionExportService
 
     /**
      * @param  array{status?: string, statuses?: list<string>, form_id?: string, form_ids?: list<string>, from?: string, to?: string, search?: string}  $filters
-     * @param  array{viewer?: TenantUser, can_view_all?: bool, form?: EApprovalForm, include_fields?: bool}|null  $scope
+     * @param  array{viewer?: TenantUser, can_view_all?: bool, created_only?: bool, form?: EApprovalForm, include_fields?: bool}|null  $scope
      */
     private function buildQuery(array $filters, ?array $scope, bool $applyLimit = true, ?int $rowLimit = null): Builder
     {
@@ -387,7 +420,11 @@ final class EApprovalSubmissionExportService
         }
 
         if ($scope !== null && isset($scope['viewer']) && ($scope['can_view_all'] ?? true) !== true) {
-            $this->applyViewerScope($query, $scope['viewer']);
+            if (($scope['created_only'] ?? false) === true) {
+                $query->where('requestor_id', $scope['viewer']->id);
+            } else {
+                $this->applyViewerScope($query, $scope['viewer']);
+            }
         }
 
         return $query;
@@ -427,6 +464,7 @@ final class EApprovalSubmissionExportService
 
     /**
      * @param  Collection<int, EApprovalFormField>  $exportFields
+     * @param  Collection<int, EApprovalFormField>  $attachmentFields
      * @return array<string, string>
      */
     private function submissionRowMap(
@@ -434,6 +472,8 @@ final class EApprovalSubmissionExportService
         Collection $exportFields,
         bool $includeApprovals = true,
         ?EApprovalForm $form = null,
+        ?Collection $attachmentFields = null,
+        bool $includeAttachments = false,
     ): array {
         $row = [
             'id' => (string) $submission->id,
@@ -451,6 +491,22 @@ final class EApprovalSubmissionExportService
 
         if ($includeApprovals) {
             $row = array_merge($row, $this->approvalColumnsForSubmission($submission, $form));
+        }
+
+        if ($includeAttachments) {
+            $attachments = $submission->relationLoaded('attachments')
+                ? $submission->attachments
+                : $submission->attachments()->get();
+
+            $row['attachment_urls'] = $this->formatAttachmentLinks($attachments);
+
+            foreach ($attachmentFields ?? collect() as $field) {
+                $fieldName = (string) $field->name;
+                $matched = $attachments->filter(
+                    static fn (EApprovalAttachment $attachment): bool => (string) ($attachment->field_name ?? '') === $fieldName,
+                );
+                $row['field:'.$field->id.':attachments'] = $this->formatAttachmentLinks($matched);
+            }
         }
 
         if ($exportFields->isEmpty()) {
@@ -560,6 +616,80 @@ final class EApprovalSubmissionExportService
         }
 
         return false;
+    }
+
+    /**
+     * @param  list<string>  $orderedKeys
+     */
+    private function selectionNeedsAttachments(array $orderedKeys): bool
+    {
+        foreach ($orderedKeys as $key) {
+            if ($key === 'attachment_urls' || str_ends_with($key, ':attachments')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  Collection<int, EApprovalAttachment>|iterable<int, EApprovalAttachment>  $attachments
+     */
+    private function formatAttachmentLinks(iterable $attachments): string
+    {
+        $entries = [];
+
+        foreach ($attachments as $attachment) {
+            if (! $attachment instanceof EApprovalAttachment) {
+                continue;
+            }
+
+            // UI-host path (not /api/v1) so Excel opens the Next.js download page, which
+            // uses the SPA token. Raw /api URLs 404 on the UI host without Nginx /api proxy.
+            $name = trim((string) ($attachment->file_name ?? ''));
+            $path = '/e-approval/attachments/'.$attachment->id;
+            if ($name !== '') {
+                $path .= '?name='.rawurlencode($name);
+            }
+            $entries[] = [
+                'url' => $this->tenantUrls->urlForCurrentTenant($path),
+                'label' => $name !== '' ? $name : 'Download attachment',
+            ];
+        }
+
+        if ($entries === []) {
+            return '';
+        }
+
+        // Single file: real Excel HYPERLINK formula (blue clickable link with file name).
+        if (count($entries) === 1) {
+            return $this->excelHyperlinkFormula($entries[0]['url'], $entries[0]['label']);
+        }
+
+        // Multiple files: one plain URL per line (Excel auto-detects each as a hyperlink).
+        // Mixing HYPERLINK() with extra lines breaks the formula.
+        return implode("\n", array_map(static fn (array $entry): string => $entry['url'], $entries));
+    }
+
+    private function excelHyperlinkFormula(string $url, string $label): string
+    {
+        $safeUrl = str_replace('"', '""', $url);
+        $safeLabel = str_replace('"', '""', $label);
+
+        return '=HYPERLINK("'.$safeUrl.'","'.$safeLabel.'")';
+    }
+
+    /**
+     * @return Collection<int, EApprovalFormField>
+     */
+    private function attachmentFields(EApprovalForm $form): Collection
+    {
+        return EApprovalFormField::query()
+            ->where('form_id', $form->id)
+            ->whereIn('type', self::ATTACHMENT_FIELD_TYPES)
+            ->orderBy('step_order')
+            ->orderBy('name')
+            ->get();
     }
 
     /**

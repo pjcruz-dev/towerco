@@ -16,15 +16,28 @@ final class TenantAppUrlResolver
     {
         $normalizedPath = str_starts_with($path, '/') ? $path : "/{$path}";
         $configured = FrontendDevUrl::configuredBaseUrl();
-        $parts = parse_url($configured) ?: [];
-        $scheme = $parts['scheme'] ?? 'http';
         $explicitPort = FrontendDevUrl::explicitPort();
         $port = $explicitPort !== null ? ':'.$explicitPort : '';
+        $environment = function_exists('app') ? (string) app()->environment() : 'production';
 
         $tenant = tenant();
         if ($tenant instanceof Tenant) {
             $domain = Domain::query()->where('tenant_id', $tenant->id)->orderBy('id')->value('domain');
             if (is_string($domain) && $domain !== '') {
+                // Prefer request host when it matches a tenant domain (sync exports on app/staging).
+                $requestHost = function_exists('request') ? request()?->getHost() : null;
+                if (is_string($requestHost) && $requestHost !== '') {
+                    $matched = Domain::query()
+                        ->where('tenant_id', $tenant->id)
+                        ->where('domain', strtolower($requestHost))
+                        ->exists();
+                    if ($matched) {
+                        $domain = strtolower($requestHost);
+                    }
+                }
+
+                $scheme = FrontendDevUrl::schemeForTenantHost($domain, $environment);
+
                 return "{$scheme}://{$domain}{$port}{$normalizedPath}";
             }
         }

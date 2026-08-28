@@ -20,6 +20,7 @@ final class EApprovalAnalyticsService
 {
     public function __construct(
         private readonly EApprovalSettingsService $settings,
+        private readonly EApprovalSlaClock $slaClock,
     ) {}
 
     /**
@@ -97,14 +98,19 @@ final class EApprovalAnalyticsService
         $pendingApprovals = (int) EApprovalRequestApproval::query()
             ->where('status', 'pending')
             ->count();
+        $reminderCutoff = $this->slaClock->thresholdBefore(now(), $reminderMinutes);
         $staleApprovals = (int) EApprovalRequestApproval::query()
             ->where('status', 'pending')
-            ->where('created_at', '<=', now()->subMinutes($reminderMinutes))
+            ->where('created_at', '<=', $reminderCutoff)
             ->count();
         $escalated = (int) EApprovalRequestApproval::query()
             ->where('status', 'pending')
             ->whereNotNull('escalated_at')
             ->count();
+
+        $slaUnit = $this->slaClock->usesWorkingDays() ? 'wd-h' : 'h';
+        $reminderHours = (int) round($reminderMinutes / 60);
+        $escalationHours = (int) round($escalationMinutes / 60);
 
         return [
             'period' => [
@@ -141,7 +147,7 @@ final class EApprovalAnalyticsService
                     'key' => 'sla_at_risk',
                     'label' => 'SLA at risk',
                     'value' => (string) $staleApprovals,
-                    'change' => '>'.(int) round($reminderMinutes / 60).'h pending',
+                    'change' => '>'.$reminderHours.$slaUnit.' pending',
                     'tone' => $staleApprovals > 0 ? 'warning' : 'neutral',
                     'href' => '/e-approval/approvals?awaiting_me=1',
                 ],
@@ -149,7 +155,7 @@ final class EApprovalAnalyticsService
                     'key' => 'escalated',
                     'label' => 'Escalated',
                     'value' => (string) $escalated,
-                    'change' => '>'.(int) round($escalationMinutes / 60).'h',
+                    'change' => '>'.$escalationHours.$slaUnit,
                     'tone' => $escalated > 0 ? 'danger' : 'neutral',
                     'href' => '/e-approval/approvals?awaiting_me=1',
                 ],
@@ -454,53 +460,57 @@ final class EApprovalAnalyticsService
     private function agingBuckets(int $reminderMinutes, int $escalationMinutes): array
     {
         $now = Carbon::now();
+        $dayCutoff = $this->slaClock->thresholdBefore($now, 24 * 60);
+        $threeDayCutoff = $this->slaClock->thresholdBefore($now, 3 * 24 * 60);
+        $reminderCutoff = $this->slaClock->thresholdBefore($now, $reminderMinutes);
+        $workingLabel = $this->slaClock->usesWorkingDays() ? ' wd' : '';
 
         // Mutually exclusive pending-approval age buckets (SLA threshold from settings).
         $exclusive = $reminderMinutes <= 3 * 24 * 60
             ? [
                 [
                     'key' => 'under_24h',
-                    'label' => 'Under 24h',
-                    'gte' => $now->copy()->subDay(),
+                    'label' => 'Under 24h'.$workingLabel,
+                    'gte' => $dayCutoff,
                     'lt' => null,
                 ],
                 [
                     'key' => '1_to_reminder',
-                    'label' => '1d–SLA',
-                    'gte' => $now->copy()->subMinutes($reminderMinutes),
-                    'lt' => $now->copy()->subDay(),
+                    'label' => '1d–SLA'.$workingLabel,
+                    'gte' => $reminderCutoff,
+                    'lt' => $dayCutoff,
                 ],
                 [
                     'key' => 'beyond_sla',
                     'label' => 'Beyond SLA',
                     'gte' => null,
-                    'lt' => $now->copy()->subMinutes($reminderMinutes),
+                    'lt' => $reminderCutoff,
                 ],
             ]
             : [
                 [
                     'key' => 'under_24h',
-                    'label' => 'Under 24h',
-                    'gte' => $now->copy()->subDay(),
+                    'label' => 'Under 24h'.$workingLabel,
+                    'gte' => $dayCutoff,
                     'lt' => null,
                 ],
                 [
                     'key' => '1_to_3d',
-                    'label' => '1–3 days',
-                    'gte' => $now->copy()->subDays(3),
-                    'lt' => $now->copy()->subDay(),
+                    'label' => '1–3 days'.$workingLabel,
+                    'gte' => $threeDayCutoff,
+                    'lt' => $dayCutoff,
                 ],
                 [
                     'key' => '3_to_sla',
-                    'label' => '3d–SLA',
-                    'gte' => $now->copy()->subMinutes($reminderMinutes),
-                    'lt' => $now->copy()->subDays(3),
+                    'label' => '3d–SLA'.$workingLabel,
+                    'gte' => $reminderCutoff,
+                    'lt' => $threeDayCutoff,
                 ],
                 [
                     'key' => 'beyond_sla',
                     'label' => 'Beyond SLA',
                     'gte' => null,
-                    'lt' => $now->copy()->subMinutes($reminderMinutes),
+                    'lt' => $reminderCutoff,
                 ],
             ];
 
