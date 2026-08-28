@@ -16,6 +16,7 @@ import {
 } from "@/lib/api/modules/auth-api";
 import {
   isPlatformAuthenticatorAvailable,
+  isWebAuthnSecureContext,
   isWebAuthnSupported,
   serializeAttestation,
   toCreationOptions,
@@ -34,9 +35,11 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
   const [label, setLabel] = useState("Work laptop");
   const [supported, setSupported] = useState<boolean | null>(null);
   const [platformOk, setPlatformOk] = useState<boolean | null>(null);
+  const [secureContext, setSecureContext] = useState<boolean | null>(null);
 
   useEffect(() => {
     setSupported(isWebAuthnSupported());
+    setSecureContext(isWebAuthnSecureContext());
     void isPlatformAuthenticatorAvailable().then(setPlatformOk);
   }, []);
 
@@ -49,6 +52,11 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
     mutationFn: async () => {
       if (!isWebAuthnSupported()) {
         throw new Error("This browser does not support passkeys.");
+      }
+      if (!isWebAuthnSecureContext()) {
+        throw new Error(
+          "Passkeys require HTTPS. Open this site with https:// (not http://) and try again.",
+        );
       }
       const options = await webAuthnRegisterOptions(label.trim() || undefined);
       const creation = toCreationOptions(options.publicKey);
@@ -105,7 +113,7 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
   const orgEnabled = listQuery.data?.enabled !== false;
   const enrollmentRequired = listQuery.data?.enrollment_required === true;
   const policy = listQuery.data?.policy ?? "allow";
-  const canEnroll = orgEnabled && supported !== false;
+  const canEnroll = orgEnabled && supported !== false && secureContext !== false;
 
   return (
     <div className="space-y-6">
@@ -151,6 +159,14 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
         <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           This browser does not support passkeys. Try Chrome, Edge, or Safari on a device with
           biometric unlock.
+        </p>
+      ) : null}
+
+      {supported && secureContext === false ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+          This page is not on HTTPS (browser shows &quot;Not secure&quot;). Passkeys only work on{" "}
+          <span className="font-medium">https://</span> (or localhost). Open the HTTPS URL and try
+          again.
         </p>
       ) : null}
 

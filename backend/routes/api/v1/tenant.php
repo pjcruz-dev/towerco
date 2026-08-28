@@ -431,7 +431,7 @@ Route::prefix('auth')->group(function () {
     Route::post('mfa/challenge', [TenantAuthController::class, 'mfaChallenge'])->name('api.tenant.v1.auth.mfa.challenge');
     Route::post('mfa/verify', [TenantAuthController::class, 'mfaVerify'])->name('api.tenant.v1.auth.mfa.verify');
     Route::post('mfa/recovery', [TenantAuthController::class, 'mfaRecovery'])->name('api.tenant.v1.auth.mfa.recovery');
-    Route::post('webauthn/login/options', [TenantWebAuthnController::class, 'loginOptions'])
+    Route::match(['GET', 'POST'], 'webauthn/login/options', [TenantWebAuthnController::class, 'loginOptions'])
         ->middleware('throttle:20,1')
         ->name('api.tenant.v1.auth.webauthn.login.options');
     Route::post('webauthn/login/verify', [TenantWebAuthnController::class, 'loginVerify'])
@@ -482,7 +482,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('auth/sessions', [TenantAuthController::class, 'sessions'])->name('api.tenant.v1.auth.sessions');
     Route::delete('auth/sessions/{sessionId}', [TenantAuthController::class, 'revokeSession'])->name('api.tenant.v1.auth.sessions.revoke');
     Route::get('auth/webauthn/credentials', [TenantWebAuthnController::class, 'index'])->name('api.tenant.v1.auth.webauthn.credentials.index');
-    Route::post('auth/webauthn/register/options', [TenantWebAuthnController::class, 'registerOptions'])
+    // GET allowed too: some reverse proxies turn POST→GET on HTTP→HTTPS redirects.
+    Route::match(['GET', 'POST'], 'auth/webauthn/register/options', [TenantWebAuthnController::class, 'registerOptions'])
         ->middleware('throttle:10,1')
         ->name('api.tenant.v1.auth.webauthn.register.options');
     Route::post('auth/webauthn/register/verify', [TenantWebAuthnController::class, 'registerVerify'])

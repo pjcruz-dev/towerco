@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
 import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
+import { resolveApiBaseUrl } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchTenantAuthPublicStatus } from "@/lib/api/modules/admin-api";
 import { login, webAuthnLoginOptions, webAuthnLoginVerify } from "@/lib/api/modules/auth-api";
@@ -29,6 +30,7 @@ import {
   tenantLoginUrl,
 } from "@/lib/tenant/resolve-tenant-domain";
 import {
+  isWebAuthnSecureContext,
   isWebAuthnSupported,
   serializeAssertion,
   toRequestOptions,
@@ -228,6 +230,11 @@ function LoginPageContent() {
       if (!isWebAuthnSupported()) {
         throw new Error("This browser does not support passkeys.");
       }
+      if (!isWebAuthnSecureContext()) {
+        throw new Error(
+          "Passkeys require HTTPS. Open this site with https:// (not http://) and try again.",
+        );
+      }
       const email = form.getValues("email")?.trim();
       const options = await webAuthnLoginOptions(email || undefined);
       const requestOptions = toRequestOptions(options.publicKey);
@@ -310,10 +317,7 @@ function LoginPageContent() {
       microsoftSignIn?.redirect_path ??
       process.env.NEXT_PUBLIC_AUTH_AZURE_REDIRECT_PATH ??
       "/auth/sso/azure/redirect";
-    const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1").replace(
-      /\/$/,
-      "",
-    );
+    const apiBase = resolveApiBaseUrl();
     const path = redirectPath.startsWith("/") ? redirectPath : `/${redirectPath}`;
     // Relative API bases (e.g. `/api/v1`) need a document origin — `new URL("/api/v1/…")` alone throws.
     const url = new URL(`${apiBase}${path}`, window.location.origin);

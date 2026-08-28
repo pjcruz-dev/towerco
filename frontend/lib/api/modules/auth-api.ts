@@ -174,7 +174,11 @@ export async function fetchWebAuthnCredentials(): Promise<{
 export async function webAuthnRegisterOptions(label?: string): Promise<WebAuthnCeremonyOptions> {
   const response = await apiClient.post<{ data: WebAuthnCeremonyOptions }>(
     "/auth/webauthn/register/options",
-    label ? { label } : {},
+    { label: label?.trim() ? label.trim() : null },
+    {
+      // Do not follow redirects: HTTP→HTTPS often rewrites POST to GET and fails this route.
+      maxRedirects: 0,
+    },
   );
   return response.data.data;
 }
@@ -203,7 +207,7 @@ export async function webAuthnLoginOptions(email?: string): Promise<WebAuthnCere
   const response = await apiClient.post<{ data: WebAuthnCeremonyOptions }>(
     "/auth/webauthn/login/options",
     email ? { email } : {},
-    { timeout: 60_000 },
+    { timeout: 60_000, maxRedirects: 0 },
   );
   return response.data.data;
 }

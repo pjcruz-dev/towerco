@@ -57,6 +57,17 @@ final class TenantWebAuthnApiTest extends TestCase
         $this->assertNotEmpty($res->json('data.challenge_id'));
     }
 
+    public function test_authenticated_user_can_request_registration_options_via_get(): void
+    {
+        $res = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/auth/webauthn/register/options?label=Laptop');
+
+        $res->assertOk();
+        $res->assertJsonPath('data.rp_id', 'test.localhost');
+        $this->assertNotEmpty($res->json('data.challenge_id'));
+    }
+
     public function test_list_credentials_starts_empty(): void
     {
         $res = $this->actingAsTenantAdmin()

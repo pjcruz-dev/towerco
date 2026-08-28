@@ -72,8 +72,7 @@ function isApiSameHostnameAsPage(): boolean {
     return false;
   }
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
-    const apiHostname = new URL(apiBase, window.location.href).hostname.toLowerCase();
+    const apiHostname = new URL(resolveApiBaseUrl(), window.location.href).hostname.toLowerCase();
     return apiHostname === window.location.hostname.toLowerCase();
   } catch {
     return false;
@@ -93,14 +92,64 @@ function resolveApiTimeoutMs(): number {
   return 20_000;
 }
 
+/**
+ * Prefer HTTPS for non-local API hosts in the browser.
+ * HTTP→HTTPS redirects turn POST into GET and break WebAuthn options (405/500).
+ *
+ * Production same-host setups (e.g. https://app.alliancetowers.com/api/v1) are unchanged:
+ * protocol is already https, hostname matches the page, tenancy still comes from Host.
+ */
+export function resolveApiBaseUrl(
+  configuredInput?: string,
+  options?: { hostname?: string; protocol?: string; href?: string },
+): string {
+  const fallback = "http://localhost:8000/api/v1";
+  const configured = (configuredInput ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? fallback).trim() || fallback;
+
+  const pageHref =
+    options?.href ??
+    (typeof window !== "undefined"
+      ? window.location.href
+      : undefined);
+
+  if (!pageHref && typeof window === "undefined" && !options) {
+    return configured;
+  }
+
+  try {
+    const base =
+      pageHref ??
+      `${options?.protocol ?? "https:"}//${options?.hostname ?? "localhost"}/`;
+    const url = new URL(configured, base);
+    const host = url.hostname.toLowerCase();
+    const isLocal =
+      host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
+    if (!isLocal && url.protocol === "http:") {
+      url.protocol = "https:";
+    }
+    // Axios baseURL should not end with "/" when paths start with "/".
+    return url.href.replace(/\/+$/, "");
+  } catch {
+    return configured;
+  }
+}
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
+  baseURL: resolveApiBaseUrl(),
   timeout: resolveApiTimeoutMs(),
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
   },
 });
+
+// Keep baseURL correct after client hydration / tenant host switches.
+if (typeof window !== "undefined") {
+  apiClient.interceptors.request.use((config) => {
+    config.baseURL = resolveApiBaseUrl();
+    return config;
+  });
+}
 
 let refreshPromise: Promise<void> | null = null;
 
@@ -122,9 +171,7 @@ async function refreshAccessToken() {
         applyTenantContextHeaders(headers);
 
         const response = await axios.post<{ data: unknown }>(
-          `${
-            process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1"
-          }${process.env.NEXT_PUBLIC_AUTH_REFRESH_PATH ?? "/auth/refresh"}`,
+          `${resolveApiBaseUrl()}${process.env.NEXT_PUBLIC_AUTH_REFRESH_PATH ?? "/auth/refresh"}`,
           { refresh_token: refreshToken },
           { headers },
         );

@@ -6,6 +6,11 @@ export function isWebAuthnSupported(): boolean {
   return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
 }
 
+/** Passkeys require HTTPS (or localhost). Plain HTTP pages are not a secure context. */
+export function isWebAuthnSecureContext(): boolean {
+  return typeof window !== "undefined" && window.isSecureContext === true;
+}
+
 export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
   if (!isWebAuthnSupported()) return false;
   try {
@@ -146,6 +151,16 @@ export function webAuthnUserMessage(error: unknown): string {
     }
     if (error.name === "SecurityError") {
       return "Passkeys require a secure context (HTTPS or localhost).";
+    }
+  }
+  if (typeof error === "object" && error !== null && "isAxiosError" in error) {
+    const ax = error as { response?: { status?: number; data?: { message?: string } }; message?: string };
+    const apiMessage = ax.response?.data?.message;
+    if (apiMessage && /GET method is not supported/i.test(apiMessage)) {
+      return "Passkey setup failed because the request was redirected (often HTTP→HTTPS). Open this site with https:// and try again.";
+    }
+    if (ax.response?.status === 301 || ax.response?.status === 302 || ax.response?.status === 307 || ax.response?.status === 308) {
+      return "Passkey API redirected unexpectedly. Use the HTTPS site URL and confirm NEXT_PUBLIC_API_BASE_URL uses https://.";
     }
   }
   if (error instanceof Error && error.message) {
