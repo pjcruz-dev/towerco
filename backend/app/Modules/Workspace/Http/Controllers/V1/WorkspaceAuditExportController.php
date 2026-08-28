@@ -70,6 +70,7 @@ final class WorkspaceAuditExportController extends AbstractApiController
                 'entity_id',
                 'entity_label',
                 'ip_address',
+                'user_agent',
                 'source',
                 'changes',
             ]);
@@ -93,6 +94,7 @@ final class WorkspaceAuditExportController extends AbstractApiController
                     (string) ($row['entity_id'] ?? ''),
                     (string) ($row['entity_label'] ?? ''),
                     (string) ($row['ip_address'] ?? ''),
+                    (string) ($row['user_agent'] ?? ''),
                     (string) ($row['source'] ?? ''),
                     is_array($changes) ? (string) json_encode($changes, JSON_UNESCAPED_UNICODE) : '',
                 ]);

@@ -25,6 +25,7 @@ export type WorkspaceAuditRow = {
   entity_label: string | null;
   actor: { id: string; name: string; email: string } | null;
   ip_address: string | null;
+  user_agent?: string | null;
   metadata: Record<string, unknown> | null;
   changes?: Record<string, WorkspaceAuditChange> | null;
   created_at: string | null;

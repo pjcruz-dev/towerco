@@ -18,7 +18,7 @@ type CompactProps = {
   className?: string;
 };
 
-/** Table cell: IP + link to lookup/map page. */
+/** Table cell: IP + link to approximate ISP location (not GPS). */
 export function AuditIpCompact({ ip, className }: CompactProps) {
   const value = ip?.trim() || "";
   if (!value) {
@@ -38,7 +38,7 @@ export function AuditIpCompact({ ip, className }: CompactProps) {
         "inline-flex max-w-[11rem] items-center gap-1 font-mono text-xs text-primary hover:underline",
         className,
       )}
-      title="Open approximate location on map"
+      title="Approx. ISP location (not GPS)"
       onClick={(event) => event.stopPropagation()}
     >
       <span className="truncate">{value}</span>
@@ -51,7 +51,7 @@ type DetailProps = {
   ip: string | null | undefined;
 };
 
-/** Detail drawer: resolve approx city/coords and Google Maps link. */
+/** Detail drawer: city/region from IP + map link. No precise coordinates shown. */
 export function AuditIpDetail({ ip }: DetailProps) {
   const value = ip?.trim() || "";
   const [geo, setGeo] = useState<IpGeoLookup | null>(null);
@@ -91,7 +91,7 @@ export function AuditIpDetail({ ip }: DetailProps) {
     return (
       <div className="space-y-1">
         <p className="font-mono text-sm">{value}</p>
-        <p className="text-xs text-muted-foreground">Private / internal address — no map location.</p>
+        <p className="text-xs text-muted-foreground">Private / internal address — no ISP map.</p>
       </div>
     );
   }
@@ -105,26 +105,25 @@ export function AuditIpDetail({ ip }: DetailProps) {
     <div className="space-y-2">
       <p className="font-mono text-sm">{value}</p>
       {status === "loading" ? (
-        <p className="text-xs text-muted-foreground">Looking up approximate location…</p>
+        <p className="text-xs text-muted-foreground">Looking up approx. ISP location…</p>
       ) : null}
       {status === "ready" && geo ? (
         <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Approx. ISP location</p>
           <p className="flex items-start gap-1.5 text-sm text-foreground">
             <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <span>{geo.label}</span>
           </p>
-          {geo.latitude != null && geo.longitude != null ? (
-            <p className="font-mono text-xs text-muted-foreground">
-              {geo.latitude.toFixed(4)}, {geo.longitude.toFixed(4)}
-            </p>
-          ) : null}
-          <p className="text-[11px] text-muted-foreground">
-            Approximate (ISP / city level), not GPS.
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Based on the public IP / ISP region — not the user’s GPS or exact address. Useful for
+            spotting unusual networks, not proving desk location.
           </p>
         </div>
       ) : null}
       {status === "unavailable" ? (
-        <p className="text-xs text-muted-foreground">Location lookup unavailable — open map link instead.</p>
+        <p className="text-xs text-muted-foreground">
+          Approx. ISP lookup unavailable — you can still open the region map link.
+        </p>
       ) : null}
       <a
         href={mapsHref}
@@ -132,7 +131,7 @@ export function AuditIpDetail({ ip }: DetailProps) {
         rel="noopener noreferrer"
         className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex gap-1.5")}
       >
-        View on map
+        View region on map
         <ExternalLink className="h-3.5 w-3.5" aria-hidden />
       </a>
     </div>

@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
 import { AuditIpCompact } from "@/components/governance/audit-ip-location";
+import { AuditDeviceCompact } from "@/components/governance/audit-device-detail";
 import {
   createDateColumn,
   createTextColumn,
@@ -16,6 +17,7 @@ import {
   auditSeverityClassName,
   auditSeverityLabel,
 } from "@/lib/workspace/audit-display";
+import { formatAuditUserAgent } from "@/lib/workspace/audit-user-agent";
 import { cn } from "@/lib/utils";
 
 function moduleLabel(module: string): string {
@@ -100,10 +102,23 @@ export function createWorkspaceAuditTableColumns(
         ) : null}
       </div>
     )),
-    createTextColumn("ip_address", "IP", (row) => <AuditIpCompact ip={row.ip_address} />, {
+    createTextColumn("ip_address", "User IP", (row) => <AuditIpCompact ip={row.ip_address} />, {
       className: "whitespace-nowrap",
       sortValue: (row) => row.ip_address ?? "",
     }),
+    createTextColumn(
+      "user_agent",
+      "User device",
+      (row) => (
+        <AuditDeviceCompact
+          userAgent={row.user_agent}
+          className="block max-w-[14rem] truncate text-xs text-muted-foreground"
+        />
+      ),
+      {
+        sortValue: (row) => formatAuditUserAgent(row.user_agent),
+      },
+    ),
     createTextColumn(
       "entity",
       "Entity",

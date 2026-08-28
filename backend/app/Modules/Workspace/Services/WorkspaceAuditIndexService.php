@@ -266,6 +266,7 @@ final class WorkspaceAuditIndexService
                 'email' => $log->actor->email,
             ] : null,
             'ip_address' => $log->ip_address,
+            'user_agent' => $log->user_agent ?? null,
             'metadata' => $log->metadata_json,
             'created_at' => $log->created_at?->toIso8601String(),
             'href' => $this->hrefFor($log->module, $log->entity_type, $log->entity_id),

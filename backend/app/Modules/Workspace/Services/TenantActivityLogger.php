@@ -70,6 +70,11 @@ final class TenantActivityLogger
             $payload['reason'] = $resolvedReason;
         }
 
+        if ($this->hasUserAgentColumn()) {
+            $ua = trim((string) (request()->userAgent() ?? ''));
+            $payload['user_agent'] = $ua !== '' ? mb_substr($ua, 0, 512) : null;
+        }
+
         $log = TenantActivityLog::query()->create($payload);
 
         $this->structuredAudit->write('tenant.workspace', $action, [
@@ -100,6 +105,23 @@ final class TenantActivityLogger
 
         try {
             $cached = Schema::connection('tenant')->hasColumn('tenant_activity_logs', 'category');
+        } catch (\Throwable) {
+            $cached = false;
+        }
+
+        return $cached;
+    }
+
+    private function hasUserAgentColumn(): bool
+    {
+        static $cached = null;
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        try {
+            $cached = Schema::connection('tenant')->hasColumn('tenant_activity_logs', 'user_agent');
         } catch (\Throwable) {
             $cached = false;
         }

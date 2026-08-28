@@ -31,6 +31,7 @@ class TenantActivityLog extends Model
         'entity_label',
         'actor_user_id',
         'ip_address',
+        'user_agent',
         'metadata_json',
         'created_at',
     ];
