@@ -34,6 +34,8 @@ class TicketingSettingsUpdateController extends AbstractApiController
             'notify_teams_on_sla_reminder' => ['sometimes', 'boolean'],
             'notify_teams_on_sla_escalation' => ['sometimes', 'boolean'],
             'categories' => ['sometimes', 'array', 'min:1'],
+            'categories.*.id' => ['sometimes', 'string', 'max:64'],
+            'categories.*.label' => ['sometimes', 'nullable', 'string', 'max:120'],
             'categories.*.sla_response_minutes' => ['nullable', 'integer', 'min:1', 'max:525600'],
             'categories.*.sla_escalation_minutes' => ['nullable', 'integer', 'min:1', 'max:525600'],
             'assignment_rules' => ['sometimes', 'array'],
@@ -42,6 +44,11 @@ class TicketingSettingsUpdateController extends AbstractApiController
             'assignment_rules.*.enabled' => ['sometimes', 'boolean'],
             'apply_category_pack' => ['sometimes', 'string', 'max:64'],
         ]);
+
+        // Laravel validated() omits nested keys without rules; restore full category rows (id/label).
+        if ($request->exists('categories') && is_array($request->input('categories'))) {
+            $data['categories'] = $request->input('categories');
+        }
 
         $settings->update($data);
 

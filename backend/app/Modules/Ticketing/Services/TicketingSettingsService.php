@@ -281,7 +281,7 @@ final class TicketingSettingsService
             $options = TicketingCategoryCatalog::normalizeList($values['categories']);
             if ($options === []) {
                 throw ValidationException::withMessages([
-                    'categories' => [__('Categories must use lowercase letters, numbers, and underscores only.')],
+                    'categories' => [__('Could not save categories. Each category needs a valid slug (lowercase letters, numbers, underscores).')],
                 ]);
             }
             $this->persistCategoryOptions($options);
