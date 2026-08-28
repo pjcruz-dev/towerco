@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { AuditIpDetail } from "@/components/governance/audit-ip-location";
 import {
   Sheet,
   SheetContent,
@@ -174,7 +175,9 @@ export function WorkspaceAuditDetailDrawer({ row, open, onOpenChange }: Props) {
           <div className="grid gap-4 sm:grid-cols-2">
             <DetailField label="Actor">{row.actor?.name ?? "—"}</DetailField>
             <DetailField label="Actor email">{row.actor?.email ?? "—"}</DetailField>
-            <DetailField label="IP address">{row.ip_address ?? "—"}</DetailField>
+            <DetailField label="IP address">
+              <AuditIpDetail ip={row.ip_address} />
+            </DetailField>
             <DetailField label="When">{formatTimestamp(row.created_at)}</DetailField>
           </div>
 

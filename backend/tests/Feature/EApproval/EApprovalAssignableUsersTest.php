@@ -64,7 +64,11 @@ final class EApprovalAssignableUsersTest extends TestCase
         $ids = collect($response->json('data'))->pluck('id')->all();
 
         $this->assertContains((string) $approver->id, $ids);
-        $this->assertContains((string) $this->testTenantAdmin->id, $ids);
+        $this->assertNotContains(
+            (string) $this->testTenantAdmin->id,
+            $ids,
+            'Bootstrap break-glass admin must not appear in Approver pickers.',
+        );
         $this->assertNotContains((string) $requestorOnly->id, $ids);
         $this->assertNotContains((string) $inactiveApprover->id, $ids);
     }

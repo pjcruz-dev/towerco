@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
+import { AuditIpCompact } from "@/components/governance/audit-ip-location";
 import {
   createDateColumn,
   createTextColumn,
@@ -99,8 +100,9 @@ export function createWorkspaceAuditTableColumns(
         ) : null}
       </div>
     )),
-    createTextColumn("ip_address", "IP", (row) => row.ip_address ?? "—", {
-      className: "whitespace-nowrap font-mono text-xs text-muted-foreground",
+    createTextColumn("ip_address", "IP", (row) => <AuditIpCompact ip={row.ip_address} />, {
+      className: "whitespace-nowrap",
+      sortValue: (row) => row.ip_address ?? "",
     }),
     createTextColumn(
       "entity",

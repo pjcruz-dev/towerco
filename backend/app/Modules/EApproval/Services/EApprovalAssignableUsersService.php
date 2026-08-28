@@ -11,6 +11,7 @@ final class EApprovalAssignableUsersService
     /**
      * Active users who can approve (permission e_approval:approve) for form/workflow pickers.
      * Includes e_approval_approver, e_approval_admin, tenant_admin, and other roles granted approve.
+     * Excludes bootstrap break-glass admin (password_login_exempt).
      *
      * @return list<array{id: string, name: string, email: string, roles: list<string>}>
      */
@@ -18,6 +19,10 @@ final class EApprovalAssignableUsersService
     {
         return TenantUser::query()
             ->where('is_active', true)
+            ->where(static function ($query): void {
+                $query->where('password_login_exempt', false)
+                    ->orWhereNull('password_login_exempt');
+            })
             ->permission('e_approval:approve')
             ->orderBy('name')
             ->get()
