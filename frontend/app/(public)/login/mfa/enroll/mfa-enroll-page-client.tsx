@@ -132,8 +132,9 @@ function MfaEnrollPageInner() {
           <li>Save recovery codes, then continue to the workspace.</li>
         </ol>
         <p className="mt-2 text-xs text-muted-foreground">
-          This screen appears after email &amp; password, Microsoft, or passkey when MFA is required
-          and you have not enrolled yet.
+          Not email-only: this also appears after <span className="font-medium text-foreground">Sign in with Microsoft</span>{" "}
+          when MFA is required and you have not enrolled yet. Passkey sign-in may skip this step if your
+          organization treats passkeys as MFA.
         </p>
 
         {startMutation.isPending && !setup ? (
