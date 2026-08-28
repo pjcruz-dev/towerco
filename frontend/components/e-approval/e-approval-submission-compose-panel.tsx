@@ -1308,7 +1308,10 @@ export function EApprovalSubmissionComposePanel({
           {showSectionProgress ? (
             <EApprovalFormSectionProgressNav sections={sectionProgress} className="sticky top-0 z-10" />
           ) : null}
-          <div className={cn("rounded-xl border border-border bg-card shadow-sm", focused ? "p-5 sm:p-6" : "p-4")}>
+          <div
+            data-help="ea-compose-fields"
+            className={cn("rounded-xl border border-border bg-card shadow-sm", focused ? "p-5 sm:p-6" : "p-4")}
+          >
             <EApprovalComposeFormFields
               fields={composeFields}
               values={computedValues}
@@ -1430,39 +1433,43 @@ export function EApprovalSubmissionComposePanel({
           </Button>
         ) : null}
         {!isResubmitMode ? (
+          <span data-help="ea-compose-save-draft" className="inline-flex">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isBusy || formQuery.isLoading || hasBalanceBlocker}
+            >
+              Save draft
+            </Button>
+          </span>
+        ) : null}
+        <span data-help="ea-compose-submit" className="inline-flex">
           <Button
             type="button"
-            variant="outline"
-            onClick={handleSaveDraft}
-            disabled={isBusy || formQuery.isLoading || hasBalanceBlocker}
+            onClick={handleSubmit}
+            disabled={
+              formQuery.isLoading ||
+              formQuery.isError ||
+              formQuery.data?.status === "draft" ||
+              isBusy ||
+              Boolean(duplicateApproverWarning) ||
+              hasBalanceBlocker ||
+              (composeStepMeta.stepped && !composeStepMeta.isLastStep) ||
+              (isResubmitMode &&
+                (!resubmitQuery.data ||
+                  (resubmitQuery.data.status !== "returned" && resubmitQuery.data.status !== "rejected")))
+            }
           >
-            Save draft
+            {submitMutation.isPending
+              ? isResubmitMode
+                ? "Resubmitting…"
+                : "Submitting…"
+              : isResubmitMode
+                ? "Resubmit request"
+                : "Submit request"}
           </Button>
-        ) : null}
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={
-            formQuery.isLoading ||
-            formQuery.isError ||
-            formQuery.data?.status === "draft" ||
-            isBusy ||
-            Boolean(duplicateApproverWarning) ||
-            hasBalanceBlocker ||
-            (composeStepMeta.stepped && !composeStepMeta.isLastStep) ||
-            (isResubmitMode &&
-              (!resubmitQuery.data ||
-                (resubmitQuery.data.status !== "returned" && resubmitQuery.data.status !== "rejected")))
-          }
-        >
-          {submitMutation.isPending
-            ? isResubmitMode
-              ? "Resubmitting…"
-              : "Submitting…"
-            : isResubmitMode
-              ? "Resubmit request"
-              : "Submit request"}
-        </Button>
+        </span>
       </div>
     </div>
   );

@@ -17,6 +17,10 @@ import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
 type Props = {
   data: EApprovalPrintPayload;
   showApprovalFooter?: boolean;
+  /** Tour / help hooks for spotlight targets. */
+  fieldsDataHelp?: string;
+  trailDataHelp?: string;
+  footerDataHelp?: string;
 };
 
 function formatStatus(status: string): string {
@@ -53,7 +57,13 @@ function attachmentsForField(
     });
 }
 
-export function EApprovalGenericFormPrintView({ data, showApprovalFooter = true }: Props) {
+export function EApprovalGenericFormPrintView({
+  data,
+  showApprovalFooter = true,
+  fieldsDataHelp,
+  trailDataHelp,
+  footerDataHelp,
+}: Props) {
   const template = resolvePrintTemplate(data);
   const approvalSlots = useMemo(() => buildApprovalHistorySlots(data, template), [data, template]);
   const gridKeys = useMemo(() => new Set((data.grids ?? []).map((grid) => grid.key)), [data.grids]);
@@ -79,7 +89,10 @@ export function EApprovalGenericFormPrintView({ data, showApprovalFooter = true 
           <ProcurementPrintHeader data={data} template={template} title={title} />
 
           {scalarFields.length > 0 ? (
-            <section className="mt-6 overflow-hidden rounded border border-slate-300">
+            <section
+              data-help={fieldsDataHelp}
+              className="mt-6 overflow-hidden rounded border border-slate-300"
+            >
               <table className="w-full border-collapse text-sm">
                 <tbody>
                   {scalarFields.map((field) => {
@@ -185,7 +198,10 @@ export function EApprovalGenericFormPrintView({ data, showApprovalFooter = true 
           ) : null}
 
           {data.show_approval_trail && data.approvals.length > 0 ? (
-            <section className="mt-6 overflow-hidden rounded border border-slate-300">
+            <section
+              data-help={trailDataHelp}
+              className="mt-6 overflow-hidden rounded border border-slate-300"
+            >
               <h2 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
                 Approval trail
               </h2>
@@ -217,11 +233,13 @@ export function EApprovalGenericFormPrintView({ data, showApprovalFooter = true 
           ) : null}
 
           {showApprovalFooter && shouldShowApprovalHistory(template) ? (
-            <ApprovalHistoryPrintBlock
-              slots={approvalSlots}
-              className="eapproval-generic-form-print-footer mt-8"
-              variant="screen"
-            />
+            <div data-help={footerDataHelp}>
+              <ApprovalHistoryPrintBlock
+                slots={approvalSlots}
+                className="eapproval-generic-form-print-footer mt-8"
+                variant="screen"
+              />
+            </div>
           ) : null}
 
           <div className={showApprovalFooter ? "print:pb-[48mm]" : undefined} aria-hidden />

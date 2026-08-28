@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint } from "lucide-react";
+import { Fingerprint, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useForm, type FieldErrors } from "react-hook-form";
@@ -148,6 +148,7 @@ function LoginPageContent() {
   const autoStartSso = searchParams.get("sso") === "1";
 
   const [showBreakGlassLogin, setShowBreakGlassLogin] = useState(false);
+  const [microsoftRedirecting, setMicrosoftRedirecting] = useState(false);
 
   useEffect(() => {
     if (passwordLoginAvailable) {
@@ -301,6 +302,10 @@ function LoginPageContent() {
   };
 
   const redirectToMicrosoftSignIn = () => {
+    if (microsoftRedirecting) {
+      return;
+    }
+    setMicrosoftRedirecting(true);
     const redirectPath =
       microsoftSignIn?.redirect_path ??
       process.env.NEXT_PUBLIC_AUTH_AZURE_REDIRECT_PATH ??
@@ -316,7 +321,7 @@ function LoginPageContent() {
     if (tenantHost) {
       url.searchParams.set("tenant_domain", tenantHost);
     }
-    window.location.href = url.toString();
+    window.location.assign(url.toString());
   };
 
   // Phase 2 env switcher: /login?sso=1 auto-starts Microsoft when SSO is enabled on this host.
@@ -352,7 +357,18 @@ function LoginPageContent() {
   const showMicrosoftPrimary =
     passwordLoginRestricted && !showBreakGlassLogin;
   const passkeyBusy = passkeyMutation.isPending;
-  const authBusy = mutation.isPending || isSubmitting || passkeyBusy;
+  const authBusy = mutation.isPending || isSubmitting || passkeyBusy || microsoftRedirecting;
+  const microsoftButtonLabel = microsoftRedirecting
+    ? "Redirecting to Microsoft…"
+    : (microsoftSignIn?.label ?? "Sign in with Microsoft");
+  const microsoftButtonContent = (
+    <>
+      {microsoftRedirecting ? (
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+      ) : null}
+      {microsoftButtonLabel}
+    </>
+  );
 
   const passkeySignInButton = passkeysAvailable ? (
     <Button
@@ -444,8 +460,13 @@ function LoginPageContent() {
               Loading sign-in options…
             </Button>
           ) : (
-            <Button className="w-full" type="button" onClick={redirectToMicrosoftSignIn}>
-              {microsoftSignIn?.label ?? "Sign in with Microsoft"}
+            <Button
+              className="w-full gap-1.5"
+              type="button"
+              disabled={authBusy || authStatusQuery.isLoading}
+              onClick={redirectToMicrosoftSignIn}
+            >
+              {microsoftButtonContent}
             </Button>
           )}
           {passkeySignInButton}
@@ -454,6 +475,7 @@ function LoginPageContent() {
             type="button"
             variant="ghost"
             size="sm"
+            disabled={microsoftRedirecting}
             onClick={() => setShowBreakGlassLogin(true)}
           >
             Break-glass administrator sign-in
@@ -522,13 +544,13 @@ function LoginPageContent() {
 
           {microsoftSignIn?.enabled ? (
             <Button
-              className="w-full"
+              className="w-full gap-1.5"
               variant={showPasswordFields ? "outline" : "default"}
               type="button"
               disabled={authBusy || authStatusQuery.isLoading}
               onClick={redirectToMicrosoftSignIn}
             >
-              {microsoftSignIn.label ?? "Sign in with Microsoft"}
+              {microsoftButtonContent}
             </Button>
           ) : null}
 

@@ -66,7 +66,7 @@ export function EApprovalSubmissionWorkflowPathPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div data-help="ea-detail-workflow-path" className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

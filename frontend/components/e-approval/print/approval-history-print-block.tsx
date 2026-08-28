@@ -23,7 +23,7 @@ function SignatureMark({ value, compact }: { value: string | null; compact?: boo
       {value ? (
         isImageSignature(value) ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="max-h-10 max-w-full object-contain" />
+          <img src={value} alt="" className="max-h-14 max-w-full object-contain" />
         ) : (
           <span className={cn("text-slate-800", compact ? "text-[11px] italic" : "text-xs")}>{value}</span>
         )

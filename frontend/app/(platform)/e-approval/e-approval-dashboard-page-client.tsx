@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   ClipboardCheck,
@@ -14,12 +15,17 @@ import {
 
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
+import { EApprovalTourCompleteAnchor, EApprovalTourOverviewQueueFixtures } from "@/components/help/e-approval-tour-fixtures";
+import { EApprovalTourSoftPrompt } from "@/components/help/e-approval-tour-soft-prompt";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import { Spinner } from "@/components/ui/spinner";
 import { useEApprovalDashboard } from "@/hooks/use-e-approval-dashboard";
 import { usePermission } from "@/hooks/use-permission";
+import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { formatEApprovalStatusLabel } from "@/modules/e-approval/status-display";
@@ -45,11 +51,19 @@ function formatWhen(iso: string | null | undefined): string {
 
 function OverviewKpiStrip({ items }: { items: EApprovalDashboardKpi[] }) {
   if (items.length === 0) {
-    return null;
+    return (
+      <section
+        data-help="ea-overview-kpis"
+        className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-sm text-muted-foreground"
+      >
+        Status cards appear here once approvals and submissions exist for your account.
+      </section>
+    );
   }
 
   return (
     <section
+      data-help="ea-overview-kpis"
       className={cn(
         "grid gap-3 sm:grid-cols-2",
         items.length >= 5 ? "xl:grid-cols-5" : items.length === 4 ? "xl:grid-cols-4" : "xl:grid-cols-3",
@@ -92,12 +106,24 @@ function QueueList({
   items,
   emptyMessage,
   metaLabel,
+  tourFixture,
 }: {
   items: EApprovalDashboardQueueItem[];
   emptyMessage: string;
   metaLabel: "requestor" | "updated";
+  tourFixture?: "awaiting" | "attention";
 }) {
+  const searchParams = useSearchParams();
+  const tourActive = isEApprovalTourActive(searchParams);
+
   if (items.length === 0) {
+    if (tourActive && tourFixture) {
+      return (
+        <Suspense fallback={<p className="px-1 py-6 text-sm text-muted-foreground">{emptyMessage}</p>}>
+          <EApprovalTourOverviewQueueFixtures variant={tourFixture} />
+        </Suspense>
+      );
+    }
     return <p className="px-1 py-6 text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
@@ -133,6 +159,20 @@ function QueueList({
 }
 
 export function EApprovalDashboardPageClient() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <DashboardContentSkeleton />
+        </div>
+      }
+    >
+      <EApprovalDashboardPageInner />
+    </Suspense>
+  );
+}
+
+function EApprovalDashboardPageInner() {
   const { data, isFetching, isError, isPlaceholderData, refetch } = useEApprovalDashboard();
   const showSkeleton = isFetching && isPlaceholderData;
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
@@ -188,11 +228,13 @@ export function EApprovalDashboardPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <EApprovalPageHeader
           title="E-Approval"
           description={data?.message ?? "Your inbox for approvals, returns, and open requests."}
           actions={
-            <div className="flex flex-wrap items-center gap-2">
+            <div data-help="ea-overview-quick-actions" className="flex flex-wrap items-center gap-2">
+              <EApprovalHelpEntryActions />
               <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
                 {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
                 Refresh
@@ -213,6 +255,11 @@ export function EApprovalDashboardPageClient() {
           }
         />
 
+        <EApprovalTourSoftPrompt />
+        <Suspense fallback={null}>
+          <EApprovalTourCompleteAnchor />
+        </Suspense>
+
         {showSkeleton ? <DashboardContentSkeleton /> : null}
 
         {isError ? <p className="text-sm text-destructive">Could not load E-Approval overview.</p> : null}
@@ -224,6 +271,7 @@ export function EApprovalDashboardPageClient() {
             <div className={cn("grid gap-4", showApproveQueue ? "lg:grid-cols-2" : "lg:grid-cols-1")}>
               {showApproveQueue ? (
                 <EApprovalSectionCard
+                  dataHelp="ea-overview-awaiting"
                   title="Needs my approval"
                   description="Oldest pending items assigned to you."
                   actions={
@@ -237,13 +285,22 @@ export function EApprovalDashboardPageClient() {
                 >
                   <QueueList
                     items={awaitingQueue}
-                    emptyMessage="Nothing waiting on you right now."
+                    emptyMessage="Nothing waiting on you right now. New items show up when someone submits work to you."
                     metaLabel="requestor"
+                    tourFixture="awaiting"
                   />
                 </EApprovalSectionCard>
-              ) : null}
+              ) : (
+                <div
+                  data-help="ea-overview-awaiting"
+                  className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-sm text-muted-foreground"
+                >
+                  Approver inbox appears here when your role can approve requests.
+                </div>
+              )}
 
               <EApprovalSectionCard
+                dataHelp="ea-overview-attention"
                 title="Needs my attention"
                 description="Returned and draft submissions you own."
                 actions={
@@ -257,8 +314,9 @@ export function EApprovalDashboardPageClient() {
               >
                 <QueueList
                   items={attentionQueue}
-                  emptyMessage="No returned or draft submissions."
+                  emptyMessage="No drafts or returns yet. Items you own that need work will list here."
                   metaLabel="updated"
+                  tourFixture="attention"
                 />
               </EApprovalSectionCard>
             </div>

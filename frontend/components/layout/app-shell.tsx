@@ -59,14 +59,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <GlobalCommandPaletteProvider>
       <AssistantDrawerProvider enabled={canUseAssistant}>
         <SidebarProvider>
-          <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased">
+          <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
             <AppSidebar />
-            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent">
+            <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent print:overflow-visible">
               <AppHeader />
-              <SubscriptionAccessBanner />
-              <ImpersonationBanner />
-              <main className="scrollbar-hide flex-1 overflow-y-auto p-6 lg:p-8">
-                <div className="mx-auto max-w-[min(100%,1920px)]">{children}</div>
+              <div className="print:hidden">
+                <SubscriptionAccessBanner />
+                <ImpersonationBanner />
+              </div>
+              <main className="scrollbar-hide flex-1 overflow-y-auto p-6 lg:p-8 print:h-auto print:overflow-visible print:p-0">
+                <div className="mx-auto max-w-[min(100%,1920px)] print:max-w-none">{children}</div>
               </main>
               <AppFooter />
             </SidebarInset>

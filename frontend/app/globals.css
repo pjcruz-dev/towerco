@@ -175,3 +175,31 @@
     display: none;
   }
 }
+
+/* Multi-page print: app shell uses h-screen + overflow clip, which otherwise prints only ~1 viewport. */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* shadcn sidebar gap + fixed panel */
+  [data-slot="sidebar"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar-container"] {
+    display: none !important;
+  }
+
+  [data-slot="sidebar-inset"] {
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}

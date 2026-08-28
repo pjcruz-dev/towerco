@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { EApprovalUserGuidesSettingsCard } from "@/components/help/e-approval-user-guides-settings-card";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -324,6 +325,8 @@ export function EApprovalSettingsPageClient() {
             </div>
           </div>
         </EApprovalSectionCard>
+
+        <EApprovalUserGuidesSettingsCard />
       </div>
     </PermissionGate>
   );

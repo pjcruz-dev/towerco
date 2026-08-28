@@ -12,6 +12,7 @@ type Props = {
   onChange: (mode: EApprovalListViewMode) => void;
   className?: string;
   ariaLabel?: string;
+  dataHelp?: string;
 };
 
 export function EApprovalListViewToggle({
@@ -19,9 +20,11 @@ export function EApprovalListViewToggle({
   onChange,
   className,
   ariaLabel = "List view",
+  dataHelp,
 }: Props) {
   return (
     <div
+      data-help={dataHelp}
       className={cn("inline-flex shrink-0 rounded-lg border border-border bg-muted/40 p-0.5", className)}
       role="group"
       aria-label={ariaLabel}

@@ -131,6 +131,13 @@ export function EApprovalFormFieldsLayout({
     return (
       <div
         id={`ea-field-${field.name}`}
+        data-help={
+          field.name === "title"
+            ? "ea-compose-fields"
+            : field.type === "file" || field.name === "attachments"
+              ? "ea-compose-upload"
+              : undefined
+        }
         className={cn(
           "scroll-mt-24",
           message && "rounded-lg border border-destructive/25 bg-destructive/[0.03] px-3 py-2 -mx-1",

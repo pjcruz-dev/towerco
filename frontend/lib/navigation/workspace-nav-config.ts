@@ -1,5 +1,6 @@
 import {
   Building2,
+  CircleHelp,
   ClipboardCheck,
   CreditCard,
   FileText,
@@ -309,6 +310,13 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         href: "/gis",
         permissions: ["gis:view"],
         module: "gis",
+      },
+      {
+        title: "Help",
+        icon: CircleHelp,
+        href: "/help",
+        permissions: ["e_approval:view"],
+        permissionsMatch: "any",
       },
     ],
   },

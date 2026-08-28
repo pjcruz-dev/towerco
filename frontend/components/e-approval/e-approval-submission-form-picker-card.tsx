@@ -18,6 +18,10 @@ type Props = {
   onStartFocused?: () => void;
   onCopyExternalLink?: () => void;
   copyingExternalLink?: boolean;
+  /** Mark this card for the live Help tour (usually Document Approval). */
+  helpTour?: boolean;
+  /** Override Start href used by the live tour auto-nav (e.g. tour sample compose). */
+  tourNavPath?: string;
 };
 
 export function EApprovalSubmissionFormPickerCard({
@@ -26,11 +30,14 @@ export function EApprovalSubmissionFormPickerCard({
   onStartFocused,
   onCopyExternalLink,
   copyingExternalLink = false,
+  helpTour = false,
+  tourNavPath,
 }: Props) {
   const canCopyExternal = Boolean(form.has_shareable_public_link && onCopyExternalLink);
 
   return (
     <article
+      data-help={helpTour ? "ea-picker-form-card" : undefined}
       className={cn(
         "group flex h-full flex-col rounded-xl border border-border bg-card shadow-sm transition-all",
         "hover:border-primary/40 hover:shadow-md",
@@ -67,7 +74,15 @@ export function EApprovalSubmissionFormPickerCard({
       </button>
 
       <div className="space-y-2 border-t border-border bg-muted/20 px-4 py-3">
-        <Button type="button" className="w-full gap-1.5" onClick={onStart}>
+        <Button
+          type="button"
+          className="w-full gap-1.5"
+          onClick={onStart}
+          data-help={helpTour ? "ea-picker-start" : undefined}
+          data-tour-nav={
+            helpTour ? (tourNavPath ?? `/e-approval/request/${form.id}`) : undefined
+          }
+        >
           Start request
           <ArrowRight className="h-4 w-4" />
         </Button>

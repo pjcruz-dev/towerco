@@ -210,6 +210,13 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionSubmitDraftCont
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionWorkflowPreviewController;
 use App\Modules\FiberOne\Http\Controllers\V1\FiberOneDashboardController;
 use App\Modules\FiberOne\Http\Controllers\V1\FiberRouteIndexController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminIndexController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminPublishController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminShowController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminUnpublishController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminUpdateController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideIndexController;
+use App\Modules\Help\Http\Controllers\V1\HelpGuideShowController;
 use App\Modules\Identity\Http\Controllers\V1\TenantAuthController;
 use App\Modules\Identity\Http\Controllers\V1\TenantEnvironmentHandoffRedeemController;
 use App\Modules\Identity\Http\Controllers\V1\TenantHealthController;
@@ -830,6 +837,15 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::put('e-approval/approval-policies', EApprovalApprovalPolicyUpdateController::class)->name('api.tenant.v1.e_approval.approval_policies.update');
     Route::post('e-approval/approval-policies/publish', EApprovalApprovalPolicyPublishController::class)->name('api.tenant.v1.e_approval.approval_policies.publish');
     Route::get('e-approval/settings/public', EApprovalSettingsPublicController::class)->name('api.tenant.v1.e_approval.settings.public');
+
+    Route::get('help/guides', HelpGuideIndexController::class)->name('api.tenant.v1.help.guides.index');
+    Route::get('help/guides/{slug}', HelpGuideShowController::class)->name('api.tenant.v1.help.guides.show');
+    Route::get('help/admin/guides', HelpGuideAdminIndexController::class)->name('api.tenant.v1.help.admin.guides.index');
+    Route::get('help/admin/guides/{slug}', HelpGuideAdminShowController::class)->name('api.tenant.v1.help.admin.guides.show');
+    Route::put('help/admin/guides/{slug}', HelpGuideAdminUpdateController::class)->name('api.tenant.v1.help.admin.guides.update');
+    Route::post('help/admin/guides/{slug}/publish', HelpGuideAdminPublishController::class)->name('api.tenant.v1.help.admin.guides.publish');
+    Route::post('help/admin/guides/{slug}/unpublish', HelpGuideAdminUnpublishController::class)->name('api.tenant.v1.help.admin.guides.unpublish');
+
     Route::get('e-approval/master-data/{key}', EApprovalMasterDataLookupController::class)->name('api.tenant.v1.e_approval.master_data.lookup');
     Route::get('e-approval/master-data-sets', EApprovalMasterDataSetIndexController::class)->name('api.tenant.v1.e_approval.master_data_sets.index');
     Route::post('e-approval/master-data-sets', EApprovalMasterDataSetStoreController::class)->name('api.tenant.v1.e_approval.master_data_sets.store');

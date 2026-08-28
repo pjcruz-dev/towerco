@@ -16,7 +16,7 @@ export function AppFooter() {
   const version = resolveAppVersionLabel();
 
   return (
-    <footer className="flex h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border bg-card px-6 text-xs text-muted-foreground md:px-8">
+    <footer className="flex h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border bg-card px-6 text-xs text-muted-foreground md:px-8 print:hidden">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="font-medium text-foreground/80">
           {version} · {envLabel}

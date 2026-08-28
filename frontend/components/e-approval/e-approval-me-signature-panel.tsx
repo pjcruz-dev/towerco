@@ -160,7 +160,7 @@ export function EApprovalMeSignaturePanel() {
   const uploadPreview = mode === "upload" && draft && isImageSignature(draft) ? draft : null;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <section data-help="ea-profile-signature" className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -180,7 +180,11 @@ export function EApprovalMeSignaturePanel() {
       <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <div className="space-y-4">
           <Tabs value={mode} onValueChange={(value) => setMode(value as SignatureMode)}>
-            <TabsList variant="line" className="w-fit justify-start gap-1 overflow-x-auto">
+            <TabsList
+              data-help="ea-profile-signature-modes"
+              variant="line"
+              className="w-fit justify-start gap-1 overflow-x-auto"
+            >
               <TabsTrigger value="draw" className="flex-none gap-1.5 px-3">
                 <PenLine className="h-3.5 w-3.5" />
                 Draw
@@ -195,7 +199,8 @@ export function EApprovalMeSignaturePanel() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="draw" className="mt-4">
+            <div data-help="ea-profile-signature-pad" className="mt-4">
+            <TabsContent value="draw" className="mt-0">
               <EApprovalSignaturePad
                 value={isDrawnSignature(draft) ? draft : null}
                 onChange={(value) => {
@@ -206,7 +211,7 @@ export function EApprovalMeSignaturePanel() {
               />
             </TabsContent>
 
-            <TabsContent value="type" className="mt-4 space-y-3">
+            <TabsContent value="type" className="mt-0 space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="ea-signature-typed">Signature text</Label>
                 <Input
@@ -227,7 +232,7 @@ export function EApprovalMeSignaturePanel() {
               />
             </TabsContent>
 
-            <TabsContent value="upload" className="mt-4 space-y-4">
+            <TabsContent value="upload" className="mt-0 space-y-4">
               <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
                 <p>Upload a high-resolution scan of your handwritten signature (PNG or JPEG).</p>
               </div>
@@ -264,50 +269,59 @@ export function EApprovalMeSignaturePanel() {
                 <p className="text-sm text-muted-foreground">No image selected yet.</p>
               )}
             </TabsContent>
+            </div>
           </Tabs>
 
           <div className="space-y-3 border-t border-border pt-4">
-            {savingSignature ? (
-              <div className="space-y-3">
-                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                  <Checkbox
-                    className="mt-0.5"
-                    checked={consentAccepted}
-                    onCheckedChange={(checked) => setConsentAccepted(checked === true)}
-                    disabled={profileQuery.isLoading || saveMutation.isPending}
-                    aria-describedby="ea-signature-consent-hint"
-                  />
-                  <span>
-                    <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
-                    <span id="ea-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
-                      {SIGNATURE_CONSENT_HINT}
+            <div data-help="ea-profile-signature-consent" className="space-y-3">
+              {savingSignature ? (
+                <>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={consentAccepted}
+                      onCheckedChange={(checked) => setConsentAccepted(checked === true)}
+                      disabled={profileQuery.isLoading || saveMutation.isPending}
+                      aria-describedby="ea-signature-consent-hint"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+                      <span id="ea-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+                        {SIGNATURE_CONSENT_HINT}
+                      </span>
                     </span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                  <Checkbox
-                    className="mt-0.5"
-                    checked={storageConsentAccepted}
-                    onCheckedChange={(checked) => setStorageConsentAccepted(checked === true)}
-                    disabled={profileQuery.isLoading || saveMutation.isPending}
-                    aria-describedby="ea-signature-storage-consent-hint"
-                  />
-                  <span>
-                    <span className="font-medium text-foreground">{storageConsentLabel}</span>
-                    <span
-                      id="ea-signature-storage-consent-hint"
-                      className="mt-1 block text-xs text-muted-foreground"
-                    >
-                      {SIGNATURE_CONSENT_HINT}
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={storageConsentAccepted}
+                      onCheckedChange={(checked) => setStorageConsentAccepted(checked === true)}
+                      disabled={profileQuery.isLoading || saveMutation.isPending}
+                      aria-describedby="ea-signature-storage-consent-hint"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">{storageConsentLabel}</span>
+                      <span
+                        id="ea-signature-storage-consent-hint"
+                        className="mt-1 block text-xs text-muted-foreground"
+                      >
+                        {SIGNATURE_CONSENT_HINT}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              </div>
-            ) : null}
+                  </label>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Consent checkboxes appear when you add or change a signature, before Save.
+                </p>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => saveMutation.mutate()} disabled={!canSave}>
-                {saveMutation.isPending ? "Saving…" : "Save signature"}
-              </Button>
+              <span data-help="ea-profile-signature-save" className="inline-flex">
+                <Button size="sm" onClick={() => saveMutation.mutate()} disabled={!canSave}>
+                  {saveMutation.isPending ? "Saving…" : "Save signature"}
+                </Button>
+              </span>
               <Button
                 size="sm"
                 variant="outline"
@@ -320,7 +334,10 @@ export function EApprovalMeSignaturePanel() {
           </div>
         </div>
 
-        <aside className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+        <aside
+          data-help="ea-profile-signature-current"
+          className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4"
+        >
           <EApprovalSignaturePreview
             value={saved}
             label="Current signature"

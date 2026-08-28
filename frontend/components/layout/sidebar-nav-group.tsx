@@ -26,6 +26,10 @@ export type SidebarSubNavItem = {
   section?: string;
   /** Optional unread/action count rendered beside the label. */
   badge?: number;
+  /** Live product tour hook (`[data-help="…"]`). */
+  dataHelp?: string;
+  /** Path used by tour auto-nav when advancing from this item. */
+  tourNav?: string;
 };
 
 type SidebarNavGroupProps = {
@@ -36,6 +40,10 @@ type SidebarNavGroupProps = {
   items: SidebarSubNavItem[];
   buttonClassName?: string;
   subButtonClassName?: string;
+  /** Live product tour hook on the group row (e.g. Settings). */
+  dataHelp?: string;
+  /** When true, keep the group expanded (e.g. during a live tour). */
+  forceOpen?: boolean;
 };
 
 const groupShellClass =
@@ -59,6 +67,8 @@ export function SidebarNavGroup({
   items,
   buttonClassName,
   subButtonClassName,
+  dataHelp,
+  forceOpen = false,
 }: SidebarNavGroupProps) {
   const pathname = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -72,14 +82,14 @@ export function SidebarNavGroup({
 
   const homeActive = isNavActive(pathname, href, true);
   const groupActive = homeActive || sortedItems.some((item) => isNavActive(pathname, item.href, item.exact));
-  const [open, setOpen] = useState(groupActive);
+  const [open, setOpen] = useState(groupActive || forceOpen);
   const [flyoutOpen, setFlyoutOpen] = useState(false);
 
   useEffect(() => {
-    if (groupActive) {
+    if (groupActive || forceOpen) {
       setOpen(true);
     }
-  }, [groupActive, pathname]);
+  }, [forceOpen, groupActive, pathname]);
 
   useLayoutEffect(() => {
     if (!flyoutOpen || !triggerRef.current) {
@@ -217,6 +227,7 @@ export function SidebarNavGroup({
   return (
     <SidebarMenuItem>
       <div
+        data-help={dataHelp}
         className={cn(
           "flex w-full items-center overflow-hidden rounded-md",
           groupActive && "bg-sidebar-accent text-sidebar-accent-foreground",
@@ -273,7 +284,15 @@ export function SidebarNavGroup({
                   </p>
                 ) : null}
                 <SidebarMenuSubButton
-                  render={<Link href={item.href} prefetch={false} onClick={closeMobile} />}
+                  render={
+                    <Link
+                      href={item.href}
+                      prefetch={false}
+                      onClick={closeMobile}
+                      data-help={item.dataHelp}
+                      data-tour-nav={item.tourNav ?? (item.dataHelp ? item.href : undefined)}
+                    />
+                  }
                   isActive={active}
                   className={cn(
                     "h-8 text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",

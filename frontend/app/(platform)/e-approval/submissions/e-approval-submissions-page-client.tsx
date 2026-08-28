@@ -11,6 +11,9 @@ import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSubmissionGalleryCard } from "@/components/e-approval/e-approval-submission-gallery-card";
 import { eApprovalSubmissionTableColumns } from "@/components/e-approval/e-approval-submission-table-columns";
+import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
+import { EApprovalTourSubmissionFixtures, EApprovalTourSubmissionTableFixtures } from "@/components/help/e-approval-tour-fixtures";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { formatEApprovalStatusLabel } from "@/modules/e-approval/status-display";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
@@ -23,6 +26,12 @@ import { usePermission } from "@/hooks/use-permission";
 import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { downloadEApprovalSubmissionsExport, fetchEApprovalSubmissionsIndex } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import {
+  LIVE_TOUR_QUERY,
+  LIVE_TOUR_STEP_QUERY,
+  resolveLiveTour,
+} from "@/lib/help/e-approval-live-tour";
 import { permissions } from "@/lib/rbac/permissions";
 import { useNotificationStore } from "@/stores/notification-store";
 import { User } from "lucide-react";
@@ -53,6 +62,7 @@ export function EApprovalSubmissionsPageClient() {
   const searchParams = useSearchParams();
   const push = useNotificationStore((s) => s.push);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
+  const canApprove = usePermission([permissions.eApprovalApprove]);
   const canExport = usePermission([permissions.eApprovalAuditView]);
   // Auditors can see all submissions; show the "Mine" scope toggle for them.
   const canViewAll = usePermission([permissions.eApprovalAuditView]);
@@ -94,6 +104,20 @@ export function EApprovalSubmissionsPageClient() {
   useEffect(() => {
     setPage(1);
   }, [sort, formId, from, to, mineOnly]);
+
+  // Live tour steps can force Gallery or Table so both layouts are demonstrated.
+  useEffect(() => {
+    if (searchParams.get(LIVE_TOUR_QUERY) !== "e-approval") {
+      return;
+    }
+    const tour = resolveLiveTour("e-approval", { canApprove, canCreate });
+    const stepIndex = Number.parseInt(searchParams.get(LIVE_TOUR_STEP_QUERY) ?? "", 10);
+    const step = tour?.steps[stepIndex];
+    const mode = step?.listViewMode;
+    if (mode && viewMode !== mode) {
+      setViewMode(mode);
+    }
+  }, [canApprove, canCreate, searchParams, setViewMode, viewMode]);
 
   const { data, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["e-approval", "submissions", page, status, debouncedSearch, mineOnly, sort, formId, from, to],
@@ -137,11 +161,13 @@ export function EApprovalSubmissionsPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalSubmissionsView]}>
       <div className="space-y-5">
+        <LiveProductTourHost />
         <EApprovalPageHeader
           title="Submissions"
           description="Track requests in workflow. Switch between gallery and table to match how you work."
           actions={
             <>
+              <EApprovalHelpEntryActions />
               {canExport ? (
                 <Button
                   size="sm"
@@ -165,16 +191,30 @@ export function EApprovalSubmissionsPageClient() {
                 </Button>
               ) : null}
               {canCreate ? (
-                <Button size="sm" type="button" onClick={() => window.location.assign("/e-approval/submissions/new")}>
+                <Button
+                  size="sm"
+                  type="button"
+                  data-help="ea-submissions-new"
+                  data-tour-nav="/e-approval/submissions/new"
+                  onClick={() => window.location.assign("/e-approval/submissions/new")}
+                >
                   <Plus className="h-3.5 w-3.5" />
                   New submission
                 </Button>
-              ) : null}
+              ) : (
+                <span
+                  data-help="ea-submissions-new"
+                  data-tour-nav="/e-approval/submissions/new"
+                  className="sr-only"
+                >
+                  New submission (not available)
+                </span>
+              )}
             </>
           }
         />
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-help="ea-submissions-filters" className="flex flex-wrap items-center gap-2">
           {STATUS_FILTERS.map((s) => (
             <Button
               key={s}
@@ -232,7 +272,7 @@ export function EApprovalSubmissionsPageClient() {
           }
           toolbar={
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="min-w-0 flex-1">
+              <div data-help="ea-submissions-search" className="min-w-0 flex-1">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="e-approval-submissions-search">
                   Search submissions
                 </label>
@@ -248,6 +288,7 @@ export function EApprovalSubmissionsPageClient() {
                 value={viewMode}
                 onChange={setViewMode}
                 ariaLabel="Submissions list view"
+                dataHelp="ea-submissions-view"
               />
             </div>
           }
@@ -258,7 +299,7 @@ export function EApprovalSubmissionsPageClient() {
           }
         >
           {viewMode === "gallery" ? (
-            <div className="p-4">
+            <div className="p-4" data-help="ea-submissions-gallery">
               {isFetching && rows.length === 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, index) => (
@@ -266,50 +307,65 @@ export function EApprovalSubmissionsPageClient() {
                   ))}
                 </div>
               ) : isEmpty ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <FileStack className="h-6 w-6" />
+                isEApprovalTourActive(searchParams) ? (
+                  <EApprovalTourSubmissionFixtures />
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <FileStack className="h-6 w-6" />
+                    </div>
+                    <h2 className="mt-4 text-base font-medium">No submissions</h2>
+                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                      {canCreate
+                        ? "No requests yet. Start a new submission from a published form."
+                        : "Nothing matches this filter. You need the requestor role (e_approval:submissions:create) to start requests — ask an administrator."}
+                    </p>
+                    {canCreate ? (
+                      <Button className="mt-4" size="sm" onClick={() => window.location.assign("/e-approval/submissions/new")}>
+                        <Plus className="h-3.5 w-3.5" />
+                        New submission
+                      </Button>
+                    ) : null}
                   </div>
-                  <h2 className="mt-4 text-base font-medium">No submissions</h2>
-                  <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                    {canCreate
-                      ? "No requests yet. Start a new submission from a published form."
-                      : "Nothing matches this filter. You need the requestor role (e_approval:submissions:create) to start requests — ask an administrator."}
-                  </p>
-                  {canCreate ? (
-                    <Button className="mt-4" size="sm" onClick={() => window.location.assign("/e-approval/submissions/new")}>
-                      <Plus className="h-3.5 w-3.5" />
-                      New submission
-                    </Button>
-                  ) : null}
-                </div>
+                )
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {rows.map((row) => (
-                    <EApprovalSubmissionGalleryCard key={row.id} submission={row} />
+                  {rows.map((row, index) => (
+                    <EApprovalSubmissionGalleryCard
+                      key={row.id}
+                      submission={row}
+                      helpStatus={index === 0}
+                      helpActions={index === 0}
+                    />
                   ))}
                 </div>
               )}
             </div>
           ) : (
-            <RegistryDataTableView
-              columns={eApprovalSubmissionTableColumns}
-              data={rows}
-              getRowId={(row) => row.id}
-              isLoading={isFetching}
-              isEmpty={isEmpty}
-              emptyMessage="No submissions match this filter."
-              enableColumnVisibility
-              columnVisibilityStorageKey="toweros.table.columns.e-approval.submissions"
-              sorting={sorting}
-              onSortingChange={onSortingChange}
-              manualSorting={manualSorting}
-              getRowClassName={(row) =>
-                row.original.status === "returned"
-                  ? "bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30"
-                  : undefined
-              }
-            />
+            <div data-help="ea-submissions-table">
+              {isEmpty && isEApprovalTourActive(searchParams) ? (
+                <EApprovalTourSubmissionTableFixtures />
+              ) : (
+                <RegistryDataTableView
+                  columns={eApprovalSubmissionTableColumns}
+                  data={rows}
+                  getRowId={(row) => row.id}
+                  isLoading={isFetching}
+                  isEmpty={isEmpty}
+                  emptyMessage="No submissions match this filter."
+                  enableColumnVisibility
+                  columnVisibilityStorageKey="toweros.table.columns.e-approval.submissions"
+                  sorting={sorting}
+                  onSortingChange={onSortingChange}
+                  manualSorting={manualSorting}
+                  getRowClassName={(row) =>
+                    row.original.status === "returned"
+                      ? "bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30"
+                      : undefined
+                  }
+                />
+              )}
+            </div>
           )}
         </EApprovalListShell>
       </div>

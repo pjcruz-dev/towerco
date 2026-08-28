@@ -31,8 +31,11 @@ export function AppHeader() {
   );
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 sm:gap-3 sm:px-6 md:px-8">
-      <SidebarTrigger className="-ml-1 shrink-0 text-muted-foreground hover:text-foreground" />
+    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 sm:gap-3 sm:px-6 md:px-8 print:hidden">
+      <SidebarTrigger
+        data-help="ea-sidebar-trigger"
+        className="-ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+      />
       <WorkspaceBreadcrumbs />
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <AppHeaderSearchTrigger />

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { LayoutDashboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/api/modules/e-approval-api";
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
 import { useProcurementPlanFeatures } from "@/hooks/use-procurement-plan-features";
+import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
 import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
 import { workspaceNavGroups } from "@/lib/navigation/workspace-nav-config";
@@ -98,6 +99,8 @@ function SidebarNavLink({
 }
 
 export function AppSidebar() {
+  const searchParams = useSearchParams();
+  const tourActive = isEApprovalTourActive(searchParams);
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
@@ -218,7 +221,7 @@ export function AppSidebar() {
   }, [gateApprovalsAwaitingMe, groups, workspacesQuery.data]);
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">
       <SidebarHeader className="border-b border-sidebar-border p-4 group-data-[collapsible=icon]:p-2">
         <SidebarBrand variant="tenant" />
       </SidebarHeader>
@@ -236,13 +239,47 @@ export function AppSidebar() {
                     title={item.title}
                     icon={item.icon}
                     href={resolveNavGroupHomeHref(item.items as SubNav[])}
-                    items={item.items.map(({ title, href, exact, section, badge }) => ({
-                      title,
-                      href,
-                      exact,
-                      section,
-                      badge,
-                    }))}
+                    dataHelp={
+                      item.title === "Settings"
+                        ? "ea-nav-settings"
+                        : item.title === "E-Approval"
+                          ? "ea-nav-e-approval"
+                          : undefined
+                    }
+                    forceOpen={
+                      tourActive && (item.title === "Settings" || item.title === "E-Approval")
+                    }
+                    items={item.items.map(({ title, href, exact, section, badge }) => {
+                      const pathOnly = href.split("?")[0] ?? href;
+                      const eApprovalNav =
+                        pathOnly === "/e-approval"
+                          ? { dataHelp: "ea-nav-e-approval-overview", tourNav: "/e-approval" }
+                          : pathOnly === "/e-approval/submissions"
+                            ? {
+                                dataHelp: "ea-nav-e-approval-submissions",
+                                tourNav: "/e-approval/submissions",
+                              }
+                            : pathOnly === "/e-approval/approvals"
+                              ? {
+                                  dataHelp: "ea-nav-e-approval-approvals",
+                                  tourNav: "/e-approval/approvals",
+                                }
+                              : pathOnly === "/e-approval/profile"
+                                ? {
+                                    dataHelp: "ea-nav-e-approval-profile",
+                                    tourNav: "/e-approval/profile",
+                                  }
+                                : null;
+                      return {
+                        title,
+                        href,
+                        exact,
+                        section,
+                        badge,
+                        dataHelp: eApprovalNav?.dataHelp,
+                        tourNav: eApprovalNav?.tourNav,
+                      };
+                    })}
                     buttonClassName={navButtonClass}
                   />
                 ) : (

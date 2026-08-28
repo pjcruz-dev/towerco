@@ -16,9 +16,13 @@ function formatSubmittedAt(value: string | null): string {
 
 type Props = {
   submission: EApprovalSubmissionListRow;
+  /** Mark status badge for live Help tour (usually first visible card). */
+  helpStatus?: boolean;
+  /** Mark card actions for live Help tour. */
+  helpActions?: boolean;
 };
 
-export function EApprovalSubmissionGalleryCard({ submission }: Props) {
+export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpActions }: Props) {
   const href = `/e-approval/submissions/${submission.id}`;
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const continueHref = `/e-approval/request/${submission.form_id}`;
@@ -46,7 +50,9 @@ export function EApprovalSubmissionGalleryCard({ submission }: Props) {
               <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{submission.form_name ?? "Form"}</p>
             </div>
           </div>
-          <EApprovalStatusBadge status={submission.status} kind="submission" />
+          <span data-help={helpStatus ? "ea-submissions-status" : undefined}>
+            <EApprovalStatusBadge status={submission.status} kind="submission" />
+          </span>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -59,7 +65,10 @@ export function EApprovalSubmissionGalleryCard({ submission }: Props) {
         </div>
       </Link>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-muted/20 px-4 py-2.5">
+      <div
+        data-help={helpActions ? "ea-submissions-card-actions" : undefined}
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-muted/20 px-4 py-2.5"
+      >
         {canContinueEditing ? (
           <>
             <Link href={continueHref} className="text-sm font-medium text-primary hover:underline">

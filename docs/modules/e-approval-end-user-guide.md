@@ -4,6 +4,14 @@ A step-by-step guide for everyday users of TowerOS **E-Approval**: how to sign i
 
 This guide is for **normal users** (requestors and approvers). It does **not** cover form building, workflows setup, or admin settings.
 
+**Prefer shorter, role-specific guides?** Start here:
+
+| Role | Guide |
+|------|-------|
+| Requestor (normal user) | [e-approval-guide-requestor.md](./e-approval-guide-requestor.md) |
+| Approver | [e-approval-guide-approver.md](./e-approval-guide-approver.md) |
+| Index | [e-approval-user-guides.md](./e-approval-user-guides.md) |
+
 ---
 
 ## Who should read what?
@@ -532,6 +540,9 @@ No. Passkeys are for login only. Approving still needs **Your signature** and co
 
 | Guide | Audience |
 |-------|----------|
+| [Requestor guide](./e-approval-guide-requestor.md) | Normal users who submit requests |
+| [Approver guide](./e-approval-guide-approver.md) | Approvers who decide on requests |
+| [User guides index](./e-approval-user-guides.md) | Start here (role picker) |
 | [Document Approval — simple user guide](./document-approval-end-user-guide.md) | Same flow, focused on Document Approval forms |
 | [E-Approval module overview](./e-approval.md) | Product / technical overview (admins) |
 | [E-Approval go-live checklist](./e-approval-go-live-checklist.md) | Admins preparing a tenant |

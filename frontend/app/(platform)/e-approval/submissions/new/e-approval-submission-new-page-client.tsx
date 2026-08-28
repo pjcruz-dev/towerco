@@ -10,6 +10,8 @@ import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalSubmissionFormPickerCard } from "@/components/e-approval/e-approval-submission-form-picker-card";
+import { EApprovalTourPickerFixtures } from "@/components/help/e-approval-tour-fixtures";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +23,11 @@ import {
   fetchEApprovalFormPublicShareUrl,
   fetchEApprovalFormsIndex,
 } from "@/lib/api/modules/e-approval-api";
+import {
+  E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH,
+  isEApprovalDocumentApprovalFormName,
+  isEApprovalTourActive,
+} from "@/lib/help/e-approval-tour-fixtures";
 import { eApprovalFocusUrl, eApprovalRequestUrlFromNewSubmissionQuery } from "@/modules/documents/controlled-document-submission-url";
 import type { EApprovalFormListRow } from "@/modules/e-approval/types";
 import { permissions } from "@/lib/rbac/permissions";
@@ -31,6 +38,7 @@ const VIEW_STORAGE_KEY = "e-approval-submission-new-view";
 export function EApprovalSubmissionNewPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const tourActive = isEApprovalTourActive(searchParams);
   const push = useNotificationStore((s) => s.push);
   const requestRedirect = useMemo(
     () => eApprovalRequestUrlFromNewSubmissionQuery(searchParams),
@@ -67,11 +75,33 @@ export function EApprovalSubmissionNewPageClient() {
     );
   }, [publishedForms, search]);
 
+  /** Tour uses Document Approval only — never Cash Advance / Liquidation as the example. */
+  const formsForDisplay = useMemo(() => {
+    if (!tourActive) {
+      return filteredForms;
+    }
+    return filteredForms.filter((form) => isEApprovalDocumentApprovalFormName(form.name));
+  }, [filteredForms, tourActive]);
+
   const openRequestForm = useCallback(
     (formId: string) => {
-      router.push(`/e-approval/request/${formId}`);
+      const params = new URLSearchParams();
+      const tour = searchParams.get("tour");
+      const tourStep = searchParams.get("tourStep");
+      if (tour) {
+        params.set("tour", tour);
+      }
+      if (tourStep) {
+        params.set("tourStep", tourStep);
+      }
+      const qs = params.toString();
+      if (tourActive) {
+        router.push(`${E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH}${qs ? `?${qs}` : ""}`);
+        return;
+      }
+      router.push(`/e-approval/request/${formId}${qs ? `?${qs}` : ""}`);
     },
-    [router],
+    [router, searchParams, tourActive],
   );
 
   const copyExternalMutation = useMutation({
@@ -121,32 +151,37 @@ export function EApprovalSubmissionNewPageClient() {
     window.open(eApprovalFocusUrl(formId, searchParams), "_blank", "noopener,noreferrer");
   };
 
-  const renderEmpty = () => (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <FileText className="h-6 w-6" />
+  const renderEmpty = () =>
+    tourActive ? (
+      <EApprovalTourPickerFixtures />
+    ) : (
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <FileText className="h-6 w-6" />
+        </div>
+        <h2 className="mt-4 text-base font-medium">No published forms yet</h2>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground">
+          Publish a form in{" "}
+          <Link href="/e-approval/forms" className="text-primary hover:underline">
+            Forms
+          </Link>{" "}
+          before requestors can submit requests.
+        </p>
       </div>
-      <h2 className="mt-4 text-base font-medium">No published forms yet</h2>
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">
-        Publish a form in{" "}
-        <Link href="/e-approval/forms" className="text-primary hover:underline">
-          Forms
-        </Link>{" "}
-        before requestors can submit requests.
-      </p>
-    </div>
-  );
+    );
 
   const renderGallery = (forms: EApprovalFormListRow[]) => (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {forms.map((form) => (
+      {forms.map((form, index) => (
         <EApprovalSubmissionFormPickerCard
           key={form.id}
           form={form}
           onStart={() => openRequestForm(form.id)}
-          onStartFocused={() => openFocusedRequestForm(form.id)}
-          onCopyExternalLink={() => copyExternalLink(form.id)}
+          onStartFocused={tourActive ? undefined : () => openFocusedRequestForm(form.id)}
+          onCopyExternalLink={tourActive ? undefined : () => copyExternalLink(form.id)}
           copyingExternalLink={copyingFormId === form.id}
+          helpTour={index === 0}
+          tourNavPath={tourActive ? E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH : undefined}
         />
       ))}
     </div>
@@ -196,11 +231,14 @@ export function EApprovalSubmissionNewPageClient() {
     }
 
     if (publishedForms.length === 0) return renderEmpty();
-    if (filteredForms.length === 0) {
+    if (tourActive && formsForDisplay.length === 0) {
+      return <EApprovalTourPickerFixtures />;
+    }
+    if (formsForDisplay.length === 0) {
       return <p className="text-sm text-muted-foreground">No forms match your search.</p>;
     }
 
-    return viewMode === "gallery" ? renderGallery(filteredForms) : renderTable(filteredForms);
+    return viewMode === "gallery" ? renderGallery(formsForDisplay) : renderTable(formsForDisplay);
   };
 
   return (
@@ -211,6 +249,7 @@ export function EApprovalSubmissionNewPageClient() {
         </div>
       ) : (
       <div className="space-y-5">
+        <LiveProductTourHost />
         <EApprovalPageHeader
           title="New submission"
           description={
@@ -224,7 +263,7 @@ export function EApprovalSubmissionNewPageClient() {
         <EApprovalListShell
           toolbar={
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="min-w-0 flex-1">
+              <div data-help="ea-picker-search" className="min-w-0 flex-1">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="ea-submission-form-search">
                   Search published forms
                 </label>

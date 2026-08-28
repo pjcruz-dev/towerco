@@ -59,17 +59,24 @@ export function EApprovalApprovalSignatureField({
     enabled,
   });
 
+  const profileSignature = profileQuery.data?.signature ?? null;
+  const hasProfileSignature = hasSignatureValue(profileSignature);
+  const profileSignatureState = profileQuery.isLoading
+    ? "pending"
+    : hasProfileSignature
+      ? "true"
+      : "false";
+
   useEffect(() => {
     if (!enabled || value !== null) {
       return;
     }
 
-    const profileSignature = profileQuery.data?.signature ?? null;
     if (profileSignature) {
       onChange(profileSignature);
       setMode(signatureModeForValue(profileSignature));
     }
-  }, [enabled, onChange, profileQuery.data?.signature, value]);
+  }, [enabled, onChange, profileSignature, value]);
 
   useEffect(() => {
     if (!consentAccepted) {
@@ -111,15 +118,25 @@ export function EApprovalApprovalSignatureField({
   };
 
   return (
-    <div className="space-y-3">
+    <div
+      className="space-y-3"
+      data-help="ea-decide-signature"
+      data-has-profile-signature={profileSignatureState}
+    >
       <div>
         <Label>Your signature</Label>
         <p className="mt-1 text-xs text-muted-foreground">
-          {profileQuery.data?.signature
+          {hasProfileSignature
             ? "Loaded from your profile. Update below if needed — it will be saved automatically when you approve."
             : "Required for approval. Draw, type, or upload an image — it will be saved to your profile for next time."}
         </p>
       </div>
+
+      {hasSignatureValue(value) && hasProfileSignature ? (
+        <div data-help="ea-decide-signature-loaded" className="rounded-lg border border-border bg-muted/20 p-3">
+          <EApprovalSignaturePreview value={value} label="Saved signature" emptyText="" />
+        </div>
+      ) : null}
 
       <Tabs
         value={mode}
@@ -128,7 +145,7 @@ export function EApprovalApprovalSignatureField({
           setUploadError(null);
         }}
       >
-        <TabsList variant="line" className="w-fit justify-start">
+        <TabsList data-help="ea-decide-signature-modes" variant="line" className="w-fit justify-start">
           <TabsTrigger value="draw" className="flex-none px-3">
             Draw
           </TabsTrigger>
@@ -139,84 +156,86 @@ export function EApprovalApprovalSignatureField({
             Upload
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="draw" className="mt-3">
-          <EApprovalSignaturePad
-            value={isImageSignature(value) ? value : null}
-            onChange={(next) => {
-              onChange(next || null);
-              onErrorChange?.(null);
-              setUploadError(null);
-            }}
-            disabled={disabled}
-            modes={["draw"]}
-          />
-        </TabsContent>
-        <TabsContent value="type" className="mt-3 space-y-3">
-          <Textarea
-            value={isTypedSignature(value) ? (value ?? "") : ""}
-            placeholder="Type your full name"
-            rows={2}
-            disabled={disabled}
-            onChange={(event) => {
-              onChange(event.target.value || null);
-              onErrorChange?.(null);
-              setUploadError(null);
-            }}
-          />
-          <EApprovalSignaturePreview
-            value={isTypedSignature(value) ? value : null}
-            label="Preview"
-            emptyText="Type your name above."
-          />
-        </TabsContent>
-        <TabsContent value="upload" className="mt-3 space-y-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={SIGNATURE_UPLOAD_ACCEPT}
-            className="sr-only"
-            disabled={disabled || uploading}
-            onChange={(event) => {
-              void handleUpload(event.target.files?.[0]);
-            }}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
+        <div data-help="ea-decide-signature-pad" className="mt-3">
+          <TabsContent value="draw" className="mt-0">
+            <EApprovalSignaturePad
+              value={isImageSignature(value) ? value : null}
+              onChange={(next) => {
+                onChange(next || null);
+                onErrorChange?.(null);
+                setUploadError(null);
+              }}
+              disabled={disabled}
+              modes={["draw"]}
+            />
+          </TabsContent>
+          <TabsContent value="type" className="mt-0 space-y-3">
+            <Textarea
+              value={isTypedSignature(value) ? (value ?? "") : ""}
+              placeholder="Type your full name"
+              rows={2}
+              disabled={disabled}
+              onChange={(event) => {
+                onChange(event.target.value || null);
+                onErrorChange?.(null);
+                setUploadError(null);
+              }}
+            />
+            <EApprovalSignaturePreview
+              value={isTypedSignature(value) ? value : null}
+              label="Preview"
+              emptyText="Type your name above."
+            />
+          </TabsContent>
+          <TabsContent value="upload" className="mt-0 space-y-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={SIGNATURE_UPLOAD_ACCEPT}
+              className="sr-only"
               disabled={disabled || uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? "Uploading…" : isImageSignature(value) ? "Replace image" : "Choose image"}
-            </Button>
-            {isImageSignature(value) ? (
+              onChange={(event) => {
+                void handleUpload(event.target.files?.[0]);
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 disabled={disabled || uploading}
-                onClick={() => {
-                  onChange(null);
-                  setUploadError(null);
-                  onErrorChange?.(null);
-                }}
+                onClick={() => fileInputRef.current?.click()}
               >
-                Clear
+                {uploading ? "Uploading…" : isImageSignature(value) ? "Replace image" : "Choose image"}
               </Button>
-            ) : null}
-          </div>
-          <p className="text-xs text-muted-foreground">PNG, JPEG, or WebP · max 2 MB</p>
-          <EApprovalSignaturePreview
-            value={isImageSignature(value) ? value : null}
-            label="Preview"
-            emptyText="Upload a clear image of your signature."
-          />
-          {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
-        </TabsContent>
+              {isImageSignature(value) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={disabled || uploading}
+                  onClick={() => {
+                    onChange(null);
+                    setUploadError(null);
+                    onErrorChange?.(null);
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">PNG, JPEG, or WebP · max 2 MB</p>
+            <EApprovalSignaturePreview
+              value={isImageSignature(value) ? value : null}
+              label="Preview"
+              emptyText="Upload a clear image of your signature."
+            />
+            {uploadError ? <p className="text-xs text-destructive">{uploadError}</p> : null}
+          </TabsContent>
+        </div>
       </Tabs>
 
-      <div className="space-y-3">
+      <div data-help="ea-decide-signature-consent" className="space-y-3">
         <label className="flex cursor-pointer items-start gap-2.5 text-sm">
           <Checkbox
             className="mt-0.5"

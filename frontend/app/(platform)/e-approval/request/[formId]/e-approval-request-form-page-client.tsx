@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSubmissionComposePanel } from "@/components/e-approval/e-approval-submission-compose-panel";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
@@ -56,6 +57,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalSubmissionsCreate]}>
       <div className="space-y-6 pb-8">
+        <LiveProductTourHost />
         <EApprovalPageHeader
           title={
             resubmitSubmissionId

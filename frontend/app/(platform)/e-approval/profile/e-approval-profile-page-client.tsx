@@ -8,6 +8,7 @@ import { EApprovalDelegationPanel } from "@/components/e-approval/e-approval-del
 import { EApprovalMeSignaturePanel } from "@/components/e-approval/e-approval-me-signature-panel";
 import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { fetchEApprovalSettingsPublic } from "@/lib/api/modules/e-approval-api";
 import {
@@ -34,6 +35,7 @@ export function EApprovalProfilePageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         <EApprovalPageHeader
           title="My E-Approval profile"
           description={

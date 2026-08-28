@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileDown,
   FileText,
@@ -24,6 +24,7 @@ import {
   EApprovalSubmissionAttachmentsPanel,
 } from "@/components/e-approval/e-approval-submission-attachments-panel";
 import { OperationalAlert } from "@/components/feedback/operational-alert";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { RaiseTicketButton } from "@/components/ticketing/raise-ticket-button";
 import { TicketingRelatedTickets } from "@/components/ticketing/ticketing-related-tickets";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -112,6 +113,7 @@ function resolveSubmissionTab(
 
 export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const push = useNotificationStore((s) => s.push);
   const canApprove = usePermission([permissions.eApprovalApprove]);
@@ -317,6 +319,16 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   ]);
 
   const tabsKey = data ? `${data.id}-${pendingApproval?.id ?? "idle"}-${defaultTab}` : "loading";
+
+  const onTabChange = useCallback(
+    (nextTab: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", nextTab);
+      const qs = params.toString();
+      router.replace(qs ? `?${qs}` : "?", { scroll: false });
+    },
+    [router, searchParams],
+  );
   const { openPdfPreview, isGenerating: isPdfGenerating } = useEApprovalPdfPreview();
   const attachments = data?.attachments ?? [];
   const visibleValues = (data?.values ?? []).filter(
@@ -353,8 +365,9 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalSubmissionsView]}>
       <div className="space-y-6">
+        <LiveProductTourHost />
         {data ? (
-          <header className="flex flex-wrap items-start justify-between gap-4">
+          <header data-help="ea-detail-header" className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground">Submission</p>
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">{data.document_no}</h1>
@@ -470,7 +483,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         ) : null}
 
         {data ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+          <div data-help="ea-detail-summary" className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
             <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Form</dt>
@@ -535,6 +548,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 size="sm"
                 variant="outline"
                 type="button"
+                data-help="ea-detail-print"
                 disabled={isPdfGenerating}
                 onClick={() => {
                   void openPdfPreview(submissionId).catch((e) => {
@@ -554,8 +568,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         ) : null}
 
         {data ? (
-          <Tabs key={tabsKey} defaultValue={defaultTab}>
-            <TabsList variant="line" className="w-full justify-start gap-1 overflow-x-auto">
+          <Tabs key={tabsKey} value={defaultTab} onValueChange={onTabChange}>
+            <TabsList data-help="ea-detail-tabs" variant="line" className="w-full justify-start gap-1 overflow-x-auto">
               <TabsTrigger value="request" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
                 Request
@@ -574,7 +588,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 ) : null}
               </TabsTrigger>
               {showDecideTab ? (
-                <TabsTrigger value="decide" className="gap-1.5">
+                <TabsTrigger value="decide" className="gap-1.5" data-help="ea-detail-decide-tab">
                   <Zap className="h-3.5 w-3.5" />
                   Decide
                   {decideBadgeCount > 0 ? (
@@ -619,7 +633,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 )}
 
                 {(data.attachments ?? []).length > 0 ? (
-                  <div className="mt-6 border-t border-border pt-4">
+                  <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
                     <EApprovalSubmissionAttachmentsPanel
                       submissionId={submissionId}
                       attachments={data.attachments}
@@ -627,7 +641,11 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       fieldLabelsByName={attachmentFieldLabelsByName}
                     />
                   </div>
-                ) : null}
+                ) : (
+                  <div data-help="ea-detail-attachments" className="sr-only">
+                    No attachments on this submission
+                  </div>
+                )}
               </EApprovalSectionCard>
 
               {data.status === "approved" && (data.viewer_is_requestor || canManage) ? (
@@ -792,6 +810,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
 
                 {canApprove && pendingApproval ? (
                   <EApprovalSectionCard
+                    dataHelp="ea-decide-panel"
                     title="Your decision"
                     description="Sign to approve. Remarks are optional for approve, required for reject or revision."
                   >
@@ -806,7 +825,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         onErrorChange={setApprovalSignatureError}
                       />
 
-                      <div className="space-y-1.5 border-t border-border pt-4">
+                      <div data-help="ea-decide-remarks" className="space-y-1.5 border-t border-border pt-4">
                         <Label htmlFor="decision-remarks">Remarks</Label>
                         <Textarea
                           id="decision-remarks"
@@ -835,60 +854,69 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           </span>
                         </label>
                       ) : null}
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            const signatureError = validateApprovalSignature(approvalSignature);
-                            if (signatureError) {
-                              setApprovalSignatureError(signatureError);
-                              return;
+                      <div
+                        data-help="ea-decide-actions"
+                        className="mt-2 flex flex-wrap gap-2 border-t border-border pt-4"
+                      >
+                        <span data-help="ea-decide-approve" className="inline-flex">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const signatureError = validateApprovalSignature(approvalSignature);
+                              if (signatureError) {
+                                setApprovalSignatureError(signatureError);
+                                return;
+                              }
+                              const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
+                              if (consentError) {
+                                setApprovalSignatureError(consentError);
+                                return;
+                              }
+                              decideMutation.mutate({
+                                approvalId: pendingApproval.id,
+                                decision: "approved",
+                                signature: approvalSignature!.trim(),
+                              });
+                            }}
+                            disabled={
+                              decideMutation.isPending ||
+                              revisionMutation.isPending ||
+                              !signatureConsentAccepted
                             }
-                            const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
-                            if (consentError) {
-                              setApprovalSignatureError(consentError);
-                              return;
+                          >
+                            Approve
+                          </Button>
+                        </span>
+                        <span data-help="ea-decide-reject" className="inline-flex">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              decideMutation.mutate({ approvalId: pendingApproval.id, decision: "rejected" })
                             }
-                            decideMutation.mutate({
-                              approvalId: pendingApproval.id,
-                              decision: "approved",
-                              signature: approvalSignature!.trim(),
-                            });
-                          }}
-                          disabled={
-                            decideMutation.isPending ||
-                            revisionMutation.isPending ||
-                            !signatureConsentAccepted
-                          }
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() =>
-                            decideMutation.mutate({ approvalId: pendingApproval.id, decision: "rejected" })
-                          }
-                          disabled={
-                            decideMutation.isPending ||
-                            revisionMutation.isPending ||
-                            decisionRemarks.trim().length < 5
-                          }
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => revisionMutation.mutate()}
-                          disabled={
-                            decideMutation.isPending ||
-                            revisionMutation.isPending ||
-                            decisionRemarks.trim().length < 5
-                          }
-                        >
-                          Request revision
-                        </Button>
+                            disabled={
+                              decideMutation.isPending ||
+                              revisionMutation.isPending ||
+                              decisionRemarks.trim().length < 5
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </span>
+                        <span data-help="ea-decide-revision" className="inline-flex">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => revisionMutation.mutate()}
+                            disabled={
+                              decideMutation.isPending ||
+                              revisionMutation.isPending ||
+                              decisionRemarks.trim().length < 5
+                            }
+                          >
+                            Request revision
+                          </Button>
+                        </span>
                       </div>
                     </div>
 
@@ -1004,7 +1032,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 ) : (
                   <p className="text-sm text-muted-foreground">No comments yet.</p>
                 )}
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <Textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
