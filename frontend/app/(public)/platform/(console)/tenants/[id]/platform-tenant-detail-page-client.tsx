@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ExternalLink, Shield } from "lucide-react";
 
 import { PlatformTenantAccessPanel } from "@/components/platform/platform-tenant-access-panel";
+import { PlatformTenantBackupsPanel } from "@/components/platform/platform-tenant-backups-panel";
 import { TenantOperatorAccessCard } from "@/components/platform/tenant-operator-access-card";
 import { TenantPlaybookManageSheet } from "@/components/platform/tenant-playbook-manage-sheet";
 import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
@@ -38,7 +39,7 @@ import { usePlatformAuthStore } from "@/stores/platform-auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
-type Tab = "overview" | "billing" | "modules" | "access" | "activity";
+type Tab = "overview" | "billing" | "modules" | "access" | "backups" | "activity";
 
 type Props = {
   tenantId: string;
@@ -49,6 +50,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "billing", label: "Billing" },
   { id: "modules", label: "Modules" },
   { id: "access", label: "Access" },
+  { id: "backups", label: "Backups" },
   { id: "activity", label: "Activity" },
 ];
 
@@ -445,6 +447,8 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
       {tab === "access" ? (
         <PlatformTenantAccessPanel tenant={tenant} onEditBranding={() => setBrandingOpen(true)} />
       ) : null}
+
+      {tab === "backups" ? <PlatformTenantBackupsPanel tenant={tenant} /> : null}
 
       {tab === "activity" ? (
         <Card className="rounded-xl shadow-sm">

@@ -631,6 +631,119 @@ export async function platformStartTenantImpersonation(
   };
 }
 
+export type PlatformTenantBackupRow = {
+  id: string;
+  tenant_id: string;
+  status: string;
+  name: string;
+  storage_path: string | null;
+  byte_size: number | null;
+  checksum: string | null;
+  database_name: string | null;
+  triggered_by: string;
+  actor_email: string | null;
+  reason: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type PlatformTenantBackupListResponse = {
+  data: PlatformTenantBackupRow[];
+  meta: {
+    total: number;
+    completed: number;
+    storage_bytes: number;
+    latest_at: string | null;
+    retention_days: number;
+  };
+};
+
+export async function platformListTenantBackups(
+  tenantId: string,
+): Promise<PlatformTenantBackupListResponse> {
+  const response = await centralApiClient.get<PlatformTenantBackupListResponse>(
+    `/platform/tenants/${tenantId}/backups`,
+  );
+  return {
+    data: response.data.data ?? [],
+    meta: response.data.meta ?? {
+      total: 0,
+      completed: 0,
+      storage_bytes: 0,
+      latest_at: null,
+      retention_days: 15,
+    },
+  };
+}
+
+export async function platformCreateTenantBackup(
+  tenantId: string,
+  payload?: { reason?: string },
+): Promise<PlatformTenantBackupRow> {
+  const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
+    `/platform/tenants/${tenantId}/backups`,
+    payload ?? {},
+  );
+  return response.data.data;
+}
+
+export async function platformCronSyncTenantBackup(
+  tenantId: string,
+): Promise<PlatformTenantBackupRow> {
+  const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
+    `/platform/tenants/${tenantId}/backups/schedule-run`,
+  );
+  return response.data.data;
+}
+
+export async function platformDownloadTenantBackup(
+  tenantId: string,
+  backupId: string,
+  fileName?: string,
+): Promise<void> {
+  const response = await centralApiClient.get<Blob>(
+    `/platform/tenants/${tenantId}/backups/${backupId}/download`,
+    { responseType: "blob" },
+  );
+  const disposition = String(response.headers["content-disposition"] ?? "");
+  const utfMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+  const resolvedName =
+    fileName?.replace(/\.sql\.gz$/i, ".sql").replace(/\.gz$/i, ".sql") ||
+    (utfMatch?.[1] ? decodeURIComponent(utfMatch[1]) : null) ||
+    plainMatch?.[1] ||
+    `${backupId}.sql`;
+
+  const objectUrl = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = resolvedName;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export async function platformRestoreTenantBackup(
+  tenantId: string,
+  backupId: string,
+  payload: { confirm: string; reason: string },
+): Promise<PlatformTenantBackupRow> {
+  const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
+    `/platform/tenants/${tenantId}/backups/${backupId}/restore`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function platformDeleteTenantBackup(
+  tenantId: string,
+  backupId: string,
+): Promise<void> {
+  await centralApiClient.delete(`/platform/tenants/${tenantId}/backups/${backupId}`);
+}
+
 export async function platformDeleteTenant(
   tenantId: string,
   payload: { confirmation: string; cascade?: boolean },

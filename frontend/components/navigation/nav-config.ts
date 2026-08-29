@@ -63,4 +63,10 @@ export const primaryNav: NavItem[] = [
     icon: "shield",
     requiredPermissions: [permissions.tenantManage],
   },
+  {
+    label: "Backups",
+    href: "/admin/backups",
+    icon: "database",
+    requiredPermissions: [permissions.tenantManage],
+  },
 ];

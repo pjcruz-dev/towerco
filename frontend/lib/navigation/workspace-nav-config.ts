@@ -381,6 +381,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             ],
           },
           { title: "Sign-in & security", href: "/admin/settings", section: "Platform", permissions: ["tenant:manage"] },
+          { title: "Backups", href: "/admin/backups", section: "Platform", permissions: ["tenant:manage"] },
           { title: "KPI & SLA", href: "/admin/settings/kpi", section: "Platform", permissions: ["tenant:manage"] },
           {
             title: "Assistant knowledge",
