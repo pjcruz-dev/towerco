@@ -56,6 +56,30 @@ final class PlatformRoleCatalogTest extends TestCase
     }
 
     #[Test]
+    public function support_can_backup_and_impersonate_tenants(): void
+    {
+        $permissions = $this->catalog->permissionsForRole(PlatformRoleCatalog::ROLE_SUPPORT);
+
+        $this->assertContains(PlatformRoleCatalog::PERM_TENANTS_BACKUP, $permissions);
+        $this->assertContains(PlatformRoleCatalog::PERM_TENANTS_IMPERSONATE, $permissions);
+        $this->assertTrue(
+            $this->catalog->roleHasPermission(
+                PlatformRoleCatalog::ROLE_SUPPORT,
+                PlatformRoleCatalog::PERM_TENANTS_BACKUP,
+            ),
+        );
+    }
+
+    #[Test]
+    public function viewer_cannot_backup_tenants(): void
+    {
+        $this->assertNotContains(
+            PlatformRoleCatalog::PERM_TENANTS_BACKUP,
+            $this->catalog->permissionsForRole(PlatformRoleCatalog::ROLE_VIEWER),
+        );
+    }
+
+    #[Test]
     public function superadmin_has_all_permissions(): void
     {
         foreach ($this->catalog->allPermissions() as $permission) {

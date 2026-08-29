@@ -44,6 +44,7 @@ docs/
 | E-Approval end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
 | PROJECT-ONE roadmap | [roadmaps/project-one-roadmap.md](./roadmaps/project-one-roadmap.md) |
 | Tenant passkeys (fingerprint / WebAuthn) | [roadmaps/tenant-passkeys-roadmap.md](./roadmaps/tenant-passkeys-roadmap.md) |
+| Tenant database backups | [modules/tenant-database-backups.md](./modules/tenant-database-backups.md) |
 | Passkeys Phase 1 (API) | [architecture/tenant-passkeys-phase-1.md](./architecture/tenant-passkeys-phase-1.md) |
 | Passkeys Phase 2 (UI) | [architecture/tenant-passkeys-phase-2.md](./architecture/tenant-passkeys-phase-2.md) |
 | Passkeys Phase 3 (hardening) | [architecture/tenant-passkeys-phase-3.md](./architecture/tenant-passkeys-phase-3.md) |

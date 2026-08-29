@@ -193,4 +193,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('procurement:rfq-auto-close')
             ->everyFiveMinutes()
             ->withoutOverlapping();
+
+        $backupScheduleTime = (string) config('toweros.tenant_database_backup.schedule_time', '02:30');
+        $schedule->command('tenants:backup-schedule')
+            ->dailyAt($backupScheduleTime !== '' ? $backupScheduleTime : '02:30')
+            ->withoutOverlapping();
+
+        $schedule->command('tenants:backup-prune')
+            ->dailyAt('03:50')
+            ->withoutOverlapping();
     })->create();

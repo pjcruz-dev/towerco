@@ -177,6 +177,22 @@ return [
         'token_ttl_minutes' => (int) env('TOWEROS_PLATFORM_IMPERSONATION_TTL_MINUTES', 30),
     ],
 
+    /**
+     * Per-tenant logical MySQL dumps (mysqldump → tenant files disk). Platform ops create/restore;
+     * tenant admins may download completed backups only.
+     */
+    'tenant_database_backup' => [
+        'enabled' => filter_var(env('TOWEROS_TENANT_DB_BACKUP_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+        'retention_days' => (int) env('TOWEROS_TENANT_DB_BACKUP_RETENTION_DAYS', 15),
+        'max_concurrent_per_tenant' => (int) env('TOWEROS_TENANT_DB_BACKUP_MAX_CONCURRENT', 1),
+        'mysqldump_path' => env('TOWEROS_MYSQLDUMP_PATH', 'mysqldump'),
+        'mysql_path' => env('TOWEROS_MYSQL_PATH', 'mysql'),
+        'schedule_enabled' => filter_var(env('TOWEROS_TENANT_DB_BACKUP_SCHEDULE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'schedule_time' => env('TOWEROS_TENANT_DB_BACKUP_SCHEDULE_TIME', '02:30'),
+        'signed_url_minutes' => (int) env('TOWEROS_TENANT_DB_BACKUP_SIGNED_URL_MINUTES', 30),
+        'job_timeout_seconds' => (int) env('TOWEROS_TENANT_DB_BACKUP_JOB_TIMEOUT', 1800),
+    ],
+
     'platform_auth' => [
         'microsoft_callback_frontend' => env('FRONTEND_APP_URL', 'http://localhost'),
         /** Auto-create central operators on first Microsoft sign-in when Entra group maps to a role. */

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   ClipboardCheck,
+  HardDrive,
   LifeBuoy,
   MessageSquareText,
   Settings2,
@@ -40,6 +41,15 @@ export const settingsHubSections: SettingsHubSection[] = [
         description: "Microsoft Entra SSO, auto-provision, password policy, and domain allowlists.",
         href: "/admin/settings",
         icon: Shield,
+        section: "Platform",
+        requiredPermissions: [permissions.tenantManage],
+      },
+      {
+        id: "backups",
+        title: "Backups",
+        description: "Download completed database backups for this organization.",
+        href: "/admin/backups",
+        icon: HardDrive,
         section: "Platform",
         requiredPermissions: [permissions.tenantManage],
       },

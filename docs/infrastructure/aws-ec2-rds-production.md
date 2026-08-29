@@ -452,6 +452,7 @@ Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
 - [ ] AWS Backup plan: RDS + EBS, **30 days**
 - [ ] S3 versioning + lifecycle as needed
 - [ ] CloudFront attached for static / download acceleration (`AWS_URL` set)
+- [ ] App-level tenant dumps: `TOWEROS_TENANT_DB_BACKUP_ENABLED=true`, MySQL client in API image, queue worker running — see [`docs/modules/tenant-database-backups.md`](../modules/tenant-database-backups.md)
 
 ---
 

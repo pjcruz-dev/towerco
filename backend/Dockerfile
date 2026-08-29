@@ -12,6 +12,7 @@ RUN set -eux; \
     git \
     unzip \
     nginx \
+    default-mysql-client \
     libzip-dev \
     libpng-dev \
     libicu-dev \

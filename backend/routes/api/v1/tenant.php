@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Modules\AdminOne\Http\Controllers\V1\AdminSettingsShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\AdminSettingsUpdateController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupDownloadController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleCloneController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleCompareController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleDestroyController;
@@ -924,6 +926,10 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         });
         Route::get('settings', AdminSettingsShowController::class)->name('api.tenant.v1.admin.settings.show');
         Route::patch('settings', AdminSettingsUpdateController::class)->name('api.tenant.v1.admin.settings.update');
+        Route::get('backups', TenantBackupIndexController::class)->name('api.tenant.v1.admin.backups.index');
+        Route::get('backups/{backup}/download', TenantBackupDownloadController::class)
+            ->middleware('throttle:30,1')
+            ->name('api.tenant.v1.admin.backups.download');
     });
 });
 

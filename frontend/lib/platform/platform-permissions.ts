@@ -6,6 +6,7 @@ export const PLATFORM_PERMS = {
   tenantsManage: "platform.tenants.manage",
   tenantsDelete: "platform.tenants.delete",
   tenantsImpersonate: "platform.tenants.impersonate",
+  tenantsBackup: "platform.tenants.backup",
   billingView: "platform.billing.view",
   billingManage: "platform.billing.manage",
   playbooksView: "platform.playbooks.view",

@@ -36,6 +36,12 @@ use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleStoreCont
 use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralStripeWebhookController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantAuditIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupDownloadController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupRestoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupScheduleRunController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupStoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingAuditIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingPortalSessionStoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBrandingAssetStoreController;
@@ -175,6 +181,24 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::post('tenants/{tenant}/impersonate', CentralTenantImpersonateController::class)
         ->middleware(['throttle:20,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_IMPERSONATE])
         ->name('api.central.v1.platform.tenants.impersonate');
+    Route::get('tenants/{tenant}/backups', CentralTenantBackupIndexController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_VIEW)
+        ->name('api.central.v1.platform.tenants.backups.index');
+    Route::post('tenants/{tenant}/backups', CentralTenantBackupStoreController::class)
+        ->middleware(['throttle:20,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
+        ->name('api.central.v1.platform.tenants.backups.store');
+    Route::post('tenants/{tenant}/backups/schedule-run', CentralTenantBackupScheduleRunController::class)
+        ->middleware(['throttle:10,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
+        ->name('api.central.v1.platform.tenants.backups.schedule_run');
+    Route::get('tenants/{tenant}/backups/{backup}/download', CentralTenantBackupDownloadController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_VIEW)
+        ->name('api.central.v1.platform.tenants.backups.download');
+    Route::post('tenants/{tenant}/backups/{backup}/restore', CentralTenantBackupRestoreController::class)
+        ->middleware(['throttle:10,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
+        ->name('api.central.v1.platform.tenants.backups.restore');
+    Route::delete('tenants/{tenant}/backups/{backup}', CentralTenantBackupDestroyController::class)
+        ->middleware(['throttle:20,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
+        ->name('api.central.v1.platform.tenants.backups.destroy');
     Route::post('tenants/{tenant}/billing-portal-session', CentralTenantBillingPortalSessionStoreController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_BILLING_MANAGE)
         ->name('api.central.v1.platform.tenants.billing_portal');
