@@ -47,7 +47,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       query: { tab: "mfa" },
       target: "ea-security-page",
       title: "After you sign in",
-      body: "If MFA is required and you have not enrolled yet, TowerOS opens Set up MFA after Sign in with Microsoft (and after email & password). Passkey may skip authenticator MFA when org policy allows. That screen has its own short guided tour before the workspace opens.",
+      body: "If MFA is required and you have not enrolled yet, TowerOS opens the split-screen Set up MFA page after Sign in with Microsoft (and after email & password). Passkey may skip authenticator MFA when org policy allows. That screen has its own short guided tour before the workspace opens.",
     },
     {
       id: "mfa-tab",
@@ -110,7 +110,7 @@ export const mfaLoginEnrollLiveTour: LiveTourDefinition = {
       entryPath: "/login/mfa/enroll",
       target: "ea-mfa-login-enroll",
       title: "Why this screen",
-      body: "Your organization requires an authenticator app before the workspace opens. This is not only for email & password — it also appears after Sign in with Microsoft when you have not enrolled yet. Passkey sign-in may skip this step if your org treats passkeys as MFA.",
+      body: "Your organization requires an authenticator app before the workspace opens. This split-screen Set up MFA page is not only for email & password — it also appears after Sign in with Microsoft when you have not enrolled yet. Passkey sign-in may skip this step if your org treats passkeys as MFA.",
     },
     {
       id: "mfa-login-qr",

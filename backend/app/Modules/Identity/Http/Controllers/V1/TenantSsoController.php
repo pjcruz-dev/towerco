@@ -13,6 +13,7 @@ use App\Modules\Identity\Services\EntraOrgDirectoryService;
 use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Services\TenantComingSoonService;
 use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Services\TenantSsoConfigService;
 use App\Modules\Identity\Services\TenantUserProvisioningService;
@@ -35,10 +36,13 @@ class TenantSsoController extends AbstractApiController
         private readonly RefreshTokenService $refreshTokenService,
         private readonly AuthAuditService $auditService,
         private readonly MfaService $mfaService,
+        private readonly TenantComingSoonService $comingSoon,
     ) {}
 
     public function redirect(Request $request): RedirectResponse|JsonResponse
     {
+        $this->comingSoon->assertSignInAllowed(tenant('id') !== null ? (string) tenant('id') : null);
+
         $config = $this->ssoConfig->findEnabledForTenant((string) tenant('id'), 'azure');
 
         if ($config === null) {

@@ -43,6 +43,9 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'slug',
             'brand_domain',
             'environment',
+            'coming_soon_enabled',
+            'coming_soon_message',
+            'coming_soon_contact',
             'tco_sequence_prefix',
             'parent_tenant_id',
         ]);
@@ -53,6 +56,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         return [
             'mfa_required' => 'boolean',
             'mfa_trust_days' => 'integer',
+            'coming_soon_enabled' => 'boolean',
             // passkeys_enabled lives in virtual `data` (null = platform default); do not cast boolean (null→false).
             'theme_tokens' => 'array',
             'billing_overrides' => 'array',

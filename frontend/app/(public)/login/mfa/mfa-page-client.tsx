@@ -2,12 +2,13 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { FormInput } from "@/components/forms/form-input";
+import { AuthOtpInput } from "@/components/auth/auth-otp-input";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
@@ -38,6 +39,8 @@ export function MfaPageClient() {
     resolver: zodResolver(schema),
     defaultValues: { code: "" },
   });
+
+  const codeValue = form.watch("code");
 
   const verifyMutation = useMutation({
     mutationFn: verifyMfaChallenge,
@@ -74,7 +77,7 @@ export function MfaPageClient() {
       notify({
         level: "info",
         title: "New challenge issued",
-        message: "Check your registered MFA channel.",
+        message: "Check your authenticator app for a new code.",
       });
     },
   });
@@ -113,82 +116,96 @@ export function MfaPageClient() {
       return null;
     }
     return (
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-sm text-muted-foreground">
-            MFA session not found. Please login again.
-          </p>
-          <Button className="mt-4" onClick={() => router.replace("/login")}>
-            Back to login
-          </Button>
+      <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <p className="text-sm text-muted-foreground">MFA session not found. Please sign in again.</p>
+        <Button className="mt-4" onClick={() => router.replace("/login")}>
+          Back to sign in
+        </Button>
       </div>
     );
   }
 
   return (
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h1 className="text-[30px] font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
-          Multi-factor verification
-        </h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Enter the verification code to complete sign in.
-        </p>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          If you have not enrolled yet, sign in and complete enrollment in Security settings.
-        </p>
+    <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 mb-4 h-8 gap-1.5 text-muted-foreground"
+        onClick={() => router.replace("/login")}
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        Back
+      </Button>
 
-        <form
-          className="mt-6 space-y-4"
-          onSubmit={form.handleSubmit(({ code }) =>
-            verifyMutation.mutate({
-              challengeId: pendingMfa.mfaChallenge!.id,
-              sessionId: pendingMfa.sessionId!,
-              code,
-            }),
-          )}
-        >
-          <FormInput
-            label="Verification code"
-            autoComplete="one-time-code"
-            {...form.register("code")}
-            error={form.formState.errors.code}
-          />
-          <Button className="w-full" disabled={verifyMutation.isPending} type="submit">
-            {verifyMutation.isPending ? "Verifying..." : "Verify"}
-          </Button>
-          <Button
-            className="w-full"
-            variant="outline"
+      <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
+        Two-factor authentication
+      </h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Enter the 6-digit code from your authenticator app to continue.
+      </p>
+
+      <form
+        className="mt-8 space-y-6"
+        onSubmit={form.handleSubmit(({ code }) =>
+          verifyMutation.mutate({
+            challengeId: pendingMfa.mfaChallenge!.id,
+            sessionId: pendingMfa.sessionId!,
+            code,
+          }),
+        )}
+      >
+        <AuthOtpInput
+          value={codeValue}
+          onChange={(next) => form.setValue("code", next, { shouldValidate: true })}
+          disabled={verifyMutation.isPending}
+          autoFocus
+          aria-invalid={Boolean(form.formState.errors.code)}
+        />
+        {form.formState.errors.code ? (
+          <p className="text-center text-xs text-destructive">Enter a valid 6-digit code.</p>
+        ) : null}
+
+        <Button className="w-full" disabled={verifyMutation.isPending || codeValue.length < 6} type="submit">
+          {verifyMutation.isPending ? "Verifying…" : "Confirm verification"}
+        </Button>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Didn&apos;t get a code?{" "}
+          <button
             type="button"
+            className="font-medium text-sky-700 hover:underline dark:text-sky-400"
             disabled={challengeMutation.isPending}
             onClick={() => challengeMutation.mutate(pendingMfa.sessionId!)}
           >
-            Request new code
-          </Button>
-        </form>
+            {challengeMutation.isPending ? "Requesting…" : "Tap to resend"}
+          </button>
+        </p>
+      </form>
 
-        <div className="mt-6 border-t pt-4">
-          <p className="text-sm font-medium">Use a recovery code</p>
-          <div className="mt-2 flex gap-2">
-            <input
-              className="h-10 flex-1 rounded-md border bg-background px-3 text-sm"
-              value={recoveryCode}
-              onChange={(event) => setRecoveryCode(event.target.value)}
-              placeholder="ABCD-EFGH"
-            />
-            <Button
-              variant="outline"
-              disabled={recoveryMutation.isPending || !recoveryCode.trim()}
-              onClick={() =>
-                recoveryMutation.mutate({
-                  sessionId: pendingMfa.sessionId!,
-                  recoveryCode: recoveryCode.trim(),
-                })
-              }
-            >
-              Recover
-            </Button>
-          </div>
+      <div className="mt-8 border-t border-border pt-5">
+        <p className="text-sm font-medium text-foreground">Use a recovery code</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm"
+            value={recoveryCode}
+            onChange={(event) => setRecoveryCode(event.target.value)}
+            placeholder="ABCD-EFGH"
+          />
+          <Button
+            variant="outline"
+            disabled={recoveryMutation.isPending || !recoveryCode.trim()}
+            onClick={() =>
+              recoveryMutation.mutate({
+                sessionId: pendingMfa.sessionId!,
+                recoveryCode: recoveryCode.trim(),
+              })
+            }
+          >
+            Recover
+          </Button>
         </div>
       </div>
+    </div>
   );
 }

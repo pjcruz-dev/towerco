@@ -10,6 +10,7 @@ use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Services\TenantComingSoonService;
 use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Services\WebAuthnPasskeyService;
 use App\Modules\Identity\Support\WebAuthnRelyingParty;
@@ -28,6 +29,7 @@ final class TenantWebAuthnController extends AbstractApiController
         private readonly AuthSessionService $sessionService,
         private readonly RefreshTokenService $refreshTokenService,
         private readonly MfaService $mfaService,
+        private readonly TenantComingSoonService $comingSoon,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -91,6 +93,7 @@ final class TenantWebAuthnController extends AbstractApiController
 
     public function loginOptions(Request $request): JsonResponse
     {
+        $this->comingSoon->assertSignInAllowed(tenant('id') !== null ? (string) tenant('id') : null);
         $this->policy->assertEnabled();
 
         $data = $request->validate([
@@ -102,6 +105,7 @@ final class TenantWebAuthnController extends AbstractApiController
 
     public function loginVerify(Request $request): JsonResponse
     {
+        $this->comingSoon->assertSignInAllowed(tenant('id') !== null ? (string) tenant('id') : null);
         $this->policy->assertEnabled();
 
         $data = $request->validate([

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { OtpauthQrCode } from "@/components/auth/otpauth-qr-code";
+import { AuthOtpInput } from "@/components/auth/auth-otp-input";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
@@ -121,10 +122,13 @@ function MfaEnrollPageInner() {
   return (
     <>
       <LiveProductTourHost />
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Set up MFA</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Complete authenticator setup before your workspace opens.
+        </p>
         <ol
-          className="mt-3 list-decimal space-y-1 pl-4 text-sm text-muted-foreground"
+          className="mt-4 list-decimal space-y-1 pl-4 text-sm text-muted-foreground"
           data-help="ea-mfa-login-enroll"
         >
           <li>Scan the QR with your authenticator app (Microsoft, Google, or 1Password).</li>
@@ -132,8 +136,9 @@ function MfaEnrollPageInner() {
           <li>Save recovery codes, then continue to the workspace.</li>
         </ol>
         <p className="mt-2 text-xs text-muted-foreground">
-          Not email-only: this also appears after <span className="font-medium text-foreground">Sign in with Microsoft</span>{" "}
-          when MFA is required and you have not enrolled yet. Passkey sign-in may skip this step if your
+          Not email-only: this also appears after{" "}
+          <span className="font-medium text-foreground">Sign in with Microsoft</span> when MFA is
+          required and you have not enrolled yet. Passkey sign-in may skip this step if your
           organization treats passkeys as MFA.
         </p>
 
@@ -162,23 +167,16 @@ function MfaEnrollPageInner() {
               </div>
             </details>
             <div data-help="ea-mfa-login-code">
-              <p className="mb-2 text-xs font-medium text-foreground">2. Enter the 6-digit code</p>
-              <input
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                placeholder="Enter 6-digit code"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-              />
+              <p className="mb-3 text-xs font-medium text-foreground">2. Enter the 6-digit code</p>
+              <AuthOtpInput value={code} onChange={setCode} disabled={completeMutation.isPending} />
             </div>
             <Button
               className="w-full"
               data-help="ea-mfa-login-verify"
-              disabled={completeMutation.isPending || code.trim().length < 6}
-              onClick={() => completeMutation.mutate(code)}
+              disabled={completeMutation.isPending || code.replace(/\D/g, "").length < 6}
+              onClick={() => completeMutation.mutate(code.replace(/\D/g, "").slice(0, 6))}
             >
-              {completeMutation.isPending ? "Verifying…" : "Verify and continue"}
+              {completeMutation.isPending ? "Verifying…" : "Confirm verification"}
             </Button>
           </div>
         ) : null}

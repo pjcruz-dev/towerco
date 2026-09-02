@@ -33,6 +33,9 @@ class CentralTenantSettingsController extends AbstractApiController
             'enabled_modules' => ['sometimes', 'nullable', 'array'],
             'enabled_modules.*' => ['string', 'max:64'],
             'operator_access_mode' => ['sometimes', 'nullable', 'string', 'in:read_only,blocked'],
+            'coming_soon_enabled' => ['sometimes', 'boolean'],
+            'coming_soon_message' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'coming_soon_contact' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         /** @var User|null $actor */

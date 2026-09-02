@@ -162,6 +162,9 @@ export type PlatformTenantRow = {
   mfa_required: boolean;
   plan_tier?: string;
   subscription_status?: string;
+  coming_soon_enabled?: boolean;
+  coming_soon_message?: string | null;
+  coming_soon_contact?: string | null;
   seat_limit?: number;
   effective_seat_limit?: number;
   effective_rfi_limit?: number;
@@ -300,6 +303,9 @@ export type PlatformTenantSubscriptionSnapshot = {
 export type PlatformTenantSettingsPatch = {
   mfa_required?: boolean;
   theme_tokens?: PlatformTenantThemeTokens | null;
+  coming_soon_enabled?: boolean;
+  coming_soon_message?: string | null;
+  coming_soon_contact?: string | null;
   plan_tier?: "starter" | "professional" | "enterprise";
   subscription_status?: "trial" | "active" | "past_due" | "canceled";
   trial_ends_at?: string | null;
@@ -331,6 +337,9 @@ export type PlatformTenantSettingsPatch = {
 export type PlatformTenantSettingsResponse = {
   tenant_id: string;
   mfa_required: boolean;
+  coming_soon_enabled?: boolean;
+  coming_soon_message?: string | null;
+  coming_soon_contact?: string | null;
   plan_tier: string;
   subscription_status: string;
   seat_limit: number;
@@ -519,6 +528,17 @@ export async function platformUpdateTenantMfa(
     mfa_required: data.mfa_required,
     theme_tokens: data.theme_tokens,
   };
+}
+
+export async function platformUpdateTenantComingSoon(
+  tenantId: string,
+  payload: {
+    coming_soon_enabled: boolean;
+    coming_soon_message?: string | null;
+    coming_soon_contact?: string | null;
+  },
+): Promise<PlatformTenantSettingsResponse> {
+  return platformPatchTenantSettings(tenantId, payload);
 }
 
 export async function platformUploadTenantBrandingAsset(
@@ -1097,3 +1117,218 @@ export async function platformSyncOperationalAcronymDefaults(): Promise<{ synced
   );
   return response.data.data;
 }
+
+export type PlatformAppMenuGroup = {
+  id: string;
+  key: string | null;
+  title: string;
+  sort_order: number;
+  is_visible: boolean;
+  updated_at?: string | null;
+};
+
+export type PlatformAppMenuTile = {
+  id: string;
+  key: string | null;
+  group_id: string | null;
+  title: string;
+  subtitle: string | null;
+  icon: string | null;
+  icon_url: string | null;
+  accent: string | null;
+  href: string;
+  open_in_new_tab: boolean;
+  sort_order: number;
+  is_visible: boolean;
+  is_system: boolean;
+  updated_at?: string | null;
+};
+
+export type PublicAppMenuTile = {
+  id: string;
+  key: string | null;
+  group_id: string | null;
+  title: string;
+  subtitle: string | null;
+  icon: string | null;
+  icon_url: string | null;
+  accent: string | null;
+  href: string;
+  open_in_new_tab: boolean;
+  sort_order: number;
+};
+
+export type PublicAppMenuGroup = {
+  id: string;
+  key: string | null;
+  title: string;
+  sort_order: number;
+  tiles: PublicAppMenuTile[];
+};
+
+export type AppMenuSettings = {
+  grid_columns: number;
+};
+
+export type PublicAppMenuPayload = {
+  settings: AppMenuSettings;
+  groups: PublicAppMenuGroup[];
+  ungrouped: PublicAppMenuTile[];
+};
+
+export type PlatformAppMenuPayload = {
+  settings: AppMenuSettings;
+  groups: PlatformAppMenuGroup[];
+  tiles: PlatformAppMenuTile[];
+};
+
+export async function platformListAppMenu(): Promise<PlatformAppMenuPayload> {
+  const response = await centralApiClient.get<{ data: PlatformAppMenuPayload }>("/platform/app-menu");
+  return {
+    settings: response.data.data?.settings ?? { grid_columns: 4 },
+    groups: response.data.data?.groups ?? [],
+    tiles: response.data.data?.tiles ?? [],
+  };
+}
+
+/** @deprecated Prefer platformListAppMenu */
+export async function platformListAppMenuTiles(): Promise<PlatformAppMenuTile[]> {
+  const data = await platformListAppMenu();
+  return data.tiles;
+}
+
+export async function platformCreateAppMenuTile(body: {
+  title: string;
+  subtitle?: string | null;
+  icon?: string | null;
+  accent?: string | null;
+  href: string;
+  group_id?: string | null;
+  open_in_new_tab?: boolean;
+  sort_order?: number;
+  is_visible?: boolean;
+  key?: string | null;
+}): Promise<PlatformAppMenuTile> {
+  const response = await centralApiClient.post<{ data: PlatformAppMenuTile }>("/platform/app-menu", body);
+  return response.data.data;
+}
+
+export async function platformUpdateAppMenuTile(
+  id: string,
+  body: Partial<{
+    title: string;
+    subtitle: string | null;
+    icon: string | null;
+    accent: string | null;
+    href: string;
+    group_id: string | null;
+    open_in_new_tab: boolean;
+    sort_order: number;
+    is_visible: boolean;
+  }>,
+): Promise<PlatformAppMenuTile> {
+  const response = await centralApiClient.patch<{ data: PlatformAppMenuTile }>(`/platform/app-menu/${id}`, body);
+  return response.data.data;
+}
+
+export async function platformDeleteAppMenuTile(id: string): Promise<void> {
+  await centralApiClient.delete(`/platform/app-menu/${id}`);
+}
+
+export async function platformReorderAppMenuTiles(orderedIds: string[]): Promise<PlatformAppMenuTile[]> {
+  const response = await centralApiClient.post<{ data: { tiles: PlatformAppMenuTile[] } }>(
+    "/platform/app-menu/reorder",
+    { ordered_ids: orderedIds },
+  );
+  return response.data.data?.tiles ?? [];
+}
+
+export async function platformPlaceAppMenuTiles(
+  groupId: string | null,
+  orderedIds: string[],
+): Promise<PlatformAppMenuPayload> {
+  const response = await centralApiClient.post<{ data: PlatformAppMenuPayload }>(
+    "/platform/app-menu/place",
+    { group_id: groupId, ordered_ids: orderedIds },
+  );
+  return {
+    settings: response.data.data?.settings ?? { grid_columns: 4 },
+    groups: response.data.data?.groups ?? [],
+    tiles: response.data.data?.tiles ?? [],
+  };
+}
+
+export async function platformUpdateAppMenuSettings(body: {
+  grid_columns: number;
+}): Promise<AppMenuSettings> {
+  const response = await centralApiClient.patch<{ data: { settings: AppMenuSettings } }>(
+    "/platform/app-menu/settings",
+    body,
+  );
+  return response.data.data.settings;
+}
+
+export async function platformSyncAppMenuDefaults(): Promise<{ synced: number; message: string }> {
+  const response = await centralApiClient.post<{ data: { synced: number; message: string } }>(
+    "/platform/app-menu/sync-defaults",
+  );
+  return response.data.data;
+}
+
+export async function platformCreateAppMenuGroup(body: {
+  title: string;
+  key?: string | null;
+  sort_order?: number;
+  is_visible?: boolean;
+}): Promise<PlatformAppMenuGroup> {
+  const response = await centralApiClient.post<{ data: PlatformAppMenuGroup }>(
+    "/platform/app-menu/groups",
+    body,
+  );
+  return response.data.data;
+}
+
+export async function platformUpdateAppMenuGroup(
+  id: string,
+  body: Partial<{ title: string; sort_order: number; is_visible: boolean }>,
+): Promise<PlatformAppMenuGroup> {
+  const response = await centralApiClient.patch<{ data: PlatformAppMenuGroup }>(
+    `/platform/app-menu/groups/${id}`,
+    body,
+  );
+  return response.data.data;
+}
+
+export async function platformDeleteAppMenuGroup(id: string): Promise<void> {
+  await centralApiClient.delete(`/platform/app-menu/groups/${id}`);
+}
+
+export async function platformReorderAppMenuGroups(orderedIds: string[]): Promise<PlatformAppMenuGroup[]> {
+  const response = await centralApiClient.post<{ data: { groups: PlatformAppMenuGroup[] } }>(
+    "/platform/app-menu/groups/reorder",
+    { ordered_ids: orderedIds },
+  );
+  return response.data.data?.groups ?? [];
+}
+
+export async function platformUploadAppMenuIcon(
+  tileId: string,
+  file: File,
+): Promise<PlatformAppMenuTile> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await centralApiClient.post<{ data: PlatformAppMenuTile }>(
+    `/platform/app-menu/${tileId}/icon`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return response.data.data;
+}
+
+export async function platformClearAppMenuIcon(tileId: string): Promise<PlatformAppMenuTile> {
+  const response = await centralApiClient.delete<{ data: PlatformAppMenuTile }>(
+    `/platform/app-menu/${tileId}/icon`,
+  );
+  return response.data.data;
+}
+

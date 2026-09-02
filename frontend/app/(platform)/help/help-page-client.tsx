@@ -198,8 +198,10 @@ function MfaTourGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">Set up MFA (first time)</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Workspace tour: My security → sample QR → Start setup → verify. First login also opens a
-        short guided tour on the Set up MFA screen after sign-in when enrollment is required.
+        Workspace tour: My security → sample QR → Start setup → verify. After sign-in, the split-screen{" "}
+        <span className="font-medium text-foreground">Set up MFA</span> and{" "}
+        <span className="font-medium text-foreground">Two-factor authentication</span> pages include a
+        short guided tour when enrollment is required.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
