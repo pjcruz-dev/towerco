@@ -309,7 +309,9 @@ export function PlatformAppMenuPageClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">App Menu</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Open the public launcher (no login) on the central host:{" "}
+            Public launcher (no login). Prefer a dedicated host such as{" "}
+            <span className="font-mono text-foreground">https://appmenu.yourdomain.com</span>{" "}
+            (root redirects to /appmenu). Current origin:{" "}
             <a
               className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
               href={publicLauncherUrl}
@@ -321,7 +323,9 @@ export function PlatformAppMenuPageClient() {
             </a>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Manage groups and tile order. Tile hrefs are destinations — each keeps its own sign-in.
+            Do not use the corporate apex for App Menu. Point DNS{" "}
+            <span className="font-mono">appmenu</span> at the TowerOS web service; keep CORS patterns
+            covering that origin.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
