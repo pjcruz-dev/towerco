@@ -309,9 +309,9 @@ export function PlatformAppMenuPageClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">App Menu</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Public launcher (no login). Prefer a dedicated host such as{" "}
+            Public launcher (no login). Prefer{" "}
             <span className="font-mono text-foreground">https://appmenu.yourdomain.com</span>{" "}
-            (root redirects to /appmenu). Current origin:{" "}
+            (App Menu at the root — no /appmenu path). On this host you can also open:{" "}
             <a
               className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
               href={publicLauncherUrl}
@@ -323,9 +323,8 @@ export function PlatformAppMenuPageClient() {
             </a>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Do not use the corporate apex for App Menu. Point DNS{" "}
-            <span className="font-mono">appmenu</span> at the TowerOS web service; keep CORS patterns
-            covering that origin.
+            Point DNS <span className="font-mono">appmenu</span> at the TowerOS web service and include
+            that hostname on the TLS certificate (same as app/staging). Keep CORS covering that origin.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

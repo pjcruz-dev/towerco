@@ -85,7 +85,18 @@ Use a dedicated hostname for the public App Menu landing (not the corporate apex
 | 5 | CORS: ensure `TOWEROS_CORS_ALLOWED_ORIGIN_PATTERNS` covers `https://*.alliancetowers.com` (or add `https://appmenu.alliancetowers.com` to extras) |
 | 6 | Do **not** register `appmenu.*` as a tenant domain, and do **not** put it in `CENTRAL_DOMAINS` / `NEXT_PUBLIC_CENTRAL_DOMAINS` (those are for platform console) |
 
-Behavior: any host matching `appmenu.*` (or listed in `NEXT_PUBLIC_APP_MENU_HOSTS`) redirects `/` → `/appmenu`. Manage tiles in Platform → App Menu.
+Behavior: any host matching `appmenu.*` (or listed in `NEXT_PUBLIC_APP_MENU_HOSTS`) serves the App Menu at **`/`** (no `/appmenu` in the address bar). Visiting `/appmenu` redirects to `/`. Manage tiles in Platform → App Menu.
+
+### TLS (fix “Not secure”)
+
+`https://appmenu.…` shows **Not secure** when the certificate does **not** include that hostname (name mismatch), even if `app.` and `staging.` work.
+
+| Stack | Fix |
+|-------|-----|
+| **ACM + ALB** | Request/expand cert to include `appmenu.alliancetowers.com` (or `*.alliancetowers.com`), attach to HTTPS listener |
+| **Certbot + Nginx on EC2** | Expand the cert: `sudo certbot --nginx -d app.alliancetowers.com -d staging.alliancetowers.com -d appmenu.alliancetowers.com` (add your real hosts), then reload nginx |
+
+Confirm in the browser: padlock → certificate → Subject Alternative Name lists `appmenu.alliancetowers.com`.
 
 1. Use the **Open tenant sign-in** button (or the sign-in URL shown in the credentials panel).
 2. Use the tenant hostname without a port when the web app listens on port 80, for example `http://test.atc.localhost/login`.

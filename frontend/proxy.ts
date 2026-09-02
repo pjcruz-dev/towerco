@@ -5,7 +5,7 @@ import { isAppMenuLauncherHostname, isCentralHostname } from "@/lib/tenant/resol
 
 /**
  * - Central host: /login → /platform/login
- * - App Menu launcher host (appmenu.*): / → /appmenu
+ * - App Menu launcher (appmenu.*): serve App Menu at `/` (rewrite); `/appmenu` → `/`
  *
  * Do not match /platform here — Next.js 16 proxy matching those paths can 404
  * App Router pages under app/(public)/platform in dev. Tenant hosts are blocked
@@ -17,8 +17,12 @@ export function proxy(request: NextRequest) {
   const launcher = isAppMenuLauncherHostname(host);
   const { pathname } = request.nextUrl;
 
+  if (launcher && (pathname === "/appmenu" || pathname === "/appmenu/")) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   if (launcher && (pathname === "/" || pathname === "")) {
-    return NextResponse.redirect(new URL("/appmenu", request.url));
+    return NextResponse.rewrite(new URL("/appmenu", request.url));
   }
 
   if (central && (pathname === "/login" || pathname === "/login/")) {
@@ -29,5 +33,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/login/"],
+  matcher: ["/", "/login", "/login/", "/appmenu", "/appmenu/"],
 };
