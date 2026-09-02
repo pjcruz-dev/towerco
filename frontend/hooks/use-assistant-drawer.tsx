@@ -13,6 +13,8 @@ type AssistantDrawerContextValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
+  minimized: boolean;
+  setMinimized: (minimized: boolean) => void;
 };
 
 const AssistantDrawerContext = createContext<AssistantDrawerContextValue | null>(null);
@@ -24,15 +26,30 @@ export function AssistantDrawerProvider({
   children: React.ReactNode;
   enabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+
+  const setOpen = useCallback((next: boolean) => {
+    setOpenState(next);
+    if (next) {
+      setMinimized(false);
+    }
+  }, []);
 
   const toggle = useCallback(() => {
-    setOpen((current) => !current);
+    setOpenState((current) => {
+      if (current) {
+        return false;
+      }
+      setMinimized(false);
+      return true;
+    });
   }, []);
 
   useEffect(() => {
     if (!enabled) {
-      setOpen(false);
+      setOpenState(false);
+      setMinimized(false);
       return;
     }
 
@@ -52,7 +69,8 @@ export function AssistantDrawerProvider({
       }
 
       if (event.key === "Escape" && !isEditable) {
-        setOpen(false);
+        setOpenState(false);
+        setMinimized(false);
       }
     };
 
@@ -65,8 +83,10 @@ export function AssistantDrawerProvider({
       open,
       setOpen,
       toggle,
+      minimized,
+      setMinimized,
     }),
-    [open, toggle],
+    [open, setOpen, toggle, minimized],
   );
 
   return (

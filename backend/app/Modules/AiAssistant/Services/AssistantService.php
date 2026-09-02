@@ -16,6 +16,7 @@ use App\Modules\AiAssistant\Services\Tools\AssistantToolFallbackPlanner;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRouter;
 use App\Modules\AiAssistant\Support\AssistantAskStatus;
 use App\Modules\AiAssistant\Support\AssistantChunkRanker;
+use App\Modules\AiAssistant\Support\AssistantCostEstimator;
 use App\Modules\AiAssistant\Support\AssistantModuleSuggestionCatalog;
 use App\Modules\AiAssistant\Support\AssistantPromptBuilder;
 use App\Modules\AiAssistant\Support\AssistantProviderErrorClassifier;
@@ -134,6 +135,9 @@ final class AssistantService
             if ($history !== []) {
                 $notes[] = 'Conversation history is included for follow-up resolution only.';
             }
+            if ($input->planMode) {
+                $notes[] = 'PLAN MODE: Reply with a clear numbered implementation / fix plan only. Do not claim work was executed. Do not propose write actions yet.';
+            }
 
             $prompt = $this->prompts->build(
                 $safeQuestion,
@@ -143,6 +147,7 @@ final class AssistantService
                 $notes,
                 $toolResults,
                 $history,
+                $input->preferredModel,
             );
 
             $errorCode = null;
@@ -161,12 +166,15 @@ final class AssistantService
             } else {
                 try {
                     $completion = $this->llm->complete($prompt);
+                    $provider = strtolower((string) config('ai_assistant.llm_provider', 'local'));
+                    $cloudLlm = ! in_array($provider, ['local', 'fake'], true);
                     $hasGrounding = $chunks !== [] || $usedLiveData;
-                    $status = ($completion->insufficientContext || (! $hasGrounding && $toolResults === []))
+                    // Cloud LLMs (Gemini/OpenAI/…) answer without a tenant knowledge base.
+                    $status = (! $cloudLlm && ($completion->insufficientContext || (! $hasGrounding && $toolResults === [])))
                         ? AssistantAskStatus::INSUFFICIENT_CONTEXT
                         : AssistantAskStatus::COMPLETED;
                     $answer = $completion->answer;
-                    if (! $hasGrounding && $undocumentedModule !== null) {
+                    if (! $cloudLlm && ! $hasGrounding && $undocumentedModule !== null) {
                         $answer = $this->guideNotPublishedAnswer($undocumentedModule);
                     }
                     $modelName = $completion->modelName;
@@ -226,23 +234,26 @@ final class AssistantService
                 latencyMs: $latencyMs,
             );
 
-            $proposedAction = $this->actions->maybePropose(
-                viewer: $viewer,
-                question: $safeQuestion,
-                moduleContext: $moduleContext,
-                conversationId: (string) $conversation->id,
-                messageId: (string) $assistantMessage->id,
-            );
+            $proposedAction = null;
+            if (! $input->planMode) {
+                $proposedAction = $this->actions->maybePropose(
+                    viewer: $viewer,
+                    question: $safeQuestion,
+                    moduleContext: $moduleContext,
+                    conversationId: (string) $conversation->id,
+                    messageId: (string) $assistantMessage->id,
+                );
 
-            if ($proposedAction !== null) {
-                $status = AssistantAskStatus::COMPLETED;
-                $answer = ($proposedAction['summary'] ?? 'I prepared an action for your review.')
-                    ."\n\nNothing has been saved yet — confirm in the card below to proceed.";
-                $assistantMessage->forceFill([
-                    'content' => $answer,
-                    'status' => $status,
-                ])->save();
-                $proposedAction['message_id'] = (string) $assistantMessage->id;
+                if ($proposedAction !== null) {
+                    $status = AssistantAskStatus::COMPLETED;
+                    $answer = ($proposedAction['summary'] ?? 'I prepared an action for your review.')
+                        ."\n\nNothing has been saved yet — confirm in the card below to proceed.";
+                    $assistantMessage->forceFill([
+                        'content' => $answer,
+                        'status' => $status,
+                    ])->save();
+                    $proposedAction['message_id'] = (string) $assistantMessage->id;
+                }
             }
 
             $conversation->forceFill([
@@ -280,6 +291,9 @@ final class AssistantService
                 proposedAction: $proposedAction,
                 errorCode: $errorCode,
                 providerNotice: $providerNotice,
+                promptTokens: $promptTokens,
+                completionTokens: $completionTokens,
+                costEstimate: AssistantCostEstimator::estimate($promptTokens, $completionTokens),
             );
         });
     }

@@ -13,19 +13,9 @@ final class TenantEnabledModulesResolver
 
     /** @var list<string> */
     public const TOGGLEABLE_MODULES = [
-        'project_one',
         'e_approval',
-        'sites',
-        'gis',
-        'tower_one',
-        'fiber_one',
-        'asset_one',
+        'dynamic_entities',
         'ticketing',
-        'procurement_one',
-        'finance_one',
-        'billings',
-        'documents',
-        'document_register',
         'ai_assistant',
     ];
 
@@ -33,28 +23,16 @@ final class TenantEnabledModulesResolver
     public const MODULE_LABELS = [
         'core' => 'Dashboard',
         'team_access' => 'Team & Access',
-        'project_one' => 'Project-One',
         'e_approval' => 'E-Approval',
-        'gis' => 'GIS',
-        'sites' => 'Sites',
-        'tower_one' => 'Tower-One',
-        'fiber_one' => 'Fiber-One',
-        'asset_one' => 'Asset-One',
+        'dynamic_entities' => 'Dynamic Entities',
         'ticketing' => 'Ticketing',
-        'procurement_one' => 'Procurement-One',
-        'finance_one' => 'Finance-One',
-        'billings' => 'Billings',
-        'documents' => 'Documents',
-        'document_register' => 'Document register',
         'ai_assistant' => 'AI Assistant',
     ];
 
     /** @var array<string, string> */
     public const MODULE_DESCRIPTIONS = [
-        'billings' => 'Tenant subscription, usage, and self-serve plan billing (/billing).',
-        'documents' => 'Expiring leases, permits, and contracts across sites.',
-        'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Approval.',
         'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
+        'dynamic_entities' => 'Dynamic entity packs for ATC PM, Procurement, Finance, and Ticketing (Manage Fields + records).',
     ];
 
     /**
@@ -65,14 +43,9 @@ final class TenantEnabledModulesResolver
         $configured = config('toweros.tenant_modules.enabled');
         if (! is_array($configured) || $configured === []) {
             return $this->normalizeSelection([
-                'project_one',
                 'e_approval',
                 'ticketing',
-                'procurement_one',
-                'sites',
-                'documents',
-                'document_register',
-                'ai_assistant',
+                'dynamic_entities',
             ]);
         }
 

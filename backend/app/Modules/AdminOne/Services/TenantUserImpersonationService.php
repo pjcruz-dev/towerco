@@ -190,7 +190,7 @@ final class TenantUserImpersonationService
             ]);
         }
 
-        if ($target->hasRole('tenant_admin')) {
+        if ($target->hasRole(\App\Modules\Tenancy\Support\TenantRbacSystemRoles::FULL_ADMIN)) {
             throw ValidationException::withMessages([
                 'user' => [__('Cannot impersonate another tenant administrator.')],
             ]);

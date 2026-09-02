@@ -23,9 +23,6 @@
         <testsuite name="EApproval">
             <directory>tests/Feature/EApproval</directory>
         </testsuite>
-        <testsuite name="Rollout">
-            <directory>tests/Feature/Rollout</directory>
-        </testsuite>
         <testsuite name="ProcurementOne">
             <directory>tests/Feature/ProcurementOne</directory>
         </testsuite>

@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Tests\Unit\Tenancy;
 
 use App\Models\Tenant;
-use App\Modules\Platform\Models\RolloutPlaybookVersion;
-use App\Modules\Platform\Models\TenantPlaybookBinding;
+use App\Modules\Tenancy\Services\TenantAdminBootstrapService;
 use App\Modules\Tenancy\Services\TenantEnvironmentProvisioningService;
+use App\Modules\Tenancy\Services\TenantModuleRbacSyncService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Stancl\Tenancy\Events as TenancyEvents;
 use Tests\TestCase;
 
 final class TenantEnvironmentProvisioningServiceTest extends TestCase
@@ -29,7 +31,13 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
             'foreign_key_constraints' => true,
         ]);
         Config::set('tenancy.database.central_connection', 'central');
-        Config::set('toweros.tenant_provisioning.auto_seed_holidays', false);
+        Config::set('cache.default', 'array');
+        Config::set('queue.default', 'sync');
+
+        Event::fake([
+            TenancyEvents\TenantCreated::class,
+            TenancyEvents\DomainCreated::class,
+        ]);
 
         Schema::connection('central')->create('tenants', function (Blueprint $table): void {
             $table->string('id')->primary();
@@ -42,6 +50,7 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
             $table->string('plan_tier', 32)->default('starter');
             $table->string('subscription_status', 32)->default('active');
             $table->unsignedInteger('seat_limit')->default(25);
+            $table->json('enabled_modules')->nullable();
             $table->timestamps();
             $table->json('data')->nullable();
             $table->unique(['slug', 'environment'], 'tenants_slug_environment_unique');
@@ -67,28 +76,16 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
             $table->foreign('tenant_id')->references('id')->on('tenants')->cascadeOnDelete();
         });
 
-        Schema::connection('central')->create('rollout_playbook_versions', function (Blueprint $table): void {
-            $table->uuid('id')->primary();
-            $table->string('version', 32);
-            $table->string('name');
-            $table->string('status', 32)->default('published');
-            $table->boolean('sla_working_days_only')->default(true);
-            $table->json('delivery_periods')->nullable();
-            $table->json('timeline_templates')->nullable();
-            $table->json('milestone_cycle_targets')->nullable();
-            $table->json('form_schemas')->nullable();
-            $table->timestamp('published_at')->nullable();
-            $table->timestamps();
+        $this->mock(TenantAdminBootstrapService::class, function ($mock): void {
+            $mock->shouldReceive('bootstrap')->andReturn([
+                'email' => 'admin@example.test',
+                'password' => 'generated-password-12',
+                'password_generated' => true,
+            ]);
         });
 
-        Schema::connection('central')->create('tenant_playbook_bindings', function (Blueprint $table): void {
-            $table->uuid('id')->primary();
-            $table->string('tenant_id');
-            $table->foreignUuid('playbook_version_id');
-            $table->uuid('rollout_policy_bundle_id')->nullable();
-            $table->string('upgrade_policy', 64)->default('new_rollouts_only');
-            $table->timestamp('assigned_at')->nullable();
-            $table->timestamps();
+        $this->mock(TenantModuleRbacSyncService::class, function ($mock): void {
+            $mock->shouldReceive('syncForTenant')->byDefault();
         });
     }
 
@@ -107,6 +104,7 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
         $this->assertSame($source->id, $created->parent_tenant_id);
         $this->assertSame('staging.alliancetowers.com', $created->domains()->first()?->domain);
         $this->assertSame($source->id, $result['org_root_tenant_id']);
+        $this->assertArrayHasKey('initial_admin', $result);
     }
 
     public function test_blocks_duplicate_environment_for_same_slug(): void
@@ -144,22 +142,6 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
 
             return $record->fresh(['domains']);
         });
-
-        $versionId = (string) Str::uuid();
-        RolloutPlaybookVersion::query()->create([
-            'id' => $versionId,
-            'version' => '2.0.0',
-            'name' => 'TowerCo Rollout Playbook v2',
-            'status' => 'published',
-            'published_at' => now(),
-        ]);
-
-        TenantPlaybookBinding::query()->create([
-            'id' => (string) Str::uuid(),
-            'tenant_id' => $tenant->id,
-            'playbook_version_id' => $versionId,
-            'assigned_at' => now(),
-        ]);
 
         return $tenant;
     }

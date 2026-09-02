@@ -18,7 +18,7 @@ import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entr
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { formatTicketingDate } from "@/components/ticketing/ticketing-utils";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";

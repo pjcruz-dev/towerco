@@ -65,7 +65,7 @@ export function TenantDeleteSheet({
             <p className="font-medium text-destructive dark:text-red-200">This action cannot be undone.</p>
             <ul className="mt-2 list-inside list-disc space-y-1 text-xs leading-relaxed">
               <li>Tenant database and all rollout, user, and audit data</li>
-              <li>Domains, SSO config, and playbook bindings</li>
+              <li>Domains, SSO config, and billing settings</li>
               <li>Uploaded tenant files and storage artifacts</li>
             </ul>
           </div>

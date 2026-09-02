@@ -68,4 +68,23 @@ final class TenantThemeTokensValidatorTest extends TestCase
         $this->assertArrayNotHasKey('logo_asset', $public);
         $this->assertSame('/api/v1/public/tenant-branding/logo?tenant='.$tenantId, $public['logo_url']);
     }
+
+    public function test_sanitize_for_public_includes_letterhead_fields(): void
+    {
+        $public = TenantThemeTokensValidator::sanitizeForPublic([
+            'version' => 1,
+            'logo_url' => null,
+            'favicon_url' => null,
+            'company_address' => 'Unit 1718 BGC, Taguig City',
+            'company_phone' => '+63 2 1234 5678',
+            'company_email' => 'contact@alliancetowers.com.ph',
+            'company_tin' => '987-654-321-000',
+            'light' => [],
+            'dark' => [],
+        ]);
+
+        $this->assertSame('Unit 1718 BGC, Taguig City', $public['company_address']);
+        $this->assertSame('contact@alliancetowers.com.ph', $public['company_email']);
+        $this->assertSame('987-654-321-000', $public['company_tin']);
+    }
 }

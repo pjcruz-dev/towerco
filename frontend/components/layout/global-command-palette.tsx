@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
+import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
 import { fetchWorkspaceSearch } from "@/lib/api/modules/workspace-search-api";
 import { workspaceSearchResultsToCommandItems } from "@/lib/navigation/workspace-entity-search";
 import {
@@ -63,15 +64,11 @@ function isMacPlatform(): boolean {
 }
 
 const ENTITY_MODULE_ORDER = [
-  "documents",
-  "document_register",
-  "sites",
+  "dynamic_entities",
   "e_approval",
   "ticketing",
-  "project_one",
-  "procurement_one",
-  "finance_one",
   "team_access",
+  "ai_assistant",
 ];
 
 function groupEntityItemsByModule(items: WorkspaceCommandItem[]): PaletteSection[] {
@@ -115,9 +112,12 @@ export function GlobalCommandPalette() {
     [activeTenantId, user],
   );
 
+  // Same Manage Sidebar tree as the left aside / top nav.
+  const { groups: workspaceNavGroups } = useWorkspaceNavGroups();
+
   const index = useMemo(
-    () => buildWorkspaceCommandIndex(scopedUser, enabledModules),
-    [enabledModules, scopedUser],
+    () => buildWorkspaceCommandIndex(scopedUser, enabledModules, workspaceNavGroups),
+    [enabledModules, scopedUser, workspaceNavGroups],
   );
 
   const canViewWorkspaces = useMemo(

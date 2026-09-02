@@ -66,7 +66,7 @@ import {
   describeResubmitToastMessage,
   describeRevisionRoutingApplied,
 } from "@/modules/e-approval/form-revision-config";
-import { eApprovalResubmitUrl } from "@/modules/documents/controlled-document-submission-url";
+import { eApprovalResubmitUrl } from "@/modules/e-approval/controlled-document-submission-url";
 import type { EApprovalDocumentLinkRow } from "@/modules/e-approval/types";
 import { usePermission } from "@/hooks/use-permission";
 import { permissions } from "@/lib/rbac/permissions";

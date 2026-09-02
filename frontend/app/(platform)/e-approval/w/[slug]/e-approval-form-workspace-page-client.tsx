@@ -12,7 +12,8 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import { EApprovalWorkspaceAuditLog } from "@/components/e-approval/e-approval-workspace-audit-log";
 import { EApprovalWorkspaceRecentActivity } from "@/components/e-approval/e-approval-workspace-recent-activity";
 import { EApprovalWorkspaceStatusChart } from "@/components/e-approval/e-approval-workspace-status-chart";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
+import type { DashboardKpiItem } from "@/components/dashboard/kpi-strip";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -40,7 +41,6 @@ import {
   type WorkspaceSavedView,
   type WorkspaceTableColumn,
 } from "@/modules/e-approval/form-workspace-dashboard-config";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
 
 type Props = { slug: string };
 
@@ -154,7 +154,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   });
 
   const title = dashboard ? workspaceDisplayTitle(dashboard.workspace, dashboard.form.name) : "Form workspace";
-  const kpis: ProjectOneKpi[] = useMemo(
+  const kpis: DashboardKpiItem[] = useMemo(
     () =>
       (dashboard?.kpis ?? []).map((item) => ({
         key: item.key,

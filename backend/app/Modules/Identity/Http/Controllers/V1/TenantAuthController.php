@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\AdminOne\Services\TenantIntegrationApiKeyService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
@@ -157,7 +158,8 @@ class TenantAuthController extends AbstractApiController
 
         $this->sessionService->revokeAllForUser((string) $user->id);
         $this->refreshTokenService->revokeAllForUser((string) $user->id);
-        $user->tokens()->delete();
+        // Preserve long-lived integration API keys; only revoke interactive session tokens.
+        app(TenantIntegrationApiKeyService::class)->revokeSessionTokensOnly($user);
 
         $this->auditService->log('auth.logout_all', (string) $user->id, null);
 

@@ -11,6 +11,8 @@ final readonly class AskAssistantInput
         public ?string $conversationId = null,
         public ?string $moduleContext = null,
         public ?string $pagePath = null,
+        public bool $planMode = false,
+        public ?string $preferredModel = null,
     ) {}
 
     /**
@@ -18,7 +20,9 @@ final readonly class AskAssistantInput
      *   question: string,
      *   conversation_id?: string|null,
      *   module_context?: string|null,
-     *   page_path?: string|null
+     *   page_path?: string|null,
+     *   plan_mode?: bool|null,
+     *   preferred_model?: string|null
      * }  $validated
      */
     public static function fromValidated(array $validated): self
@@ -33,6 +37,10 @@ final readonly class AskAssistantInput
                 : null,
             pagePath: isset($validated['page_path']) && is_string($validated['page_path'])
                 ? trim($validated['page_path'])
+                : null,
+            planMode: (bool) ($validated['plan_mode'] ?? false),
+            preferredModel: isset($validated['preferred_model']) && is_string($validated['preferred_model'])
+                ? trim($validated['preferred_model'])
                 : null,
         );
     }

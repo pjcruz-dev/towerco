@@ -8,7 +8,6 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -79,38 +78,6 @@ final class EApprovalPublicSubmissionTest extends TestCase
 
         $inbox->assertOk();
         $this->assertNotEmpty($inbox->json('data'));
-    }
-
-    public function test_public_form_show_hydrates_master_data_choices(): void
-    {
-        tenancy()->initialize($this->testTenant);
-        Site::query()->create([
-            'site_code' => 'SITE-100',
-            'name' => 'Alpha Tower',
-            'status' => 'active',
-        ]);
-        tenancy()->end();
-
-        $formId = $this->createPublishedFormWithSiteLookup();
-        $token = $this->createPublicLink($formId);
-
-        $show = $this->withHeaders($this->publicApiHeaders())
-            ->getJson('/api/v1/public/e-approval/forms/'.$token);
-
-        $show->assertOk();
-
-        $siteField = collect($show->json('data.form.fields'))->firstWhere('name', 'site_id');
-        $this->assertIsArray($siteField);
-        $options = $siteField['options'] ?? [];
-        $this->assertIsArray($options);
-        $this->assertArrayNotHasKey('master_data_key', $options);
-        $this->assertArrayNotHasKey('masterDataKey', $options);
-
-        $choices = $options['choices'] ?? [];
-        $this->assertIsArray($choices);
-        $this->assertNotEmpty($choices);
-        $this->assertSame('SITE-100', $choices[0]['value']);
-        $this->assertStringContainsString('SITE-100', (string) $choices[0]['label']);
     }
 
     public function test_revoked_public_link_rejects_submission(): void
@@ -253,32 +220,6 @@ final class EApprovalPublicSubmissionTest extends TestCase
                         'name' => 'core_access_documents',
                         'label' => '14. Upload file (SOW, MOP, SP and ID\'s & Certifications)',
                         'validation' => ['required' => true, 'maxFiles' => 15],
-                    ],
-                ],
-                'steps' => [
-                    ['type' => 'user', 'approverId' => (string) $this->approver->id, 'step_order' => 1],
-                ],
-            ]);
-
-        $response->assertCreated();
-
-        return (string) $response->json('data.form.id');
-    }
-
-    private function createPublishedFormWithSiteLookup(): string
-    {
-        $response = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson('/api/v1/e-approval/forms', [
-                'name' => 'Site access',
-                'description' => 'External site access',
-                'status' => 'published',
-                'fields' => [
-                    [
-                        'type' => 'select',
-                        'name' => 'site_id',
-                        'label' => 'Site ID',
-                        'options' => ['master_data_key' => 'sites'],
                     ],
                 ],
                 'steps' => [

@@ -109,7 +109,7 @@ final class TenantUserBulkActionsTest extends TestCase
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/admin/users/bulk-assign-role', [
                 'user_ids' => [(string) $first->id, (string) $second->id],
-                'role' => 'manager',
+                'role' => 'staff',
             ]);
 
         $response->assertOk()
@@ -118,8 +118,8 @@ final class TenantUserBulkActionsTest extends TestCase
             ->assertJsonPath('data.errors', []);
 
         tenancy()->initialize($this->testTenant);
-        $this->assertTrue($first->fresh()->hasRole('manager'));
-        $this->assertTrue($second->fresh()->hasRole('manager'));
+        $this->assertTrue($first->fresh()->hasRole('staff'));
+        $this->assertTrue($second->fresh()->hasRole('staff'));
         $this->assertTrue($first->fresh()->hasRole('viewer'));
         tenancy()->end();
     }
@@ -128,14 +128,14 @@ final class TenantUserBulkActionsTest extends TestCase
     {
         $target = $this->createTenantUser('role.skip@towerone.test', 'Role Skip');
         tenancy()->initialize($this->testTenant);
-        $target->assignRole('manager');
+        $target->assignRole('staff');
         tenancy()->end();
 
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/admin/users/bulk-assign-role', [
                 'user_ids' => [(string) $target->id],
-                'role' => 'manager',
+                'role' => 'staff',
             ]);
 
         $response->assertOk()

@@ -26,6 +26,10 @@ export type AuthUser = {
   roles: UserRole[];
   permissions: string[];
   enabledModules?: string[];
+  /** Merged Metacoresoft-style entity/field ACL from assigned roles. */
+  accessMatrix?: import("@/lib/api/modules/admin-roles-api").RoleAccessMatrix;
+  /** Post-login landing from Manage Sidebar (role default → global → /dashboard). */
+  defaultLandingHref?: string;
   tenantAccesses: TenantAccess[];
   isImpersonating?: boolean;
   impersonator?: AuthImpersonator;

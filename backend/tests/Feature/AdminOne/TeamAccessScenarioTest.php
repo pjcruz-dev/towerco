@@ -63,19 +63,19 @@ final class TeamAccessScenarioTest extends TestCase
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/admin/users/bulk-assign-role', [
                 'user_ids' => [$userId],
-                'role' => 'manager',
+                'role' => 'staff',
             ]);
 
         $bulkRole->assertOk()
             ->assertJsonPath('data.processed', 1);
 
         tenancy()->initialize($this->testTenant);
-        $this->assertTrue(TenantUser::query()->findOrFail($userId)->hasRole('manager'));
+        $this->assertTrue(TenantUser::query()->findOrFail($userId)->hasRole('staff'));
         tenancy()->end();
 
         $managerIndex = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
-            ->getJson('/api/v1/admin/users?role=manager&per_page=50');
+            ->getJson('/api/v1/admin/users?role=staff&per_page=50');
 
         $managerIndex->assertOk();
         $managerIds = collect($managerIndex->json('data'))->pluck('id')->all();
@@ -99,7 +99,7 @@ final class TeamAccessScenarioTest extends TestCase
     {
         tenancy()->initialize($this->testTenant);
         $viewer = TenantRole::query()->where('name', 'viewer')->firstOrFail();
-        $manager = TenantRole::query()->where('name', 'manager')->firstOrFail();
+        $staff = TenantRole::query()->where('name', 'staff')->firstOrFail();
         tenancy()->end();
 
         $clone = $this->actingAsTenantAdmin()
@@ -116,10 +116,10 @@ final class TeamAccessScenarioTest extends TestCase
 
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
-            ->getJson('/api/v1/admin/roles/compare?left='.$viewer->id.'&right='.$manager->id)
+            ->getJson('/api/v1/admin/roles/compare?left='.$viewer->id.'&right='.$staff->id)
             ->assertOk()
             ->assertJsonPath('data.left.name', 'viewer')
-            ->assertJsonPath('data.right.name', 'manager');
+            ->assertJsonPath('data.right.name', 'staff');
 
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())

@@ -65,6 +65,19 @@ export function getErrorMessage(error: unknown): string {
 
     const apiMessage = data?.message?.trim();
     const status = error.response?.status;
+
+    if (status === 403) {
+      if (
+        apiMessage &&
+        !GENERIC_VALIDATION_MESSAGES.has(apiMessage) &&
+        !/^forbidden\.?$/i.test(apiMessage) &&
+        !/^this action is unauthorized\.?$/i.test(apiMessage)
+      ) {
+        return apiMessage;
+      }
+      return "Your role does not allow this action. Ask an administrator to update permissions for your role.";
+    }
+
     if (status !== undefined && status >= 500) {
       return apiMessage && !GENERIC_VALIDATION_MESSAGES.has(apiMessage)
         ? apiMessage

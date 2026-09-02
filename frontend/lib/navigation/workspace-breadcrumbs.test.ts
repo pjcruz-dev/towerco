@@ -4,22 +4,22 @@ import { resolveWorkspaceBreadcrumbs } from "./workspace-breadcrumbs";
 
 describe("resolveWorkspaceBreadcrumbs", () => {
   it("hides breadcrumbs on module dashboards", () => {
-    expect(resolveWorkspaceBreadcrumbs("/project-one")).toEqual([]);
+    expect(resolveWorkspaceBreadcrumbs("/e-approval")).toEqual([]);
     expect(resolveWorkspaceBreadcrumbs("/dashboard")).toEqual([]);
   });
 
-  it("maps project-one approvals to module-aligned crumbs", () => {
-    expect(resolveWorkspaceBreadcrumbs("/project-one/approvals")).toEqual([
-      { label: "Project-One", href: "/project-one" },
-      { label: "Approvals" },
+  it("maps dynamic-entities routes to module-aligned crumbs", () => {
+    expect(resolveWorkspaceBreadcrumbs("/dynamic-entities/fields")).toEqual([
+      { label: "Dynamic Entities", href: "/dynamic-entities" },
+      { label: "Manage Fields" },
     ]);
   });
 
-  it("maps nested project-one routes", () => {
-    expect(resolveWorkspaceBreadcrumbs("/project-one/approvals/new")).toEqual([
-      { label: "Project-One", href: "/project-one" },
-      { label: "Approvals", href: "/project-one/approvals" },
-      { label: "New approval" },
+  it("maps nested e-approval routes", () => {
+    expect(resolveWorkspaceBreadcrumbs("/e-approval/submissions/new")).toEqual([
+      { label: "E-Approval", href: "/e-approval" },
+      { label: "Submissions", href: "/e-approval/submissions" },
+      { label: "New request" },
     ]);
   });
 

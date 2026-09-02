@@ -13,7 +13,6 @@ use App\Modules\Platform\Support\PlatformTenantAuditEventType;
 use App\Modules\Platform\Models\RolloutPolicyBundle;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
 use App\Modules\Platform\Services\RolloutPolicyBundleService;
-use App\Modules\Rollout\Services\TenantPlaybookSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +24,6 @@ class CentralTenantPlaybookAssignController extends AbstractApiController
         Tenant $tenant,
         RolloutPlaybookCatalogService $catalog,
         RolloutPolicyBundleService $policyBundles,
-        TenantPlaybookSyncService $sync,
         PlatformTenantAuditLogger $audit,
     ): JsonResponse {
         $data = $request->validate([
@@ -65,10 +63,6 @@ class CentralTenantPlaybookAssignController extends AbstractApiController
             $binding->update(['rollout_policy_bundle_id' => null]);
             $assignedVersion = $version->version;
             $assignedPolicy = null;
-        }
-
-        if ($data['sync_tenant_database'] ?? true) {
-            $sync->syncBindingToTenantDatabase($tenant, $binding->fresh(['playbookVersion', 'rolloutPolicyBundle']), $request->user()?->email);
         }
 
         /** @var User|null $actor */

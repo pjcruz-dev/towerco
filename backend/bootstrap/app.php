@@ -1,9 +1,11 @@
 <?php
 
 use App\Core\Exceptions\DomainException;
+use App\Core\Http\Middleware\AcceptIntegrationApiKeyHeader;
 use App\Core\Http\Middleware\AssignCorrelationId;
 use App\Core\Http\Middleware\ConfigureTenantSanctumProvider;
 use App\Core\Http\Middleware\EnsureActiveSession;
+use App\Core\Http\Middleware\EnsureIntegrationApiKey;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Core\Http\Middleware\EnsurePasskeyEnrollment;
 use App\Core\Http\Middleware\EnsurePlatformAdmin;
@@ -82,6 +84,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.session' => EnsureActiveSession::class,
             'auth.mfa' => EnsureMfaVerified::class,
             'auth.passkey' => EnsurePasskeyEnrollment::class,
+            'integration.api_key' => AcceptIntegrationApiKeyHeader::class,
+            'integration.token' => EnsureIntegrationApiKey::class,
             'platform.admin' => EnsurePlatformAdmin::class,
             'platform.permission' => EnsurePlatformPermission::class,
             'platform.mfa' => EnsurePlatformMfaVerified::class,
@@ -145,53 +149,12 @@ return Application::configure(basePath: dirname(__DIR__))
             $schedule->command('horizon:snapshot')->everyFiveMinutes();
         }
 
-        $schedule->command('rollout:gate-approvals:escalate')
-            ->weekdays()
-            ->dailyAt('08:00')
-            ->withoutOverlapping();
-
-        $schedule->command('rollout:recompute-sla-risk')
-            ->dailyAt('01:30')
-            ->withoutOverlapping();
-
-        $schedule->command('e-approval:sla-run')
-            ->everyFiveMinutes()
-            ->withoutOverlapping();
-
-        $schedule->command('ticketing:sla-run')
-            ->everyFiveMinutes()
+        $schedule->command('dyn:run-scheduled-tasks')
+            ->everyMinute()
             ->withoutOverlapping();
 
         $schedule->command('toweros:subscriptions:process')
             ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('documents:expiry-notify')
-            ->dailyAt('07:00')
-            ->withoutOverlapping();
-
-        $schedule->command('procurement:export-run-scheduled')
-            ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('e-approval:reports-run-scheduled')
-            ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('e-approval:exports-prune')
-            ->dailyAt('03:15')
-            ->withoutOverlapping();
-
-        $schedule->command('workspace:audit-prune')
-            ->dailyAt('03:40')
-            ->withoutOverlapping();
-
-        $schedule->command('procurement:rfq-reminders')
-            ->dailyAt('08:30')
-            ->withoutOverlapping();
-
-        $schedule->command('procurement:rfq-auto-close')
-            ->everyFiveMinutes()
             ->withoutOverlapping();
 
         $backupScheduleTime = (string) config('toweros.tenant_database_backup.schedule_time', '02:30');

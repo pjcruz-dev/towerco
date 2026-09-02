@@ -269,7 +269,12 @@ final class WorkspaceAuditIndexService
             'user_agent' => $log->user_agent ?? null,
             'metadata' => $log->metadata_json,
             'created_at' => $log->created_at?->toIso8601String(),
-            'href' => $this->hrefFor($log->module, $log->entity_type, $log->entity_id),
+            'href' => $this->hrefFor(
+                $log->module,
+                $log->entity_type,
+                $log->entity_id,
+                is_array($log->metadata_json) ? $log->metadata_json : [],
+            ),
         ]);
     }
 
@@ -295,7 +300,10 @@ final class WorkspaceAuditIndexService
         return $row;
     }
 
-    private function hrefFor(?string $module, ?string $entityType, ?string $entityId): ?string
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function hrefFor(?string $module, ?string $entityType, ?string $entityId, array $metadata = []): ?string
     {
         if ($entityId === null || $entityId === '') {
             return null;
@@ -334,6 +342,14 @@ final class WorkspaceAuditIndexService
                 'user' => '/users',
                 'role' => '/roles',
                 default => '/users',
+            },
+            'dynamic_entities' => match ($entityType) {
+                'dyn_record' => '/dynamic-entities/records/'.$entityId,
+                'dyn_entity' => '/dynamic-entities/'.rawurlencode($entityId),
+                'dyn_field', 'dyn_field_group' => isset($metadata['entity_slug']) && is_string($metadata['entity_slug']) && $metadata['entity_slug'] !== ''
+                    ? '/dynamic-entities/'.rawurlencode($metadata['entity_slug'])
+                    : '/dynamic-entities',
+                default => '/dynamic-entities',
             },
             default => null,
         };

@@ -6,6 +6,7 @@ namespace App\Modules\AdminOne\Services;
 
 use App\Modules\AdminOne\Models\TenantPermission;
 use App\Modules\AdminOne\Models\TenantRole;
+use App\Modules\AdminOne\Support\RoleAccessMatrix;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
@@ -14,6 +15,7 @@ use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
@@ -28,19 +30,10 @@ class RoleCatalogService
 
     /** @var array<string, string> role name prefix → enabled_modules key */
     private const MODULE_ROLE_PREFIXES = [
-        'project_one_' => 'project_one',
         'ticketing_' => 'ticketing',
-        'procurement_' => 'procurement_one',
-        'finance_' => 'finance_one',
-        'documents_' => 'documents',
-        'dcf_' => 'document_register',
-        'sites_' => 'sites',
         'e_approval_' => 'e_approval',
         'ai_assistant_' => 'ai_assistant',
     ];
-
-    /** @var list<string> */
-    private const PROJECT_ONE_DISCIPLINE_ROLES = ['saq_approver', 'pmo_approver', 'cme_approver'];
 
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,
@@ -190,9 +183,13 @@ class RoleCatalogService
 
     /**
      * @param  list<string>  $permissions
+     * @param  array<string, mixed>|null  $accessMatrix
      */
-    public function updateCustomRolePermissions(TenantRole $role, array $permissions): TenantRole
-    {
+    public function updateCustomRolePermissions(
+        TenantRole $role,
+        array $permissions,
+        ?array $accessMatrix = null,
+    ): TenantRole {
         if (TenantRbacSystemRoles::isSystem($role->name)) {
             throw ValidationException::withMessages([
                 'role' => [__('System roles cannot be modified from the console.')],
@@ -202,6 +199,12 @@ class RoleCatalogService
         $this->assertPermissionsExist($permissions);
         $beforeCount = $role->permissions()->count();
         $role->syncPermissions($permissions);
+
+        if ($accessMatrix !== null && Schema::connection('tenant')->hasColumn('roles', 'access_matrix_json')) {
+            $role->access_matrix_json = RoleAccessMatrix::normalize($accessMatrix);
+            $role->save();
+        }
+
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $fresh = $role->fresh(['permissions']);
@@ -325,18 +328,17 @@ class RoleCatalogService
             return true;
         }
 
-        // Billing-only role is tied to the Billings workspace module (not always-on Team & Access).
+        // Billing role is always available (subscription self-serve lives under Team & Access).
         if ($roleName === 'billing') {
-            return in_array('billings', $enabledModules, true);
+            return true;
         }
 
         if (TenantRbacSystemRoles::isCoreBaseline($roleName)) {
             return true;
         }
 
-        if ($roleName === 'finance' || in_array($roleName, self::PROJECT_ONE_DISCIPLINE_ROLES, true)) {
-            return in_array('project_one', $enabledModules, true)
-                || ($roleName === 'finance' && in_array('finance_one', $enabledModules, true));
+        if (TenantRbacSystemRoles::isAtcOperational($roleName)) {
+            return true;
         }
 
         foreach (self::MODULE_ROLE_PREFIXES as $prefix => $module) {
@@ -356,7 +358,7 @@ class RoleCatalogService
      */
     private function roleSummary(TenantRole $role, array $enabled, array $userCounts): array
     {
-        return [
+        $summary = [
             'id' => $role->id,
             'name' => $role->name,
             'is_baseline' => TenantRbacSystemRoles::isCoreBaseline($role->name),
@@ -368,6 +370,12 @@ class RoleCatalogService
                 ->all(),
             'user_count' => $userCounts[(int) $role->id] ?? 0,
         ];
+
+        if (Schema::connection('tenant')->hasColumn('roles', 'access_matrix_json')) {
+            $summary['access_matrix'] = $role->accessMatrix();
+        }
+
+        return $summary;
     }
 
     /**

@@ -170,7 +170,7 @@ export function UsersPageClient() {
   const roleOptions =
     visibleRoleCatalog.length > 0
       ? visibleRoleCatalog.map((r) => r.name)
-      : ["viewer", "manager", "tenant_admin"];
+      : ["viewer", "administrator"];
 
   const selectedIdList = useMemo(
     () => Object.keys(rowSelection).filter((id) => rowSelection[id]),
@@ -433,7 +433,7 @@ export function UsersPageClient() {
     const labels = bulkRoles.map(roleLabel).join(", ");
     if (
       window.confirm(
-        `Remove ${bulkRoles.length === 1 ? `the "${labels}" role` : `these roles (${labels})`} from ${selectedCount} selected user${selectedCount === 1 ? "" : "s"}? Other roles are kept. The last active tenant admin cannot lose tenant_admin.`,
+        `Remove ${bulkRoles.length === 1 ? `the "${labels}" role` : `these roles (${labels})`} from ${selectedCount} selected user${selectedCount === 1 ? "" : "s"}? Other roles are kept. The last active Administrator cannot lose the administrator role.`,
       )
     ) {
       bulkRemoveRoleMutation.mutate();

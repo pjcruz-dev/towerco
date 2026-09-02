@@ -23,7 +23,7 @@ class TenantEnabledModulesResolverTest extends TestCase
 
     public function test_tenant_override_limits_modules(): void
     {
-        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'project_one', 'e_approval']);
+        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'dynamic_entities', 'e_approval']);
 
         $tenant = new Tenant([
             'enabled_modules' => ['core', 'team_access', 'e_approval'],
@@ -36,7 +36,7 @@ class TenantEnabledModulesResolverTest extends TestCase
 
     public function test_null_tenant_override_uses_platform_default(): void
     {
-        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'project_one', 'e_approval']);
+        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'dynamic_entities', 'e_approval']);
 
         $tenant = new Tenant([
             'enabled_modules' => null,
@@ -44,10 +44,10 @@ class TenantEnabledModulesResolverTest extends TestCase
 
         $resolver = app(TenantEnabledModulesResolver::class);
 
-        $this->assertSame(['core', 'team_access', 'project_one', 'e_approval'], $resolver->resolveForTenant($tenant));
+        $this->assertSame(['core', 'team_access', 'e_approval', 'dynamic_entities'], $resolver->resolveForTenant($tenant));
     }
 
-    public function test_billings_is_toggleable_when_in_platform_catalog(): void
+    public function test_billings_is_not_a_toggleable_workspace_module(): void
     {
         Config::set('toweros.tenant_modules.enabled', [
             'core',
@@ -59,8 +59,9 @@ class TenantEnabledModulesResolverTest extends TestCase
         $resolver = app(TenantEnabledModulesResolver::class);
         $catalog = $resolver->catalogForPlatformApi();
 
-        $this->assertContains('billings', $resolver->toggleableModules());
-        $this->assertSame('Billings', $catalog['labels']['billings']);
-        $this->assertArrayHasKey('billings', $catalog['descriptions']);
+        $this->assertNotContains('billings', $resolver->toggleableModules());
+        $this->assertNotContains('billings', $resolver->platformModules());
+        $this->assertArrayNotHasKey('billings', $catalog['labels']);
+        $this->assertArrayNotHasKey('billings', $catalog['descriptions']);
     }
 }

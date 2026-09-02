@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Core\Support\AllowlistedSort;
-use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
 use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
@@ -15,8 +14,6 @@ use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
-use App\Modules\ProcurementOne\Services\ProcurementVendorPoPolicyGuard;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -49,9 +46,6 @@ final class EApprovalSubmissionService
         private readonly EApprovalSubmissionFinanceAuditService $financeAudit,
         private readonly EApprovalFieldComputedService $computedFields,
         private readonly EApprovalSubmissionWorkflowPreparer $workflowPreparer,
-        private readonly ProcurementVendorPoPolicyGuard $vendorPoPolicy,
-        private readonly ProcurementPrEApprovalHookService $procurementPrHook,
-        private readonly ControlledDocumentEApprovalValuesService $controlledDocumentValues,
     ) {}
 
     public function paginate(
@@ -165,20 +159,13 @@ final class EApprovalSubmissionService
         $values = $this->enrichValuesForParent($parentId, $form, $values);
         $values = $this->computedFields->apply($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values);
-        $controlled = $this->controlledDocumentValues->prepareForSubmit(
-            $form,
-            $values,
-            fn () => $this->documentNumbers->nextDocumentNumber($form, $values, $requestor),
-        );
-        $values = $controlled['values'];
 
         $this->valuesValidator->validate($form, $values);
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
-        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled) {
+        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning) {
             $submissionId = (string) Str::uuid();
             $prepared = $this->workflowPreparer->prepare($form, $values, $submissionId);
-            $documentNo = $controlled['document_no'];
+            $documentNo = $this->documentNumbers->nextDocumentNumber($form, $values, $requestor);
 
             $submission = EApprovalSubmission::query()->create([
                 'id' => $submissionId,
@@ -211,7 +198,6 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
-            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
 
             return $fresh;
         });
@@ -261,7 +247,6 @@ final class EApprovalSubmissionService
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, $updateParentLink);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
         $values = $this->computedFields->apply($form, $values);
-        $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values);
 
         $this->valuesValidator->validate($form, $values, false);
@@ -316,7 +301,6 @@ final class EApprovalSubmissionService
         );
         $values = $this->enrichValuesForParent($parentId, $form, $values);
         $values = $this->computedFields->apply($form, $values);
-        $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values, (string) $submission->id);
         $this->valuesValidator->validate($form, $values, false);
 
@@ -366,12 +350,6 @@ final class EApprovalSubmissionService
         $values = $this->enrichValuesForParent($parentId, $form, $values);
         $values = $this->computedFields->apply($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values, (string) $submission->id);
-        $controlled = $this->controlledDocumentValues->prepareForSubmit(
-            $form,
-            $values,
-            fn () => $this->documentNumbers->nextDocumentNumber($form, $values, $requestor),
-        );
-        $values = $controlled['values'];
         $this->valuesValidator->validate(
             $form,
             $values,
@@ -379,10 +357,9 @@ final class EApprovalSubmissionService
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
         );
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
-        return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId, $controlled) {
-            $documentNo = $controlled['document_no'];
+        return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId) {
+            $documentNo = $this->documentNumbers->nextDocumentNumber($form, $values, $requestor);
             $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
 
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
@@ -423,7 +400,6 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
-            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
 
             return $fresh;
         });
@@ -496,7 +472,6 @@ final class EApprovalSubmissionService
 
         $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
         $this->notifySubmissionCancelled($fresh, $actor, $pendingApproverIds);
-        $this->procurementPrHook->afterSubmissionMutation($fresh, $actor);
 
         return $fresh;
     }
@@ -559,7 +534,6 @@ final class EApprovalSubmissionService
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
         );
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
         $previousValues = $this->currentValuesMap($submission);
         $revisionConfig = EApprovalRevisionRouting::fromFormMetadata(

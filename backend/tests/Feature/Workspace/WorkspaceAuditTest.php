@@ -70,40 +70,6 @@ final class WorkspaceAuditTest extends TestCase
             ->assertJsonMissing(['source' => 'e_approval']);
     }
 
-    public function test_workspace_audit_includes_procurement_dual_write(): void
-    {
-        tenancy()->initialize($this->testTenant);
-        app(\App\Modules\ProcurementOne\Services\ProcurementLifecycleAuditService::class)->record(
-            \App\Modules\ProcurementOne\Support\ProcurementDocumentType::PURCHASE_REQUISITION,
-            'pr-1',
-            'PR-100',
-            'cancelled',
-            $this->testTenantAdmin,
-            'No longer required',
-            [
-                'changes' => [
-                    'status' => ['from' => 'pending_approval', 'to' => 'cancelled'],
-                ],
-            ],
-        );
-        $this->assertSame(1, \App\Modules\Workspace\Models\TenantActivityLog::query()->count());
-        tenancy()->end();
-
-        $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->getJson('/api/v1/workspace/audit?module=procurement_one')
-            ->assertOk()
-            ->assertJsonFragment([
-                'module' => 'procurement_one',
-                'action' => 'purchase_requisition.cancelled',
-                'entity_label' => 'PR-100',
-            ])
-            ->assertJsonPath('data.0.changes.status.to', 'cancelled')
-            ->assertJsonPath('data.0.category', 'lifecycle')
-            ->assertJsonPath('data.0.severity', 'high')
-            ->assertJsonPath('data.0.reason', 'No longer required');
-    }
-
     public function test_workspace_audit_exposes_normalized_changes(): void
     {
         tenancy()->initialize($this->testTenant);

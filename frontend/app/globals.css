@@ -122,14 +122,15 @@
   --chart-3: oklch(0.72 0.12 230);
   --chart-4: oklch(0.78 0.04 250);
   --chart-5: oklch(0.82 0.03 250);
-  --sidebar: oklch(0.16 0 0);
-  --sidebar-foreground: oklch(0.93 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.24 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Side nav stays white in dark mode (content chrome only flips) */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #94a3b8;
 }
 
 @layer base {
@@ -174,6 +175,51 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Arrange Form — thicker range so the thumb is easy to grab */
+.dyn-arrange-span-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.75rem;
+  background: transparent;
+}
+.dyn-arrange-span-slider:focus {
+  outline: none;
+}
+.dyn-arrange-span-slider::-webkit-slider-runnable-track {
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: var(--border);
+}
+.dyn-arrange-span-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: -0.375rem;
+  border-radius: 9999px;
+  border: 2px solid var(--background);
+  background: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: grab;
+}
+.dyn-arrange-span-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+.dyn-arrange-span-slider::-moz-range-track {
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: var(--border);
+}
+.dyn-arrange-span-slider::-moz-range-thumb {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  border: 2px solid var(--background);
+  background: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: grab;
 }
 
 /* Multi-page print: app shell uses h-screen + overflow clip, which otherwise prints only ~1 viewport. */

@@ -11,8 +11,26 @@
     -webkit-print-color-adjust: exact;
   }
 
+  .dyn-print-toolbar,
   .eapproval-print-toolbar {
     display: none !important;
+  }
+
+  .dyn-print-root,
+  .dyn-print-stage {
+    background: #fff !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .dyn-print-scale {
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 0 !important;
   }
 
   .eapproval-attachment-only-print {

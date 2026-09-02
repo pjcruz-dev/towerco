@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { EApprovalSubmissionComposePanel } from "@/components/e-approval/e-approval-submission-compose-panel";
 import { RequestFocusShell } from "@/components/layout/request-focus-shell";
 import { PermissionGate } from "@/components/layout/permission-gate";
-import { eApprovalRequestUrl } from "@/modules/documents/controlled-document-submission-url";
+import { eApprovalRequestUrl } from "@/modules/e-approval/controlled-document-submission-url";
 import type { ControlledDocumentRequestMode } from "@/modules/e-approval/controlled-document-compose";
 import { permissions } from "@/lib/rbac/permissions";
 

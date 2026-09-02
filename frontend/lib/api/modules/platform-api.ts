@@ -205,7 +205,7 @@ export type PlatformTenantListParams = {
   environment?: string;
   plan_tier?: string;
   subscription_status?: string;
-  modules?: "" | "e_approval_only" | "project_one" | "ticketing";
+  modules?: "" | "e_approval_only" | "dynamic_entities" | "ticketing";
   access_mode?: "" | "blocked" | "read_only" | "grace";
   /** API field form: `column:asc|desc` (allowlisted physical columns). */
   sort?: string;
@@ -280,6 +280,10 @@ export type PlatformTenantThemeTokens = {
   version: number;
   logo_url?: string | null;
   favicon_url?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_tin?: string | null;
   light?: Record<string, string>;
   dark?: Record<string, string>;
 };
@@ -773,7 +777,6 @@ export type CreateTenantPayload = {
   brand_domain?: string | null;
   environment?: "local" | "test" | "staging" | "production";
   tco_sequence_prefix?: string | null;
-  playbook_version_id?: string | null;
   /** null = deployment default; otherwise explicit module list including core + team_access */
   enabled_modules?: string[] | null;
   migrate?: boolean;
@@ -802,11 +805,7 @@ export type CreateTenantResponse = {
   slug?: string | null;
   brand_domain?: string | null;
   environment?: string | null;
-  playbook_version?: string | null;
-  assigned_policy_code?: string | null;
   domain_endpoints?: TenantDomainEndpointRecommendation[] | null;
-  public_holidays_seeded?: number;
-  holiday_years?: number[];
   initial_admin?: CreateTenantInitialAdmin;
 };
 
@@ -839,11 +838,7 @@ export type CreateTenantEnvironmentResponse = {
   brand_domain?: string | null;
   environment?: string | null;
   parent_tenant_id?: string | null;
-  playbook_version?: string | null;
-  assigned_policy_code?: string | null;
   domain_endpoints?: TenantDomainEndpointRecommendation[] | null;
-  public_holidays_seeded?: number;
-  holiday_years?: number[];
   initial_admin?: CreateTenantInitialAdmin;
 };
 

@@ -7,6 +7,55 @@ export type AdminRoleAssignedUser = {
   is_active: boolean;
 };
 
+export type RoleDataFilterOperator =
+  | "equals"
+  | "not_equals"
+  | "contains"
+  | "not_contains"
+  | "is_empty"
+  | "is_not_empty"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte";
+
+export type RoleDataFilterRule = {
+  field: string;
+  operator: RoleDataFilterOperator;
+  value?: string;
+};
+
+export type RoleDataFilterGroup = {
+  logic: "and" | "or";
+  rules: RoleDataFilterRule[];
+};
+
+export type RoleAccessMatrix = {
+  entities?: Record<
+    string,
+    {
+      view?: boolean;
+      view_own?: boolean;
+      create?: boolean;
+      edit?: boolean;
+      delete?: boolean;
+      export?: boolean;
+    }
+  >;
+  fields?: Record<string, Record<string, FieldAccessLevel>>;
+  workflows?: Record<string, Record<string, boolean>>;
+  /** Per-entity row filters (Metacoresoft Data Filters). */
+  filters?: Record<string, RoleDataFilterGroup>;
+};
+
+export type FieldAccessLevel =
+  | "full"
+  | "view"
+  | "table_record"
+  | "record"
+  | "form"
+  | "hide";
+
 export type AdminRoleRow = {
   id: number;
   name: string;
@@ -14,6 +63,7 @@ export type AdminRoleRow = {
   is_system?: boolean;
   permissions: string[];
   user_count: number;
+  access_matrix?: RoleAccessMatrix;
 };
 
 export type AdminRoleDetail = AdminRoleRow & {
@@ -68,9 +118,11 @@ export async function cloneAdminRole(roleId: number, name: string): Promise<Admi
 export async function updateAdminRole(
   roleId: number,
   permissions: string[],
+  accessMatrix?: RoleAccessMatrix | null,
 ): Promise<AdminRoleRow> {
   const response = await apiClient.patch<{ data: AdminRoleRow }>(`/admin/roles/${roleId}`, {
     permissions,
+    ...(accessMatrix !== undefined ? { access_matrix: accessMatrix } : {}),
   });
   return response.data.data;
 }

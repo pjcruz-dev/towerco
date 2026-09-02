@@ -9,7 +9,6 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 const segmentLabels: Record<string, string> = {
   platform: "Dashboard",
-  playbooks: "Rollout playbooks",
   tenants: "Tenants",
   create: "Create tenant",
 };
@@ -21,12 +20,6 @@ export function PlatformConsoleHeader() {
     const parts = pathname.split("/").filter(Boolean);
     if (parts.length <= 1) {
       return "Dashboard";
-    }
-    if (parts[1] === "playbooks") {
-      if (parts[2] === "policies" && parts[3]) {
-        return "Rollout policy editor";
-      }
-      return "Rollout playbooks";
     }
     if (parts[1] === "tenants" && parts[2] === "create") {
       return "Create tenant";

@@ -6,7 +6,6 @@ namespace App\Modules\Billing\Services;
 
 use App\Models\Tenant;
 use App\Models\TenantBillingRfiCompletion;
-use App\Modules\Rollout\Models\RolloutProgram;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -59,7 +58,7 @@ final class TenantRfiMeterService
         ];
     }
 
-    public function isNewBillableRfi(Tenant $tenant, RolloutProgram $program, Carbon $actualRfiDate): bool
+    public function isNewBillableRfi(Tenant $tenant, object $program, Carbon $actualRfiDate): bool
     {
         if ($program->actual_rfi_date !== null) {
             return false;
@@ -72,7 +71,7 @@ final class TenantRfiMeterService
         return ! $actualRfiDate->lt($tenant->billing_meter_starts_at);
     }
 
-    public function assertCanRecordRfi(Tenant $tenant, RolloutProgram $program, Carbon $actualRfiDate): void
+    public function assertCanRecordRfi(Tenant $tenant, object $program, Carbon $actualRfiDate): void
     {
         if (! $this->isNewBillableRfi($tenant, $program, $actualRfiDate)) {
             return;
@@ -102,7 +101,7 @@ final class TenantRfiMeterService
         }
     }
 
-    public function recordCompletion(Tenant $tenant, RolloutProgram $program, Carbon $actualRfiDate): void
+    public function recordCompletion(Tenant $tenant, object $program, Carbon $actualRfiDate): void
     {
         if (! $this->isMeteringEnforced($tenant)) {
             return;

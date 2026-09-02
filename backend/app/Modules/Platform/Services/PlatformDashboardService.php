@@ -198,7 +198,7 @@ final class PlatformDashboardService
                 'id' => 'pf-playbook-upgrade',
                 'label' => 'Tenants with playbook upgrade',
                 'count' => $upgradePending,
-                'href' => '/platform/playbooks',
+                'href' => '/platform#tenant-directory',
                 'priority' => 'high',
             ] : null,
             $productionWithoutMfa > 0 ? [

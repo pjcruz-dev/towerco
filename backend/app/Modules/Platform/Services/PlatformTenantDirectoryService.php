@@ -181,14 +181,14 @@ final class PlatformTenantDirectoryService
 
         $platform = $this->enabledModulesResolver->platformModules();
         $platformIsEaOnly = in_array('e_approval', $platform, true)
-            && ! in_array('project_one', $platform, true);
+            && ! in_array('dynamic_entities', $platform, true);
 
         if ($modulesFilter === 'e_approval_only') {
             $query->where(function (Builder $q) use ($platformIsEaOnly): void {
                 $q->where(function (Builder $explicit): void {
                     $explicit->whereNotNull('enabled_modules')
                         ->whereRaw("JSON_CONTAINS(enabled_modules, '\"e_approval\"')")
-                        ->whereRaw("NOT JSON_CONTAINS(enabled_modules, '\"project_one\"')");
+                        ->whereRaw("NOT JSON_CONTAINS(enabled_modules, '\"dynamic_entities\"')");
                 });
 
                 if ($platformIsEaOnly) {
@@ -199,14 +199,14 @@ final class PlatformTenantDirectoryService
             return;
         }
 
-        if ($modulesFilter === 'project_one') {
+        if ($modulesFilter === 'dynamic_entities') {
             $query->where(function (Builder $q) use ($platform): void {
                 $q->where(function (Builder $explicit): void {
                     $explicit->whereNotNull('enabled_modules')
-                        ->whereRaw("JSON_CONTAINS(enabled_modules, '\"project_one\"')");
+                        ->whereRaw("JSON_CONTAINS(enabled_modules, '\"dynamic_entities\"')");
                 });
 
-                if (in_array('project_one', $platform, true)) {
+                if (in_array('dynamic_entities', $platform, true)) {
                     $q->orWhereNull('enabled_modules');
                 }
             });

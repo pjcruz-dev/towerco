@@ -152,7 +152,7 @@ final class TicketingSlaRunnerService
     {
         return TenantUser::query()
             ->where('is_active', true)
-            ->whereHas('roles', static fn ($q) => $q->where('name', 'tenant_admin'))
+            ->whereHas('roles', static fn ($q) => $q->where('name', 'administrator'))
             ->get()
             ->all();
     }

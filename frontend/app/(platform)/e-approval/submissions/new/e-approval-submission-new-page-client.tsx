@@ -28,7 +28,7 @@ import {
   isEApprovalDocumentApprovalFormName,
   isEApprovalTourActive,
 } from "@/lib/help/e-approval-tour-fixtures";
-import { eApprovalFocusUrl, eApprovalRequestUrlFromNewSubmissionQuery } from "@/modules/documents/controlled-document-submission-url";
+import { eApprovalFocusUrl, eApprovalRequestUrlFromNewSubmissionQuery } from "@/modules/e-approval/controlled-document-submission-url";
 import type { EApprovalFormListRow } from "@/modules/e-approval/types";
 import { permissions } from "@/lib/rbac/permissions";
 import { useNotificationStore } from "@/stores/notification-store";

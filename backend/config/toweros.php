@@ -48,7 +48,7 @@ return [
      */
     'tenant_bootstrap_admin_password' => env('TOWEROS_TENANT_BOOTSTRAP_ADMIN_PASSWORD'),
 
-    'tenant_bootstrap_admin_name' => env('TOWEROS_TENANT_BOOTSTRAP_ADMIN_NAME', 'Tenant administrator'),
+    'tenant_bootstrap_admin_name' => env('TOWEROS_TENANT_BOOTSTRAP_ADMIN_NAME', 'Administrator'),
 
     /**
      * When true, platform provisioning responses include the initial admin plaintext password.
@@ -251,18 +251,17 @@ return [
         ),
         /** New tenants created via platform console (default off; enable per tenant when ready). */
         'default_mfa_required' => env('TOWEROS_TENANT_DEFAULT_MFA_REQUIRED', false),
-        /** `latest` assigns the newest published playbook; `v1` pins to 1.0.0 when present. */
+        /** @deprecated Rollout playbooks are retired; provisioning no longer assigns playbooks. */
         'default_playbook' => env('TOWEROS_TENANT_DEFAULT_PLAYBOOK', 'latest'),
         /**
-         * When true, new tenants are assigned a published rollout policy bundle automatically
-         * (gate chains, email notifications, timeline). Uses default_rollout_policy_code when set,
-         * otherwise the newest published bundle for the assigned playbook version.
+         * @deprecated Rollout policies are retired; provisioning no longer auto-assigns policy bundles.
          */
-        'auto_assign_rollout_policy' => env('TOWEROS_TENANT_AUTO_ASSIGN_ROLLOUT_POLICY', true),
-        /** Optional published policy bundle code (e.g. bts-standard). When empty, picks latest published. */
+        'auto_assign_rollout_policy' => env('TOWEROS_TENANT_AUTO_ASSIGN_ROLLOUT_POLICY', false),
+        /** @deprecated Unused after playbook retirement. */
         'default_rollout_policy_code' => env('TOWEROS_TENANT_DEFAULT_ROLLOUT_POLICY_CODE'),
-        'auto_seed_holidays' => env('TOWEROS_TENANT_AUTO_SEED_HOLIDAYS', true),
-        'seed_next_holiday_year' => env('TOWEROS_TENANT_SEED_NEXT_HOLIDAY_YEAR', true),
+        /** @deprecated Holiday auto-seed is a no-op. */
+        'auto_seed_holidays' => env('TOWEROS_TENANT_AUTO_SEED_HOLIDAYS', false),
+        'seed_next_holiday_year' => env('TOWEROS_TENANT_SEED_NEXT_HOLIDAY_YEAR', false),
     ],
 
     /**
@@ -369,13 +368,15 @@ return [
 
     /**
      * Tenant modules enabled for RBAC provisioning and the Team & Access role editor.
-     * Keys: core, team_access, project_one, e_approval, ticketing, procurement_one, finance_one, billings,
-     * sites, documents, document_register, ai_assistant (plus optional gis, tower_one, fiber_one, asset_one).
+     * Keys: core, team_access, e_approval, ticketing, dynamic_entities, ai_assistant (opt-in)
+     * Billings is no longer a toggleable workspace module (subscription UI uses Team & Access permissions).
+     * Project-One, Procurement-One, Finance-One, Documents, and Sites were removed in favor of Dynamic Entities.
      */
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,billings,sites,documents,document_register,ai_assistant')),
+            // AI Assistant is opt-in (not bundled with Dynamic Entities).
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,e_approval,ticketing,dynamic_entities')),
         ))),
     ],
 

@@ -1,4 +1,4 @@
-export type EApprovalFinanceProcurementPolicy = {
+﻿export type EApprovalFinanceProcurementPolicy = {
   liquidation_requires_parent: boolean;
   liquidation_overspend_mode: "block" | "warn";
   liquidation_max_overspend_percent: number;

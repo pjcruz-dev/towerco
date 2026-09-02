@@ -1,4 +1,4 @@
-import type { EApprovalBuilderLayoutRow } from "@/modules/e-approval/builder-layout-rows";
+﻿import type { EApprovalBuilderLayoutRow } from "@/modules/e-approval/builder-layout-rows";
 import { BUILDER_LAYOUT_ROWS_META_KEY } from "@/modules/e-approval/builder-layout-rows";
 import {
   layoutWidthForRowColumns,

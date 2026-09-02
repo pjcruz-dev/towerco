@@ -73,7 +73,7 @@ trait InteractsWithInMemoryTenantApi
             'password' => 'password',
             'is_active' => true,
         ]);
-        $this->testTenantAdmin->assignRole('tenant_admin');
+        $this->testTenantAdmin->assignRole('administrator');
         tenancy()->end();
     }
 

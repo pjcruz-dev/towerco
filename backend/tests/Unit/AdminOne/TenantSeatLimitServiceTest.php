@@ -33,7 +33,7 @@ final class TenantSeatLimitServiceTest extends TestCase
         $service = app(TenantUserAdminService::class);
 
         $this->expectException(ValidationException::class);
-        $service->create('Extra Manager', 'manager@test.localhost', ['manager']);
+        $service->create('Extra Staff', 'staff.extra@test.localhost', ['staff']);
 
         tenancy()->end();
     }
@@ -110,7 +110,7 @@ final class TenantSeatLimitServiceTest extends TestCase
         $service = app(TenantUserAdminService::class);
 
         $this->expectException(ValidationException::class);
-        $service->update($viewer, null, null, ['manager'], null);
+        $service->update($viewer, null, null, ['staff'], null);
 
         tenancy()->end();
     }

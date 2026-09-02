@@ -70,7 +70,7 @@ class TenantUserImpersonationTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
-        $otherAdmin->assignRole('tenant_admin');
+        $otherAdmin->assignRole('administrator');
 
         Sanctum::actingAs($this->testTenantAdmin, ['*']);
 
@@ -88,13 +88,13 @@ class TenantUserImpersonationTest extends TestCase
     {
         tenancy()->initialize($this->testTenant);
 
-        $manager = TenantUser::query()->create([
-            'name' => 'Manager',
-            'email' => 'manager@test.localhost',
+        $operator = TenantUser::query()->create([
+            'name' => 'Operator',
+            'email' => 'operator@test.localhost',
             'password' => 'password',
             'is_active' => true,
         ]);
-        $manager->assignRole('manager');
+        $operator->assignRole('staff');
 
         $target = TenantUser::query()->create([
             'name' => 'Viewer',
@@ -104,7 +104,7 @@ class TenantUserImpersonationTest extends TestCase
         ]);
         $target->assignRole('viewer');
 
-        Sanctum::actingAs($manager, ['*']);
+        Sanctum::actingAs($operator, ['*']);
 
         $response = $this->postJson(
             '/api/v1/admin/users/'.$target->id.'/impersonate',

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,12 +20,9 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   platformCreateTenant,
-  platformListRolloutPlaybooks,
   type CreateTenantResponse,
 } from "@/lib/api/modules/platform-api";
 import {
@@ -40,7 +37,6 @@ import {
   recommendedTenantDomain,
   type TenantEnvironment,
 } from "@/lib/tenant/recommended-tenant-domain";
-import { filterSelectClassName } from "@/lib/ui/field-control";
 import { usePlatformAuthStore } from "@/stores/platform-auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -57,7 +53,6 @@ const schema = z
     brand_domain: z.string().optional(),
     environment: z.enum(["local", "test", "staging", "production"]),
     tco_sequence_prefix: z.string().max(8).optional(),
-    playbook_version_id: z.string().optional(),
     seed: z.boolean(),
   })
   .superRefine((values, ctx) => {
@@ -93,12 +88,6 @@ export function PlatformCreateTenantPageClient() {
     }
   }, [accessToken, isHydrated, router]);
 
-  const playbooksQuery = useQuery({
-    queryKey: ["platform", "rollout-playbooks"],
-    queryFn: platformListRolloutPlaybooks,
-    enabled: Boolean(isHydrated && accessToken),
-  });
-
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -108,7 +97,6 @@ export function PlatformCreateTenantPageClient() {
       brand_domain: "",
       environment: "local",
       tco_sequence_prefix: "A",
-      playbook_version_id: "",
       seed: false,
     },
   });
@@ -141,9 +129,6 @@ export function PlatformCreateTenantPageClient() {
   const slug = form.watch("slug");
   const brandDomain = form.watch("brand_domain");
   const environment = form.watch("environment");
-  const playbookVersions = (playbooksQuery.data?.versions ?? []).filter(
-    (version) => version.published_at,
-  );
 
   const [hostnameCustomized, setHostnameCustomized] = useState(false);
   const slugLocked = useRef(false);
@@ -242,7 +227,6 @@ export function PlatformCreateTenantPageClient() {
 
   const onSubmit = (values: FormValues) => {
     const tenantId = values.tenant_id?.trim() || undefined;
-    const playbookVersionId = values.playbook_version_id?.trim() || undefined;
     mutation.mutate({
       domain: values.domain.trim(),
       tenant_id: tenantId,
@@ -250,7 +234,6 @@ export function PlatformCreateTenantPageClient() {
       brand_domain: values.brand_domain?.trim() || undefined,
       environment: values.environment,
       tco_sequence_prefix: values.tco_sequence_prefix?.trim() || undefined,
-      playbook_version_id: playbookVersionId,
       enabled_modules: enabledModules,
       migrate: true,
       seed: values.seed,
@@ -271,8 +254,8 @@ export function PlatformCreateTenantPageClient() {
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create tenant</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Provision a new organization tenant for any environment — local, test, staging, or production.
-          Rollout policy and PH holidays apply automatically. Add linked environments later from the
-          tenant directory without changing slug or brand.
+          Team & Access seeds Administrator plus ATC job roles (Finance Officer, Staff, Admin, …). Add linked
+          environments later from the tenant directory without changing slug or brand.
         </p>
       </div>
 
@@ -311,28 +294,9 @@ export function PlatformCreateTenantPageClient() {
                 <span className="font-mono">{created.brand_domain}</span>
               </p>
             ) : null}
-            {created.playbook_version ? (
-              <p>
-                <span className="font-medium text-foreground">Rollout playbook:</span>{" "}
-                <span className="font-mono">v{created.playbook_version}</span>
-              </p>
-            ) : null}
-            {created.assigned_policy_code ? (
-              <p>
-                <span className="font-medium text-foreground">Rollout policy:</span>{" "}
-                <span className="font-mono">{created.assigned_policy_code}</span>
-                <span className="text-muted-foreground"> (timeline, gates, email notifications)</span>
-              </p>
-            ) : null}
-            {created.public_holidays_seeded ? (
-              <p>
-                <span className="font-medium text-foreground">PH holidays seeded:</span>{" "}
-                {created.public_holidays_seeded} dates
-                {created.holiday_years?.length
-                  ? ` (${created.holiday_years.join(", ")})`
-                  : null}
-              </p>
-            ) : null}
+            <p className="text-xs text-muted-foreground">
+              Roles &amp; Permissions includes Core, Job roles, and module tiers for enabled workspace modules.
+            </p>
             {created.domain_endpoints && created.domain_endpoints.length > 0 ? (
               <div className="space-y-2">
                 <p className="font-medium text-foreground">Recommended hostnames</p>
@@ -387,7 +351,6 @@ export function PlatformCreateTenantPageClient() {
                     brand_domain: "",
                     environment: "local",
                     tco_sequence_prefix: "A",
-                    playbook_version_id: "",
                     seed: false,
                   });
                 }}
@@ -556,7 +519,7 @@ export function PlatformCreateTenantPageClient() {
 
             <Card>
               <CardHeader className="border-b pb-4">
-                <CardTitle>Rollout &amp; site IDs</CardTitle>
+                <CardTitle>Site ID prefix</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-4">
                 <FormInput
@@ -566,25 +529,9 @@ export function PlatformCreateTenantPageClient() {
                   {...form.register("tco_sequence_prefix")}
                   error={form.formState.errors.tco_sequence_prefix}
                 />
-                <div className="space-y-1.5">
-                  <Label htmlFor="playbook-version">Rollout playbook</Label>
-                  <Select
-                    id="playbook-version"
-                    className={filterSelectClassName}
-                    {...form.register("playbook_version_id")}
-                    disabled={playbooksQuery.isLoading}
-                  >
-                    <option value="">Latest published (recommended)</option>
-                    {playbookVersions.map((version) => (
-                      <option key={version.id} value={version.id}>
-                        v{version.version} — {version.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Policy bundle (gates, email notifications) is assigned from platform defaults.
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Used for Dynamic Entity site codes (e.g. ATC site ID sequences).
+                </p>
               </CardContent>
             </Card>
 
@@ -610,7 +557,7 @@ export function PlatformCreateTenantPageClient() {
                   <span>
                     <span className="font-medium text-foreground">Seed demo dataset</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Dev/UAT only — sample sites, rollouts, and users. Adds provisioning time.
+                      Dev/UAT only — sample Dynamic Entity records and users. Adds provisioning time.
                     </span>
                   </span>
                 </label>
@@ -634,7 +581,7 @@ export function PlatformCreateTenantPageClient() {
               </Button>
               {mutation.isPending ? (
                 <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Provisioning database, migrations, rollout playbook, and admin user. Keep this tab open.
+                  Provisioning database, migrations, and admin user. Keep this tab open.
                 </p>
               ) : (
                 <p className="mt-2 text-center text-xs text-muted-foreground">

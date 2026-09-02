@@ -17,5 +17,6 @@ final readonly class LlmPrompt
         public ?string $moduleContext = null,
         public ?string $pagePath = null,
         public array $toolResults = [],
+        public ?string $modelOverride = null,
     ) {}
 }

@@ -3,46 +3,26 @@ import type { AuthUser } from "@/types/auth";
 export const TENANT_MODULE_LABELS: Record<string, string> = {
   core: "Dashboard",
   team_access: "Team & Access",
-  project_one: "Project-One",
   e_approval: "E-Approval",
-  gis: "GIS",
-  sites: "Sites",
-  tower_one: "Tower-One",
-  fiber_one: "Fiber-One",
-  asset_one: "Asset-One",
+  dynamic_entities: "Dynamic Entities",
   ticketing: "Ticketing",
-  procurement_one: "Procurement-One",
-  finance_one: "Finance-One",
-  billings: "Billings",
-  documents: "Documents",
-  document_register: "Document register",
   ai_assistant: "AI Assistant",
 };
 
 export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
-  billings: "Tenant subscription, usage, and self-serve plan billing (/billing).",
-  documents: "Expiring leases, permits, and contracts across sites.",
-  document_register:
-    "ISO master list of approved documents; start requests and revisions via E-Approval.",
   ai_assistant:
-    "In-app help assistant for workflows, permissions, and how-to guidance.",
+    "In-app help assistant for workflows, permissions, and how-to guidance. Opt-in — not included with Dynamic Entities alone.",
+  dynamic_entities:
+    "Dynamic entity packs (PM, Procurement, Finance, Ticketing) with Manage Fields.",
+  e_approval: "Forms, submissions, and approval workflows.",
+  ticketing: "Service desk tickets and queues.",
 };
 
-/** Optional modules superadmins can enable per tenant (must stay aligned with backend TOGGLEABLE_MODULES). */
+/** Optional modules superadmins can enable per tenant (aligned with backend TOGGLEABLE_MODULES). */
 export const TOGGLEABLE_WORKSPACE_MODULES = [
-  "project_one",
   "e_approval",
   "ticketing",
-  "procurement_one",
-  "finance_one",
-  "billings",
-  "sites",
-  "documents",
-  "document_register",
-  "gis",
-  "tower_one",
-  "fiber_one",
-  "asset_one",
+  "dynamic_entities",
   "ai_assistant",
 ] as const;
 
@@ -74,18 +54,9 @@ export function resolveToggleableWorkspaceModules(
 /** Toggleable workspace modules shown as badges on the platform tenant directory. */
 export const PLATFORM_TENANT_MODULE_BADGE_ORDER = [
   "e_approval",
-  "project_one",
   "ticketing",
-  "procurement_one",
-  "finance_one",
-  "billings",
-  "documents",
-  "document_register",
-  "sites",
-  "gis",
-  "tower_one",
-  "fiber_one",
-  "asset_one",
+  "dynamic_entities",
+  "ai_assistant",
 ] as const;
 
 export function resolveEnabledModulesForUser(
@@ -122,9 +93,7 @@ export function isTenantModuleEnabled(
 export function notificationsModuleEnabled(enabledModules: string[]): boolean {
   return (
     enabledModules.includes("e_approval")
-    || enabledModules.includes("project_one")
     || enabledModules.includes("ticketing")
-    || enabledModules.includes("procurement_one")
-    || enabledModules.includes("finance_one")
+    || enabledModules.includes("dynamic_entities")
   );
 }

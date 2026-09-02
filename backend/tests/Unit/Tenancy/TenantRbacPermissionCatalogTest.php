@@ -10,35 +10,42 @@ use Tests\TestCase;
 
 class TenantRbacPermissionCatalogTest extends TestCase
 {
-    public function test_default_enabled_modules_exclude_legacy_inventory_modules(): void
+    public function test_default_enabled_modules_exclude_removed_infrastructure_modules(): void
     {
-        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'project_one', 'e_approval']);
+        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'dynamic_entities', 'e_approval']);
 
         $catalog = app(TenantRbacPermissionCatalog::class);
         $enabled = $catalog->enabledPermissions();
 
         $this->assertContains('dashboard:view', $enabled);
         $this->assertContains('workspace:environments:switch', $enabled);
+        $this->assertContains('sidebar:manage', $enabled);
+        $this->assertContains('notifications:manage', $enabled);
+        $this->assertContains('printables:manage', $enabled);
+        $this->assertContains('api_keys:manage', $enabled);
+        $this->assertContains('system:manage', $enabled);
+        $this->assertContains('html_reports:manage', $enabled);
+        $this->assertContains('email_templates:manage', $enabled);
+        $this->assertContains('automation:manage', $enabled);
+        $this->assertContains('automation:manage', $enabled);
         $this->assertContains('user:manage', $enabled);
         $this->assertContains('user:impersonate', $enabled);
-        $this->assertContains('project_one:view', $enabled);
+        $this->assertContains('billing:view', $enabled);
+        $this->assertContains('billing:manage', $enabled);
+        $this->assertContains('dynamic_entities:view', $enabled);
         $this->assertContains('e_approval:view', $enabled);
 
-        $this->assertNotContains('billing:view', $enabled);
-        $this->assertNotContains('billing:manage', $enabled);
         $this->assertNotContains('gis:view', $enabled);
-        $this->assertNotContains('sites:view', $enabled);
         $this->assertNotContains('tower_one:view', $enabled);
         $this->assertNotContains('fiber_one:view', $enabled);
         $this->assertNotContains('asset_one:view', $enabled);
     }
 
-    public function test_billing_permissions_require_billings_module(): void
+    public function test_billing_permissions_live_under_team_access(): void
     {
         Config::set('toweros.tenant_modules.enabled', [
             'core',
             'team_access',
-            'billings',
         ]);
 
         $catalog = app(TenantRbacPermissionCatalog::class);
@@ -47,50 +54,23 @@ class TenantRbacPermissionCatalogTest extends TestCase
 
         $this->assertContains('billing:view', $enabled);
         $this->assertContains('billing:manage', $enabled);
-        $this->assertArrayHasKey('billings', $groups);
-        $this->assertSame('Billings', $groups['billings']['label']);
-        $this->assertNotContains('billing:view', $groups['team_access']['permissions'] ?? []);
-    }
-
-    public function test_permission_groups_split_documents_and_document_register(): void
-    {
-        Config::set('toweros.tenant_modules.enabled', [
-            'core',
-            'team_access',
-            'documents',
-            'document_register',
-        ]);
-
-        $groups = app(TenantRbacPermissionCatalog::class)->permissionGroupsForApi();
-
-        $this->assertArrayHasKey('documents', $groups);
-        $this->assertArrayHasKey('document_register', $groups);
-        $this->assertContains('documents:view', $groups['documents']['permissions']);
-        $this->assertNotContains('documents:controlled:view', $groups['documents']['permissions']);
-        $this->assertContains('documents:controlled:view', $groups['document_register']['permissions']);
-    }
-
-    public function test_document_register_permissions_require_module(): void
-    {
-        Config::set('toweros.tenant_modules.enabled', ['core', 'team_access', 'documents']);
-
-        $enabled = app(TenantRbacPermissionCatalog::class)->enabledPermissions();
-
-        $this->assertContains('documents:view', $enabled);
-        $this->assertNotContains('documents:controlled:view', $enabled);
+        $this->assertArrayNotHasKey('billings', $groups);
+        $this->assertContains('billing:view', $groups['team_access']['permissions'] ?? []);
+        $this->assertContains('billing:manage', $groups['team_access']['permissions'] ?? []);
     }
 
     public function test_permission_groups_only_include_enabled_modules(): void
     {
-        Config::set('toweros.tenant_modules.enabled', ['core', 'project_one', 'e_approval']);
+        Config::set('toweros.tenant_modules.enabled', ['core', 'dynamic_entities', 'e_approval']);
 
         $groups = app(TenantRbacPermissionCatalog::class)->permissionGroupsForApi();
 
         $this->assertArrayHasKey('core', $groups);
         $this->assertArrayHasKey('team_access', $groups);
-        $this->assertArrayHasKey('project_one', $groups);
+        $this->assertArrayHasKey('dynamic_entities', $groups);
         $this->assertArrayHasKey('e_approval', $groups);
         $this->assertArrayNotHasKey('gis', $groups);
+        $this->assertArrayNotHasKey('tower_one', $groups);
         $this->assertArrayNotHasKey('ai_assistant', $groups);
     }
 
@@ -110,6 +90,7 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertContains('ai_assistant:tools:use', $enabled);
         $this->assertContains('ai_assistant:actions:execute', $enabled);
         $this->assertContains('ai_assistant:knowledge:manage', $enabled);
+        $this->assertContains('ai_assistant:prompts:manage', $enabled);
         $this->assertContains('ai_assistant:conversations:audit', $enabled);
         $this->assertArrayHasKey('ai_assistant', $groups);
         $this->assertSame('AI Assistant', $groups['ai_assistant']['label']);

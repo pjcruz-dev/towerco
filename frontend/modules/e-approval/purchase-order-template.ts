@@ -1,4 +1,4 @@
-import { suggestApiKeyFromLabel } from "@/modules/e-approval/field-api-key";
+﻿import { suggestApiKeyFromLabel } from "@/modules/e-approval/field-api-key";
 import type { GridColumnDef } from "@/modules/e-approval/field-options";
 import {
   PO_ROW_IDS,
@@ -238,7 +238,7 @@ export function buildPurchaseOrderTemplateFields(
       "vat_amount",
       order,
       { operation: "percent_of", source_field: "vatable_amount", rate_field: "vat_rate" },
-      "Auto-calculated from VATable sales × VAT rate.",
+      "Auto-calculated from VATable sales ├ù VAT rate.",
     ),
   );
   add(
@@ -265,7 +265,7 @@ export function buildPurchaseOrderTemplateFields(
       "grand_total",
       order,
       { operation: "subtract_fields", left_field: "total_vat_inclusive", right_field: "less_discount" },
-      "Auto-calculated: Total (VAT inclusive) − Less discount.",
+      "Auto-calculated: Total (VAT inclusive) ΓêÆ Less discount.",
     ),
   );
   add({ type: "section", name: "section_signatures", label: "Signatures" });

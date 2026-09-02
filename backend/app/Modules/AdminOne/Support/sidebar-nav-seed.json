@@ -1,0 +1,1825 @@
+[
+  {
+    "key": "group.operations",
+    "type": "header",
+    "title": "Operations",
+    "icon": null,
+    "href": null,
+    "entity_slug": null,
+    "required_permissions": [],
+    "permissions_match": "all",
+    "module": null,
+    "sort_order": 0,
+    "children": [
+      {
+        "key": "group.operations.dashboard",
+        "type": "internal_page",
+        "title": "Dashboard",
+        "icon": "LayoutDashboard",
+        "href": "/dashboard",
+        "entity_slug": null,
+        "required_permissions": [
+          "dashboard:view"
+        ],
+        "permissions_match": "all",
+        "module": "core",
+        "sort_order": 0,
+        "children": []
+      },
+      {
+        "key": "group.operations.sites",
+        "type": "header",
+        "title": "Sites",
+        "icon": "Waypoints",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 1,
+        "children": [
+          {
+            "key": "group.operations.sites.executive-dashboard",
+            "type": "internal_page",
+            "title": "Executive Dashboard",
+            "icon": null,
+            "href": "/dynamic-entities/executive-dashboard",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.cas-executive-dashboard",
+            "type": "internal_page",
+            "title": "CAS Executive Dashboard",
+            "icon": null,
+            "href": "/dynamic-entities/reports/cas-executive-dashboard",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.tower-sites",
+            "type": "entity_link",
+            "title": "Tower Sites",
+            "icon": null,
+            "href": null,
+            "entity_slug": "tower_sites",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.construction-projects",
+            "type": "entity_link",
+            "title": "Construction Projects",
+            "icon": null,
+            "href": null,
+            "entity_slug": "construction_projects",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.construction-activities",
+            "type": "entity_link",
+            "title": "Construction Activities",
+            "icon": null,
+            "href": null,
+            "entity_slug": "construction_activities",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.postcon-trackers",
+            "type": "entity_link",
+            "title": "Postcon Trackers",
+            "icon": null,
+            "href": null,
+            "entity_slug": "postcon_trackers",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.saq-trackers",
+            "type": "entity_link",
+            "title": "SAQ Trackers",
+            "icon": null,
+            "href": null,
+            "entity_slug": "saq_trackers",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 6,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.power-trackers",
+            "type": "entity_link",
+            "title": "Power Trackers",
+            "icon": null,
+            "href": null,
+            "entity_slug": "power_trackers",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 7,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.site-permits",
+            "type": "entity_link",
+            "title": "Site Permits",
+            "icon": null,
+            "href": null,
+            "entity_slug": "site_permits",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.site-documents",
+            "type": "entity_link",
+            "title": "Site Documents",
+            "icon": null,
+            "href": null,
+            "entity_slug": "site_documents",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 9,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.land-leases",
+            "type": "entity_link",
+            "title": "Land Leases",
+            "icon": null,
+            "href": null,
+            "entity_slug": "land_leases",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 10,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.telco-contracts",
+            "type": "entity_link",
+            "title": "Telco Contracts",
+            "icon": null,
+            "href": null,
+            "entity_slug": "telco_contracts",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 11,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.colocations",
+            "type": "entity_link",
+            "title": "Colocations",
+            "icon": null,
+            "href": null,
+            "entity_slug": "site_colocations",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 12,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.electric-utilities",
+            "type": "entity_link",
+            "title": "Electric Utilities",
+            "icon": null,
+            "href": null,
+            "entity_slug": "electric_utilities",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 13,
+            "children": []
+          },
+          {
+            "key": "group.operations.sites.all-entities",
+            "type": "internal_page",
+            "title": "All entities",
+            "icon": null,
+            "href": "/dynamic-entities",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 14,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.tower-operations",
+        "type": "header",
+        "title": "Tower Operations",
+        "icon": "Activity",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 2,
+        "children": [
+          {
+            "key": "group.operations.tower-operations.live-build-forecasts",
+            "type": "internal_page",
+            "title": "LIVE Build & Forecasts",
+            "icon": null,
+            "href": "/dynamic-entities/reports/live-tower-build-forecasts",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.site-portfolio-status",
+            "type": "internal_page",
+            "title": "Site Portfolio Status",
+            "icon": null,
+            "href": "/dynamic-entities/reports/site-portfolio-status",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.rfti-pipeline-sla",
+            "type": "internal_page",
+            "title": "RFTI Pipeline & SLA",
+            "icon": null,
+            "href": "/dynamic-entities/reports/rfti-pipeline",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.saq-milestone-aging",
+            "type": "internal_page",
+            "title": "SAQ Milestone Aging",
+            "icon": null,
+            "href": "/dynamic-entities/reports/saq-milestone-aging",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.permit-status-compliance",
+            "type": "internal_page",
+            "title": "Permit Status & Compliance",
+            "icon": null,
+            "href": "/dynamic-entities/reports/permit-status-compliance",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.energization-power",
+            "type": "internal_page",
+            "title": "Energization & Power",
+            "icon": null,
+            "href": "/dynamic-entities/reports/energization-power-status",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.operations.tower-operations.colocation-tenancy",
+            "type": "internal_page",
+            "title": "Colocation & Tenancy",
+            "icon": null,
+            "href": "/dynamic-entities/reports/colocation-tenancy",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 6,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.cost-capital",
+        "type": "header",
+        "title": "Cost & Capital",
+        "icon": "PiggyBank",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 3,
+        "children": [
+          {
+            "key": "group.operations.cost-capital.materials-issued-per-tower",
+            "type": "internal_page",
+            "title": "Materials Issued per Tower",
+            "icon": null,
+            "href": "/dynamic-entities/reports/materials-issued",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.cost-capital.cost-vs-budget-per-tower",
+            "type": "internal_page",
+            "title": "Cost vs Budget per Tower",
+            "icon": null,
+            "href": "/dynamic-entities/reports/cost-vs-budget",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.cost-capital.capex-opex-per-site",
+            "type": "internal_page",
+            "title": "Capex & Opex per Site",
+            "icon": null,
+            "href": "/dynamic-entities/reports/capex-opex",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.cost-capital.capex-budgets",
+            "type": "entity_link",
+            "title": "CapEx Budgets",
+            "icon": null,
+            "href": null,
+            "entity_slug": "capex_budgets",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.procurement",
+        "type": "header",
+        "title": "Procurement",
+        "icon": "Package",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 4,
+        "children": [
+          {
+            "key": "group.operations.procurement.purchase-monitoring",
+            "type": "internal_page",
+            "title": "Purchase Monitoring",
+            "icon": null,
+            "href": "/dynamic-entities/reports/purchase-monitoring",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.daily-sales",
+            "type": "internal_page",
+            "title": "Daily Sales",
+            "icon": null,
+            "href": "/dynamic-entities/reports/daily-sales",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.stock-on-hand",
+            "type": "internal_page",
+            "title": "Stock on Hand",
+            "icon": null,
+            "href": "/dynamic-entities/reports/stock-on-hand",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.bank-reconciliation",
+            "type": "internal_page",
+            "title": "Bank Reconciliation",
+            "icon": null,
+            "href": "/dynamic-entities/reports/bank-reconciliation",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.purchase-transactions",
+            "type": "entity_link",
+            "title": "Purchase Transactions",
+            "icon": null,
+            "href": null,
+            "entity_slug": "purchase_transactions",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.procurement-requests",
+            "type": "entity_link",
+            "title": "Procurement Requests",
+            "icon": null,
+            "href": null,
+            "entity_slug": "procurement_requests",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.materials-equipment",
+            "type": "entity_link",
+            "title": "Materials & Equipment",
+            "icon": null,
+            "href": null,
+            "entity_slug": "products",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 6,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.warehouses",
+            "type": "entity_link",
+            "title": "Warehouses",
+            "icon": null,
+            "href": null,
+            "entity_slug": "warehouses",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 7,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.stock-movements",
+            "type": "entity_link",
+            "title": "Stock Movements",
+            "icon": null,
+            "href": null,
+            "entity_slug": "stock_movements",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.operations.procurement.suppliers",
+            "type": "entity_link",
+            "title": "Suppliers",
+            "icon": null,
+            "href": null,
+            "entity_slug": "suppliers",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 9,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.finance",
+        "type": "header",
+        "title": "Finance",
+        "icon": "Landmark",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 5,
+        "children": [
+          {
+            "key": "group.operations.finance.cas-executive-dashboard",
+            "type": "internal_page",
+            "title": "CAS Executive Dashboard",
+            "icon": null,
+            "href": "/dynamic-entities/reports/cas-executive-dashboard",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.ar-ap-aging",
+            "type": "internal_page",
+            "title": "AR & AP Aging",
+            "icon": null,
+            "href": "/dynamic-entities/reports/ar-ap-aging",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.petty-cash",
+            "type": "internal_page",
+            "title": "Petty Cash",
+            "icon": null,
+            "href": "/dynamic-entities/reports/petty-cash",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.chart-of-accounts",
+            "type": "entity_link",
+            "title": "Chart of Accounts",
+            "icon": null,
+            "href": null,
+            "entity_slug": "chart_of_accounts",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.fiscal-periods",
+            "type": "entity_link",
+            "title": "Fiscal Periods",
+            "icon": null,
+            "href": null,
+            "entity_slug": "fiscal_periods",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.general-ledger",
+            "type": "entity_link",
+            "title": "General Ledger",
+            "icon": null,
+            "href": null,
+            "entity_slug": "general_ledger",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.bank-accounts",
+            "type": "entity_link",
+            "title": "Bank Accounts",
+            "icon": null,
+            "href": null,
+            "entity_slug": "bank_accounts",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 6,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.bank-transactions",
+            "type": "entity_link",
+            "title": "Bank Transactions",
+            "icon": null,
+            "href": null,
+            "entity_slug": "bank_transactions",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 7,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.bank-reconciliations",
+            "type": "entity_link",
+            "title": "Bank Reconciliations",
+            "icon": null,
+            "href": null,
+            "entity_slug": "bank_reconciliations",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.payments-receipts",
+            "type": "entity_link",
+            "title": "Payments & Receipts",
+            "icon": null,
+            "href": null,
+            "entity_slug": "payments_and_receipts",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 9,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.fixed-assets",
+            "type": "entity_link",
+            "title": "Fixed Assets",
+            "icon": null,
+            "href": null,
+            "entity_slug": "fixed_assets",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 10,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.customers",
+            "type": "entity_link",
+            "title": "Customers",
+            "icon": null,
+            "href": null,
+            "entity_slug": "customers",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 11,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.sales-transactions",
+            "type": "entity_link",
+            "title": "Sales Transactions",
+            "icon": null,
+            "href": null,
+            "entity_slug": "sales_transactions",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 12,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.site-operating-costs",
+            "type": "entity_link",
+            "title": "Site Operating Costs",
+            "icon": null,
+            "href": null,
+            "entity_slug": "site_operating_costs",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 13,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.bir-2307-certificates",
+            "type": "entity_link",
+            "title": "BIR 2307 Certificates",
+            "icon": null,
+            "href": null,
+            "entity_slug": "bir_form_2307_certificates",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 14,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.trial-balance",
+            "type": "internal_page",
+            "title": "Trial Balance",
+            "icon": null,
+            "href": "/dynamic-entities/reports/trial-balance",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 15,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.income-statement",
+            "type": "internal_page",
+            "title": "Income Statement",
+            "icon": null,
+            "href": "/dynamic-entities/reports/income-statement",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 16,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.balance-sheet",
+            "type": "internal_page",
+            "title": "Balance Sheet",
+            "icon": null,
+            "href": "/dynamic-entities/reports/balance-sheet",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 17,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.cash-flow",
+            "type": "internal_page",
+            "title": "Cash Flow",
+            "icon": null,
+            "href": "/dynamic-entities/reports/cash-flow",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 18,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.monthly-management-accounts",
+            "type": "internal_page",
+            "title": "Monthly Management Accounts",
+            "icon": null,
+            "href": "/dynamic-entities/reports/monthly-management-accounts",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 19,
+            "children": []
+          },
+          {
+            "key": "group.operations.finance.bir-compliance",
+            "type": "internal_page",
+            "title": "BIR Compliance",
+            "icon": null,
+            "href": "/dynamic-entities/reports/bir-compliance",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 20,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.site-ticketing",
+        "type": "header",
+        "title": "Site Ticketing",
+        "icon": "LifeBuoy",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 6,
+        "children": [
+          {
+            "key": "group.operations.site-ticketing.ticketing-board",
+            "type": "internal_page",
+            "title": "Ticketing Board",
+            "icon": null,
+            "href": "/dynamic-entities/ticketing-board",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.site-ticketing.site-tickets",
+            "type": "entity_link",
+            "title": "Site Tickets",
+            "icon": null,
+            "href": null,
+            "entity_slug": "site_tickets",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.site-ticketing.categories",
+            "type": "entity_link",
+            "title": "Categories",
+            "icon": null,
+            "href": null,
+            "entity_slug": "ticket_categories",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.site-ticketing.activities",
+            "type": "entity_link",
+            "title": "Activities",
+            "icon": null,
+            "href": null,
+            "entity_slug": "ticket_activities",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.reference",
+        "type": "header",
+        "title": "Reference",
+        "icon": "Building2",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "all",
+        "module": "dynamic_entities",
+        "sort_order": 7,
+        "children": [
+          {
+            "key": "group.operations.reference.vendors",
+            "type": "entity_link",
+            "title": "Vendors",
+            "icon": null,
+            "href": null,
+            "entity_slug": "vendors",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.reference.territories",
+            "type": "entity_link",
+            "title": "Territories",
+            "icon": null,
+            "href": null,
+            "entity_slug": "territories",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.reference.project-teams",
+            "type": "entity_link",
+            "title": "Project Teams",
+            "icon": null,
+            "href": null,
+            "entity_slug": "project_teams",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.reference.milestone-catalogue",
+            "type": "entity_link",
+            "title": "Milestone Catalogue",
+            "icon": null,
+            "href": null,
+            "entity_slug": "milestone_catalogue",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.reference.branches",
+            "type": "entity_link",
+            "title": "Branches",
+            "icon": null,
+            "href": null,
+            "entity_slug": "branches",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.reference.lessors",
+            "type": "entity_link",
+            "title": "Lessors",
+            "icon": null,
+            "href": null,
+            "entity_slug": "lessors",
+            "required_permissions": [
+              "dynamic_entities:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.system-core",
+        "type": "header",
+        "title": "System Core",
+        "icon": "Shapes",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:fields:manage",
+          "printables:manage",
+          "sidebar:manage",
+          "api_keys:manage",
+          "system:manage",
+          "html_reports:manage",
+          "workflows:manage",
+          "email_templates:manage",
+          "automation:manage",
+          "search_index:manage",
+          "ai_assistant:prompts:manage"
+        ],
+        "permissions_match": "any",
+        "module": "dynamic_entities",
+        "sort_order": 8,
+        "children": [
+          {
+            "key": "group.operations.system-core.manage-system",
+            "type": "internal_page",
+            "title": "Manage System",
+            "icon": null,
+            "href": "/admin/system",
+            "entity_slug": null,
+            "required_permissions": [
+              "system:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.search-index",
+            "type": "internal_page",
+            "title": "Search Index",
+            "icon": null,
+            "href": "/admin/search-index",
+            "entity_slug": null,
+            "required_permissions": [
+              "search_index:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-fields",
+            "type": "entity_link",
+            "title": "Manage Fields",
+            "icon": null,
+            "href": null,
+            "entity_slug": "fields",
+            "required_permissions": [
+              "dynamic_entities:fields:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.field-groups",
+            "type": "internal_page",
+            "title": "Field Groups",
+            "icon": null,
+            "href": "/dynamic-entities/field-groups",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:fields:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-printables",
+            "type": "entity_link",
+            "title": "Manage Printables",
+            "icon": null,
+            "href": null,
+            "entity_slug": "printables",
+            "required_permissions": [
+              "printables:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-html-reports",
+            "type": "internal_page",
+            "title": "Manage HTML Reports",
+            "icon": null,
+            "href": "/dynamic-entities/html-reports",
+            "entity_slug": null,
+            "required_permissions": [
+              "html_reports:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.report-builder",
+            "type": "internal_page",
+            "title": "Report Builder",
+            "icon": null,
+            "href": "/dynamic-entities/report-builder",
+            "entity_slug": null,
+            "required_permissions": [
+              "html_reports:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.email-templates",
+            "type": "internal_page",
+            "title": "Email Templates",
+            "icon": null,
+            "href": "/dynamic-entities/email-templates",
+            "entity_slug": null,
+            "required_permissions": [
+              "email_templates:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 6,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-cron-jobs",
+            "type": "internal_page",
+            "title": "Manage Cron Jobs",
+            "icon": null,
+            "href": "/admin/automation",
+            "entity_slug": null,
+            "required_permissions": [
+              "automation:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 7,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-workflows",
+            "type": "internal_page",
+            "title": "Manage Workflows",
+            "icon": null,
+            "href": "/dynamic-entities/workflows",
+            "entity_slug": null,
+            "required_permissions": [
+              "workflows:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-ai-prompts",
+            "type": "internal_page",
+            "title": "Manage AI Prompts",
+            "icon": null,
+            "href": "/admin/ai-prompts",
+            "entity_slug": null,
+            "required_permissions": [
+              "ai_assistant:prompts:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-sidebar",
+            "type": "internal_page",
+            "title": "Manage Sidebar",
+            "icon": "Shapes",
+            "href": "/admin/sidebar",
+            "entity_slug": null,
+            "required_permissions": [
+              "sidebar:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 9,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-rest-api",
+            "type": "internal_page",
+            "title": "Manage REST API",
+            "icon": null,
+            "href": "/admin/api-keys",
+            "entity_slug": null,
+            "required_permissions": [
+              "api_keys:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 10,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.ticketing",
+        "type": "header",
+        "title": "Ticketing",
+        "icon": "LifeBuoy",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "ticketing:view",
+          "ticketing:tickets:create",
+          "ticketing:tickets:manage"
+        ],
+        "permissions_match": "all",
+        "module": "ticketing",
+        "sort_order": 9,
+        "children": [
+          {
+            "key": "group.operations.ticketing.overview",
+            "type": "internal_page",
+            "title": "Overview",
+            "icon": null,
+            "href": "/ticketing",
+            "entity_slug": null,
+            "required_permissions": [
+              "ticketing:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.ticketing.tickets",
+            "type": "internal_page",
+            "title": "Tickets",
+            "icon": null,
+            "href": "/ticketing/tickets",
+            "entity_slug": null,
+            "required_permissions": [
+              "ticketing:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.ticketing.new-ticket",
+            "type": "internal_page",
+            "title": "New ticket",
+            "icon": null,
+            "href": "/ticketing/tickets/new",
+            "entity_slug": null,
+            "required_permissions": [
+              "ticketing:tickets:create"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.e-approval",
+        "type": "header",
+        "title": "E-Approval",
+        "icon": "ClipboardCheck",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "e_approval:view",
+          "e_approval:submissions:view",
+          "e_approval:submissions:create",
+          "e_approval:approve",
+          "e_approval:forms:manage",
+          "e_approval:settings:manage",
+          "e_approval:audit:view"
+        ],
+        "permissions_match": "all",
+        "module": "e_approval",
+        "sort_order": 10,
+        "children": [
+          {
+            "key": "group.operations.e-approval.overview",
+            "type": "internal_page",
+            "title": "Overview",
+            "icon": null,
+            "href": "/e-approval",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.e-approval.forms",
+            "type": "internal_page",
+            "title": "Forms",
+            "icon": null,
+            "href": "/e-approval/forms",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:forms:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.e-approval.submissions",
+            "type": "internal_page",
+            "title": "Submissions",
+            "icon": null,
+            "href": "/e-approval/submissions",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:submissions:view"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.e-approval.approvals",
+            "type": "internal_page",
+            "title": "Approvals",
+            "icon": null,
+            "href": "/e-approval/approvals?awaiting_me=1",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:approve"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.e-approval.reports",
+            "type": "internal_page",
+            "title": "Reports",
+            "icon": null,
+            "href": "/e-approval/reports",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:audit:view",
+              "e_approval:submissions:view"
+            ],
+            "permissions_match": "any",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.help-center",
+        "type": "internal_page",
+        "title": "Help Center",
+        "icon": "CircleHelp",
+        "href": "/help",
+        "entity_slug": null,
+        "required_permissions": [
+          "dashboard:view",
+          "e_approval:view",
+          "ticketing:view",
+          "dynamic_entities:view"
+        ],
+        "permissions_match": "any",
+        "module": null,
+        "sort_order": 11,
+        "children": []
+      }
+    ]
+  },
+  {
+    "key": "group.administration",
+    "type": "header",
+    "title": "Administration",
+    "icon": null,
+    "href": null,
+    "entity_slug": null,
+    "required_permissions": [],
+    "permissions_match": "all",
+    "module": null,
+    "sort_order": 1,
+    "children": [
+      {
+        "key": "group.administration.team-access",
+        "type": "header",
+        "title": "Team & Access",
+        "icon": "Users",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "user:manage",
+          "role:manage"
+        ],
+        "permissions_match": "all",
+        "module": "team_access",
+        "sort_order": 0,
+        "children": [
+          {
+            "key": "group.administration.team-access.users",
+            "type": "internal_page",
+            "title": "Users",
+            "icon": null,
+            "href": "/users",
+            "entity_slug": null,
+            "required_permissions": [
+              "user:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.administration.team-access.organization",
+            "type": "internal_page",
+            "title": "Organization",
+            "icon": null,
+            "href": "/users/org",
+            "entity_slug": null,
+            "required_permissions": [
+              "user:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.administration.team-access.roles-permissions",
+            "type": "internal_page",
+            "title": "Roles & Permissions",
+            "icon": null,
+            "href": "/users/roles",
+            "entity_slug": null,
+            "required_permissions": [
+              "role:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.administration.audit-trail",
+        "type": "internal_page",
+        "title": "Audit trail",
+        "icon": "ScrollText",
+        "href": "/governance/audit",
+        "entity_slug": null,
+        "required_permissions": [
+          "workspace:audit:view"
+        ],
+        "permissions_match": "all",
+        "module": "core",
+        "sort_order": 1,
+        "children": []
+      },
+      {
+        "key": "group.administration.backup-restore",
+        "type": "internal_page",
+        "title": "Backup & Restore",
+        "icon": "Archive",
+        "href": "/admin/backups",
+        "entity_slug": null,
+        "required_permissions": [
+          "tenant:manage"
+        ],
+        "permissions_match": "all",
+        "module": "core",
+        "sort_order": 2,
+        "children": []
+      },
+      {
+        "key": "group.administration.billing",
+        "type": "internal_page",
+        "title": "Billing",
+        "icon": "CreditCard",
+        "href": "/billing",
+        "entity_slug": null,
+        "required_permissions": [
+          "billing:view"
+        ],
+        "permissions_match": "all",
+        "module": "team_access",
+        "sort_order": 3,
+        "children": []
+      },
+      {
+        "key": "group.administration.settings",
+        "type": "header",
+        "title": "Settings",
+        "icon": "Settings",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "tenant:manage",
+          "e_approval:settings:manage",
+          "ticketing:settings:manage",
+          "e_approval:view"
+        ],
+        "permissions_match": "any",
+        "module": "core",
+        "sort_order": 4,
+        "children": [
+          {
+            "key": "group.administration.settings.overview",
+            "type": "internal_page",
+            "title": "Overview",
+            "icon": null,
+            "href": "/settings",
+            "entity_slug": null,
+            "required_permissions": [
+              "tenant:manage",
+              "e_approval:settings:manage",
+              "ticketing:settings:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.sign-in-security",
+            "type": "internal_page",
+            "title": "Sign-in & security",
+            "icon": null,
+            "href": "/admin/settings",
+            "entity_slug": null,
+            "required_permissions": [
+              "tenant:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.backups",
+            "type": "internal_page",
+            "title": "Backups",
+            "icon": null,
+            "href": "/admin/backups",
+            "entity_slug": null,
+            "required_permissions": [
+              "tenant:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.kpi-sla",
+            "type": "internal_page",
+            "title": "KPI & SLA",
+            "icon": null,
+            "href": "/admin/settings/kpi",
+            "entity_slug": null,
+            "required_permissions": [
+              "tenant:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.my-e-approval-profile",
+            "type": "internal_page",
+            "title": "My E-Approval profile",
+            "icon": null,
+            "href": "/e-approval/profile",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:view"
+            ],
+            "permissions_match": "all",
+            "module": "e_approval",
+            "sort_order": 5,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.module-policies",
+            "type": "internal_page",
+            "title": "Module policies",
+            "icon": null,
+            "href": "/e-approval/settings",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:settings:manage"
+            ],
+            "permissions_match": "all",
+            "module": "e_approval",
+            "sort_order": 6,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.approval-policies",
+            "type": "internal_page",
+            "title": "Approval policies",
+            "icon": null,
+            "href": "/e-approval/approval-policies",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:settings:manage"
+            ],
+            "permissions_match": "all",
+            "module": "e_approval",
+            "sort_order": 7,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.master-data",
+            "type": "internal_page",
+            "title": "Master data",
+            "icon": null,
+            "href": "/e-approval/master-data",
+            "entity_slug": null,
+            "required_permissions": [
+              "e_approval:settings:manage"
+            ],
+            "permissions_match": "all",
+            "module": "e_approval",
+            "sort_order": 8,
+            "children": []
+          },
+          {
+            "key": "group.administration.settings.ticketing-settings",
+            "type": "internal_page",
+            "title": "Ticketing settings",
+            "icon": null,
+            "href": "/ticketing/settings",
+            "entity_slug": null,
+            "required_permissions": [
+              "ticketing:settings:manage"
+            ],
+            "permissions_match": "all",
+            "module": "ticketing",
+            "sort_order": 9,
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+]

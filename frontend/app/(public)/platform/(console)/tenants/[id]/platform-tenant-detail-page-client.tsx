@@ -8,7 +8,6 @@ import { ExternalLink, Shield } from "lucide-react";
 import { PlatformTenantAccessPanel } from "@/components/platform/platform-tenant-access-panel";
 import { PlatformTenantBackupsPanel } from "@/components/platform/platform-tenant-backups-panel";
 import { TenantOperatorAccessCard } from "@/components/platform/tenant-operator-access-card";
-import { TenantPlaybookManageSheet } from "@/components/platform/tenant-playbook-manage-sheet";
 import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
@@ -23,7 +22,6 @@ import {
   platformFetchTenantAudit,
   platformPatchTenantSettings,
   platformUpdateTenantMfa,
-  type PlatformTenantRow,
   type PlatformTenantThemeTokens,
 } from "@/lib/api/modules/platform-api";
 import {
@@ -62,13 +60,11 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
   const isHydrated = usePlatformAuthStore((s) => s.isHydrated);
   const canManageTenants = platformHasPermission(platformUser, PLATFORM_PERMS.tenantsManage);
   const canManageBilling = platformHasPermission(platformUser, PLATFORM_PERMS.billingManage);
-  const canManagePlaybooks = platformHasPermission(platformUser, PLATFORM_PERMS.playbooksManage);
 
   const [tab, setTab] = useState<Tab>("overview");
   const [billingOpen, setBillingOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
   const [brandingOpen, setBrandingOpen] = useState(false);
-  const [playbookManageOpen, setPlaybookManageOpen] = useState(false);
   const [billingDowngradeWarnings, setBillingDowngradeWarnings] = useState<string[]>([]);
   const [confirmPlanDowngrade, setConfirmPlanDowngrade] = useState(false);
 
@@ -254,11 +250,6 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
               Open tenant
             </a>
           ) : null}
-          {canManagePlaybooks && tenantHasProjectOne(tenant) ? (
-            <Button type="button" variant="outline" onClick={() => setPlaybookManageOpen(true)}>
-              Manage rollout policy
-            </Button>
-          ) : null}
           {canManageTenants ? (
             <Button type="button" variant="outline" onClick={() => setModulesOpen(true)}>
               Edit modules
@@ -364,41 +355,6 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
               </Button>
             </CardContent>
           </Card>
-          {tenantHasProjectOne(tenant) ? (
-            <Card className="rounded-xl shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base font-medium">Project-One (advanced)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  Playbook:{" "}
-                  <span className="font-mono text-foreground">
-                    {tenant.assigned_playbook_version ? `v${tenant.assigned_playbook_version}` : "Not assigned"}
-                  </span>
-                </p>
-                <p>
-                  Policy bundle:{" "}
-                  <span className="font-mono text-foreground">
-                    {tenant.assigned_rollout_policy_code ?? "Not assigned"}
-                  </span>
-                  {tenant.assigned_rollout_policy_name ? ` (${tenant.assigned_rollout_policy_name})` : ""}
-                </p>
-                {tenant.playbook_upgrade_available ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    A newer published playbook version is available.
-                  </p>
-                ) : null}
-                {canManagePlaybooks ? (
-                  <Button type="button" size="sm" onClick={() => setPlaybookManageOpen(true)}>
-                    Manage rollout policy
-                  </Button>
-                ) : null}
-                <Link href="/platform/playbooks" className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  View playbook catalog
-                </Link>
-              </CardContent>
-            </Card>
-          ) : null}
         </div>
       ) : null}
 
@@ -518,16 +474,6 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
           void queryClient.invalidateQueries({ queryKey: ["platform", "dashboard"] });
         }}
       />
-
-      <TenantPlaybookManageSheet
-        open={playbookManageOpen}
-        onOpenChange={setPlaybookManageOpen}
-        tenant={tenant}
-      />
     </div>
   );
-}
-
-function tenantHasProjectOne(tenant: PlatformTenantRow): boolean {
-  return (tenant.effective_enabled_modules ?? []).includes("project_one");
 }

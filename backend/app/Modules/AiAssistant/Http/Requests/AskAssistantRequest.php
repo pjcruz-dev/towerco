@@ -23,6 +23,8 @@ class AskAssistantRequest extends FormRequest
             'conversation_id' => ['sometimes', 'nullable', 'uuid'],
             'module_context' => ['sometimes', 'nullable', 'string', 'max:64'],
             'page_path' => ['sometimes', 'nullable', 'string', 'max:512'],
+            'plan_mode' => ['sometimes', 'boolean'],
+            'preferred_model' => ['sometimes', 'nullable', 'string', 'max:120'],
         ];
     }
 
@@ -31,7 +33,9 @@ class AskAssistantRequest extends FormRequest
      *   question: string,
      *   conversation_id?: string|null,
      *   module_context?: string|null,
-     *   page_path?: string|null
+     *   page_path?: string|null,
+     *   plan_mode?: bool,
+     *   preferred_model?: string|null
      * }
      */
     public function validatedPayload(): array
@@ -40,7 +44,9 @@ class AskAssistantRequest extends FormRequest
          *   question: string,
          *   conversation_id?: string|null,
          *   module_context?: string|null,
-         *   page_path?: string|null
+         *   page_path?: string|null,
+         *   plan_mode?: bool,
+         *   preferred_model?: string|null
          * } $validated
          */
         $validated = $this->validated();

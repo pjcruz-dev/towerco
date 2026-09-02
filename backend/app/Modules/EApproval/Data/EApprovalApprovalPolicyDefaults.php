@@ -41,14 +41,14 @@ final class EApprovalApprovalPolicyDefaults
                 'label' => 'PR Standard',
                 'steps' => [
                     ['type' => 'manager', 'step_order' => 1],
-                    ['type' => 'role', 'approverId' => 'tenant_admin', 'step_order' => 2],
+                    ['type' => 'role', 'approverId' => 'administrator', 'step_order' => 2],
                 ],
             ],
             'pr_capex' => [
                 'label' => 'PR CapEx / High value',
                 'steps' => [
                     ['type' => 'manager', 'step_order' => 1],
-                    ['type' => 'role', 'approverId' => 'tenant_admin', 'step_order' => 2],
+                    ['type' => 'role', 'approverId' => 'administrator', 'step_order' => 2],
                     ['type' => 'role', 'approverId' => 'finance', 'step_order' => 3],
                 ],
             ],
@@ -56,14 +56,14 @@ final class EApprovalApprovalPolicyDefaults
                 'label' => 'PO Standard',
                 'steps' => [
                     ['type' => 'manager', 'step_order' => 1],
-                    ['type' => 'role', 'approverId' => 'tenant_admin', 'step_order' => 2],
+                    ['type' => 'role', 'approverId' => 'administrator', 'step_order' => 2],
                 ],
             ],
             'po_high_value' => [
                 'label' => 'PO High value',
                 'steps' => [
                     ['type' => 'manager', 'step_order' => 1],
-                    ['type' => 'role', 'approverId' => 'tenant_admin', 'step_order' => 2],
+                    ['type' => 'role', 'approverId' => 'administrator', 'step_order' => 2],
                     ['type' => 'role', 'approverId' => 'finance', 'step_order' => 3],
                 ],
             ],

@@ -19,9 +19,18 @@ class RoleUpdateController extends AbstractApiController
         $data = $request->validate([
             'permissions' => ['required', 'array', 'min:1'],
             'permissions.*' => ['string', 'max:64'],
+            'access_matrix' => ['sometimes', 'nullable', 'array'],
+            'access_matrix.entities' => ['sometimes', 'array'],
+            'access_matrix.fields' => ['sometimes', 'array'],
+            'access_matrix.workflows' => ['sometimes', 'array'],
+            'access_matrix.filters' => ['sometimes', 'array'],
         ]);
 
-        $updated = $service->updateCustomRolePermissions($role, $data['permissions']);
+        $updated = $service->updateCustomRolePermissions(
+            $role,
+            $data['permissions'],
+            array_key_exists('access_matrix', $data) ? $data['access_matrix'] : null,
+        );
         $payload = $service->show($updated);
         unset($payload['users']);
 

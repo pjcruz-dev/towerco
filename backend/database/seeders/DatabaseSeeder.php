@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\User;
@@ -7,8 +9,6 @@ use App\Modules\Platform\Services\OperationalAcronymService;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
 use App\Modules\Platform\Services\RolloutPolicyBundleService;
 use App\Modules\Platform\Support\OperationalAcronymDefaults;
-use App\Modules\Rollout\Data\RolloutPlaybookV2Definition;
-use App\Modules\Rollout\Data\RolloutPlaybookV3Definition;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Laravel\Passport\ClientRepository;
@@ -47,16 +47,6 @@ class DatabaseSeeder extends Seeder
 
         $playbookV1 = $catalog->ensurePublishedV1();
         $policyBundles->ensureDefaultPublishedBundle($playbookV1);
-
-        $playbookV2 = $catalog->publishVersion(RolloutPlaybookV2Definition::VERSION);
-        $policyBundles->ensureFullGateApprovalPublishedBundle($playbookV2);
-
-        $playbookV3 = $catalog->publishVersion(RolloutPlaybookV3Definition::VERSION);
-        $policyBundles->ensureFullGateApprovalPublishedBundle(
-            $playbookV3,
-            'towerco-full-gate-approval-v3',
-            'TowerCo Full Gate Approval v3',
-        );
 
         app(OperationalAcronymService::class)->syncDefaults(OperationalAcronymDefaults::all());
 

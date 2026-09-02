@@ -67,11 +67,7 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             'brand_domain' => $created->brand_domain,
             'environment' => $created->environment,
             'parent_tenant_id' => $created->parent_tenant_id,
-            'playbook_version' => $result['playbook_version'] ?? null,
-            'assigned_policy_code' => $result['assigned_policy_code'] ?? null,
             'domain_endpoints' => $result['domain_endpoints']['endpoints'] ?? null,
-            'public_holidays_seeded' => $result['public_holidays_seeded'] ?? 0,
-            'holiday_years' => $result['holiday_years'] ?? [],
         ];
 
         if (isset($result['initial_admin'])) {

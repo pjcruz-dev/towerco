@@ -4,24 +4,22 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 
 /**
- * Resolves SLA threshold instants — wall-clock or working-day minutes
- * (Mon–Fri, tenant public holidays) for production-safe reminder/escalation aging.
+ * Resolves SLA threshold instants using wall-clock minutes.
+ * Working-day calendars lived in the removed Rollout module.
  */
 final class EApprovalSlaClock
 {
     public function __construct(
         private readonly EApprovalSettingsService $settings,
-        private readonly TenantWorkingDaysCalendarFactory $calendars,
     ) {}
 
     public function usesWorkingDays(): bool
     {
-        return $this->settings->getBool(EApprovalSettingsService::SLA_USE_WORKING_DAYS, true);
+        return false;
     }
 
     /**
@@ -31,10 +29,6 @@ final class EApprovalSlaClock
     {
         $minutes = max(0, $minutes);
 
-        if (! $this->usesWorkingDays()) {
-            return Carbon::parse($now)->subMinutes($minutes);
-        }
-
-        return $this->calendars->make()->subWorkingMinutes($now, $minutes);
+        return Carbon::parse($now)->subMinutes($minutes);
     }
 }

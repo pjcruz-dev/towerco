@@ -1,6 +1,5 @@
 import { apiClient } from "@/lib/api/client";
 import type { PlanCatalogTier } from "@/components/billing/plan-tier-comparison-table";
-import type { ProcurementPlanFeatures } from "@/modules/procurement-one/types";
 
 export type TenantSubscriptionSnapshot = {
   status: string;
@@ -39,7 +38,6 @@ export type TenantBillingSnapshot = {
   plan_features: {
     file_uploads: boolean;
     max_file_fields: number | null;
-    procurement_one?: ProcurementPlanFeatures;
   };
   plan_catalog?: { currency?: string; tiers: PlanCatalogTier[] };
   support_email?: string | null;
@@ -127,7 +125,7 @@ export type TenantBillingUsageReport = {
       submissions_total: number;
       submissions_last_30d: number;
     };
-    project_one: { rollouts_total: number; rollouts_last_30d: number };
+    project_one?: { rollouts_total: number; rollouts_last_30d: number };
   };
   has_enterprise_overrides: boolean;
 };

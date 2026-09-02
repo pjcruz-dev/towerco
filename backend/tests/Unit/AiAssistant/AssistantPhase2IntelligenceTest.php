@@ -119,7 +119,12 @@ final class AssistantPhase2IntelligenceTest extends TestCase
 
     public function test_prompt_builder_includes_conversation_history(): void
     {
-        $builder = new AssistantPromptBuilder(new PromptSecurityService);
+        $builder = new AssistantPromptBuilder(
+            new PromptSecurityService,
+            new \App\Modules\AiAssistant\Services\AiPromptModuleService(
+                new \App\Modules\AiAssistant\Support\AiPromptIntentDetector,
+            ),
+        );
         $prompt = $builder->build(
             question: 'What about that ticket?',
             chunks: [],
@@ -133,6 +138,7 @@ final class AssistantPhase2IntelligenceTest extends TestCase
         $this->assertStringContainsString('TKT-00004', $prompt->user);
         $this->assertStringContainsString('USER_QUESTION:', $prompt->user);
         $this->assertStringContainsString('What about that ticket?', $prompt->user);
+        $this->assertNotSame('', trim($prompt->system));
     }
 
     private function stubTool(string $name): AssistantToolInterface

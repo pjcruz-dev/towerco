@@ -1,4 +1,5 @@
 import type { AuthImpersonator, AuthSession, AuthUser, TenantAccess, UserRole } from "@/types/auth";
+import type { RoleAccessMatrix } from "@/lib/api/modules/admin-roles-api";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -13,6 +14,45 @@ function asStringArray(value: unknown): string[] {
 
 function asRoles(value: unknown): UserRole[] {
   return asStringArray(value);
+}
+
+function parseAccessMatrix(value: unknown): RoleAccessMatrix | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as UnknownRecord;
+  const matrix: RoleAccessMatrix = {};
+
+  if (record.entities && typeof record.entities === "object" && !Array.isArray(record.entities)) {
+    const entities: NonNullable<RoleAccessMatrix["entities"]> = {};
+    for (const [slug, row] of Object.entries(record.entities as UnknownRecord)) {
+      if (!row || typeof row !== "object") continue;
+      const flags = row as UnknownRecord;
+      entities[slug] = {
+        view: Boolean(flags.view),
+        view_own: Boolean(flags.view_own),
+        create: Boolean(flags.create),
+        edit: Boolean(flags.edit),
+        delete: Boolean(flags.delete),
+        export: Boolean(flags.export),
+      };
+    }
+    if (Object.keys(entities).length > 0) {
+      matrix.entities = entities;
+    }
+  }
+
+  if (record.fields && typeof record.fields === "object") {
+    matrix.fields = record.fields as RoleAccessMatrix["fields"];
+  }
+  if (record.workflows && typeof record.workflows === "object") {
+    matrix.workflows = record.workflows as RoleAccessMatrix["workflows"];
+  }
+  if (record.filters && typeof record.filters === "object" && !Array.isArray(record.filters)) {
+    matrix.filters = record.filters as RoleAccessMatrix["filters"];
+  }
+
+  return Object.keys(matrix).length > 0 ? matrix : undefined;
 }
 
 function parseTenantAccesses(value: unknown): TenantAccess[] {
@@ -47,6 +87,10 @@ export function normalizeAuthSession(payload: unknown): AuthSession {
 
   const tenantAccesses = parseTenantAccesses(userData?.tenant_accesses ?? userData?.tenantAccesses);
   const enabledModules = asStringArray(userData?.enabled_modules ?? userData?.enabledModules);
+  const accessMatrix = parseAccessMatrix(userData?.access_matrix ?? userData?.accessMatrix);
+  const defaultLandingHref = asString(
+    userData?.default_landing_href ?? userData?.defaultLandingHref,
+  );
 
   const impersonatorRaw = userData?.impersonator;
   let impersonator: AuthImpersonator | undefined;
@@ -80,6 +124,8 @@ export function normalizeAuthSession(payload: unknown): AuthSession {
         roles: asRoles(userData.roles),
         permissions: asStringArray(userData.permissions),
         ...(enabledModules.length > 0 ? { enabledModules } : {}),
+        ...(accessMatrix ? { accessMatrix } : {}),
+        ...(defaultLandingHref ? { defaultLandingHref } : {}),
         tenantAccesses,
         ...(isImpersonating ? { isImpersonating: true } : {}),
         ...(impersonator ? { impersonator } : {}),

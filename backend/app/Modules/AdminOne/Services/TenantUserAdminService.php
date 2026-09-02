@@ -9,6 +9,7 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Database\Eloquent\Builder;
@@ -358,7 +359,7 @@ class TenantUserAdminService
 
             if ($this->isLastActiveTenantAdmin($target) && $removeRoles !== []) {
                 $remaining = array_values(array_diff($target->getRoleNames()->all(), $removeRoles));
-                if ($remaining === [] || ! in_array('tenant_admin', $remaining, true)) {
+                if ($remaining === [] || ! in_array(TenantRbacSystemRoles::FULL_ADMIN, $remaining, true)) {
                     $errors[] = [
                         'user_id' => (string) $target->id,
                         'message' => (string) __('Cannot remove roles from the last active tenant administrator.'),
@@ -417,10 +418,10 @@ class TenantUserAdminService
                     continue;
                 }
 
-                if ($this->isLastActiveTenantAdmin($target) && $removeRole === 'tenant_admin') {
+                if ($this->isLastActiveTenantAdmin($target) && $removeRole === TenantRbacSystemRoles::FULL_ADMIN) {
                     $errors[] = [
                         'user_id' => (string) $target->id,
-                        'message' => (string) __('Cannot remove the tenant administrator role from the last active administrator.'),
+                        'message' => (string) __('Cannot remove the administrator role from the last active administrator.'),
                     ];
 
                     continue 2;
@@ -688,13 +689,13 @@ class TenantUserAdminService
 
     private function isLastActiveTenantAdmin(TenantUser $user): bool
     {
-        if (! $user->hasRole('tenant_admin')) {
+        if (! $user->hasRole(TenantRbacSystemRoles::FULL_ADMIN)) {
             return false;
         }
 
         return TenantUser::query()
             ->where('is_active', true)
-            ->role('tenant_admin')
+            ->role(TenantRbacSystemRoles::FULL_ADMIN)
             ->where('id', '!=', $user->id)
             ->count() === 0;
     }

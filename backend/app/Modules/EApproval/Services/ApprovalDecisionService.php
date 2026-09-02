@@ -11,8 +11,6 @@ use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
-use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Query\Builder;
@@ -35,8 +33,6 @@ final class ApprovalDecisionService
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalVendorRegistrationMasterDataService $vendorMasterData,
-        private readonly ProcurementPrEApprovalHookService $procurementPrHook,
-        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalCommentService $comments,
         private readonly EApprovalExternalPackageService $externalPackages,
     ) {}
@@ -255,8 +251,6 @@ final class ApprovalDecisionService
                     );
                     $submission->loadMissing(['form', 'values.field']);
                     $this->vendorMasterData->syncApprovedRegistration($submission, $actor);
-                    $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
-                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             } else {
                 $this->audit->log(
@@ -348,8 +342,6 @@ final class ApprovalDecisionService
                 notifyStakeholders: false,
             );
             $submission->loadMissing(['form', 'values.field']);
-            $this->procurementPrHook->afterSubmissionMutation($submission, $actor);
-
             return $approval->fresh(['submission.form', 'approver', 'step']);
         });
     }

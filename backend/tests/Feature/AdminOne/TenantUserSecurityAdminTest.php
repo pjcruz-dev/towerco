@@ -196,12 +196,12 @@ final class TenantUserSecurityAdminTest extends TestCase
         $viewer = $this->createTenantUser('viewer.user@towerone.test', 'Viewer User');
         $manager = $this->createTenantUser('manager.user@towerone.test', 'Manager User');
         tenancy()->initialize($this->testTenant);
-        $manager->syncRoles(['manager']);
+        $manager->syncRoles(['staff']);
         tenancy()->end();
 
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
-            ->getJson('/api/v1/admin/users?role=manager&per_page=50');
+            ->getJson('/api/v1/admin/users?role=staff&per_page=50');
 
         $response->assertOk();
 
@@ -214,16 +214,16 @@ final class TenantUserSecurityAdminTest extends TestCase
     {
         tenancy()->initialize($this->testTenant);
         $viewer = TenantRole::query()->where('name', 'viewer')->firstOrFail();
-        $manager = TenantRole::query()->where('name', 'manager')->firstOrFail();
+        $staff = TenantRole::query()->where('name', 'staff')->firstOrFail();
         tenancy()->end();
 
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
-            ->getJson('/api/v1/admin/roles/compare?left='.$viewer->id.'&right='.$manager->id);
+            ->getJson('/api/v1/admin/roles/compare?left='.$viewer->id.'&right='.$staff->id);
 
         $response->assertOk()
             ->assertJsonPath('data.left.name', 'viewer')
-            ->assertJsonPath('data.right.name', 'manager');
+            ->assertJsonPath('data.right.name', 'staff');
 
         $onlyRight = $response->json('data.only_right');
         $this->assertIsArray($onlyRight);

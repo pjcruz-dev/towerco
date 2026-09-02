@@ -6,7 +6,6 @@ namespace App\Modules\Platform\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
-use App\Modules\Rollout\Data\RolloutPlaybookDefinitionRegistry;
 use Illuminate\Http\JsonResponse;
 
 class CentralRolloutPlaybookIndexController extends AbstractApiController
@@ -16,7 +15,7 @@ class CentralRolloutPlaybookIndexController extends AbstractApiController
         $versions = $catalog->listPublished();
 
         return $this->ok([
-            'registry_versions' => RolloutPlaybookDefinitionRegistry::supportedVersions(),
+            'registry_versions' => ['1.0.0'],
             'versions' => collect($versions)->map(static fn ($v) => [
                 'id' => $v->id,
                 'version' => $v->version,

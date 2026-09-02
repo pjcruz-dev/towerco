@@ -8,7 +8,6 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Models\TicketingTicket;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Ticketing\Notifications\TicketingTicketMailNotification;
 use App\Modules\Ticketing\Services\TicketingSettingsService;
@@ -35,7 +34,6 @@ final class TicketingModuleTest extends TestCase
             'toweros.tenant_modules.enabled' => [
                 'core',
                 'team_access',
-                'project_one',
                 'e_approval',
                 'ticketing',
             ],
@@ -72,18 +70,18 @@ final class TicketingModuleTest extends TestCase
         $create = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/ticketing/tickets', [
-                'title' => 'Rollout gate stuck',
-                'description' => 'Cannot advance SAQ phase on rollout R-100.',
+                'title' => 'Ops ticket stuck',
+                'description' => 'Cannot complete field checklist.',
                 'priority' => 'high',
                 'category' => 'operations',
-                'source_module' => 'project_one',
-                'source_reference_type' => 'rollout',
+                'source_module' => 'ticketing',
+                'source_reference_type' => 'manual',
                 'source_reference_id' => '00000000-0000-0000-0000-000000000001',
-                'source_label' => 'Rollout R-100',
+                'source_label' => 'Manual',
             ]);
 
         $create->assertCreated()
-            ->assertJsonPath('data.title', 'Rollout gate stuck')
+            ->assertJsonPath('data.title', 'Ops ticket stuck')
             ->assertJsonPath('data.status', 'open');
 
         $ticketId = (string) $create->json('data.id');
@@ -321,7 +319,7 @@ final class TicketingModuleTest extends TestCase
             'email' => 'assignee@test.localhost',
             'password' => 'password',
         ]);
-        $assignee->assignRole('manager');
+        $assignee->assignRole('ticketing_operator');
         tenancy()->end();
 
         $create = $this->actingAsTenantAdmin()
@@ -480,29 +478,6 @@ final class TicketingModuleTest extends TestCase
             ->getJson("/api/v1/ticketing/tickets/{$ticketId}")
             ->assertOk()
             ->assertJsonPath('data.sla_status', 'at_risk');
-    }
-
-    public function test_can_create_ticket_from_sites_source(): void
-    {
-        tenancy()->initialize($this->testTenant);
-        $site = Site::query()->create([
-            'site_code' => 'SITE-P3',
-            'name' => 'Phase 3 Site',
-            'status' => 'active',
-        ]);
-        tenancy()->end();
-
-        $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson('/api/v1/ticketing/tickets', [
-                'title' => 'Site access issue',
-                'source_module' => 'sites',
-                'source_reference_type' => 'site',
-                'source_reference_id' => (string) $site->id,
-                'source_label' => 'SITE-P3',
-            ])
-            ->assertCreated()
-            ->assertJsonPath('data.source_module', 'sites');
     }
 
     public function test_non_manage_user_only_sees_own_tickets(): void

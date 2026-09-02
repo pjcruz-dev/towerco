@@ -15,12 +15,15 @@ final class AssistantProviderErrorClassifier
 
     public const CURSOR_RATE_LIMIT_EXCEEDED = 'cursor_rate_limit_exceeded';
 
+    public const GEMINI_QUOTA_EXCEEDED = 'gemini_quota_exceeded';
+
     public static function classify(Throwable $e): ?string
     {
         if ($e instanceof AssistantProviderQuotaExceededException) {
             return match ($e->provider) {
                 'openai', 'chatgpt' => self::OPENAI_QUOTA_EXCEEDED,
                 'cursor', 'cursor_ai' => self::CURSOR_RATE_LIMIT_EXCEEDED,
+                'gemini', 'google', 'google_ai', 'ai_studio' => self::GEMINI_QUOTA_EXCEEDED,
                 default => null,
             };
         }
@@ -37,6 +40,13 @@ final class AssistantProviderErrorClassifier
 
         if (str_contains($message, 'http 429') && str_contains($message, 'cursor')) {
             return self::CURSOR_RATE_LIMIT_EXCEEDED;
+        }
+
+        if (
+            str_contains($message, 'http 429')
+            && (str_contains($message, 'gemini') || str_contains($message, 'generativelanguage'))
+        ) {
+            return self::GEMINI_QUOTA_EXCEEDED;
         }
 
         return null;
@@ -59,6 +69,12 @@ final class AssistantProviderErrorClassifier
                 'title' => 'Cursor API limit reached',
                 'message' => 'Ask TowerOS cannot answer right now because the configured Cursor API key hit a rate or usage limit.',
                 'admin_action' => 'Ask your workspace administrator to check Cursor billing/limits or retry in a few minutes.',
+            ],
+            self::GEMINI_QUOTA_EXCEEDED => [
+                'provider' => 'gemini',
+                'title' => 'Google AI Studio quota exceeded',
+                'message' => 'AI Assistant cannot answer right now because the configured Google AI Studio / Gemini API key hit a rate or quota limit.',
+                'admin_action' => 'Check AI Studio quotas/billing, wait a moment, or switch models, then try again.',
             ],
             default => null,
         };

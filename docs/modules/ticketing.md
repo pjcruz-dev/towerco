@@ -215,7 +215,7 @@ PATCH /api/v1/ticketing/tickets/{id}
 - `ticketing:tickets:manage` — assign, change status/priority, internal comments
 - `ticketing:settings:manage` — categories, SLA, IT mailbox, email/webhook toggles (tenant admin)
 
-Baseline roles: **viewer** and **manager** receive create/view; **manager** also receives manage; **tenant_admin** receives settings.
+Baseline roles: **ticketing_contributor** / **ticketing_operator** receive create/view (operator also manage); **ticketing_admin** and **tenant_admin** receive settings.
 
 **Raise ticket button** requires both source-module view permission and `ticketing:tickets:create`, plus tenant module `ticketing` enabled.
 

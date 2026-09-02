@@ -7,23 +7,30 @@ namespace App\Modules\Platform\Services;
 use App\Models\Tenant;
 use App\Modules\Platform\Models\RolloutPlaybookVersion;
 use App\Modules\Platform\Models\TenantPlaybookBinding;
-use App\Modules\Rollout\Data\RolloutPlaybookDefinitionRegistry;
-use App\Modules\Rollout\Data\RolloutPlaybookV1Definition;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Minimal playbook catalog after Rollout module removal.
+ * Keeps central tenant playbook binding records intact for provisioning.
+ */
 final class RolloutPlaybookCatalogService
 {
     public function ensurePublishedV1(): RolloutPlaybookVersion
     {
-        $payload = RolloutPlaybookV1Definition::payload();
-
         /** @var RolloutPlaybookVersion $version */
         $version = RolloutPlaybookVersion::query()->updateOrCreate(
-            ['version' => $payload['version']],
-            array_merge($payload, [
+            ['version' => '1.0.0'],
+            [
+                'name' => 'Legacy playbook (retired)',
+                'status' => 'published',
+                'sla_working_days_only' => true,
+                'delivery_periods' => [],
+                'timeline_templates' => [],
+                'milestone_cycle_targets' => [],
+                'form_schemas' => [],
                 'published_at' => now(),
-            ]),
+            ],
         );
 
         return $version;
@@ -31,22 +38,19 @@ final class RolloutPlaybookCatalogService
 
     public function publishVersion(string $version): RolloutPlaybookVersion
     {
-        if (! in_array($version, RolloutPlaybookDefinitionRegistry::supportedVersions(), true)) {
-            throw ValidationException::withMessages([
-                'version' => [__('Unsupported playbook version.')],
-            ]);
-        }
-
-        $payload = RolloutPlaybookDefinitionRegistry::payloadForVersion($version);
-        unset($payload['version']);
-
         /** @var RolloutPlaybookVersion $record */
         $record = RolloutPlaybookVersion::query()->updateOrCreate(
             ['version' => $version],
-            array_merge($payload, [
+            [
+                'name' => 'Playbook '.$version,
                 'status' => 'published',
+                'sla_working_days_only' => true,
+                'delivery_periods' => [],
+                'timeline_templates' => [],
+                'milestone_cycle_targets' => [],
+                'form_schemas' => [],
                 'published_at' => now(),
-            ]),
+            ],
         );
 
         return $record->fresh();

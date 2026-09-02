@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { FormInput } from "@/components/forms/form-input";
 import { TenantBrandMark } from "@/components/layout/tenant-brand-mark";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -14,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   platformUploadTenantBrandingAsset,
@@ -45,6 +47,10 @@ export function TenantBrandingSheet({
   const existing = tenant.theme_tokens;
   const [logoUrl, setLogoUrl] = useState(existing?.logo_url ?? "");
   const [faviconUrl, setFaviconUrl] = useState(existing?.favicon_url ?? "");
+  const [companyAddress, setCompanyAddress] = useState(existing?.company_address ?? "");
+  const [companyPhone, setCompanyPhone] = useState(existing?.company_phone ?? "");
+  const [companyEmail, setCompanyEmail] = useState(existing?.company_email ?? "");
+  const [companyTin, setCompanyTin] = useState(existing?.company_tin ?? "");
   const [showUrls, setShowUrls] = useState(Boolean(existing?.logo_url || existing?.favicon_url));
   const notify = useNotificationStore((state) => state.push);
 
@@ -54,8 +60,22 @@ export function TenantBrandingSheet({
     }
     setLogoUrl(existing?.logo_url ?? "");
     setFaviconUrl(existing?.favicon_url ?? "");
-    setShowUrls(Boolean(existing?.logo_url?.startsWith("https://") || existing?.favicon_url?.startsWith("https://")));
-  }, [open, existing?.logo_url, existing?.favicon_url]);
+    setCompanyAddress(existing?.company_address ?? "");
+    setCompanyPhone(existing?.company_phone ?? "");
+    setCompanyEmail(existing?.company_email ?? "");
+    setCompanyTin(existing?.company_tin ?? "");
+    setShowUrls(
+      Boolean(existing?.logo_url?.startsWith("https://") || existing?.favicon_url?.startsWith("https://")),
+    );
+  }, [
+    open,
+    existing?.logo_url,
+    existing?.favicon_url,
+    existing?.company_address,
+    existing?.company_phone,
+    existing?.company_email,
+    existing?.company_tin,
+  ]);
 
   const label = tenant.domains[0] ?? tenant.slug ?? tenant.id;
 
@@ -65,6 +85,10 @@ export function TenantBrandingSheet({
     onSuccess: (tokens, variables) => {
       setLogoUrl(tokens.logo_url ?? "");
       setFaviconUrl(tokens.favicon_url ?? "");
+      setCompanyAddress(tokens.company_address ?? "");
+      setCompanyPhone(tokens.company_phone ?? "");
+      setCompanyEmail(tokens.company_email ?? "");
+      setCompanyTin(tokens.company_tin ?? "");
       onUploaded?.(tokens);
       notify({
         level: "success",
@@ -86,13 +110,22 @@ export function TenantBrandingSheet({
     }
     const trimmedLogo = logoUrl.trim();
     const trimmedFavicon = faviconUrl.trim();
-    if (!trimmedLogo && !trimmedFavicon && !existing?.light && !existing?.dark) {
+    const trimmedAddress = companyAddress.trim();
+    const trimmedPhone = companyPhone.trim();
+    const trimmedEmail = companyEmail.trim();
+    const trimmedTin = companyTin.trim();
+    const hasLetterhead = Boolean(trimmedAddress || trimmedPhone || trimmedEmail || trimmedTin);
+    if (!trimmedLogo && !trimmedFavicon && !hasLetterhead && !existing?.light && !existing?.dark) {
       return null;
     }
     return {
       version: (existing?.version ?? 0) + 1,
       logo_url: trimmedLogo || null,
       favicon_url: trimmedFavicon || null,
+      company_address: trimmedAddress || null,
+      company_phone: trimmedPhone || null,
+      company_email: trimmedEmail || null,
+      company_tin: trimmedTin || null,
       light: existing?.light ?? {},
       dark: existing?.dark ?? {},
     };
@@ -106,12 +139,12 @@ export function TenantBrandingSheet({
         <SheetHeader>
           <SheetTitle>Tenant branding</SheetTitle>
           <SheetDescription>
-            Logo and favicon for <span className="font-medium text-foreground">{label}</span>. Upload a file or
-            paste an HTTPS URL. Users see changes after a refresh.
+            Logo, favicon, and letterhead for <span className="font-medium text-foreground">{label}</span>.
+            Letterhead appears on Dynamic Entity print documents. Users see changes after a refresh.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-col gap-4 px-4 pb-2">
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-2">
           <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
             <TenantBrandMark size="lg" src={logoUrl.trim() || null} />
             <p className="text-sm text-muted-foreground">
@@ -189,6 +222,48 @@ export function TenantBrandingSheet({
               />
             </div>
           ) : null}
+
+          <div className="space-y-3 border-t border-border pt-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Print letterhead</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Shown on Dynamic Entity print pages for this tenant. Company name uses the tenant
+                display name.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tenant-company-address">Address</Label>
+              <Textarea
+                id="tenant-company-address"
+                rows={3}
+                placeholder="Unit 1718 High Street South…, BGC, Taguig City, Philippines 1630"
+                value={companyAddress}
+                onChange={(event) => setCompanyAddress(event.target.value)}
+                className="min-h-[4.5rem] resize-y text-sm"
+              />
+            </div>
+            <FormInput
+              label="Phone"
+              placeholder="+63 2 0000 0000"
+              value={companyPhone}
+              onChange={(event) => setCompanyPhone(event.target.value)}
+              autoComplete="off"
+            />
+            <FormInput
+              label="Email"
+              placeholder="contact@example.com"
+              value={companyEmail}
+              onChange={(event) => setCompanyEmail(event.target.value)}
+              autoComplete="off"
+            />
+            <FormInput
+              label="TIN"
+              placeholder="987-654-321-000"
+              value={companyTin}
+              onChange={(event) => setCompanyTin(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
         </div>
 
         <SheetFooter className="mt-0 border-t border-border flex-row flex-wrap gap-2 sm:justify-between">

@@ -99,7 +99,7 @@ final class ScopeTenantPermissionCacheTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
-        $admin->assignRole('tenant_admin');
+        $admin->assignRole('administrator');
 
         $this->assertTrue($admin->hasPermissionTo('user:manage'));
         $this->assertTrue($admin->can('project_one:view'));

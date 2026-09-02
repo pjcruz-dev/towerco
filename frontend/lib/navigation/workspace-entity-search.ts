@@ -1,15 +1,10 @@
 import {
-  Building2,
   ClipboardCheck,
   ClipboardList,
-  FileText,
   LifeBuoy,
-  Landmark,
   MapPin,
-  Package,
+  Shapes,
   User,
-  Waypoints,
-  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,14 +17,7 @@ const ENTITY_ICONS: Record<string, LucideIcon> = {
   "e_approval:submission": ClipboardCheck,
   "e_approval:form": ClipboardList,
   "ticketing:ticket": LifeBuoy,
-  "sites:site": MapPin,
-  "documents:document": FileText,
-  "documents:controlled_document": ClipboardCheck,
-  "tower_one:tower": Landmark,
-  "asset_one:asset": Package,
-  "fiber_one:fiber_route": Waypoints,
-  "project_one:project": Building2,
-  "project_one:rollout": Zap,
+  "dynamic_entities:record": Shapes,
   "team_access:user": User,
 };
 
@@ -42,14 +30,7 @@ function entityTypeLabel(module: string, entityType: string): string {
     submission: "Submission",
     form: "Form",
     ticket: "Ticket",
-    site: "Site",
-    document: "Document",
-    controlled_document: "Controlled document",
-    tower: "Tower",
-    asset: "Asset",
-    fiber_route: "Fiber route",
-    project: "Project",
-    rollout: "Rollout",
+    record: "Record",
     user: "User",
   };
 

@@ -8,8 +8,6 @@ use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalMasterDataRow;
 use App\Modules\EApproval\Models\EApprovalMasterDataSet;
 use App\Modules\EApproval\Models\EApprovalSubmission;
-use App\Modules\Identity\Models\TenantUser;
-use App\Modules\ProcurementOne\Services\ProcurementVendorSyncService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Str;
 
@@ -22,7 +20,6 @@ final class EApprovalVendorRegistrationMasterDataService
         private readonly EApprovalAuditLogger $audit,
         private readonly EApprovalVendorMasterDataMapper $mapper,
         private readonly EApprovalVendorMasterDataDedupeService $dedupe,
-        private readonly ProcurementVendorSyncService $procurementVendors,
     ) {}
 
     public function syncApprovedRegistration(EApprovalSubmission $submission, ?Authenticatable $actor = null): ?EApprovalMasterDataRow
@@ -66,8 +63,6 @@ final class EApprovalVendorRegistrationMasterDataService
                 $actor,
             );
 
-            $this->procurementVendors->syncFromApprovedRegistration($submission, $row, $actor instanceof TenantUser ? $actor : null);
-
             return $row;
         }
 
@@ -84,8 +79,6 @@ final class EApprovalVendorRegistrationMasterDataService
             (string) $row->id,
             $actor,
         );
-
-        $this->procurementVendors->syncFromApprovedRegistration($submission, $row, $actor instanceof TenantUser ? $actor : null);
 
         return $row;
     }

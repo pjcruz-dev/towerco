@@ -14,7 +14,12 @@ return [
 
     'vector_store' => env('AI_ASSISTANT_VECTOR_STORE', 'database'),
 
-    'llm_provider' => env('AI_ASSISTANT_LLM_PROVIDER', 'local'),
+    // Prefer Gemini when an AI Studio key is present and provider is not explicitly set.
+    'llm_provider' => env('AI_ASSISTANT_LLM_PROVIDER') ?: (
+        filled(env('AI_ASSISTANT_GOOGLE_AI_API_KEY', env('GOOGLE_AI_API_KEY', '')))
+            ? 'gemini'
+            : 'local'
+    ),
 
     'chunking' => [
         'size' => (int) env('AI_ASSISTANT_CHUNK_SIZE', 800),
@@ -65,6 +70,34 @@ return [
         'max_wait_seconds' => (int) env('AI_ASSISTANT_CURSOR_MAX_WAIT_SECONDS', 120),
         'poll_interval_ms' => (int) env('AI_ASSISTANT_CURSOR_POLL_INTERVAL_MS', 1500),
         'timeout' => (int) env('AI_ASSISTANT_CURSOR_TIMEOUT', 30),
+    ],
+
+    /*
+    | Google AI Studio (Gemini) — Generative Language API
+    | Get a key: https://aistudio.google.com/apikey
+    */
+    'gemini' => [
+        'api_key' => env('AI_ASSISTANT_GOOGLE_AI_API_KEY', env('GOOGLE_AI_API_KEY', '')),
+        'base_url' => env('AI_ASSISTANT_GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+        'chat_model' => env('AI_ASSISTANT_GEMINI_CHAT_MODEL', 'gemini-2.0-flash'),
+        // Comma-separated allowlist for the in-chat model selector.
+        'chat_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'AI_ASSISTANT_GEMINI_CHAT_MODELS',
+                'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro,gemini-2.0-flash,gemini-2.0-flash-lite,gemini-1.5-flash,gemini-1.5-pro',
+            )),
+        ))),
+        'max_tokens' => (int) env('AI_ASSISTANT_GEMINI_MAX_TOKENS', 2048),
+        'temperature' => (float) env('AI_ASSISTANT_GEMINI_TEMPERATURE', 0.2),
+        'timeout' => (int) env('AI_ASSISTANT_GEMINI_TIMEOUT', 60),
+    ],
+
+    'cost' => [
+        'php_per_usd' => (float) env('AI_ASSISTANT_PHP_PER_USD', 58),
+        // Defaults approximate Gemini Flash list prices (USD per 1M tokens).
+        'input_usd_per_mtok' => (float) env('AI_ASSISTANT_COST_INPUT_USD_PER_MTOK', 0.075),
+        'output_usd_per_mtok' => (float) env('AI_ASSISTANT_COST_OUTPUT_USD_PER_MTOK', 0.30),
     ],
 
     'opensearch' => [

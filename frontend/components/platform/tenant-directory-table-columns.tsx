@@ -5,7 +5,6 @@ import {
   ExternalLink,
   CreditCard,
   LayoutGrid,
-  Package,
   Palette,
   Plus,
   Settings2,
@@ -70,7 +69,6 @@ function TenantRowActionsMenu({
   onBranding,
   onBilling,
   onModules,
-  onPlaybook,
   onAddEnv,
   onDelete,
 }: {
@@ -80,7 +78,6 @@ function TenantRowActionsMenu({
   onBranding: (row: PlatformTenantRow) => void;
   onBilling: (row: PlatformTenantRow) => void;
   onModules: (row: PlatformTenantRow) => void;
-  onPlaybook?: (row: PlatformTenantRow) => void;
   onAddEnv: (row: PlatformTenantRow) => void;
   onDelete: (row: PlatformTenantRow) => void;
 }) {
@@ -147,17 +144,6 @@ function TenantRowActionsMenu({
           onSelect: () => onModules(row),
         },
         {
-          key: "playbook",
-          label: (
-            <>
-              <Package className="size-3.5 text-muted-foreground" />
-              Rollout policy
-            </>
-          ),
-          hidden: !onPlaybook,
-          onSelect: () => onPlaybook?.(row),
-        },
-        {
           key: "branding",
           label: (
             <>
@@ -200,7 +186,6 @@ export function createTenantDirectoryTableColumns(options: {
   onBranding: (row: PlatformTenantRow) => void;
   onBilling: (row: PlatformTenantRow) => void;
   onModules: (row: PlatformTenantRow) => void;
-  onPlaybook?: (row: PlatformTenantRow) => void;
   onAddEnv: (row: PlatformTenantRow) => void;
   onDelete: (row: PlatformTenantRow) => void;
   onMfaToggle: (row: PlatformTenantRow) => void;
@@ -307,53 +292,6 @@ export function createTenantDirectoryTableColumns(options: {
       meta: { className: "hidden w-[140px] px-4 py-2.5 md:table-cell" },
     },
     {
-      id: "playbook",
-      header: "Playbook",
-      cell: ({ row }) => {
-        const tenant = row.original;
-        if (tenant.assigned_playbook_version) {
-          return (
-            <div className="space-y-0.5">
-              {options.onPlaybook ? (
-                <button
-                  type="button"
-                  className="text-left text-xs font-medium text-primary hover:underline"
-                  onClick={() => options.onPlaybook?.(tenant)}
-                >
-                  v{tenant.assigned_playbook_version}
-                </button>
-              ) : (
-                <p className="text-xs font-medium text-foreground">v{tenant.assigned_playbook_version}</p>
-              )}
-              {tenant.assigned_rollout_policy_code ? (
-                <p className="font-mono text-[10px] text-muted-foreground">
-                  {tenant.assigned_rollout_policy_code}
-                </p>
-              ) : null}
-              {tenant.playbook_upgrade_available ? (
-                <Badge variant="outline" className="text-[10px] text-amber-700">
-                  Upgrade
-                </Badge>
-              ) : null}
-            </div>
-          );
-        }
-        if (options.onPlaybook) {
-          return (
-            <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={() => options.onPlaybook?.(tenant)}
-            >
-              Assign
-            </button>
-          );
-        }
-        return <span className="text-xs text-muted-foreground">-</span>;
-      },
-      meta: { className: "hidden w-[100px] px-4 py-2.5 xl:table-cell" },
-    },
-    {
       id: "access",
       header: "Access",
       cell: ({ row }) => {
@@ -420,7 +358,6 @@ export function createTenantDirectoryTableColumns(options: {
             onBranding={options.onBranding}
             onBilling={options.onBilling}
             onModules={options.onModules}
-            onPlaybook={options.onPlaybook}
             onAddEnv={options.onAddEnv}
             onDelete={options.onDelete}
           />

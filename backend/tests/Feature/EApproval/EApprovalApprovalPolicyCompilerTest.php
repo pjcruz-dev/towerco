@@ -71,7 +71,7 @@ final class EApprovalApprovalPolicyCompilerTest extends TestCase
 
         $this->assertCount(3, $workflow['steps']);
         $this->assertSame('role', $workflow['steps'][1]['approver_type']);
-        $this->assertSame('tenant_admin', $workflow['steps'][1]['approver_id']);
+        $this->assertSame('administrator', $workflow['steps'][1]['approver_id']);
         $this->assertSame('role', $workflow['steps'][2]['approver_type']);
         $this->assertSame('finance', $workflow['steps'][2]['approver_id']);
     }

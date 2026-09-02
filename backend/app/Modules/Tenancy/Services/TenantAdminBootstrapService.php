@@ -6,6 +6,7 @@ namespace App\Modules\Tenancy\Services;
 
 use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
 use Illuminate\Support\Str;
 
 /**
@@ -26,7 +27,7 @@ class TenantAdminBootstrapService
             $this->rbacBaseline->ensure();
 
             $email = 'admin@'.$normalizedDomain;
-            $name = (string) config('toweros.tenant_bootstrap_admin_name', 'Tenant administrator');
+            $name = (string) config('toweros.tenant_bootstrap_admin_name', 'Administrator');
 
             if (is_string($password) && $password !== '') {
                 $plain = $password;
@@ -48,7 +49,7 @@ class TenantAdminBootstrapService
                 ],
             );
 
-            $user->syncRoles(['tenant_admin']);
+            $user->syncRoles([TenantRbacSystemRoles::FULL_ADMIN]);
 
             return [
                 'email' => $email,

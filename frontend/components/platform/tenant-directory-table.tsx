@@ -37,7 +37,6 @@ type Props = {
   onBranding: (row: PlatformTenantRow) => void;
   onBilling: (row: PlatformTenantRow) => void;
   onModules: (row: PlatformTenantRow) => void;
-  onPlaybook?: (row: PlatformTenantRow) => void;
   onAddEnv: (row: PlatformTenantRow) => void;
   onDelete: (row: PlatformTenantRow) => void;
   onMfaToggle: (row: PlatformTenantRow) => void;
@@ -64,7 +63,6 @@ export function TenantDirectoryTable({
   onBranding,
   onBilling,
   onModules,
-  onPlaybook,
   onAddEnv,
   onDelete,
   onMfaToggle,
@@ -76,11 +74,10 @@ export function TenantDirectoryTable({
   const localCount = rows.filter((row) => row.environment === "local").length;
   const blockedCount = rows.filter((row) => row.access_mode === "blocked").length;
   const readOnlyCount = rows.filter((row) => row.access_mode === "read_only").length;
-  const upgradeCount = rows.filter((row) => row.playbook_upgrade_available).length;
   const eaOnlyCount = rows.filter(
     (row) =>
       (row.effective_enabled_modules ?? []).includes("e_approval") &&
-      !(row.effective_enabled_modules ?? []).includes("project_one"),
+      !(row.effective_enabled_modules ?? []).includes("dynamic_entities"),
   ).length;
 
   const columns = useMemo(
@@ -91,7 +88,6 @@ export function TenantDirectoryTable({
         onBranding,
         onBilling,
         onModules,
-        onPlaybook,
         onAddEnv,
         onDelete,
         onMfaToggle,
@@ -102,7 +98,6 @@ export function TenantDirectoryTable({
       onBranding,
       onBilling,
       onModules,
-      onPlaybook,
       onAddEnv,
       onDelete,
       onMfaToggle,
@@ -156,7 +151,7 @@ export function TenantDirectoryTable({
               >
                 <option value="">All modules</option>
                 <option value="e_approval_only">E-Approval only</option>
-                <option value="project_one">Includes Project-One</option>
+                <option value="dynamic_entities">Includes Dynamic Entities</option>
                 <option value="ticketing">Includes Ticketing</option>
               </Select>
               <Select
@@ -227,12 +222,6 @@ export function TenantDirectoryTable({
                   <>
                     <span className="hidden sm:inline">·</span>
                     <span>{readOnlyCount} read-only (page)</span>
-                  </>
-                ) : null}
-                {upgradeCount > 0 ? (
-                  <>
-                    <span className="hidden md:inline">·</span>
-                    <span className="hidden md:inline">{upgradeCount} playbook upgrade (page)</span>
                   </>
                 ) : null}
                 <span className="hidden md:inline">·</span>

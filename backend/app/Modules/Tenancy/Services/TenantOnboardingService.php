@@ -5,12 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Tenancy\Services;
 
 use App\Models\Tenant;
-use App\Modules\Platform\Models\RolloutPlaybookVersion;
-use App\Modules\Platform\Models\RolloutPolicyBundle;
-use App\Modules\Platform\Models\TenantPlaybookBinding;
-use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
-use App\Modules\Platform\Services\RolloutPolicyBundleService;
-use App\Modules\Rollout\Services\TenantPlaybookSyncService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use Illuminate\Support\Facades\Artisan;
@@ -23,11 +17,6 @@ class TenantOnboardingService
     public function __construct(
         private readonly TenantAdminBootstrapService $adminBootstrap,
         private readonly TenantDomainSlugService $domainSlugs,
-        private readonly RolloutPlaybookCatalogService $playbookCatalog,
-        private readonly RolloutPolicyBundleService $policyBundles,
-        private readonly TenantPlaybookSyncService $playbookSync,
-        private readonly TenantRolloutBootstrapService $rolloutBootstrap,
-        private readonly TenantDocumentsBootstrapService $documentsBootstrap,
         private readonly TenantEnabledModulesResolver $enabledModulesResolver,
         private readonly TenantModuleRbacSyncService $moduleRbacSync,
     ) {}
@@ -40,8 +29,6 @@ class TenantOnboardingService
      *   brand_domain?: string|null,
      *   environment?: string|null,
      *   tco_sequence_prefix?: string|null,
-     *   playbook_version_id?: string|null,
-     *   rollout_policy_bundle_id?: string|null,
      *   enabled_modules?: list<string>|null,
      *   migrate?: bool,
      *   seed?: bool
@@ -49,11 +36,7 @@ class TenantOnboardingService
      * @return array{
      *   tenant: Tenant,
      *   domain_endpoints?: array<string, mixed>,
-     *   playbook_version?: string,
-     *   assigned_policy_code?: string|null,
-     *   initial_admin?: array{email: string, password: string, password_generated: bool},
-     *   public_holidays_seeded?: int,
-     *   holiday_years?: list<int>
+     *   initial_admin?: array{email: string, password: string, password_generated: bool}
      * }
      */
     public function createTenant(array $input): array
@@ -109,97 +92,31 @@ class TenantOnboardingService
         $recommendation = $this->domainSlugs->recommend($tenant, $slug, $brandDomain, $environment);
         $this->domainSlugs->persistEndpoints($tenant, $recommendation);
 
-        $playbookVersion = $this->resolvePlaybookVersion($input['playbook_version_id'] ?? null);
-        $binding = $this->assignPlaybookBinding(
-            $tenant,
-            $playbookVersion,
-            $input['rollout_policy_bundle_id'] ?? null,
-        );
+        $shouldMigrate = ! empty($input['migrate']);
+        $shouldSeed = ! empty($input['seed']);
 
-        $initialAdmin = null;
-        $rolloutBootstrap = [
-            'public_holidays_seeded' => 0,
-            'holiday_years' => [],
-        ];
-
-        if (! empty($input['migrate'])) {
-            if (! empty($input['seed'])) {
-                Artisan::call('tenants:migrate', [
-                    '--tenants' => [$tenant->id],
-                    '--force' => true,
-                    '--seed' => true,
-                    '--seeder' => 'Database\\Seeders\\TenantDatabaseSeeder',
-                ]);
+        if ($shouldMigrate || $shouldSeed) {
+            $migrateParams = [
+                '--tenants' => [$tenant->id],
+                '--force' => true,
+            ];
+            if ($shouldSeed) {
+                $migrateParams['--seed'] = true;
+                $migrateParams['--seeder'] = 'Database\\Seeders\\TenantDatabaseSeeder';
             }
-
-            // Stancl TenantCreated already runs CreateDatabase + MigrateDatabase synchronously.
-            // Avoid a second full tenants:migrate pass (often exceeds frontend timeouts on Windows).
+            Artisan::call('tenants:migrate', $migrateParams);
         }
 
-        // Tenant DB always exists after createDomain(); sync playbook + holidays for every new org.
-        $this->playbookSync->syncBindingToTenantDatabase(
-            $tenant,
-            $binding->fresh(['playbookVersion', 'rolloutPolicyBundle']),
-        );
-
-        $rolloutBootstrap = $this->rolloutBootstrap->provision($tenant);
-
-        // Stancl creates the tenant DB on createDomain(); always ensure admin@{domain} exists.
         $initialAdmin = $this->adminBootstrap->bootstrap($tenant, $domain);
 
-        $this->documentsBootstrap->provisionSiteDocumentReviewForm($tenant);
-
-        if ($enabledModules !== null) {
-            $this->moduleRbacSync->syncForTenant($tenant);
-        }
+        // Seed Administrator + ATC job roles / module tiers for enabled modules.
+        $this->moduleRbacSync->syncForTenant($tenant);
 
         return [
             'tenant' => $tenant->fresh(['domains']),
             'domain_endpoints' => $recommendation,
-            'playbook_version' => $playbookVersion->version,
-            'assigned_policy_code' => $binding->rolloutPolicyBundle?->code,
             'initial_admin' => $initialAdmin,
-            'public_holidays_seeded' => $rolloutBootstrap['public_holidays_seeded'],
-            'holiday_years' => $rolloutBootstrap['holiday_years'],
         ];
-    }
-
-    private function assignPlaybookBinding(
-        Tenant $tenant,
-        RolloutPlaybookVersion $playbookVersion,
-        ?string $rolloutPolicyBundleId,
-    ): TenantPlaybookBinding {
-        if (is_string($rolloutPolicyBundleId) && $rolloutPolicyBundleId !== '') {
-            /** @var RolloutPolicyBundle $bundle */
-            $bundle = RolloutPolicyBundle::query()->findOrFail($rolloutPolicyBundleId);
-
-            return $this->policyBundles->assignToTenant($tenant, $bundle);
-        }
-
-        $defaultBundle = $this->policyBundles->resolveDefaultForProvisioning($playbookVersion);
-        if ($defaultBundle !== null) {
-            return $this->policyBundles->assignToTenant($tenant, $defaultBundle);
-        }
-
-        return $this->playbookCatalog->assignToTenant($tenant, $playbookVersion);
-    }
-
-    private function resolvePlaybookVersion(?string $playbookVersionId): RolloutPlaybookVersion
-    {
-        if (is_string($playbookVersionId) && $playbookVersionId !== '') {
-            /** @var RolloutPlaybookVersion $version */
-            $version = RolloutPlaybookVersion::query()->findOrFail($playbookVersionId);
-
-            return $version;
-        }
-
-        $policy = (string) config('toweros.tenant_provisioning.default_playbook', 'latest');
-        if ($policy === 'v1') {
-            return $this->playbookCatalog->ensurePublishedV1();
-        }
-
-        return $this->playbookCatalog->latestPublished()
-            ?? $this->playbookCatalog->ensurePublishedV1();
     }
 
     private function normalizeDomain(string $domain): string

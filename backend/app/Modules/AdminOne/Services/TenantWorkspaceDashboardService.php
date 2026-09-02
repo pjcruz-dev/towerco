@@ -13,8 +13,6 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Models\TenantNotification;
 use App\Modules\Notifications\Services\TenantNotificationService;
 use App\Modules\Notifications\Support\TenantNotificationAccess;
-use App\Modules\Rollout\Services\RolloutDashboardMetricsService;
-use App\Modules\Sites\Models\Site;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +24,6 @@ final class TenantWorkspaceDashboardService
 
     public function __construct(
         private readonly TenantNotificationService $notifications,
-        private readonly RolloutDashboardMetricsService $rolloutMetrics,
     ) {}
 
     /**
@@ -146,7 +143,7 @@ final class TenantWorkspaceDashboardService
 
         $rolloutMetrics = null;
         if ($user->can('project_one:rollout:view')) {
-            $rolloutMetrics = $this->rolloutMetrics->build($user);
+            $rolloutMetrics = null;
             if ($rolloutMetrics !== null) {
                 if (($rolloutMetrics['gate_approvals_awaiting_me'] ?? 0) > 0) {
                     $kpis[] = [
@@ -218,24 +215,7 @@ final class TenantWorkspaceDashboardService
             }
         }
 
-        if ($user->can('sites:view') && Schema::connection('tenant')->hasTable('sites')) {
-            $siteCount = Site::query()->count();
-            $mappedSites = Site::query()
-                ->whereNotNull('latitude')
-                ->whereNotNull('longitude')
-                ->count();
-
-            if (count($kpis) < 6) {
-                $kpis[] = [
-                    'key' => 'sites',
-                    'label' => 'Sites',
-                    'value' => (string) $siteCount,
-                    'change' => $mappedSites > 0 ? "{$mappedSites} on map" : 'Registry total',
-                    'tone' => 'neutral',
-                ];
-            }
-        }
-
+        
         if ($kpis === []) {
             $kpis[] = [
                 'key' => 'workspace_ready',
@@ -388,10 +368,7 @@ final class TenantWorkspaceDashboardService
         if (TenantNotificationAccess::allowedModulesFor($user) !== []) {
             $links[] = ['label' => 'Notifications', 'href' => '/notifications'];
         }
-        if ($user->can('sites:view')) {
-            $links[] = ['label' => 'Sites', 'href' => '/sites'];
-        }
-
+        
         return $links;
     }
 

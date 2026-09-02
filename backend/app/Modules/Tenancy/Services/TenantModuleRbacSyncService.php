@@ -6,7 +6,7 @@ namespace App\Modules\Tenancy\Services;
 
 use App\Models\Tenant;
 
-final class TenantModuleRbacSyncService
+class TenantModuleRbacSyncService
 {
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,

@@ -69,7 +69,7 @@ class CreateTenant extends Command
             if (! empty($result['initial_admin'])) {
                 $admin = InitialAdminExposure::forTransport($result['initial_admin']);
                 $this->newLine();
-                $this->warn('Initial tenant administrator:');
+                $this->warn('Initial Administrator:');
                 $this->line('  email: '.$admin['email']);
                 if (isset($admin['password']) && is_string($admin['password'])) {
                     $this->line('  password: '.$admin['password']);

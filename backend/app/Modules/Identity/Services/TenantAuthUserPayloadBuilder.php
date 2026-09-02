@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Services;
 
 use App\Models\Tenant;
+use App\Modules\AdminOne\Services\SidebarNavService;
+use App\Modules\DynamicEntities\Services\DynRoleAccessService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
@@ -16,13 +18,13 @@ final class TenantAuthUserPayloadBuilder
     public function __construct(
         private readonly TenantRbacBaselineService $rbacBaseline,
         private readonly TenantRbacPermissionCatalog $permissionCatalog,
+        private readonly DynRoleAccessService $dynRoleAccess,
+        private readonly SidebarNavService $sidebarNav,
     ) {}
 
     /**
-     * @return array<string, mixed>
-     */
-    /**
      * @param  array{id: string, name: string, email: string, source?: string}|null  $platformImpersonator
+     * @return array<string, mixed>
      */
     public function build(
         TenantUser $user,
@@ -42,6 +44,14 @@ final class TenantAuthUserPayloadBuilder
 
         $enabledModules = app(TenantEnabledModulesResolver::class)->resolveForCurrentTenant();
         $isImpersonating = $impersonator !== null || $platformImpersonator !== null;
+        $accessMatrix = $this->dynRoleAccess->matrixFor($user);
+
+        $defaultLandingHref = '/dashboard';
+        try {
+            $defaultLandingHref = $this->sidebarNav->resolveForUser($user)['default_landing_href'] ?? '/dashboard';
+        } catch (\Throwable) {
+            $defaultLandingHref = '/dashboard';
+        }
 
         $payload = [
             'id' => $user->getKey(),
@@ -52,6 +62,8 @@ final class TenantAuthUserPayloadBuilder
             'roles' => $roles,
             'permissions' => $permissions,
             'enabled_modules' => $enabledModules,
+            'access_matrix' => $accessMatrix,
+            'default_landing_href' => $defaultLandingHref,
             'is_impersonating' => $isImpersonating,
             'tenant_accesses' => [
                 [

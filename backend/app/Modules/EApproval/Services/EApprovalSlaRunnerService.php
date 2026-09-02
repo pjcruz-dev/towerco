@@ -97,7 +97,7 @@ final class EApprovalSlaRunnerService
 
             $admins = TenantUser::query()
                 ->where('is_active', true)
-                ->whereHas('roles', static fn ($q) => $q->whereIn('name', ['tenant_admin', 'e_approval_admin']))
+                ->whereHas('roles', static fn ($q) => $q->whereIn('name', ['administrator', 'e_approval_admin']))
                 ->pluck('id')
                 ->map(static fn ($id) => (string) $id)
                 ->all();

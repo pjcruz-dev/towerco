@@ -860,7 +860,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         ]);
 
-        $otherUser->assignRole('tenant_admin');
+        $otherUser->assignRole('administrator');
 
         tenancy()->end();
 

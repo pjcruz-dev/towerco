@@ -30,8 +30,6 @@ class CentralTenantProvisioningController extends AbstractApiController
             'brand_domain' => ['sometimes', 'nullable', 'string', 'max:255'],
             'environment' => ['sometimes', 'string', 'in:local,test,staging,production'],
             'tco_sequence_prefix' => ['sometimes', 'nullable', 'string', 'max:8'],
-            'playbook_version_id' => ['sometimes', 'nullable', 'uuid'],
-            'rollout_policy_bundle_id' => ['sometimes', 'nullable', 'uuid'],
             'enabled_modules' => ['sometimes', 'nullable', 'array'],
             'enabled_modules.*' => ['string', 'max:64'],
             'migrate' => ['sometimes', 'boolean'],
@@ -46,7 +44,6 @@ class CentralTenantProvisioningController extends AbstractApiController
                 'brand_domain' => $data['brand_domain'] ?? null,
                 'environment' => $data['environment'] ?? 'local',
                 'tco_sequence_prefix' => $data['tco_sequence_prefix'] ?? null,
-                'playbook_version_id' => $data['playbook_version_id'] ?? null,
                 'migrate' => (bool) ($data['migrate'] ?? true),
                 'seed' => (bool) ($data['seed'] ?? false),
             ];
@@ -68,11 +65,7 @@ class CentralTenantProvisioningController extends AbstractApiController
             'slug' => $tenant->slug,
             'brand_domain' => $tenant->brand_domain,
             'environment' => $tenant->environment,
-            'playbook_version' => $result['playbook_version'] ?? null,
-            'assigned_policy_code' => $result['assigned_policy_code'] ?? null,
             'domain_endpoints' => $result['domain_endpoints']['endpoints'] ?? null,
-            'public_holidays_seeded' => $result['public_holidays_seeded'] ?? 0,
-            'holiday_years' => $result['holiday_years'] ?? [],
         ];
 
         if (isset($result['initial_admin'])) {
@@ -90,7 +83,6 @@ class CentralTenantProvisioningController extends AbstractApiController
                 'domain' => $payload['domain'],
                 'slug' => $payload['slug'],
                 'environment' => $payload['environment'],
-                'playbook_version' => $payload['playbook_version'],
             ],
         );
 

@@ -51,6 +51,16 @@ export type AssistantProviderNotice = {
   admin_action: string;
 };
 
+export type AssistantCostEstimate = {
+  currency: string;
+  low: number;
+  high: number;
+  label: string;
+  intensity: "low" | "medium" | "high";
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+};
+
 export type AssistantAskResponse = {
   conversation_id: string;
   message_id: string;
@@ -69,6 +79,18 @@ export type AssistantAskResponse = {
   proposed_action?: AssistantProposedAction | null;
   error_code?: string | null;
   provider_notice?: AssistantProviderNotice | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  cost_estimate?: AssistantCostEstimate | null;
+};
+
+export type AssistantMeta = {
+  enabled: boolean;
+  llm_provider: string;
+  model_name: string;
+  models: string[];
+  supports_model_select: boolean;
+  greeting: string;
 };
 
 export type AssistantActionConfirmResponse = {
@@ -114,6 +136,8 @@ export type AskAssistantPayload = {
   conversation_id?: string | null;
   module_context?: string | null;
   page_path?: string | null;
+  plan_mode?: boolean;
+  preferred_model?: string | null;
 };
 
 export type AssistantKnowledgeStatus = "draft" | "published" | "archived";
@@ -160,8 +184,15 @@ export async function askAssistant(payload: AskAssistantPayload): Promise<Assist
     conversation_id: payload.conversation_id ?? undefined,
     module_context: payload.module_context ?? undefined,
     page_path: payload.page_path ?? undefined,
+    plan_mode: payload.plan_mode === true ? true : undefined,
+    preferred_model: payload.preferred_model ?? undefined,
   });
 
+  return response.data.data;
+}
+
+export async function fetchAssistantMeta(): Promise<AssistantMeta> {
+  const response = await apiClient.get<{ data: AssistantMeta }>("/assistant/meta");
   return response.data.data;
 }
 
@@ -288,3 +319,57 @@ export async function reindexAssistantKnowledge(id: string): Promise<{
 export async function deleteAssistantKnowledge(id: string): Promise<void> {
   await apiClient.delete(`/assistant/knowledge/${id}`);
 }
+
+export type AiPromptModuleListRow = {
+  id: string;
+  key: string;
+  name: string;
+  filename: string | null;
+  description: string | null;
+  kind: string;
+  intent_key: string | null;
+  sort_order: number;
+  is_enabled: boolean;
+  is_system: boolean;
+  updated_at: string | null;
+  body_chars: number;
+};
+
+export type AiPromptModuleDetail = AiPromptModuleListRow & {
+  body: string;
+};
+
+export async function listAiPromptModules(): Promise<AiPromptModuleListRow[]> {
+  const response = await apiClient.get<{ data: AiPromptModuleListRow[] }>("/assistant/prompt-modules");
+  return response.data.data;
+}
+
+export async function getAiPromptModule(id: string): Promise<AiPromptModuleDetail> {
+  const response = await apiClient.get<{ data: AiPromptModuleDetail }>(`/assistant/prompt-modules/${id}`);
+  return response.data.data;
+}
+
+export async function updateAiPromptModule(
+  id: string,
+  payload: Partial<{
+    name: string;
+    description: string | null;
+    body: string;
+    is_enabled: boolean;
+    sort_order: number;
+  }>,
+): Promise<AiPromptModuleDetail> {
+  const response = await apiClient.patch<{ data: AiPromptModuleDetail }>(
+    `/assistant/prompt-modules/${id}`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function resetAiPromptModule(id: string): Promise<AiPromptModuleDetail> {
+  const response = await apiClient.post<{ data: AiPromptModuleDetail }>(
+    `/assistant/prompt-modules/${id}/reset`,
+  );
+  return response.data.data;
+}
+

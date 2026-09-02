@@ -1,31 +1,51 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, SendHorizontal, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  Mic,
+  Paperclip,
+  Phone,
+  SendHorizontal,
+} from "lucide-react";
 
 import { AssistantMessage, type AssistantChatMessage } from "@/components/assistant/assistant-message";
-import { AssistantSuggestedQuestions } from "@/components/assistant/assistant-suggested-questions";
+import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   askAssistant,
   cancelAssistantAction,
   confirmAssistantAction,
   fetchAssistantConversation,
+  fetchAssistantMeta,
   submitAssistantFeedback,
   type AssistantAskResponse,
   type AssistantCitation,
   type AssistantConversationMessage,
+  type AssistantCostEstimate,
+  type AssistantMeta,
 } from "@/lib/api/modules/assistant-api";
 import { getErrorMessage } from "@/lib/api/error";
 import type { AssistantRouteContext } from "@/lib/assistant/route-context";
+import { cn } from "@/lib/utils";
 
 type Props = {
   routeContext: AssistantRouteContext;
   open: boolean;
+  autoPilot?: boolean;
+  planMode?: boolean;
+  preferredModel?: string | null;
+  onPreferredModelChange?: (model: string) => void;
 };
 
 const CONVERSATION_STORAGE_KEY = "toweros.assistant.conversation_id";
+
+function modelLabel(model: string): string {
+  return model
+    .replace(/^models\//, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function toAssistantMessage(response: AssistantAskResponse): AssistantChatMessage {
   return {
@@ -71,26 +91,57 @@ function toRestoredMessage(message: AssistantConversationMessage): AssistantChat
   };
 }
 
-export function AssistantChatPanel({ routeContext, open }: Props) {
+export function AssistantChatPanel({
+  routeContext,
+  open,
+  autoPilot = false,
+  planMode = false,
+  preferredModel = null,
+  onPreferredModelChange,
+}: Props) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [followups, setFollowups] = useState<string[]>(routeContext.suggestedQuestions);
   const [isAsking, setIsAsking] = useState(false);
   const [feedbackPendingId, setFeedbackPendingId] = useState<string | null>(null);
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<AssistantMeta | null>(null);
+  const [activeModel, setActiveModel] = useState<string | null>(preferredModel);
+  const [costEstimate, setCostEstimate] = useState<AssistantCostEstimate | null>(null);
   const [isRestoring, setIsRestoring] = useState(
     () =>
       typeof window !== "undefined" &&
       window.localStorage.getItem(CONVERSATION_STORAGE_KEY) !== null,
   );
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Rehydrate the last conversation across page refreshes. Only the conversation id is
-  // persisted locally; message content is fetched from the server (access-checked), so
-  // no chat content leaks between accounts on a shared browser.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchAssistantMeta();
+        if (cancelled) return;
+        setMeta(data);
+        if (!preferredModel && data.model_name) {
+          setActiveModel(data.model_name);
+        }
+      } catch {
+        // Meta is optional chrome; chat still works.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [preferredModel]);
+
+  useEffect(() => {
+    if (preferredModel) {
+      setActiveModel(preferredModel);
+    }
+  }, [preferredModel]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -119,7 +170,6 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
           window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
         }
       } catch {
-        // Conversation missing or not accessible for this session — start fresh.
         window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
       } finally {
         if (!cancelled) {
@@ -134,12 +184,6 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
   }, []);
 
   useEffect(() => {
-    if (messages.length === 0) {
-      setFollowups(routeContext.suggestedQuestions);
-    }
-  }, [routeContext.suggestedQuestions, messages.length]);
-
-  useEffect(() => {
     if (!open) {
       return;
     }
@@ -152,61 +196,6 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
       return () => window.clearTimeout(timer);
     }
   }, [open]);
-
-  const sendQuestion = async (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed || isAsking) {
-      return;
-    }
-
-    setError(null);
-    setQuestion("");
-    const tempUserId = `local-user-${Date.now()}`;
-    setMessages((current) => [
-      ...current,
-      { id: tempUserId, role: "user", content: trimmed },
-    ]);
-    setIsAsking(true);
-
-    try {
-      const response = await askAssistant({
-        question: trimmed,
-        conversation_id: conversationId,
-        module_context: routeContext.moduleKey,
-        page_path: routeContext.pagePath,
-      });
-
-      setConversationId(response.conversation_id);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, response.conversation_id);
-      }
-      setMessages((current) => [...current, toAssistantMessage(response)]);
-      if (response.suggested_followups.length > 0) {
-        setFollowups(response.suggested_followups);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsAsking(false);
-    }
-  };
-
-  const onFeedback = async (messageId: string, rating: "up" | "down") => {
-    setFeedbackPendingId(messageId);
-    setError(null);
-    try {
-      await submitAssistantFeedback({ message_id: messageId, rating });
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === messageId ? { ...message, feedback: rating } : message,
-        ),
-      );
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setFeedbackPendingId(null);
-    }
-  };
 
   const onConfirmAction = async (
     messageId: string,
@@ -247,6 +236,81 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
     }
   };
 
+  const sendQuestion = async (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || isAsking) {
+      return;
+    }
+
+    setError(null);
+    setQuestion("");
+    const tempUserId = `local-user-${Date.now()}`;
+    setMessages((current) => [
+      ...current,
+      { id: tempUserId, role: "user", content: trimmed },
+    ]);
+    setIsAsking(true);
+
+    try {
+      const response = await askAssistant({
+        question: trimmed,
+        conversation_id: conversationId,
+        module_context: routeContext.moduleKey,
+        page_path: routeContext.pagePath,
+        plan_mode: planMode,
+        preferred_model: activeModel,
+      });
+
+      setConversationId(response.conversation_id);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, response.conversation_id);
+      }
+      if (response.model_name) {
+        setActiveModel(response.model_name);
+      }
+      if (response.cost_estimate) {
+        setCostEstimate(response.cost_estimate);
+      }
+
+      const assistantMsg = toAssistantMessage(response);
+      setMessages((current) => [...current, assistantMsg]);
+
+      if (
+        autoPilot &&
+        !planMode &&
+        response.proposed_action?.id &&
+        response.proposed_action.requires_confirmation !== false
+      ) {
+        void onConfirmAction(
+          response.message_id,
+          response.proposed_action.id,
+          response.proposed_action.payload ?? {},
+        );
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsAsking(false);
+    }
+  };
+
+  const onFeedback = async (messageId: string, rating: "up" | "down") => {
+    setFeedbackPendingId(messageId);
+    setError(null);
+    try {
+      await submitAssistantFeedback({ message_id: messageId, rating });
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === messageId ? { ...message, feedback: rating } : message,
+        ),
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setFeedbackPendingId(null);
+    }
+  };
+
   const onCancelAction = async (messageId: string, proposalId: string) => {
     setActionPendingId(messageId);
     setError(null);
@@ -276,11 +340,14 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
     setMessages([]);
     setError(null);
     setQuestion("");
-    setFollowups(routeContext.suggestedQuestions);
+    setCostEstimate(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
     }
   };
+
+  const models = meta?.models?.length ? meta.models : activeModel ? [activeModel] : [];
+  const selectedModel = activeModel ?? meta?.model_name ?? models[0] ?? "gemini-2.0-flash";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
@@ -291,24 +358,8 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             Restoring your conversation…
           </div>
         ) : messages.length === 0 ? (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-xl bg-muted/40 px-3.5 py-3">
-              <div className="mt-0.5 rounded-full bg-card p-2 text-muted-foreground shadow-sm ring-1 ring-border">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">How can I help?</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Ask about workflows, permissions, or processes. Answers use approved help for your
-                  workspace.
-                </p>
-              </div>
-            </div>
-            <AssistantSuggestedQuestions
-              questions={followups}
-              disabled={isAsking}
-              onSelect={(value) => void sendQuestion(value)}
-            />
+          <div className="max-w-[92%] rounded-2xl border border-border bg-card px-3.5 py-3 text-sm text-foreground shadow-sm">
+            {meta?.greeting ?? "Hey! What are we building or fixing today?"}
           </div>
         ) : (
           <>
@@ -326,15 +377,8 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             {isAsking ? (
               <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Looking up approved guidance…
+                Thinking…
               </div>
-            ) : null}
-            {!isAsking && followups.length > 0 ? (
-              <AssistantSuggestedQuestions
-                questions={followups}
-                disabled={isAsking}
-                onSelect={(value) => void sendQuestion(value)}
-              />
             ) : null}
           </>
         )}
@@ -347,13 +391,14 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             {error}
           </p>
         ) : null}
-        <div className="flex items-center gap-2 rounded-full border border-border bg-background px-2 py-1.5 shadow-sm">
-          <Input
+        <div className="rounded-2xl border border-border bg-background px-3 py-2 shadow-sm">
+          <textarea
             ref={inputRef}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Type your message…"
-            className="h-9 flex-1 border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+            placeholder="Type your message..."
+            rows={2}
+            className="max-h-28 w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
             disabled={isAsking}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -362,34 +407,103 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
               }
             }}
           />
-          <Button
-            type="button"
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-full"
-            disabled={isAsking || question.trim() === ""}
-            onClick={() => void sendQuestion(question)}
-            aria-label="Send message"
-          >
-            {isAsking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <SendHorizontal className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2 px-1">
-          <p className="text-[11px] text-muted-foreground">
-            {routeContext.moduleKey ?? "workspace"} · Enter to send
-          </p>
-          {messages.length > 0 ? (
+          <div className="mt-1 flex items-center justify-between gap-2">
             <button
               type="button"
-              className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={startNewConversation}
+              className="rounded-md p-1.5 text-muted-foreground opacity-50"
+              title="Attachments coming soon"
+              disabled
             >
-              New chat
+              <Paperclip className="size-4" />
             </button>
-          ) : null}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-muted-foreground opacity-50"
+                title="Voice coming soon"
+                disabled
+              >
+                <Phone className="size-4" />
+              </button>
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-muted-foreground opacity-50"
+                title="Microphone coming soon"
+                disabled
+              >
+                <Mic className="size-4" />
+              </button>
+              <Button
+                type="button"
+                size="icon"
+                className="size-9 shrink-0 rounded-lg bg-sky-600 text-white hover:bg-sky-500"
+                disabled={isAsking || question.trim() === ""}
+                onClick={() => void sendQuestion(question)}
+                aria-label="Send message"
+              >
+                {isAsking ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {meta?.supports_model_select && models.length > 1 ? (
+              <select
+                className="h-8 max-w-[180px] truncate rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground"
+                value={selectedModel}
+                onChange={(e) => {
+                  setActiveModel(e.target.value);
+                  onPreferredModelChange?.(e.target.value);
+                }}
+                aria-label="Model"
+              >
+                {models.map((m) => (
+                  <option key={m} value={m}>
+                    {modelLabel(m)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground">
+                <TowerOsAssistantMark className="size-3 shrink-0 text-muted-foreground" />
+                {modelLabel(selectedModel)}
+              </span>
+            )}
+            {messages.length > 0 ? (
+              <button
+                type="button"
+                className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                onClick={startNewConversation}
+              >
+                New chat
+              </button>
+            ) : null}
+          </div>
+          {costEstimate ? (
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                costEstimate.intensity === "high"
+                  ? "bg-amber-200 text-amber-950 dark:bg-amber-400/30 dark:text-amber-100"
+                  : costEstimate.intensity === "medium"
+                    ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"
+                    : "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100",
+              )}
+              title="Rough estimate from token usage × configured Gemini rates (₱)"
+            >
+              {costEstimate.label}
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">
+              {planMode ? "Plan mode" : "Enter to send"}
+            </span>
+          )}
         </div>
       </div>
     </div>

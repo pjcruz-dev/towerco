@@ -6,12 +6,6 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
-use App\Modules\ProcurementOne\Models\ProcurementPo;
-use App\Modules\ProcurementOne\Models\ProcurementPr;
-use App\Modules\ProcurementOne\Services\ProcurementPoPrintEnrichmentService;
-use App\Modules\ProcurementOne\Services\ProcurementPrPrintEnrichmentService;
-use App\Modules\ProcurementOne\Support\ProcurementGridValueParser;
-use App\Modules\ProcurementOne\Support\ProcurementLineGridColumns;
 
 final class EApprovalSubmissionPrintService
 {
@@ -24,9 +18,6 @@ final class EApprovalSubmissionPrintService
         private readonly EApprovalPdfLayoutService $pdfLayout,
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalFormValueDisplayService $valueDisplay,
-        private readonly ProcurementGridValueParser $gridParser,
-        private readonly ProcurementPoPrintEnrichmentService $poPrintEnrichment,
-        private readonly ProcurementPrPrintEnrichmentService $prPrintEnrichment,
     ) {}
 
     /**
@@ -63,9 +54,6 @@ final class EApprovalSubmissionPrintService
         $formMetadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
         $printTemplateKind = (string) ($template['layout_kind'] ?? $formMetadata['print_template_kind'] ?? '');
 
-        $valuesByKey = $this->poPrintEnrichment->enrichSubmissionPrintValues($submission, $valuesByKey);
-        $valuesByKey = $this->prPrintEnrichment->enrichSubmissionPrintValues($submission, $valuesByKey);
-
         $fields = $this->resolvePrintFields($valuesByKey, $layoutRows, $layoutPersisted, $printTemplateKind);
 
         return [
@@ -83,11 +71,7 @@ final class EApprovalSubmissionPrintService
                 : null,
             'print_template_kind' => $printTemplateKind !== '' ? $printTemplateKind : null,
             'fields' => $fields,
-            'grids' => $this->buildGridPrintModels(
-                $submission,
-                $this->resolveProcurementPo($submission),
-                $this->resolveProcurementPr($submission),
-            ),
+            'grids' => $this->buildGridPrintModels($submission),
             'approvals' => $submission->approvals->map(static fn ($a) => [
                 'step' => $a->step?->step_order,
                 'approver' => $a->approver?->name,
@@ -114,20 +98,13 @@ final class EApprovalSubmissionPrintService
      */
     private function resolvePrintFields(array $valuesByKey, array $layoutRows, bool $layoutPersisted, string $printTemplateKind): array
     {
-        if ($this->usesDedicatedPrintTemplate($printTemplateKind)) {
-            return $this->allPrintFields($valuesByKey);
-        }
-
-        if (! $layoutPersisted) {
+        if ($this->usesDedicatedPrintTemplate($printTemplateKind) || ! $layoutPersisted) {
             return $this->allPrintFields($valuesByKey);
         }
 
         $fields = [];
         foreach ($layoutRows as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            if (empty($row['visible'])) {
+            if (! is_array($row) || empty($row['visible'])) {
                 continue;
             }
             $key = trim((string) ($row['key'] ?? ''));
@@ -141,11 +118,7 @@ final class EApprovalSubmissionPrintService
             ];
         }
 
-        if ($fields === []) {
-            return $this->allPrintFields($valuesByKey);
-        }
-
-        return $fields;
+        return $fields === [] ? $this->allPrintFields($valuesByKey) : $fields;
     }
 
     /**
@@ -170,7 +143,10 @@ final class EApprovalSubmissionPrintService
         return in_array($printTemplateKind, self::DEDICATED_PRINT_TEMPLATE_KINDS, true);
     }
 
-    private function buildGridPrintModels(EApprovalSubmission $submission, ?ProcurementPo $po = null, ?ProcurementPr $pr = null): array
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildGridPrintModels(EApprovalSubmission $submission): array
     {
         $grids = [];
 
@@ -188,15 +164,6 @@ final class EApprovalSubmissionPrintService
 
             $raw = is_scalar($row->value) ? trim((string) $row->value) : '';
             $parsedRows = $this->parseGridRowsForPrint($raw, $columns);
-
-            if ($parsedRows === [] && $po !== null && $key === 'line_items') {
-                $parsedRows = $this->gridRowsFromPurchaseOrder($po, $columns);
-            }
-
-            if ($parsedRows === [] && $pr !== null && $key === 'line_items') {
-                $parsedRows = $this->gridRowsFromPurchaseRequisition($pr, $columns);
-            }
-
             if ($parsedRows === []) {
                 continue;
             }
@@ -209,105 +176,7 @@ final class EApprovalSubmissionPrintService
             ];
         }
 
-        if ($grids === [] && $po !== null) {
-            $columns = ProcurementLineGridColumns::PO_LABELS;
-            $rows = $this->gridRowsFromPurchaseOrder($po, $columns);
-            if ($rows !== []) {
-                $grids[] = [
-                    'key' => 'line_items',
-                    'label' => 'PO line items',
-                    'columns' => $columns,
-                    'rows' => $rows,
-                ];
-            }
-        }
-
-        if ($grids === [] && $pr !== null) {
-            $columns = ProcurementLineGridColumns::PR_LABELS;
-            $rows = $this->gridRowsFromPurchaseRequisition($pr, $columns);
-            if ($rows !== []) {
-                $grids[] = [
-                    'key' => 'line_items',
-                    'label' => 'Line items',
-                    'columns' => $columns,
-                    'rows' => $rows,
-                ];
-            }
-        }
-
         return $grids;
-    }
-
-    private function resolveProcurementPr(EApprovalSubmission $submission): ?ProcurementPr
-    {
-        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
-        if (($metadata['form_family'] ?? null) !== 'purchase_requisition') {
-            return null;
-        }
-
-        return ProcurementPr::query()
-            ->with('lines')
-            ->where('e_approval_submission_id', (string) $submission->id)
-            ->first();
-    }
-
-    private function resolveProcurementPo(EApprovalSubmission $submission): ?ProcurementPo
-    {
-        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
-        if (($metadata['form_family'] ?? null) !== 'purchase_order') {
-            return null;
-        }
-
-        return ProcurementPo::query()
-            ->with('lines')
-            ->where('e_approval_submission_id', (string) $submission->id)
-            ->first();
-    }
-
-    /**
-     * @param  list<string>  $columns
-     * @return list<list<string>>
-     */
-    private function gridRowsFromPurchaseOrder(ProcurementPo $po, array $columns): array
-    {
-        $po->loadMissing('lines');
-        $rows = [];
-
-        foreach ($po->lines as $line) {
-            $row = [];
-            foreach ($columns as $column) {
-                $row[] = ProcurementLineGridColumns::printCellValue($line, $column);
-            }
-
-            if (array_filter($row, static fn (string $cell): bool => trim($cell) !== '') !== []) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param  list<string>  $columns
-     * @return list<list<string>>
-     */
-    private function gridRowsFromPurchaseRequisition(ProcurementPr $pr, array $columns): array
-    {
-        $pr->loadMissing('lines');
-        $rows = [];
-
-        foreach ($pr->lines as $line) {
-            $row = [];
-            foreach ($columns as $column) {
-                $row[] = ProcurementLineGridColumns::printCellValue($line, $column);
-            }
-
-            if (array_filter($row, static fn (string $cell): bool => trim($cell) !== '') !== []) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
     }
 
     /**
@@ -320,7 +189,7 @@ final class EApprovalSubmissionPrintService
             return [];
         }
 
-        $labeledRows = $this->gridParser->labeledRows($gridRaw, $columns);
+        $labeledRows = $this->labeledGridRows($gridRaw, $columns);
         $normalized = [];
 
         foreach ($labeledRows as $row) {
@@ -329,15 +198,14 @@ final class EApprovalSubmissionPrintService
 
             foreach ($columns as $index => $label) {
                 $value = $this->resolveLabeledGridCell($row, $label, $index);
-
-                if ($value === '' && $this->isAmountColumn($label)) {
-                    $value = $this->computeGridLineAmount($row, $columns);
+                if ($value === '' && str_contains(strtolower(trim($label)), 'amount')) {
+                    $qty = $this->parseAmount($this->resolveLabeledGridCell($row, 'Qty', $this->columnIndex($columns, 'Qty') ?? 1));
+                    $unitPrice = $this->parseAmount($this->resolveLabeledGridCell($row, 'Unit price', $this->columnIndex($columns, 'Unit price') ?? 2));
+                    $value = ($qty <= 0 && $unitPrice <= 0) ? '' : number_format($qty * $unitPrice, 2, '.', '');
                 }
-
                 if ($value !== '') {
                     $hasContent = true;
                 }
-
                 $cells[] = $value;
             }
 
@@ -350,8 +218,35 @@ final class EApprovalSubmissionPrintService
     }
 
     /**
-     * @param  array<string, string>  $row
+     * @param  list<string>  $columns
+     * @return list<array<string, string>>
      */
+    private function labeledGridRows(string $gridRaw, array $columns): array
+    {
+        try {
+            $decoded = json_decode($gridRaw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        $rows = is_array($decoded['rows'] ?? null) ? $decoded['rows'] : (is_array($decoded) ? $decoded : []);
+        $out = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $labeled = [];
+            foreach ($columns as $index => $label) {
+                $value = $row[$label] ?? $row[(string) $index] ?? $row[$index] ?? '';
+                $labeled[$label] = is_scalar($value) ? trim((string) $value) : '';
+            }
+            $out[] = $labeled;
+        }
+
+        return $out;
+    }
+
+    /** @param  array<string, string>  $row */
     private function resolveLabeledGridCell(array $row, string $label, int $index): string
     {
         foreach ([$label, strtolower($label), (string) $index] as $key) {
@@ -362,40 +257,15 @@ final class EApprovalSubmissionPrintService
 
         $needle = strtolower(trim($label));
         foreach ($row as $key => $value) {
-            if (! is_string($key) || strtolower(trim($key)) !== $needle) {
-                continue;
+            if (is_string($key) && strtolower(trim($key)) === $needle) {
+                return trim((string) $value);
             }
-
-            return trim((string) $value);
         }
 
         return '';
     }
 
-    private function isAmountColumn(string $label): bool
-    {
-        return str_contains(strtolower(trim($label)), 'amount');
-    }
-
-    /**
-     * @param  array<string, string>  $row
-     * @param  list<string>  $columns
-     */
-    private function computeGridLineAmount(array $row, array $columns): string
-    {
-        $qty = $this->parseAmount($this->resolveLabeledGridCell($row, 'Qty', $this->columnIndex($columns, 'Qty') ?? 1));
-        $unitPrice = $this->parseAmount($this->resolveLabeledGridCell($row, 'Unit price', $this->columnIndex($columns, 'Unit price') ?? 2));
-
-        if ($qty <= 0 && $unitPrice <= 0) {
-            return '';
-        }
-
-        return number_format($qty * $unitPrice, 2, '.', '');
-    }
-
-    /**
-     * @param  list<string>  $columns
-     */
+    /** @param  list<string>  $columns */
     private function columnIndex(array $columns, string $label): ?int
     {
         $needle = strtolower(trim($label));

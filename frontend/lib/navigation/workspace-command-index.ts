@@ -1,11 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 
 import type { AuthUser } from "@/types/auth";
-import type { ProcurementPlanFeatures } from "@/modules/procurement-one/types";
+import type { RoleAccessMatrix } from "@/lib/api/modules/admin-roles-api";
+import { canAccessDynNavHref } from "@/lib/rbac/entity-access-nav";
 import { hasPermission } from "@/lib/rbac/permissions";
-import {
-  isProcurementPlanFeatureEnabled,
-} from "@/lib/procurement/procurement-plan-features";
 import {
   isTenantModuleEnabled,
   notificationsModuleEnabled,
@@ -63,24 +61,24 @@ function filterSub(
   items: WorkspaceSubNavItem[],
   can: (p: string[]) => boolean,
   enabledModules: string[],
-  procurementPlanFeatures?: ProcurementPlanFeatures | null,
+  accessMatrix?: RoleAccessMatrix | null,
 ): WorkspaceSubNavItem[] {
   return items.filter((item) => {
     if (item.module && !isTenantModuleEnabled(enabledModules, item.module)) {
       return false;
     }
 
-    if (
-      item.procurementPlanFeature &&
-      procurementPlanFeatures &&
-      !isProcurementPlanFeatureEnabled(procurementPlanFeatures, item.procurementPlanFeature)
-    ) {
+    const allowedByPerms =
+      item.permissions.length === 0
+        ? true
+        : item.permissionsMatch === "any"
+          ? canAccessAny(can, item.permissions)
+          : can(item.permissions);
+    if (!allowedByPerms) {
       return false;
     }
 
-    return item.permissionsMatch === "any"
-      ? canAccessAny(can, item.permissions)
-      : can(item.permissions);
+    return canAccessDynNavHref(item.href, accessMatrix);
   });
 }
 
@@ -88,15 +86,16 @@ function filterTop(
   items: WorkspaceTopNavItem[],
   can: (p: string[]) => boolean,
   enabledModules: string[],
-  procurementPlanFeatures?: ProcurementPlanFeatures | null,
+  accessMatrix?: RoleAccessMatrix | null,
 ): WorkspaceTopNavItem[] {
   return items
     .map((item) => {
       if (item.items) {
-        if (!canAccessAny(can, item.permissions)) {
+        // Empty permissions = no ACL gate (DB-managed sidebar items).
+        if (item.permissions.length > 0 && !canAccessAny(can, item.permissions)) {
           return null;
         }
-        const sub = filterSub(item.items, can, enabledModules, procurementPlanFeatures);
+        const sub = filterSub(item.items, can, enabledModules, accessMatrix);
         if (sub.length === 0) {
           return null;
         }
@@ -107,11 +106,16 @@ function filterTop(
       }
 
       const allowed =
-        item.permissionsMatch === "any"
-          ? canAccessAny(can, item.permissions)
-          : can(item.permissions);
+        item.permissions.length === 0
+          ? true
+          : item.permissionsMatch === "any"
+            ? canAccessAny(can, item.permissions)
+            : can(item.permissions);
+      if (!allowed) {
+        return null;
+      }
 
-      return allowed ? item : null;
+      return canAccessDynNavHref(item.href, accessMatrix) ? item : null;
     })
     .filter((item): item is WorkspaceTopNavItem => item !== null);
 }
@@ -196,14 +200,16 @@ function dedupeNavigateItems(items: WorkspaceCommandItem[]): WorkspaceCommandIte
     byHref.set(item.href, {
       ...existing,
       keywords: [
-        ...new Set([
-          ...(existing.keywords ?? []),
-          ...(item.keywords ?? []),
-          existing.title,
-          item.title,
-          existing.parent ?? "",
-          item.parent ?? "",
-        ].filter(Boolean)),
+        ...new Set(
+          [
+            ...(existing.keywords ?? []),
+            ...(item.keywords ?? []),
+            existing.title,
+            item.title,
+            existing.parent ?? "",
+            item.parent ?? "",
+          ].filter(Boolean),
+        ),
       ],
     });
   }
@@ -215,6 +221,7 @@ function filterQuickActions(
   actions: WorkspaceQuickAction[],
   enabledModules: string[],
   can: (perms: string[]) => boolean,
+  accessMatrix?: RoleAccessMatrix | null,
 ): WorkspaceCommandItem[] {
   return actions
     .filter((action) => {
@@ -226,9 +233,15 @@ function filterQuickActions(
         return false;
       }
 
-      return action.permissionsMatch === "any"
-        ? canAccessAny(can, action.permissions)
-        : can(action.permissions);
+      const allowed =
+        action.permissionsMatch === "any"
+          ? canAccessAny(can, action.permissions)
+          : can(action.permissions);
+      if (!allowed) {
+        return false;
+      }
+
+      return canAccessDynNavHref(action.href, accessMatrix);
     })
     .map((action) => ({
       id: `action:${action.id}`,
@@ -246,19 +259,36 @@ function filterQuickActions(
 export function buildWorkspaceCommandIndex(
   user: AuthUser | null,
   enabledModules: string[],
+  /** When provided (e.g. Manage Sidebar DB tree), use this instead of static workspaceNavGroups. */
+  navGroups?: Array<{ group: string; items: WorkspaceTopNavItem[] }> | null,
 ): { navigate: WorkspaceCommandItem[]; actions: WorkspaceCommandItem[] } {
   const can = (perms: string[]) => hasPermission(user, perms);
+  const accessMatrix = user?.accessMatrix;
 
-  const filteredGroups = workspaceNavGroups
-    .map((group) => ({
-      group: group.group,
-      items: filterTop(filterByTenantModules(group.items, enabledModules), can, enabledModules),
-    }))
-    .filter((group) => group.items.length > 0);
+  const filteredGroups =
+    navGroups && navGroups.length > 0
+      ? navGroups
+          .map((group) => ({
+            group: group.group,
+            // Backend already enforced module/permission visibility for DB sidebar.
+            items: filterTop(group.items, can, enabledModules, accessMatrix),
+          }))
+          .filter((group) => group.items.length > 0)
+      : workspaceNavGroups
+          .map((group) => ({
+            group: group.group,
+            items: filterTop(
+              filterByTenantModules(group.items, enabledModules),
+              can,
+              enabledModules,
+              accessMatrix,
+            ),
+          }))
+          .filter((group) => group.items.length > 0);
 
   return {
     navigate: dedupeNavigateItems(flattenNavGroups(filteredGroups)),
-    actions: filterQuickActions(workspaceQuickActions, enabledModules, can),
+    actions: filterQuickActions(workspaceQuickActions, enabledModules, can, accessMatrix),
   };
 }
 

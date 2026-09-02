@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
@@ -32,7 +31,6 @@ final class SubmissionWorkflowService
         private readonly EApprovalSubmissionWorkflowResolver $workflowResolver,
         private readonly EApprovalFieldMapResolver $fieldMapResolver,
         private readonly EApprovalFormFieldChoicesResolver $fieldChoicesResolver,
-        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalWorkflowConditionEvaluator $conditionEvaluator,
     ) {}
 
@@ -77,7 +75,6 @@ final class SubmissionWorkflowService
             $this->audit->log('no_steps', $submission->id, 'No workflow steps; auto-approved.');
             $this->notifyRequestorOutcome($submission, 'approved', __('System'));
             $submission->loadMissing(['form', 'values.field', 'attachments']);
-            $this->controlledDocumentHook->afterSubmissionMutation($submission, null);
 
             return;
         }

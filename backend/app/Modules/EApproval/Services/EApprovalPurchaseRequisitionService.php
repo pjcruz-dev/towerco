@@ -4,20 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\ProcurementOne\Models\ProcurementPo;
-use App\Modules\ProcurementOne\Models\ProcurementPr;
-use App\Modules\ProcurementOne\Services\ProcurementPoPrBalanceService;
-use App\Modules\ProcurementOne\Support\ProcurementPoStatus;
 use Illuminate\Support\Facades\DB;
 
 final class EApprovalPurchaseRequisitionService
 {
-    public function __construct(
-        private readonly ProcurementPoPrBalanceService $procurementBalances,
-    ) {}
     /**
      * Approved purchase requisitions for the requestor with remaining PO budget.
      *
@@ -87,19 +79,6 @@ final class EApprovalPurchaseRequisitionService
 
     public function openBalanceForParent(string $parentSubmissionId, ?string $excludeChildSubmissionId = null): ?float
     {
-        $modelBalance = $this->openBalanceForParentFromModels($parentSubmissionId, $excludeChildSubmissionId);
-        if ($modelBalance !== null) {
-            return $modelBalance;
-        }
-
-        $procurementPr = ProcurementPr::query()
-            ->where('e_approval_submission_id', $parentSubmissionId)
-            ->first();
-
-        if ($procurementPr instanceof ProcurementPr) {
-            return $this->openBalanceForProcurementPr($procurementPr, $excludeChildSubmissionId);
-        }
-
         $rows = $this->parentBalanceRows(null, $parentSubmissionId, $excludeChildSubmissionId, false);
 
         if ($rows !== []) {
@@ -108,113 +87,6 @@ final class EApprovalPurchaseRequisitionService
             $committed = (float) ($row->committed_amount ?? 0);
 
             return max(0, round($estimated - $committed, 2));
-        }
-
-        return null;
-    }
-
-    private function openBalanceForProcurementPr(
-        ProcurementPr $procurementPr,
-        ?string $excludeChildSubmissionId = null,
-    ): ?float {
-        $excludePoId = null;
-        if ($excludeChildSubmissionId !== null && $excludeChildSubmissionId !== '') {
-            $excludePoId = ProcurementPo::query()
-                ->where('e_approval_submission_id', $excludeChildSubmissionId)
-                ->value('id');
-            $excludePoId = $excludePoId !== null ? (string) $excludePoId : null;
-        }
-
-        return $this->procurementBalances->openBalanceForPr($procurementPr, $excludePoId);
-    }
-
-    private function openBalanceForParentFromModels(
-        string $parentSubmissionId,
-        ?string $excludeChildSubmissionId = null,
-    ): ?float {
-        /** @var EApprovalSubmission|null $parent */
-        $parent = EApprovalSubmission::query()
-            ->with(['values.field', 'form'])
-            ->find($parentSubmissionId);
-
-        if ($parent === null || (string) $parent->status !== EApprovalSubmissionStatus::APPROVED) {
-            return null;
-        }
-
-        if (! $this->isPurchaseRequisitionForm($parent)) {
-            return null;
-        }
-
-        $documentNo = trim((string) ($parent->document_no ?? ''));
-        if ($documentNo === '' || str_starts_with($documentNo, 'DRAFT-')) {
-            return null;
-        }
-
-        $estimated = $this->submissionFieldAmount($parent, 'estimated_total');
-        if ($estimated === null) {
-            $procurementPr = ProcurementPr::query()
-                ->where('e_approval_submission_id', $parentSubmissionId)
-                ->first();
-            $estimated = $procurementPr !== null ? (float) $procurementPr->estimated_total : null;
-        }
-
-        if ($estimated === null) {
-            return null;
-        }
-
-        $childrenQuery = EApprovalSubmission::query()
-            ->with(['values.field'])
-            ->where('parent_submission_id', $parentSubmissionId)
-            ->where('status', '<>', EApprovalSubmissionStatus::REJECTED);
-
-        if ($excludeChildSubmissionId !== null && $excludeChildSubmissionId !== '') {
-            $childrenQuery->where('id', '<>', $excludeChildSubmissionId);
-        }
-
-        $committed = 0.0;
-        foreach ($childrenQuery->get() as $child) {
-            $committed += $this->childPurchaseOrderCommittedAmount($child);
-        }
-
-        return max(0, round($estimated - $committed, 2));
-    }
-
-    private function childPurchaseOrderCommittedAmount(EApprovalSubmission $child): float
-    {
-        $procurementPo = ProcurementPo::query()->where('e_approval_submission_id', (string) $child->id)->first();
-        if ($procurementPo instanceof ProcurementPo) {
-            if (in_array((string) $procurementPo->status, [ProcurementPoStatus::CANCELLED, ProcurementPoStatus::VOIDED], true)) {
-                return 0.0;
-            }
-
-            return (float) $procurementPo->grand_total;
-        }
-
-        return $this->submissionFieldAmount($child, 'grand_total')
-            ?? $this->submissionFieldAmount($child, 'total_amount')
-            ?? 0.0;
-    }
-
-    private function isPurchaseRequisitionForm(EApprovalSubmission $submission): bool
-    {
-        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
-
-        return ($metadata['form_family'] ?? null) === 'purchase_requisition';
-    }
-
-    private function submissionFieldAmount(EApprovalSubmission $submission, string $fieldName): ?float
-    {
-        foreach ($submission->values as $value) {
-            if ((string) ($value->field?->name ?? '') !== $fieldName) {
-                continue;
-            }
-
-            $raw = trim(str_replace(',', '', (string) ($value->value ?? '')));
-            if ($raw === '' || ! is_numeric($raw)) {
-                return null;
-            }
-
-            return (float) $raw;
         }
 
         return null;

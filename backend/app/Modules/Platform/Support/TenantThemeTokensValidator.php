@@ -16,6 +16,10 @@ use Illuminate\Validation\ValidationException;
  *     favicon_url?: string|null,
  *     logo_asset?: string|null,
  *     favicon_asset?: string|null,
+ *     company_address?: string|null,
+ *     company_phone?: string|null,
+ *     company_email?: string|null,
+ *     company_tin?: string|null,
  *     light?: array<string, string>,
  *     dark?: array<string, string>
  * }
@@ -82,6 +86,10 @@ final class TenantThemeTokensValidator
                 'favicon_url' => ['nullable', 'string', 'max:2048'],
                 'logo_asset' => ['nullable', 'string', 'max:512', 'regex:'.self::HOSTED_ASSET_PATH],
                 'favicon_asset' => ['nullable', 'string', 'max:512', 'regex:'.self::HOSTED_ASSET_PATH],
+                'company_address' => ['nullable', 'string', 'max:1000'],
+                'company_phone' => ['nullable', 'string', 'max:80'],
+                'company_email' => ['nullable', 'string', 'max:255'],
+                'company_tin' => ['nullable', 'string', 'max:80'],
                 'light' => ['nullable', 'array', 'max:50'],
                 'dark' => ['nullable', 'array', 'max:50'],
             ],
@@ -95,6 +103,26 @@ final class TenantThemeTokensValidator
                 }
                 if (! is_string($url) || ! self::isAllowedPublicUrl($url)) {
                     $v->errors()->add($urlKey, __('Use an HTTPS URL or upload a file in Tenant branding.'));
+                }
+            }
+
+            $email = $themeTokens['company_email'] ?? null;
+            if (is_string($email) && trim($email) !== '' && filter_var(trim($email), FILTER_VALIDATE_EMAIL) === false) {
+                $v->errors()->add('company_email', __('Enter a valid company email.'));
+            }
+
+            foreach (['company_address', 'company_phone', 'company_email', 'company_tin'] as $textKey) {
+                $value = $themeTokens[$textKey] ?? null;
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                if (! is_string($value)) {
+                    $v->errors()->add($textKey, __('Company letterhead fields must be text.'));
+
+                    continue;
+                }
+                if (preg_match('/[<>]|javascript:/i', $value) === 1) {
+                    $v->errors()->add($textKey, __('Invalid characters in :key.', ['key' => $textKey]));
                 }
             }
 
@@ -159,6 +187,10 @@ final class TenantThemeTokensValidator
             'version' => 1,
             'logo_url' => null,
             'favicon_url' => null,
+            'company_address' => null,
+            'company_phone' => null,
+            'company_email' => null,
+            'company_tin' => null,
             'light' => [],
             'dark' => [],
         ];
@@ -170,6 +202,15 @@ final class TenantThemeTokensValidator
         try {
             $validated = self::validate($raw);
             unset($validated['logo_asset'], $validated['favicon_asset']);
+
+            // Normalize empty strings to null for public consumers.
+            foreach (['company_address', 'company_phone', 'company_email', 'company_tin'] as $key) {
+                if (! array_key_exists($key, $validated)) {
+                    continue;
+                }
+                $value = $validated[$key];
+                $validated[$key] = is_string($value) && trim($value) !== '' ? trim($value) : null;
+            }
 
             return array_merge($defaults, $validated);
         } catch (ValidationException) {

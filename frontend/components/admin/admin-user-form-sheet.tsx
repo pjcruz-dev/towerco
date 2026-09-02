@@ -186,7 +186,7 @@ export function AdminUserFormSheet({
         : roleOptions.map((name) => ({
             id: 0,
             name,
-            is_baseline: ["tenant_admin", "billing", "viewer", "manager"].includes(name),
+            is_baseline: ["administrator", "billing", "viewer"].includes(name),
             permissions: [] as string[],
             user_count: 0,
           }));
@@ -197,7 +197,7 @@ export function AdminUserFormSheet({
       .map((name) => ({
         id: 0,
         name,
-        is_baseline: ["tenant_admin", "billing", "viewer", "manager"].includes(name),
+        is_baseline: ["administrator", "billing", "viewer"].includes(name),
         is_system: true,
         permissions: [] as string[],
         user_count: 0,
@@ -318,8 +318,9 @@ export function AdminUserFormSheet({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Gate approvals also require the user as SAQ / PMO / CME owner on each rollout (edit rollout metadata).
-                  Use <span className="font-medium">manager</span> if one person covers multiple disciplines.
+                  Job roles (Finance Officer, Staff, Admin, …) control day-to-day access. Use{" "}
+                  <span className="font-medium">Administrator</span> only for full IT control of this
+                  organization.
                 </p>
                 {editing && effectivePermissionGroups.length > 0 ? (
                   <div className="rounded-lg border border-border/60 bg-muted/10 p-3">

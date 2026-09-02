@@ -10,9 +10,11 @@ import {
   LogOut,
   Monitor,
   Moon,
+  PanelLeft,
   Settings,
   Shield,
   Sun,
+  PanelTop,
   UserCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -56,6 +58,10 @@ import {
 } from "@/lib/tenant/environment-switch";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import {
+  useNavigationLayoutStore,
+  type NavigationLayout,
+} from "@/stores/navigation-layout-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
 type ThemeChoice = "light" | "dark" | "system";
@@ -148,6 +154,53 @@ function ThemeSegment({ onSelect }: { onSelect?: () => void }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function NavigationLayoutSegment() {
+  const layout = useNavigationLayoutStore((s) => s.layout);
+  const setLayout = useNavigationLayoutStore((s) => s.setLayout);
+  const hydrate = useNavigationLayoutStore((s) => s.hydrate);
+  const hydrated = useNavigationLayoutStore((s) => s.hydrated);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  const options: { value: NavigationLayout; label: string; icon: typeof PanelLeft }[] = [
+    { value: "sidebar", label: "Sidebar", icon: PanelLeft },
+    { value: "navbar", label: "Navbar", icon: PanelTop },
+  ];
+
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <PanelLeft className="size-3.5" aria-hidden />
+        Navigation Layout
+      </p>
+      <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        {options.map((option) => {
+          const Icon = option.icon;
+          const isActive = hydrated ? layout === option.value : option.value === "sidebar";
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setLayout(option.value)}
+              className={cn(
+                "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors",
+                isActive
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+              )}
+            >
+              <span>{option.label}</span>
+              <Icon className="size-3.5 opacity-80" aria-hidden />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -431,6 +484,8 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
           <p className="text-xs font-medium text-muted-foreground">Appearance</p>
           <ThemeSegment onSelect={onNavigate} />
         </div>
+
+        <NavigationLayoutSegment />
 
         {settingsLinks.length > 0 ? (
           <div className="space-y-1">

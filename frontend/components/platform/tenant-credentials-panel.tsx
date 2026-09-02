@@ -15,7 +15,7 @@ export function TenantCredentialsPanel({
   initialAdmin,
   loginDomain,
   loginUrl,
-  title = "Initial tenant administrator",
+  title = "Initial Administrator",
 }: Props) {
   const resolvedLoginUrl =
     loginUrl ?? (loginDomain ? tenantLoginUrl(loginDomain) : null);

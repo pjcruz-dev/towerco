@@ -8,7 +8,7 @@ import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { DashboardLineChart } from "@/components/dashboard/dashboard-line-chart";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";

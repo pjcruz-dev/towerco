@@ -25,16 +25,10 @@ final class TenantRbacModuleRoleTemplates
     {
         $roles = array_merge(
             self::coreRoles(),
-            self::projectOneRoles(),
+            self::atcOperationalRoles(),
             self::ticketingRoles(),
-            self::procurementRoles(),
-            self::financeRoles(),
             self::eApprovalRoles(),
-            self::documentsRoles(),
-            self::controlledDocumentsRoles(),
-            self::sitesRoles(),
             self::aiAssistantRoles(),
-            self::disciplineAddons(),
             self::legacyAliases(),
         );
 
@@ -79,17 +73,28 @@ final class TenantRbacModuleRoleTemplates
                 'billing:view',
                 'billing:manage',
             ],
-            'manager' => [
+            'finance' => [
                 'dashboard:view',
-                'ai_assistant:use',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view_discipline',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+            ],
+        ];
+    }
+
+    /**
+     * Metacoresoft Role Management parity — Alliance Towers operational job roles.
+     *
+     * @return array<string, list<string>>
+     */
+    private static function atcOperationalRoles(): array
+    {
+        return [
+            'admin' => [
+                'dashboard:view',
+                'workspace:audit:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'dynamic_entities:fields:manage',
                 'e_approval:view',
                 'e_approval:submissions:create',
                 'e_approval:submissions:view',
@@ -97,70 +102,72 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:view',
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'finance_one:view',
-                'sites:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
             ],
-            'finance' => [
+            'administrator' => [
                 'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:finance:view',
-                'project_one:finance:edit',
-                'finance_one:view',
-                'finance_one:reports:view',
             ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function projectOneRoles(): array
-    {
-        return [
-            'project_one_viewer' => [
+            'commercial_sales_officer' => [
                 'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
             ],
-            'project_one_contributor' => [
+            'finance_officer' => [
                 'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
+                'e_approval:approve',
             ],
-            'project_one_operator' => [
+            'procurement_officer' => [
                 'dashboard:view',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view_discipline',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
+                'e_approval:approve',
             ],
-            'project_one_admin' => [
+            'project_manager' => [
                 'dashboard:view',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view',
-                'project_one:finance:edit',
-                'project_one:playbook:configure',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
+                'e_approval:approve',
+                'ticketing:view',
+                'ticketing:tickets:create',
+                'ticketing:tickets:manage',
+            ],
+            'sa_officer' => [
+                'dashboard:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
+            ],
+            'sales' => [
+                'dashboard:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
+            ],
+            'staff' => [
+                'dashboard:view',
+                'dynamic_entities:view',
+                'ticketing:view',
+                'ticketing:tickets:create',
+                'e_approval:view',
+                'e_approval:submissions:create',
+                'e_approval:submissions:view',
             ],
         ];
     }
@@ -190,104 +197,6 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
                 'ticketing:settings:manage',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function procurementRoles(): array
-    {
-        return [
-            'procurement_viewer' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:vendors:view',
-                'procurement_one:inventory:view',
-            ],
-            'procurement_contributor' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:vendors:view',
-                'procurement_one:inventory:view',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'procurement_operator' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'procurement_admin' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'procurement_one:settings:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function financeRoles(): array
-    {
-        return [
-            'finance_viewer' => [
-                'dashboard:view',
-                'finance_one:view',
-            ],
-            'finance_contributor' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'finance_operator' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'finance_one:documents:manage',
-                'finance_one:budget:manage',
-                'finance_one:contracts:manage',
-                'finance_one:payments:manage',
-                'finance_one:reports:view',
-                'e_approval:view',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-            'finance_admin' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'finance_one:documents:manage',
-                'finance_one:budget:manage',
-                'finance_one:contracts:manage',
-                'finance_one:payments:manage',
-                'finance_one:reports:view',
-                'finance_one:settings:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
             ],
         ];
     }
@@ -326,118 +235,6 @@ final class TenantRbacModuleRoleTemplates
         ];
     }
 
-    /**
-     * Site & rollout document roles (binders, uploads, templates).
-     *
-     * @return array<string, list<string>>
-     */
-    private static function documentsRoles(): array
-    {
-        return [
-            'documents_viewer' => [
-                'dashboard:view',
-                'documents:view',
-            ],
-            'documents_contributor' => [
-                'dashboard:view',
-                'documents:view',
-                'documents:upload',
-            ],
-            'documents_operator' => [
-                'dashboard:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
-            ],
-            'documents_approver' => [
-                'dashboard:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
-            ],
-            'documents_admin' => [
-                'dashboard:view',
-                'documents:view',
-                'documents:upload',
-                'documents:manage',
-                'documents:template:manage',
-            ],
-        ];
-    }
-
-    /**
-     * Controlled Document Form (DCF) roles — managed through E-Approval workflow.
-     *
-     * @return array<string, list<string>>
-     */
-    private static function controlledDocumentsRoles(): array
-    {
-        return [
-            // Read-only access to the controlled document register.
-            'dcf_viewer' => [
-                'dashboard:view',
-                'documents:controlled:view',
-            ],
-            // Can submit new controlled documents and revisions via E-Approval.
-            'dcf_author' => [
-                'dashboard:view',
-                'documents:controlled:view',
-                'documents:controlled:create',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            // Can approve controlled-document E-Approval workflow steps.
-            'dcf_approver' => [
-                'dashboard:view',
-                'documents:controlled:view',
-                'documents:controlled:approve',
-                'e_approval:view',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-            // Full document control: publish, obsolete, edit metadata, upload revisions.
-            'dcf_controller' => [
-                'dashboard:view',
-                'documents:controlled:view',
-                'documents:controlled:create',
-                'documents:controlled:approve',
-                'documents:controlled:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-            // Admin: full DCF control including bulk import and E-Approval form management.
-            'dcf_admin' => [
-                'dashboard:view',
-                'documents:controlled:view',
-                'documents:controlled:create',
-                'documents:controlled:approve',
-                'documents:controlled:manage',
-                'documents:controlled:import',
-                'e_approval:view',
-                'e_approval:forms:manage',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-                'e_approval:audit:view',
-                'e_approval:settings:manage',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function sitesRoles(): array
-    {
-        return [
-            'sites_viewer' => [
-                'dashboard:view',
-                'sites:view',
-            ],
-        ];
-    }
-
     /** @return array<string, list<string>> */
     private static function aiAssistantRoles(): array
     {
@@ -454,32 +251,8 @@ final class TenantRbacModuleRoleTemplates
                 'ai_assistant:tools:use',
                 'ai_assistant:actions:execute',
                 'ai_assistant:knowledge:manage',
+                'ai_assistant:prompts:manage',
                 'ai_assistant:conversations:audit',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function disciplineAddons(): array
-    {
-        return [
-            'saq_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:saq:manage',
-            ],
-            'pmo_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-            ],
-            'cme_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:cme:manage',
             ],
         ];
     }

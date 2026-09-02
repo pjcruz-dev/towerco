@@ -2,10 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Modules\AdminOne\Http\Controllers\V1\SystemConfigBrandingUploadController;
+use App\Modules\AdminOne\Http\Controllers\V1\SystemConfigShowController;
+use App\Modules\AdminOne\Http\Controllers\V1\SystemConfigUpdateController;
+use App\Modules\AdminOne\Http\Controllers\V1\IntegrationApiDocsMetaController;
+use App\Modules\AdminOne\Http\Controllers\V1\IntegrationApiKeyDestroyController;
+use App\Modules\AdminOne\Http\Controllers\V1\IntegrationApiKeyIndexController;
+use App\Modules\AdminOne\Http\Controllers\V1\IntegrationApiKeyStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\AdminSettingsShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\AdminSettingsUpdateController;
-use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupDownloadController;
-use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleCloneController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleCompareController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleDestroyController;
@@ -13,6 +18,14 @@ use App\Modules\AdminOne\Http\Controllers\V1\RoleIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleUpdateController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavAdminShowController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavItemDestroyController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavItemStoreController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavItemUpdateController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavReorderController;
+use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavSeedController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupDownloadController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBillingCheckoutSessionStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBillingPortalSessionStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBillingShowController;
@@ -39,12 +52,18 @@ use App\Modules\AdminOne\Http\Controllers\V1\TenantUserSeatUsageController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserUpdateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantWorkspaceDashboardController;
+use App\Modules\AdminOne\Http\Controllers\V1\WorkspaceSidebarShowController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantActionCancelController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantActionConfirmController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantAskController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AssistantMetaShowController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationIndexController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationShowController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantFeedbackStoreController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AiPromptModuleIndexController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AiPromptModuleResetController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AiPromptModuleShowController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AiPromptModuleUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeArchiveController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeDestroyController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeIndexController;
@@ -54,42 +73,65 @@ use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeShowController
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeStoreController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantRetrieveController;
-use App\Modules\AssetOne\Http\Controllers\V1\AssetIndexController;
-use App\Modules\AssetOne\Http\Controllers\V1\AssetOneDashboardController;
-use App\Modules\AssetOne\Http\Controllers\V1\AssetShowController;
-use App\Modules\AssetOne\Http\Controllers\V1\AssetStatusUpdateController;
-use App\Modules\AssetOne\Http\Controllers\V1\AssetStoreController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentIndexController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentLookupController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentObsoleteController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessShowController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessUpdateController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionDownloadController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionFileStoreController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionStreamController;
-use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentShowController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentBinderTemplateResetController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentBinderTemplateShowController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentBinderTemplateUpdateController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentExpiringIndexController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentFileDownloadController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentFileMetadataUpdateController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentFileRequestApprovalController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentFileShowController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentFileVersionStoreController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentRolloutLeasePackageMigrateController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteFileIndexController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteFilePresignCompleteController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteFilePresignStoreController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteFileReorderController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteFileStoreController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteGateChecklistController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteLessorStoreController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteRolloutOptionsController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteWorkspaceShowController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentSiteWorkspaceUpdateController;
-use App\Modules\Documents\Http\Controllers\V1\DocumentUploadCapabilitiesShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\AtcExecutiveDashboardController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\AtcTicketingBoardController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynInvoiceAgingAdjustController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFinanceReportsController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskRunController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskSyncController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskToggleController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportDuplicateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportRenderController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderAiBuildController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderPreviewController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderSaveController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynSearchIndexActionController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynSearchIndexStatusController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormDownloadController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordBulkController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordDestroyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordExportController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportAnalyzeController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportTemplateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordShowController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordWorkflowActionController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\PurchaseMonitoringReportController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalAnalyticsShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalApprovalDecideController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalApprovalIndexController;
@@ -131,8 +173,8 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplateCustomShowCon
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplateCustomStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplateCustomUpdateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplateFinanceBundleStoreController;
-use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplatesIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplateStoreController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormTemplatesIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormUpdateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormValidateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkflowPreviewController;
@@ -210,8 +252,6 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionSubmitDraftController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionWorkflowPreviewController;
-use App\Modules\FiberOne\Http\Controllers\V1\FiberOneDashboardController;
-use App\Modules\FiberOne\Http\Controllers\V1\FiberRouteIndexController;
 use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminIndexController;
 use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminPublishController;
 use App\Modules\Help\Http\Controllers\V1\HelpGuideAdminShowController;
@@ -231,175 +271,6 @@ use App\Modules\Notifications\Http\Controllers\V1\TenantNotificationIndexControl
 use App\Modules\Notifications\Http\Controllers\V1\TenantNotificationMarkAllReadController;
 use App\Modules\Notifications\Http\Controllers\V1\TenantNotificationMarkReadController;
 use App\Modules\Notifications\Http\Controllers\V1\TenantNotificationUnreadCountController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceAgingIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceFormSchemaController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceFromPoStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceGlExportController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceSubmitController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementApInvoiceUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementBudgetLineDestroyController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementBudgetLineIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementBudgetLineStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementBudgetLineUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementBudgetUtilizationShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractActivateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractExpiringIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractTerminateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementContractUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementCostCenterIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementCostCenterStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementCreditNoteApproveController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementCreditNoteStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementEntityCsvExportController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementExcelPackExportController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnAttachmentDownloadController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnAttachmentStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnFromPoStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnPostController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnPrintController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementGrnUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryDeployStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryLocationIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryLocationStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryLocationUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryMovementIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryStockBalanceIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementInventoryTransferStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementOneDashboardController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementOneMetadataController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementOneSettingsShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementOneSettingsUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementP2pDashboardController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchExportController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchMarkExportedController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchMarkReconciledController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentBatchStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestApproveController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestFromApInvoiceStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestMarkPaidController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestMarkReconciledController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestScheduleController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPaymentRequestSubmitController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoCancelController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoFormSchemaController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoFromPrStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoMigrateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoSendVendorEmailController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoSubmitController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPoVoidController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrAttachmentStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrCancelController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrFormSchemaController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrMigrateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrSubmitController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementPrVoidController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqAwardController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqBidAttachmentDownloadController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqBidStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqBidVersionsIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqCancelController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqCloseBiddingController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqComparisonShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqFromPrStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqInviteVendorsController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqPoStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqPublicQuoteBidStoreController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqPublicQuoteShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqPublishController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqResendVendorInvitationController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementRfqShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorAccreditationUpdateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorContractsIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorFormSchemaController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorInboxShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorIndexController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorMigrateController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorShowController;
-use App\Modules\ProcurementOne\Http\Controllers\V1\ProcurementVendorSpendDashboardController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectApprovalIndexController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectApprovalStoreController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectApprovalUpdateController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectIndexController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectMilestoneUpdateController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectOneDashboardController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectOneDashboardMapController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectShowController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectStoreController;
-use App\Modules\ProjectOne\Http\Controllers\V1\ProjectUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\CmeDailyReportStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\ForwardGeocodeController;
-use App\Modules\Rollout\Http\Controllers\V1\ReverseGeocodeController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutActivityIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutAssignableUsersController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutBatchStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutBulkPhaseDatesController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutBulkPhaseDatesGridController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutBulkUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutDeliveryPeriodStartController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutFileShowController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutFileStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalDecideController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalDelegationDestroyController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalDelegationIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalDelegationStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalExportController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGateApprovalSubmitController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupDestroyController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupSeedDefaultsController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutGeographyLookupUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutMapController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutPermitIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutPermitSyncController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutPlaybookConfigureController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutPlaybookStatusController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramCancelController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramExportController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramShowController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutProgramUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutRfiRecordedController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutSiteLicenseRecordedController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutSiteProfileUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutTimelinePhaseGateUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\RolloutTssrApprovedController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteCandidateRejectController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteCandidateSelectController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteCandidateStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteCandidateUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteHuntingLogStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteProfitabilityShowController;
-use App\Modules\Rollout\Http\Controllers\V1\SiteProfitabilityUpdateController;
-use App\Modules\Rollout\Http\Controllers\V1\TenantPublicHolidayDestroyController;
-use App\Modules\Rollout\Http\Controllers\V1\TenantPublicHolidayIndexController;
-use App\Modules\Rollout\Http\Controllers\V1\TenantPublicHolidaySeedPhilippinesController;
-use App\Modules\Rollout\Http\Controllers\V1\TenantPublicHolidayStoreController;
-use App\Modules\Rollout\Http\Controllers\V1\TenantPublicHolidayUpdateController;
-use App\Modules\Sites\Http\Controllers\V1\SiteIndexController;
-use App\Modules\Sites\Http\Controllers\V1\SiteShowController;
 use App\Modules\Tenancy\Http\Controllers\V1\TenantEnvironmentHandoffMintController;
 use App\Modules\Tenancy\Http\Controllers\V1\TenantLinkedEnvironmentsController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAssignableUsersController;
@@ -416,9 +287,6 @@ use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketIndexController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketStoreController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketUpdateController;
-use App\Modules\TowerOne\Http\Controllers\V1\TowerIndexController;
-use App\Modules\TowerOne\Http\Controllers\V1\TowerOneDashboardController;
-use App\Modules\TowerOne\Http\Controllers\V1\TowerShowController;
 use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditEntityIndexController;
 use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditExportController;
 use App\Modules\Workspace\Http\Controllers\V1\WorkspaceAuditIndexController;
@@ -466,12 +334,6 @@ Route::middleware(['throttle:e-approval-public'])->prefix('public/e-approval')->
         ->name('api.tenant.v1.e_approval.public.shared.attachments.show');
 });
 
-Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')->group(function () {
-    Route::get('rfq-quotes/{token}', ProcurementRfqPublicQuoteShowController::class)->name('api.tenant.v1.procurement.public.rfq_quotes.show');
-    Route::post('rfq-quotes/{token}/bids', ProcurementRfqPublicQuoteBidStoreController::class)->name('api.tenant.v1.procurement.public.rfq_quotes.bids.store');
-    Route::get('vendor-inbox/{token}', ProcurementVendorInboxShowController::class)->name('api.tenant.v1.procurement.public.vendor_inbox.show');
-});
-
 Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa', 'auth.passkey'])->group(function () {
     Route::get('me', [TenantAuthController::class, 'me'])->name('api.tenant.v1.auth.me');
     Route::get('workspace/environments', TenantLinkedEnvironmentsController::class)
@@ -495,52 +357,18 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         ->middleware('throttle:20,1')
         ->name('api.tenant.v1.auth.webauthn.credentials.destroy');
     Route::post('auth/impersonation/stop', TenantImpersonationStopController::class)->name('api.tenant.v1.auth.impersonation.stop');
-    Route::get('sites', SiteIndexController::class)->name('api.tenant.v1.sites.index');
-    Route::get('sites/{site}', SiteShowController::class)->name('api.tenant.v1.sites.show');
-    Route::middleware('tenant.module:documents')->group(function () {
-        Route::get('sites/{site}/documents/gate-checklist', DocumentSiteGateChecklistController::class)->name('api.tenant.v1.sites.documents.gate_checklist');
-        Route::get('sites/{site}/documents/rollout-options', DocumentSiteRolloutOptionsController::class)->name('api.tenant.v1.sites.documents.rollout_options');
-        Route::get('sites/{site}/documents/workspace', DocumentSiteWorkspaceShowController::class)->name('api.tenant.v1.sites.documents.workspace.show');
-        Route::patch('sites/{site}/documents/workspace', DocumentSiteWorkspaceUpdateController::class)->name('api.tenant.v1.sites.documents.workspace.update');
-        Route::post('sites/{site}/documents/lessors', DocumentSiteLessorStoreController::class)->name('api.tenant.v1.sites.documents.lessors.store');
-        Route::get('sites/{site}/documents/files', DocumentSiteFileIndexController::class)->name('api.tenant.v1.sites.documents.files.index');
-        Route::post('sites/{site}/documents/files/presign', DocumentSiteFilePresignStoreController::class)->name('api.tenant.v1.sites.documents.files.presign');
-        Route::post('sites/{site}/documents/files/complete', DocumentSiteFilePresignCompleteController::class)->name('api.tenant.v1.sites.documents.files.complete');
-        Route::post('sites/{site}/documents/files', DocumentSiteFileStoreController::class)->name('api.tenant.v1.sites.documents.files.store');
-        Route::patch('sites/{site}/documents/files/reorder', DocumentSiteFileReorderController::class)->name('api.tenant.v1.sites.documents.files.reorder');
-        Route::get('documents/upload-capabilities', DocumentUploadCapabilitiesShowController::class)->name('api.tenant.v1.documents.upload_capabilities.show');
-        Route::get('documents/binder-template', DocumentBinderTemplateShowController::class)->name('api.tenant.v1.documents.binder_template.show');
-        Route::put('documents/binder-template', DocumentBinderTemplateUpdateController::class)->name('api.tenant.v1.documents.binder_template.update');
-        Route::post('documents/binder-template/reset', DocumentBinderTemplateResetController::class)->name('api.tenant.v1.documents.binder_template.reset');
-        Route::get('documents/expiring', DocumentExpiringIndexController::class)->name('api.tenant.v1.documents.expiring.index');
-        Route::post('documents/files/{document}/request-approval', DocumentFileRequestApprovalController::class)->name('api.tenant.v1.documents.files.request_approval');
-        Route::get('documents/files/{document}', DocumentFileShowController::class)->name('api.tenant.v1.documents.files.show');
-        Route::get('documents/files/{document}/download', DocumentFileDownloadController::class)->name('api.tenant.v1.documents.files.download');
-        Route::patch('documents/files/{document}/metadata', DocumentFileMetadataUpdateController::class)->name('api.tenant.v1.documents.files.metadata.update');
-        Route::post('documents/files/{document}/versions', DocumentFileVersionStoreController::class)->name('api.tenant.v1.documents.files.versions.store');
-    });
-    Route::middleware('tenant.module:document_register')->group(function () {
-        Route::get('documents/controlled', ControlledDocumentIndexController::class)->name('api.tenant.v1.documents.controlled.index');
-        Route::get('documents/controlled/register-access', ControlledDocumentRegisterAccessShowController::class)->name('api.tenant.v1.documents.controlled.register_access.show');
-        Route::put('documents/controlled/register-access', ControlledDocumentRegisterAccessUpdateController::class)->name('api.tenant.v1.documents.controlled.register_access.update');
-        Route::get('documents/controlled/lookup', ControlledDocumentLookupController::class)->name('api.tenant.v1.documents.controlled.lookup');
-        Route::post('documents/controlled/import', ControlledDocumentImportController::class)->name('api.tenant.v1.documents.controlled.import');
-        Route::get('documents/controlled/{controlledDocument}', ControlledDocumentShowController::class)->name('api.tenant.v1.documents.controlled.show');
-        Route::post('documents/controlled/{controlledDocument}/obsolete', ControlledDocumentObsoleteController::class)->name('api.tenant.v1.documents.controlled.obsolete');
-        Route::post('documents/controlled/{controlledDocument}/revisions/{revision}/file', ControlledDocumentRevisionFileStoreController::class)->name('api.tenant.v1.documents.controlled.revisions.file');
-        Route::get('documents/controlled/{controlledDocument}/revisions/{revision}/download', ControlledDocumentRevisionDownloadController::class)->name('api.tenant.v1.documents.controlled.revisions.download');
-        Route::get('documents/controlled/{controlledDocument}/revisions/{revision}/stream', ControlledDocumentRevisionStreamController::class)->name('api.tenant.v1.documents.controlled.revisions.stream');
-    });
     Route::get('notifications', TenantNotificationIndexController::class)->name('api.tenant.v1.notifications.index');
     Route::get('notifications/unread-count', TenantNotificationUnreadCountController::class)->name('api.tenant.v1.notifications.unread_count');
     Route::post('notifications/mark-all-read', TenantNotificationMarkAllReadController::class)->name('api.tenant.v1.notifications.mark_all_read');
     Route::post('notifications/{notification}/read', TenantNotificationMarkReadController::class)->name('api.tenant.v1.notifications.read');
     Route::get('dashboard', TenantWorkspaceDashboardController::class)->name('api.tenant.v1.dashboard');
     Route::get('workspace/search', WorkspaceSearchController::class)->name('api.tenant.v1.workspace.search');
+    Route::get('workspace/sidebar', WorkspaceSidebarShowController::class)->name('api.tenant.v1.workspace.sidebar');
     Route::get('workspace/audit/export', WorkspaceAuditExportController::class)->name('api.tenant.v1.workspace.audit.export');
     Route::get('workspace/audit/entity', WorkspaceAuditEntityIndexController::class)->name('api.tenant.v1.workspace.audit.entity');
     Route::get('workspace/audit', WorkspaceAuditIndexController::class)->name('api.tenant.v1.workspace.audit.index');
     Route::middleware(['tenant.module:ai_assistant', 'throttle:assistant'])->group(function () {
+        Route::get('assistant/meta', AssistantMetaShowController::class)->name('api.tenant.v1.assistant.meta');
         Route::post('assistant/ask', AssistantAskController::class)->name('api.tenant.v1.assistant.ask');
         Route::post('assistant/retrieve', AssistantRetrieveController::class)->name('api.tenant.v1.assistant.retrieve');
         Route::get('assistant/conversations', AssistantConversationIndexController::class)->name('api.tenant.v1.assistant.conversations.index');
@@ -557,85 +385,83 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('assistant/knowledge/{source}/archive', AssistantKnowledgeArchiveController::class)->name('api.tenant.v1.assistant.knowledge.archive');
         Route::post('assistant/knowledge/{source}/reindex', AssistantKnowledgeReindexController::class)->name('api.tenant.v1.assistant.knowledge.reindex');
         Route::delete('assistant/knowledge/{source}', AssistantKnowledgeDestroyController::class)->name('api.tenant.v1.assistant.knowledge.destroy');
+
+        Route::get('assistant/prompt-modules', AiPromptModuleIndexController::class)->name('api.tenant.v1.assistant.prompt_modules.index');
+        Route::get('assistant/prompt-modules/{module}', AiPromptModuleShowController::class)->name('api.tenant.v1.assistant.prompt_modules.show');
+        Route::patch('assistant/prompt-modules/{module}', AiPromptModuleUpdateController::class)->name('api.tenant.v1.assistant.prompt_modules.update');
+        Route::post('assistant/prompt-modules/{module}/reset', AiPromptModuleResetController::class)->name('api.tenant.v1.assistant.prompt_modules.reset');
     });
-    Route::get('project-one/dashboard', ProjectOneDashboardController::class)->name('api.tenant.v1.project_one.dashboard');
-    Route::get('project-one/dashboard/map', ProjectOneDashboardMapController::class)->name('api.tenant.v1.project_one.dashboard.map');
-    Route::get('project-one/assignable-users', RolloutAssignableUsersController::class)->name('api.tenant.v1.project_one.assignable_users.index');
-    Route::get('project-one/rollouts/export', RolloutProgramExportController::class)->name('api.tenant.v1.project_one.rollouts.export');
-    Route::get('project-one/rollouts', RolloutProgramIndexController::class)->name('api.tenant.v1.project_one.rollouts.index');
-    Route::post('project-one/rollouts', RolloutProgramStoreController::class)->name('api.tenant.v1.project_one.rollouts.store');
-    Route::post('project-one/rollouts/bulk-update', RolloutBulkUpdateController::class)->name('api.tenant.v1.project_one.rollouts.bulk_update');
-    Route::post('project-one/rollouts/bulk-phase-dates', RolloutBulkPhaseDatesController::class)->name('api.tenant.v1.project_one.rollouts.bulk_phase_dates');
-    Route::post('project-one/rollouts/bulk-phase-dates-grid', RolloutBulkPhaseDatesGridController::class)->name('api.tenant.v1.project_one.rollouts.bulk_phase_dates_grid');
-    Route::post('project-one/rollout-batches', RolloutBatchStoreController::class)->name('api.tenant.v1.project_one.rollout_batches.store');
-    Route::post('project-one/rollouts/{rollout}/documents/migrate-lease-package', DocumentRolloutLeasePackageMigrateController::class)
-        ->name('api.tenant.v1.project_one.rollouts.documents.migrate_lease_package');
-    Route::get('project-one/rollouts/{rollout}', RolloutProgramShowController::class)->name('api.tenant.v1.project_one.rollouts.show');
-    Route::get('project-one/rollouts/{rollout}/activity', RolloutActivityIndexController::class)->name('api.tenant.v1.project_one.rollouts.activity');
-    Route::get('project-one/rollouts/{rollout}/map', RolloutMapController::class)->name('api.tenant.v1.project_one.rollouts.map');
-    Route::patch('project-one/rollouts/{rollout}', RolloutProgramUpdateController::class)->name('api.tenant.v1.project_one.rollouts.update');
-    Route::patch('project-one/rollouts/{rollout}/site-profile', RolloutSiteProfileUpdateController::class)->name('api.tenant.v1.project_one.rollouts.site_profile.update');
-    Route::get('project-one/rollouts/{rollout}/permits', RolloutPermitIndexController::class)->name('api.tenant.v1.project_one.rollouts.permits.index');
-    Route::put('project-one/rollouts/{rollout}/permits', RolloutPermitSyncController::class)->name('api.tenant.v1.project_one.rollouts.permits.sync');
-    Route::post('project-one/rollouts/{rollout}/cancel', RolloutProgramCancelController::class)->name('api.tenant.v1.project_one.rollouts.cancel');
-    Route::post('project-one/files', RolloutFileStoreController::class)->name('api.tenant.v1.project_one.files.store');
-    Route::get('project-one/files/{file}', RolloutFileShowController::class)->name('api.tenant.v1.project_one.files.show');
-    Route::post('project-one/rollouts/{rollout}/tssr-approved', RolloutTssrApprovedController::class)->name('api.tenant.v1.project_one.rollouts.tssr_approved');
-    Route::post('project-one/rollouts/{rollout}/delivery-period-start', RolloutDeliveryPeriodStartController::class)->name('api.tenant.v1.project_one.rollouts.delivery_period_start');
-    Route::post('project-one/rollouts/{rollout}/rfi-recorded', RolloutRfiRecordedController::class)->name('api.tenant.v1.project_one.rollouts.rfi_recorded');
-    Route::post('project-one/rollouts/{rollout}/site-license-recorded', RolloutSiteLicenseRecordedController::class)->name('api.tenant.v1.project_one.rollouts.site_license_recorded');
-    Route::patch('project-one/rollout-phases/{phase}/gate', RolloutTimelinePhaseGateUpdateController::class)->name('api.tenant.v1.project_one.rollout_phases.gate');
-    Route::get('project-one/gate-approvals', RolloutGateApprovalIndexController::class)->name('api.tenant.v1.project_one.gate_approvals.index');
-    Route::get('project-one/gate-approvals/export', RolloutGateApprovalExportController::class)->name('api.tenant.v1.project_one.gate_approvals.export');
-    Route::get('project-one/gate-approval-delegations', RolloutGateApprovalDelegationIndexController::class)->name('api.tenant.v1.project_one.gate_approval_delegations.index');
-    Route::post('project-one/gate-approval-delegations', RolloutGateApprovalDelegationStoreController::class)->name('api.tenant.v1.project_one.gate_approval_delegations.store');
-    Route::delete('project-one/gate-approval-delegations/{delegation}', RolloutGateApprovalDelegationDestroyController::class)->name('api.tenant.v1.project_one.gate_approval_delegations.destroy');
-    Route::post('project-one/rollout-phases/{phase}/gate-approvals', RolloutGateApprovalSubmitController::class)->name('api.tenant.v1.project_one.rollout_phases.gate_approvals.submit');
-    Route::post('project-one/gate-approvals/{gateApproval}/decide', RolloutGateApprovalDecideController::class)->name('api.tenant.v1.project_one.gate_approvals.decide');
-    Route::post('project-one/rollouts/{rollout}/candidates', SiteCandidateStoreController::class)->name('api.tenant.v1.project_one.rollouts.candidates.store');
-    Route::patch('project-one/candidates/{candidate}', SiteCandidateUpdateController::class)->name('api.tenant.v1.project_one.candidates.update');
-    Route::post('project-one/candidates/{candidate}/reject', SiteCandidateRejectController::class)->name('api.tenant.v1.project_one.candidates.reject');
-    Route::post('project-one/candidates/{candidate}/select', SiteCandidateSelectController::class)->name('api.tenant.v1.project_one.candidates.select');
-    Route::post('project-one/rollouts/{rollout}/hunting-logs', SiteHuntingLogStoreController::class)->name('api.tenant.v1.project_one.rollouts.hunting_logs.store');
-    Route::post('project-one/rollouts/{rollout}/cme-reports', CmeDailyReportStoreController::class)->name('api.tenant.v1.project_one.rollouts.cme_reports.store');
-    Route::get('project-one/rollouts/{rollout}/profitability', SiteProfitabilityShowController::class)->name('api.tenant.v1.project_one.rollouts.profitability.show');
-    Route::patch('project-one/rollouts/{rollout}/profitability', SiteProfitabilityUpdateController::class)->name('api.tenant.v1.project_one.rollouts.profitability.update');
-    Route::get('project-one/rollout-playbook', RolloutPlaybookStatusController::class)->name('api.tenant.v1.project_one.rollout_playbook.status');
-    Route::patch('project-one/rollout-playbook', RolloutPlaybookConfigureController::class)->name('api.tenant.v1.project_one.rollout_playbook.configure');
-    Route::get('project-one/public-holidays', TenantPublicHolidayIndexController::class)->name('api.tenant.v1.project_one.public_holidays.index');
-    Route::post('project-one/public-holidays/seed-philippines', TenantPublicHolidaySeedPhilippinesController::class)->name('api.tenant.v1.project_one.public_holidays.seed_philippines');
-    Route::post('project-one/public-holidays', TenantPublicHolidayStoreController::class)->name('api.tenant.v1.project_one.public_holidays.store');
-    Route::patch('project-one/public-holidays/{holiday}', TenantPublicHolidayUpdateController::class)->name('api.tenant.v1.project_one.public_holidays.update');
-    Route::delete('project-one/public-holidays/{holiday}', TenantPublicHolidayDestroyController::class)->name('api.tenant.v1.project_one.public_holidays.destroy');
-    Route::get('project-one/geography', RolloutGeographyLookupIndexController::class)->name('api.tenant.v1.project_one.geography.index');
-    Route::post('project-one/geography/seed-defaults', RolloutGeographyLookupSeedDefaultsController::class)->name('api.tenant.v1.project_one.geography.seed_defaults');
-    Route::post('project-one/geography', RolloutGeographyLookupStoreController::class)->name('api.tenant.v1.project_one.geography.store');
-    Route::patch('project-one/geography/{geography}', RolloutGeographyLookupUpdateController::class)->name('api.tenant.v1.project_one.geography.update');
-    Route::delete('project-one/geography/{geography}', RolloutGeographyLookupDestroyController::class)->name('api.tenant.v1.project_one.geography.destroy');
-    Route::post('project-one/geocode/reverse', ReverseGeocodeController::class)
-        ->middleware('throttle:geocode')
-        ->name('api.tenant.v1.project_one.geocode.reverse');
-    Route::post('project-one/geocode/forward', ForwardGeocodeController::class)
-        ->middleware('throttle:geocode')
-        ->name('api.tenant.v1.project_one.geocode.forward');
-    Route::get('project-one/projects', ProjectIndexController::class)->name('api.tenant.v1.project_one.projects.index');
-    Route::post('project-one/projects', ProjectStoreController::class)->name('api.tenant.v1.project_one.projects.store');
-    Route::get('project-one/projects/{project}', ProjectShowController::class)->name('api.tenant.v1.project_one.projects.show');
-    Route::patch('project-one/projects/{project}', ProjectUpdateController::class)->name('api.tenant.v1.project_one.projects.update');
-    Route::get('project-one/approvals', ProjectApprovalIndexController::class)->name('api.tenant.v1.project_one.approvals.index');
-    Route::post('project-one/approvals', ProjectApprovalStoreController::class)->name('api.tenant.v1.project_one.approvals.store');
-    Route::patch('project-one/approvals/{approval}', ProjectApprovalUpdateController::class)->name('api.tenant.v1.project_one.approvals.update');
-    Route::patch('project-one/milestones/{milestone}', ProjectMilestoneUpdateController::class)->name('api.tenant.v1.project_one.milestones.update');
-    Route::get('tower-one/dashboard', TowerOneDashboardController::class)->name('api.tenant.v1.tower_one.dashboard');
-    Route::get('tower-one/towers', TowerIndexController::class)->name('api.tenant.v1.tower_one.towers.index');
-    Route::get('tower-one/towers/{tower}', TowerShowController::class)->name('api.tenant.v1.tower_one.towers.show');
-    Route::get('fiber-one/dashboard', FiberOneDashboardController::class)->name('api.tenant.v1.fiber_one.dashboard');
-    Route::get('fiber-one/routes', FiberRouteIndexController::class)->name('api.tenant.v1.fiber_one.routes.index');
-    Route::get('asset-one/dashboard', AssetOneDashboardController::class)->name('api.tenant.v1.asset_one.dashboard');
-    Route::get('asset-one/assets', AssetIndexController::class)->name('api.tenant.v1.asset_one.assets.index');
-    Route::post('asset-one/assets', AssetStoreController::class)->name('api.tenant.v1.asset_one.assets.store');
-    Route::get('asset-one/assets/{asset}', AssetShowController::class)->name('api.tenant.v1.asset_one.assets.show');
-    Route::patch('asset-one/assets/{asset}/status', AssetStatusUpdateController::class)->name('api.tenant.v1.asset_one.assets.status');
+    Route::middleware('tenant.module:dynamic_entities')->group(function () {
+        Route::get('dynamic-entities/entities', DynEntityIndexController::class)->name('api.tenant.v1.dynamic_entities.entities.index');
+        Route::post('dynamic-entities/entities', DynEntityStoreController::class)->name('api.tenant.v1.dynamic_entities.entities.store');
+        Route::get('dynamic-entities/entities/{entity}', DynEntityShowController::class)->name('api.tenant.v1.dynamic_entities.entities.show');
+        Route::patch('dynamic-entities/entities/{entity}', DynEntityUpdateController::class)->name('api.tenant.v1.dynamic_entities.entities.update');
+        Route::post('dynamic-entities/entities/{entity}/fields', DynFieldStoreController::class)->name('api.tenant.v1.dynamic_entities.fields.store');
+        Route::post('dynamic-entities/entities/{entity}/field-groups', DynFieldGroupStoreController::class)->name('api.tenant.v1.dynamic_entities.field_groups.store');
+        Route::patch('dynamic-entities/field-groups/{group}', DynFieldGroupUpdateController::class)->name('api.tenant.v1.dynamic_entities.field_groups.update');
+        Route::delete('dynamic-entities/field-groups/{group}', DynFieldGroupDestroyController::class)->name('api.tenant.v1.dynamic_entities.field_groups.destroy');
+        Route::patch('dynamic-entities/fields/{field}', DynFieldUpdateController::class)->name('api.tenant.v1.dynamic_entities.fields.update');
+        Route::get('dynamic-entities/reports/purchase-monitoring', PurchaseMonitoringReportController::class)
+            ->name('api.tenant.v1.dynamic_entities.reports.purchase_monitoring');
+        Route::get('dynamic-entities/reports/executive-dashboard', AtcExecutiveDashboardController::class)
+            ->name('api.tenant.v1.dynamic_entities.reports.executive_dashboard');
+        Route::get('dynamic-entities/reports/ticketing-board', AtcTicketingBoardController::class)
+            ->name('api.tenant.v1.dynamic_entities.reports.ticketing_board');
+        // One {report} route only — duplicate URIs overwrite each other in Laravel's route collection.
+        Route::get('dynamic-entities/reports/{report}', DynFinanceReportsController::class)
+            ->whereIn('report', DynFinanceReportsController::reportKeys())
+            ->name('api.tenant.v1.dynamic_entities.reports.show');
+        Route::post('dynamic-entities/reports/aging-invoice-adjustments/adjust', DynInvoiceAgingAdjustController::class)
+            ->name('api.tenant.v1.dynamic_entities.reports.aging_invoice.adjust');
+        Route::get('dynamic-entities/entities/{entity}/records', DynRecordIndexController::class)->name('api.tenant.v1.dynamic_entities.records.index');
+        Route::post('dynamic-entities/entities/{entity}/records', DynRecordStoreController::class)->name('api.tenant.v1.dynamic_entities.records.store');
+        Route::post('dynamic-entities/entities/{entity}/records/bulk', DynRecordBulkController::class)->name('api.tenant.v1.dynamic_entities.records.bulk');
+        Route::get('dynamic-entities/entities/{entity}/records/export', DynRecordExportController::class)->name('api.tenant.v1.dynamic_entities.records.export');
+        Route::get('dynamic-entities/entities/{entity}/records/import/template', DynRecordImportTemplateController::class)->name('api.tenant.v1.dynamic_entities.records.import.template');
+        Route::post('dynamic-entities/entities/{entity}/records/import/analyze', DynRecordImportAnalyzeController::class)->name('api.tenant.v1.dynamic_entities.records.import.analyze');
+        Route::post('dynamic-entities/entities/{entity}/records/import', DynRecordImportController::class)->name('api.tenant.v1.dynamic_entities.records.import');
+        Route::get('dynamic-entities/records/{record}', DynRecordShowController::class)->name('api.tenant.v1.dynamic_entities.records.show');
+        Route::patch('dynamic-entities/records/{record}', DynRecordUpdateController::class)->name('api.tenant.v1.dynamic_entities.records.update');
+        Route::post('dynamic-entities/records/{record}/workflow-actions/{action}', DynRecordWorkflowActionController::class)
+            ->name('api.tenant.v1.dynamic_entities.records.workflow_action');
+        Route::delete('dynamic-entities/records/{record}', DynRecordDestroyController::class)->name('api.tenant.v1.dynamic_entities.records.destroy');
+        Route::get('dynamic-entities/pdf-forms', DynPdfFormIndexController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.index');
+        Route::post('dynamic-entities/pdf-forms', DynPdfFormStoreController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.store');
+        Route::patch('dynamic-entities/pdf-forms/{form}', DynPdfFormUpdateController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.update');
+        Route::delete('dynamic-entities/pdf-forms/{form}', DynPdfFormDestroyController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.destroy');
+        Route::get('dynamic-entities/pdf-forms/{form}/file', DynPdfFormDownloadController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.file');
+        Route::get('dynamic-entities/html-reports', DynHtmlReportIndexController::class)->name('api.tenant.v1.dynamic_entities.html_reports.index');
+        Route::post('dynamic-entities/html-reports', DynHtmlReportStoreController::class)->name('api.tenant.v1.dynamic_entities.html_reports.store');
+        Route::get('dynamic-entities/html-reports/render/{slug}', DynHtmlReportRenderController::class)
+            ->where('slug', '[A-Za-z0-9\-]+')
+            ->name('api.tenant.v1.dynamic_entities.html_reports.render');
+        Route::get('dynamic-entities/html-reports/{report}', DynHtmlReportShowController::class)->name('api.tenant.v1.dynamic_entities.html_reports.show');
+        Route::patch('dynamic-entities/html-reports/{report}', DynHtmlReportUpdateController::class)->name('api.tenant.v1.dynamic_entities.html_reports.update');
+        Route::delete('dynamic-entities/html-reports/{report}', DynHtmlReportDestroyController::class)->name('api.tenant.v1.dynamic_entities.html_reports.destroy');
+        Route::post('dynamic-entities/html-reports/{report}/duplicate', DynHtmlReportDuplicateController::class)->name('api.tenant.v1.dynamic_entities.html_reports.duplicate');
+        Route::post('dynamic-entities/report-builder/preview', DynReportBuilderPreviewController::class)->name('api.tenant.v1.dynamic_entities.report_builder.preview');
+        Route::post('dynamic-entities/report-builder/save', DynReportBuilderSaveController::class)->name('api.tenant.v1.dynamic_entities.report_builder.save');
+        Route::post('dynamic-entities/report-builder/ai-build', DynReportBuilderAiBuildController::class)->name('api.tenant.v1.dynamic_entities.report_builder.ai_build');
+        Route::get('dynamic-entities/email-templates', DynEmailTemplateIndexController::class)->name('api.tenant.v1.dynamic_entities.email_templates.index');
+        Route::post('dynamic-entities/email-templates', DynEmailTemplateStoreController::class)->name('api.tenant.v1.dynamic_entities.email_templates.store');
+        Route::get('dynamic-entities/email-templates/{template}', DynEmailTemplateShowController::class)->name('api.tenant.v1.dynamic_entities.email_templates.show');
+        Route::patch('dynamic-entities/email-templates/{template}', DynEmailTemplateUpdateController::class)->name('api.tenant.v1.dynamic_entities.email_templates.update');
+        Route::delete('dynamic-entities/email-templates/{template}', DynEmailTemplateDestroyController::class)->name('api.tenant.v1.dynamic_entities.email_templates.destroy');
+        Route::get('dynamic-entities/scheduled-tasks', DynScheduledTaskIndexController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.index');
+        Route::post('dynamic-entities/scheduled-tasks', DynScheduledTaskStoreController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.store');
+        Route::post('dynamic-entities/scheduled-tasks/sync', DynScheduledTaskSyncController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.sync');
+        Route::patch('dynamic-entities/scheduled-tasks/{task}', DynScheduledTaskUpdateController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.update');
+        Route::delete('dynamic-entities/scheduled-tasks/{task}', DynScheduledTaskDestroyController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.destroy');
+        Route::post('dynamic-entities/scheduled-tasks/{task}/run', DynScheduledTaskRunController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.run');
+        Route::post('dynamic-entities/scheduled-tasks/{task}/toggle', DynScheduledTaskToggleController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.toggle');
+        Route::get('dynamic-entities/workflows', DynWorkflowIndexController::class)->name('api.tenant.v1.dynamic_entities.workflows.index');
+        Route::post('dynamic-entities/workflows', DynWorkflowStoreController::class)->name('api.tenant.v1.dynamic_entities.workflows.store');
+        Route::get('dynamic-entities/workflows/{workflow}', DynWorkflowShowController::class)->name('api.tenant.v1.dynamic_entities.workflows.show');
+        Route::patch('dynamic-entities/workflows/{workflow}', DynWorkflowUpdateController::class)->name('api.tenant.v1.dynamic_entities.workflows.update');
+        Route::delete('dynamic-entities/workflows/{workflow}', DynWorkflowDestroyController::class)->name('api.tenant.v1.dynamic_entities.workflows.destroy');
+        Route::get('dynamic-entities/search-index', DynSearchIndexStatusController::class)->name('api.tenant.v1.dynamic_entities.search_index.status');
+        Route::post('dynamic-entities/search-index/actions', DynSearchIndexActionController::class)->name('api.tenant.v1.dynamic_entities.search_index.actions');
+    });
     Route::get('ticketing/dashboard', TicketingDashboardController::class)->name('api.tenant.v1.ticketing.dashboard');
     Route::get('ticketing/settings', TicketingSettingsShowController::class)->name('api.tenant.v1.ticketing.settings.show');
     Route::put('ticketing/settings', TicketingSettingsUpdateController::class)->name('api.tenant.v1.ticketing.settings.update');
@@ -650,108 +476,6 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('ticketing/tickets/{ticket}/comments', TicketingCommentStoreController::class)->name('api.tenant.v1.ticketing.tickets.comments.store');
     Route::post('ticketing/tickets/{ticket}/attachments', TicketingAttachmentStoreController::class)->name('api.tenant.v1.ticketing.tickets.attachments.store');
     Route::get('ticketing/attachments/{attachment}', TicketingAttachmentDownloadController::class)->name('api.tenant.v1.ticketing.attachments.show');
-    Route::get('procurement-one/dashboard', ProcurementOneDashboardController::class)->name('api.tenant.v1.procurement_one.dashboard');
-    Route::get('procurement-one/settings', ProcurementOneSettingsShowController::class)->name('api.tenant.v1.procurement_one.settings.show');
-    Route::put('procurement-one/settings', ProcurementOneSettingsUpdateController::class)->name('api.tenant.v1.procurement_one.settings.update');
-    Route::get('procurement-one/metadata', ProcurementOneMetadataController::class)->name('api.tenant.v1.procurement_one.metadata');
-    Route::get('procurement-one/vendors', ProcurementVendorIndexController::class)->name('api.tenant.v1.procurement_one.vendors.index');
-    Route::get('procurement-one/vendors/form-schema', ProcurementVendorFormSchemaController::class)->name('api.tenant.v1.procurement_one.vendors.form_schema');
-    Route::post('procurement-one/vendors/migrate-from-master-data', ProcurementVendorMigrateController::class)->name('api.tenant.v1.procurement_one.vendors.migrate');
-    Route::get('procurement-one/vendors/{vendor}', ProcurementVendorShowController::class)->name('api.tenant.v1.procurement_one.vendors.show');
-    Route::patch('procurement-one/vendors/{vendor}/accreditation', ProcurementVendorAccreditationUpdateController::class)->name('api.tenant.v1.procurement_one.vendors.accreditation');
-    Route::get('procurement-one/prs/form-schema', ProcurementPrFormSchemaController::class)->name('api.tenant.v1.procurement_one.prs.form_schema');
-    Route::post('procurement-one/prs/migrate-from-e-approval', ProcurementPrMigrateController::class)->name('api.tenant.v1.procurement_one.prs.migrate');
-    Route::get('procurement-one/prs', ProcurementPrIndexController::class)->name('api.tenant.v1.procurement_one.prs.index');
-    Route::post('procurement-one/prs', ProcurementPrStoreController::class)->name('api.tenant.v1.procurement_one.prs.store');
-    Route::get('procurement-one/prs/{pr}', ProcurementPrShowController::class)->name('api.tenant.v1.procurement_one.prs.show');
-    Route::patch('procurement-one/prs/{pr}', ProcurementPrUpdateController::class)->name('api.tenant.v1.procurement_one.prs.update');
-    Route::post('procurement-one/prs/{pr}/submit', ProcurementPrSubmitController::class)->name('api.tenant.v1.procurement_one.prs.submit');
-    Route::post('procurement-one/prs/{pr}/cancel', ProcurementPrCancelController::class)->name('api.tenant.v1.procurement_one.prs.cancel');
-    Route::post('procurement-one/prs/{pr}/void', ProcurementPrVoidController::class)->name('api.tenant.v1.procurement_one.prs.void');
-    Route::post('procurement-one/prs/{pr}/attachments', ProcurementPrAttachmentStoreController::class)->name('api.tenant.v1.procurement_one.prs.attachments.store');
-    Route::get('procurement-one/pos/form-schema', ProcurementPoFormSchemaController::class)->name('api.tenant.v1.procurement_one.pos.form_schema');
-    Route::post('procurement-one/pos/migrate-from-e-approval', ProcurementPoMigrateController::class)->name('api.tenant.v1.procurement_one.pos.migrate');
-    Route::get('procurement-one/pos', ProcurementPoIndexController::class)->name('api.tenant.v1.procurement_one.pos.index');
-    Route::post('procurement-one/pos', ProcurementPoStoreController::class)->name('api.tenant.v1.procurement_one.pos.store');
-    Route::get('procurement-one/pos/{po}', ProcurementPoShowController::class)->name('api.tenant.v1.procurement_one.pos.show');
-    Route::patch('procurement-one/pos/{po}', ProcurementPoUpdateController::class)->name('api.tenant.v1.procurement_one.pos.update');
-    Route::post('procurement-one/pos/{po}/submit', ProcurementPoSubmitController::class)->name('api.tenant.v1.procurement_one.pos.submit');
-    Route::post('procurement-one/pos/{po}/cancel', ProcurementPoCancelController::class)->name('api.tenant.v1.procurement_one.pos.cancel');
-    Route::post('procurement-one/pos/{po}/void', ProcurementPoVoidController::class)->name('api.tenant.v1.procurement_one.pos.void');
-    Route::post('procurement-one/pos/{po}/send-vendor-email', ProcurementPoSendVendorEmailController::class)->name('api.tenant.v1.procurement_one.pos.send_vendor_email');
-    Route::post('procurement-one/pos/{po}/grns', ProcurementGrnFromPoStoreController::class)->name('api.tenant.v1.procurement_one.pos.grns.store');
-    Route::get('procurement-one/grns', ProcurementGrnIndexController::class)->name('api.tenant.v1.procurement_one.grns.index');
-    Route::get('procurement-one/grns/{grn}', ProcurementGrnShowController::class)->name('api.tenant.v1.procurement_one.grns.show');
-    Route::get('procurement-one/grns/{grn}/print', ProcurementGrnPrintController::class)->name('api.tenant.v1.procurement_one.grns.print');
-    Route::patch('procurement-one/grns/{grn}', ProcurementGrnUpdateController::class)->name('api.tenant.v1.procurement_one.grns.update');
-    Route::post('procurement-one/grns/{grn}/post', ProcurementGrnPostController::class)->name('api.tenant.v1.procurement_one.grns.post');
-    Route::post('procurement-one/grns/{grn}/attachments', ProcurementGrnAttachmentStoreController::class)->name('api.tenant.v1.procurement_one.grns.attachments.store');
-    Route::get('procurement-one/grns/{grn}/attachments/{attachment}/download', ProcurementGrnAttachmentDownloadController::class)->name('api.tenant.v1.procurement_one.grns.attachments.download');
-    Route::get('procurement-one/inventory/locations', ProcurementInventoryLocationIndexController::class)->name('api.tenant.v1.procurement_one.inventory.locations.index');
-    Route::post('procurement-one/inventory/locations', ProcurementInventoryLocationStoreController::class)->name('api.tenant.v1.procurement_one.inventory.locations.store');
-    Route::patch('procurement-one/inventory/locations/{location}', ProcurementInventoryLocationUpdateController::class)->name('api.tenant.v1.procurement_one.inventory.locations.update');
-    Route::get('procurement-one/inventory/stock-balances', ProcurementInventoryStockBalanceIndexController::class)->name('api.tenant.v1.procurement_one.inventory.stock_balances.index');
-    Route::get('procurement-one/inventory/movements', ProcurementInventoryMovementIndexController::class)->name('api.tenant.v1.procurement_one.inventory.movements.index');
-    Route::post('procurement-one/inventory/transfers', ProcurementInventoryTransferStoreController::class)->name('api.tenant.v1.procurement_one.inventory.transfers.store');
-    Route::post('procurement-one/inventory/deployments', ProcurementInventoryDeployStoreController::class)->name('api.tenant.v1.procurement_one.inventory.deployments.store');
-    Route::get('procurement-one/cost-centers', ProcurementCostCenterIndexController::class)->name('api.tenant.v1.procurement_one.cost_centers.index');
-    Route::post('procurement-one/cost-centers', ProcurementCostCenterStoreController::class)->name('api.tenant.v1.procurement_one.cost_centers.store');
-    Route::get('procurement-one/budget-lines', ProcurementBudgetLineIndexController::class)->name('api.tenant.v1.procurement_one.budget_lines.index');
-    Route::post('procurement-one/budget-lines', ProcurementBudgetLineStoreController::class)->name('api.tenant.v1.procurement_one.budget_lines.store');
-    Route::patch('procurement-one/budget-lines/{budgetLine}', ProcurementBudgetLineUpdateController::class)->name('api.tenant.v1.procurement_one.budget_lines.update');
-    Route::delete('procurement-one/budget-lines/{budgetLine}', ProcurementBudgetLineDestroyController::class)->name('api.tenant.v1.procurement_one.budget_lines.destroy');
-    Route::get('procurement-one/budget-utilization', ProcurementBudgetUtilizationShowController::class)->name('api.tenant.v1.procurement_one.budget_utilization.show');
-    Route::post('procurement-one/pos/{po}/ap-invoices', ProcurementApInvoiceFromPoStoreController::class)->name('api.tenant.v1.procurement_one.pos.ap_invoices.store');
-    Route::get('procurement-one/ap-invoices/form-schema', ProcurementApInvoiceFormSchemaController::class)->name('api.tenant.v1.procurement_one.ap_invoices.form_schema');
-    Route::get('procurement-one/ap-invoices', ProcurementApInvoiceIndexController::class)->name('api.tenant.v1.procurement_one.ap_invoices.index');
-    Route::get('procurement-one/ap-invoices/export', ProcurementApInvoiceGlExportController::class)->name('api.tenant.v1.procurement_one.ap_invoices.export');
-    Route::get('procurement-one/ap-invoices/aging', ProcurementApInvoiceAgingIndexController::class)->name('api.tenant.v1.procurement_one.ap_invoices.aging');
-    Route::get('procurement-one/ap-invoices/{apInvoice}', ProcurementApInvoiceShowController::class)->name('api.tenant.v1.procurement_one.ap_invoices.show');
-    Route::patch('procurement-one/ap-invoices/{apInvoice}', ProcurementApInvoiceUpdateController::class)->name('api.tenant.v1.procurement_one.ap_invoices.update');
-    Route::post('procurement-one/ap-invoices/{apInvoice}/submit', ProcurementApInvoiceSubmitController::class)->name('api.tenant.v1.procurement_one.ap_invoices.submit');
-    Route::post('procurement-one/credit-notes', ProcurementCreditNoteStoreController::class)->name('api.tenant.v1.procurement_one.credit_notes.store');
-    Route::post('procurement-one/credit-notes/{creditNote}/approve', ProcurementCreditNoteApproveController::class)->name('api.tenant.v1.procurement_one.credit_notes.approve');
-    Route::get('procurement-one/payment-requests', ProcurementPaymentRequestIndexController::class)->name('api.tenant.v1.procurement_one.payment_requests.index');
-    Route::get('procurement-one/payment-requests/{paymentRequest}', ProcurementPaymentRequestShowController::class)->name('api.tenant.v1.procurement_one.payment_requests.show');
-    Route::post('procurement-one/ap-invoices/{apInvoice}/payment-requests', ProcurementPaymentRequestFromApInvoiceStoreController::class)->name('api.tenant.v1.procurement_one.ap_invoices.payment_requests.store');
-    Route::post('procurement-one/payment-requests/{paymentRequest}/submit', ProcurementPaymentRequestSubmitController::class)->name('api.tenant.v1.procurement_one.payment_requests.submit');
-    Route::post('procurement-one/payment-requests/{paymentRequest}/approve', ProcurementPaymentRequestApproveController::class)->name('api.tenant.v1.procurement_one.payment_requests.approve');
-    Route::post('procurement-one/payment-requests/{paymentRequest}/schedule', ProcurementPaymentRequestScheduleController::class)->name('api.tenant.v1.procurement_one.payment_requests.schedule');
-    Route::post('procurement-one/payment-requests/{paymentRequest}/mark-paid', ProcurementPaymentRequestMarkPaidController::class)->name('api.tenant.v1.procurement_one.payment_requests.mark_paid');
-    Route::post('procurement-one/payment-requests/{paymentRequest}/mark-reconciled', ProcurementPaymentRequestMarkReconciledController::class)->name('api.tenant.v1.procurement_one.payment_requests.mark_reconciled');
-    Route::get('procurement-one/payment-batches', ProcurementPaymentBatchIndexController::class)->name('api.tenant.v1.procurement_one.payment_batches.index');
-    Route::post('procurement-one/payment-batches', ProcurementPaymentBatchStoreController::class)->name('api.tenant.v1.procurement_one.payment_batches.store');
-    Route::get('procurement-one/payment-batches/{paymentBatch}', ProcurementPaymentBatchShowController::class)->name('api.tenant.v1.procurement_one.payment_batches.show');
-    Route::get('procurement-one/payment-batches/{paymentBatch}/export', ProcurementPaymentBatchExportController::class)->name('api.tenant.v1.procurement_one.payment_batches.export');
-    Route::post('procurement-one/payment-batches/{paymentBatch}/mark-exported', ProcurementPaymentBatchMarkExportedController::class)->name('api.tenant.v1.procurement_one.payment_batches.mark_exported');
-    Route::post('procurement-one/payment-batches/{paymentBatch}/mark-reconciled', ProcurementPaymentBatchMarkReconciledController::class)->name('api.tenant.v1.procurement_one.payment_batches.mark_reconciled');
-    Route::get('procurement-one/rfqs', ProcurementRfqIndexController::class)->name('api.tenant.v1.procurement_one.rfqs.index');
-    Route::get('procurement-one/rfqs/{rfq}', ProcurementRfqShowController::class)->name('api.tenant.v1.procurement_one.rfqs.show');
-    Route::get('procurement-one/rfqs/{rfq}/comparison', ProcurementRfqComparisonShowController::class)->name('api.tenant.v1.procurement_one.rfqs.comparison');
-    Route::post('procurement-one/prs/{pr}/rfqs', ProcurementRfqFromPrStoreController::class)->name('api.tenant.v1.procurement_one.prs.rfqs.store');
-    Route::post('procurement-one/rfqs/{rfq}/publish', ProcurementRfqPublishController::class)->name('api.tenant.v1.procurement_one.rfqs.publish');
-    Route::post('procurement-one/rfqs/{rfq}/vendors', ProcurementRfqInviteVendorsController::class)->name('api.tenant.v1.procurement_one.rfqs.vendors.store');
-    Route::post('procurement-one/rfqs/{rfq}/vendors/{vendor}/resend-invitation', ProcurementRfqResendVendorInvitationController::class)->name('api.tenant.v1.procurement_one.rfqs.vendors.resend_invitation');
-    Route::post('procurement-one/rfqs/{rfq}/bids', ProcurementRfqBidStoreController::class)->name('api.tenant.v1.procurement_one.rfqs.bids.store');
-    Route::get('procurement-one/rfqs/{rfq}/bids/{bid}/versions', ProcurementRfqBidVersionsIndexController::class)->name('api.tenant.v1.procurement_one.rfqs.bids.versions.index');
-    Route::get('procurement-one/rfqs/{rfq}/bids/{bid}/attachments/{attachment}/download', ProcurementRfqBidAttachmentDownloadController::class)->name('api.tenant.v1.procurement_one.rfqs.bids.attachments.download');
-    Route::post('procurement-one/rfqs/{rfq}/close-bidding', ProcurementRfqCloseBiddingController::class)->name('api.tenant.v1.procurement_one.rfqs.close_bidding');
-    Route::post('procurement-one/rfqs/{rfq}/award', ProcurementRfqAwardController::class)->name('api.tenant.v1.procurement_one.rfqs.award');
-    Route::post('procurement-one/rfqs/{rfq}/pos', ProcurementRfqPoStoreController::class)->name('api.tenant.v1.procurement_one.rfqs.pos.store');
-    Route::post('procurement-one/rfqs/{rfq}/cancel', ProcurementRfqCancelController::class)->name('api.tenant.v1.procurement_one.rfqs.cancel');
-    Route::get('procurement-one/contracts', ProcurementContractIndexController::class)->name('api.tenant.v1.procurement_one.contracts.index');
-    Route::get('procurement-one/contracts/expiring', ProcurementContractExpiringIndexController::class)->name('api.tenant.v1.procurement_one.contracts.expiring');
-    Route::post('procurement-one/contracts', ProcurementContractStoreController::class)->name('api.tenant.v1.procurement_one.contracts.store');
-    Route::get('procurement-one/contracts/{contract}', ProcurementContractShowController::class)->name('api.tenant.v1.procurement_one.contracts.show');
-    Route::put('procurement-one/contracts/{contract}', ProcurementContractUpdateController::class)->name('api.tenant.v1.procurement_one.contracts.update');
-    Route::post('procurement-one/contracts/{contract}/activate', ProcurementContractActivateController::class)->name('api.tenant.v1.procurement_one.contracts.activate');
-    Route::post('procurement-one/contracts/{contract}/terminate', ProcurementContractTerminateController::class)->name('api.tenant.v1.procurement_one.contracts.terminate');
-    Route::get('procurement-one/vendors/{vendor}/contracts', ProcurementVendorContractsIndexController::class)->name('api.tenant.v1.procurement_one.vendors.contracts.index');
-    Route::get('procurement-one/reports/excel-pack', ProcurementExcelPackExportController::class)->name('api.tenant.v1.procurement_one.reports.excel_pack');
-    Route::get('procurement-one/reports/{entity}/export', ProcurementEntityCsvExportController::class)->name('api.tenant.v1.procurement_one.reports.entity_export');
-    Route::get('procurement-one/reports/p2p-dashboard', ProcurementP2pDashboardController::class)->name('api.tenant.v1.procurement_one.reports.p2p_dashboard');
-    Route::get('procurement-one/reports/vendor-spend', ProcurementVendorSpendDashboardController::class)->name('api.tenant.v1.procurement_one.reports.vendor_spend');
-    Route::post('procurement-one/prs/{pr}/pos', ProcurementPoFromPrStoreController::class)->name('api.tenant.v1.procurement_one.prs.pos.store');
     Route::get('e-approval/health', EApprovalHealthController::class)->name('api.tenant.v1.e_approval.health');
     Route::get('e-approval/assignable-users', EApprovalAssignableUsersController::class)->name('api.tenant.v1.e_approval.assignable_users');
     Route::post('e-approval/workflow/test-manager-lookup', EApprovalManagerLookupTestController::class)->name('api.tenant.v1.e_approval.workflow.test_manager_lookup');
@@ -914,22 +638,75 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('roles/{role}/clone', RoleCloneController::class)->name('api.tenant.v1.admin.roles.clone');
         Route::patch('roles/{role}', RoleUpdateController::class)->name('api.tenant.v1.admin.roles.update');
         Route::delete('roles/{role}', RoleDestroyController::class)->name('api.tenant.v1.admin.roles.destroy');
-        Route::middleware('tenant.module:billings')->group(function () {
-            Route::get('billing', TenantBillingShowController::class)->name('api.tenant.v1.admin.billing.show');
-            Route::get('billing/usage', TenantBillingUsageShowController::class)->name('api.tenant.v1.admin.billing.usage');
-            Route::post('billing/checkout-session', TenantBillingCheckoutSessionStoreController::class)
-                ->middleware('throttle:20,1')
-                ->name('api.tenant.v1.admin.billing.checkout');
-            Route::post('billing/portal-session', TenantBillingPortalSessionStoreController::class)
-                ->middleware('throttle:20,1')
-                ->name('api.tenant.v1.admin.billing.portal');
-        });
+        Route::get('billing', TenantBillingShowController::class)->name('api.tenant.v1.admin.billing.show');
+        Route::get('billing/usage', TenantBillingUsageShowController::class)->name('api.tenant.v1.admin.billing.usage');
+        Route::post('billing/checkout-session', TenantBillingCheckoutSessionStoreController::class)
+            ->middleware('throttle:20,1')
+            ->name('api.tenant.v1.admin.billing.checkout');
+        Route::post('billing/portal-session', TenantBillingPortalSessionStoreController::class)
+            ->middleware('throttle:20,1')
+            ->name('api.tenant.v1.admin.billing.portal');
         Route::get('settings', AdminSettingsShowController::class)->name('api.tenant.v1.admin.settings.show');
         Route::patch('settings', AdminSettingsUpdateController::class)->name('api.tenant.v1.admin.settings.update');
+        Route::get('sidebar', SidebarNavAdminShowController::class)->name('api.tenant.v1.admin.sidebar.show');
+        Route::post('sidebar/items', SidebarNavItemStoreController::class)->name('api.tenant.v1.admin.sidebar.items.store');
+        Route::patch('sidebar/items/{item}', SidebarNavItemUpdateController::class)->name('api.tenant.v1.admin.sidebar.items.update');
+        Route::delete('sidebar/items/{item}', SidebarNavItemDestroyController::class)->name('api.tenant.v1.admin.sidebar.items.destroy');
+        Route::post('sidebar/reorder', SidebarNavReorderController::class)->name('api.tenant.v1.admin.sidebar.reorder');
+        Route::post('sidebar/seed', SidebarNavSeedController::class)->name('api.tenant.v1.admin.sidebar.seed');
+        Route::get('api-keys', IntegrationApiKeyIndexController::class)->name('api.tenant.v1.admin.api_keys.index');
+        Route::get('api-keys/docs-meta', IntegrationApiDocsMetaController::class)
+            ->name('api.tenant.v1.admin.api_keys.docs_meta');
+        Route::post('api-keys', IntegrationApiKeyStoreController::class)
+            ->middleware('throttle:20,1')
+            ->name('api.tenant.v1.admin.api_keys.store');
+        Route::delete('api-keys/{token}', IntegrationApiKeyDestroyController::class)
+            ->whereNumber('token')
+            ->name('api.tenant.v1.admin.api_keys.destroy');
+        Route::get('system', SystemConfigShowController::class)->name('api.tenant.v1.admin.system.show');
+        Route::patch('system', SystemConfigUpdateController::class)->name('api.tenant.v1.admin.system.update');
+        Route::post('system/branding/{asset}', SystemConfigBrandingUploadController::class)
+            ->whereIn('asset', ['logo', 'favicon'])
+            ->middleware('throttle:20,1')
+            ->name('api.tenant.v1.admin.system.branding.upload');
         Route::get('backups', TenantBackupIndexController::class)->name('api.tenant.v1.admin.backups.index');
         Route::get('backups/{backup}/download', TenantBackupDownloadController::class)
             ->middleware('throttle:30,1')
             ->name('api.tenant.v1.admin.backups.download');
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Integration API (machine keys — no interactive session / MFA / passkey)
+|--------------------------------------------------------------------------
+| Auth: Bearer token, X-API-Key, or ?api_key= with Sanctum ability "integration".
+| Authorization: inherits the minting user's Spatie + DynRoleAccess permissions.
+*/
+Route::middleware([
+    'integration.api_key',
+    'tenant.sanctum',
+    'auth:sanctum',
+    'integration.token',
+    'throttle:120,1',
+])->prefix('integration')->group(function () {
+    Route::middleware('tenant.module:dynamic_entities')->group(function () {
+        Route::get('dynamic-entities/entities', DynEntityIndexController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.entities.index');
+        Route::get('dynamic-entities/entities/{entity}', DynEntityShowController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.entities.show');
+        Route::get('dynamic-entities/entities/{entity}/records', DynRecordIndexController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.index');
+        Route::post('dynamic-entities/entities/{entity}/records', DynRecordStoreController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.store');
+        Route::get('dynamic-entities/records/{record}', DynRecordShowController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.show');
+        Route::patch('dynamic-entities/records/{record}', DynRecordUpdateController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.update');
+        Route::delete('dynamic-entities/records/{record}', DynRecordDestroyController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.destroy');
+        Route::post('dynamic-entities/records/{record}/workflow-actions/{action}', DynRecordWorkflowActionController::class)
+            ->name('api.tenant.v1.integration.dynamic_entities.records.workflow_action');
     });
 });
 

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\EApproval\Models\EApprovalDocumentLink;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormValue;
@@ -33,7 +32,6 @@ final class EApprovalSubmissionLifecycleService
         private readonly EApprovalNotificationDispatcher $mail,
         private readonly EApprovalCommentService $comments,
         private readonly EApprovalDocumentLinkService $documentLinks,
-        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalExternalResubmitTokenService $externalResubmitTokens,
     ) {}
 
@@ -201,7 +199,6 @@ final class EApprovalSubmissionLifecycleService
                     );
                     $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
                     $submission->loadMissing(['form', 'values.field', 'attachments']);
-                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             }
 

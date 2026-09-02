@@ -9,7 +9,7 @@ import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { eApprovalFocusUrl } from "@/modules/documents/controlled-document-submission-url";
+import { eApprovalFocusUrl } from "@/modules/e-approval/controlled-document-submission-url";
 import { fetchEApprovalForm } from "@/lib/api/modules/e-approval-api";
 import { permissions } from "@/lib/rbac/permissions";
 

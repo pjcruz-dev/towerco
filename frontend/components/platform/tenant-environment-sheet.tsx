@@ -99,8 +99,8 @@ export function TenantEnvironmentSheet({
 
         <div className="space-y-4 px-4 py-2 text-sm text-muted-foreground">
           <p>
-            Each environment has its own database, domains, and rollout data. Playbook and policy settings are copied
-            from the source tenant.
+            Each environment gets its own database, domains, and Team &amp; Access RBAC (Administrator plus ATC
+            job roles). Workspace modules default to the source tenant&apos;s selection and can be adjusted below.
           </p>
 
           {availableOptions.length === 0 ? (

@@ -9,7 +9,6 @@ use App\Modules\AdminOne\Services\TenantSeatLimitService;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Rollout\Models\RolloutProgram;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -65,7 +64,6 @@ final class TenantUsageReportService
             'total_users' => TenantUser::query()->count(),
             'modules' => [
                 'e_approval' => $this->eApprovalUsage($periodStart),
-                'project_one' => $this->projectOneUsage($periodStart),
             ],
         ];
     }
@@ -104,23 +102,4 @@ final class TenantUsageReportService
         ];
     }
 
-    /**
-     * @return array<string, int>
-     */
-    private function projectOneUsage(Carbon $periodStart): array
-    {
-        if (! Schema::connection('tenant')->hasTable('rollout_programs')) {
-            return [
-                'rollouts_total' => 0,
-                'rollouts_last_30d' => 0,
-            ];
-        }
-
-        return [
-            'rollouts_total' => RolloutProgram::query()->count(),
-            'rollouts_last_30d' => RolloutProgram::query()
-                ->where('created_at', '>=', $periodStart)
-                ->count(),
-        ];
-    }
 }

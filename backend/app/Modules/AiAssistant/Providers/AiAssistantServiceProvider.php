@@ -11,6 +11,7 @@ use App\Modules\AiAssistant\Support\BedrockEmbeddingProvider;
 use App\Modules\AiAssistant\Support\BedrockLlmProvider;
 use App\Modules\AiAssistant\Support\CursorLlmProvider;
 use App\Modules\AiAssistant\Support\DatabaseVectorStore;
+use App\Modules\AiAssistant\Support\GeminiLlmProvider;
 use App\Modules\AiAssistant\Support\KnowledgeTextChunker;
 use App\Modules\AiAssistant\Support\LocalGroundedLlmProvider;
 use App\Modules\AiAssistant\Support\LocalHashEmbeddingProvider;
@@ -20,13 +21,9 @@ use App\Modules\AiAssistant\Support\OpenSearchVectorStore;
 use App\Modules\AiAssistant\Services\Actions\AssistantActionRegistry;
 use App\Modules\AiAssistant\Services\Actions\DraftEApprovalSubmissionAction;
 use App\Modules\AiAssistant\Services\Actions\DraftTicketAction;
-use App\Modules\AiAssistant\Services\Actions\SuggestDocumentMetadataAction;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRegistry;
-use App\Modules\AiAssistant\Services\Tools\GetControlledDocumentByCodeTool;
 use App\Modules\AiAssistant\Services\Tools\GetEApprovalSubmissionByDocumentNoTool;
-use App\Modules\AiAssistant\Services\Tools\GetSiteByCodeTool;
 use App\Modules\AiAssistant\Services\Tools\GetTicketByNumberTool;
-use App\Modules\AiAssistant\Services\Tools\ListExpiringDocumentsTool;
 use App\Modules\AiAssistant\Services\Tools\ListMyEApprovalSubmissionsTool;
 use App\Modules\AiAssistant\Services\Tools\ListMyOpenTicketsTool;
 use App\Modules\AiAssistant\Services\Tools\ListMyPendingApprovalsTool;
@@ -108,6 +105,18 @@ final class AiAssistantServiceProvider extends ServiceProvider
                     pollIntervalMs: (int) config('ai_assistant.cursor.poll_interval_ms', 1500),
                     requestTimeoutSeconds: (int) config('ai_assistant.cursor.timeout', 30),
                 ),
+                'gemini', 'google', 'google_ai', 'ai_studio' => new GeminiLlmProvider(
+                    apiKey: (string) config('ai_assistant.gemini.api_key', ''),
+                    baseUrl: (string) config('ai_assistant.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta'),
+                    modelId: (string) config('ai_assistant.gemini.chat_model', 'gemini-2.0-flash'),
+                    maxTokens: (int) config('ai_assistant.gemini.max_tokens', 2048),
+                    temperature: (float) config('ai_assistant.gemini.temperature', 0.2),
+                    timeoutSeconds: (int) config('ai_assistant.gemini.timeout', 60),
+                    allowedModels: array_values(array_filter(
+                        (array) config('ai_assistant.gemini.chat_models', []),
+                        static fn ($m): bool => is_string($m) && trim($m) !== '',
+                    )),
+                ),
                 default => throw new InvalidArgumentException("Unsupported AI LLM provider [{$driver}]."),
             };
         });
@@ -117,10 +126,7 @@ final class AiAssistantServiceProvider extends ServiceProvider
                 $app->make(ListMyEApprovalSubmissionsTool::class),
                 $app->make(GetEApprovalSubmissionByDocumentNoTool::class),
                 $app->make(GetTicketByNumberTool::class),
-                $app->make(GetControlledDocumentByCodeTool::class),
-                $app->make(GetSiteByCodeTool::class),
                 $app->make(ListMyOpenTicketsTool::class),
-                $app->make(ListExpiringDocumentsTool::class),
                 $app->make(SearchWorkspaceEntitiesTool::class),
             ]);
         });
@@ -129,7 +135,6 @@ final class AiAssistantServiceProvider extends ServiceProvider
             return new AssistantActionRegistry([
                 $app->make(DraftTicketAction::class),
                 $app->make(DraftEApprovalSubmissionAction::class),
-                $app->make(SuggestDocumentMetadataAction::class),
             ]);
         });
     }

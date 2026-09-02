@@ -1,6 +1,10 @@
-import type { ProjectOneKpi } from "@/modules/project-one/types";
-
-export type PlatformDashboardKpi = ProjectOneKpi;
+export type PlatformDashboardKpi = {
+  key: string;
+  label: string;
+  value: string;
+  change?: string;
+  tone?: "neutral" | "success" | "warning" | "danger";
+};
 
 export type PlatformDashboardAction = {
   id: string;

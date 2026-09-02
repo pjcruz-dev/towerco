@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircleQuestion } from "lucide-react";
 
+import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
 import { useAssistantDrawer } from "@/hooks/use-assistant-drawer";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,7 @@ function defaultPosition(): Position {
 }
 
 export function AssistantFloatingLauncher() {
-  const { open, setOpen } = useAssistantDrawer();
+  const { open, setOpen, minimized } = useAssistantDrawer();
   const [position, setPosition] = useState<Position | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragState = useRef<{
@@ -134,7 +134,7 @@ export function AssistantFloatingLauncher() {
     setOpen(true);
   };
 
-  if (open || !position) {
+  if ((open && !minimized) || !position) {
     return null;
   }
 
@@ -143,16 +143,16 @@ export function AssistantFloatingLauncher() {
       type="button"
       onPointerDown={onPointerDown}
       onClick={onClick}
-      aria-label="Ask TowerOS"
+      aria-label="AI Assistant"
       className={cn(
         "fixed z-40 flex h-14 w-14 touch-none items-center justify-center rounded-full",
-        "bg-primary text-primary-foreground shadow-lg ring-1 ring-black/5",
-        "transition-shadow hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "bg-sky-600 text-white shadow-lg ring-1 ring-sky-700/20",
+        "transition-shadow hover:bg-sky-500 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         dragging ? "cursor-grabbing" : "cursor-grab",
       )}
       style={{ left: position.x, top: position.y }}
     >
-      <MessageCircleQuestion className="h-6 w-6" />
+      <TowerOsAssistantMark className="h-6 w-6" />
     </button>
   );
 }
