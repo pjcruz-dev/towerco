@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
-import { BookOpen, CircleHelp, CreditCard, Layers, LogIn, PlusCircle, Users } from "lucide-react";
+import { BookOpen, CircleHelp, CreditCard, LayoutGrid, Layers, LogIn, PlusCircle, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
@@ -55,6 +55,12 @@ const navItems: NavItem[] = [
     href: "/platform/operators",
     icon: Users,
     permission: PLATFORM_PERMS.operatorsView,
+  },
+  {
+    title: "App Menu",
+    href: "/platform/app-menu",
+    icon: LayoutGrid,
+    permission: PLATFORM_PERMS.tenantsManage,
   },
   {
     title: "Helper center",

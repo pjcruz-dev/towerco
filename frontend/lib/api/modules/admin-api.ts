@@ -47,10 +47,17 @@ export type PasskeysPublicStatus = {
   satisfies_mfa: boolean;
 } | null;
 
+export type ComingSoonPublicStatus = {
+  enabled: boolean;
+  message: string;
+  contact: string | null;
+};
+
 export type TenantAuthPublicStatus = {
   microsoft_sign_in: MicrosoftSignInPublicStatus;
   password_login: PasswordLoginPublicStatus;
   passkeys: PasskeysPublicStatus;
+  coming_soon?: ComingSoonPublicStatus | null;
 };
 
 export async function fetchTenantMicrosoftSsoConfig(): Promise<TenantMicrosoftSsoConfig | null> {

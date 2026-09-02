@@ -258,6 +258,9 @@ final class PlatformTenantDirectoryService
                 'slug' => $tenant->slug,
                 'brand_domain' => $tenant->brand_domain,
                 'environment' => (string) ($tenant->environment ?? 'production'),
+                'coming_soon_enabled' => (bool) ($tenant->coming_soon_enabled ?? false),
+                'coming_soon_message' => $tenant->coming_soon_message,
+                'coming_soon_contact' => $tenant->coming_soon_contact,
                 'parent_tenant_id' => $tenant->parent_tenant_id,
                 'theme_tokens' => $tenant->theme_tokens !== null
                     ? TenantThemeTokensValidator::sanitizeForPublic($tenant->theme_tokens)

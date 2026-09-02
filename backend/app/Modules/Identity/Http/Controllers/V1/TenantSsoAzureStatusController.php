@@ -6,6 +6,7 @@ namespace App\Modules\Identity\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Identity\Services\TenantAuthPolicyService;
+use App\Modules\Identity\Services\TenantComingSoonService;
 use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Services\TenantSsoConfigService;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,7 @@ final class TenantSsoAzureStatusController extends AbstractApiController
         TenantSsoConfigService $service,
         TenantAuthPolicyService $authPolicy,
         TenantPasskeysPolicyService $passkeysPolicy,
+        TenantComingSoonService $comingSoon,
     ): JsonResponse {
         $tenantId = tenant('id');
         if ($tenantId === null) {
@@ -26,6 +28,7 @@ final class TenantSsoAzureStatusController extends AbstractApiController
                 'microsoft_sign_in' => null,
                 'password_login' => null,
                 'passkeys' => null,
+                'coming_soon' => $comingSoon->publicStatus(null),
             ]);
         }
 
@@ -35,6 +38,7 @@ final class TenantSsoAzureStatusController extends AbstractApiController
             'microsoft_sign_in' => $service->publicStatus($tenantId),
             'password_login' => $authPolicy->publicPasswordLoginStatus($tenantId),
             'passkeys' => $passkeysPolicy->publicStatus(),
+            'coming_soon' => $comingSoon->publicStatus($tenantId),
         ]);
     }
 }

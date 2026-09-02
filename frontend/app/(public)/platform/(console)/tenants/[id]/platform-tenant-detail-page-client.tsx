@@ -22,6 +22,7 @@ import {
   platformFetchTenant,
   platformFetchTenantAudit,
   platformPatchTenantSettings,
+  platformUpdateTenantComingSoon,
   platformUpdateTenantMfa,
   type PlatformTenantRow,
   type PlatformTenantThemeTokens,
@@ -174,6 +175,31 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
     },
     onError: (error) =>
       notify({ level: "error", title: "Could not update MFA", message: getErrorMessage(error) }),
+  });
+
+  const comingSoonMutation = useMutation({
+    mutationFn: (payload: {
+      coming_soon_enabled: boolean;
+      coming_soon_message?: string | null;
+      coming_soon_contact?: string | null;
+    }) => platformUpdateTenantComingSoon(tenantId, payload),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId, "audit"] });
+      notify({
+        level: "success",
+        title: "Coming Soon updated",
+        message: data.coming_soon_enabled
+          ? "Login shows Coming Soon for this environment."
+          : "Login is open for this environment.",
+      });
+    },
+    onError: (error) =>
+      notify({
+        level: "error",
+        title: "Could not update Coming Soon",
+        message: getErrorMessage(error),
+      }),
   });
 
   if (!isHydrated || !accessToken) {
@@ -364,6 +390,76 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
               </Button>
             </CardContent>
           </Card>
+
+          <Card className="rounded-xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base font-medium">Coming Soon</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Per environment. Turn on for staging while production stays open. No countdown —
+                login is replaced with a short message.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={comingSoonMutation.isPending}
+                onClick={() =>
+                  comingSoonMutation.mutate({
+                    coming_soon_enabled: !tenant.coming_soon_enabled,
+                    coming_soon_message: tenant.coming_soon_message ?? null,
+                    coming_soon_contact: tenant.coming_soon_contact ?? null,
+                  })
+                }
+              >
+                Coming Soon {tenant.coming_soon_enabled ? "on" : "off"} — toggle
+              </Button>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-muted-foreground" htmlFor="cs-message">
+                  Message
+                </label>
+                <textarea
+                  id="cs-message"
+                  className="min-h-[72px] w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                  defaultValue={tenant.coming_soon_message ?? ""}
+                  placeholder="This workspace is not open for sign-in yet…"
+                  onBlur={(e) => {
+                    const next = e.target.value.trim();
+                    const current = (tenant.coming_soon_message ?? "").trim();
+                    if (next === current) return;
+                    comingSoonMutation.mutate({
+                      coming_soon_enabled: Boolean(tenant.coming_soon_enabled),
+                      coming_soon_message: next || null,
+                      coming_soon_contact: tenant.coming_soon_contact ?? null,
+                    });
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-muted-foreground" htmlFor="cs-contact">
+                  Contact (email or URL)
+                </label>
+                <input
+                  id="cs-contact"
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                  defaultValue={tenant.coming_soon_contact ?? ""}
+                  placeholder="ops@example.com"
+                  onBlur={(e) => {
+                    const next = e.target.value.trim();
+                    const current = (tenant.coming_soon_contact ?? "").trim();
+                    if (next === current) return;
+                    comingSoonMutation.mutate({
+                      coming_soon_enabled: Boolean(tenant.coming_soon_enabled),
+                      coming_soon_message: tenant.coming_soon_message ?? null,
+                      coming_soon_contact: next || null,
+                    });
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           {tenantHasProjectOne(tenant) ? (
             <Card className="rounded-xl shadow-sm">
               <CardHeader>

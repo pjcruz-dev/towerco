@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 use App\Modules\Identity\Http\Controllers\V1\CentralHealthController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuGroupDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuGroupIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuGroupReorderController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuGroupStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuGroupUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuIconDestroyController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuIconStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuPlaceController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuPublicIconController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuPublicIndexController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuReorderController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuSettingsUpdateController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuSyncDefaultsController;
+use App\Modules\Platform\Http\Controllers\V1\CentralAppMenuUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymDestroyController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralOperationalAcronymPublicIndexController;
@@ -81,6 +98,13 @@ Route::get('public/tenant-branding/{asset}', [CentralTenantPublicBrandingControl
 Route::get('public/operational-acronyms', CentralOperationalAcronymPublicIndexController::class)
     ->middleware('throttle:120,1')
     ->name('api.central.v1.public.operational-acronyms');
+
+Route::get('public/app-menu', CentralAppMenuPublicIndexController::class)
+    ->middleware('throttle:120,1')
+    ->name('api.central.v1.public.app-menu');
+Route::get('public/app-menu-icons/{appMenuTile}', CentralAppMenuPublicIconController::class)
+    ->middleware('throttle:120,1')
+    ->name('api.central.v1.public.app-menu-icons');
 
 Route::post('platform/login', [CentralPlatformAuthController::class, 'login'])
     ->middleware('throttle:10,1')
@@ -259,4 +283,50 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::delete('operational-acronyms/{operationalAcronym}', CentralOperationalAcronymDestroyController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
         ->name('api.central.v1.platform.operational-acronyms.destroy');
+
+    Route::get('app-menu', CentralAppMenuIndexController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.index');
+    Route::post('app-menu', CentralAppMenuStoreController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.store');
+    Route::post('app-menu/sync-defaults', CentralAppMenuSyncDefaultsController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.sync-defaults');
+    Route::post('app-menu/reorder', CentralAppMenuReorderController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.reorder');
+    Route::post('app-menu/place', CentralAppMenuPlaceController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.place');
+    Route::patch('app-menu/settings', CentralAppMenuSettingsUpdateController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.settings');
+    Route::get('app-menu/groups', CentralAppMenuGroupIndexController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.groups.index');
+    Route::post('app-menu/groups', CentralAppMenuGroupStoreController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.groups.store');
+    Route::post('app-menu/groups/reorder', CentralAppMenuGroupReorderController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.groups.reorder');
+    Route::patch('app-menu/groups/{appMenuGroup}', CentralAppMenuGroupUpdateController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.groups.update');
+    Route::delete('app-menu/groups/{appMenuGroup}', CentralAppMenuGroupDestroyController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.groups.destroy');
+    Route::patch('app-menu/{appMenuTile}', CentralAppMenuUpdateController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.update');
+    Route::post('app-menu/{appMenuTile}/icon', CentralAppMenuIconStoreController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.icon.store');
+    Route::delete('app-menu/{appMenuTile}/icon', CentralAppMenuIconDestroyController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.icon.destroy');
+    Route::delete('app-menu/{appMenuTile}', CentralAppMenuDestroyController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.app-menu.destroy');
 });

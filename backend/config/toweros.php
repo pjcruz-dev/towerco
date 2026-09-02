@@ -340,6 +340,17 @@ return [
     'tenant_app_url' => env('TOWEROS_TENANT_APP_URL', env('FRONTEND_APP_URL', 'http://localhost')),
 
     /**
+     * Public App Menu launcher defaults (editable in Platform console).
+     * Prefer absolute login URLs, e.g. https://app.example.com/login
+     */
+    'app_menu' => [
+        'production_url' => env('TOWEROS_APP_MENU_PRODUCTION_URL'),
+        'staging_url' => env('TOWEROS_APP_MENU_STAGING_URL'),
+        /** Desktop columns on /appmenu (3–6). Mobile stays 2. */
+        'grid_columns' => (int) env('TOWEROS_APP_MENU_GRID_COLUMNS', 4),
+    ],
+
+    /**
      * Sanctum SPA stateful domains — tenant hostnames are merged from the central DB at runtime.
      */
     'sanctum' => [
