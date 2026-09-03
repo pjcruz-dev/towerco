@@ -28,6 +28,8 @@ class TenantDatabaseBackup extends Model
 
     public const TRIGGER_SCHEDULER = 'scheduler';
 
+    public const TRIGGER_UPLOAD = 'upload';
+
     /** Central registry — must not use the tenant connection when tenancy is initialized. */
     protected $connection = 'central';
 
@@ -35,6 +37,8 @@ class TenantDatabaseBackup extends Model
         'id',
         'tenant_id',
         'status',
+        'progress_percent',
+        'progress_message',
         'storage_path',
         'byte_size',
         'checksum',
@@ -52,6 +56,7 @@ class TenantDatabaseBackup extends Model
     {
         return [
             'byte_size' => 'integer',
+            'progress_percent' => 'integer',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];

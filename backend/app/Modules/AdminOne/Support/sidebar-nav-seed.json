@@ -1635,21 +1635,6 @@
         "children": []
       },
       {
-        "key": "group.administration.backup-restore",
-        "type": "internal_page",
-        "title": "Backup & Restore",
-        "icon": "Archive",
-        "href": "/admin/backups",
-        "entity_slug": null,
-        "required_permissions": [
-          "tenant:manage"
-        ],
-        "permissions_match": "all",
-        "module": "core",
-        "sort_order": 2,
-        "children": []
-      },
-      {
         "key": "group.administration.billing",
         "type": "internal_page",
         "title": "Billing",
@@ -1661,7 +1646,7 @@
         ],
         "permissions_match": "all",
         "module": "team_access",
-        "sort_order": 3,
+        "sort_order": 2,
         "children": []
       },
       {

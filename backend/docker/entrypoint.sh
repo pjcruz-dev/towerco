@@ -88,6 +88,21 @@ ensure_app_key() {
 
 ensure_app_key
 
+# Docker Compose injects DB_HOST/REDIS_HOST, but a host-oriented .env (127.0.0.1) can win
+# during config:cache if those vars were unset/cleared. Pin service DNS names for the API container.
+if [ "${TOWEROS_DOCKER:-0}" = "1" ]; then
+  export DB_HOST="${DB_HOST:-mysql}"
+  export CENTRAL_DB_HOST="${CENTRAL_DB_HOST:-$DB_HOST}"
+  export REDIS_HOST="${REDIS_HOST:-redis}"
+  # Never bake localhost Redis into the container config cache.
+  if [ "$REDIS_HOST" = "127.0.0.1" ] || [ "$REDIS_HOST" = "localhost" ]; then
+    export REDIS_HOST=redis
+  fi
+  if [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
+    export DB_HOST=mysql
+  fi
+fi
+
 # Framework boot optimization. Cache config + events for faster per-request boot.
 # route:cache is intentionally skipped: the app has closure routes (web.php, tenant.php).
 # Set TOWEROS_API_OPTIMIZE=0 to keep hot-reload of config in active development.

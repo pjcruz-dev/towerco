@@ -187,6 +187,8 @@ return [
         'max_concurrent_per_tenant' => (int) env('TOWEROS_TENANT_DB_BACKUP_MAX_CONCURRENT', 1),
         'mysqldump_path' => env('TOWEROS_MYSQLDUMP_PATH', 'mysqldump'),
         'mysql_path' => env('TOWEROS_MYSQL_PATH', 'mysql'),
+        /** Max uploaded .sql / .sql.gz size (KB). Keep ≤ PHP upload_max_filesize. */
+        'upload_max_kb' => (int) env('TOWEROS_TENANT_DB_BACKUP_UPLOAD_MAX_KB', 32768),
         'schedule_enabled' => filter_var(env('TOWEROS_TENANT_DB_BACKUP_SCHEDULE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'schedule_time' => env('TOWEROS_TENANT_DB_BACKUP_SCHEDULE_TIME', '02:30'),
         'signed_url_minutes' => (int) env('TOWEROS_TENANT_DB_BACKUP_SIGNED_URL_MINUTES', 30),

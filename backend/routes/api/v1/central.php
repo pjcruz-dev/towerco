@@ -59,6 +59,7 @@ use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupRestoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupScheduleRunController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupStoreController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupUploadController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingAuditIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBillingPortalSessionStoreController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBrandingAssetStoreController;
@@ -211,6 +212,9 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::post('tenants/{tenant}/backups', CentralTenantBackupStoreController::class)
         ->middleware(['throttle:20,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
         ->name('api.central.v1.platform.tenants.backups.store');
+    Route::post('tenants/{tenant}/backups/upload', CentralTenantBackupUploadController::class)
+        ->middleware(['throttle:10,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
+        ->name('api.central.v1.platform.tenants.backups.upload');
     Route::post('tenants/{tenant}/backups/schedule-run', CentralTenantBackupScheduleRunController::class)
         ->middleware(['throttle:10,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_BACKUP])
         ->name('api.central.v1.platform.tenants.backups.schedule_run');

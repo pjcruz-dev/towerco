@@ -14,6 +14,8 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->string('tenant_id');
             $table->string('status', 32);
+            $table->unsignedTinyInteger('progress_percent')->nullable();
+            $table->string('progress_message', 255)->nullable();
             $table->string('storage_path')->nullable();
             $table->unsignedBigInteger('byte_size')->nullable();
             $table->string('checksum', 64)->nullable();

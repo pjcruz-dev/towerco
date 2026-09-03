@@ -28,6 +28,8 @@ final class PlatformTenantAuditEventType
 
     public const TENANT_BACKUP_CREATED = 'tenant.backup.created';
 
+    public const TENANT_BACKUP_UPLOADED = 'tenant.backup.uploaded';
+
     public const TENANT_BACKUP_RESTORE_QUEUED = 'tenant.backup.restore_queued';
 
     public const TENANT_BACKUP_RESTORED = 'tenant.backup.restored';
@@ -51,6 +53,7 @@ final class PlatformTenantAuditEventType
             self::TENANT_IMPERSONATION_STARTED,
             self::TENANT_ACCESS_UPDATED,
             self::TENANT_BACKUP_CREATED,
+            self::TENANT_BACKUP_UPLOADED,
             self::TENANT_BACKUP_RESTORE_QUEUED,
             self::TENANT_BACKUP_RESTORED,
             self::TENANT_BACKUP_DELETED,

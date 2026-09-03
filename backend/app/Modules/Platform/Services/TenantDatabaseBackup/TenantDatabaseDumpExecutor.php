@@ -13,6 +13,69 @@ use Symfony\Component\Process\Process;
 final class TenantDatabaseDumpExecutor
 {
     /**
+     * Verify mysqldump / mysql CLI and that the tenant database is reachable.
+     *
+     * @param  'create'|'restore'  $operation
+     */
+    public function assertReady(string $operation, array $connection): void
+    {
+        if ($operation === 'create') {
+            $this->assertCliAvailable(
+                (string) config('toweros.tenant_database_backup.mysqldump_path', 'mysqldump'),
+                'mysqldump',
+            );
+        } else {
+            $this->assertCliAvailable(
+                (string) config('toweros.tenant_database_backup.mysql_path', 'mysql'),
+                'mysql',
+            );
+        }
+
+        $this->assertSafeDatabaseName($connection['database']);
+        $this->pingMysql($connection, requireDatabase: $operation === 'create');
+    }
+
+    /**
+     * @param  array{host: string, port: int|string, username: string, password: string, database: string}  $connection
+     */
+    public function pingMysql(array $connection, bool $requireDatabase = true): void
+    {
+        $mysql = (string) config('toweros.tenant_database_backup.mysql_path', 'mysql');
+        $this->assertCliAvailable($mysql, 'mysql');
+
+        $command = [
+            $mysql,
+            '--host='.$connection['host'],
+            '--port='.(string) $connection['port'],
+            '--user='.$connection['username'],
+            '-N',
+            '-e',
+            'SELECT 1',
+        ];
+
+        if ($requireDatabase) {
+            // Prove the tenant schema exists and is selectable.
+            array_splice($command, 4, 0, [$connection['database']]);
+        }
+
+        $process = new Process($command, null, [
+            'MYSQL_PWD' => $connection['password'],
+        ], null, 30);
+        $process->run();
+
+        if (! $process->isSuccessful() || ! str_contains(trim($process->getOutput()), '1')) {
+            throw new RuntimeException(
+                'MySQL preflight failed: '.$this->formatProcessFailure(
+                    $process,
+                    $process->getErrorOutput(),
+                    $mysql,
+                    $connection,
+                ),
+            );
+        }
+    }
+
+    /**
      * @param  array{host: string, port: int|string, username: string, password: string, database: string}  $connection
      */
     public function dumpToGzipFile(array $connection, string $gzipTargetPath): void
@@ -21,6 +84,7 @@ final class TenantDatabaseDumpExecutor
 
         $mysqldump = (string) config('toweros.tenant_database_backup.mysqldump_path', 'mysqldump');
         $timeout = max(60, (int) config('toweros.tenant_database_backup.job_timeout_seconds', 1800));
+        $this->assertCliAvailable($mysqldump, 'mysqldump');
 
         $command = [
             $mysqldump,
@@ -30,6 +94,8 @@ final class TenantDatabaseDumpExecutor
             '--single-transaction',
             '--routines',
             '--triggers',
+            // Avoid PROCESS privilege requirement (common for app DB users in local/Docker).
+            '--no-tablespaces',
             $connection['database'],
         ];
 
@@ -45,9 +111,13 @@ final class TenantDatabaseDumpExecutor
             throw new RuntimeException('Could not open gzip target for tenant database dump.');
         }
 
+        $stderr = '';
         try {
-            foreach ($process as $type => $data) {
+            // ITER_KEEP_OUTPUT is required: the default iterator clears stderr/stdout as it yields,
+            // which left failures as the empty UI string "mysqldump failed:".
+            foreach ($process->getIterator(Process::ITER_KEEP_OUTPUT) as $type => $data) {
                 if ($type === Process::ERR) {
+                    $stderr .= $data;
                     continue;
                 }
                 gzwrite($gzip, $data);
@@ -59,7 +129,12 @@ final class TenantDatabaseDumpExecutor
         if (! $process->isSuccessful()) {
             @unlink($gzipTargetPath);
             throw new RuntimeException(
-                'mysqldump failed: '.trim($process->getErrorOutput() !== '' ? $process->getErrorOutput() : $process->getOutput()),
+                'mysqldump failed: '.$this->formatProcessFailure(
+                    $process,
+                    $stderr,
+                    $mysqldump,
+                    $connection,
+                ),
             );
         }
 
@@ -82,6 +157,7 @@ final class TenantDatabaseDumpExecutor
 
         $mysql = (string) config('toweros.tenant_database_backup.mysql_path', 'mysql');
         $timeout = max(60, (int) config('toweros.tenant_database_backup.job_timeout_seconds', 1800));
+        $this->assertCliAvailable($mysql, 'mysql');
 
         $sqlPath = $gzipSourcePath.'.sql';
         $this->gunzipToFile($gzipSourcePath, $sqlPath);
@@ -97,19 +173,21 @@ final class TenantDatabaseDumpExecutor
                 $connection['database'],
             ];
 
+            // Prefer streaming the SQL file into mysql (avoids loading multi‑MB dumps into PHP memory).
             $process = new Process($command, null, [
                 'MYSQL_PWD' => $connection['password'],
             ], null, $timeout);
-            $sql = file_get_contents($sqlPath);
-            if ($sql === false) {
-                throw new RuntimeException('Could not read decompressed SQL for import.');
-            }
-            $process->setInput($sql);
+            $process->setInput(fopen($sqlPath, 'rb') ?: throw new RuntimeException('Could not open decompressed SQL for import.'));
             $process->run();
 
             if (! $process->isSuccessful()) {
                 throw new RuntimeException(
-                    'mysql restore failed: '.trim($process->getErrorOutput() !== '' ? $process->getErrorOutput() : $process->getOutput()),
+                    'mysql restore failed: '.$this->formatProcessFailure(
+                        $process,
+                        $process->getErrorOutput(),
+                        $mysql,
+                        $connection,
+                    ),
                 );
             }
         } finally {
@@ -132,6 +210,7 @@ final class TenantDatabaseDumpExecutor
         }
 
         $mysql = (string) config('toweros.tenant_database_backup.mysql_path', 'mysql');
+        $this->assertCliAvailable($mysql, 'mysql');
         $db = $connection['database'];
         $quoted = str_replace('`', '``', $db);
 
@@ -208,6 +287,66 @@ final class TenantDatabaseDumpExecutor
             gzclose($in);
             fclose($out);
         }
+    }
+
+    private function assertCliAvailable(string $binary, string $label): void
+    {
+        $binary = trim($binary);
+        if ($binary === '') {
+            throw new RuntimeException("{$label} path is empty. Set TOWEROS_MYSQLDUMP_PATH / TOWEROS_MYSQL_PATH.");
+        }
+
+        // Absolute/relative path to a file — verify it exists and is executable-ish.
+        if (str_contains($binary, '/') || str_contains($binary, '\\') || preg_match('/\.(exe|bat|cmd)$/i', $binary) === 1) {
+            if (! is_file($binary)) {
+                throw new RuntimeException(
+                    "{$label} binary not found at [{$binary}]. Install MySQL client tools or set TOWEROS_MYSQLDUMP_PATH / TOWEROS_MYSQL_PATH.",
+                );
+            }
+
+            return;
+        }
+
+        // Bare command name — resolve on PATH (where / which).
+        $finder = Process::fromShellCommandline(
+            PHP_OS_FAMILY === 'Windows' ? 'where '.escapeshellarg($binary) : 'command -v '.escapeshellarg($binary),
+        );
+        $finder->setTimeout(10);
+        $finder->run();
+        if (! $finder->isSuccessful() || trim($finder->getOutput()) === '') {
+            throw new RuntimeException(
+                "{$label} not found on PATH [{$binary}]. Install MySQL client tools in the API/worker environment, or set TOWEROS_MYSQLDUMP_PATH / TOWEROS_MYSQL_PATH.",
+            );
+        }
+    }
+
+    /**
+     * @param  array{host: string, port: int|string, username: string, password: string, database: string}  $connection
+     */
+    private function formatProcessFailure(
+        Process $process,
+        string $capturedStderr,
+        string $binary,
+        array $connection,
+    ): string {
+        $detail = trim($capturedStderr);
+        if ($detail === '') {
+            $detail = trim($process->getErrorOutput());
+        }
+        if ($detail === '') {
+            $detail = trim($process->getOutput());
+        }
+
+        $meta = sprintf(
+            'exit=%s; binary=%s; host=%s:%s; db=%s',
+            $process->getExitCode() ?? 'null',
+            $binary,
+            $connection['host'],
+            (string) $connection['port'],
+            $connection['database'],
+        );
+
+        return $detail !== '' ? $detail.' ('.$meta.')' : $meta;
     }
 
     private function assertSafeDatabaseName(string $database): void

@@ -11,6 +11,7 @@ use App\Modules\Platform\Jobs\CreateTenantDatabaseBackupJob;
 use App\Modules\Platform\Jobs\RestoreTenantDatabaseBackupJob;
 use App\Modules\Platform\Services\PlatformTenantAuditLogger;
 use App\Modules\Platform\Support\PlatformTenantAuditEventType;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -82,18 +83,29 @@ final class TenantDatabaseBackupService
         $this->assertFeatureEnabled();
         $this->assertNoConcurrentWork($tenant);
 
+        $connection = $this->mysqlConnectionForTenant($tenant);
+        try {
+            $this->executor->assertReady('create', $connection);
+        } catch (Throwable $e) {
+            throw ValidationException::withMessages([
+                'backup' => [__('Backup preflight failed: :message', ['message' => Str::limit($e->getMessage(), 400)])],
+            ]);
+        }
+
         $backup = TenantDatabaseBackup::query()->create([
             'id' => (string) Str::uuid(),
             'tenant_id' => (string) $tenant->id,
             'status' => TenantDatabaseBackup::STATUS_PENDING,
-            'database_name' => $tenant->database()->getName(),
+            'progress_percent' => 5,
+            'progress_message' => 'Queued — waiting to start dump',
+            'database_name' => $connection['database'],
             'triggered_by' => $triggeredBy,
             'actor_user_id' => $actor?->id,
             'actor_email' => $actor?->email,
             'reason' => $reason !== null && trim($reason) !== '' ? trim($reason) : null,
         ]);
 
-        CreateTenantDatabaseBackupJob::dispatch($backup->id);
+        CreateTenantDatabaseBackupJob::dispatch($backup->id)->afterResponse();
 
         $this->audit->log(
             PlatformTenantAuditEventType::TENANT_BACKUP_CREATED,
@@ -108,6 +120,113 @@ final class TenantDatabaseBackupService
         );
 
         return $backup->fresh() ?? $backup;
+    }
+
+    /**
+     * Import a previously downloaded .sql / .sql.gz into the backup catalog (does not restore yet).
+     * Operator can then use Restore on the new row.
+     */
+    public function importUploadedArchive(
+        Tenant $tenant,
+        UploadedFile $file,
+        User $actor,
+        ?string $reason = null,
+    ): TenantDatabaseBackup {
+        $this->assertFeatureEnabled();
+
+        $original = strtolower((string) $file->getClientOriginalName());
+        $isGzip = str_ends_with($original, '.sql.gz') || str_ends_with($original, '.gz');
+        $isSql = str_ends_with($original, '.sql');
+        if (! $isGzip && ! $isSql) {
+            throw ValidationException::withMessages([
+                'file' => [__('Upload a .sql or .sql.gz dump exported from TowerOS backups.')],
+            ]);
+        }
+
+        $maxKb = max(1024, (int) config('toweros.tenant_database_backup.upload_max_kb', 32768));
+        $size = (int) $file->getSize();
+        if ($size <= 0 || $size > ($maxKb * 1024)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Backup file exceeds the upload limit (:max MB).', ['max' => (int) ceil($maxKb / 1024)])],
+            ]);
+        }
+
+        $backupId = (string) Str::uuid();
+        $storagePath = $this->storagePathFor($tenant, $backupId);
+        $tmpGz = tempnam(sys_get_temp_dir(), 'toweros-tdb-upload-');
+        if ($tmpGz === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('Could not allocate temporary upload storage.')],
+            ]);
+        }
+        $tmpGzPath = $tmpGz.'.sql.gz';
+        @unlink($tmpGz);
+
+        try {
+            if ($isGzip) {
+                $this->normalizeUploadedGzipToFile($file->getRealPath() ?: '', $tmpGzPath);
+            } else {
+                $this->gzipPlainSqlFile($file->getRealPath() ?: '', $tmpGzPath);
+            }
+
+            $this->assertLooksLikeMysqlDump($tmpGzPath);
+
+            $bytes = file_get_contents($tmpGzPath);
+            if ($bytes === false || $bytes === '') {
+                throw ValidationException::withMessages([
+                    'file' => [__('Uploaded backup archive is empty.')],
+                ]);
+            }
+
+            Storage::disk($this->disk())->put($storagePath, $bytes);
+
+            $backup = TenantDatabaseBackup::query()->create([
+                'id' => $backupId,
+                'tenant_id' => (string) $tenant->id,
+                'status' => TenantDatabaseBackup::STATUS_COMPLETED,
+                'progress_percent' => 100,
+                'progress_message' => 'Uploaded — ready to restore',
+                'storage_path' => $storagePath,
+                'byte_size' => strlen($bytes),
+                'checksum' => hash('sha256', $bytes),
+                'database_name' => $tenant->database()->getName(),
+                'triggered_by' => TenantDatabaseBackup::TRIGGER_UPLOAD,
+                'actor_user_id' => $actor->id,
+                'actor_email' => $actor->email,
+                'reason' => $reason !== null && trim($reason) !== '' ? trim($reason) : 'Uploaded backup archive',
+                'started_at' => now(),
+                'finished_at' => now(),
+            ]);
+
+            $this->audit->log(
+                PlatformTenantAuditEventType::TENANT_BACKUP_UPLOADED,
+                $tenant,
+                $actor,
+                null,
+                [
+                    'backup_id' => $backup->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'byte_size' => $backup->byte_size,
+                    'reason' => $backup->reason,
+                ],
+            );
+
+            return $backup;
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            @unlink($tmpGzPath);
+            try {
+                Storage::disk($this->disk())->delete($storagePath);
+            } catch (Throwable) {
+            }
+
+            throw ValidationException::withMessages([
+                'file' => [Str::limit($e->getMessage(), 400)],
+            ]);
+        } finally {
+            @unlink($tmpGzPath);
+        }
     }
 
     public function queueRestore(
@@ -140,21 +259,42 @@ final class TenantDatabaseBackupService
         $this->assertNoConcurrentWork($tenant, $backup->id);
         $this->assertStoragePathOwnedByTenant($tenant, (string) $backup->storage_path);
 
+        $connection = $this->mysqlConnectionForTenant($tenant);
+        try {
+            $this->assertRestoreArchiveValid($tenant, $backup);
+            $this->executor->assertReady('restore', $connection);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            throw ValidationException::withMessages([
+                'restore' => [__('Restore preflight failed: :message', ['message' => Str::limit($e->getMessage(), 400)])],
+            ]);
+        }
+
         $backup->status = TenantDatabaseBackup::STATUS_RESTORING;
+        $backup->progress_percent = 5;
+        $backup->progress_message = 'Queued — restore will start shortly';
         $backup->error_message = null;
         $backup->started_at = now();
         $backup->finished_at = null;
         $backup->save();
 
         try {
+            // afterResponse: with QUEUE_CONNECTION=sync, restore still runs in-process but
+            // AFTER the 202 is sent — avoids axios 20s timeouts aborting a live mysql import.
             RestoreTenantDatabaseBackupJob::dispatch(
                 $backup->id,
                 (string) $tenant->id,
                 (string) $actor->id,
                 (string) $actor->email,
                 trim($reason),
-            );
+            )->afterResponse();
         } catch (Throwable $e) {
+            $backup->status = TenantDatabaseBackup::STATUS_COMPLETED;
+            $backup->error_message = 'Restore failed to queue: '.Str::limit($e->getMessage(), 1800);
+            $backup->finished_at = now();
+            $backup->save();
+
             throw ValidationException::withMessages([
                 'restore' => [Str::limit($e->getMessage(), 500)],
             ]);
@@ -307,7 +447,7 @@ final class TenantDatabaseBackupService
         $backup->status = TenantDatabaseBackup::STATUS_RUNNING;
         $backup->started_at = now();
         $backup->error_message = null;
-        $backup->save();
+        $this->setProgress($backup, 15, 'Validating tools and database…');
 
         $tmp = tempnam(sys_get_temp_dir(), 'toweros-tdb-');
         if ($tmp === false) {
@@ -321,8 +461,12 @@ final class TenantDatabaseBackupService
 
         try {
             $connection = $this->mysqlConnectionForTenant($tenant);
+            $this->executor->assertReady('create', $connection);
+
+            $this->setProgress($backup, 40, 'Dumping tenant database (mysqldump)…');
             $this->executor->dumpToGzipFile($connection, $gzipPath);
 
+            $this->setProgress($backup, 80, 'Storing compressed archive…');
             $path = $this->storagePathFor($tenant, $backup->id);
             $contents = file_get_contents($gzipPath);
             if ($contents === false) {
@@ -338,6 +482,8 @@ final class TenantDatabaseBackupService
             $backup->status = TenantDatabaseBackup::STATUS_COMPLETED;
             $backup->finished_at = now();
             $backup->error_message = null;
+            $backup->progress_percent = 100;
+            $backup->progress_message = 'Backup completed successfully';
             $backup->save();
         } catch (Throwable $e) {
             $this->markFailed($backup, $e->getMessage());
@@ -356,7 +502,9 @@ final class TenantDatabaseBackupService
         $previousOperatorMode = $tenant->operator_access_mode ?? null;
 
         try {
+            $this->setProgress($backup, 15, 'Validating archive and MySQL tools…');
             $this->assertStoragePathOwnedByTenant($tenant, (string) $backup->storage_path);
+            $this->assertRestoreArchiveValid($tenant, $backup);
 
             if ($backup->storage_path === null || ! Storage::disk($this->disk())->exists($backup->storage_path)) {
                 throw new \RuntimeException('Backup archive missing from storage.');
@@ -372,6 +520,7 @@ final class TenantDatabaseBackupService
             $gzipPath = $tmp.'.sql.gz';
             @unlink($tmp);
 
+            $this->setProgress($backup, 30, 'Loading backup archive…');
             file_put_contents($gzipPath, Storage::disk($this->disk())->get($backup->storage_path));
 
             try {
@@ -379,6 +528,9 @@ final class TenantDatabaseBackupService
                 if ($backup->database_name !== null && $backup->database_name !== $connection['database']) {
                     throw new \RuntimeException('Backup database name does not match this tenant.');
                 }
+                $this->executor->assertReady('restore', $connection);
+
+                $this->setProgress($backup, 55, 'Recreating database and importing SQL…');
                 $this->executor->restoreFromGzipFile($connection, $gzipPath);
             } finally {
                 @unlink($gzipPath);
@@ -387,6 +539,8 @@ final class TenantDatabaseBackupService
             $backup->status = TenantDatabaseBackup::STATUS_COMPLETED;
             $backup->finished_at = now();
             $backup->error_message = null;
+            $backup->progress_percent = 100;
+            $backup->progress_message = 'Restore completed successfully';
             $backup->save();
 
             $actor = $actorUserId !== null
@@ -408,6 +562,8 @@ final class TenantDatabaseBackupService
             // Keep the dump usable — restore failure must not mark the backup artifact as failed.
             $backup->status = TenantDatabaseBackup::STATUS_COMPLETED;
             $backup->error_message = 'Restore failed: '.Str::limit($e->getMessage(), 1900);
+            $backup->progress_percent = 0;
+            $backup->progress_message = 'Restore failed';
             $backup->finished_at = now();
             $backup->save();
 
@@ -424,6 +580,8 @@ final class TenantDatabaseBackupService
     {
         $backup->status = TenantDatabaseBackup::STATUS_FAILED;
         $backup->error_message = Str::limit($message, 2000);
+        $backup->progress_percent = 0;
+        $backup->progress_message = 'Failed';
         $backup->finished_at = now();
         $backup->save();
     }
@@ -473,6 +631,8 @@ final class TenantDatabaseBackupService
             'id' => $backup->id,
             'tenant_id' => $backup->tenant_id,
             'status' => $backup->status,
+            'progress_percent' => $backup->progress_percent,
+            'progress_message' => $backup->progress_message,
             'name' => $backup->storage_path !== null ? basename($backup->storage_path) : ('backup-'.$backup->id),
             'storage_path' => $backup->storage_path,
             'byte_size' => $backup->byte_size,
@@ -487,6 +647,68 @@ final class TenantDatabaseBackupService
             'created_at' => $backup->created_at?->toIso8601String(),
             'updated_at' => $backup->updated_at?->toIso8601String(),
         ];
+    }
+
+    private function setProgress(TenantDatabaseBackup $backup, int $percent, string $message): void
+    {
+        $backup->progress_percent = max(0, min(100, $percent));
+        $backup->progress_message = Str::limit($message, 250);
+        $backup->save();
+    }
+
+    private function assertRestoreArchiveValid(Tenant $tenant, TenantDatabaseBackup $backup): void
+    {
+        if (! $backup->isCompleted() && $backup->status !== TenantDatabaseBackup::STATUS_RESTORING) {
+            throw ValidationException::withMessages([
+                'backup' => [__('Only completed backups can be restored.')],
+            ]);
+        }
+
+        if ($backup->storage_path === null || $backup->storage_path === '') {
+            throw ValidationException::withMessages([
+                'backup' => [__('Backup archive path is missing.')],
+            ]);
+        }
+
+        $this->assertStoragePathOwnedByTenant($tenant, $backup->storage_path);
+
+        $disk = Storage::disk($this->disk());
+        if (! $disk->exists($backup->storage_path)) {
+            throw ValidationException::withMessages([
+                'backup' => [__('Backup archive is missing from storage.')],
+            ]);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'toweros-tdb-validate-');
+        if ($tmp === false) {
+            throw ValidationException::withMessages([
+                'backup' => [__('Could not allocate temporary file for validation.')],
+            ]);
+        }
+        $tmpGz = $tmp.'.sql.gz';
+        @unlink($tmp);
+
+        try {
+            file_put_contents($tmpGz, $disk->get($backup->storage_path));
+            $this->assertLooksLikeMysqlDump($tmpGz);
+        } finally {
+            @unlink($tmpGz);
+        }
+
+        $expectedDb = $tenant->database()->getName();
+        if (
+            is_string($backup->database_name)
+            && $backup->database_name !== ''
+            && $expectedDb !== ''
+            && $backup->database_name !== $expectedDb
+        ) {
+            throw ValidationException::withMessages([
+                'backup' => [__('This backup belongs to database :from, but this tenant uses :to.', [
+                    'from' => $backup->database_name,
+                    'to' => $expectedDb,
+                ])],
+            ]);
+        }
     }
 
     public function assertStoragePathOwnedByTenant(Tenant $tenant, string $path): void
@@ -560,6 +782,90 @@ final class TenantDatabaseBackupService
             Storage::disk($this->disk())->delete($backup->storage_path);
         } catch (Throwable) {
             // Best-effort delete; metadata still purged.
+        }
+    }
+
+    private function normalizeUploadedGzipToFile(string $sourcePath, string $targetGzipPath): void
+    {
+        if ($sourcePath === '' || ! is_file($sourcePath)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Uploaded file could not be read.')],
+            ]);
+        }
+
+        $head = file_get_contents($sourcePath, false, null, 0, 2);
+        if ($head !== "\x1f\x8b") {
+            throw ValidationException::withMessages([
+                'file' => [__('File is not a valid gzip archive (.sql.gz).')],
+            ]);
+        }
+
+        if (! @copy($sourcePath, $targetGzipPath)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Could not stage uploaded gzip backup.')],
+            ]);
+        }
+    }
+
+    private function gzipPlainSqlFile(string $sourcePath, string $targetGzipPath): void
+    {
+        if ($sourcePath === '' || ! is_file($sourcePath)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Uploaded file could not be read.')],
+            ]);
+        }
+
+        $in = fopen($sourcePath, 'rb');
+        $out = gzopen($targetGzipPath, 'wb9');
+        if ($in === false || $out === false) {
+            if (is_resource($in)) {
+                fclose($in);
+            }
+            throw ValidationException::withMessages([
+                'file' => [__('Could not compress uploaded SQL backup.')],
+            ]);
+        }
+
+        try {
+            while (! feof($in)) {
+                $chunk = fread($in, 1024 * 1024);
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                gzwrite($out, $chunk);
+            }
+        } finally {
+            fclose($in);
+            gzclose($out);
+        }
+    }
+
+    private function assertLooksLikeMysqlDump(string $gzipPath): void
+    {
+        $gz = gzopen($gzipPath, 'rb');
+        if ($gz === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('Could not open uploaded backup for validation.')],
+            ]);
+        }
+
+        try {
+            $sample = (string) gzread($gz, 8192);
+        } finally {
+            gzclose($gz);
+        }
+
+        $sampleLower = strtolower($sample);
+        $ok = str_contains($sampleLower, 'mysqldump')
+            || str_contains($sampleLower, 'mariadb dump')
+            || str_contains($sampleLower, 'create table')
+            || str_contains($sampleLower, 'insert into')
+            || str_contains($sampleLower, '-- dump');
+
+        if (! $ok) {
+            throw ValidationException::withMessages([
+                'file' => [__('File does not look like a MySQL/MariaDB logical dump.')],
+            ]);
         }
     }
 
