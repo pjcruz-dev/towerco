@@ -13,6 +13,7 @@ use App\Modules\Identity\Services\MfaService;
 use App\Modules\Identity\Services\RefreshTokenService;
 use App\Modules\Identity\Services\TenantAuthPolicyService;
 use App\Modules\Identity\Services\TenantAuthUserPayloadBuilder;
+use App\Modules\Identity\Services\TenantComingSoonService;
 use App\Modules\Identity\Services\TenantPasskeysPolicyService;
 use App\Modules\Identity\Support\TenantImpersonationContextResolver;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,7 @@ class TenantAuthController extends AbstractApiController
         private readonly MfaService $mfaService,
         private readonly AuthAuditService $auditService,
         private readonly TenantAuthPolicyService $authPolicy,
+        private readonly TenantComingSoonService $comingSoon,
     ) {}
 
     public function login(Request $request): JsonResponse
@@ -40,6 +42,7 @@ class TenantAuthController extends AbstractApiController
         ]);
 
         $tenantId = (string) tenant('id');
+        $this->comingSoon->assertSignInAllowed($tenantId);
         $email = TenantUser::normalizeEmail($credentials['email']);
 
         $user = TenantUser::findByEmail($email);

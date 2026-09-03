@@ -11,10 +11,44 @@ export function parseCentralHostnames(): string[] {
   return ["localhost", "127.0.0.1"];
 }
 
+/**
+ * Explicit App Menu launcher hosts (comma-separated), in addition to `appmenu.*`.
+ * Example: NEXT_PUBLIC_APP_MENU_HOSTS=apps.alliancetowers.com,launcher.example.com
+ */
+export function parseAppMenuLauncherHostnames(): string[] {
+  const raw = process.env.NEXT_PUBLIC_APP_MENU_HOSTS?.trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Public App Menu landing hosts (e.g. appmenu.alliancetowers.com).
+ * Not a tenant workspace and not the platform console — root redirects to /appmenu.
+ */
+export function isAppMenuLauncherHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (host === "") {
+    return false;
+  }
+  if (host === "appmenu" || host.startsWith("appmenu.")) {
+    return true;
+  }
+  return parseAppMenuLauncherHostnames().includes(host);
+}
+
 export function isCentralHostname(hostname: string): boolean {
   const host = hostname.trim().toLowerCase();
   if (host === "") {
     return true;
+  }
+  // Public App Menu launcher is not the platform console.
+  if (isAppMenuLauncherHostname(host)) {
+    return false;
   }
   // Tenant dev hosts: atc.localhost, staging.quantum.localhost, etc. (never the platform host).
   if (host.endsWith(".localhost")) {
@@ -25,7 +59,7 @@ export function isCentralHostname(hostname: string): boolean {
 
 export function tenantDomainFromBrowserHostname(hostname: string): string | null {
   const host = hostname.trim().toLowerCase();
-  if (!host || isCentralHostname(host)) {
+  if (!host || isCentralHostname(host) || isAppMenuLauncherHostname(host)) {
     return null;
   }
   return host;

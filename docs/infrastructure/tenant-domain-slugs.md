@@ -70,8 +70,33 @@ Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 | Local dev (production) | http://app.atc.localhost/login |
 | Staging | https://staging.alliancetowers.com/login |
 | Production app | https://app.alliancetowers.com/login |
+| **App Menu (public hub)** | https://appmenu.alliancetowers.com/ (redirects to `/appmenu`) |
 
-## After you create a tenant environment
+## App Menu launcher (`appmenu.{brand_domain}`)
+
+Use a dedicated hostname for the public App Menu landing (not the corporate apex, not `app.`).
+
+| Step | Action |
+|------|--------|
+| 1 | DNS: CNAME `appmenu` → same TowerOS **web** ALB / edge as `app.` |
+| 2 | TLS: include `appmenu.alliancetowers.com` on the cert |
+| 3 | Proxy: route that host to the Next.js **web** service (same as tenant SPA) |
+| 4 | Frontend env: `NEXT_PUBLIC_CENTRAL_API_BASE_URL` must point at the central API |
+| 5 | CORS: ensure `TOWEROS_CORS_ALLOWED_ORIGIN_PATTERNS` covers `https://*.alliancetowers.com` (or add `https://appmenu.alliancetowers.com` to extras) |
+| 6 | Do **not** register `appmenu.*` as a tenant domain, and do **not** put it in `CENTRAL_DOMAINS` / `NEXT_PUBLIC_CENTRAL_DOMAINS` (those are for platform console) |
+
+Behavior: any host matching `appmenu.*` (or listed in `NEXT_PUBLIC_APP_MENU_HOSTS`) serves the App Menu at **`/`** (no `/appmenu` in the address bar). Visiting `/appmenu` redirects to `/`. Manage tiles in Platform → App Menu.
+
+### TLS (fix “Not secure”)
+
+`https://appmenu.…` shows **Not secure** when the certificate does **not** include that hostname (name mismatch), even if `app.` and `staging.` work.
+
+| Stack | Fix |
+|-------|-----|
+| **ACM + ALB** | Request/expand cert to include `appmenu.alliancetowers.com` (or `*.alliancetowers.com`), attach to HTTPS listener |
+| **Certbot + Nginx on EC2** | Expand the cert: `sudo certbot --nginx -d app.alliancetowers.com -d staging.alliancetowers.com -d appmenu.alliancetowers.com` (add your real hosts), then reload nginx |
+
+Confirm in the browser: padlock → certificate → Subject Alternative Name lists `appmenu.alliancetowers.com`.
 
 1. Use the **Open tenant sign-in** button (or the sign-in URL shown in the credentials panel).
 2. Use the tenant hostname without a port when the web app listens on port 80, for example `http://test.atc.localhost/login`.
@@ -83,8 +108,9 @@ Platform API: `POST /api/v1/platform/tenants/{tenant}/environments`
 
 1. CNAME `staging` → TowerOS load balancer / CloudFront (→ `staging.alliancetowers.com`).
 2. CNAME `app` → same (or separate origin for prod) (→ `app.alliancetowers.com`).
-3. TLS cert covers `app.alliancetowers.com`, `staging.alliancetowers.com` (and optionally apex / wildcards).
-4. Tenant hostnames are registered in the central DB when you provision environments; Sanctum stateful domains are merged from that data automatically. Use `SANCTUM_STATEFUL_DOMAINS` only for optional extras (e.g. platform console hosts).
+3. CNAME `appmenu` → same web origin (→ `appmenu.alliancetowers.com` public App Menu hub).
+4. TLS cert covers `app.alliancetowers.com`, `staging.alliancetowers.com`, `appmenu.alliancetowers.com` (and optionally apex / wildcards).
+5. Tenant hostnames are registered in the central DB when you provision environments; Sanctum stateful domains are merged from that data automatically. Use `SANCTUM_STATEFUL_DOMAINS` only for optional extras (e.g. platform console hosts).
 
 ## TCO Site ID
 

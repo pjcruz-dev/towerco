@@ -9,9 +9,9 @@ import { useForm, type FieldErrors } from "react-hook-form";
 import { z } from "zod";
 
 import { FormInput } from "@/components/forms/form-input";
+import { ComingSoonLoginPanel } from "@/components/auth/coming-soon-login-panel";
 import { LoginNoticeBanner } from "@/components/feedback/login-notice-banner";
 import { Button } from "@/components/ui/button";
-import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
 import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { resolveApiBaseUrl } from "@/lib/api/client";
@@ -88,7 +88,6 @@ function LoginPageContent() {
 
   const browserHostname = useBrowserHostname();
   const clientReady = useClientReady();
-  const organizationLabel = useOrganizationLabel();
   const [loginNotice, setLoginNoticeState] = useState<LoginNotice | null>(null);
 
   const showLoginNotice = (notice: LoginNotice) => {
@@ -330,7 +329,13 @@ function LoginPageContent() {
 
   // Phase 2 env switcher: /login?sso=1 auto-starts Microsoft when SSO is enabled on this host.
   useEffect(() => {
-    if (!autoStartSso || !authStatusReady || !microsoftSignIn?.enabled || onCentralHost) {
+    if (
+      !autoStartSso ||
+      !authStatusReady ||
+      !microsoftSignIn?.enabled ||
+      onCentralHost ||
+      authStatusQuery.data?.coming_soon?.enabled
+    ) {
       return;
     }
 
@@ -350,6 +355,7 @@ function LoginPageContent() {
     redirectToMicrosoftSignIn();
   }, [
     authStatusReady,
+    authStatusQuery.data?.coming_soon?.enabled,
     autoStartSso,
     browserHostname,
     microsoftSignIn?.enabled,
@@ -389,11 +395,22 @@ function LoginPageContent() {
     </Button>
   ) : null;
 
+  const comingSoon = authStatusQuery.data?.coming_soon;
+  if (authStatusReady && comingSoon?.enabled) {
+    return (
+      <ComingSoonLoginPanel
+        message={comingSoon.message}
+        contact={comingSoon.contact}
+      />
+    );
+  }
+
   return (
-    <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
-        Sign in to {organizationLabel}
-      </h1>
+    <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+      <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">Sign in</h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Welcome back. Sign in to continue to your workspace.
+      </p>
 
       {loginNotice ? (
         <div className="mt-4">

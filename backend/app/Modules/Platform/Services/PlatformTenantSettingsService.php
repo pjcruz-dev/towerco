@@ -95,6 +95,18 @@ final class PlatformTenantSettingsService
             $tenant->operator_access_mode = TenantOperatorAccessMode::normalize($data['operator_access_mode']);
         }
 
+        if (array_key_exists('coming_soon_enabled', $data)) {
+            $tenant->coming_soon_enabled = (bool) $data['coming_soon_enabled'];
+        }
+        if (array_key_exists('coming_soon_message', $data)) {
+            $message = trim((string) ($data['coming_soon_message'] ?? ''));
+            $tenant->coming_soon_message = $message !== '' ? $message : null;
+        }
+        if (array_key_exists('coming_soon_contact', $data)) {
+            $contact = trim((string) ($data['coming_soon_contact'] ?? ''));
+            $tenant->coming_soon_contact = $contact !== '' ? $contact : null;
+        }
+
         $modulesChanged = false;
         if (array_key_exists('enabled_modules', $data)) {
             $tenant->enabled_modules = TenantEnabledModulesValidator::validate(
@@ -154,6 +166,20 @@ final class PlatformTenantSettingsService
                     $accessChanges,
                 );
             }
+
+            $comingSoonChanges = $this->pickChanges($settingsChanges, [
+                'coming_soon_enabled',
+                'coming_soon_message',
+                'coming_soon_contact',
+            ]);
+            if ($comingSoonChanges !== []) {
+                $this->platformAudit->log(
+                    PlatformTenantAuditEventType::TENANT_ACCESS_UPDATED,
+                    $tenant,
+                    $actor,
+                    $comingSoonChanges,
+                );
+            }
         });
 
         if ($modulesChanged) {
@@ -174,6 +200,9 @@ final class PlatformTenantSettingsService
             'enabled_modules' => $tenant->enabled_modules,
             'effective_enabled_modules' => $this->enabledModulesResolver->resolveForTenant($tenant),
             'operator_access_mode' => $tenant->operator_access_mode,
+            'coming_soon_enabled' => (bool) ($tenant->coming_soon_enabled ?? false),
+            'coming_soon_message' => $tenant->coming_soon_message,
+            'coming_soon_contact' => $tenant->coming_soon_contact,
             'trial_ends_at' => $subscription['trial_ends_at'],
             'past_due_grace_ends_at' => $subscription['past_due_grace_ends_at'],
             'canceled_at' => $subscription['canceled_at'],
@@ -216,6 +245,9 @@ final class PlatformTenantSettingsService
             'theme_tokens' => $tenant->theme_tokens,
             'enabled_modules' => $tenant->enabled_modules,
             'operator_access_mode' => $tenant->operator_access_mode,
+            'coming_soon_enabled' => (bool) ($tenant->coming_soon_enabled ?? false),
+            'coming_soon_message' => $tenant->coming_soon_message,
+            'coming_soon_contact' => $tenant->coming_soon_contact,
         ];
     }
 
