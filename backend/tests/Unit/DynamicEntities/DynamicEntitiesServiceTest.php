@@ -517,4 +517,39 @@ SQL);
 
         @unlink($path);
     }
+
+    #[Test]
+    public function entity_index_payload_omits_print_template_html(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $entity = $admin->createEntity([
+            'name' => 'Sales Transactions',
+            'slug' => 'sales_transactions',
+            'module_pack' => 'finance',
+        ], $this->actor);
+
+        $html = str_repeat('<p>Official Receipt</p>', 200);
+        $entity->print_settings_json = [
+            'templates' => [[
+                'id' => 'tpl-or',
+                'name' => 'Official Receipt',
+                'layout' => 'grouped',
+                'template_html' => $html,
+                'template_css' => 'body { font-size: 12px; }',
+                'updated_at' => '2026-09-01T00:00:00+00:00',
+            ]],
+            'default_template_id' => 'tpl-or',
+        ];
+        $entity->save();
+
+        $list = $admin->presentEntity($entity->fresh());
+        $this->assertSame('Official Receipt', $list['print_settings']['templates'][0]['name']);
+        $this->assertSame('tpl-or', $list['print_settings']['default_template_id']);
+        $this->assertArrayNotHasKey('template_html', $list['print_settings']['templates'][0]);
+        $this->assertArrayNotHasKey('template_css', $list['print_settings']['templates'][0]);
+
+        $detail = $admin->presentEntity($entity->fresh(), true);
+        $this->assertSame($html, $detail['print_settings']['templates'][0]['template_html']);
+        $this->assertArrayHasKey('fields', $detail);
+    }
 }

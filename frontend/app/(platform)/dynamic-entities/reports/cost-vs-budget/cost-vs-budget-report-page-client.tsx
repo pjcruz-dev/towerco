@@ -8,6 +8,7 @@ import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-char
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { fetchDynFinanceReport } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { formatPeso } from "../format-peso";
@@ -94,18 +95,18 @@ export function CostVsBudgetReportPageClient() {
             void load();
           }}
         >
-          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={region} onChange={(e) => setRegion(e.target.value)}>
+          <Select className="h-9 w-44" value={region} onChange={(e) => setRegion(e.target.value)}>
             <option value="">All regions</option>
             {(report?.filter_options.regions ?? []).map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
-          </select>
-          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={projectType} onChange={(e) => setProjectType(e.target.value)}>
+          </Select>
+          <Select className="h-9 w-44" value={projectType} onChange={(e) => setProjectType(e.target.value)}>
             <option value="">All project types</option>
             {(report?.filter_options.project_types ?? []).map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
-          </select>
+          </Select>
           <Button type="submit" size="sm" disabled={loading}>Update</Button>
         </form>
 

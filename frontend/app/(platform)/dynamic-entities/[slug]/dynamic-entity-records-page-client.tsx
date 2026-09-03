@@ -468,14 +468,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
       <div className="space-y-4">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/dynamic-entities" className="underline-offset-4 hover:underline">
-                Entities
-              </Link>
-              {" / "}
-              {entity?.name ?? slug}
-            </p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {entity?.name ?? slug}
               </h1>

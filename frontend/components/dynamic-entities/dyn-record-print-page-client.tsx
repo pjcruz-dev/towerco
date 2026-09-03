@@ -8,6 +8,7 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { TenantBrandMark } from "@/components/layout/tenant-brand-mark";
 import { BirForm2307Print } from "@/components/dynamic-entities/bir-form-2307-print";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import {
   fetchDynRecord,
@@ -333,7 +334,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
               </Link>
             ) : null}
 
-            <select
+            <Select
               className={toolbarSelectClass}
               value={paper}
               onChange={(e) => setPaper(e.target.value as PaperSize)}
@@ -344,9 +345,9 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
                   {PAPER_MM[key].label}
                 </option>
               ))}
-            </select>
+            </Select>
 
-            <select
+            <Select
               className={toolbarSelectClass}
               value={orientation}
               onChange={(e) => setOrientation(e.target.value as Orientation)}
@@ -354,9 +355,9 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
             >
               <option value="portrait">Portrait</option>
               <option value="landscape">Landscape</option>
-            </select>
+            </Select>
 
-            <select
+            <Select
               className={toolbarSelectClass}
               value={margin}
               onChange={(e) => setMargin(e.target.value as MarginPreset)}
@@ -366,7 +367,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
               <option value="narrow">Narrow · 6mm</option>
               <option value="wide">Wide · 20mm</option>
               <option value="none">None</option>
-            </select>
+            </Select>
 
             <div className="flex items-center gap-0.5">
               <button
@@ -377,7 +378,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
               >
                 <Minus className="size-3.5" />
               </button>
-              <select
+              <Select
                 className={cn(toolbarSelectClass, "min-w-[6.5rem]")}
                 value={zoomMode}
                 onChange={(e) => {
@@ -394,7 +395,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
                     {z}%
                   </option>
                 ))}
-              </select>
+              </Select>
               <button
                 type="button"
                 className="flex size-8 items-center justify-center rounded-md border border-slate-600 bg-slate-800 text-slate-100 hover:border-slate-500"

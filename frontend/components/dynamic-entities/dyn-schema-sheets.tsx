@@ -730,7 +730,7 @@ function FieldEditorForm({
               </label>
               <label className="space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Field type</span>
-                <select
+                <Select
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-70"
                   value={type}
                   disabled={isSystemField}
@@ -744,7 +744,7 @@ function FieldEditorForm({
                   {isSystemField && !FIELD_TYPE_OPTIONS.some((t) => t.value === type) ? (
                     <option value={type}>{typeLabel(type)}</option>
                   ) : null}
-                </select>
+                </Select>
               </label>
             </Section>
 
@@ -808,7 +808,7 @@ function FieldEditorForm({
               <Section title="Position on the form">
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Field group</span>
-                  <select
+                  <Select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={groupId}
                     onChange={(e) => setGroupId(e.target.value)}
@@ -819,11 +819,11 @@ function FieldEditorForm({
                         {g.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Field width</span>
-                  <select
+                  <Select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={columnSpan}
                     onChange={(e) => setColumnSpan(e.target.value)}
@@ -836,7 +836,7 @@ function FieldEditorForm({
                     {!WIDTH_OPTIONS.some((w) => String(w.value) === columnSpan) ? (
                       <option value={columnSpan}>{columnSpan} of 12</option>
                     ) : null}
-                  </select>
+                  </Select>
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Sort order</span>
@@ -896,7 +896,7 @@ function FieldEditorForm({
                   <span className="text-xs font-medium text-muted-foreground">
                     Which entity does this field link to?
                   </span>
-                  <select
+                  <Select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={targetEntityId}
                     onChange={(e) => setTargetEntityId(e.target.value)}
@@ -907,7 +907,7 @@ function FieldEditorForm({
                         {e.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
 
                 <div className="space-y-2">
@@ -929,7 +929,7 @@ function FieldEditorForm({
                           setRelationFilters(next);
                         }}
                       />
-                      <select
+                      <Select
                         className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                         value={filter.op}
                         onChange={(e) => {
@@ -944,7 +944,7 @@ function FieldEditorForm({
                         <option value="eq">equals</option>
                         <option value="neq">not equals</option>
                         <option value="contains">contains</option>
-                      </select>
+                      </Select>
                       <Input
                         className="min-w-[7rem] flex-1"
                         placeholder="Value"
@@ -1244,7 +1244,7 @@ function FieldEditorForm({
                   {rules.map((rule, index) => (
                     <div key={index} className="space-y-2 rounded-lg border border-border p-3">
                       <div className="flex flex-wrap gap-2">
-                        <select
+                        <Select
                           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                           value={rule.action}
                           onChange={(e) => {
@@ -1259,8 +1259,8 @@ function FieldEditorForm({
                           <option value="show">Show when</option>
                           <option value="hide">Hide when</option>
                           <option value="require">Require when</option>
-                        </select>
-                        <select
+                        </Select>
+                        <Select
                           className="h-9 min-w-[8rem] flex-1 rounded-md border border-input bg-background px-2 text-sm"
                           value={rule.field}
                           onChange={(e) => {
@@ -1275,8 +1275,8 @@ function FieldEditorForm({
                               {f.label}
                             </option>
                           ))}
-                        </select>
-                        <select
+                        </Select>
+                        <Select
                           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                           value={rule.op}
                           onChange={(e) => {
@@ -1292,7 +1292,7 @@ function FieldEditorForm({
                           <option value="neq">not equals</option>
                           <option value="empty">is empty</option>
                           <option value="not_empty">is not empty</option>
-                        </select>
+                        </Select>
                         {rule.op === "eq" || rule.op === "neq" ? (
                           <Input
                             className="min-w-[7rem] flex-1"

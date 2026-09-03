@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 
 import type { AuthUser } from "@/types/auth";
 import type { RoleAccessMatrix } from "@/lib/api/modules/admin-roles-api";
@@ -39,7 +40,7 @@ export type WorkspaceCommandItem = {
 };
 
 const RECENT_STORAGE_KEY = "toweros.workspace.command-recent";
-const RECENT_LIMIT = 5;
+const RECENT_LIMIT = 12;
 
 type StoredRecentItem = {
   id: string;
@@ -319,16 +320,32 @@ function hydrateRecentItem(
   lookup: Map<string, WorkspaceCommandItem>,
 ): WorkspaceCommandItem | null {
   const match = lookup.get(stored.href);
-  if (!match) {
+  if (match) {
+    return {
+      ...match,
+      kind: "recent",
+      group: "Recent",
+      title: stored.title || match.title,
+      description: stored.description ?? match.description,
+    };
+  }
+
+  if (!stored.href || !stored.title) {
     return null;
   }
 
+  // Keep orphaned visits (deep links) visible in History even if not in the nav index.
   return {
-    ...match,
+    id: stored.id || `recent:${stored.href}`,
     kind: "recent",
-    group: "Recent",
-    title: stored.title || match.title,
-    description: stored.description ?? match.description,
+    title: stored.title,
+    description: stored.description,
+    href: stored.href,
+    icon: LayoutDashboard,
+    group: stored.group || "Recent",
+    parent: stored.parent,
+    section: stored.section,
+    module: stored.module,
   };
 }
 

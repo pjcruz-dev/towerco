@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import {
   createDynFieldGroup,
   fetchDynEntities,
@@ -17,6 +19,7 @@ import {
   type DynEntitySummary,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 export function DynamicFieldGroupsPageClient() {
   const searchParams = useSearchParams();
@@ -96,25 +99,23 @@ export function DynamicFieldGroupsPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.dynamicEntitiesFieldsManage]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Field Groups</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Organize how fields appear on forms and record views. Fields left ungrouped render above
-              groups — an entity with no groups is unaffected.
-            </p>
-          </div>
-          <Button variant="outline" size="sm" render={<Link href="/dynamic-entities/fields" />}>
-            Manage Fields
-          </Button>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Field Groups"
+          description="Organize how fields appear on forms and record views. Fields left ungrouped render above groups — an entity with no groups is unaffected."
+          actions={
+            <Button variant="outline" size="sm" render={<Link href="/dynamic-entities/fields" />}>
+              Manage Fields
+            </Button>
+          }
+        />
 
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Entity</span>
-            <select
-              className="flex h-9 min-w-[220px] rounded-md border border-input bg-background px-3 text-sm"
+            <Select
+              className="min-w-[220px]"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
             >
@@ -123,7 +124,7 @@ export function DynamicFieldGroupsPageClient() {
                   {e.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">New group</span>
@@ -158,8 +159,8 @@ export function DynamicFieldGroupsPageClient() {
                       {field.name}: {field.type}
                     </div>
                   </div>
-                  <select
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  <Select
+                    className="h-8 w-36 text-xs"
                     defaultValue=""
                     disabled={saving || (detail?.field_groups.length ?? 0) === 0}
                     onChange={(e) => {
@@ -173,7 +174,7 @@ export function DynamicFieldGroupsPageClient() {
                         {g.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               ))}
               {ungrouped.length === 0 ? (

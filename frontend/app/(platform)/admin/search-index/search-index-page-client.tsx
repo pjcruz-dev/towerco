@@ -1,10 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { RefreshCw, Search, Sparkles, Wand2 } from "lucide-react";
+import { RefreshCw, Sparkles, Wand2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   fetchSearchIndexStatus,
@@ -92,17 +101,11 @@ export function SearchIndexPageClient() {
   return (
     <PermissionGate requiredPermissions={[permissions.searchIndexManage]}>
       <div className={adminPageShellClass}>
-        <header className="space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Search className="size-4" />
-            <span className="text-xs font-medium">System Core</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-foreground">Search Index</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Powers Ctrl+K search and Dynamic Entity list filters. Includes records, tables, fields,
-            reports, and people.
-          </p>
-        </header>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Search Index"
+          description="Powers Ctrl+K search and Dynamic Entity list filters. Includes records, tables, fields, reports, and people."
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -204,35 +207,35 @@ export function SearchIndexPageClient() {
                 <h2 className="text-base font-medium">Coverage by table</h2>
               </div>
               <div className="max-h-[640px] overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-muted/80 text-left text-xs font-medium text-muted-foreground backdrop-blur">
-                    <tr>
-                      <th className="px-4 py-3">Table</th>
-                      <th className="px-4 py-3 text-right">Indexed rows</th>
-                      <th className="px-4 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur">
+                    <TableRow>
+                      <TableHead>Table</TableHead>
+                      <TableHead className="text-right">Indexed rows</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {status.coverage.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
                           No dynamic entities found.
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       status.coverage.map((row) => (
-                        <tr key={row.id} className="border-t">
-                          <td className="px-4 py-2.5">
+                        <TableRow key={row.id}>
+                          <TableCell className="whitespace-normal">
                             <span className="font-medium">{row.name}</span>
                             {statusBadge(row)}
                             <div className="text-[11px] text-muted-foreground">
                               {row.slug} · {formatCount(row.record_count)} records
                             </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCount(row.indexed_rows)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
+                          </TableCell>
+                          <TableCell className="text-right">
                             <Button
                               type="button"
                               size="sm"
@@ -242,12 +245,12 @@ export function SearchIndexPageClient() {
                             >
                               Rebuild
                             </Button>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </section>
           </div>

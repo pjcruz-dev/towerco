@@ -8,6 +8,7 @@ import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-char
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { fetchDynFinanceReport } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { formatPeso } from "../format-peso";
@@ -77,8 +78,8 @@ export function CapexOpexReportPageClient() {
             void load();
           }}
         >
-          <select
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          <Select
+            className="h-9 w-44"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
           >
@@ -88,9 +89,9 @@ export function CapexOpexReportPageClient() {
                 {r}
               </option>
             ))}
-          </select>
-          <select
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          </Select>
+          <Select
+            className="h-9 w-44"
             value={structure}
             onChange={(e) => setStructure(e.target.value)}
           >
@@ -100,7 +101,7 @@ export function CapexOpexReportPageClient() {
                 {r}
               </option>
             ))}
-          </select>
+          </Select>
           <Button type="submit" size="sm" disabled={loading}>
             Update
           </Button>

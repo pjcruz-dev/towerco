@@ -6,9 +6,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Braces, Eye, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -27,6 +38,7 @@ import {
   type DynReportBuilderPreview,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type Format = "summary" | "detail" | "matrix";
@@ -280,20 +292,17 @@ export function DynReportBuilderPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Customization</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Report Builder</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Build summary, detail, or matrix reports from dynamic entities. Saves as an HTML report
-              with a live definition.
-            </p>
-          </div>
-          <Button variant="outline" render={<Link href="/dynamic-entities/html-reports" />}>
-            Manage HTML Reports
-          </Button>
-        </div>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Report Builder"
+          description="Build summary, detail, or matrix reports from dynamic entities. Saves as an HTML report with a live definition."
+          actions={
+            <Button variant="outline" size="sm" render={<Link href="/dynamic-entities/html-reports" />}>
+              Manage HTML Reports
+            </Button>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -361,8 +370,7 @@ export function DynReportBuilderPageClient() {
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label>Source</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.entity_slug}
                       onChange={(e) =>
                         patch({
@@ -380,23 +388,21 @@ export function DynReportBuilderPageClient() {
                           {e.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Metric</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.metric ?? "count"}
                       onChange={(e) => patch({ metric: e.target.value as "count" | "sum" })}
                     >
                       <option value="count">Count of records</option>
                       <option value="sum">Sum of field</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Of field</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.metric_field ?? ""}
                       disabled={def.metric !== "sum"}
                       onChange={(e) => patch({ metric_field: e.target.value })}
@@ -407,7 +413,7 @@ export function DynReportBuilderPageClient() {
                           {f.label || f.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
               </section>
@@ -416,20 +422,21 @@ export function DynReportBuilderPageClient() {
                 <h2 className="text-base font-medium">2. Select the format of the report</h2>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   {formats.map((f) => (
-                    <button
+                    <Button
                       key={f.id}
                       type="button"
+                      variant="outline"
                       onClick={() => patch({ format: f.id })}
                       className={cn(
-                        "rounded-xl border p-3 text-left transition-colors",
+                        "h-auto flex-col items-start gap-1 whitespace-normal rounded-xl p-3 text-left shadow-none",
                         def.format === f.id
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                          : "hover:bg-muted/40",
+                          ? "border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40"
+                          : "",
                       )}
                     >
-                      <div className="text-sm font-medium">{f.title}</div>
-                      <p className="mt-1 text-xs text-muted-foreground">{f.desc}</p>
-                    </button>
+                      <span className="text-sm font-medium">{f.title}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{f.desc}</span>
+                    </Button>
                   ))}
                 </div>
               </section>
@@ -439,8 +446,7 @@ export function DynReportBuilderPageClient() {
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label>Component (group by)</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.group_by ?? ""}
                       onChange={(e) => patch({ group_by: e.target.value })}
                     >
@@ -450,12 +456,11 @@ export function DynReportBuilderPageClient() {
                           {f.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Date grouping</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.date_grouping ?? "exact"}
                       onChange={(e) =>
                         patch({
@@ -468,12 +473,11 @@ export function DynReportBuilderPageClient() {
                       <option value="week">Week</option>
                       <option value="month">Month</option>
                       <option value="year">Year</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>{def.format === "matrix" ? "Across (columns)" : "Then by (optional)"}</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={
                         def.format === "matrix"
                           ? (def.matrix_column || def.group_by_2 || "")
@@ -491,7 +495,7 @@ export function DynReportBuilderPageClient() {
                           {f.label}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
               </section>
@@ -512,8 +516,7 @@ export function DynReportBuilderPageClient() {
                   <div className="mt-3 space-y-2">
                     {(def.filters ?? []).map((f, i) => (
                       <div key={i} className="grid gap-2 sm:grid-cols-[1fr_100px_1fr_auto]">
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        <Select
                           value={f.field}
                           onChange={(e) => updateFilter(i, { field: e.target.value })}
                         >
@@ -522,14 +525,13 @@ export function DynReportBuilderPageClient() {
                               {opt.label}
                             </option>
                           ))}
-                        </select>
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        </Select>
+                        <Select
                           value={f.op ?? "eq"}
                           onChange={(e) => updateFilter(i, { op: e.target.value })}
                         >
                           <option value="eq">is</option>
-                        </select>
+                        </Select>
                         <Input
                           value={String(f.value ?? "")}
                           onChange={(e) => updateFilter(i, { value: e.target.value })}
@@ -555,8 +557,7 @@ export function DynReportBuilderPageClient() {
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   <div className="space-y-1.5">
                     <Label>Chart</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.chart ?? "bar"}
                       onChange={(e) => patch({ chart: e.target.value })}
                     >
@@ -564,29 +565,27 @@ export function DynReportBuilderPageClient() {
                       <option value="pie">Pie</option>
                       <option value="line">Line</option>
                       <option value="none">None</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Sort by</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.sort_by ?? "metric"}
                       onChange={(e) => patch({ sort_by: e.target.value as "metric" | "group" })}
                     >
                       <option value="metric">Metric value</option>
                       <option value="group">Group label</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Direction</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    <Select
                       value={def.direction ?? "desc"}
                       onChange={(e) => patch({ direction: e.target.value as "asc" | "desc" })}
                     >
                       <option value="desc">High → low</option>
                       <option value="asc">Low → high</option>
-                    </select>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Row limit</Label>
@@ -646,68 +645,65 @@ export function DynReportBuilderPageClient() {
                       />
                     ) : null}
                     <div className="max-h-[420px] overflow-auto rounded-lg border">
-                      <table className="w-full text-[13px]">
-                        <thead className="sticky top-0 bg-muted/80 backdrop-blur">
-                          <tr>
+                      <Table className="text-[13px]">
+                        <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur">
+                          <TableRow>
                             {preview.columns.map((c) => (
-                              <th
+                              <TableHead
                                 key={c.key}
-                                className={cn(
-                                  "border-b px-2 py-2 text-left font-medium",
-                                  c.numeric && "text-right",
-                                )}
+                                className={cn(c.numeric && "text-right")}
                               >
                                 {c.label}
-                              </th>
+                              </TableHead>
                             ))}
-                          </tr>
-                        </thead>
-                        <tbody>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {preview.rows.length === 0 ? (
-                            <tr>
-                              <td
-                                className="px-2 py-3 text-muted-foreground"
+                            <TableRow>
+                              <TableCell
+                                className="text-muted-foreground"
                                 colSpan={preview.columns.length}
                               >
                                 No matching records.
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ) : (
                             preview.rows.map((row, idx) => (
-                              <tr key={idx} className="border-b last:border-0">
+                              <TableRow key={idx}>
                                 {preview.columns.map((c) => (
-                                  <td
+                                  <TableCell
                                     key={c.key}
-                                    className={cn("px-2 py-1.5", c.numeric && "text-right tabular-nums")}
+                                    className={cn(c.numeric && "text-right tabular-nums")}
                                   >
                                     {c.numeric
                                       ? formatMoney(row[c.key], def.currency_prefix ?? "")
                                       : String(row[c.key] ?? "")}
-                                  </td>
+                                  </TableCell>
                                 ))}
-                              </tr>
+                              </TableRow>
                             ))
                           )}
-                        </tbody>
+                        </TableBody>
                         {Object.keys(preview.totals).length > 0 ? (
-                          <tfoot>
-                            <tr className="bg-muted/50 font-medium">
+                          <TableFooter>
+                            <TableRow>
                               {preview.columns.map((c, i) => (
-                                <td
+                                <TableCell
                                   key={c.key}
-                                  className={cn("px-2 py-2", c.numeric && "text-right tabular-nums")}
+                                  className={cn(c.numeric && "text-right tabular-nums")}
                                 >
                                   {i === 0
                                     ? "Total"
                                     : c.numeric && preview.totals[c.key] != null
                                       ? formatMoney(preview.totals[c.key], def.currency_prefix ?? "")
                                       : ""}
-                                </td>
+                                </TableCell>
                               ))}
-                            </tr>
-                          </tfoot>
+                            </TableRow>
+                          </TableFooter>
                         ) : null}
-                      </table>
+                      </Table>
                     </div>
                   </div>
                 )}

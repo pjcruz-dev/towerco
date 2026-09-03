@@ -10,6 +10,7 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import {
   fetchPurchaseMonitoringReport,
   type PurchaseMonitoringReport,
@@ -81,13 +82,7 @@ export function PurchaseMonitoringPageClient() {
       <div className="space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/dynamic-entities" className="underline-offset-4 hover:underline">
-                Entities
-              </Link>
-              {" / Operations"}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Purchase Monitoring Report</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Purchase Monitoring Report</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Track purchase orders, goods receipts, and supplier spend from dynamic ATC records.
             </p>
@@ -114,8 +109,8 @@ export function PurchaseMonitoringPageClient() {
           </label>
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Supplier</span>
-            <select
-              className="flex h-9 min-w-[200px] rounded-md border border-input bg-background px-3 text-sm"
+            <Select
+              className="min-w-[200px]"
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value)}
             >
@@ -125,12 +120,12 @@ export function PurchaseMonitoringPageClient() {
                   {s.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Type</span>
-            <select
-              className="flex h-9 min-w-[160px] rounded-md border border-input bg-background px-3 text-sm"
+            <Select
+              className="min-w-[160px]"
               value={transactionType}
               onChange={(e) => setTransactionType(e.target.value)}
             >
@@ -140,7 +135,7 @@ export function PurchaseMonitoringPageClient() {
                   {t}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <Button type="submit" size="sm" disabled={loading}>
             Update

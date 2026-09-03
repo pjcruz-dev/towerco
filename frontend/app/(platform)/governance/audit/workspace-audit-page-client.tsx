@@ -24,6 +24,9 @@ import {
   type WorkspaceAuditRow,
 } from "@/lib/api/modules/workspace-audit-api";
 import { permissions } from "@/lib/rbac/permissions";
+import {
+  WORKSPACE_AUDIT_MODULE_FILTERS,
+} from "@/lib/tenant/enabled-modules";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const PER_PAGE = 50;
@@ -184,14 +187,11 @@ export function WorkspaceAuditPageClient() {
             </Label>
             <Select id="audit-module" value={module} onChange={(event) => setModule(event.target.value)}>
               <option value="">All modules</option>
-              <option value="e_approval">E-Approval</option>
-              <option value="documents">Documents</option>
-              <option value="team_access">Team &amp; access</option>
-              <option value="procurement_one">Procurement</option>
-              <option value="project_one">Project-One</option>
-              <option value="ticketing">Ticketing</option>
-              <option value="dynamic_entities">Dynamic Entities</option>
-              <option value="ai_assistant">AI Assistant</option>
+              {WORKSPACE_AUDIT_MODULE_FILTERS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
             </Select>
           </div>
           <div className="w-full min-w-[140px] space-y-1.5 sm:w-auto">

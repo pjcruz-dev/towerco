@@ -202,6 +202,8 @@ final class DynEntityAdminService
             ]),
         );
 
+        $this->syncRelationshipInverse($field);
+
         return $field;
     }
 
@@ -222,6 +224,8 @@ final class DynEntityAdminService
             'field_order' => $field->field_order,
             'column_span' => $field->column_span,
         ];
+        $previousTargetId = $field->target_entity_id ? (string) $field->target_entity_id : null;
+        $previousName = (string) $field->name;
 
         if (isset($data['label'])) {
             $field->label = (string) $data['label'];
@@ -295,6 +299,8 @@ final class DynEntityAdminService
                 'column_span' => $field->column_span,
             ], array_keys($before)),
         );
+
+        $this->syncRelationshipInverse($field, $previousTargetId, $previousName);
 
         return $field;
     }
@@ -427,11 +433,9 @@ final class DynEntityAdminService
             'is_location_based' => $entity->is_location_based,
             'source_linked_table' => $entity->source_linked_table,
             'related_tabs' => $entity->related_tabs_json ?? [],
-            'print_settings' => AtcPrintTemplates::merge(
-                is_array($entity->print_settings_json) ? $entity->print_settings_json : null,
-                $entity->slug,
-                $entity->name,
-            ),
+            'print_settings' => $withSchema
+                ? $this->presentPrintSettings($entity)
+                : $this->presentPrintSettingsSummary($entity),
             'sort_order' => $entity->sort_order,
             'is_active' => $entity->is_active,
             'created_at' => $entity->created_at?->toIso8601String(),
@@ -492,5 +496,137 @@ final class DynEntityAdminService
             'conditional_rules' => $field->conditional_rules_json,
             'is_virtual' => $field->is_virtual,
         ];
+    }
+
+    /**
+     * Full printable blob for the editor / record print. Includes HTML/CSS.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentPrintSettings(DynEntity $entity): array
+    {
+        try {
+            return AtcPrintTemplates::merge(
+                is_array($entity->print_settings_json) ? $entity->print_settings_json : null,
+                $entity->slug,
+                $entity->name,
+            );
+        } catch (\Throwable) {
+            return $this->presentPrintSettingsSummary($entity);
+        }
+    }
+
+    /**
+     * List payload only: names, ids, layout. Skips template HTML so GET /entities stays fast.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentPrintSettingsSummary(DynEntity $entity): array
+    {
+        $stored = is_array($entity->print_settings_json) ? $entity->print_settings_json : null;
+        $rows = [];
+        $defaultId = null;
+
+        if (is_array($stored) && isset($stored['templates']) && is_array($stored['templates']) && $stored['templates'] !== []) {
+            foreach ($stored['templates'] as $index => $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $fallbackId = is_string($stored['default_template_id'] ?? null) && $index === 0
+                    ? (string) $stored['default_template_id']
+                    : AtcPrintTemplates::stableLegacyId($entity->slug.'-'.$index);
+                $rows[] = $this->slimPrintTemplateRow($row, $entity->name, $fallbackId);
+            }
+            $defaultId = isset($stored['default_template_id']) && is_string($stored['default_template_id'])
+                ? $stored['default_template_id']
+                : null;
+        } elseif (is_array($stored) && $stored !== []) {
+            $legacyId = AtcPrintTemplates::stableLegacyId($entity->slug);
+            $rows[] = $this->slimPrintTemplateRow($stored, $entity->name, $legacyId);
+            $defaultId = $legacyId;
+        } else {
+            $base = AtcPrintTemplates::defaultsForSlug($entity->slug);
+            $name = (string) ($base['list_label'] ?: ($entity->name.' Template'));
+            $title = (string) ($base['document_title'] !== '' ? $base['document_title'] : strtoupper($entity->name));
+            $id = AtcPrintTemplates::stableLegacyId($entity->slug);
+            $rows[] = [
+                'id' => $id,
+                'name' => $name,
+                'list_label' => $name,
+                'document_title' => $title,
+                'layout' => (string) ($base['layout'] ?? 'grouped'),
+                'updated_at' => null,
+            ];
+            $defaultId = $id;
+        }
+
+        if ($rows === []) {
+            $id = AtcPrintTemplates::stableLegacyId($entity->slug);
+            $rows[] = [
+                'id' => $id,
+                'name' => $entity->name.' Template',
+                'list_label' => $entity->name.' Template',
+                'document_title' => strtoupper($entity->name),
+                'layout' => 'grouped',
+                'updated_at' => null,
+            ];
+            $defaultId = $id;
+        }
+
+        $ids = [];
+        foreach ($rows as $row) {
+            $ids[(string) $row['id']] = true;
+        }
+        if ($defaultId === null || $defaultId === '' || ! isset($ids[$defaultId])) {
+            $defaultId = (string) $rows[0]['id'];
+        }
+
+        $active = $rows[0];
+        foreach ($rows as $row) {
+            if ((string) $row['id'] === $defaultId) {
+                $active = $row;
+                break;
+            }
+        }
+
+        return [
+            ...$active,
+            'templates' => array_values($rows),
+            'default_template_id' => $defaultId,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{id: string, name: string, list_label: string, document_title: string, layout: string, updated_at: ?string}
+     */
+    private function slimPrintTemplateRow(array $row, string $entityName, string $fallbackId): array
+    {
+        $id = isset($row['id']) && is_string($row['id']) && $row['id'] !== ''
+            ? $row['id']
+            : $fallbackId;
+        $name = isset($row['name']) && is_string($row['name']) && trim($row['name']) !== ''
+            ? trim($row['name'])
+            : (string) ($row['list_label'] ?? $row['document_title'] ?? $entityName.' Template');
+
+        return [
+            'id' => $id,
+            'name' => $name,
+            'list_label' => (string) ($row['list_label'] ?? $name),
+            'document_title' => (string) ($row['document_title'] ?? ''),
+            'layout' => (string) ($row['layout'] ?? 'grouped'),
+            'updated_at' => isset($row['updated_at']) && is_string($row['updated_at']) ? $row['updated_at'] : null,
+        ];
+    }
+
+    /**
+     * Bidirectional sync: relationship field ↔ related_tabs_json on the target entity.
+     */
+    private function syncRelationshipInverse(
+        DynField $field,
+        ?string $previousTargetId = null,
+        ?string $previousName = null,
+    ): void {
+        app(DynRelationshipService::class)->syncAfterFieldMutation($field, $previousTargetId, $previousName);
     }
 }

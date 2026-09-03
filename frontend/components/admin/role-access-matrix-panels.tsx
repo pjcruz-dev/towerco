@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { ChevronDown, Settings2 } from "lucide-react";
 
 import { RoleDataFiltersDialog } from "@/components/admin/role-data-filters-dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import type {
   FieldAccessLevel,
@@ -217,11 +219,12 @@ export function RoleAccessMatrixPanels({
   if (tab === "data") {
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-          <strong className="font-medium">View</strong> shows all records.{" "}
-          <strong className="font-medium">View Own</strong> limits to records the user created or is
-          assigned (disables View). Use <strong className="font-medium">Data Filters</strong> for
-          field-level row restrictions.
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <strong className="font-medium text-foreground">View</strong> shows all records.{" "}
+          <strong className="font-medium text-foreground">View Own</strong> limits to records the user
+          created or is assigned (disables View). Use{" "}
+          <strong className="font-medium text-foreground">Data Filters</strong> for field-level row
+          restrictions.
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
@@ -230,22 +233,24 @@ export function RoleAccessMatrixPanels({
               : "Bulk actions apply to all entities in this list."}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+              size="sm"
+              variant="outline"
               disabled={disabled || filteredEntities.length === 0}
               onClick={() => applyAllFlagsToFiltered(true)}
             >
               Check all
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+              size="sm"
+              variant="outline"
               disabled={disabled || filteredEntities.length === 0}
               onClick={() => applyAllFlagsToFiltered(false)}
             >
               Uncheck all
-            </button>
+            </Button>
           </div>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -261,14 +266,14 @@ export function RoleAccessMatrixPanels({
                     <th key={col.id} className="px-2 py-2.5 text-center">
                       <div className="flex flex-col items-center gap-1">
                         <span>{col.label}</span>
-                        <input
-                          type="checkbox"
-                          className="size-3.5 rounded border-input"
+                        <Checkbox
                           checked={allOn}
                           disabled={disabled || filteredEntities.length === 0}
                           title={allOn ? `Uncheck all ${col.label}` : `Check all ${col.label}`}
                           aria-label={allOn ? `Uncheck all ${col.label}` : `Check all ${col.label}`}
-                          onChange={(e) => applyColumnToFiltered(col.id, e.target.checked)}
+                          onCheckedChange={(checked) =>
+                            applyColumnToFiltered(col.id, checked === true)
+                          }
                         />
                       </div>
                     </th>
@@ -293,24 +298,23 @@ export function RoleAccessMatrixPanels({
                       <td className="px-3 py-2 font-medium text-foreground">{entity.name}</td>
                       {ENTITY_COLS.map((col) => (
                         <td key={col.id} className="px-2 py-2 text-center">
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input"
+                          <Checkbox
                             checked={row[col.id]}
                             disabled={disabled}
                             aria-label={`${entity.name} ${col.label}`}
-                            onChange={(e) => setEntityFlag(entity.slug, col.id, e.target.checked)}
+                            onCheckedChange={(checked) =>
+                              setEntityFlag(entity.slug, col.id, checked === true)
+                            }
                           />
                         </td>
                       ))}
                       <td className="px-2 py-2 text-center">
-                        <button
+                        <Button
                           type="button"
+                          size="sm"
+                          variant="outline"
                           disabled={disabled}
-                          className={cn(
-                            "inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:opacity-50",
-                            count > 0 && "border-sky-300 text-sky-800 dark:border-sky-700 dark:text-sky-200",
-                          )}
+                          className={cn(count > 0 && "border-foreground/30 bg-muted/50")}
                           onClick={() => {
                             loadEntityDetail(entity.slug);
                             setFiltersEntity(entity);
@@ -318,10 +322,10 @@ export function RoleAccessMatrixPanels({
                         >
                           <Settings2 className="size-3.5" />
                           Filters
-                          <span className="rounded-full bg-muted px-1.5 tabular-nums text-[10px] text-muted-foreground">
+                          <span className="rounded-md bg-muted px-1.5 tabular-nums text-[10px] text-muted-foreground">
                             {count}
                           </span>
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -351,7 +355,7 @@ export function RoleAccessMatrixPanels({
   if (tab === "fields") {
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           Configure access per view — form, table and record. Default is Full access.
         </div>
         <div className="rounded-lg border border-border">
@@ -443,7 +447,7 @@ export function RoleAccessMatrixPanels({
   // workflow
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         Toggle a step to Active so users in this role can trigger that workflow action on the entity.
       </div>
       <div className="rounded-lg border border-border">

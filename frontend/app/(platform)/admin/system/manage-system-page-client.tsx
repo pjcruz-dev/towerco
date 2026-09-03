@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Settings2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import { resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
@@ -20,6 +21,7 @@ import {
   type SystemConfigResponse,
 } from "@/lib/api/modules/system-config-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type TabId =
@@ -163,32 +165,26 @@ export function ManageSystemPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.systemManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Settings2 className="size-4" />
-              <span className="text-xs font-medium">System Core</span>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">System Configuration</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Manage branding, logo styling, visual themes, localization, security, and system
-              integrations.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={settingsSearch}
-              onChange={(e) => setSettingsSearch(e.target.value)}
-              placeholder="Search settings…"
-              className="h-9 w-44"
-              autoComplete="off"
-            />
-            <Button type="button" size="sm" disabled={saving || !draft} onClick={() => void onSave()}>
-              Save Changes
-            </Button>
-          </div>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="System Configuration"
+          description="Manage branding, logo styling, visual themes, localization, security, and system integrations."
+          actions={
+            <>
+              <Input
+                value={settingsSearch}
+                onChange={(e) => setSettingsSearch(e.target.value)}
+                placeholder="Search settings…"
+                className="h-9 w-44"
+                autoComplete="off"
+              />
+              <Button type="button" size="sm" disabled={saving || !draft} onClick={() => void onSave()}>
+                Save Changes
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -196,23 +192,15 @@ export function ManageSystemPageClient() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-1 border-b border-border pb-px">
-          {filteredTabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className={cn(
-                "rounded-t-md px-3 py-2 text-sm font-medium whitespace-nowrap",
-                tab === item.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as TabId)}>
+          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+            {filteredTabs.map((item) => (
+              <TabsTrigger key={item.id} value={item.id} className="px-3">
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {loading || !draft ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Loading system settings…</p>
@@ -703,18 +691,19 @@ function LayoutCard({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onClick}
       className={cn(
-        "rounded-xl border px-4 py-3 text-left transition",
+        "h-auto w-full flex-col items-start gap-1 whitespace-normal rounded-xl px-4 py-3 text-left shadow-none",
         active
           ? "border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40"
-          : "border-border hover:border-sky-300/60",
+          : "hover:border-sky-300/60",
       )}
     >
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-    </button>
+      <span className="text-sm font-medium text-foreground">{title}</span>
+      <span className="text-xs font-normal text-muted-foreground">{description}</span>
+    </Button>
   );
 }

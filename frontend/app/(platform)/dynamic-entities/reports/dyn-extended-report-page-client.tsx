@@ -9,6 +9,7 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import {
   fetchDynExtendedReport,
   type DynExtendedReport,
@@ -178,8 +179,8 @@ export function DynExtendedReportPageClient({ report }: { report: DynExtendedRep
             }}
           >
             {report === "stock-on-hand" ? (
-              <select
-                className="h-9 min-w-[220px] rounded-md border border-input bg-background px-3 text-sm"
+              <Select
+                className="h-9 min-w-[220px]"
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
               >
@@ -191,7 +192,7 @@ export function DynExtendedReportPageClient({ report }: { report: DynExtendedRep
                     </option>
                   ),
                 )}
-              </select>
+              </Select>
             ) : null}
             {report === "ar-ap-aging" ? (
               <DatePicker className="h-9 w-40" value={asOf} onChange={setAsOf} />

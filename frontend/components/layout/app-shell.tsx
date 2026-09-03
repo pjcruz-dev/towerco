@@ -65,8 +65,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
             {useNavbar ? null : <AppSidebar />}
             <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent print:overflow-visible">
+              {/* Navbar layout: light utility bar → dark module nav (Metacoresoft-style; no global + New). */}
+              <AppHeader showSidebarTrigger={!useNavbar} showBrand={useNavbar} />
               {useNavbar ? <AppTopNav /> : null}
-              <AppHeader showSidebarTrigger={!useNavbar} />
               <div className="print:hidden">
                 <SubscriptionAccessBanner />
                 <ImpersonationBanner />

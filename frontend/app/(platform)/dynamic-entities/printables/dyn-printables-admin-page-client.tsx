@@ -6,9 +6,12 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, Copy, FileStack, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { getErrorMessage, isCanceledRequestError } from "@/lib/api/error";
 import {
   fetchDynEntities,
   updateDynEntity,
@@ -23,6 +26,7 @@ import {
   type DynPrintTemplate,
 } from "@/lib/dynamic-entities/dyn-print-templates";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 function formatUpdated(iso: string | undefined | null): string {
@@ -62,16 +66,38 @@ export function DynPrintablesAdminPageClient() {
     setError(null);
     try {
       const list = await fetchDynEntities({ active_only: true });
-      setEntities([...list].sort((a, b) => a.name.localeCompare(b.name)));
-    } catch {
-      setError("Unable to load printable templates.");
+      const rows = Array.isArray(list) ? list : [];
+      setEntities([...rows].sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (err) {
+      if (isCanceledRequestError(err)) {
+        return;
+      }
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void refresh();
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const list = await fetchDynEntities({ active_only: true });
+        if (cancelled) return;
+        const rows = Array.isArray(list) ? list : [];
+        setEntities([...rows].sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (err) {
+        if (cancelled || isCanceledRequestError(err)) return;
+        setError(getErrorMessage(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const groups = useMemo<EntityTemplates[]>(() => {
@@ -213,36 +239,38 @@ export function DynPrintablesAdminPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.printablesManage]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/dynamic-entities" className="underline-offset-4 hover:underline">
-                Dynamic Entities
-              </Link>
-              {" / Manage Printables"}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Printable Templates</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Multiple templates per entity (e.g. Official Receipt + Disbursement Voucher).
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/dynamic-entities/printables/pdf-forms"
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
-            >
-              <FileStack className="size-3.5" />
-              PDF Forms Manager
-            </Link>
-            <Button type="button" onClick={() => setNewOpen(true)}>
-              <Plus className="size-3.5" />
-              New Template
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage Printables"
+          description="Multiple templates per entity (e.g. Official Receipt + Disbursement Voucher)."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                render={<Link href="/dynamic-entities/printables/pdf-forms" />}
+              >
+                <FileStack className="size-3.5" />
+                PDF Forms Manager
+              </Button>
+              <Button type="button" size="sm" onClick={() => setNewOpen(true)}>
+                <Plus className="size-3.5" />
+                New Template
+              </Button>
+            </>
+          }
+        />
+
+        {error ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
+              Retry
             </Button>
           </div>
-        </header>
-
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        ) : null}
 
         {newOpen ? (
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -253,8 +281,7 @@ export function DynPrintablesAdminPageClient() {
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <label className="min-w-[14rem] flex-1 space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Entity</span>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                <Select
                   value={newSlug}
                   onChange={(e) => setNewSlug(e.target.value)}
                 >
@@ -267,7 +294,7 @@ export function DynPrintablesAdminPageClient() {
                         : ""}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="min-w-[14rem] flex-1 space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Template name</span>
@@ -300,9 +327,11 @@ export function DynPrintablesAdminPageClient() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <button
+            <Button
               type="button"
-              className="ml-auto text-xs font-medium text-sky-700 hover:underline dark:text-sky-300"
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
               onClick={() => {
                 const next: Record<string, boolean> = {};
                 for (const g of filtered) next[g.entity.slug] = !allExpanded;
@@ -310,7 +339,7 @@ export function DynPrintablesAdminPageClient() {
               }}
             >
               {allExpanded ? "Collapse all" : "Expand all"}
-            </button>
+            </Button>
           </div>
 
           {loading ? (
@@ -323,12 +352,13 @@ export function DynPrintablesAdminPageClient() {
                 const open = isOpen(entity.slug);
                 return (
                   <li key={entity.id} className="border-b border-border last:border-b-0">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={() => toggleGroup(entity.slug)}
                       className={cn(
-                        "flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-muted/60",
-                        open ? "bg-sky-50 dark:bg-sky-950/30" : "bg-muted/40",
+                        "h-auto w-full justify-start gap-2 rounded-none px-4 py-2.5 text-left",
+                        open ? "bg-muted" : "bg-muted/40",
                       )}
                     >
                       <ChevronDown
@@ -338,10 +368,10 @@ export function DynPrintablesAdminPageClient() {
                         )}
                       />
                       <span className="text-sm font-medium text-foreground">{entity.name}</span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
                         {templates.length}
                       </span>
-                    </button>
+                    </Button>
                     {open
                       ? templates.map((template) => {
                           const key = selectionKey(entity.slug, template.id);

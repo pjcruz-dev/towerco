@@ -11,7 +11,7 @@ import {
   createTextColumn,
 } from "@/components/ui/data-table-column-helpers";
 import type { WorkspaceAuditRow } from "@/lib/api/modules/workspace-audit-api";
-import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
+import { workspaceAuditModuleLabel } from "@/lib/tenant/enabled-modules";
 import {
   auditCategoryLabel,
   auditSeverityClassName,
@@ -19,10 +19,6 @@ import {
 } from "@/lib/workspace/audit-display";
 import { formatAuditUserAgent } from "@/lib/workspace/audit-user-agent";
 import { cn } from "@/lib/utils";
-
-function moduleLabel(module: string): string {
-  return TENANT_MODULE_LABELS[module] ?? module.replace(/_/g, " ");
-}
 
 type Options = {
   onOpen: (row: WorkspaceAuditRow) => void;
@@ -36,7 +32,7 @@ export function createWorkspaceAuditTableColumns(
       className: "whitespace-nowrap text-xs text-muted-foreground",
       enableSorting: true,
     }),
-    createTextColumn("module", "Module", (row) => moduleLabel(row.module), {
+    createTextColumn("module", "Module", (row) => workspaceAuditModuleLabel(row.module), {
       enableSorting: true,
     }),
     createTextColumn(

@@ -12,6 +12,7 @@ import {
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   fetchDynEntity,
   fetchDynRecords,
@@ -299,7 +300,7 @@ export function DynPrintableEditorPageClient() {
                 {detail.name}
               </span>
               {allTemplates.length > 1 ? (
-                <select
+                <Select
                   className="h-9 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm"
                   value={settings.id}
                   onChange={(e) => {
@@ -314,9 +315,9 @@ export function DynPrintableEditorPageClient() {
                       {templateDisplayName(t)}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : null}
-              <select
+              <Select
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                 value={settings.orientation === "landscape" ? "landscape" : "portrait"}
                 onChange={(e) =>
@@ -326,9 +327,9 @@ export function DynPrintableEditorPageClient() {
               >
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
-              </select>
+              </Select>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <select
+                <Select
                   className="h-9 min-w-[10rem] rounded-md border border-input bg-background px-2 text-sm"
                   value={previewRecordId}
                   onChange={(e) => setPreviewRecordId(e.target.value)}
@@ -340,13 +341,13 @@ export function DynPrintableEditorPageClient() {
                       {r.title}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-9 px-2"
-                  onClick={() => void loadDetail(selectedSlug)}
+                  onClick={() => void loadDetail(selectedSlug, templateIdParam)}
                   aria-label="Refresh records"
                 >
                   <RefreshCw className="size-3.5" />
@@ -686,7 +687,7 @@ function DesignPanel({
         </label>
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">Layout preset (fallback)</span>
-          <select
+          <Select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={settings.layout}
             onChange={(e) => onChange({ layout: e.target.value })}
@@ -699,11 +700,11 @@ function DesignPanel({
             {!LAYOUT_OPTIONS.some((o) => o.value === settings.layout) ? (
               <option value={settings.layout}>{settings.layout}</option>
             ) : null}
-          </select>
+          </Select>
         </label>
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">Signature style</span>
-          <select
+          <Select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={settings.signature_style ?? "prepared"}
             onChange={(e) => onChange({ signature_style: e.target.value })}
@@ -711,7 +712,7 @@ function DesignPanel({
             <option value="prepared">Prepared / Approved</option>
             <option value="parties">Parties</option>
             <option value="none">None</option>
-          </select>
+          </Select>
         </label>
         <label className="block space-y-1.5 sm:col-span-2">
           <span className="text-xs font-medium text-muted-foreground">Subtitle fields</span>

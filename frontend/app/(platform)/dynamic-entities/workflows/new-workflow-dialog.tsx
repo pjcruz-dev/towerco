@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchAdminRoleCatalog } from "@/lib/api/modules/admin-roles-api";
@@ -161,8 +162,7 @@ export function NewWorkflowDialog({ open, onOpenChange, onCreated }: Props) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Target Entity</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Select
                 value={entitySlug}
                 onChange={(e) => setEntitySlug(e.target.value)}
               >
@@ -172,12 +172,11 @@ export function NewWorkflowDialog({ open, onOpenChange, onCreated }: Props) {
                     {e.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Trigger Mode</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Select
                 value={triggerMode}
                 onChange={(e) => setTriggerMode(e.target.value as DynWorkflowTriggerMode)}
               >
@@ -186,7 +185,7 @@ export function NewWorkflowDialog({ open, onOpenChange, onCreated }: Props) {
                     {t.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 

@@ -11,6 +11,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type Modifier,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
 import {
@@ -19,7 +20,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { CSS, getEventCoordinates } from "@dnd-kit/utilities";
 import {
   Eye,
   EyeOff,
@@ -177,6 +178,21 @@ type DynTableColumnsControlProps = {
 
 const VISIBLE_LIST = "visible";
 const HIDDEN_LIST = "hidden";
+
+/**
+ * Keep the drag preview under the cursor. DialogContent uses CSS translate(-50%, -50%),
+ * which otherwise offsets the overlay away from the pointer.
+ */
+const snapCenterToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
+  if (!draggingNodeRect || !activatorEvent) return transform;
+  const coordinates = getEventCoordinates(activatorEvent);
+  if (!coordinates) return transform;
+  return {
+    ...transform,
+    x: transform.x + coordinates.x - (draggingNodeRect.left + draggingNodeRect.width / 2),
+    y: transform.y + coordinates.y - (draggingNodeRect.top + draggingNodeRect.height / 2),
+  };
+};
 
 /**
  * Gear button + Table View Settings dialog (show/hide + drag reorder).
@@ -369,7 +385,10 @@ export function DynTableColumnsControl({ options, prefs, onSave }: DynTableColum
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[min(calc(100vw-2rem),720px)]" showCloseButton>
+        <DialogContent
+          className="w-[min(calc(100vw-2rem),720px)] bg-popover text-popover-foreground"
+          showCloseButton
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings2 className="size-4 text-muted-foreground" />
@@ -419,6 +438,7 @@ export function DynTableColumnsControl({ options, prefs, onSave }: DynTableColum
             <DndContext
               sensors={sensors}
               collisionDetection={closestCorners}
+              modifiers={[snapCenterToCursor]}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDragEnd={onDragEnd}
@@ -428,7 +448,7 @@ export function DynTableColumnsControl({ options, prefs, onSave }: DynTableColum
                 <ColumnListPanel
                   id={VISIBLE_LIST}
                   title="Visible"
-                  titleIcon={<Eye className="size-3.5 text-emerald-600" />}
+                  titleIcon={<Eye className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
                   actionLabel="Hide All ›"
                   onAction={hideAll}
                   emptyLabel="No visible columns"
@@ -498,9 +518,9 @@ export function DynTableColumnsControl({ options, prefs, onSave }: DynTableColum
                 />
               </div>
 
-              <DragOverlay>
+              <DragOverlay dropAnimation={null} style={{ zIndex: 100 }}>
                 {activeOpt ? (
-                  <div className="flex items-center gap-2 rounded-md border border-sky-300 bg-card px-2.5 py-2 text-sm shadow-lg ring-2 ring-sky-500/20">
+                  <div className="flex items-center gap-2 rounded-md border border-sky-500/60 bg-popover px-2.5 py-2 text-sm text-popover-foreground shadow-lg ring-2 ring-sky-500/25 dark:border-sky-400/50 dark:ring-sky-400/20">
                     <GripVertical className="size-3.5 text-muted-foreground" />
                     <span className="font-medium">{activeOpt.label}</span>
                   </div>
@@ -562,8 +582,8 @@ function ColumnListPanel({
   return (
     <div
       className={cn(
-        "flex min-h-56 flex-col rounded-xl border border-border bg-card",
-        isOver && "ring-2 ring-sky-500/30",
+        "flex min-h-56 flex-col rounded-xl border border-border bg-muted/40 dark:bg-muted/25",
+        isOver && "ring-2 ring-sky-500/40 dark:ring-sky-400/35",
       )}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
@@ -646,7 +666,10 @@ function SortableColumnRow({
         transition,
         opacity: isDragging ? 0.35 : undefined,
       }}
-      className="flex items-center gap-1 rounded-md border border-border/80 bg-background px-1.5 py-1.5"
+      className={cn(
+        "flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-1.5 text-card-foreground shadow-xs",
+        isDragging && "border-dashed opacity-40",
+      )}
     >
       <button
         type="button"
@@ -657,12 +680,12 @@ function SortableColumnRow({
       >
         <GripVertical className="size-3.5" />
       </button>
-      <span className="min-w-0 flex-1 truncate text-sm">{option.label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{option.label}</span>
       <button
         type="button"
         className={cn(
           "rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-          pinned && "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+          pinned && "bg-sky-500/15 text-sky-700 dark:bg-sky-500/20 dark:text-sky-400",
         )}
         title={pinned ? "Unpin" : "Pin"}
         onClick={onTogglePin}
@@ -673,7 +696,7 @@ function SortableColumnRow({
         type="button"
         className={cn(
           "rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-          starred && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+          starred && "bg-amber-500/15 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
         )}
         title={starred ? "Unstar" : "Star"}
         onClick={onToggleStar}

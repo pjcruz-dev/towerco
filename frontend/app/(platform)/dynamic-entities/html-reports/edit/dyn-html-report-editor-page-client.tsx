@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -17,6 +19,7 @@ import {
   type DynHtmlReportRow,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type EditorTab = "html" | "css" | "js";
@@ -128,38 +131,39 @@ export function DynHtmlReportEditorPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
-      <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-[1600px] flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/dynamic-entities/html-reports"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="size-4" />
-              HTML Reports
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <h1 className="text-base font-medium text-foreground">
-              {report?.name || "Edit report"}
-            </h1>
-          </div>
-          <div className="flex gap-2">
-            {report ? (
+      <div className={cn(adminPageShellClass, "h-[calc(100vh-4rem)] gap-3")}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title={report?.name || "Edit report"}
+          description="Edit HTML, CSS, and JavaScript for this report."
+          actions={
+            <>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => router.push(`/dynamic-entities/html-reports/${report.slug}`)}
+                render={<Link href="/dynamic-entities/html-reports" />}
               >
-                Preview
+                <ArrowLeft className="size-4" />
+                HTML Reports
               </Button>
-            ) : null}
-            <Button type="button" size="sm" disabled={saving || loading} onClick={() => void onSave()}>
-              <Save className="size-4" />
-              Save Changes
-            </Button>
-          </div>
-        </div>
+              {report ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/dynamic-entities/html-reports/${report.slug}`)}
+                >
+                  Preview
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" disabled={saving || loading} onClick={() => void onSave()}>
+                <Save className="size-4" />
+                Save Changes
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -172,23 +176,15 @@ export function DynHtmlReportEditorPageClient() {
         ) : (
           <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.6fr_0.9fr]">
             <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card">
-              <div className="flex gap-1 border-b border-border px-2 pt-2">
-                {(["html", "css", "js"] as EditorTab[]).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setTab(key)}
-                    className={cn(
-                      "rounded-t-md px-3 py-1.5 text-xs font-medium uppercase",
-                      tab === key
-                        ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                        : "text-muted-foreground hover:bg-muted",
-                    )}
-                  >
-                    {key}
-                  </button>
-                ))}
-              </div>
+              <Tabs value={tab} onValueChange={(value) => setTab(value as EditorTab)}>
+                <TabsList variant="line" className="w-full justify-start px-2 pt-2">
+                  {(["html", "css", "js"] as EditorTab[]).map((key) => (
+                    <TabsTrigger key={key} value={key} className="uppercase">
+                      {key}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
               <Textarea
                 value={source}
                 onChange={(e) => setSource(e.target.value)}

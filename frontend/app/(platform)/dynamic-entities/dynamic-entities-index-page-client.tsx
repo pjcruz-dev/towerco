@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchDynEntities, type DynEntitySummary } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 export function DynamicEntitiesIndexPageClient() {
   const [entities, setEntities] = useState<DynEntitySummary[]>([]);
@@ -43,21 +46,17 @@ export function DynamicEntitiesIndexPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.dynamicEntitiesView]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dynamic Entities</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              ATC module packs with fully dynamic fields — records, lists, and Manage Fields.
-            </p>
-          </div>
-          <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            href="/dynamic-entities/fields"
-          >
-            Manage Fields
-          </Link>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="Dynamic Entities"
+          title="Dynamic Entities"
+          description="ATC module packs with fully dynamic fields — records, lists, and Manage Fields."
+          actions={
+            <Button variant="outline" size="sm" render={<Link href="/dynamic-entities/fields" />}>
+              Manage Fields
+            </Button>
+          }
+        />
 
         {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}

@@ -79,6 +79,11 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityIndexController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityShowController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityStoreController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipGraphController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipLayoutController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipEdgeStoreController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipEdgeUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipEdgeDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupStoreController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupUpdateController;
@@ -392,6 +397,16 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('assistant/prompt-modules/{module}/reset', AiPromptModuleResetController::class)->name('api.tenant.v1.assistant.prompt_modules.reset');
     });
     Route::middleware('tenant.module:dynamic_entities')->group(function () {
+        Route::get('dynamic-entities/relationship-graph', DynRelationshipGraphController::class)
+            ->name('api.tenant.v1.dynamic_entities.relationship_graph');
+        Route::put('dynamic-entities/relationship-graph/layout', DynRelationshipLayoutController::class)
+            ->name('api.tenant.v1.dynamic_entities.relationship_graph.layout');
+        Route::post('dynamic-entities/relationship-graph/edges', DynRelationshipEdgeStoreController::class)
+            ->name('api.tenant.v1.dynamic_entities.relationship_graph.edges.store');
+        Route::patch('dynamic-entities/relationship-graph/edges/{field}', DynRelationshipEdgeUpdateController::class)
+            ->name('api.tenant.v1.dynamic_entities.relationship_graph.edges.update');
+        Route::delete('dynamic-entities/relationship-graph/edges/{field}', DynRelationshipEdgeDestroyController::class)
+            ->name('api.tenant.v1.dynamic_entities.relationship_graph.edges.destroy');
         Route::get('dynamic-entities/entities', DynEntityIndexController::class)->name('api.tenant.v1.dynamic_entities.entities.index');
         Route::post('dynamic-entities/entities', DynEntityStoreController::class)->name('api.tenant.v1.dynamic_entities.entities.store');
         Route::get('dynamic-entities/entities/{entity}', DynEntityShowController::class)->name('api.tenant.v1.dynamic_entities.entities.show');

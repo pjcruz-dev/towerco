@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 type Props = {
   questions: string[];
   onSelect: (question: string) => void;
@@ -16,15 +18,16 @@ export function AssistantSuggestedQuestions({ questions, onSelect, disabled }: P
       <p className="text-xs font-medium text-muted-foreground">Suggested</p>
       <div className="flex flex-col gap-1.5">
         {questions.map((question) => (
-          <button
+          <Button
             key={question}
             type="button"
+            variant="outline"
             disabled={disabled}
             onClick={() => onSelect(question)}
-            className="rounded-xl bg-muted/50 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+            className="h-auto justify-start whitespace-normal rounded-xl px-3 py-2 text-left text-sm font-normal"
           >
             {question}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

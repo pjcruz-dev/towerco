@@ -28,10 +28,12 @@ import {
 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   createSidebarNavItem,
@@ -45,6 +47,7 @@ import {
   type SidebarNavRoleOption,
 } from "@/lib/api/modules/sidebar-nav-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 
@@ -260,11 +263,12 @@ export function ManageSidebarPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.sidebarManage]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Manage Sidebar</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage Sidebar"
+          description={
+            <>
               Configure the workspace menu tree, permissions, and role login defaults.
               {items.length > 0 ? (
                 <span className="text-foreground/80">
@@ -275,30 +279,32 @@ export function ManageSidebarPageClient() {
                     : null}
                 </span>
               ) : null}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void onSeed(false)}>
-              <RefreshCw className="mr-1.5 size-3.5" />
-              Ensure seeded
-            </Button>
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void onSeed(true)}>
-              Reset to defaults
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                setIsCreating(true);
-                setEditing(null);
-              }}
-            >
-              <Plus className="mr-1.5 size-3.5" />
-              Add New Item
-            </Button>
-          </div>
-        </header>
+            </>
+          }
+          actions={
+            <>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void onSeed(false)}>
+                <RefreshCw className="mr-1.5 size-3.5" />
+                Ensure seeded
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void onSeed(true)}>
+                Reset to defaults
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setIsCreating(true);
+                  setEditing(null);
+                }}
+              >
+                <Plus className="mr-1.5 size-3.5" />
+                Add New Item
+              </Button>
+            </>
+          }
+        />
 
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -307,8 +313,8 @@ export function ManageSidebarPageClient() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select
-            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+          <Select
+            className="h-9 w-44"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
           >
@@ -318,7 +324,7 @@ export function ManageSidebarPageClient() {
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
           <Button type="button" variant="ghost" size="sm" onClick={collapseAll}>
             Collapse All
           </Button>
@@ -446,19 +452,21 @@ function SortableRow({
         !item.is_visible && "opacity-50",
       )}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-sm"
         className="cursor-grab text-muted-foreground hover:text-foreground"
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
       >
         <GripVertical className="size-4" />
-      </button>
+      </Button>
       {hasChildren ? (
-        <button type="button" className="text-muted-foreground" onClick={onToggle} aria-label="Toggle">
+        <Button type="button" variant="ghost" size="icon-sm" onClick={onToggle} aria-label="Toggle">
           {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
-        </button>
+        </Button>
       ) : (
         <span className="inline-block w-4" />
       )}
@@ -553,8 +561,8 @@ function EditSidebarItemDialog({
           </div>
           <div className="space-y-1">
             <Label>Type</Label>
-            <select
-              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+            <Select
+              className="h-9 w-full"
               value={type}
               onChange={(e) => setType(e.target.value as SidebarNavItemType)}
             >
@@ -563,7 +571,7 @@ function EditSidebarItemDialog({
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label>Icon</Label>
@@ -574,8 +582,8 @@ function EditSidebarItemDialog({
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
               />
-              <select
-                className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+              <Select
+                className="h-9 w-40"
                 value=""
                 onChange={(e) => {
                   if (e.target.value) setIcon(e.target.value);
@@ -587,7 +595,7 @@ function EditSidebarItemDialog({
                     {name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
           <div className="space-y-1">
@@ -600,8 +608,8 @@ function EditSidebarItemDialog({
           </div>
           <div className="space-y-1">
             <Label>Parent Item</Label>
-            <select
-              className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+            <Select
+              className="h-9 w-full"
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
             >
@@ -611,7 +619,7 @@ function EditSidebarItemDialog({
                   {p.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           {type === "entity_link" ? (
             <div className="space-y-1">

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { formatTimestamp } from "@/lib/admin/user-display";
 import type { WorkspaceAuditChange, WorkspaceAuditRow } from "@/lib/api/modules/workspace-audit-api";
-import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
+import { workspaceAuditModuleLabel } from "@/lib/tenant/enabled-modules";
 import {
   auditCategoryLabel,
   auditSeverityClassName,
@@ -32,7 +32,7 @@ type Props = {
 };
 
 function moduleLabel(module: string): string {
-  return TENANT_MODULE_LABELS[module] ?? module.replace(/_/g, " ");
+  return workspaceAuditModuleLabel(module);
 }
 
 function sourceLabel(source: string): string {

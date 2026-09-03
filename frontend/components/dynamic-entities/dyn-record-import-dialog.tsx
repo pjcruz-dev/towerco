@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, Download, FileSpreadsheet, ShieldCheck, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogBody,
@@ -243,7 +244,7 @@ export function DynRecordImportDialog({
                       >
                         <span className="truncate text-sm font-medium">{header}</span>
                         <ArrowRight className="size-3.5 text-muted-foreground" />
-                        <select
+                        <Select
                           className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
                           value={columnMap[header] ?? IGNORE}
                           onChange={(e) =>
@@ -263,7 +264,7 @@ export function DynRecordImportDialog({
                               </option>
                             );
                           })}
-                        </select>
+                        </Select>
                       </li>
                     ))}
                   </ul>
@@ -271,8 +272,8 @@ export function DynRecordImportDialog({
 
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium">Identifier for Updates &amp; Duplication Check</p>
-                  <select
-                    className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
+                  <Select
+                    className="h-9 w-full"
                     value={upsertField}
                     onChange={(e) => setUpsertField(e.target.value)}
                   >
@@ -282,7 +283,7 @@ export function DynRecordImportDialog({
                         {opt.header}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-xs text-muted-foreground">
                     Select a unique column (code, name, etc.) to update matches; otherwise new
                     records are created. About {analyze.row_count.toLocaleString()} data row

@@ -8,6 +8,7 @@ import { Plus, Shield, Trash2, Users } from "lucide-react";
 import { RoleAccessMatrixPanels } from "@/components/admin/role-access-matrix-panels";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -16,6 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminRoleCatalog } from "@/hooks/use-admin-role-catalog";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -280,15 +282,9 @@ export function RolesPageClient() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/users"
-              prefetch={false}
-              className={cn(
-                "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium shadow-sm hover:bg-muted",
-              )}
-            >
+            <Button type="button" size="sm" variant="outline" render={<Link href="/users" prefetch={false} />}>
               Back to users
-            </Link>
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -329,8 +325,10 @@ export function RolesPageClient() {
                       <li key={role.id}>
                         <div
                           className={cn(
-                            "group flex items-center gap-1 rounded-lg",
-                            active ? "bg-sky-50 dark:bg-sky-950/40" : "hover:bg-muted/60",
+                            "group flex items-center gap-1 rounded-md",
+                            active
+                              ? "bg-muted text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                           )}
                         >
                           <button
@@ -346,15 +344,15 @@ export function RolesPageClient() {
                             <div className="flex items-center gap-2">
                               <span
                                 className={cn(
-                                  "truncate text-sm font-medium capitalize",
-                                  active ? "text-sky-900 dark:text-sky-100" : "text-foreground",
+                                  "truncate text-sm capitalize",
+                                  active ? "font-medium text-foreground" : "font-normal",
                                 )}
                               >
                                 {roleLabel(role.name)}
                               </span>
                               {role.is_baseline ? (
                                 <Shield
-                                  className="size-3.5 shrink-0 text-amber-500"
+                                  className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
                                   aria-label="Protected role"
                                 />
                               ) : null}
@@ -439,23 +437,19 @@ export function RolesPageClient() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1 border-b border-border px-4 pt-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setPermTab(tab.id)}
-                  className={cn(
-                    "border-b-2 px-3 py-2 text-xs font-medium transition-colors",
-                    permTab === tab.id
-                      ? "border-sky-600 text-sky-700 dark:text-sky-300"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              value={permTab}
+              onValueChange={(value) => setPermTab(value as PermTab)}
+              className="border-b border-border px-4 pt-2"
+            >
+              <TabsList variant="line" className="h-auto w-full justify-start gap-0 rounded-none bg-transparent p-0">
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={tab.id} className="flex-none px-3 py-2 text-xs">
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
 
             <div className="flex-1 overflow-y-auto p-4">
               {!selectedRole ? (
@@ -464,7 +458,7 @@ export function RolesPageClient() {
 
               {selectedRole && permTab === "general" ? (
                 <div className="space-y-3">
-                  <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Global permissions
                   </p>
                   {generalCards.length === 0 ? (
@@ -478,16 +472,17 @@ export function RolesPageClient() {
                             key={card.permission}
                             className={cn(
                               "flex cursor-pointer gap-3 rounded-lg border border-border p-3 transition-colors",
-                              checked ? "border-sky-300 bg-sky-50/80 dark:border-sky-800 dark:bg-sky-950/30" : "bg-card hover:bg-muted/40",
+                              checked
+                                ? "border-foreground/20 bg-muted/50"
+                                : "bg-card hover:bg-muted/40",
                               !canEditSelected && "cursor-default opacity-80",
                             )}
                           >
-                            <input
-                              type="checkbox"
-                              className="mt-0.5 size-4 rounded border-input"
+                            <Checkbox
                               checked={checked}
                               disabled={!canEditSelected}
-                              onChange={() => togglePermission(card.permission)}
+                              onCheckedChange={() => togglePermission(card.permission)}
+                              className="mt-0.5"
                             />
                             <span className="min-w-0">
                               <span className="block text-sm font-medium text-foreground">{card.title}</span>

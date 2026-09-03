@@ -1,12 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Copy, KeyRound, Plus, Search, Trash2 } from "lucide-react";
+import { Check, Copy, Plus, Search, Trash2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
 import { resolveApiBaseUrl } from "@/lib/api/client";
 import {
@@ -18,6 +28,7 @@ import {
   type IntegrationApiKeyRow,
 } from "@/lib/api/modules/integration-api-keys-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 const QUICK_NAV: Array<{ id: string; label: string }> = [
@@ -70,9 +81,11 @@ function CopyBlock({ text, label }: { text: string; label?: string }) {
       {label ? (
         <div className="flex items-center justify-between border-b border-slate-800 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
           <span>{label}</span>
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-1 text-slate-300 hover:text-white"
+            variant="ghost"
+            size="xs"
+            className="h-6 px-1.5 text-slate-300 hover:bg-slate-800 hover:text-white"
             onClick={async () => {
               await navigator.clipboard.writeText(text);
               setCopied(true);
@@ -81,16 +94,18 @@ function CopyBlock({ text, label }: { text: string; label?: string }) {
           >
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
-          </button>
+          </Button>
         </div>
       ) : null}
       <pre className="overflow-x-auto p-3 text-[12px] leading-relaxed whitespace-pre-wrap break-all">
         {text}
       </pre>
       {!label ? (
-        <button
+        <Button
           type="button"
-          className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-slate-800 px-2 py-1 text-[11px] text-slate-200 opacity-0 transition group-hover:opacity-100"
+          variant="secondary"
+          size="xs"
+          className="absolute top-2 right-2 opacity-0 transition group-hover:opacity-100"
           onClick={async () => {
             await navigator.clipboard.writeText(text);
             setCopied(true);
@@ -99,7 +114,7 @@ function CopyBlock({ text, label }: { text: string; label?: string }) {
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           {copied ? "Copied" : "Copy"}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -218,17 +233,12 @@ export function ManageRestApiPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.apiKeysManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <header className="space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <KeyRound className="size-4" />
-            <span className="text-xs font-medium">System Core</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-foreground">API Control Center</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Manage security tokens and explore integration protocols.
-          </p>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="API Control Center"
+          description="Manage security tokens and explore integration protocols."
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
@@ -294,79 +304,72 @@ export function ManageRestApiPageClient() {
             </div>
           ) : null}
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
-              <thead className="sticky top-0 bg-muted/50 text-xs font-medium text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="px-4 py-2.5">Token identity</th>
-                  <th className="px-4 py-2.5">Access key</th>
-                  <th className="px-4 py-2.5">Lifecycle</th>
-                  <th className="px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      Loading keys…
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                      No integration keys yet. Create one to call the integration endpoints.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => {
-                    const tone = statusLabel(row.status);
-                    return (
-                      <tr key={row.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3 align-top">
-                          <p className="font-medium text-foreground">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">ID: #{row.id}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Owner: {row.created_by_name || row.created_by_email || "—"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 align-top font-mono text-xs text-muted-foreground">
-                          {row.token_preview}
-                        </td>
-                        <td className="px-4 py-3 align-top text-muted-foreground">
-                          <p>Issued: {formatWhen(row.created_at)}</p>
-                          <p>Pulse: {row.last_used_at ? formatWhen(row.last_used_at) : "Never"}</p>
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                              tone.className,
-                            )}
-                          >
-                            {tone.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 align-top text-right">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            disabled={busy}
-                            onClick={() => void onRevoke(row.id, row.name)}
-                          >
-                            <Trash2 className="size-4" />
-                            Revoke
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table className="min-w-[720px] text-[13px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Token identity</TableHead>
+                <TableHead>Access key</TableHead>
+                <TableHead>Lifecycle</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Loading keys…
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    No integration keys yet. Create one to call the integration endpoints.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row) => {
+                  const tone = statusLabel(row.status);
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className="align-top whitespace-normal">
+                        <p className="font-medium text-foreground">{row.name}</p>
+                        <p className="text-xs text-muted-foreground">ID: #{row.id}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Owner: {row.created_by_name || row.created_by_email || "—"}
+                        </p>
+                      </TableCell>
+                      <TableCell className="align-top font-mono text-xs text-muted-foreground">
+                        {row.token_preview}
+                      </TableCell>
+                      <TableCell className="align-top whitespace-normal text-muted-foreground">
+                        <p>Issued: {formatWhen(row.created_at)}</p>
+                        <p>Pulse: {row.last_used_at ? formatWhen(row.last_used_at) : "Never"}</p>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Badge variant="secondary" className={cn("h-auto rounded-full", tone.className)}>
+                          {tone.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="align-top text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700"
+                          disabled={busy}
+                          onClick={() => void onRevoke(row.id, row.name)}
+                        >
+                          <Trash2 className="size-4" />
+                          Revoke
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
         </section>
 
         <section className="rounded-xl border border-border bg-card shadow-sm">
@@ -540,25 +543,26 @@ export function ManageRestApiPageClient() {
                       filteredSchemas.map((schema) => {
                         const open = expandedSchema === schema.slug;
                         return (
-                          <button
+                          <Button
                             key={schema.slug}
                             type="button"
+                            variant="outline"
                             onClick={() => setExpandedSchema(open ? null : schema.slug)}
                             className={cn(
-                              "rounded-lg border px-3 py-2.5 text-left transition",
+                              "h-auto flex-col items-start gap-0.5 whitespace-normal rounded-lg px-3 py-2.5 text-left shadow-none",
                               open
                                 ? "border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40"
-                                : "border-border bg-background hover:border-sky-300/60",
+                                : "",
                             )}
                           >
-                            <p className="text-sm font-medium text-foreground">{schema.name}</p>
-                            <p className="font-mono text-[11px] text-muted-foreground">{schema.slug}</p>
-                            <p className="mt-1 text-[11px] text-muted-foreground">
+                            <span className="text-sm font-medium text-foreground">{schema.name}</span>
+                            <span className="font-mono text-[11px] font-normal text-muted-foreground">{schema.slug}</span>
+                            <span className="mt-1 text-[11px] font-normal text-muted-foreground">
                               {schema.field_count} fields
                               {schema.module_pack ? ` · ${schema.module_pack}` : ""}
-                            </p>
+                            </span>
                             {open ? (
-                              <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto border-t border-border/60 pt-2">
+                              <ul className="mt-2 max-h-40 w-full space-y-0.5 overflow-y-auto border-t border-border/60 pt-2">
                                 {schema.fields.map((field) => (
                                   <li
                                     key={field.name}
@@ -570,7 +574,7 @@ export function ManageRestApiPageClient() {
                                 ))}
                               </ul>
                             ) : null}
-                          </button>
+                          </Button>
                         );
                       })
                     )}

@@ -175,13 +175,27 @@ export function useWorkspaceNavGroups(): {
       let items = group.items;
 
       if (group.group === "Operations" && workspaceTopLevelItems.length > 0) {
-        const eApprovalIndex = items.findIndex((item) => item.title === "E-Approval");
-        const insertAt = eApprovalIndex >= 0 ? eApprovalIndex : items.length;
-        items = [
-          ...items.slice(0, insertAt),
-          ...workspaceTopLevelItems,
-          ...items.slice(insertAt),
-        ];
+        // Nest form workspaces under E-Approval (navbar stays compact — no extra top-level pills).
+        items = items.map((item) => {
+          if (item.title !== "E-Approval") return item;
+          const existing = item.items ?? [];
+          const withoutDup = existing.filter(
+            (sub) => !workspaceTopLevelItems.some((ws) => ws.href === sub.href),
+          );
+          return {
+            ...item,
+            items: [
+              ...withoutDup,
+              ...workspaceTopLevelItems.map((ws) => ({
+                title: ws.title,
+                href: ws.href!,
+                section: "Workspaces",
+                permissions: ws.permissions,
+                module: ws.module,
+              })),
+            ],
+          };
+        });
       }
 
       return { ...group, items };

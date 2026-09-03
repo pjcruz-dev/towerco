@@ -144,9 +144,9 @@ final class DynRecordQueryFilterParser
             if ($name === '' || (bool) $field->is_system_field) {
                 continue;
             }
-            if ((bool) $field->is_filterable || (bool) $field->show_in_table) {
-                $allowed[$name] = true;
-            }
+            // Allow all custom fields so relationship picker filters (and API callers)
+            // can constrain lookups even when the column is not shown as a list filter.
+            $allowed[$name] = true;
         }
 
         return $allowed;

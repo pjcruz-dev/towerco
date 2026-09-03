@@ -12,9 +12,9 @@ import {
 import { DynStructuredLayout } from "@/components/dynamic-entities/dyn-structured-layout";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { SelectField } from "@/components/ui/select-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,24 +84,34 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
         setEntity(row);
         setValues((prev) => {
           const next = { ...prev };
+          let changed = false;
           for (const field of row.fields ?? []) {
             if (next[field.name]) continue;
             if (field.type === "select" || field.type === "multiselect") {
               const def = parseDynSelectOptions(field.options).default;
-              if (def) next[field.name] = def;
+              if (def) {
+                next[field.name] = def;
+                changed = true;
+              }
               continue;
             }
             if (field.type === "number" || field.type === "decimal") {
               const def = parseDynNumberOptions(field.options).default_value;
-              if (def) next[field.name] = def;
+              if (def) {
+                next[field.name] = def;
+                changed = true;
+              }
               continue;
             }
             if (field.type === "text" || field.type === "textarea" || field.type === "email") {
               const def = parseDynTextOptions(field.options).default_value;
-              if (def) next[field.name] = def;
+              if (def) {
+                next[field.name] = def;
+                changed = true;
+              }
             }
           }
-          return next;
+          return changed ? next : prev;
         });
       })
       .catch((err) => {
@@ -194,13 +204,17 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
     }
   }
 
+  function patchValue(fieldName: string, next: string) {
+    setValues((prev) => (prev[fieldName] === next ? prev : { ...prev, [fieldName]: next }));
+  }
+
   function renderFormField(field: DynField) {
     if (field.type === "relationship") {
       return (
         <DynRelationshipPicker
           field={field}
           value={values[field.name] ?? ""}
-          onChange={(next) => setValues((v) => ({ ...v, [field.name]: next }))}
+          onChange={(next) => patchValue(field.name, next)}
           required={field.is_required}
         />
       );
@@ -210,7 +224,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
       return (
         <SelectField
           value={values[field.name] ?? ""}
-          onChange={(next) => setValues((v) => ({ ...v, [field.name]: next }))}
+          onChange={(next) => patchValue(field.name, next)}
           options={choices.map((c) => ({ value: c.value, label: c.label }))}
           allowEmpty={!field.is_required}
           placeholder="Select…"
@@ -222,28 +236,31 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
         <Textarea
           className="min-h-20"
           value={values[field.name] ?? ""}
-          onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+          onChange={(e) => patchValue(field.name, e.target.value)}
           required={field.is_required}
         />
       );
     }
     if (field.type === "boolean") {
       return (
-        <Select
-          value={values[field.name] ?? ""}
-          onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
-        >
-          <option value="">—</option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </Select>
+        <label className="inline-flex h-9 items-center gap-2 text-sm">
+          <Checkbox
+            checked={values[field.name] === "true" || values[field.name] === "1"}
+            onCheckedChange={(checked) =>
+              patchValue(field.name, checked === true ? "true" : "false")
+            }
+          />
+          <span className="text-muted-foreground">
+            {values[field.name] === "true" || values[field.name] === "1" ? "Yes" : "No"}
+          </span>
+        </label>
       );
     }
     if (field.type === "date") {
       return (
         <DatePicker
           value={values[field.name] ?? ""}
-          onChange={(next) => setValues((v) => ({ ...v, [field.name]: next }))}
+          onChange={(next) => patchValue(field.name, next)}
         />
       );
     }
@@ -257,7 +274,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
               : "text"
         }
         value={values[field.name] ?? ""}
-        onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+        onChange={(e) => patchValue(field.name, e.target.value)}
         required={field.is_required}
       />
     );
@@ -304,7 +321,20 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
             <Button type="submit" disabled={saving || !entity}>
               {saving ? "Saving…" : "Create"}
             </Button>
-            <Button type="button" variant="outline" render={<Link href={`/dynamic-entities/${slug}`} />}>
+            <Button
+              type="button"
+              variant="outline"
+              render={
+                <Link
+                  href={
+                    returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+                      ? returnTo
+                      : `/dynamic-entities/${slug}`
+                  }
+                  prefetch={false}
+                />
+              }
+            >
               Cancel
             </Button>
           </div>

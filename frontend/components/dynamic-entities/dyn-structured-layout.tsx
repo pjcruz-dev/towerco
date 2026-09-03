@@ -154,11 +154,15 @@ export function DynStructuredLayout({
     setOrderedGroups(groups);
     orderedGroupsRef.current = groups;
     setCollapsed((prev) => {
+      let changed = false;
       const next = { ...prev };
       for (const g of groups) {
-        if (next[g.id] === undefined) next[g.id] = Boolean(g.start_collapsed);
+        if (next[g.id] === undefined) {
+          next[g.id] = Boolean(g.start_collapsed);
+          changed = true;
+        }
       }
-      return next;
+      return changed ? next : prev;
     });
   }, [groups]);
 
@@ -172,7 +176,23 @@ export function DynStructuredLayout({
       next[key].push(field);
     }
     fieldsByGroupRef.current = next;
-    setFieldsByGroup(next);
+    setFieldsByGroup((prev) => {
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length) {
+        let same = true;
+        for (const key of nextKeys) {
+          const a = prev[key] ?? [];
+          const b = next[key] ?? [];
+          if (a.length !== b.length || a.some((field, i) => field.id !== b[i]?.id)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return next;
+    });
   }, [fields, groups, mode]);
 
   async function deleteGroup(group: Group) {

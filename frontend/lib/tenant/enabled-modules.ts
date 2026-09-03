@@ -9,6 +9,34 @@ export const TENANT_MODULE_LABELS: Record<string, string> = {
   ai_assistant: "AI Assistant",
 };
 
+/** Historical audit rows may still carry retired module keys — display only. */
+const LEGACY_AUDIT_MODULE_LABELS: Record<string, string> = {
+  documents: "Documents (legacy)",
+  procurement_one: "Procurement (legacy)",
+  project_one: "Project-One (legacy)",
+};
+
+/**
+ * Module filter options for Workspace Audit — aligned with current workspace modules
+ * (not retired Documents / Procurement-One / Project-One product surfaces).
+ */
+export const WORKSPACE_AUDIT_MODULE_FILTERS = [
+  { value: "e_approval", label: TENANT_MODULE_LABELS.e_approval },
+  { value: "team_access", label: TENANT_MODULE_LABELS.team_access },
+  { value: "ticketing", label: TENANT_MODULE_LABELS.ticketing },
+  { value: "dynamic_entities", label: TENANT_MODULE_LABELS.dynamic_entities },
+  { value: "ai_assistant", label: TENANT_MODULE_LABELS.ai_assistant },
+  { value: "core", label: TENANT_MODULE_LABELS.core },
+] as const;
+
+export function workspaceAuditModuleLabel(module: string): string {
+  return (
+    TENANT_MODULE_LABELS[module] ??
+    LEGACY_AUDIT_MODULE_LABELS[module] ??
+    module.replace(/_/g, " ")
+  );
+}
+
 export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
   ai_assistant:
     "In-app help assistant for workflows, permissions, and how-to guidance. Opt-in — not included with Dynamic Entities alone.",

@@ -8,6 +8,7 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import { fetchDynFinanceReport } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { formatPeso } from "../format-peso";
@@ -81,12 +82,12 @@ export function MaterialsIssuedReportPageClient() {
         >
           <DatePicker className="h-9 w-40" value={dateFrom} onChange={setDateFrom} />
           <DatePicker className="h-9 w-40" value={dateTo} onChange={setDateTo} />
-          <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={region} onChange={(e) => setRegion(e.target.value)}>
+          <Select className="h-9 w-44" value={region} onChange={(e) => setRegion(e.target.value)}>
             <option value="">All regions</option>
             {(report?.filter_options.regions ?? []).map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
-          </select>
+          </Select>
           <Button type="submit" size="sm" disabled={loading}>Update</Button>
         </form>
 

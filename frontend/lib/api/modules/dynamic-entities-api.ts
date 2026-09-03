@@ -165,6 +165,116 @@ export async function fetchDynEntities(params?: {
   return response.data.data;
 }
 
+export type DynRelationshipGraphNode = {
+  id: string;
+  slug: string;
+  name: string;
+  module_pack: string;
+  fields: Array<{
+    id: string;
+    name: string;
+    label: string;
+    type: string;
+    is_key: boolean;
+    target_entity_id: string | null;
+  }>;
+};
+
+export type DynRelationshipGraphEdge = {
+  id: string;
+  kind: "relationship" | "related_tab" | string;
+  source_entity_id: string;
+  target_entity_id: string;
+  field_id: string | null;
+  field_name: string | null;
+  field_label: string | null;
+  cardinality: string;
+  related_tab_label?: string | null;
+  usage_count?: number;
+  soft_disabled?: boolean;
+};
+
+export type DynRelationshipGraphLayout = {
+  positions: Record<string, { x: number; y: number }>;
+  viewport: { x?: number; y?: number; zoom?: number } | null;
+};
+
+export type DynRelationshipGraph = {
+  nodes: DynRelationshipGraphNode[];
+  edges: DynRelationshipGraphEdge[];
+  layout: Record<string, { x: number; y: number }>;
+  viewport: { x?: number; y?: number; zoom?: number } | null;
+};
+
+export async function fetchDynRelationshipGraph(params?: {
+  module_pack?: string;
+}): Promise<DynRelationshipGraph> {
+  const response = await apiClient.get<{ data: DynRelationshipGraph }>(
+    "/dynamic-entities/relationship-graph",
+    { params },
+  );
+  return response.data.data;
+}
+
+export async function saveDynRelationshipGraphLayout(payload: {
+  positions: Record<string, { x: number; y: number }>;
+  viewport?: { x?: number; y?: number; zoom?: number } | null;
+  reset?: boolean;
+}): Promise<DynRelationshipGraphLayout> {
+  const response = await apiClient.put<{ data: DynRelationshipGraphLayout }>(
+    "/dynamic-entities/relationship-graph/layout",
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function createDynRelationshipEdge(payload: {
+  source_entity_id: string;
+  target_entity_id: string;
+  label?: string;
+  name?: string;
+  related_tab_label?: string;
+  sync_related_tab?: boolean;
+}): Promise<DynRelationshipGraphEdge> {
+  const response = await apiClient.post<{ data: DynRelationshipGraphEdge }>(
+    "/dynamic-entities/relationship-graph/edges",
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function updateDynRelationshipEdge(
+  fieldId: string,
+  payload: {
+    label?: string;
+    target_entity_id?: string | null;
+    related_tab_label?: string;
+    sync_related_tab?: boolean;
+  },
+): Promise<DynRelationshipGraphEdge> {
+  const response = await apiClient.patch<{ data: DynRelationshipGraphEdge }>(
+    `/dynamic-entities/relationship-graph/edges/${fieldId}`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function deleteDynRelationshipEdge(
+  fieldId: string,
+  options?: { force?: boolean; soft_disable?: boolean },
+): Promise<DynRelationshipGraphEdge> {
+  const response = await apiClient.delete<{ data: DynRelationshipGraphEdge }>(
+    `/dynamic-entities/relationship-graph/edges/${fieldId}`,
+    {
+      params: {
+        force: options?.force ? 1 : undefined,
+        soft_disable: options?.soft_disable ? 1 : undefined,
+      },
+    },
+  );
+  return response.data.data;
+}
+
 export async function fetchDynEntity(entity: string): Promise<DynEntityDetail> {
   const response = await apiClient.get<{ data: DynEntityDetail }>(`/dynamic-entities/entities/${entity}`);
   return response.data.data;
@@ -237,7 +347,8 @@ export async function fetchDynRecords(
     parent_record_id?: string;
     foreign_field?: string;
     status?: string;
-    filter?: Record<string, string>;
+    /** Simple equals/contains map, or nested ops: filter[field][eq]=x */
+    filter?: Record<string, string | Record<string, string>>;
   },
 ): Promise<PaginatedEnvelope<DynRecordListRow>> {
   const response = await apiClient.get<{ data: DynRecordListRow[]; meta: PaginatedMeta }>(

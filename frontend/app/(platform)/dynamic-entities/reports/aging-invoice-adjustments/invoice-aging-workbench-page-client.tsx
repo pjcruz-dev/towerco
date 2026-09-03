@@ -8,6 +8,7 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
 import { apiClient } from "@/lib/api/client";
 import { permissions } from "@/lib/rbac/permissions";
@@ -260,8 +261,8 @@ export function InvoiceAgingWorkbenchPageClient() {
                 placeholder="Search Invoice / Customer..."
                 className="h-9 max-w-xs"
               />
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              <Select
+                className="h-9 w-48"
                 value={customer}
                 onChange={(e) => setCustomer(e.target.value)}
               >
@@ -271,9 +272,9 @@ export function InvoiceAgingWorkbenchPageClient() {
                     {c}
                   </option>
                 ))}
-              </select>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              </Select>
+              <Select
+                className="h-9 w-48"
                 value={bracket}
                 onChange={(e) => setBracket(e.target.value)}
               >
@@ -283,7 +284,7 @@ export function InvoiceAgingWorkbenchPageClient() {
                     {b.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="max-h-[560px] overflow-auto">

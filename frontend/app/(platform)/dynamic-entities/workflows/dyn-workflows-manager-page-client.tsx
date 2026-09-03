@@ -3,11 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GitBranch, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, Trash2, Zap } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   deleteDynWorkflow,
@@ -15,6 +24,7 @@ import {
   type DynWorkflowRow,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 import { NewWorkflowDialog } from "./new-workflow-dialog";
 
@@ -77,32 +87,27 @@ export function DynWorkflowsManagerPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.workflowsManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <GitBranch className="size-4" />
-              <span className="text-xs font-medium">Operations</span>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">Workflow Automation</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Create and manage database-driven transactional steps and status transitions.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search workflows…"
-              className="h-9 w-48"
-              autoComplete="off"
-            />
-            <Button type="button" size="sm" onClick={() => setOpenNew(true)}>
-              <Plus className="size-4" />
-              New Workflow
-            </Button>
-          </div>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage Workflows"
+          description="Create and manage database-driven transactional steps and status transitions."
+          actions={
+            <>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search workflows…"
+                className="h-9 w-48"
+                autoComplete="off"
+              />
+              <Button type="button" size="sm" onClick={() => setOpenNew(true)}>
+                <Plus className="size-4" />
+                New Workflow
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -127,81 +132,79 @@ export function DynWorkflowsManagerPageClient() {
           </section>
         ) : (
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left text-xs font-medium text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Entity</th>
-                    <th className="px-4 py-3">Trigger</th>
-                    <th className="px-4 py-3">Status match</th>
-                    <th className="px-4 py-3">Active</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{row.name}</div>
-                        {row.description ? (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                            {row.description}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <code className="text-xs">{row.entity_slug}</code>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {triggerLabel(row.trigger_mode)}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {row.status_matches.length
-                          ? row.status_matches.join(", ")
-                          : "Any"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={
-                            row.is_active
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-muted-foreground"
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Trigger</TableHead>
+                  <TableHead>Status match</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-medium">{row.name}</div>
+                      {row.description ? (
+                        <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                          {row.description}
+                        </div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <code className="text-xs">{row.entity_slug}</code>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {triggerLabel(row.trigger_mode)}
+                    </TableCell>
+                    <TableCell className="whitespace-normal text-muted-foreground">
+                      {row.status_matches.length
+                        ? row.status_matches.join(", ")
+                        : "Any"}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={
+                          row.is_active
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {row.is_active ? "Yes" : "No"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() =>
+                            router.push(`/dynamic-entities/workflows/edit?id=${row.id}`)
                           }
                         >
-                          {row.is_active ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={busy}
-                            onClick={() =>
-                              router.push(`/dynamic-entities/workflows/edit?id=${row.id}`)
-                            }
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600"
-                            disabled={busy}
-                            onClick={() => void onDelete(row)}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600"
+                          disabled={busy}
+                          onClick={() => void onDelete(row)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             <div className="border-t px-4 py-2 text-xs text-muted-foreground">
               {filtered.length} workflow{filtered.length === 1 ? "" : "s"}
               {" · "}

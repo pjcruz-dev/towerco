@@ -5,7 +5,6 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { fieldControlClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
@@ -125,21 +124,21 @@ export function DatePicker({
       <PopoverTrigger
         disabled={locked}
         render={
-          <button
+          <Button
             id={id}
             type="button"
+            variant="outline"
             disabled={locked}
             aria-invalid={ariaInvalid}
             className={cn(
-              fieldControlClassName,
-              "flex h-9 items-center justify-between gap-2 text-left",
+              "h-9 w-full justify-between font-normal",
               !selected && "text-muted-foreground",
               className,
             )}
           >
             <span className="truncate">{selected ? formatDisplay(selected) : placeholder}</span>
             <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </button>
+          </Button>
         }
       />
 
@@ -188,24 +187,23 @@ export function DatePicker({
             const isToday = sameDay(cell, today);
 
             return (
-              <button
+              <Button
                 key={toIsoDate(cell)}
                 type="button"
+                variant={isSelected ? "default" : "ghost"}
+                size="icon-sm"
                 onClick={() => {
                   onChange(toIsoDate(cell));
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors",
-                  "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "size-8",
                   !inMonth && "text-muted-foreground/50",
-                  inMonth && !isSelected && "text-foreground",
                   isToday && !isSelected && "ring-1 ring-border",
-                  isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
               >
                 {cell.getDate()}
-              </button>
+              </Button>
             );
           })}
         </div>

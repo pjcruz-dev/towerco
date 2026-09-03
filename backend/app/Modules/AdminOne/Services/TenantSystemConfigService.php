@@ -220,21 +220,22 @@ final class TenantSystemConfigService
         $light['background'] = $base;
         // Keep Geist CTA primary (#171717); accent is brand only (charts / chips).
         $light['chart-1'] = $accent;
-        // Side nav is always white (TowerOS shell); do not apply sidebar_dark here.
-        $light['sidebar'] = '#ffffff';
-        $light['sidebar-foreground'] = '#0f172a';
-        $light['sidebar-primary'] = '#171717';
-        $light['sidebar-accent'] = '#f1f5f9';
-        $light['sidebar-accent-foreground'] = '#0f172a';
-        $light['sidebar-border'] = '#e2e8f0';
+        // Aside matches header (card surface).
+        $light['sidebar'] = 'var(--card)';
+        $light['sidebar-foreground'] = 'var(--card-foreground)';
+        $light['sidebar-primary'] = 'var(--primary)';
+        $light['sidebar-accent'] = 'var(--muted)';
+        $light['sidebar-accent-foreground'] = 'var(--foreground)';
+        $light['sidebar-border'] = 'var(--border)';
 
         $dark['chart-1'] = $accent;
-        $dark['sidebar'] = '#ffffff';
-        $dark['sidebar-foreground'] = '#0f172a';
-        $dark['sidebar-primary'] = '#171717';
-        $dark['sidebar-accent'] = '#f1f5f9';
-        $dark['sidebar-accent-foreground'] = '#0f172a';
-        $dark['sidebar-border'] = '#e2e8f0';
+        $dark['sidebar'] = 'var(--card)';
+        $dark['sidebar-foreground'] = 'var(--card-foreground)';
+        $dark['sidebar-primary'] = 'var(--primary)';
+        $dark['sidebar-primary-foreground'] = 'var(--primary-foreground)';
+        $dark['sidebar-accent'] = 'var(--muted)';
+        $dark['sidebar-accent-foreground'] = 'var(--foreground)';
+        $dark['sidebar-border'] = 'var(--border)';
 
         $payload = array_merge($existing, [
             'version' => max(1, (int) ($existing['version'] ?? 1)),

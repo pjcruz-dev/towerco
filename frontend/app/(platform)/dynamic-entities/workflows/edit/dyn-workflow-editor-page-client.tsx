@@ -7,10 +7,12 @@ import { ArrowLeft, Save } from "lucide-react";
 
 import { DynWorkflowButtonsEditor } from "@/components/dynamic-entities/dyn-workflow-buttons-editor";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchAdminRoleCatalog } from "@/lib/api/modules/admin-roles-api";
@@ -29,6 +31,7 @@ import {
   type DynWorkflowActionDef,
 } from "@/lib/dynamic-entities/dyn-workflow-actions";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 function DynWorkflowEditorInner() {
   const router = useRouter();
@@ -193,30 +196,29 @@ function DynWorkflowEditorInner() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.workflowsManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              render={<Link href="/dynamic-entities/workflows" />}
-            >
-              <ArrowLeft className="mr-1 size-4" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-2xl font-semibold">Edit Workflow</h1>
-              <p className="text-sm text-muted-foreground">
-                Configure trigger constraints and THEN steps (updates, creates, emails).
-              </p>
-            </div>
-          </div>
-          <Button type="button" disabled={saving || loading} onClick={() => void onSave()}>
-            <Save className="mr-1.5 size-4" />
-            Save
-          </Button>
-        </div>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Edit Workflow"
+          description="Configure trigger constraints and THEN steps (updates, creates, emails)."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                render={<Link href="/dynamic-entities/workflows" />}
+              >
+                <ArrowLeft className="size-4" />
+                Back
+              </Button>
+              <Button type="button" size="sm" disabled={saving || loading} onClick={() => void onSave()}>
+                <Save className="size-4" />
+                Save
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -244,8 +246,7 @@ function DynWorkflowEditorInner() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Target Entity</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  <Select
                     value={entitySlug}
                     onChange={(e) => setEntitySlug(e.target.value)}
                   >
@@ -254,19 +255,18 @@ function DynWorkflowEditorInner() {
                         {e.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Trigger Mode</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  <Select
                     value={triggerMode}
                     onChange={(e) => setTriggerMode(e.target.value as DynWorkflowTriggerMode)}
                   >
                     <option value="manual">Manual Button (User-Triggered)</option>
                     <option value="on_create">Auto on Record Create</option>
                     <option value="on_update">Auto on Record Update</option>
-                  </select>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Status Field Slug</Label>

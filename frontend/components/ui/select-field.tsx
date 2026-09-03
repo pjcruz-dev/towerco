@@ -59,7 +59,12 @@ export function SelectField({
   return (
     <SelectPrimitive.Root
       value={selected}
-      onValueChange={(next) => onChange(next == null ? "" : String(next))}
+      onValueChange={(next) => {
+        const normalized = next == null ? "" : String(next);
+        // Base UI can re-emit the current value when `items` identity changes (options recreated each render).
+        if (normalized === (selected ?? "")) return;
+        onChange(normalized);
+      }}
       disabled={disabled}
       items={items}
     >

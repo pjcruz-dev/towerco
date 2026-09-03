@@ -146,8 +146,8 @@ export function AssistantFloatingLauncher() {
       aria-label="AI Assistant"
       className={cn(
         "fixed z-40 flex h-14 w-14 touch-none items-center justify-center rounded-full",
-        "bg-sky-600 text-white shadow-lg ring-1 ring-sky-700/20",
-        "transition-shadow hover:bg-sky-500 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "bg-primary text-primary-foreground shadow-lg",
+        "transition-shadow hover:bg-primary/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         dragging ? "cursor-grabbing" : "cursor-grab",
       )}
       style={{ left: position.x, top: position.y }}

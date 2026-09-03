@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Eye, FileText, Pencil, Trash2, Upload } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/api/error";
@@ -17,6 +18,7 @@ import {
   type DynPdfFormRow,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 export function DynPdfFormsManagerPageClient() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -138,49 +140,48 @@ export function DynPdfFormsManagerPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.printablesManage]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Link
-              href="/dynamic-entities/printables"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:underline"
-            >
-              <ArrowLeft className="size-3.5" />
-              Printables
-            </Link>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">PDF Forms Manager</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Upload, rename, or delete PDF form templates used for overlays.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Catalog code (optional)</label>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="PDF Forms Manager"
+          description="Upload, rename, or delete PDF form templates used for overlays."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                render={<Link href="/dynamic-entities/printables" />}
+              >
+                <ArrowLeft className="size-3.5" />
+                Printables
+              </Button>
               <Input
                 className="h-9 w-36"
-                placeholder="e.g. 0217"
+                placeholder="Catalog code"
                 value={uploadCode}
                 disabled={busy}
                 onChange={(e) => setUploadCode(e.target.value)}
               />
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={(e) => void onUploadSelected(e.target.files)}
-            />
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="mr-1.5 size-3.5" />
-              Upload PDF Form
-            </Button>
-          </div>
-        </header>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => void onUploadSelected(e.target.files)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="size-3.5" />
+                Upload PDF
+              </Button>
+            </>
+          }
+        />
 
         <div className="flex flex-wrap items-center gap-3">
           <Input

@@ -65,7 +65,7 @@ function SidebarNavLink({
         isActive={active}
         className={navButtonClass}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="size-4" />
         <span>{title}</span>
         {badge !== undefined && badge > 0 ? (
           <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar-primary-foreground group-data-[collapsible=icon]:hidden">
@@ -90,7 +90,7 @@ export function AppSidebar() {
       <SidebarContent className="scrollbar-hide gap-1 px-2 py-2">
         {groupsWithBadges.map((group) => (
           <div key={group.group} className="mt-2 first:mt-0">
-            <div className="px-3 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
+            <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
               {group.group}
             </div>
             <SidebarMenu>

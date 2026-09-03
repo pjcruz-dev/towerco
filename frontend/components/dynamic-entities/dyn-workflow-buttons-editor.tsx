@@ -5,6 +5,7 @@ import { ChevronDown, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   fieldChoiceOptions,
   newEmptyWorkflowButton,
@@ -185,7 +186,7 @@ export function DynWorkflowButtonsEditor({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-muted-foreground">Button colour</span>
-                    <select
+                    <Select
                       className={selectClass}
                       value={button.variant ?? "default"}
                       onChange={(e) =>
@@ -198,13 +199,13 @@ export function DynWorkflowButtonsEditor({
                       <option value="outline">Outline</option>
                       <option value="secondary">Secondary</option>
                       <option value="destructive">Destructive</option>
-                    </select>
+                    </Select>
                   </label>
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-muted-foreground">
                       Who can press it
                     </span>
-                    <select
+                    <Select
                       className={selectClass}
                       multiple
                       value={button.role_ids ?? []}
@@ -225,7 +226,7 @@ export function DynWorkflowButtonsEditor({
                           </option>
                         ))
                       )}
-                    </select>
+                    </Select>
                     <span className="text-[11px] text-muted-foreground">
                       Leave empty for everyone. Hold Ctrl/Cmd to multi-select.
                     </span>
@@ -334,7 +335,7 @@ function WhenSection({
         const choices = fieldChoiceOptions(fieldMeta?.options);
         return (
           <div key={ci} className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start">
-            <select
+            <Select
               className={selectClass}
               value={cond.field}
               onChange={(e) =>
@@ -346,8 +347,8 @@ function WhenSection({
                   {f.label}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               className={selectClass}
               value={cond.op}
               onChange={(e) =>
@@ -360,7 +361,7 @@ function WhenSection({
             >
               <option value="eq">is</option>
               <option value="neq">is not</option>
-            </select>
+            </Select>
             <ValueInput
               choices={choices}
               value={cond.value}
@@ -414,7 +415,7 @@ function GetSection({
     >
       {loads.map((load, li) => (
         <div key={li} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-center">
-          <select
+          <Select
             className={selectClass}
             value={load.source_field}
             onChange={(e) =>
@@ -431,7 +432,7 @@ function GetSection({
                 </option>
               ))}
             </optgroup>
-          </select>
+          </Select>
           <Input
             value={load.alias}
             onChange={(e) =>
@@ -505,7 +506,7 @@ function ThenUpdatesSection({
         return (
           <div key={ui} className="space-y-2 rounded-lg border border-border/70 bg-background p-2.5">
             <div className="grid gap-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-center">
-              <select
+              <Select
                 className={selectClass}
                 value={upd.target}
                 onChange={(e) =>
@@ -517,8 +518,8 @@ function ThenUpdatesSection({
                     {a.label}
                   </option>
                 ))}
-              </select>
-              <select
+              </Select>
+              <Select
                 className={selectClass}
                 value={upd.field}
                 onChange={(e) =>
@@ -531,8 +532,8 @@ function ThenUpdatesSection({
                     {f.label}
                   </option>
                 ))}
-              </select>
-              <select
+              </Select>
+              <Select
                 className={selectClass}
                 value={upd.mode}
                 onChange={(e) =>
@@ -549,7 +550,7 @@ function ThenUpdatesSection({
                     {m.value !== "set" && m.value !== "copy" ? " (soon)" : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
               <Button
                 type="button"
                 variant="ghost"
@@ -572,7 +573,7 @@ function ThenUpdatesSection({
               />
             ) : null}
             {upd.mode === "copy" ? (
-              <select
+              <Select
                 className={selectClass}
                 value={upd.from ?? ""}
                 onChange={(e) =>
@@ -585,7 +586,7 @@ function ThenUpdatesSection({
                     {s.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : null}
             {!modeEnabled ? (
               <p className="text-[11px] text-muted-foreground">
@@ -653,7 +654,7 @@ function CreateSection({
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">Create a record in</span>
-              <select
+              <Select
                 className={selectClass}
                 value={create.entity_slug}
                 onChange={(e) =>
@@ -670,11 +671,11 @@ function CreateSection({
                     {e.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="space-y-1">
               <span className="text-[11px] font-medium text-muted-foreground">One per row of</span>
-              <select
+              <Select
                 className={selectClass}
                 value={create.one_per ?? ""}
                 onChange={(e) =>
@@ -693,7 +694,7 @@ function CreateSection({
                     {a}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           <p className="text-[11px] text-muted-foreground">
@@ -719,7 +720,7 @@ function CreateSection({
                 }
                 placeholder="Field name"
               />
-              <select
+              <Select
                 className={selectClass}
                 value={m.mode}
                 onChange={(e) =>
@@ -741,9 +742,9 @@ function CreateSection({
               >
                 <option value="set">Set a value</option>
                 <option value="copy">Copy from</option>
-              </select>
+              </Select>
               {m.mode === "copy" ? (
-                <select
+                <Select
                   className={selectClass}
                   value={m.from ?? ""}
                   onChange={(e) =>
@@ -767,7 +768,7 @@ function CreateSection({
                       {s.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <Input
                   value={m.value}
@@ -945,14 +946,14 @@ function ValueInput({
 }) {
   if (choices.length > 0) {
     return (
-      <select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
+      <Select className={selectClass} value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">-- leave blank --</option>
         {choices.map((c) => (
           <option key={c} value={c}>
             {c}
           </option>
         ))}
-      </select>
+      </Select>
     );
   }
   return <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />;

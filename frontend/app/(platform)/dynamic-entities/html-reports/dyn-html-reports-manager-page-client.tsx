@@ -8,7 +8,6 @@ import {
   Copy,
   Download,
   ExternalLink,
-  FileCode2,
   FileJson,
   Pencil,
   Plus,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -27,6 +27,14 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   createDynHtmlReport,
@@ -39,6 +47,7 @@ import {
   type DynReportBuilderDef,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type ReportClipboardPayload = {
@@ -322,52 +331,51 @@ export function DynHtmlReportsManagerPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <FileCode2 className="size-4" />
-              <span className="text-xs font-medium">System Core</span>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">HTML Reports</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage HTML Reports"
+          description={
+            <>
               Create and manage dynamic HTML-based reports. Right-click a report to copy, duplicate
               or replace it.
-            </p>
-            <p className="text-xs text-muted-foreground">{total} reports</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search reports…"
-              className="h-9 w-48"
-              autoComplete="off"
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              render={<Link href="/dynamic-entities/report-builder" />}
-            >
-              Report Builder
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void onPasteAsNew()}
-            >
-              <ClipboardPaste className="size-4" />
-              Paste Report
-            </Button>
-            <Button type="button" size="sm" disabled={busy} onClick={() => void onNew()}>
-              <Plus className="size-4" />
-              New Report
-            </Button>
-          </div>
-        </header>
+              <span className="mt-1 block text-xs">{total} reports</span>
+            </>
+          }
+          actions={
+            <>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search reports…"
+                className="h-9 w-48"
+                autoComplete="off"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                render={<Link href="/dynamic-entities/report-builder" />}
+              >
+                Report Builder
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void onPasteAsNew()}
+              >
+                <ClipboardPaste className="size-4" />
+                Paste Report
+              </Button>
+              <Button type="button" size="sm" disabled={busy} onClick={() => void onNew()}>
+                <Plus className="size-4" />
+                New Report
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -393,112 +401,108 @@ export function DynHtmlReportsManagerPageClient() {
         />
 
         <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[840px] text-left text-[13px]">
-              <thead className="bg-muted/50 text-xs font-medium text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="px-4 py-2.5">Name</th>
-                  <th className="px-4 py-2.5">Slug / URL</th>
-                  <th className="px-4 py-2.5">Description</th>
-                  <th className="px-4 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                      Loading reports…
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                      No reports match.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((row) => (
-                    <ContextMenu key={row.id}>
-                      <ContextMenuTrigger
-                        render={
-                          <tr
-                            className={cn(
-                              "border-b border-border last:border-0",
-                              selectedId === row.id && "bg-sky-50/50 dark:bg-sky-950/20",
-                            )}
-                            onClick={() => setSelectedId(row.id)}
-                          />
-                        }
-                      >
-                        <td className="px-4 py-3 align-top">
-                          <p className="font-medium text-foreground">{row.name}</p>
-                          {row.is_system ? (
-                            <span className="text-[11px] text-muted-foreground">System seed</span>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="flex items-center gap-2">
-                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
-                              {row.path}
-                            </code>
-                            <Link
-                              href={`/dynamic-entities/html-reports/${row.slug}`}
-                              className="text-sky-700 hover:underline dark:text-sky-400"
-                              title="Open report"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ExternalLink className="size-3.5" />
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 align-top text-muted-foreground">
-                          {row.description?.trim() || "No description"}
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              disabled={busy}
-                              title="Copy JSON"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void onCopy(row);
-                              }}
-                            >
-                              <Copy className="size-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              disabled={busy}
-                              title="Edit"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(editHref(row));
-                              }}
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600"
-                              disabled={busy}
-                              title="Delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void onDelete(row);
-                              }}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </ContextMenuTrigger>
+          <Table className="min-w-[840px] text-[13px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Slug / URL</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    Loading reports…
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    No reports match.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((row) => (
+                  <ContextMenu key={row.id}>
+                    <ContextMenuTrigger
+                      render={
+                        <TableRow
+                          className={cn(selectedId === row.id && "bg-muted")}
+                          onClick={() => setSelectedId(row.id)}
+                        />
+                      }
+                    >
+                      <TableCell className="align-top whitespace-normal">
+                        <p className="font-medium text-foreground">{row.name}</p>
+                        {row.is_system ? (
+                          <span className="text-[11px] text-muted-foreground">System seed</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <div className="flex items-center gap-2">
+                          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+                            {row.path}
+                          </code>
+                          <Link
+                            href={`/dynamic-entities/html-reports/${row.slug}`}
+                            className="text-sky-700 hover:underline dark:text-sky-400"
+                            title="Open report"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="size-3.5" />
+                          </Link>
+                        </div>
+                      </TableCell>
+                      <TableCell className="align-top whitespace-normal text-muted-foreground">
+                        {row.description?.trim() || "No description"}
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            title="Copy JSON"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void onCopy(row);
+                            }}
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            title="Edit"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(editHref(row));
+                            }}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600"
+                            disabled={busy}
+                            title="Delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void onDelete(row);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </ContextMenuTrigger>
                       <ContextMenuContent className="min-w-[17rem]">
                         <ContextMenuItem
                           disabled={busy}
@@ -580,9 +584,8 @@ export function DynHtmlReportsManagerPageClient() {
                     </ContextMenu>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+            </TableBody>
+          </Table>
         </section>
       </div>
     </PermissionGate>

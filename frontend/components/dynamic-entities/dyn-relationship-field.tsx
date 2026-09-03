@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 
@@ -11,6 +11,10 @@ import {
   fetchDynRecords,
   type DynField,
 } from "@/lib/api/modules/dynamic-entities-api";
+import {
+  relationFiltersFromField,
+  relationFiltersToRecordFilterParams,
+} from "@/lib/dynamic-entities/dyn-relation-filters";
 import { cn } from "@/lib/utils";
 
 type Resolved = {
@@ -33,6 +37,12 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<Array<{ id: string; title: string | null }>>([]);
   const [loading, setLoading] = useState(false);
+
+  const schemaFilters = useMemo(() => relationFiltersFromField(field), [field]);
+  const filterParams = useMemo(
+    () => relationFiltersToRecordFilterParams(schemaFilters),
+    [schemaFilters],
+  );
 
   useEffect(() => {
     if (!value) {
@@ -57,7 +67,11 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
     let cancelled = false;
     setLoading(true);
     const t = window.setTimeout(() => {
-      fetchDynRecords(slug, { search: search || undefined, per_page: 20 })
+      fetchDynRecords(slug, {
+        search: search || undefined,
+        per_page: 20,
+        filter: Object.keys(filterParams).length > 0 ? filterParams : undefined,
+      })
         .then((page) => {
           if (!cancelled) setOptions(page.data.map((r) => ({ id: r.id, title: r.title })));
         })
@@ -72,7 +86,7 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [open, slug, search]);
+  }, [filterParams, open, slug, search]);
 
   if (!slug) {
     return (
@@ -91,7 +105,7 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
         <div className="flex flex-wrap items-center gap-1.5">
           <Link
             href={`/dynamic-entities/records/${value}`}
-            className="inline-flex max-w-full items-center rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 underline-offset-2 hover:underline dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200"
+            className="inline-flex max-w-full items-center rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground underline-offset-2 hover:underline"
           >
             <span className="truncate">{label ?? "…"}</span>
           </Link>
@@ -119,6 +133,11 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
         />
         {open ? (
           <div className="absolute z-40 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-md">
+            {schemaFilters.length > 0 ? (
+              <p className="border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
+                Filtered by field rules ({schemaFilters.length})
+              </p>
+            ) : null}
             {loading ? (
               <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
             ) : options.length === 0 ? (
@@ -175,7 +194,7 @@ export function DynRelationshipView({
   return (
     <Link
       href={href}
-      className="text-sm font-medium text-sky-700 underline underline-offset-2 hover:text-sky-800 dark:text-sky-400"
+      className="text-sm font-medium text-foreground underline underline-offset-2 hover:text-foreground/80"
       title={field.label}
     >
       <span className="break-all">{title || id.slice(0, 8)}</span>

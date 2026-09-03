@@ -28,6 +28,14 @@ export function getApiFieldErrors(error: unknown, prefixToStrip = ""): Record<st
   return map;
 }
 
+export function isCanceledRequestError(error: unknown): boolean {
+  if (axios.isAxiosError(error) && error.code === "ERR_CANCELED") {
+    return true;
+  }
+
+  return typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError";
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as

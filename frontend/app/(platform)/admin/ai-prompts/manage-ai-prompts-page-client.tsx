@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, RotateCcw, Save } from "lucide-react";
+import { RotateCcw, Save } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import {
   type AiPromptModuleListRow,
 } from "@/lib/api/modules/assistant-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 export function ManageAiPromptsPageClient() {
@@ -150,18 +152,12 @@ export function ManageAiPromptsPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.aiAssistantPromptsManage]}>
-      <div className="mx-auto flex h-[calc(100vh-4rem)] w-full max-w-[1600px] flex-col">
-        <header className="mb-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Bot className="size-4" />
-            <span className="text-xs font-medium">System Core</span>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Manage AI Prompts</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Edit modular Ask TowerOS system instructions assembled by intent. Markdown/text only — never executed as
-            code. Uses your configured LLM provider (`AI_ASSISTANT_LLM_PROVIDER`), not Active Security Tokens.
-          </p>
-        </header>
+      <div className={cn(adminPageShellClass, "h-[calc(100vh-4rem)] gap-4")}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage AI Prompts"
+          description="Edit modular Ask TowerOS system instructions assembled by intent. Markdown/text only — never executed as code. Uses your configured LLM provider (`AI_ASSISTANT_LLM_PROVIDER`), not Active Security Tokens."
+        />
 
         {error ? (
           <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -197,31 +193,27 @@ export function ManageAiPromptsPageClient() {
                     const active = row.id === selectedId;
                     return (
                       <li key={row.id}>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           onClick={() => {
                             if (dirty && !window.confirm("Discard unsaved changes?")) return;
                             setSelectedId(row.id);
                           }}
                           className={cn(
-                            "flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left text-sm transition-colors",
-                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted/60",
+                            "h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-lg px-3 py-2 text-left",
+                            active ? "bg-muted" : "",
                             !row.is_enabled && !active ? "opacity-55" : "",
                           )}
                         >
                           <span className="font-medium leading-snug">{row.name}</span>
-                          <span
-                            className={cn(
-                              "text-[11px]",
-                              active ? "text-primary-foreground/80" : "text-muted-foreground",
-                            )}
-                          >
+                          <span className="text-[11px] font-normal text-muted-foreground">
                             {row.key}
                             {row.kind === "router" ? " · reference" : ` · ${row.kind}`}
                             {row.intent_key ? ` · ${row.intent_key}` : ""}
                             {!row.is_enabled ? " · off" : ""}
                           </span>
-                        </button>
+                        </Button>
                       </li>
                     );
                   })}

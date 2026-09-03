@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { fetchDynFinanceReport } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { formatPeso } from "../format-peso";
@@ -88,8 +89,8 @@ export function BankReconciliationReportPageClient() {
             void load();
           }}
         >
-          <select
-            className="h-9 min-w-[240px] rounded-md border border-input bg-background px-3 text-sm"
+          <Select
+            className="h-9 min-w-[240px]"
             value={bankAccountId}
             onChange={(e) => setBankAccountId(e.target.value)}
           >
@@ -99,9 +100,9 @@ export function BankReconciliationReportPageClient() {
                 {a.name} {a.account_number ? `(${a.account_number})` : ""}
               </option>
             ))}
-          </select>
-          <select
-            className="h-9 min-w-[180px] rounded-md border border-input bg-background px-3 text-sm"
+          </Select>
+          <Select
+            className="h-9 min-w-[180px]"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           >
@@ -109,7 +110,7 @@ export function BankReconciliationReportPageClient() {
             {(report?.filter_options.periods ?? []).map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
-          </select>
+          </Select>
           <Button type="submit" size="sm" disabled={loading}>Update</Button>
         </form>
 

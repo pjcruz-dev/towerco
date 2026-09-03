@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 type Mode = "design" | "styles" | "source";
@@ -375,8 +376,8 @@ export const DynPrintableWysiwyg = forwardRef<DynPrintableWysiwygHandle, Props>(
               <Redo2 className="size-3.5" />
             </ToolBtn>
             <Sep />
-            <select
-              className="h-7 rounded border border-input bg-background px-1 text-[11px]"
+            <Select
+              className="h-7 w-28 text-[11px]"
               defaultValue="p"
               onChange={(e) => exec("formatBlock", e.target.value)}
               aria-label="Paragraph style"
@@ -385,7 +386,7 @@ export const DynPrintableWysiwyg = forwardRef<DynPrintableWysiwygHandle, Props>(
               <option value="h2">Heading</option>
               <option value="h3">Subheading</option>
               <option value="pre">Monospace</option>
-            </select>
+            </Select>
             <Sep />
             <ToolBtn label="Bold" onClick={() => exec("bold")}>
               <Bold className="size-3.5" />

@@ -229,7 +229,7 @@ export function SidebarNavGroup({
       <div
         data-help={dataHelp}
         className={cn(
-          "flex w-full items-center overflow-hidden rounded-md",
+          "flex h-8 w-full items-center overflow-hidden rounded-md",
           groupActive && "bg-sidebar-accent text-sidebar-accent-foreground",
           !groupActive && "text-sidebar-foreground/70",
         )}
@@ -245,11 +245,11 @@ export function SidebarNavGroup({
           }
           isActive={groupActive}
           className={cn(
-            "min-w-0 flex-1 rounded-none rounded-l-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "h-8 min-w-0 flex-1 rounded-none rounded-l-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             buttonClassName,
           )}
         >
-          <Icon className="h-4 w-4 shrink-0" />
+          <Icon className="size-4 shrink-0" />
           <span className="truncate">{title}</span>
         </SidebarMenuButton>
         <button
@@ -258,18 +258,18 @@ export function SidebarNavGroup({
           aria-expanded={open}
           onClick={toggleOpen}
           className={cn(
-            "inline-flex h-9 w-8 shrink-0 items-center justify-center rounded-r-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-r-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             groupActive && "text-sidebar-accent-foreground",
           )}
         >
           <ChevronRight
-            className={cn("h-3.5 w-3.5 opacity-70 transition-transform", open && "rotate-90")}
+            className={cn("size-4 opacity-70 transition-transform", open && "rotate-90")}
             aria-hidden
           />
         </button>
       </div>
       {open ? (
-        <SidebarMenuSub className="ml-3.5 border-l border-sidebar-border pl-2">
+        <SidebarMenuSub>
           {sortedItems.map((item, index) => {
             const active = isNavActive(pathname, item.href, item.exact);
             const showSection =
@@ -284,6 +284,7 @@ export function SidebarNavGroup({
                   </p>
                 ) : null}
                 <SidebarMenuSubButton
+                  size="md"
                   render={
                     <Link
                       href={item.href}
@@ -295,11 +296,11 @@ export function SidebarNavGroup({
                   }
                   isActive={active}
                   className={cn(
-                    "h-8 text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
+                    "text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
                     subButtonClassName,
                   )}
                 >
-                  <span className="text-xs">{item.title}</span>
+                  <span>{item.title}</span>
                   {item.badge && item.badge > 0 ? (
                     <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar-primary-foreground">
                       {item.badge > 99 ? "99+" : item.badge}

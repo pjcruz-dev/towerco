@@ -1,12 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Mail, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -18,6 +27,7 @@ import {
   type DynEmailTemplateRow,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type FormState = {
@@ -167,18 +177,17 @@ export function DynEmailTemplatesPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.emailTemplatesManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
-        <header className="space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Mail className="size-4" />
-            <span className="text-xs font-medium">System Core</span>
-          </div>
-          <h1 className="text-2xl font-semibold text-foreground">Manage Email Templates</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Reusable subject and body templates for workflow notifications. Reference a template from a
-            workflow email step with <code className="text-xs">template_slug</code>.
-          </p>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Email Templates"
+          description={
+            <>
+              Reusable subject and body templates for workflow notifications. Reference a template from a
+              workflow email step with <code className="text-xs">template_slug</code>.
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -203,77 +212,72 @@ export function DynEmailTemplatesPageClient() {
                 autoComplete="off"
               />
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-[13px]">
-                <thead className="sticky top-0 bg-muted/40 text-xs font-medium text-muted-foreground">
-                  <tr className="border-b border-border">
-                    <th className="px-4 py-2.5">Name</th>
-                    <th className="px-4 py-2.5">Subject</th>
-                    <th className="px-4 py-2.5 whitespace-nowrap">Last updated</th>
-                    <th className="px-4 py-2.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
-                        No templates found.
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={cn(
-                          "border-b border-border/80 transition-colors",
-                          editingId === row.id ? "bg-muted/50" : "hover:bg-muted/30",
-                        )}
-                      >
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          <div>{row.name}</div>
-                          <div className="text-[11px] font-normal text-muted-foreground">{row.slug}</div>
-                        </td>
-                        <td className="max-w-[220px] truncate px-4 py-3 text-muted-foreground">
-                          {row.subject}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                          {formatUpdated(row.updated_at)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() => void onEdit(row)}
-                            >
-                              <Pencil className="size-3.5" />
-                              Edit
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={busy || row.is_system}
-                              onClick={() => void onDelete(row)}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <Table className="min-w-[520px] text-[13px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Last updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                      Loading…
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                      No templates found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className={cn(editingId === row.id && "bg-muted/50")}
+                    >
+                      <TableCell className="whitespace-normal font-medium text-foreground">
+                        <div>{row.name}</div>
+                        <div className="text-[11px] font-normal text-muted-foreground">{row.slug}</div>
+                      </TableCell>
+                      <TableCell className="max-w-[220px] truncate text-muted-foreground">
+                        {row.subject}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatUpdated(row.updated_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => void onEdit(row)}
+                          >
+                            <Pencil className="size-3.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy || row.is_system}
+                            onClick={() => void onDelete(row)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </section>
 
           <section className="rounded-xl border border-border bg-card p-4 shadow-sm">

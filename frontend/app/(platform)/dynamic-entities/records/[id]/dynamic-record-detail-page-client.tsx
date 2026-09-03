@@ -20,9 +20,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
 import { usePermission } from "@/hooks/use-permission";
 import {
   fetchDynRecord,
@@ -377,14 +377,17 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
     }
     if (field.type === "boolean") {
       return (
-        <Select
-          value={draft[field.name] ?? ""}
-          onChange={(e) => setDraft((d) => ({ ...d, [field.name]: e.target.value }))}
-        >
-          <option value="">—</option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </Select>
+        <label className="inline-flex h-9 items-center gap-2 text-sm">
+          <Checkbox
+            checked={draft[field.name] === "true" || draft[field.name] === "1"}
+            onCheckedChange={(checked) =>
+              setDraft((d) => ({ ...d, [field.name]: checked === true ? "true" : "false" }))
+            }
+          />
+          <span className="text-muted-foreground">
+            {draft[field.name] === "true" || draft[field.name] === "1" ? "Yes" : "No"}
+          </span>
+        </label>
       );
     }
     if (field.type === "date") {
@@ -418,20 +421,7 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
       <div className="w-full space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">
-              <Link href="/dynamic-entities" className="underline-offset-4 hover:underline">
-                Entities
-              </Link>
-              {record ? (
-                <>
-                  {" / "}
-                  <Link href={listHref} className="underline-offset-4 hover:underline">
-                    {record.entity.name}
-                  </Link>
-                </>
-              ) : null}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {record?.title ?? "Record"}
             </h1>
             {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}

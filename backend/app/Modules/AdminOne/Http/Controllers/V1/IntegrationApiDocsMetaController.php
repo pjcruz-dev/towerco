@@ -22,7 +22,7 @@ class IntegrationApiDocsMetaController extends AbstractApiController
 
         $entities = DynEntity::query()
             ->where('is_active', true)
-            ->with(['fields' => static fn ($q) => $q->orderBy('sort_order')->orderBy('name')])
+            ->with(['fields' => static fn ($q) => $q->orderBy('field_order')->orderBy('name')])
             ->orderBy('name')
             ->get();
 

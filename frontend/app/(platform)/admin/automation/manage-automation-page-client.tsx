@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Clock,
   Pause,
   Pencil,
   Play,
@@ -13,10 +12,20 @@ import {
 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -31,6 +40,7 @@ import {
   type DynScheduledTaskRow,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type FormState = {
@@ -237,29 +247,24 @@ export function ManageAutomationPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.automationManage]}>
-      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="size-4" />
-              <span className="text-xs font-medium">System Core</span>
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground">Automation & Cron Jobs</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              Manage scheduled tasks and automated system processes.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void onSync()}>
-              <RefreshCw className="size-4" />
-              Cron Sync
-            </Button>
-            <Button type="button" size="sm" disabled={busy} onClick={openCreate}>
-              <Plus className="size-4" />
-              New Task
-            </Button>
-          </div>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Automation & Cron Jobs"
+          description="Manage scheduled tasks and automated system processes."
+          actions={
+            <>
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void onSync()}>
+                <RefreshCw className="size-4" />
+                Cron Sync
+              </Button>
+              <Button type="button" size="sm" disabled={busy} onClick={openCreate}>
+                <Plus className="size-4" />
+                New Task
+              </Button>
+            </>
+          }
+        />
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
@@ -313,8 +318,8 @@ export function ManageAutomationPageClient() {
               </div>
               <div className="space-y-1.5">
                 <Label>Command</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                <Select
+                  className="h-9 w-full"
                   value={form.command_key}
                   onChange={(e) => {
                     const key = e.target.value;
@@ -333,12 +338,12 @@ export function ManageAutomationPageClient() {
                       {c.name} ({c.execution_label})
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Schedule</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                <Select
+                  className="h-9 w-full"
                   value={form.schedule}
                   onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
                 >
@@ -347,7 +352,7 @@ export function ManageAutomationPageClient() {
                       {p.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               {form.schedule === "custom" ? (
                 <div className="space-y-1.5 sm:col-span-2">
@@ -370,125 +375,123 @@ export function ManageAutomationPageClient() {
         ) : null}
 
         <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-[13px]">
-              <thead className="bg-muted/40 text-xs font-medium text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="px-3 py-2.5">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={() => toggleAll()}
-                      aria-label="Select all"
-                    />
-                  </th>
-                  <th className="px-3 py-2.5">ID</th>
-                  <th className="px-3 py-2.5">Job details</th>
-                  <th className="px-3 py-2.5">Schedule</th>
-                  <th className="px-3 py-2.5">Execution</th>
-                  <th className="px-3 py-2.5">Next run</th>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
-                      Loading…
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
-                      No scheduled tasks yet.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => (
-                    <tr key={row.id} className="border-b border-border/80 hover:bg-muted/30">
-                      <td className="px-3 py-3">
-                        <Checkbox
-                          checked={selected.has(row.id)}
-                          onCheckedChange={() => toggleOne(row.id)}
-                          aria-label={`Select ${row.name}`}
-                        />
-                      </td>
-                      <td className="px-3 py-3 font-medium text-muted-foreground">#{row.number}</td>
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-foreground">{row.name}</div>
-                        <div className="text-[12px] text-muted-foreground">{row.description}</div>
-                      </td>
-                      <td className="px-3 py-3 font-mono text-[12px]">{row.schedule_display}</td>
-                      <td className="px-3 py-3">
-                        <div className="font-mono text-[12px] text-foreground">{row.execution_label}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Last Run: {formatTs(row.last_run_at)}
-                          {row.last_status ? ` · ${row.last_status}` : ""}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">{formatTs(row.next_run_at)}</td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
-                            row.is_active
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
-                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-                          )}
+          <Table className="min-w-[900px] text-[13px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={() => toggleAll()}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Job details</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Execution</TableHead>
+                <TableHead>Next run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                    No scheduled tasks yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(row.id)}
+                        onCheckedChange={() => toggleOne(row.id)}
+                        aria-label={`Select ${row.name}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium text-muted-foreground">#{row.number}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-medium text-foreground">{row.name}</div>
+                      <div className="text-[12px] text-muted-foreground">{row.description}</div>
+                    </TableCell>
+                    <TableCell className="font-mono text-[12px]">{row.schedule_display}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-mono text-[12px] text-foreground">{row.execution_label}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Last Run: {formatTs(row.last_run_at)}
+                        {row.last_status ? ` · ${row.last_status}` : ""}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{formatTs(row.next_run_at)}</TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
+                          row.is_active
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
+                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                        )}
+                      >
+                        {row.is_active ? "Active" : "Paused"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          disabled={busy}
+                          title="Run now"
+                          onClick={() => void onRun(row)}
                         >
-                          {row.is_active ? "Active" : "Paused"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            disabled={busy}
-                            title="Run now"
-                            onClick={() => void onRun(row)}
-                          >
-                            <Play className="size-3.5 text-amber-600" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            disabled={busy}
-                            title="Edit"
-                            onClick={() => openEdit(row)}
-                          >
-                            <Pencil className="size-3.5 text-sky-600" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            disabled={busy}
-                            title={row.is_active ? "Pause" : "Resume"}
-                            onClick={() => void onToggle(row)}
-                          >
-                            <Pause className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon-sm"
-                            variant="outline"
-                            disabled={busy || row.is_system}
-                            title="Delete"
-                            onClick={() => void onDelete(row)}
-                          >
-                            <Trash2 className="size-3.5 text-red-600" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                          <Play className="size-3.5 text-amber-600" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          disabled={busy}
+                          title="Edit"
+                          onClick={() => openEdit(row)}
+                        >
+                          <Pencil className="size-3.5 text-sky-600" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          disabled={busy}
+                          title={row.is_active ? "Pause" : "Resume"}
+                          onClick={() => void onToggle(row)}
+                        >
+                          <Pause className="size-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          disabled={busy || row.is_system}
+                          title="Delete"
+                          onClick={() => void onDelete(row)}
+                        >
+                          <Trash2 className="size-3.5 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </section>
       </div>
     </PermissionGate>

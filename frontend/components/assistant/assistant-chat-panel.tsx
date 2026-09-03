@@ -12,6 +12,8 @@ import {
 import { AssistantMessage, type AssistantChatMessage } from "@/components/assistant/assistant-message";
 import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   askAssistant,
   cancelAssistantAction,
@@ -391,14 +393,14 @@ export function AssistantChatPanel({
             {error}
           </p>
         ) : null}
-        <div className="rounded-2xl border border-border bg-background px-3 py-2 shadow-sm">
-          <textarea
+        <div className="rounded-xl border border-border bg-background px-3 py-2 shadow-sm">
+          <Textarea
             ref={inputRef}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="Type your message..."
             rows={2}
-            className="max-h-28 w-full resize-none border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
+            className="max-h-28 min-h-0 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
             disabled={isAsking}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
@@ -408,35 +410,41 @@ export function AssistantChatPanel({
             }}
           />
           <div className="mt-1 flex items-center justify-between gap-2">
-            <button
+            <Button
               type="button"
-              className="rounded-md p-1.5 text-muted-foreground opacity-50"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
               title="Attachments coming soon"
               disabled
             >
               <Paperclip className="size-4" />
-            </button>
+            </Button>
             <div className="flex items-center gap-1">
-              <button
+              <Button
                 type="button"
-                className="rounded-md p-1.5 text-muted-foreground opacity-50"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
                 title="Voice coming soon"
                 disabled
               >
                 <Phone className="size-4" />
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="rounded-md p-1.5 text-muted-foreground opacity-50"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
                 title="Microphone coming soon"
                 disabled
               >
                 <Mic className="size-4" />
-              </button>
+              </Button>
               <Button
                 type="button"
                 size="icon"
-                className="size-9 shrink-0 rounded-lg bg-sky-600 text-white hover:bg-sky-500"
+                className="size-9 shrink-0"
                 disabled={isAsking || question.trim() === ""}
                 onClick={() => void sendQuestion(question)}
                 aria-label="Send message"
@@ -454,8 +462,8 @@ export function AssistantChatPanel({
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             {meta?.supports_model_select && models.length > 1 ? (
-              <select
-                className="h-8 max-w-[180px] truncate rounded-md border border-border bg-background px-2 text-[11px] font-medium text-foreground"
+              <Select
+                className="h-8 max-w-[180px] text-[11px]"
                 value={selectedModel}
                 onChange={(e) => {
                   setActiveModel(e.target.value);
@@ -468,7 +476,7 @@ export function AssistantChatPanel({
                     {modelLabel(m)}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : (
               <span className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground">
                 <TowerOsAssistantMark className="size-3 shrink-0 text-muted-foreground" />
@@ -476,13 +484,15 @@ export function AssistantChatPanel({
               </span>
             )}
             {messages.length > 0 ? (
-              <button
+              <Button
                 type="button"
-                className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                variant="ghost"
+                size="xs"
+                className="h-7 px-2 text-[11px] text-muted-foreground"
                 onClick={startNewConversation}
               >
                 New chat
-              </button>
+              </Button>
             ) : null}
           </div>
           {costEstimate ? (

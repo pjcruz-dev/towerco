@@ -274,7 +274,7 @@ function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
             return (
               <div
                 key={env.environment}
-                className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground"
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
               >
                 <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 truncate font-medium">{env.label}</span>
@@ -385,7 +385,7 @@ function TenantPicker({ onSelect }: { onSelect?: () => void }) {
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                   isActive
-                    ? "border-primary/30 bg-primary/5 text-foreground"
+                    ? "border-border bg-muted/50 text-foreground"
                     : "border-transparent bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >

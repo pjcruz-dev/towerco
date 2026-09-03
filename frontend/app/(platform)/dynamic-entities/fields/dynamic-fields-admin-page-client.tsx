@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Pencil, Plus } from "lucide-react";
@@ -8,9 +7,19 @@ import { LayoutGrid, Pencil, Plus } from "lucide-react";
 import { DynArrangeFormDialog } from "@/components/dynamic-entities/dyn-arrange-form-dialog";
 import { DynSchemaSheets, type DynSchemaMode } from "@/components/dynamic-entities/dyn-schema-sheets";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Select } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   fetchDynEntities,
   fetchDynEntity,
@@ -20,6 +29,7 @@ import {
   type DynField,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type QuickFilter = "all" | "required" | "in_table" | "has_rules" | "system";
@@ -61,6 +71,35 @@ function isListVisibilityManaged(field: DynField): boolean {
 function effectiveShowInTable(field: DynField): boolean {
   if (isListChromeField(field.name) && !isListVisibilityManaged(field)) return true;
   return Boolean(field.show_in_table);
+}
+
+function FlagCheck({
+  label,
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs text-muted-foreground",
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+      )}
+    >
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(value) => onCheckedChange(value === true)}
+        aria-label={label}
+      />
+      {label}
+    </label>
+  );
 }
 
 export function DynamicFieldsAdminPageClient() {
@@ -210,54 +249,47 @@ export function DynamicFieldsAdminPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.dynamicEntitiesFieldsManage]}>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/dynamic-entities" className="underline-offset-4 hover:underline">
-                Dynamic Entities
-              </Link>
-              {" / Manage Fields"}
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Fields</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Everything a record can store — what it is called, where it sits, and when it appears.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!slug || !detail}
-              onClick={() => setArrangeOpen(true)}
-            >
-              <LayoutGrid className="size-3.5" />
-              Arrange Form
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!slug}
-              onClick={() => {
-                if (!slug) return;
-                router.push(`/dynamic-entities/field-groups?entity=${encodeURIComponent(slug)}`);
-              }}
-            >
-              Field Groups
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={!slug}
-              onClick={() => setSchemaMode({ kind: "add-field" })}
-            >
-              <Plus className="size-3.5" />
-              New Field
-            </Button>
-          </div>
-        </header>
+      <div className={adminPageShellClass}>
+        <WorkspacePageHeader
+          eyebrow="System Core"
+          title="Manage Fields"
+          description="Everything a record can store — what it is called, where it sits, and when it appears."
+          actions={
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!slug || !detail}
+                onClick={() => setArrangeOpen(true)}
+              >
+                <LayoutGrid className="size-3.5" />
+                Arrange Form
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!slug}
+                onClick={() => {
+                  if (!slug) return;
+                  router.push(`/dynamic-entities/field-groups?entity=${encodeURIComponent(slug)}`);
+                }}
+              >
+                Field Groups
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!slug}
+                onClick={() => setSchemaMode({ kind: "add-field" })}
+              >
+                <Plus className="size-3.5" />
+                New Field
+              </Button>
+            </>
+          }
+        />
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
@@ -265,8 +297,7 @@ export function DynamicFieldsAdminPageClient() {
           <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-3">
             <label className="space-y-1 text-sm">
               <span className="text-xs font-medium text-muted-foreground">Entity</span>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Select
                 value={slug}
                 onChange={(e) => syncEntityQuery(e.target.value)}
               >
@@ -276,7 +307,7 @@ export function DynamicFieldsAdminPageClient() {
                     {slug === e.slug && detail ? ` (${detail.fields.length})` : ` (${e.module_pack})`}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-xs font-medium text-muted-foreground">Search</span>
@@ -288,8 +319,7 @@ export function DynamicFieldsAdminPageClient() {
             </label>
             <label className="space-y-1 text-sm">
               <span className="text-xs font-medium text-muted-foreground">Type</span>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
               >
@@ -299,141 +329,128 @@ export function DynamicFieldsAdminPageClient() {
                     {typeLabel(t)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
 
           <div className="flex flex-wrap gap-1.5 border-b border-border px-4 py-2.5">
             {chips.map((chip) => (
-              <button
+              <Button
                 key={chip.id}
                 type="button"
+                size="xs"
+                variant={quickFilter === chip.id ? "secondary" : "ghost"}
                 onClick={() => setQuickFilter(chip.id)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                  quickFilter === chip.id
-                    ? "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200"
-                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
               >
                 {chip.label}
-              </button>
+              </Button>
             ))}
             <span className="ml-auto self-center text-xs text-muted-foreground">
               {filteredFields.length} field{filteredFields.length === 1 ? "" : "s"}
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-muted/60 text-left text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5">Field</th>
-                  <th className="px-3 py-2.5">Type</th>
-                  <th className="px-3 py-2.5 text-center">Required</th>
-                  <th className="px-3 py-2.5 text-center">In table</th>
-                  <th className="px-3 py-2.5 text-center">Filter</th>
-                  <th className="px-3 py-2.5 text-right"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredFields.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                      {detail ? "No fields match these filters." : "Select an entity to manage fields."}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredFields.map((field) => {
-                    const busy = togglingId === field.id;
-                    const system = Boolean(field.is_system_field);
-                    const editableSystem = isEditableSystemField(field.name);
-                    const listChrome = isListChromeField(field.name);
-                    const canToggleTable = !system || listChrome || field.name === "id";
-                    const canToggleFilter = !system || field.name === "id";
-                    return (
-                      <tr
-                        key={field.id}
-                        className="border-t border-border/70 hover:bg-muted/30"
-                      >
-                        <td className="px-4 py-2.5">
-                          <div className="font-medium text-foreground">{field.label}</div>
-                          <div className="font-mono text-[11px] text-muted-foreground">{field.name}</div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <span
-                            className={cn(
-                              "inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize",
-                              system
-                                ? "border-slate-300 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
-                                : "border-border bg-background text-foreground",
-                            )}
-                          >
-                            {system ? "System" : typeLabel(field.type)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <Switch
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Field</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Flags</TableHead>
+                <TableHead className="text-right"> </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredFields.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
+                    {detail ? "No fields match these filters." : "Select an entity to manage fields."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredFields.map((field) => {
+                  const busy = togglingId === field.id;
+                  const system = Boolean(field.is_system_field);
+                  const editableSystem = isEditableSystemField(field.name);
+                  const listChrome = isListChromeField(field.name);
+                  const canToggleTable = !system || listChrome || field.name === "id";
+                  const canToggleFilter = !system || field.name === "id";
+                  return (
+                    <TableRow key={field.id}>
+                      <TableCell className="whitespace-normal">
+                        <div className="font-medium text-foreground">{field.label}</div>
+                        <div className="font-mono text-[11px] text-muted-foreground">{field.name}</div>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium capitalize",
+                            system
+                              ? "border-slate-300 bg-slate-50 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                              : "border-border bg-background text-foreground",
+                          )}
+                        >
+                          {system ? "System" : typeLabel(field.type)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <FlagCheck
+                            label="Required"
                             checked={field.is_required}
                             disabled={busy || system}
                             onCheckedChange={(checked) =>
                               void toggleFlag(field, "is_required", checked)
                             }
-                            aria-label={`${field.label} required`}
                           />
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <Switch
+                          <FlagCheck
+                            label="Table"
                             checked={effectiveShowInTable(field)}
                             disabled={busy || !canToggleTable}
                             onCheckedChange={(checked) =>
                               void toggleFlag(field, "show_in_table", checked)
                             }
-                            aria-label={`${field.label} in table`}
                           />
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <Switch
+                          <FlagCheck
+                            label="Filter"
                             checked={field.is_filterable}
                             disabled={busy || !canToggleFilter}
                             onCheckedChange={(checked) =>
                               void toggleFlag(field, "is_filterable", checked)
                             }
-                            aria-label={`${field.label} filterable`}
                           />
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            disabled={system && !editableSystem}
-                            title={
-                              field.name === "workflows"
-                                ? "Configure workflow buttons"
-                                : field.name === "actions"
-                                  ? "Configure list actions column"
-                                  : field.name === "id"
-                                    ? "Configure ID column"
-                                    : field.name === "print"
-                                      ? "Configure print column"
-                                      : system
-                                        ? "System fields are read-only here"
-                                        : "Edit field"
-                            }
-                            onClick={() => setSchemaMode({ kind: "edit-field", field })}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          disabled={system && !editableSystem}
+                          title={
+                            field.name === "workflows"
+                              ? "Configure workflow buttons"
+                              : field.name === "actions"
+                                ? "Configure list actions column"
+                                : field.name === "id"
+                                  ? "Configure ID column"
+                                  : field.name === "print"
+                                    ? "Configure print column"
+                                    : system
+                                      ? "System fields are read-only here"
+                                      : "Edit field"
+                          }
+                          onClick={() => setSchemaMode({ kind: "edit-field", field })}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
 
         {detail ? (
