@@ -605,12 +605,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: ["workspace:audit:view"],
           },
           {
-            title: "Backup & Restore",
-            href: "/admin/backups",
-            section: "Compliance",
-            permissions: ["tenant:manage"],
-          },
-          {
             title: "Billing",
             href: "/billing",
             section: "Commercial",

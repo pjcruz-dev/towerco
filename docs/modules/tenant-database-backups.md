@@ -21,6 +21,7 @@ Per-tenant **logical MySQL dumps** stored on the tenant files disk (S3 in produc
 
 - `GET /api/v1/platform/tenants/{tenant}/backups`
 - `POST /api/v1/platform/tenants/{tenant}/backups` `{ "reason": "..." }`
+- `POST /api/v1/platform/tenants/{tenant}/backups/upload` `multipart: file, reason?`
 - `POST /api/v1/platform/tenants/{tenant}/backups/schedule-run`
 - `GET /api/v1/platform/tenants/{tenant}/backups/{id}/download`
 - `POST /api/v1/platform/tenants/{tenant}/backups/{id}/restore` `{ "confirm": "<slug|brand_domain>", "reason": "..." }`
@@ -49,7 +50,32 @@ Per-tenant **logical MySQL dumps** stored on the tenant files disk (S3 in produc
 | `TOWEROS_TENANT_DB_BACKUP_SCHEDULE_TIME` | `02:30` | UTC daily schedule |
 | `TOWEROS_MYSQLDUMP_PATH` / `TOWEROS_MYSQL_PATH` | `mysqldump` / `mysql` | CLI binaries |
 
-## Ops
+## Progress & validation
+
+Backup/restore jobs report **phased progress** (`progress_percent` + `progress_message`), not byte-accurate mysqldump %:
+
+| Phase (create) | ~% |
+|----------------|----|
+| Queued | 5 |
+| Preflight (CLI + DB ping) | 15 |
+| Dumping | 40 |
+| Storing | 80 |
+| Completed / Failed | 100 / 0 |
+
+| Phase (restore) | ~% |
+|-----------------|----|
+| Queued | 5 |
+| Validate archive + tools | 15 |
+| Load archive | 30 |
+| Recreate DB + import | 55 |
+| Completed / Failed | 100 / 0 |
+
+**Preflight validation** (before queue / during job):
+
+- `mysqldump` / `mysql` binary present
+- Tenant database reachable (`SELECT 1`)
+- Restore: archive exists, gzip opens, looks like a MySQL dump, `database_name` matches this tenant
+- Concurrent backup/restore blocked per tenant
 
 1. API image must include MySQL client tools (`default-mysql-client` in `backend/Dockerfile`).
 2. Queue worker must run (`toweros-worker`) — create/restore are async jobs.
@@ -59,14 +85,49 @@ Per-tenant **logical MySQL dumps** stored on the tenant files disk (S3 in produc
 
 ## Restore / import
 
-There is **no Upload SQL** in v1. To restore (import) a dump back into the tenant database:
+There is **no Upload SQL** in older builds. Current builds support **Upload backup** (`.sql` / `.sql.gz`) into the catalog, then **Restore** to apply.
+
+### Upload (import archive into catalog)
+
+1. Open **Platform console → Tenant → Backups**.
+2. Click **Upload backup** and choose a `.sql` or `.sql.gz` (e.g. a file previously downloaded from TowerOS).
+3. The file appears as a **completed** row (`triggered_by=upload`).
+4. Click **Restore** on that row and confirm the tenant slug — that replaces the live database.
+
+Limit: `TOWEROS_TENANT_DB_BACKUP_UPLOAD_MAX_KB` (default 32 MB; must stay within PHP `upload_max_filesize`).
+
+### Restore / import live data
+
+To restore (import) a dump back into the tenant database:
 
 1. Open **Platform console → Tenant → Backups**.
 2. On a **completed** row, click **Restore**.
 3. Type the tenant **slug** (or brand domain) exactly and enter a **reason**.
 4. Confirm — live tenant data is replaced; access is blocked until the job finishes.
 
-Tenant admins can only **download**; they cannot restore.
+Tenant admins can only **download**; they cannot restore or upload.
+
+### Dynamic Entities only?
+
+Platform backups are **full tenant database** dumps (all modules). There is **no** “restore Dynamic Entities only” from this screen.
+
+To import **Dynamic Entity records** only (CSV/XLSX per entity):
+
+1. Sign in to the **tenant workspace** (not Platform).
+2. Open the entity list (e.g. Tower Sites).
+3. Use **Import** on that list — template → analyze → import.
+
+Schema (entities/fields) is managed via Manage Fields / Relationship Studio / seeds — not via backup restore.
+
+### Local / Windows failure: empty `mysqldump failed:`
+
+Backups run `mysqldump` in the **same process environment as the API/queue worker**.
+
+- **Docker API image** includes MySQL client tools — preferred for local backups.
+- **Host PHP on Windows** usually has no `mysqldump` on PATH → create fails. Install [MySQL Shell/Client](https://dev.mysql.com/downloads/mysql/) and set `TOWEROS_MYSQLDUMP_PATH` / `TOWEROS_MYSQL_PATH`, or run the API container.
+
+Failed rows now store stderr + exit code + host/db (password never logged).
+
 
 ## Safety
 
@@ -74,4 +135,4 @@ Tenant admins can only **download**; they cannot restore.
 - Storage paths must start with `{tenantId}/backups/`.
 - Downloads stream through authenticated API endpoints (local `tenant_files` is not public `/storage`).
 - Restore requires typing the tenant slug (or brand domain) and a reason; sets `operator_access_mode=blocked` for the duration of the job.
-- No arbitrary SQL upload in v1.
+- Uploaded archives are validated as gzip/MySQL dumps and stored under `{tenantId}/backups/` only; restore still requires slug confirmation.

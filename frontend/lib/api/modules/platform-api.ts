@@ -659,6 +659,8 @@ export type PlatformTenantBackupRow = {
   id: string;
   tenant_id: string;
   status: string;
+  progress_percent?: number | null;
+  progress_message?: string | null;
   name: string;
   storage_path: string | null;
   byte_size: number | null;
@@ -710,6 +712,28 @@ export async function platformCreateTenantBackup(
   const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
     `/platform/tenants/${tenantId}/backups`,
     payload ?? {},
+    { timeout: PLATFORM_PROVISIONING_TIMEOUT_MS },
+  );
+  return response.data.data;
+}
+
+export async function platformUploadTenantBackup(
+  tenantId: string,
+  file: File,
+  reason?: string,
+): Promise<PlatformTenantBackupRow> {
+  const form = new FormData();
+  form.append("file", file);
+  if (reason?.trim()) {
+    form.append("reason", reason.trim());
+  }
+  const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
+    `/platform/tenants/${tenantId}/backups/upload`,
+    form,
+    {
+      timeout: PLATFORM_PROVISIONING_TIMEOUT_MS,
+      headers: { "Content-Type": "multipart/form-data" },
+    },
   );
   return response.data.data;
 }
@@ -719,6 +743,8 @@ export async function platformCronSyncTenantBackup(
 ): Promise<PlatformTenantBackupRow> {
   const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
     `/platform/tenants/${tenantId}/backups/schedule-run`,
+    {},
+    { timeout: PLATFORM_PROVISIONING_TIMEOUT_MS },
   );
   return response.data.data;
 }
@@ -757,6 +783,8 @@ export async function platformRestoreTenantBackup(
   const response = await centralApiClient.post<{ data: PlatformTenantBackupRow }>(
     `/platform/tenants/${tenantId}/backups/${backupId}/restore`,
     payload,
+    // Restore can exceed the default 20s client timeout when the job runs inline.
+    { timeout: PLATFORM_PROVISIONING_TIMEOUT_MS },
   );
   return response.data.data;
 }

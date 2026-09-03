@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Minus, Pencil, Plus, Printer } from "lucide-react";
+import { Minus, Pencil, Plus, Printer, Download } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { TenantBrandMark } from "@/components/layout/tenant-brand-mark";
-import { BirForm2307Print } from "@/components/dynamic-entities/bir-form-2307-print";
+import {
+  BirForm2307Print,
+  type BirForm2307PrintHandle,
+} from "@/components/dynamic-entities/bir-form-2307-print";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
@@ -19,10 +22,13 @@ import {
 } from "@/lib/api/modules/dynamic-entities-api";
 import { renderDynPrintCss, renderDynPrintTemplate, buildSystemDateTokens } from "@/lib/dynamic-entities/dyn-print-template";
 import { resolvePrintTemplate } from "@/lib/dynamic-entities/dyn-print-templates";
+import { BIR_2307_PAGE } from "@/lib/dynamic-entities/bir-2307-field-map";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
 import { resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
+
+const BIR_2307_PAGE_WIDTH_PX = BIR_2307_PAGE.width;
 
 type RelatedBlock = {
   title: string;
@@ -63,7 +69,7 @@ const MARGIN_MM: Record<MarginPreset, number> = {
 const ZOOM_STEPS: Array<50 | 75 | 100 | 150 | 200 | 300> = [50, 75, 100, 150, 200, 300];
 
 const toolbarSelectClass =
-  "h-8 rounded-md border border-slate-600 bg-slate-800 px-2.5 text-xs font-medium text-slate-100 outline-none hover:border-slate-500 focus:border-sky-500";
+  "h-8 !w-auto min-w-[7.5rem] max-w-[11rem] shrink-0 rounded-md border border-slate-600 bg-slate-800 px-2.5 text-xs font-medium text-slate-100 outline-none hover:border-slate-500 focus:border-sky-500";
 
 export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props) {
   const organizationLabel = useOrganizationLabel();
@@ -83,6 +89,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
   const [pageCount, setPageCount] = useState(1);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLElement | null>(null);
+  const birPrintRef = useRef<BirForm2307PrintHandle | null>(null);
 
   const record = items[0]?.record ?? null;
   const relatedBlocks = items[0]?.relatedBlocks ?? [];
@@ -334,40 +341,48 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
               </Link>
             ) : null}
 
-            <Select
-              className={toolbarSelectClass}
-              value={paper}
-              onChange={(e) => setPaper(e.target.value as PaperSize)}
-              aria-label="Paper size"
-            >
-              {(Object.keys(PAPER_MM) as PaperSize[]).map((key) => (
-                <option key={key} value={key}>
-                  {PAPER_MM[key].label}
-                </option>
-              ))}
-            </Select>
+            {!isBir2307 ? (
+              <>
+                <Select
+                  className={toolbarSelectClass}
+                  value={paper}
+                  onChange={(e) => setPaper(e.target.value as PaperSize)}
+                  aria-label="Paper size"
+                >
+                  {(Object.keys(PAPER_MM) as PaperSize[]).map((key) => (
+                    <option key={key} value={key}>
+                      {PAPER_MM[key].label}
+                    </option>
+                  ))}
+                </Select>
 
-            <Select
-              className={toolbarSelectClass}
-              value={orientation}
-              onChange={(e) => setOrientation(e.target.value as Orientation)}
-              aria-label="Orientation"
-            >
-              <option value="portrait">Portrait</option>
-              <option value="landscape">Landscape</option>
-            </Select>
+                <Select
+                  className={toolbarSelectClass}
+                  value={orientation}
+                  onChange={(e) => setOrientation(e.target.value as Orientation)}
+                  aria-label="Orientation"
+                >
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </Select>
 
-            <Select
-              className={toolbarSelectClass}
-              value={margin}
-              onChange={(e) => setMargin(e.target.value as MarginPreset)}
-              aria-label="Margins"
-            >
-              <option value="default">Default · 12mm</option>
-              <option value="narrow">Narrow · 6mm</option>
-              <option value="wide">Wide · 20mm</option>
-              <option value="none">None</option>
-            </Select>
+                <Select
+                  className={toolbarSelectClass}
+                  value={margin}
+                  onChange={(e) => setMargin(e.target.value as MarginPreset)}
+                  aria-label="Margins"
+                >
+                  <option value="default">Default · 12mm</option>
+                  <option value="narrow">Narrow · 6mm</option>
+                  <option value="wide">Wide · 20mm</option>
+                  <option value="none">None</option>
+                </Select>
+              </>
+            ) : (
+              <span className="rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-300">
+                Official BIR 2307 · Legal
+              </span>
+            )}
 
             <div className="flex items-center gap-0.5">
               <button
@@ -417,10 +432,27 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
                 {listLabel}
                 {siteSubtitle ? ` · ${siteSubtitle}` : ""}
               </p>
+              {isBir2307 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-md border-slate-600 bg-slate-800 px-3 text-xs font-medium text-slate-100 hover:border-slate-500 hover:bg-slate-700"
+                  onClick={() => birPrintRef.current?.download()}
+                >
+                  <Download className="size-3.5" />
+                  Download PDF
+                </Button>
+              ) : null}
               <Button
                 size="sm"
                 className="h-8 rounded-md bg-sky-600 px-3 text-xs font-medium text-white hover:bg-sky-500"
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (isBir2307) {
+                    birPrintRef.current?.print();
+                    return;
+                  }
+                  window.print();
+                }}
               >
                 <Printer className="size-3.5" />
                 Print Document
@@ -440,7 +472,7 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
               <div
                 className="dyn-print-scale origin-top space-y-8 print:!m-0 print:!w-full print:!max-w-none print:!transform-none print:space-y-0"
                 style={{
-                  width: paperWidth,
+                  width: isBir2307 ? `${BIR_2307_PAGE_WIDTH_PX}px` : paperWidth,
                   transform: `scale(${previewScale})`,
                 }}
               >
@@ -456,18 +488,14 @@ export function DynRecordPrintPageClient({ recordIds, templateId = null }: Props
                     organizationLabel={organizationLabel}
                     companyAddressBlock={companyAddressBlock}
                     isLast={index === items.length - 1}
+                    birPrintRef={index === 0 ? birPrintRef : undefined}
                   />
                 ))}
               </div>
               <p className="max-w-xl text-center text-[11px] text-slate-400 print:hidden">
-                {items.length} {items.length === 1 ? "record" : "records"} ·{" "}
-                {new Date().toLocaleDateString(undefined, {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}{" "}
-                · {PAPER_MM[paper].label} {orientation} · {widthMm} × {heightMm} mm · margins{" "}
-                {marginMm}/{marginMm}/{marginMm}/{marginMm} mm
+                {isBir2307
+                  ? "Preview on screen · Print / Download PDF uses the official vector form"
+                  : `Preview scaled for screen · Print uses real paper size · ${PAPER_MM[paper].label} ${orientation} · ${widthMm} × ${heightMm} mm · margins ${marginMm} mm`}
               </p>
             </div>
           ) : !error ? (
@@ -553,6 +581,7 @@ function DynPrintRecordSheet({
   organizationLabel,
   companyAddressBlock,
   isLast,
+  birPrintRef,
 }: {
   record: DynRecordDetail;
   relatedBlocks: RelatedBlock[];
@@ -563,6 +592,7 @@ function DynPrintRecordSheet({
   organizationLabel: string;
   companyAddressBlock: string | null;
   isLast: boolean;
+  birPrintRef?: RefObject<BirForm2307PrintHandle | null>;
 }) {
   const print = resolvePrintTemplate(record.entity.print_settings, templateId, record.entity.name);
   const groups = [...(record.entity.field_groups ?? [])]
@@ -622,17 +652,16 @@ function DynPrintRecordSheet({
       <article
         ref={sheetRef}
         className={cn(
-          "dyn-print-sheet border border-slate-400 bg-neutral-200 shadow-lg print:border-0 print:bg-white print:shadow-none",
+          "dyn-print-sheet border border-slate-400 bg-white shadow-lg print:border-0 print:shadow-none",
           !isLast && "dyn-print-sheet-break mb-8 print:mb-0",
         )}
         style={{
-          minHeight: "934px",
+          width: BIR_2307_PAGE.width,
+          minHeight: BIR_2307_PAGE.height,
           padding: 0,
-          width: "612px",
-          maxWidth: "100%",
         }}
       >
-        <BirForm2307Print record={record} />
+        <BirForm2307Print ref={birPrintRef} record={record} />
       </article>
     );
   }

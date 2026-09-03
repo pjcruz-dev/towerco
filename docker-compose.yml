@@ -102,7 +102,7 @@ services:
     environment:
       TOWEROS_DOCKER: "1"
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
-      TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-1}
+      TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-4}
       # Survive config:cache. Quote "*" — bare * is special in YAML.
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-"*"}
       DB_HOST: mysql
@@ -125,7 +125,7 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
-    mem_limit: ${TOWEROS_API_MEM_LIMIT:-512m}
+    mem_limit: ${TOWEROS_API_MEM_LIMIT:-1536m}
 
   web:
     profiles: ["web"]

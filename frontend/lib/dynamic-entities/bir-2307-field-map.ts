@@ -1,7 +1,8 @@
 /**
  * Field placement for official BIR Form 2307 (January 2018 ENCS) page 1.
- * Coordinates are top-left origin on the official page-1 artwork (612×934).
- * Filled PDF embeds this artwork — do not redesign the form.
+ * Coordinates are top-left origin on the calibration grid (612×934).
+ * Print/fill uses the vector PDF (`templatePdfSrc`) for sharp output;
+ * `backgroundSrc` PNG is only a screen/print-fallback overlay.
  */
 
 export const BIR_2307_PAGE = {
@@ -32,21 +33,31 @@ export type Bir2307OverlayField =
       size?: number;
       gapsAfter?: number[];
       gapExtra?: number;
+      /** Absolute left positions per character (overrides pitch/gaps when set). */
+      xs?: number[];
     };
 
 /**
- * Calibrated against official page-1 artwork + filled preview screenshots.
- * Payee: TIN row is above the large white name band (name was previously getting the TIN).
- * Part III column lines ≈ 175 | 218 | 290 | 364 | 436 | 508 | 595.
+ * Calibrated against official page-1 artwork (612×934 raster).
+ * Payee TIN boxes: y≈137–150, groups at x 207–244 | 258–295 | 310–347 | 361–433 (last group wider).
+ * Payor TIN boxes: y≈252–266, same x groups.
  */
 export const BIR_2307_FIELDS: Bir2307OverlayField[] = [
-  // 1 — Period From / To (nudge up — was sitting on box bottom edge)
+  // 1 — Period From / To
   { id: "period_from", kind: "chars", x: 151, y: 108, pitch: 13.05, size: 10, gapsAfter: [2, 4], gapExtra: 0 },
   { id: "period_to", kind: "chars", x: 398, y: 108, pitch: 13.05, size: 10, gapsAfter: [2, 4], gapExtra: 0 },
 
-  // 2 — Payee TIN (was below the grey boxes; match Payor TIN optical placement)
-  { id: "payee_tin", kind: "chars", x: 208, y: 148, pitch: 14.2, size: 11, gapsAfter: [3, 6, 9], gapExtra: 7 },
-  // 3 — Payee name (nudge up off bottom border)
+  // 2 — Payee TIN (sit inside grey boxes; last segment uses wider cells)
+  {
+    id: "payee_tin",
+    kind: "chars",
+    x: 210,
+    y: 140,
+    pitch: 13,
+    size: 10,
+    xs: [210, 223, 236, 261, 274, 287, 312, 325, 338, 372, 397, 421],
+  },
+  // 3 — Payee name
   { id: "payee_name", kind: "text", x: 175, y: 164, w: 410, size: 10, bold: true, uppercase: true },
   // 4 — Address + 4A ZIP
   { id: "payee_address", kind: "text", x: 175, y: 192, w: 330, size: 9 },
@@ -54,8 +65,16 @@ export const BIR_2307_FIELDS: Bir2307OverlayField[] = [
   // 5 — Foreign address
   { id: "payee_foreign_address", kind: "text", x: 175, y: 222, w: 410, size: 9 },
 
-  // 6–8 Payor (TIN OK; name/address slight nudge up)
-  { id: "payor_tin", kind: "chars", x: 208, y: 254, pitch: 14.2, size: 11, gapsAfter: [3, 6, 9], gapExtra: 7 },
+  // 6–8 Payor
+  {
+    id: "payor_tin",
+    kind: "chars",
+    x: 210,
+    y: 255,
+    pitch: 13,
+    size: 10,
+    xs: [210, 223, 236, 261, 274, 287, 312, 325, 338, 372, 397, 421],
+  },
   { id: "payor_name", kind: "text", x: 175, y: 278, w: 410, size: 10, bold: true, uppercase: true },
   { id: "payor_address", kind: "text", x: 175, y: 306, w: 330, size: 9 },
   { id: "payor_zip", kind: "chars", x: 530, y: 306, pitch: 13, size: 10 },

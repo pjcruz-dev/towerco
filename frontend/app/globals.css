@@ -222,6 +222,33 @@
   cursor: grab;
 }
 
+/* Backup / restore job progress */
+@keyframes toweros-progress-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes toweros-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.toweros-progress-shine {
+  animation: toweros-progress-shine 1.35s ease-in-out infinite;
+}
+
+.toweros-progress-indeterminate {
+  animation: toweros-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
 /* Multi-page print: app shell uses h-screen + overflow clip, which otherwise prints only ~1 viewport. */
 @media print {
   html,

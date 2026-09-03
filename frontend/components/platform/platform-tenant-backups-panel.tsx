@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Clock, Download, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Clock, Download, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,14 @@ import {
   platformDownloadTenantBackup,
   platformListTenantBackups,
   platformRestoreTenantBackup,
+  platformUploadTenantBackup,
+  type PlatformTenantBackupListResponse,
   type PlatformTenantBackupRow,
   type PlatformTenantRow,
 } from "@/lib/api/modules/platform-api";
 import { PLATFORM_PERMS, platformHasPermission } from "@/lib/platform/platform-permissions";
 import { useNotificationStore } from "@/stores/notification-store";
 import { usePlatformAuthStore } from "@/stores/platform-auth-store";
-
 function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null || bytes <= 0) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -67,6 +68,66 @@ function statusBadge(status: string) {
   );
 }
 
+function isInFlightStatus(status: string): boolean {
+  return ["pending", "running", "restoring"].includes(status);
+}
+
+function ProgressBar({
+  percent,
+  label,
+  animated = true,
+  indeterminate = false,
+}: {
+  percent: number;
+  label?: string | null;
+  animated?: boolean;
+  /** Full-track sliding bar when server % is not advancing yet */
+  indeterminate?: boolean;
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  const showIndeterminate = animated && indeterminate && clamped < 100;
+  const showShine = animated && !showIndeterminate && clamped > 0 && clamped < 100;
+
+  return (
+    <div className="mt-2 w-full space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="truncate">{label || "Working…"}</span>
+        <span className="shrink-0 tabular-nums font-medium text-foreground">
+          {showIndeterminate ? `${clamped}%…` : `${clamped}%`}
+        </span>
+      </div>
+      <div
+        className="relative h-2.5 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={clamped}
+        aria-busy={showIndeterminate || undefined}
+        aria-label={label || "Job progress"}
+      >
+        {showIndeterminate ? (
+          <div
+            aria-hidden
+            className="toweros-progress-indeterminate absolute inset-y-0 left-0 w-2/5 rounded-full bg-amber-500 dark:bg-amber-400"
+          />
+        ) : (
+          <div
+            className="relative h-full overflow-hidden rounded-full bg-amber-500 transition-[width] duration-700 ease-out dark:bg-amber-400"
+            style={{ width: `${clamped}%` }}
+          >
+            {showShine ? (
+              <div
+                aria-hidden
+                className="toweros-progress-shine absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+              />
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   tenant: PlatformTenantRow;
 };
@@ -80,33 +141,88 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
   const [restoreTarget, setRestoreTarget] = useState<PlatformTenantBackupRow | null>(null);
   const [confirm, setConfirm] = useState("");
   const [reason, setReason] = useState("");
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const confirmToken = (tenant.slug || tenant.brand_domain || "").trim();
 
+  const backupsQueryKey = ["platform", "tenants", tenant.id, "backups"] as const;
+
   const backupsQuery = useQuery({
-    queryKey: ["platform", "tenants", tenant.id, "backups"],
+    queryKey: backupsQueryKey,
     queryFn: () => platformListTenantBackups(tenant.id),
     refetchInterval: (query) => {
       const rows = query.state.data?.data ?? [];
-      const busy = rows.some((row) =>
-        ["pending", "running", "restoring"].includes(row.status),
-      );
-      return busy ? 4000 : false;
+      const busy = rows.some((row) => isInFlightStatus(row.status));
+      return busy ? 1000 : false;
     },
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenant.id, "backups"] });
+    void queryClient.invalidateQueries({ queryKey: backupsQueryKey });
     void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenant.id, "audit"] });
   };
 
+  const pushBackupListCache = (list: Awaited<ReturnType<typeof platformListTenantBackups>>) => {
+    queryClient.setQueryData(backupsQueryKey, list);
+  };
+
+  const patchBackupRowInCache = (
+    backupId: string,
+    patch: Partial<PlatformTenantBackupRow>,
+  ) => {
+    queryClient.setQueryData<PlatformTenantBackupListResponse>(backupsQueryKey, (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        data: current.data.map((row) => (row.id === backupId ? { ...row, ...patch } : row)),
+      };
+    });
+  };
+
+  const pollBackupsUntil = async (
+    backupId: string,
+    isDone: (row: PlatformTenantBackupRow) => boolean,
+    deadlineMs: number,
+  ): Promise<PlatformTenantBackupRow> => {
+    const deadline = Date.now() + deadlineMs;
+    while (Date.now() < deadline) {
+      await new Promise((r) => window.setTimeout(r, 1000));
+      const list = await platformListTenantBackups(tenant.id);
+      pushBackupListCache(list);
+      const row = list.data.find((item) => item.id === backupId);
+      if (!row) throw new Error("Backup job disappeared.");
+      if (isDone(row)) return row;
+    }
+    throw new Error("Job is still running. Refresh this tab shortly.");
+  };
+
   const createMutation = useMutation({
-    mutationFn: () => platformCreateTenantBackup(tenant.id, { reason: "Manual backup" }),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const queued = await platformCreateTenantBackup(tenant.id, { reason: "Manual backup" });
+      pushBackupListCache(await platformListTenantBackups(tenant.id));
+      if (!isInFlightStatus(queued.status)) {
+        return queued;
+      }
+      return pollBackupsUntil(queued.id, (row) => !isInFlightStatus(row.status), 170_000);
+    },
+    onSuccess: (row) => {
       invalidate();
-      notify({ level: "success", title: "Backup queued", message: "Dump will appear when the worker finishes." });
+      if (row.status === "completed" && !row.error_message) {
+        notify({
+          level: "success",
+          title: "Backup completed",
+          message: `${row.name} is ready (${formatBytes(row.byte_size)}).`,
+        });
+        return;
+      }
+      notify({
+        level: "error",
+        title: "Backup failed",
+        message: row.error_message || `Status: ${row.status}`,
+      });
     },
     onError: (error) => {
+      invalidate();
       notify({ level: "error", title: "Backup failed", message: getErrorMessage(error) });
     },
   });
@@ -119,6 +235,22 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
     },
     onError: (error) => {
       notify({ level: "error", title: "Cron Sync failed", message: getErrorMessage(error) });
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) =>
+      platformUploadTenantBackup(tenant.id, file, `Uploaded ${file.name}`),
+    onSuccess: (row) => {
+      invalidate();
+      notify({
+        level: "success",
+        title: "Backup uploaded",
+        message: `${row.name} is in the catalog. Use Restore to apply it to the live database.`,
+      });
+    },
+    onError: (error) => {
+      notify({ level: "error", title: "Upload failed", message: getErrorMessage(error) });
     },
   });
 
@@ -145,12 +277,53 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
   });
 
   const restoreMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!restoreTarget) throw new Error("No backup selected");
-      return platformRestoreTenantBackup(tenant.id, restoreTarget.id, {
-        confirm: confirm.trim(),
-        reason: reason.trim(),
+      const backupId = restoreTarget.id;
+
+      // Show restoring + moving bar immediately (POST may take a while before/while job runs).
+      patchBackupRowInCache(backupId, {
+        status: "restoring",
+        progress_percent: 5,
+        progress_message: "Queued — restore will start shortly",
+        error_message: null,
       });
+
+      // Poll in parallel so % advances even if the restore POST stays open.
+      let stopPoll = false;
+      void (async () => {
+        while (!stopPoll) {
+          await new Promise((r) => window.setTimeout(r, 1000));
+          if (stopPoll) break;
+          try {
+            pushBackupListCache(await platformListTenantBackups(tenant.id));
+          } catch {
+            // ignore transient poll errors while restore request is in flight
+          }
+        }
+      })();
+
+      try {
+        const queued = await platformRestoreTenantBackup(tenant.id, backupId, {
+          confirm: confirm.trim(),
+          reason: reason.trim(),
+        });
+        pushBackupListCache(await platformListTenantBackups(tenant.id));
+
+        if (queued.status === "completed" || !isInFlightStatus(queued.status)) {
+          const list = await platformListTenantBackups(tenant.id);
+          pushBackupListCache(list);
+          return list.data.find((item) => item.id === backupId) ?? queued;
+        }
+
+        return await pollBackupsUntil(
+          backupId,
+          (row) => !isInFlightStatus(row.status),
+          170_000,
+        );
+      } finally {
+        stopPoll = true;
+      }
     },
     onSuccess: (row) => {
       setRestoreTarget(null);
@@ -161,11 +334,11 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
         notify({
           level: "success",
           title: "Restore completed",
-          message: "Tenant database was replaced from the selected backup.",
+          message: `Live database ${row.database_name ?? "for this tenant"} was replaced from this backup.`,
         });
         return;
       }
-      if (row.status === "completed" && row.error_message) {
+      if (row.error_message) {
         notify({
           level: "error",
           title: "Restore failed",
@@ -175,8 +348,8 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
       }
       notify({
         level: "warning",
-        title: "Restore queued",
-        message: "Tenant access is blocked until the restore job finishes. Refresh this tab shortly.",
+        title: "Restore finished with status "+row.status,
+        message: "Refresh this tab to confirm tenant data.",
       });
     },
     onError: (error) => {
@@ -187,8 +360,15 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
 
   const meta = backupsQuery.data?.meta;
   const rows = backupsQuery.data?.data ?? [];
+  const activeJobs = rows.filter((row) => isInFlightStatus(row.status));
+  const liveDatabaseName =
+    rows.find((row) => row.database_name)?.database_name ??
+    `tenant${tenant.id}`;
   const busy =
-    createMutation.isPending || cronMutation.isPending || restoreMutation.isPending;
+    createMutation.isPending ||
+    cronMutation.isPending ||
+    restoreMutation.isPending ||
+    uploadMutation.isPending;
 
   return (
     <div className="space-y-4">
@@ -197,8 +377,14 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
           <div className="max-w-xl space-y-2">
             <h2 className="text-xl font-semibold tracking-tight">Data Protection Center</h2>
             <p className="text-sm text-slate-300">
-              Logical MySQL dumps for this tenant database. Restore permanently replaces live tenant
-              data. AWS RDS snapshots remain the infrastructure DR baseline.
+              Logical MySQL dumps for this entire tenant database (all modules). Restore permanently
+              replaces live tenant data. AWS RDS snapshots remain the infrastructure DR baseline.
+              For Dynamic Entity records only, use Import on the entity list inside the tenant
+              workspace — not this screen.
+            </p>
+            <p className="text-xs text-slate-400">
+              Live database now:{" "}
+              <span className="font-mono text-slate-200">{liveDatabaseName}</span>
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {canBackup ? (
@@ -223,6 +409,37 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
                     <Clock className="size-4" />
                     Cron Sync
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="border-slate-600 bg-transparent text-slate-50 hover:bg-slate-800"
+                    disabled={busy}
+                    onClick={() => uploadInputRef.current?.click()}
+                  >
+                    <Upload className="size-4" />
+                    {uploadMutation.isPending ? "Uploading…" : "Upload backup"}
+                  </Button>
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept=".sql,.gz,application/sql,application/gzip"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      const lower = file.name.toLowerCase();
+                      if (!lower.endsWith(".sql") && !lower.endsWith(".sql.gz") && !lower.endsWith(".gz")) {
+                        notify({
+                          level: "error",
+                          title: "Invalid file",
+                          message: "Choose a .sql or .sql.gz dump.",
+                        });
+                        return;
+                      }
+                      uploadMutation.mutate(file);
+                    }}
+                  />
                 </>
               ) : (
                 <p className="text-xs text-slate-400">View-only — backup permission required to create or restore.</p>
@@ -256,8 +473,59 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
       <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
         Restoring a backup permanently replaces current live data for this tenant. Backups older than{" "}
         {meta?.retention_days ?? 15} days are deleted automatically — download local copies if you need
-        longer retention.
+        longer retention. Progress below updates while a job is running (phased %, not byte-accurate).
       </div>
+
+      {activeJobs.length > 0 || createMutation.isPending || restoreMutation.isPending ? (
+        <Card className="rounded-xl border-amber-400/60 bg-amber-50/40 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base font-medium">
+              <Clock className="size-4 animate-pulse text-amber-700 dark:text-amber-300" />
+              In progress
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activeJobs.length > 0 ? (
+              activeJobs.map((job) => {
+                const percent = job.progress_percent ?? (job.status === "pending" ? 5 : 40);
+                const waiting =
+                  percent < 15 ||
+                  (job.progress_message ?? "").toLowerCase().includes("queued") ||
+                  (job.progress_message ?? "").toLowerCase().includes("starting");
+                return (
+                  <div key={job.id} className="rounded-lg border border-border bg-card px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      {statusBadge(job.status)}
+                      <span className="font-medium text-foreground">{job.name}</span>
+                    </div>
+                    <ProgressBar
+                      percent={percent}
+                      label={job.progress_message}
+                      animated
+                      indeterminate={waiting}
+                    />
+                  </div>
+                );
+              })
+            ) : (
+              <div className="rounded-lg border border-border bg-card px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {statusBadge(restoreMutation.isPending ? "restoring" : "pending")}
+                  <span className="font-medium text-foreground">
+                    {restoreMutation.isPending ? "Restore starting…" : "Backup starting…"}
+                  </span>
+                </div>
+                <ProgressBar
+                  percent={8}
+                  label={restoreMutation.isPending ? "Queuing restore…" : "Queuing backup…"}
+                  animated
+                  indeterminate
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="rounded-xl shadow-sm">
         <CardHeader>
@@ -285,16 +553,34 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
                     <tr key={row.id} className="border-b border-border/70 last:border-0">
                       <td className="px-2 py-3">
                         <div className="font-medium text-foreground">{row.name}</div>
-                        {row.error_message ? (
-                          <p
-                            className="mt-1 max-w-md truncate text-xs text-destructive"
-                            title={row.error_message}
-                          >
-                            {row.error_message}
-                          </p>
+                        {row.triggered_by === "upload" ? (
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">Uploaded archive</p>
                         ) : null}
                       </td>
-                      <td className="px-2 py-3">{statusBadge(row.status)}</td>
+                      <td className="px-2 py-3">
+                        <div className="space-y-1">
+                          {statusBadge(row.status)}
+                          {isInFlightStatus(row.status) ? (
+                            <ProgressBar
+                              percent={row.progress_percent ?? 10}
+                              label={row.progress_message}
+                              animated
+                              indeterminate={(row.progress_percent ?? 0) < 15}
+                            />
+                          ) : null}
+                          {row.status === "completed" && row.progress_message && !row.error_message ? (
+                            <p className="text-[11px] text-muted-foreground">{row.progress_message}</p>
+                          ) : null}
+                          {row.status === "failed" || row.error_message ? (
+                            <p
+                              className="max-w-[14rem] truncate text-[11px] text-destructive"
+                              title={row.error_message ?? undefined}
+                            >
+                              {row.error_message || "Failed"}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-2 py-3 text-muted-foreground">{formatBytes(row.byte_size)}</td>
                       <td className="px-2 py-3 text-muted-foreground">{formatWhen(row.created_at)}</td>
                       <td className="px-2 py-3">
@@ -331,7 +617,7 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
                                 variant="ghost"
                                 className="text-destructive hover:text-destructive"
                                 disabled={
-                                  ["pending", "running", "restoring"].includes(row.status) ||
+                                  isInFlightStatus(row.status) ||
                                   deleteMutation.isPending
                                 }
                                 aria-label="Delete backup"
@@ -371,9 +657,10 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
             <DialogTitle>Restore tenant database</DialogTitle>
             <DialogDescription>
               This replaces all live data in the tenant database with{" "}
-              <span className="font-medium text-foreground">{restoreTarget?.name}</span>. Type{" "}
-              <span className="font-mono text-foreground">{confirmToken || "tenant slug"}</span> to
-              confirm.
+              <span className="font-medium text-foreground">{restoreTarget?.name}</span>. Type the
+              tenant slug{" "}
+              <span className="font-mono text-foreground">{confirmToken || "(missing slug)"}</span>{" "}
+              exactly (not the tenant UUID) to confirm.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4">
@@ -421,7 +708,7 @@ export function PlatformTenantBackupsPanel({ tenant }: Props) {
               }
               onClick={() => restoreMutation.mutate()}
             >
-              {restoreMutation.isPending ? "Restoring…" : "Restore now"}
+              {restoreMutation.isPending ? "Restoring… wait for result" : "Restore now"}
             </Button>
           </DialogFooter>
         </DialogContent>
