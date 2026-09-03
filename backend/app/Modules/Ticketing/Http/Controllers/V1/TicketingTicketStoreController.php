@@ -33,6 +33,7 @@ class TicketingTicketStoreController extends AbstractApiController
             'source_reference_type' => ['nullable', 'string', 'max:128'],
             'source_reference_id' => ['nullable', 'string', 'max:36'],
             'source_label' => ['nullable', 'string', 'max:255'],
+            'requester_id' => ['nullable', 'uuid', 'exists:users,id'],
             'assignee_id' => ['nullable', 'uuid', 'exists:users,id'],
             'links' => ['nullable', 'array'],
             'links.*.link_module' => ['required_with:links', 'string', 'max:64'],
@@ -42,17 +43,19 @@ class TicketingTicketStoreController extends AbstractApiController
         ]);
 
         if (! $request->user()->can('ticketing:tickets:manage')) {
-            unset($data['assignee_id']);
+            unset($data['assignee_id'], $data['requester_id']);
         }
 
-        $ticket = $service->create($request->user(), $data);
+        $actor = $request->user();
+        $ticket = $service->create($actor, $data);
 
         try {
-            $notifications->dispatchCreated($ticket, $request->user());
+            $ticket->loadMissing(['requester:id,name,email', 'assignee:id,name,email']);
+            $requesterForNotify = $ticket->requester instanceof TenantUser ? $ticket->requester : $actor;
+            $notifications->dispatchCreated($ticket, $requesterForNotify);
 
-            $ticket->loadMissing('assignee:id,name,email');
             if ($ticket->assignee instanceof TenantUser) {
-                $notifications->dispatchAssigned($ticket, $request->user(), $ticket->assignee);
+                $notifications->dispatchAssigned($ticket, $actor, $ticket->assignee);
             }
         } catch (Throwable $exception) {
             Log::error('Ticketing create notifications failed; ticket was still created.', [

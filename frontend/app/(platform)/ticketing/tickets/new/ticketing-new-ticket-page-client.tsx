@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Paperclip, X } from "lucide-react";
 
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
+import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
 import { formatFileSize, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -18,21 +19,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   createTicketingTicket,
+  fetchTicketingAssignableUsers,
   fetchTicketingMetadata,
   uploadTicketingAttachment,
 } from "@/lib/api/modules/ticketing-api";
 import { parseRaiseTicketSearchParams } from "@/lib/ticketing/raise-ticket";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
+import { usePermission } from "@/hooks/use-permission";
+import { useAuthStore } from "@/stores/auth-store";
 
 export function TicketingNewTicketPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = parseRaiseTicketSearchParams(searchParams);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentUser = useAuthStore((state) => state.user);
+  const canManageTickets = usePermission([permissions.ticketingTicketsManage]);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("general");
+  const [requesterId, setRequesterId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,10 +49,23 @@ export function TicketingNewTicketPageClient() {
     if (prefill.description) setDescription(prefill.description);
   }, [prefill.title, prefill.description]);
 
+  useEffect(() => {
+    if (canManageTickets && currentUser?.id && !requesterId) {
+      setRequesterId(currentUser.id);
+    }
+  }, [canManageTickets, currentUser?.id, requesterId]);
+
   const { data: metadata } = useQuery({
     queryKey: ["ticketing", "metadata"],
     queryFn: fetchTicketingMetadata,
     staleTime: 300_000,
+  });
+
+  const { data: assignableUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ["ticketing", "assignable-users"],
+    queryFn: fetchTicketingAssignableUsers,
+    enabled: canManageTickets,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -65,6 +86,7 @@ export function TicketingNewTicketPageClient() {
         source_reference_id: prefill.source_reference_id,
         source_label: prefill.source_label,
         links: prefill.links,
+        ...(canManageTickets && requesterId ? { requester_id: requesterId } : {}),
       });
 
       for (const file of files) {
@@ -122,9 +144,31 @@ export function TicketingNewTicketPageClient() {
               setError("Title is required.");
               return;
             }
+            if (canManageTickets && !requesterId) {
+              setError("Select who this ticket is for.");
+              return;
+            }
             createMutation.mutate();
           }}
         >
+          {canManageTickets ? (
+            <section data-help="tk-compose-requester" className="space-y-2">
+              <Label htmlFor="requester">Created for (requester)</Label>
+              <TicketingUserPicker
+                id="requester"
+                users={assignableUsers ?? []}
+                value={requesterId}
+                onChange={setRequesterId}
+                disabled={usersLoading}
+                placeholder={usersLoading ? "Loading users…" : "Select user…"}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ticket managers can open a ticket on behalf of another user. The selected user becomes the
+                requester.
+              </p>
+            </section>
+          ) : null}
+
           <section data-help="tk-compose-title" className="space-y-4">
             <h2 className="text-sm font-medium text-foreground">Issue details</h2>
             <div className="space-y-2">

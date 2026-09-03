@@ -103,6 +103,63 @@ final class TicketingModuleTest extends TestCase
             ->assertJsonPath('data.comments.0.body', 'Please check gate approval delegation.');
     }
 
+    public function test_manager_can_create_ticket_on_behalf_of_user(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $onBehalfOf = TenantUser::query()->create([
+            'name' => 'On Behalf Requester',
+            'email' => 'on-behalf@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $onBehalfOf->assignRole('ticketing_contributor');
+        $onBehalfId = (string) $onBehalfOf->id;
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Opened for colleague',
+                'requester_id' => $onBehalfId,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.title', 'Opened for colleague')
+            ->assertJsonPath('data.requester.id', $onBehalfId)
+            ->assertJsonPath('data.requester.name', 'On Behalf Requester');
+    }
+
+    public function test_contributor_cannot_set_requester_id_on_create(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $contributor = TenantUser::query()->create([
+            'name' => 'Normal Contributor',
+            'email' => 'normal-contributor@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $contributor->assignRole('ticketing_contributor');
+
+        $other = TenantUser::query()->create([
+            'name' => 'Other User',
+            'email' => 'other-user@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $other->assignRole('ticketing_contributor');
+        $contributorId = (string) $contributor->id;
+        $otherId = (string) $other->id;
+        tenancy()->end();
+
+        $this->actingAs($contributor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Must be my ticket',
+                'requester_id' => $otherId,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.requester.id', $contributorId);
+    }
+
     public function test_ticket_index_returns_paginated_list(): void
     {
         $this->actingAsTenantAdmin()
