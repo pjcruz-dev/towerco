@@ -328,10 +328,16 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         title: "Team & Access",
         icon: Users,
         module: "team_access",
-        permissions: ["user:manage", "role:manage"],
+        permissions: ["user:manage", "role:manage", "organization:view", "organization:manage"],
+        permissionsMatch: "any",
         items: [
           { title: "Users", href: "/users", permissions: ["user:manage"] },
-          { title: "Organization", href: "/users/org", permissions: ["user:manage"] },
+          {
+            title: "Organization",
+            href: "/users/org",
+            permissions: ["organization:view", "organization:manage", "user:manage"],
+            permissionsMatch: "any",
+          },
           { title: "Roles & permissions", href: "/users/roles", permissions: ["role:manage"] },
         ],
       },

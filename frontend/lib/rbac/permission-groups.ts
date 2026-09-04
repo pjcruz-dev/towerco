@@ -10,6 +10,7 @@ const MODULE_GROUP_LABELS: Record<string, string> = {
   tenant: "Platform",
   user: "Team & Access",
   role: "Team & Access",
+  organization: "Team & Access",
   billing: "Team & Access",
   sites: "Sites",
   documents: "Documents",

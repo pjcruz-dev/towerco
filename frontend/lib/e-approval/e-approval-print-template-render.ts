@@ -130,6 +130,58 @@ function isWidePrintFieldType(type: string | null | undefined): boolean {
   return t === "textarea" || t === "file" || t === "richtext" || t === "camera" || t === "date_range";
 }
 
+/** Scalar "Total personal / Total expenses" style fields — print below grids, not in Request details. */
+export function isPrintTotalScalarField(field: {
+  key: string;
+  label?: string | null;
+  field_type?: string | null;
+}): boolean {
+  const key = field.key.trim().toLowerCase();
+  const label = (field.label ?? "").trim().toLowerCase();
+  const type = (field.field_type ?? "").toLowerCase();
+  if (type === "grid") return false;
+  if (/^total([_\s-]|$)/.test(key) || /^totals?([_\s-]|$)/.test(key)) return true;
+  if (/^totals?\b/.test(label)) return true;
+  return false;
+}
+
+export function parsePrintNumericCell(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed || /^[—\-–]$/.test(trimmed) || /^sample\b/i.test(trimmed)) {
+    return null;
+  }
+  const parenNegative = /^\(.*\)$/.test(trimmed);
+  const cleaned = trimmed
+    .replace(/[^\d.,\-]/g, "")
+    .replace(/,/g, "");
+  if (cleaned === "" || cleaned === "-" || cleaned === ".") {
+    return null;
+  }
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parenNegative ? -Math.abs(parsed) : parsed;
+}
+
+export function formatPrintNumericTotal(value: number): string {
+  const hasFraction = Math.abs(value % 1) > 1e-9;
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+const SUMMABLE_COLUMN_LABEL =
+  /personal|official|total|amount|price|cost|qty|quantity|sum|subtotal|debit|credit|balance|hours|days/i;
+
+export function shouldSumPrintGridColumn(columnLabel: string, cells: string[]): boolean {
+  const numericCount = cells.filter((cell) => parsePrintNumericCell(cell) !== null).length;
+  if (numericCount === 0) return false;
+  if (SUMMABLE_COLUMN_LABEL.test(columnLabel)) return true;
+  return numericCount >= Math.ceil(cells.length / 2);
+}
+
 function renderScalarFieldRowHtml(label: string, value: string, wide: boolean): string {
   const rowClass = wide ? "ea-form-row ea-form-row--wide" : "ea-form-row";
   const display = value.trim() !== "" ? escapeHtml(value) : "—";
@@ -139,32 +191,82 @@ function renderScalarFieldRowHtml(label: string, value: string, wide: boolean): 
     </div>`;
 }
 
-function renderDynamicScalarFieldsHtml(payload: EApprovalPrintPayload): string {
+function partitionPrintScalarFields(payload: EApprovalPrintPayload): {
+  detailFields: EApprovalPrintPayload["fields"];
+  totalFields: EApprovalPrintPayload["fields"];
+} {
   const gridKeys = new Set((payload.grids ?? []).map((grid) => grid.key));
-  const rows = (payload.fields ?? [])
-    .filter((field) => {
-      const type = (field.field_type ?? "").toLowerCase();
-      if (gridKeys.has(field.key)) return false;
-      if (EXCLUDED_DYNAMIC_BODY_TYPES.has(type)) return false;
-      return true;
-    })
-    .map((field) =>
-      renderScalarFieldRowHtml(
-        field.label || field.key,
-        field.value ?? "",
-        isWidePrintFieldType(field.field_type),
-      ),
-    );
+  const detailFields: EApprovalPrintPayload["fields"] = [];
+  const totalFields: EApprovalPrintPayload["fields"] = [];
 
-  if (rows.length === 0) {
+  for (const field of payload.fields ?? []) {
+    const type = (field.field_type ?? "").toLowerCase();
+    if (gridKeys.has(field.key)) continue;
+    if (EXCLUDED_DYNAMIC_BODY_TYPES.has(type)) continue;
+    if ((payload.grids?.length ?? 0) > 0 && isPrintTotalScalarField(field)) {
+      totalFields.push(field);
+      continue;
+    }
+    detailFields.push(field);
+  }
+
+  return { detailFields, totalFields };
+}
+
+function renderDynamicScalarFieldsHtml(
+  fields: EApprovalPrintPayload["fields"],
+  emptyMessage = "No printable fields on this form.",
+): string {
+  if (fields.length === 0) {
     return `<div class="ea-form-grid">
-${renderScalarFieldRowHtml("Details", "No printable fields on this form.", true)}
+${renderScalarFieldRowHtml("Details", emptyMessage, true)}
 </div>`;
   }
+
+  const rows = fields.map((field) =>
+    renderScalarFieldRowHtml(
+      field.label || field.key,
+      field.value ?? "",
+      isWidePrintFieldType(field.field_type),
+    ),
+  );
 
   return `<div class="ea-form-grid">
 ${rows.join("\n")}
 </div>`;
+}
+
+function renderPrintGridTotalsFooterHtml(grid: {
+  columns: string[];
+  rows: string[][];
+}): string {
+  const columns = grid.columns.length > 0 ? grid.columns : ["Value"];
+  if (grid.rows.length === 0) return "";
+
+  const summable = columns.map((column, index) => {
+    const cells = grid.rows.map((row) => row[index] ?? "");
+    return shouldSumPrintGridColumn(column, cells);
+  });
+  if (!summable.some(Boolean)) return "";
+
+  const labelIndex = summable.findIndex((flag) => !flag);
+  const labelAt = labelIndex >= 0 ? labelIndex : 0;
+
+  const cells = columns.map((_, index) => {
+    if (index === labelAt) {
+      return `<td class="ea-print-table-total-label"><strong>Total</strong></td>`;
+    }
+    if (!summable[index]) {
+      return `<td></td>`;
+    }
+    const total = grid.rows.reduce((sum, row) => {
+      const parsed = parsePrintNumericCell(row[index] ?? "");
+      return parsed === null ? sum : sum + parsed;
+    }, 0);
+    return `<td class="ea-print-table-total-value"><strong>${escapeHtml(formatPrintNumericTotal(total))}</strong></td>`;
+  });
+
+  return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
 }
 
 export function renderPrintGridTableHtml(grid: {
@@ -189,6 +291,7 @@ export function renderPrintGridTableHtml(grid: {
           })
           .join("")
       : `<tr><td colspan="${columns.length}">No line items</td></tr>`;
+  const foot = renderPrintGridTotalsFooterHtml({ columns, rows: grid.rows });
 
   return `<section class="ea-form-section ea-form-grid-section" data-grid-key="${escapeHtml(grid.key)}">
   <h2 class="ea-form-section-title">${escapeHtml(grid.label || grid.key)}</h2>
@@ -196,6 +299,7 @@ export function renderPrintGridTableHtml(grid: {
     <table class="ea-print-table">
       <thead><tr>${head}</tr></thead>
       <tbody>${body}</tbody>
+      ${foot}
     </table>
   </div>
 </section>`;
@@ -214,13 +318,29 @@ function renderDynamicGridsHtml(payload: EApprovalPrintPayload, onlyKey?: string
 }
 
 function renderDynamicFormBodyHtml(payload: EApprovalPrintPayload): string {
-  const fieldsHtml = renderDynamicScalarFieldsHtml(payload);
+  const { detailFields, totalFields } = partitionPrintScalarFields(payload);
   const gridsHtml = renderDynamicGridsHtml(payload);
-  return `<section class="ea-form-section">
+  const parts: string[] = [];
+
+  if (detailFields.length > 0 || ((payload.grids?.length ?? 0) === 0 && totalFields.length === 0)) {
+    parts.push(`<section class="ea-form-section">
   <h2 class="ea-form-section-title">Request details</h2>
-  ${fieldsHtml}
-</section>
-${gridsHtml}`;
+  ${renderDynamicScalarFieldsHtml(detailFields)}
+</section>`);
+  }
+
+  if (gridsHtml) {
+    parts.push(gridsHtml);
+  }
+
+  if (totalFields.length > 0) {
+    parts.push(`<section class="ea-form-section ea-form-totals-section">
+  <h2 class="ea-form-section-title">Totals</h2>
+  ${renderDynamicScalarFieldsHtml(totalFields)}
+</section>`);
+  }
+
+  return parts.join("\n");
 }
 
 /** True when custom HTML already embeds grids via dynamic tokens (avoid duplicate React tables). */
@@ -501,12 +621,21 @@ export function defaultEApprovalDocumentDesignCss(): string {
   font-size: 10px;
 }
 .ea-print-table tbody tr:nth-child(even) { background: #f8fafc; }
+.ea-print-table tfoot td {
+  background: #f1f5f9;
+  font-weight: 600;
+  border-top: 2px solid #cbd5e1;
+}
+.ea-print-table-total-label { text-align: left; }
+.ea-print-table-total-value { text-align: right; white-space: nowrap; }
+.ea-form-totals-section { margin-top: 12px; }
 
 @media print {
   .ea-form-doc { color: #000; }
   .ea-form-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ea-form-docmeta { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .ea-print-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ea-print-table thead th,
+  .ea-print-table tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }`;
 }
 
@@ -552,24 +681,31 @@ export function buildEApprovalDocumentDesignPreviewPayload(
       field.grid_columns && field.grid_columns.length > 0
         ? field.grid_columns
         : ["Date", "Description", "Amount"];
+    const sampleRow = (rowIndex: number) =>
+      columns.map((column) => {
+        if (/personal/i.test(column)) return rowIndex === 0 ? "3,200.00" : "3,800.00";
+        if (/official/i.test(column)) return rowIndex === 0 ? "4,100.00" : "3,900.00";
+        if (/total|amount|price|cost/i.test(column)) return rowIndex === 0 ? "7,300.00" : "7,700.00";
+        if (/date/i.test(column)) return rowIndex === 0 ? "2026-09-01" : "2026-09-03";
+        return `Sample ${column}${rowIndex === 0 ? "" : " 2"}`;
+      });
     return {
       key: field.name,
       label: field.label || field.name,
       columns,
-      rows: [
-        columns.map((column, index) =>
-          index === columns.length - 1 && /amount|total|price/i.test(column)
-            ? "1,250.00"
-            : `Sample ${column}`,
-        ),
-        columns.map((column, index) =>
-          index === columns.length - 1 && /amount|total|price/i.test(column)
-            ? "480.00"
-            : `Sample ${column} 2`,
-        ),
-      ],
+      rows: [sampleRow(0), sampleRow(1)],
     };
   });
+
+  // Sample totals for live preview when the form has Total* fields.
+  for (const field of previewFields) {
+    if (!isPrintTotalScalarField(field)) continue;
+    const label = `${field.label} ${field.key}`.toLowerCase();
+    if (/personal/.test(label)) field.value = "7,000.00";
+    else if (/official/.test(label)) field.value = "8,000.00";
+    else if (/expense/.test(label)) field.value = "15,000.00";
+    else field.value = "15,000.00";
+  }
 
   return {
     document_no: "EA-PREVIEW-001",

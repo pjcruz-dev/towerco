@@ -80,6 +80,44 @@ describe("renderEApprovalPrintTemplateHtml", () => {
     expect(html).not.toContain("Sample Credit card expenses");
   });
 
+  it("moves Total* fields below grids and adds numeric column footers", () => {
+    const html = renderEApprovalPrintTemplateHtml("{{system.form_body}}", samplePayload({
+      fields: [
+        { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+        { key: "total_personal", label: "Total personal", value: "7000", field_type: "currency" },
+        { key: "total_official", label: "Total official", value: "8000", field_type: "currency" },
+        { key: "total_expenses", label: "Total expenses", value: "15000", field_type: "currency" },
+      ],
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Credit card expenses",
+          columns: ["Date", "Personal", "Official", "Total"],
+          rows: [
+            ["2026-09-01", "3,000.00", "4,000.00", "7,000.00"],
+            ["2026-09-02", "4,000.00", "4,000.00", "8,000.00"],
+          ],
+        },
+      ],
+    }));
+
+    const requestIdx = html.indexOf("Request details");
+    const gridIdx = html.indexOf("Credit card expenses");
+    const totalsIdx = html.indexOf("ea-form-totals-section");
+    expect(requestIdx).toBeGreaterThan(-1);
+    expect(gridIdx).toBeGreaterThan(requestIdx);
+    expect(totalsIdx).toBeGreaterThan(gridIdx);
+    expect(html.indexOf("Total personal")).toBeGreaterThan(totalsIdx);
+    expect(html).toContain("ea-print-table-totals");
+    expect(html).toContain("<strong>7,000</strong>");
+    expect(html).toContain("<strong>8,000</strong>");
+    expect(html).toContain("<strong>15,000</strong>");
+    expect(html).toContain("Total expenses");
+    // Request details should not list Total personal above the grid.
+    const requestBlock = html.slice(requestIdx, gridIdx);
+    expect(requestBlock).not.toContain("Total personal");
+  });
+
   it("renders a single grid via {{grid.*}} without escaping table HTML", () => {
     const html = renderEApprovalPrintTemplateHtml("{{grid.expense_lines}}", samplePayload({
       grids: [

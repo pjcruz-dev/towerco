@@ -10,6 +10,7 @@ import {
   documentDesignEmbedsGrids,
   hasCustomPrintDocumentDesign,
   renderEApprovalPrintTemplateHtml,
+  renderPrintGridTableHtml,
 } from "@/lib/e-approval/e-approval-print-template-render";
 import { hydrateEApprovalPrintLogoUrls } from "@/lib/e-approval/fetch-authenticated-asset";
 import {
@@ -105,47 +106,11 @@ export function EApprovalGenericFormPrintView({
 
           {!gridsEmbeddedInDesign
             ? (hydratedData.grids ?? []).map((grid) => (
-            <section key={grid.key} className="mt-6 overflow-hidden rounded border border-slate-300">
-              <h2 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
-                {grid.label}
-              </h2>
-              <table className="w-full border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-200 text-left text-[10px] font-medium text-slate-700">
-                    {grid.columns.map((column) => (
-                      <th key={column} className="border border-slate-300 px-2 py-2">
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {grid.rows.length > 0 ? (
-                    grid.rows.map((row, rowIndex) => (
-                      <tr key={rowIndex} className="odd:bg-white even:bg-slate-50">
-                        {row.map((cell, cellIndex) => (
-                          <td
-                            key={cellIndex}
-                            className="border border-slate-200 px-2 py-1.5 align-top text-slate-900"
-                          >
-                            {cell || "—"}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={Math.max(grid.columns.length, 1)}
-                        className="border border-slate-200 px-2 py-2 text-slate-500"
-                      >
-                        No rows
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </section>
+                <div
+                  key={grid.key}
+                  className="mt-6"
+                  dangerouslySetInnerHTML={{ __html: renderPrintGridTableHtml(grid) }}
+                />
               ))
             : null}
 

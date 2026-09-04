@@ -32,13 +32,22 @@ import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { formatTimestamp } from "@/lib/admin/user-display";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchAdminOrgChart, syncAdminEntraOrg } from "@/lib/api/modules/admin-users-api";
-import { permissions } from "@/lib/rbac/permissions";
+import { hasAnyPermission, permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
 const EMPTY_PEOPLE: [] = [];
 const SHOW_ROLES_STORAGE_KEY = "toweros.org-chart.show-roles";
+const ORG_ACCESS_PERMISSIONS = [
+  permissions.organizationView,
+  permissions.organizationManage,
+  permissions.userManage,
+] as const;
+const ORG_MANAGE_PERMISSIONS = [
+  permissions.organizationManage,
+  permissions.userManage,
+] as const;
 
 type OrgView = "line" | "all";
 
@@ -55,7 +64,24 @@ export function OrgPageClient() {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const authUser = useAuthStore((state) => state.user);
+  const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
   const organizationLabel = useOrganizationLabel();
+  const canManageOrganization = useMemo(() => {
+    const scoped = authUser
+      ? { ...authUser, permissions: effectivePermissions() }
+      : null;
+    return hasAnyPermission(scoped, [...ORG_MANAGE_PERMISSIONS]);
+  }, [authUser, effectivePermissions]);
+  const canAssignRoles = useMemo(() => {
+    const scoped = authUser
+      ? { ...authUser, permissions: effectivePermissions() }
+      : null;
+    return hasAnyPermission(scoped, [
+      permissions.organizationManage,
+      permissions.userManage,
+    ]);
+  }, [authUser, effectivePermissions]);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrgView>("all");
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -156,7 +182,7 @@ export function OrgPageClient() {
   };
 
   return (
-    <PermissionGate requiredPermissions={[permissions.userManage]}>
+    <PermissionGate requiredPermissions={[...ORG_ACCESS_PERMISSIONS]} match="any">
       <div className="space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -164,21 +190,30 @@ export function OrgPageClient() {
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
               manager, job title, department, Microsoft 365 license, and profile photo onto existing {organizationLabel}{" "}
-              users. People without a Microsoft 365 license are hidden here. Turn on Show roles when you need to review
-              or assign tenant roles from the chart.
+              users. People without a Microsoft 365 license are hidden here.
+              {canAssignRoles
+                ? " Turn on Show roles when you need to review or assign tenant roles from the chart."
+                : ""}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Last synced {formatTimestamp(chartQuery.data?.synced_at)}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/users" prefetch={false} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-              Back to users
-            </Link>
-            <Button size="sm" disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
-              {syncMutation.isPending ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
-              {syncMutation.isPending ? "Syncing…" : "Sync from Microsoft"}
-            </Button>
+            {hasAnyPermission(
+              authUser ? { ...authUser, permissions: effectivePermissions() } : null,
+              [permissions.userManage],
+            ) ? (
+              <Link href="/users" prefetch={false} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                Back to users
+              </Link>
+            ) : null}
+            {canManageOrganization ? (
+              <Button size="sm" disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
+                {syncMutation.isPending ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
+                {syncMutation.isPending ? "Syncing…" : "Sync from Microsoft"}
+              </Button>
+            ) : null}
           </div>
         </header>
 
@@ -267,17 +302,19 @@ export function OrgPageClient() {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <label
-                  htmlFor="org-show-roles"
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
-                >
-                  <Switch
-                    id="org-show-roles"
-                    checked={showRoles}
-                    onCheckedChange={setShowRolesPreference}
-                  />
-                  <span className="text-xs font-medium text-foreground">Show roles</span>
-                </label>
+                {canAssignRoles ? (
+                  <label
+                    htmlFor="org-show-roles"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <Switch
+                      id="org-show-roles"
+                      checked={showRoles}
+                      onCheckedChange={setShowRolesPreference}
+                    />
+                    <span className="text-xs font-medium text-foreground">Show roles</span>
+                  </label>
+                ) : null}
                 <Tabs value={view} onValueChange={(value) => setView(value as OrgView)}>
                   <TabsList>
                     <TabsTrigger value="all" className="px-3">
@@ -333,8 +370,8 @@ export function OrgPageClient() {
                   index={filteredIndex}
                   focusedId={focusedId}
                   onSelect={selectPerson}
-                  onManageRoles={openRoles}
-                  showRoles={showRoles}
+                  onManageRoles={canAssignRoles ? openRoles : undefined}
+                  showRoles={canAssignRoles && showRoles}
                 />
               </AdminOrgCanvas>
             ) : focusedId && filteredIndex.byId.has(focusedId) ? (
@@ -344,8 +381,8 @@ export function OrgPageClient() {
                   focusedId={focusedId}
                   onFocus={setFocusedId}
                   organizationLabel={organizationLabel}
-                  onManageRoles={openRoles}
-                  showRoles={showRoles}
+                  onManageRoles={canAssignRoles ? openRoles : undefined}
+                  showRoles={canAssignRoles && showRoles}
                 />
               </AdminOrgCanvas>
             ) : (

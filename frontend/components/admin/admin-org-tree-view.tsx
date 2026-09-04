@@ -4,7 +4,6 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { OrgPersonCard } from "@/components/admin/admin-org-person-card";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   expandableOrgIds,
@@ -158,14 +157,6 @@ export function AdminOrgTreeView({
 
   return (
     <div className="px-3 py-3">
-      <div className="mb-2 flex items-center justify-end gap-1" data-org-no-pan="">
-        <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedIds(new Set(allExpandable))}>
-          Expand all
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedIds(new Set())}>
-          Collapse all
-        </Button>
-      </div>
       <div className="flex min-w-max flex-col items-center gap-16 px-4 py-4">
         {trees.map((root, offset) => (
           <div key={root.id} className="flex w-full flex-col items-center">

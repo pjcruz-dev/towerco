@@ -82,6 +82,7 @@ final class TenantRbacModuleRoleTemplates
             'manager' => [
                 'dashboard:view',
                 'ai_assistant:use',
+                'organization:view',
                 'project_one:view',
                 'project_one:manage',
                 'project_one:rollout:view',

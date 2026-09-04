@@ -21,6 +21,8 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertContains('workspace:environments:switch', $enabled);
         $this->assertContains('user:manage', $enabled);
         $this->assertContains('user:impersonate', $enabled);
+        $this->assertContains('organization:view', $enabled);
+        $this->assertContains('organization:manage', $enabled);
         $this->assertContains('project_one:view', $enabled);
         $this->assertContains('e_approval:view', $enabled);
 

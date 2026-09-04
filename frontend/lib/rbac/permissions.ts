@@ -12,6 +12,8 @@ export const permissions = {
   userManage: "user:manage",
   userImpersonate: "user:impersonate",
   roleManage: "role:manage",
+  organizationView: "organization:view",
+  organizationManage: "organization:manage",
   projectOneView: "project_one:view",
   projectOneManage: "project_one:manage",
   rolloutView: "project_one:rollout:view",
@@ -78,6 +80,19 @@ export function hasPermission(
   if (requiredPermissions.length === 0) return true;
 
   return requiredPermissions.every((permission) =>
+    user.permissions.includes(permission),
+  );
+}
+
+/** True when the user holds at least one of the listed permissions. */
+export function hasAnyPermission(
+  user: AuthUser | null,
+  requiredPermissions: string[] = [],
+): boolean {
+  if (!user) return false;
+  if (requiredPermissions.length === 0) return true;
+
+  return requiredPermissions.some((permission) =>
     user.permissions.includes(permission),
   );
 }

@@ -16,7 +16,12 @@ class TenantUserAvatarShowController
         TenantUser $user,
         EntraUserAvatarService $avatars,
     ): StreamedResponse {
-        abort_unless($request->user()?->can('user:manage'), 403);
+        abort_unless(
+            $request->user()?->can('organization:view')
+            || $request->user()?->can('organization:manage')
+            || $request->user()?->can('user:manage'),
+            403,
+        );
 
         return $avatars->streamAvatar($user);
     }

@@ -14,7 +14,11 @@ final class TenantUserEntraOrgSyncController extends AbstractApiController
 {
     public function __invoke(Request $request, EntraOrgDirectoryService $org): JsonResponse
     {
-        abort_unless($request->user()?->can('user:manage'), 403);
+        abort_unless(
+            $request->user()?->can('organization:manage')
+            || $request->user()?->can('user:manage'),
+            403,
+        );
 
         set_time_limit(180);
         ignore_user_abort(true);
