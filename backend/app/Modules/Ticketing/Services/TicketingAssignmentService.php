@@ -39,8 +39,16 @@ final class TicketingAssignmentService
             }
 
             $user = TenantUser::query()->whereKey($assigneeId)->where('is_active', true)->first();
+            if (! $user instanceof TenantUser) {
+                return null;
+            }
 
-            return $user instanceof TenantUser ? (string) $user->id : null;
+            $pool = $this->settings->itAssigneeUserIds();
+            if ($pool !== null && ! in_array((string) $user->id, $pool, true)) {
+                return null;
+            }
+
+            return (string) $user->id;
         }
 
         return null;
@@ -98,6 +106,17 @@ final class TicketingAssignmentService
                 if ($strict) {
                     throw ValidationException::withMessages([
                         'assignment_rules' => [__('Assignee for :category must be an active user.', ['category' => $category])],
+                    ]);
+                }
+
+                continue;
+            }
+
+            $pool = $this->settings->itAssigneeUserIds();
+            if ($pool !== null && ! in_array($assigneeId, $pool, true)) {
+                if ($strict) {
+                    throw ValidationException::withMessages([
+                        'assignment_rules' => [__('Assignee for :category must be in the IT assignee list.', ['category' => $category])],
                     ]);
                 }
 

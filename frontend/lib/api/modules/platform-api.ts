@@ -167,14 +167,22 @@ export type PlatformTenantRow = {
   coming_soon_contact?: string | null;
   seat_limit?: number;
   effective_seat_limit?: number;
+  effective_tower_license_limit?: number;
+  tower_licenses_used?: number;
+  /** @deprecated Prefer effective_tower_license_limit */
   effective_rfi_limit?: number;
+  /** @deprecated Prefer tower_licenses_used */
   rfi_units_used?: number;
   billing_meter_starts_at?: string | null;
   billing_interval?: "monthly" | "annual";
   billing_overrides?: {
     seat_limit?: number;
     included_paid_seats?: number;
+    included_tower_licenses?: number;
+    grandfather_tower_licenses?: number;
+    /** @deprecated Prefer included_tower_licenses */
     included_rfi_units?: number;
+    /** @deprecated Prefer grandfather_tower_licenses */
     grandfather_rfi_units?: number;
     annual_discount_percent?: number | null;
     modules?: {
@@ -321,7 +329,11 @@ export type PlatformTenantSettingsPatch = {
   billing_overrides?: {
     seat_limit?: number;
     included_paid_seats?: number;
+    included_tower_licenses?: number;
+    grandfather_tower_licenses?: number;
+    /** @deprecated Prefer included_tower_licenses */
     included_rfi_units?: number;
+    /** @deprecated Prefer grandfather_tower_licenses */
     grandfather_rfi_units?: number;
     annual_discount_percent?: number | null;
     modules?: {
@@ -378,12 +390,16 @@ export type PlatformPlanCatalogTier = {
   sort: number;
   included?: {
     paid_seats?: number;
+    tower_licenses?: number;
+    /** @deprecated Prefer tower_licenses */
     rfi_units?: number;
     storage_gb?: number;
   };
   pricing?: {
     monthly_base_usd?: number;
     annual_base_usd?: number;
+    tower_overage_usd?: number;
+    /** @deprecated Prefer tower_overage_usd */
     rfi_overage_usd?: number;
     paid_seat_overage_usd?: number;
   };
@@ -429,11 +445,15 @@ export type PlatformBillingCatalogPatch = {
     annual_discount_percent?: number;
     included?: {
       paid_seats?: number;
+      tower_licenses?: number;
+      /** @deprecated Prefer tower_licenses */
       rfi_units?: number;
       storage_gb?: number;
     };
     pricing?: {
       monthly_base_usd?: number;
+      tower_overage_usd?: number;
+      /** @deprecated Prefer tower_overage_usd */
       rfi_overage_usd?: number;
       paid_seat_overage_usd?: number;
     };

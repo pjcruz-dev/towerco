@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   createTicketingTicket,
-  fetchTicketingAssignableUsers,
+  fetchTicketingDirectoryUsers,
   fetchTicketingMetadata,
   uploadTicketingAttachment,
 } from "@/lib/api/modules/ticketing-api";
@@ -61,9 +61,9 @@ export function TicketingNewTicketPageClient() {
     staleTime: 300_000,
   });
 
-  const { data: assignableUsers, isLoading: usersLoading } = useQuery({
-    queryKey: ["ticketing", "assignable-users"],
-    queryFn: fetchTicketingAssignableUsers,
+  const { data: directoryUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ["ticketing", "directory-users"],
+    queryFn: fetchTicketingDirectoryUsers,
     enabled: canManageTickets,
     staleTime: 60_000,
   });
@@ -156,7 +156,7 @@ export function TicketingNewTicketPageClient() {
               <Label htmlFor="requester">Created for (requester)</Label>
               <TicketingUserPicker
                 id="requester"
-                users={assignableUsers ?? []}
+                users={directoryUsers ?? []}
                 value={requesterId}
                 onChange={setRequesterId}
                 disabled={usersLoading}

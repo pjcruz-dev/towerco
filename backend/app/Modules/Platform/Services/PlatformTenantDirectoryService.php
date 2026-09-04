@@ -7,7 +7,7 @@ namespace App\Modules\Platform\Services;
 use App\Core\Support\AllowlistedSort;
 use App\Models\Tenant;
 use App\Modules\Billing\Services\TenantPlanEntitlementsService;
-use App\Modules\Billing\Services\TenantRfiMeterService;
+use App\Modules\Billing\Services\TenantTowerLicenseMeterService;
 use App\Modules\Billing\Services\TenantSubscriptionLifecycleService;
 use App\Modules\Platform\Models\RolloutPlaybookVersion;
 use App\Modules\Platform\Models\TenantPlaybookBinding;
@@ -30,7 +30,7 @@ final class PlatformTenantDirectoryService
 
     public function __construct(
         private readonly TenantPlanEntitlementsService $entitlements,
-        private readonly TenantRfiMeterService $rfiMeter,
+        private readonly TenantTowerLicenseMeterService $towerLicenses,
         private readonly TenantEnabledModulesResolver $enabledModulesResolver,
         private readonly TenantSubscriptionLifecycleService $subscriptions,
     ) {}
@@ -248,8 +248,8 @@ final class PlatformTenantDirectoryService
                 'operator_access_mode' => $subscription['operator_access_mode'],
                 'seat_limit' => (int) ($tenant->seat_limit ?? 25),
                 'effective_seat_limit' => $this->entitlements->effectiveSeatLimit($tenant),
-                'effective_rfi_limit' => $this->entitlements->effectiveRfiLimit($tenant),
-                'rfi_units_used' => $this->rfiMeter->billableCount($tenant),
+                'effective_tower_license_limit' => $this->entitlements->effectiveTowerLicenseLimit($tenant),
+                'tower_licenses_used' => $this->towerLicenses->billableCount($tenant),
                 'billing_meter_starts_at' => $tenant->billing_meter_starts_at?->toIso8601String(),
                 'billing_interval' => (string) ($tenant->billing_interval ?? 'monthly'),
                 'billing_overrides' => $tenant->billing_overrides,

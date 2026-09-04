@@ -279,6 +279,7 @@ use App\Modules\Notifications\Http\Controllers\V1\TenantNotificationUnreadCountC
 use App\Modules\Tenancy\Http\Controllers\V1\TenantEnvironmentHandoffMintController;
 use App\Modules\Tenancy\Http\Controllers\V1\TenantLinkedEnvironmentsController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAssignableUsersController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingDirectoryUsersController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentDownloadController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentStoreController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingCommentStoreController;
@@ -484,6 +485,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('ticketing/settings/test-webhook', TicketingSettingsTestWebhookController::class)->name('api.tenant.v1.ticketing.settings.test_webhook');
     Route::get('ticketing/metadata', TicketingMetadataController::class)->name('api.tenant.v1.ticketing.metadata');
     Route::get('ticketing/assignable-users', TicketingAssignableUsersController::class)->name('api.tenant.v1.ticketing.assignable_users');
+    Route::get('ticketing/directory-users', TicketingDirectoryUsersController::class)->name('api.tenant.v1.ticketing.directory_users');
     Route::get('ticketing/tickets', TicketingTicketIndexController::class)->name('api.tenant.v1.ticketing.tickets.index');
     Route::post('ticketing/tickets', TicketingTicketStoreController::class)->name('api.tenant.v1.ticketing.tickets.store');
     Route::get('ticketing/tickets/{ticket}', TicketingTicketShowController::class)->name('api.tenant.v1.ticketing.tickets.show');

@@ -1,19 +1,54 @@
 "use client";
 
 import type { TenantBillingEstimateSnapshot } from "@/lib/api/modules/admin-billing-api";
+import type { TenantBillingEstimate } from "@/lib/billing/tenant-billing-estimate";
 import { formatMoney } from "@/lib/billing/format-money";
 import { cn } from "@/lib/utils";
 
+type EstimateLike = TenantBillingEstimateSnapshot | TenantBillingEstimate;
+
 type Props = {
-  estimate: TenantBillingEstimateSnapshot;
+  estimate: EstimateLike;
   className?: string;
   compact?: boolean;
 };
 
+function towerAddons(estimate: EstimateLike): number {
+  return (
+    ("tower_addons_monthly" in estimate ? estimate.tower_addons_monthly : undefined) ??
+    ("rfi_addons_monthly" in estimate ? estimate.rfi_addons_monthly : undefined) ??
+    0
+  );
+}
+
+function billableExtraTowers(estimate: EstimateLike): number {
+  return (
+    ("billable_extra_tower_licenses" in estimate
+      ? estimate.billable_extra_tower_licenses
+      : undefined) ??
+    ("billable_extra_rfi_units" in estimate ? estimate.billable_extra_rfi_units : undefined) ??
+    0
+  );
+}
+
+function perTower(estimate: EstimateLike): number {
+  return (
+    ("per_tower_license_monthly" in estimate ? estimate.per_tower_license_monthly : undefined) ??
+    ("add_one_tower_license_monthly" in estimate
+      ? estimate.add_one_tower_license_monthly
+      : undefined) ??
+    ("per_rfi_unit_monthly" in estimate ? estimate.per_rfi_unit_monthly : undefined) ??
+    ("add_one_rfi_unit_monthly" in estimate ? estimate.add_one_rfi_unit_monthly : undefined) ??
+    0
+  );
+}
+
 export function BillingEstimateCard({ estimate, className, compact = false }: Props) {
   const currency = estimate.currency;
-  const perSeat = estimate.per_paid_seat_monthly ?? estimate.add_one_paid_seat_monthly ?? 0;
-  const perRfi = estimate.per_rfi_unit_monthly ?? estimate.add_one_rfi_unit_monthly ?? 0;
+  const perSeat = estimate.per_paid_seat_monthly ?? 0;
+  const towerRate = perTower(estimate);
+  const towerAddonAmount = towerAddons(estimate);
+  const extraTowers = billableExtraTowers(estimate);
 
   return (
     <div className={cn("rounded-xl border border-border bg-card p-5 shadow-sm", className)}>
@@ -39,13 +74,13 @@ export function BillingEstimateCard({ estimate, className, compact = false }: Pr
             </dd>
           </div>
         ) : null}
-        {estimate.rfi_addons_monthly > 0 ? (
+        {towerAddonAmount > 0 ? (
           <div className="flex items-center justify-between gap-3">
             <dt className="text-muted-foreground">
-              RFI add-ons ({estimate.billable_extra_rfi_units} × {formatMoney(perRfi, currency)})
+              Tower license add-ons ({extraTowers} × {formatMoney(towerRate, currency)})
             </dt>
             <dd className="font-medium tabular-nums text-foreground">
-              +{formatMoney(estimate.rfi_addons_monthly, currency)}/mo
+              +{formatMoney(towerAddonAmount, currency)}/mo
             </dd>
           </div>
         ) : null}
@@ -68,7 +103,8 @@ export function BillingEstimateCard({ estimate, className, compact = false }: Pr
       </dl>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        +1 seat = {formatMoney(perSeat, currency)}/mo · +1 RFI = {formatMoney(perRfi, currency)}/mo
+        +1 seat = {formatMoney(perSeat, currency)}/mo · +1 tower license ={" "}
+        {formatMoney(towerRate, currency)}/mo
       </p>
 
       {estimate.addons_billed_monthly_note ? (

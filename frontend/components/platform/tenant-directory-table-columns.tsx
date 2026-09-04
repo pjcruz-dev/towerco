@@ -282,8 +282,8 @@ export function createTenantDirectoryTableColumns(options: {
             </span>
             <p className="text-[11px] tabular-nums text-muted-foreground">
               {tenant.effective_seat_limit ?? tenant.seat_limit ?? "-"} seats
-              {tenant.effective_rfi_limit != null
-                ? `  |  ${tenant.rfi_units_used ?? 0}/${tenant.effective_rfi_limit} RFI`
+              {(tenant.effective_tower_license_limit ?? tenant.effective_rfi_limit) != null
+                ? `  |  ${tenant.tower_licenses_used ?? tenant.rfi_units_used ?? 0}/${tenant.effective_tower_license_limit ?? tenant.effective_rfi_limit} towers`
                 : ""}
             </p>
           </div>

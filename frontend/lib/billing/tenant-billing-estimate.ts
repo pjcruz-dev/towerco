@@ -6,18 +6,18 @@ export type TenantBillingEstimate = {
   annual_discount_percent: number;
   monthly_base: number;
   catalog_included_paid_seats: number;
-  catalog_included_rfi_units: number;
+  catalog_included_tower_licenses: number;
   effective_paid_seats: number;
-  paid_rfi_capacity: number;
-  grandfather_rfi_units?: number;
+  paid_tower_capacity: number;
+  grandfather_tower_licenses?: number;
   committed_extra_seats: number;
-  committed_extra_rfi_units: number;
+  committed_extra_tower_licenses: number;
   billable_extra_seats: number;
-  billable_extra_rfi_units: number;
+  billable_extra_tower_licenses: number;
   per_paid_seat_monthly: number;
-  per_rfi_unit_monthly: number;
+  per_tower_license_monthly: number;
   seat_addons_monthly: number;
-  rfi_addons_monthly: number;
+  tower_addons_monthly: number;
   addons_monthly: number;
   estimated_monthly_total: number;
   annual_base_prepaid: number;
@@ -35,10 +35,10 @@ type ComputeInput = {
   billingInterval?: "monthly" | "annual";
   annualDiscountOverride?: number | null;
   effectiveSeatLimit: number;
-  includedRfiUnitsOverride?: number | null;
-  grandfatherRfiUnits?: number;
+  includedTowerLicensesOverride?: number | null;
+  grandfatherTowerLicenses?: number;
   seatUsed?: number;
-  rfiUsed?: number;
+  towerLicensesUsed?: number;
 };
 
 function tierRow(tiers: PlanCatalogTier[], planTier: string): PlanCatalogTier | undefined {
@@ -53,30 +53,34 @@ export function computeTenantBillingEstimate(input: ComputeInput): TenantBilling
 
   const monthlyBase = Math.max(0, tier.pricing?.monthly_base_usd ?? 0);
   const perSeat = Math.max(0, tier.pricing?.paid_seat_overage_usd ?? 0);
-  const perRfi = Math.max(0, tier.pricing?.rfi_overage_usd ?? 0);
+  const perTower = Math.max(
+    0,
+    tier.pricing?.tower_overage_usd ?? tier.pricing?.rfi_overage_usd ?? 0,
+  );
 
   const catalogIncludedSeats = tier.included?.paid_seats ?? 0;
-  const catalogIncludedRfi = tier.included?.rfi_units ?? 0;
+  const catalogIncludedTowers =
+    tier.included?.tower_licenses ?? tier.included?.rfi_units ?? 0;
 
   const effectiveSeats = Math.max(1, input.effectiveSeatLimit);
-  const paidRfiCapacity =
-    input.includedRfiUnitsOverride != null
-      ? Math.max(0, input.includedRfiUnitsOverride)
-      : catalogIncludedRfi;
-  const grandfatherRfi = Math.max(0, input.grandfatherRfiUnits ?? 0);
-  const effectiveRfiLimit = paidRfiCapacity + grandfatherRfi;
+  const paidTowerCapacity =
+    input.includedTowerLicensesOverride != null
+      ? Math.max(0, input.includedTowerLicensesOverride)
+      : catalogIncludedTowers;
+  const grandfatherTowers = Math.max(0, input.grandfatherTowerLicenses ?? 0);
+  const effectiveTowerLimit = paidTowerCapacity + grandfatherTowers;
 
   const committedExtraSeats = Math.max(0, effectiveSeats - catalogIncludedSeats);
-  const committedExtraRfi = Math.max(0, paidRfiCapacity - catalogIncludedRfi);
+  const committedExtraTowers = Math.max(0, paidTowerCapacity - catalogIncludedTowers);
   const usageExtraSeats = Math.max(0, (input.seatUsed ?? 0) - effectiveSeats);
-  const usageExtraRfi = Math.max(0, (input.rfiUsed ?? 0) - effectiveRfiLimit);
+  const usageExtraTowers = Math.max(0, (input.towerLicensesUsed ?? 0) - effectiveTowerLimit);
 
   const billableExtraSeats = committedExtraSeats + usageExtraSeats;
-  const billableExtraRfi = committedExtraRfi + usageExtraRfi;
+  const billableExtraTowers = committedExtraTowers + usageExtraTowers;
 
   const seatAddonsMonthly = Math.round(billableExtraSeats * perSeat * 100) / 100;
-  const rfiAddonsMonthly = Math.round(billableExtraRfi * perRfi * 100) / 100;
-  const addonsMonthly = Math.round((seatAddonsMonthly + rfiAddonsMonthly) * 100) / 100;
+  const towerAddonsMonthly = Math.round(billableExtraTowers * perTower * 100) / 100;
+  const addonsMonthly = Math.round((seatAddonsMonthly + towerAddonsMonthly) * 100) / 100;
   const estimatedMonthlyTotal = Math.round((monthlyBase + addonsMonthly) * 100) / 100;
 
   const annualDiscount =
@@ -93,18 +97,18 @@ export function computeTenantBillingEstimate(input: ComputeInput): TenantBilling
     annual_discount_percent: annualDiscount,
     monthly_base: monthlyBase,
     catalog_included_paid_seats: catalogIncludedSeats,
-    catalog_included_rfi_units: catalogIncludedRfi,
+    catalog_included_tower_licenses: catalogIncludedTowers,
     effective_paid_seats: effectiveSeats,
-    paid_rfi_capacity: paidRfiCapacity,
-    grandfather_rfi_units: grandfatherRfi,
+    paid_tower_capacity: paidTowerCapacity,
+    grandfather_tower_licenses: grandfatherTowers,
     committed_extra_seats: committedExtraSeats,
-    committed_extra_rfi_units: committedExtraRfi,
+    committed_extra_tower_licenses: committedExtraTowers,
     billable_extra_seats: billableExtraSeats,
-    billable_extra_rfi_units: billableExtraRfi,
+    billable_extra_tower_licenses: billableExtraTowers,
     per_paid_seat_monthly: perSeat,
-    per_rfi_unit_monthly: perRfi,
+    per_tower_license_monthly: perTower,
     seat_addons_monthly: seatAddonsMonthly,
-    rfi_addons_monthly: rfiAddonsMonthly,
+    tower_addons_monthly: towerAddonsMonthly,
     addons_monthly: addonsMonthly,
     estimated_monthly_total: estimatedMonthlyTotal,
     annual_base_prepaid: annualBasePrepaid,

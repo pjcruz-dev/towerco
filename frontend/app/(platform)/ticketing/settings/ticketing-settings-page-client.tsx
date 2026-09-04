@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, Layers, Mail, UserRoundPlus, Webhook } from "lucide-react";
+import { Clock, Layers, Mail, UserRound, UserRoundPlus, Webhook } from "lucide-react";
 
 import { TicketingAssignmentRulesEditor } from "@/components/ticketing/ticketing-assignment-rules-editor";
 import { TicketingCategoriesEditor } from "@/components/ticketing/ticketing-categories-editor";
+import { TicketingItAssigneePoolEditor } from "@/components/ticketing/ticketing-it-assignee-pool-editor";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { slugifyTicketingCategory } from "@/components/ticketing/ticketing-utils";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
@@ -15,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   fetchTicketingAssignableUsers,
+  fetchTicketingDirectoryUsers,
   fetchTicketingSettings,
   sendTicketingSettingsTestEmail,
   sendTicketingSettingsTestWebhook,
@@ -73,6 +76,11 @@ export function TicketingSettingsPageClient() {
   const [notifyItOnReopen, setNotifyItOnReopen] = useState(true);
   const [notifyRequestorOnResolve, setNotifyRequestorOnResolve] = useState(true);
   const [notifyAssigneeOnAssign, setNotifyAssigneeOnAssign] = useState(true);
+  const [notifyOnStatusChange, setNotifyOnStatusChange] = useState(false);
+  const [emailNoReplyMessage, setEmailNoReplyMessage] = useState("");
+  const [itAssigneeUserIds, setItAssigneeUserIds] = useState<string[]>([]);
+  const [itAssigneePoolConfigured, setItAssigneePoolConfigured] = useState(false);
+  const [itPoolTouched, setItPoolTouched] = useState(false);
   const [slaEnabled, setSlaEnabled] = useState(true);
   const [slaResponseMinutes, setSlaResponseMinutes] = useState("480");
   const [slaEscalationMinutes, setSlaEscalationMinutes] = useState("1440");
@@ -91,7 +99,13 @@ export function TicketingSettingsPageClient() {
   const assignableUsersQuery = useQuery({
     queryKey: ["ticketing", "assignable-users"],
     queryFn: fetchTicketingAssignableUsers,
-    staleTime: 300_000,
+    staleTime: 60_000,
+  });
+
+  const directoryUsersQuery = useQuery({
+    queryKey: ["ticketing", "directory-users"],
+    queryFn: fetchTicketingDirectoryUsers,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -101,6 +115,11 @@ export function TicketingSettingsPageClient() {
       setNotifyItOnReopen(settingsQuery.data.notify_it_on_reopen ?? true);
       setNotifyRequestorOnResolve(settingsQuery.data.notify_requestor_on_resolve ?? true);
       setNotifyAssigneeOnAssign(settingsQuery.data.notify_assignee_on_assign ?? true);
+      setNotifyOnStatusChange(settingsQuery.data.notify_on_status_change ?? false);
+      setEmailNoReplyMessage(settingsQuery.data.email_no_reply_message ?? "");
+      setItAssigneeUserIds(settingsQuery.data.it_assignee_user_ids ?? []);
+      setItAssigneePoolConfigured(settingsQuery.data.it_assignee_pool_configured ?? false);
+      setItPoolTouched(false);
       setSlaEnabled(settingsQuery.data.sla_enabled ?? true);
       setSlaResponseMinutes(String(settingsQuery.data.sla_response_minutes ?? 480));
       setSlaEscalationMinutes(String(settingsQuery.data.sla_escalation_minutes ?? 1440));
@@ -125,6 +144,11 @@ export function TicketingSettingsPageClient() {
         notify_it_on_reopen: notifyItOnReopen,
         notify_requestor_on_resolve: notifyRequestorOnResolve,
         notify_assignee_on_assign: notifyAssigneeOnAssign,
+        notify_on_status_change: notifyOnStatusChange,
+        email_no_reply_message: emailNoReplyMessage.trim(),
+        ...(itPoolTouched || itAssigneePoolConfigured
+          ? { it_assignee_user_ids: itAssigneeUserIds }
+          : {}),
         sla_enabled: slaEnabled,
         sla_response_minutes: Number(slaResponseMinutes),
         sla_escalation_minutes: Number(slaEscalationMinutes),
@@ -139,8 +163,13 @@ export function TicketingSettingsPageClient() {
     onSuccess: (data) => {
       setCategoryRows(optionsFromSettings(data));
       setAssignmentRules(data.assignment_rules ?? []);
+      setItAssigneeUserIds(data.it_assignee_user_ids ?? []);
+      setItAssigneePoolConfigured(data.it_assignee_pool_configured ?? false);
+      setNotifyOnStatusChange(data.notify_on_status_change ?? false);
+      setEmailNoReplyMessage(data.email_no_reply_message ?? "");
       queryClient.invalidateQueries({ queryKey: ["ticketing", "settings"] });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "metadata"] });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "assignable-users"] });
       push({ level: "success", title: "Settings saved" });
     },
     onError: (error) => push({ level: "error", title: "Save failed", message: getErrorMessage(error) }),
@@ -187,7 +216,7 @@ export function TicketingSettingsPageClient() {
             </Link>
           }
           title="Ticketing settings"
-          description="Configure categories, per-category SLA, auto-assign rules, IT notifications, and Teams webhooks."
+          description="Configure categories, IT assignees, per-category SLA, auto-assign rules, and notifications."
           actions={
             <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
               {saveMutation.isPending ? "Saving…" : "Save settings"}
@@ -230,6 +259,27 @@ export function TicketingSettingsPageClient() {
               </div>
             )}
           </section>
+
+          {!settingsQuery.isLoading && !settingsQuery.isError ? (
+            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-700 dark:text-sky-400">
+                  <UserRound className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <TicketingItAssigneePoolEditor
+                    directoryUsers={directoryUsersQuery.data ?? []}
+                    selectedIds={itAssigneeUserIds}
+                    onChange={(ids) => {
+                      setItPoolTouched(true);
+                      setItAssigneeUserIds(ids);
+                    }}
+                    poolConfigured={itAssigneePoolConfigured}
+                  />
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {!settingsQuery.isLoading && !settingsQuery.isError ? (
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -341,6 +391,19 @@ export function TicketingSettingsPageClient() {
                       placeholder="it-support@company.com, noc@company.com"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-no-reply">No-reply message</Label>
+                    <Textarea
+                      id="email-no-reply"
+                      value={emailNoReplyMessage}
+                      onChange={(e) => setEmailNoReplyMessage(e.target.value)}
+                      placeholder="This mailbox is not monitored. Please reply in TowerOS Ticketing."
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Appended to every ticketing email (status line is always included).
+                    </p>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Mailer: {settingsQuery.data?.notifications_mailer ?? "unknown"}
                     {!mailerReady ? " (log only — configure SMTP/SES in API environment)" : ""}
@@ -366,7 +429,7 @@ export function TicketingSettingsPageClient() {
                   <div>
                     <h2 className="text-sm font-medium text-foreground">Email notification toggles</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Control which events send email from Ticketing.
+                      Control which events send email from Ticketing. Status is included in every email body.
                     </p>
                   </div>
                   <div className="space-y-3">
@@ -398,6 +461,13 @@ export function TicketingSettingsPageClient() {
                       />
                       Email assignee when a ticket is assigned to them
                     </label>
+                    <label className="flex items-center gap-3 text-sm text-foreground">
+                      <Checkbox
+                        checked={notifyOnStatusChange}
+                        onCheckedChange={(v) => setNotifyOnStatusChange(v === true)}
+                      />
+                      Email requester and assignee when status changes
+                    </label>
                   </div>
                 </div>
               </section>
@@ -412,8 +482,8 @@ export function TicketingSettingsPageClient() {
                       <h2 className="text-sm font-medium text-foreground">Teams / webhook</h2>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Paste the Teams Workflows “Copy webhook link” URL (Power Automate). Click{" "}
-                        <span className="font-medium text-foreground">Save settings</span> so ticket
-                        events keep using it; Test can use the URL in this field immediately.
+                        <span className="font-medium text-foreground">Save settings</span> so ticket events
+                        keep using it; Test can use the URL in this field immediately.
                       </p>
                     </div>
                     <div className="space-y-2">

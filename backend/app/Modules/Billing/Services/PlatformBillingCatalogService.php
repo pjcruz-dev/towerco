@@ -149,6 +149,10 @@ final class PlatformBillingCatalogService
             /** @var array<string, int> $included */
             $included = $row['included'] ?? [];
 
+            if ($key === 'tower_licenses' || $key === 'rfi_units') {
+                return $this->resolveIncludedInt($included, 'tower_licenses', 'rfi_units');
+            }
+
             return max(0, (int) ($included[$key] ?? 0));
         }
 
@@ -188,22 +192,22 @@ final class PlatformBillingCatalogService
         $included = array_merge(
             [
                 'paid_seats' => 0,
-                'rfi_units' => 0,
+                'tower_licenses' => 0,
                 'storage_gb' => 0,
             ],
-            is_array($config['included'] ?? null) ? $config['included'] : [],
-            is_array($override['included'] ?? null) ? $override['included'] : [],
+            $this->normalizeLegacyIncluded(is_array($config['included'] ?? null) ? $config['included'] : []),
+            $this->normalizeLegacyIncluded(is_array($override['included'] ?? null) ? $override['included'] : []),
         );
 
         /** @var array<string, float> $pricing */
         $pricing = array_merge(
             [
                 'monthly_base_usd' => 0.0,
-                'rfi_overage_usd' => 0.0,
+                'tower_overage_usd' => 0.0,
                 'paid_seat_overage_usd' => 0.0,
             ],
-            is_array($config['pricing'] ?? null) ? $config['pricing'] : [],
-            is_array($override['pricing'] ?? null) ? $override['pricing'] : [],
+            $this->normalizeLegacyPricing(is_array($config['pricing'] ?? null) ? $config['pricing'] : []),
+            $this->normalizeLegacyPricing(is_array($override['pricing'] ?? null) ? $override['pricing'] : []),
         );
 
         $defaultDiscount = $this->normalizeDiscountPercent(
@@ -216,7 +220,7 @@ final class PlatformBillingCatalogService
 
         $pricingUsd = [
             'monthly_base_usd' => max(0, (float) ($pricing['monthly_base_usd'] ?? 0)),
-            'rfi_overage_usd' => max(0, (float) ($pricing['rfi_overage_usd'] ?? 0)),
+            'tower_overage_usd' => max(0, (float) ($pricing['tower_overage_usd'] ?? 0)),
             'paid_seat_overage_usd' => max(0, (float) ($pricing['paid_seat_overage_usd'] ?? 0)),
         ];
         $monthlyBaseUsd = $pricingUsd['monthly_base_usd'];
@@ -232,13 +236,13 @@ final class PlatformBillingCatalogService
             'sort' => (int) ($config['sort'] ?? 0),
             'included' => [
                 'paid_seats' => max(0, (int) $included['paid_seats']),
-                'rfi_units' => max(0, (int) $included['rfi_units']),
-                'storage_gb' => max(0, (int) $included['storage_gb']),
+                'tower_licenses' => max(0, (int) $included['tower_licenses']),
+                'storage_gb' => max(0, (int) ($included['storage_gb'] ?? 0)),
             ],
             'pricing' => [
                 'monthly_base_usd' => $displayPricing['monthly_base_usd'],
                 'annual_base_usd' => $displayPricing['annual_base_usd'],
-                'rfi_overage_usd' => $displayPricing['rfi_overage_usd'],
+                'tower_overage_usd' => $displayPricing['tower_overage_usd'],
                 'paid_seat_overage_usd' => $displayPricing['paid_seat_overage_usd'],
             ],
             'annual_discount_percent' => $tierDiscount,
@@ -254,7 +258,16 @@ final class PlatformBillingCatalogService
     private function normalizeIncluded(array $patch, array $existing): array
     {
         $out = $existing;
-        foreach (['paid_seats', 'rfi_units', 'storage_gb'] as $key) {
+
+        if (array_key_exists('tower_licenses', $patch) || array_key_exists('rfi_units', $patch)) {
+            $value = array_key_exists('tower_licenses', $patch)
+                ? max(0, (int) $patch['tower_licenses'])
+                : max(0, (int) $patch['rfi_units']);
+            $out['tower_licenses'] = $value;
+            unset($out['rfi_units']);
+        }
+
+        foreach (['paid_seats', 'storage_gb'] as $key) {
             if (! array_key_exists($key, $patch)) {
                 continue;
             }
@@ -278,7 +291,16 @@ final class PlatformBillingCatalogService
     private function normalizePricing(array $patch, array $existing): array
     {
         $out = $existing;
-        foreach (['monthly_base_usd', 'rfi_overage_usd', 'paid_seat_overage_usd'] as $key) {
+
+        if (array_key_exists('tower_overage_usd', $patch) || array_key_exists('rfi_overage_usd', $patch)) {
+            $value = array_key_exists('tower_overage_usd', $patch)
+                ? max(0, (float) $patch['tower_overage_usd'])
+                : max(0, (float) $patch['rfi_overage_usd']);
+            $out['tower_overage_usd'] = $value;
+            unset($out['rfi_overage_usd']);
+        }
+
+        foreach (['monthly_base_usd', 'paid_seat_overage_usd'] as $key) {
             if (! array_key_exists($key, $patch)) {
                 continue;
             }
@@ -286,6 +308,50 @@ final class PlatformBillingCatalogService
         }
 
         return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $included
+     * @return array<string, mixed>
+     */
+    private function normalizeLegacyIncluded(array $included): array
+    {
+        if (! array_key_exists('tower_licenses', $included) && array_key_exists('rfi_units', $included)) {
+            $included['tower_licenses'] = $included['rfi_units'];
+        }
+        unset($included['rfi_units']);
+
+        return $included;
+    }
+
+    /**
+     * @param  array<string, mixed>  $pricing
+     * @return array<string, mixed>
+     */
+    private function normalizeLegacyPricing(array $pricing): array
+    {
+        if (! array_key_exists('tower_overage_usd', $pricing) && array_key_exists('rfi_overage_usd', $pricing)) {
+            $pricing['tower_overage_usd'] = $pricing['rfi_overage_usd'];
+        }
+        unset($pricing['rfi_overage_usd']);
+
+        return $pricing;
+    }
+
+    /**
+     * @param  array<string, mixed>  $included
+     */
+    private function resolveIncludedInt(array $included, string $primary, string $legacy): int
+    {
+        if (array_key_exists($primary, $included)) {
+            return max(0, (int) $included[$primary]);
+        }
+
+        if (array_key_exists($legacy, $included)) {
+            return max(0, (int) $included[$legacy]);
+        }
+
+        return 0;
     }
 
     private function assertDiscountPercent(mixed $value, string $field): float

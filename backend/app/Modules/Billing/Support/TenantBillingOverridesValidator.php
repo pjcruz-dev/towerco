@@ -49,24 +49,28 @@ final class TenantBillingOverridesValidator
             $normalized['included_paid_seats'] = $seats;
         }
 
-        if (array_key_exists('included_rfi_units', $input)) {
-            $units = (int) $input['included_rfi_units'];
+        if (array_key_exists('included_tower_licenses', $input) || array_key_exists('included_rfi_units', $input)) {
+            $units = array_key_exists('included_tower_licenses', $input)
+                ? (int) $input['included_tower_licenses']
+                : (int) $input['included_rfi_units'];
             if ($units < 0 || $units > 100000) {
                 throw ValidationException::withMessages([
-                    'billing_overrides.included_rfi_units' => [__('Included RFI units must be between 0 and 100000.')],
+                    'billing_overrides.included_tower_licenses' => [__('Included tower licenses must be between 0 and 100000.')],
                 ]);
             }
-            $normalized['included_rfi_units'] = $units;
+            $normalized['included_tower_licenses'] = $units;
         }
 
-        if (array_key_exists('grandfather_rfi_units', $input)) {
-            $units = (int) $input['grandfather_rfi_units'];
+        if (array_key_exists('grandfather_tower_licenses', $input) || array_key_exists('grandfather_rfi_units', $input)) {
+            $units = array_key_exists('grandfather_tower_licenses', $input)
+                ? (int) $input['grandfather_tower_licenses']
+                : (int) $input['grandfather_rfi_units'];
             if ($units < 0 || $units > 100000) {
                 throw ValidationException::withMessages([
-                    'billing_overrides.grandfather_rfi_units' => [__('Grandfather RFI units must be between 0 and 100000.')],
+                    'billing_overrides.grandfather_tower_licenses' => [__('Grandfather tower licenses must be between 0 and 100000.')],
                 ]);
             }
-            $normalized['grandfather_rfi_units'] = $units;
+            $normalized['grandfather_tower_licenses'] = $units;
         }
 
         if (array_key_exists('annual_discount_percent', $input)) {

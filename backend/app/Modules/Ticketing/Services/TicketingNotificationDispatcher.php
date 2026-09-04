@@ -126,6 +126,35 @@ final class TicketingNotificationDispatcher
         );
     }
 
+    public function dispatchStatusChanged(TicketingTicket $ticket, TenantUser $actor, string $fromStatus): void
+    {
+        if (! $this->settings->getBool(TicketingSettingsService::NOTIFY_ON_STATUS_CHANGE, false)) {
+            return;
+        }
+
+        $ticket->loadMissing(['requester:id,name,email', 'assignee:id,name,email']);
+
+        $recipients = [];
+        if ($ticket->requester instanceof TenantUser) {
+            $recipients[] = $ticket->requester;
+        }
+        if (
+            $ticket->assignee instanceof TenantUser
+            && (string) $ticket->assignee_id !== (string) ($ticket->requester_id ?? '')
+        ) {
+            $recipients[] = $ticket->assignee;
+        }
+
+        if ($recipients === []) {
+            return;
+        }
+
+        SafeMailNotificationSender::sendAfterResponse(
+            $recipients,
+            new TicketingTicketMailNotification($ticket, 'status', $actor->name, $fromStatus),
+        );
+    }
+
     private function sendItMail(TicketingTicket $ticket, string $event, ?string $actorName): void
     {
         $emails = $this->settings->itSupportEmails();

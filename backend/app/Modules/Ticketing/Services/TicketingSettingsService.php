@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
+use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\TeamsWebhookUrl;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
@@ -23,6 +24,12 @@ final class TicketingSettingsService
     public const NOTIFY_REQUESTOR_ON_RESOLVE = 'notify_requestor_on_resolve';
 
     public const NOTIFY_ASSIGNEE_ON_ASSIGN = 'notify_assignee_on_assign';
+
+    public const NOTIFY_ON_STATUS_CHANGE = 'notify_on_status_change';
+
+    public const EMAIL_NO_REPLY_MESSAGE = 'email_no_reply_message';
+
+    public const IT_ASSIGNEE_USER_IDS = 'it_assignee_user_ids';
 
     public const CATEGORIES = 'categories';
 
@@ -119,6 +126,88 @@ final class TicketingSettingsService
     }
 
     /**
+     * Configured IT assignee pool. null = not configured (legacy: all active users assignable).
+     *
+     * @return list<string>|null
+     */
+    public function itAssigneeUserIds(): ?array
+    {
+        $raw = $this->getString(self::IT_ASSIGNEE_USER_IDS);
+        if ($raw === null || trim($raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        $ids = [];
+        foreach ($decoded as $value) {
+            if (is_string($value) && $value !== '') {
+                $ids[] = $value;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public function assertAssigneeAllowed(?string $assigneeId): void
+    {
+        if ($assigneeId === null || $assigneeId === '') {
+            return;
+        }
+
+        $pool = $this->itAssigneeUserIds();
+        if ($pool === null) {
+            return;
+        }
+
+        if (! in_array($assigneeId, $pool, true)) {
+            throw ValidationException::withMessages([
+                'assignee_id' => [__('Assignee must be an IT user from Ticketing settings.')],
+            ]);
+        }
+
+        $exists = TenantUser::query()
+            ->whereKey($assigneeId)
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'assignee_id' => [__('Selected assignee was not found or is inactive.')],
+            ]);
+        }
+    }
+
+    /**
+     * @param  list<string>  $ids
+     */
+    public function persistItAssigneeUserIds(array $ids): void
+    {
+        $normalized = [];
+        foreach ($ids as $id) {
+            if (is_string($id) && $id !== '') {
+                $normalized[] = $id;
+            }
+        }
+        $normalized = array_values(array_unique($normalized));
+
+        if ($normalized !== []) {
+            $valid = TenantUser::query()
+                ->whereIn('id', $normalized)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->map(static fn ($id): string => (string) $id)
+                ->all();
+            $normalized = array_values(array_intersect($normalized, $valid));
+        }
+
+        $this->setString(self::IT_ASSIGNEE_USER_IDS, json_encode($normalized, JSON_THROW_ON_ERROR));
+    }
+
+    /**
      * @param  list<array{category: string, assignee_id: string, enabled: bool}>  $rules
      */
     public function persistAssignmentRules(array $rules): void
@@ -209,6 +298,10 @@ final class TicketingSettingsService
             'notify_it_on_reopen' => $this->getBool(self::NOTIFY_IT_ON_REOPEN, true),
             'notify_requestor_on_resolve' => $this->getBool(self::NOTIFY_REQUESTOR_ON_RESOLVE, true),
             'notify_assignee_on_assign' => $this->getBool(self::NOTIFY_ASSIGNEE_ON_ASSIGN, true),
+            'notify_on_status_change' => $this->getBool(self::NOTIFY_ON_STATUS_CHANGE, false),
+            'email_no_reply_message' => $this->getString(self::EMAIL_NO_REPLY_MESSAGE, ''),
+            'it_assignee_user_ids' => $this->itAssigneeUserIds() ?? [],
+            'it_assignee_pool_configured' => $this->itAssigneeUserIds() !== null,
             'categories' => $this->categories(),
             'category_options' => $this->categoryOptions(),
             'category_packs' => app(TicketingCategoryPackCatalog::class)->all(),
@@ -249,6 +342,7 @@ final class TicketingSettingsService
             self::NOTIFY_IT_ON_REOPEN => 'notify_it_on_reopen',
             self::NOTIFY_REQUESTOR_ON_RESOLVE => 'notify_requestor_on_resolve',
             self::NOTIFY_ASSIGNEE_ON_ASSIGN => 'notify_assignee_on_assign',
+            self::NOTIFY_ON_STATUS_CHANGE => 'notify_on_status_change',
             self::SLA_ENABLED => 'sla_enabled',
             self::NOTIFY_TEAMS_ON_CREATE => 'notify_teams_on_create',
             self::NOTIFY_TEAMS_ON_SLA_REMINDER => 'notify_teams_on_sla_reminder',
@@ -257,6 +351,14 @@ final class TicketingSettingsService
             if (array_key_exists($input, $values)) {
                 $this->setString($key, filter_var($values[$input], FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false');
             }
+        }
+
+        if (array_key_exists('email_no_reply_message', $values)) {
+            $this->setString(self::EMAIL_NO_REPLY_MESSAGE, trim((string) $values['email_no_reply_message']));
+        }
+
+        if (array_key_exists('it_assignee_user_ids', $values) && is_array($values['it_assignee_user_ids'])) {
+            $this->persistItAssigneeUserIds($values['it_assignee_user_ids']);
         }
 
         if (array_key_exists('sla_response_minutes', $values)) {

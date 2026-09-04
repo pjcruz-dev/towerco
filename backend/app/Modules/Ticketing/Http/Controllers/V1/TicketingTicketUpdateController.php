@@ -58,6 +58,12 @@ class TicketingTicketUpdateController extends AbstractApiController
             );
         } elseif ($result['lifecycle_event'] === 'reopened') {
             $notifications->dispatchReopened($updated, $request->user());
+        } elseif (
+            ($result['status_changed'] ?? false)
+            && is_string($result['status_from'] ?? null)
+            && ! in_array($result['lifecycle_event'], ['resolved', 'reopened'], true)
+        ) {
+            $notifications->dispatchStatusChanged($updated, $request->user(), (string) $result['status_from']);
         }
 
         if ($result['assignee_changed'] && $result['new_assignee'] instanceof TenantUser) {

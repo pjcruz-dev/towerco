@@ -243,6 +243,10 @@ final class TicketingTicketService
                 $assigneeId = $this->assignment->resolveAssigneeId($category);
             }
 
+            if (is_string($assigneeId) && $assigneeId !== '') {
+                app(TicketingSettingsService::class)->assertAssigneeAllowed($assigneeId);
+            }
+
             $ticket = TicketingTicket::query()->create([
                 'id' => (string) Str::uuid(),
                 'ticket_number' => $this->nextTicketNumber(),
@@ -352,7 +356,9 @@ final class TicketingTicketService
      *   lifecycle_event: ?string,
      *   resolution_comment: ?string,
      *   assignee_changed: bool,
-     *   new_assignee: ?TenantUser
+     *   new_assignee: ?TenantUser,
+     *   status_changed: bool,
+     *   status_from: ?string
      * }
      */
     public function update(TicketingTicket $ticket, TenantUser $actor, array $data): array
@@ -368,6 +374,8 @@ final class TicketingTicketService
         $resolutionComment = null;
         $assigneeChanged = false;
         $newAssignee = null;
+        $statusChanged = false;
+        $statusFrom = null;
         $previousAssigneeId = $ticket->assignee_id !== null ? (string) $ticket->assignee_id : null;
         $previousStatus = (string) $ticket->status;
         $previousPriority = (string) $ticket->priority;
@@ -410,6 +418,9 @@ final class TicketingTicketService
             $nextAssigneeId = $data['assignee_id'] !== null && $data['assignee_id'] !== ''
                 ? (string) $data['assignee_id']
                 : null;
+            if ($nextAssigneeId !== null) {
+                app(TicketingSettingsService::class)->assertAssigneeAllowed($nextAssigneeId);
+            }
             if ($nextAssigneeId !== $previousAssigneeId) {
                 $assigneeChanged = $nextAssigneeId !== null;
             }
@@ -456,6 +467,11 @@ final class TicketingTicketService
             } elseif ($isRequester && $status === TicketingTicket::STATUS_CLOSED) {
                 $updates['status'] = TicketingTicket::STATUS_CLOSED;
                 $updates['closed_at'] = now();
+            }
+
+            if (isset($updates['status']) && (string) $updates['status'] !== $previousStatus) {
+                $statusChanged = true;
+                $statusFrom = $previousStatus;
             }
         }
 
@@ -516,6 +532,8 @@ final class TicketingTicketService
             'resolution_comment' => $resolutionComment,
             'assignee_changed' => $assigneeChanged,
             'new_assignee' => $newAssignee,
+            'status_changed' => $statusChanged,
+            'status_from' => $statusFrom,
         ];
     }
 

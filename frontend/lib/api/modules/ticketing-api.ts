@@ -25,6 +25,11 @@ export async function fetchTicketingAssignableUsers(): Promise<TicketingUserRef[
   return response.data.data;
 }
 
+export async function fetchTicketingDirectoryUsers(): Promise<TicketingUserRef[]> {
+  const response = await apiClient.get<{ data: TicketingUserRef[] }>("/ticketing/directory-users");
+  return response.data.data;
+}
+
 export type TicketingTicketListParams = {
   page?: number;
   per_page?: number;

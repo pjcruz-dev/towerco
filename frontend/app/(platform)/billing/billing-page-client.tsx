@@ -117,9 +117,9 @@ export function BillingPageClient() {
     snapshot && snapshot.seat_limit > 0
       ? Math.round((snapshot.seat_used / snapshot.seat_limit) * 100)
       : 0;
-  const rfiUsed = snapshot?.rfi_units?.used ?? 0;
-  const rfiLimit = snapshot?.rfi_units?.limit ?? 0;
-  const rfiUtilization = rfiLimit > 0 ? Math.round((rfiUsed / rfiLimit) * 100) : 0;
+  const towerUsed = snapshot?.tower_licenses?.used ?? snapshot?.rfi_units?.used ?? 0;
+  const towerLimit = snapshot?.tower_licenses?.limit ?? snapshot?.rfi_units?.limit ?? 0;
+  const towerUtilization = towerLimit > 0 ? Math.round((towerUsed / towerLimit) * 100) : 0;
 
   return (
     <PermissionGate requiredPermissions={[permissions.billingView]}>
@@ -128,7 +128,7 @@ export function BillingPageClient() {
           title="Billing & subscription"
           description={
             <>
-              Plan tier, seats, and RFI capacity for your organization. Seat limits and plan changes
+              Plan tier, seats, and tower licenses for your organization. Seat limits and plan changes
               are managed in the{" "}
               <strong className="font-medium text-foreground">Platform console</strong> (Tenants →
               Billing &amp; plan).
@@ -248,20 +248,16 @@ export function BillingPageClient() {
                 tone={utilizationTone(seatUtilization)}
               />
               <TenantBillingMetricCard
-                label="RFI units"
+                label="Tower licenses"
                 value={
                   <>
-                    {rfiUsed}{" "}
-                    <span className="text-base font-normal text-muted-foreground">/ {rfiLimit}</span>
+                    {towerUsed}{" "}
+                    <span className="text-base font-normal text-muted-foreground">/ {towerLimit}</span>
                   </>
                 }
-                hint={
-                  snapshot.rfi_units?.metering_active
-                    ? `${snapshot.rfi_units.available} remaining after go-live`
-                    : "Metering not active yet"
-                }
-                utilizationPercent={snapshot.rfi_units?.metering_active ? rfiUtilization : undefined}
-                tone={utilizationTone(rfiUtilization)}
+                hint={`${snapshot.tower_licenses?.available ?? snapshot.rfi_units?.available ?? 0} available · each active tower site uses one`}
+                utilizationPercent={towerUtilization}
+                tone={utilizationTone(towerUtilization)}
               />
             </div>
 

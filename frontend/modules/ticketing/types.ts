@@ -116,6 +116,10 @@ export type TicketingSettings = {
   notify_it_on_reopen: boolean;
   notify_requestor_on_resolve: boolean;
   notify_assignee_on_assign: boolean;
+  notify_on_status_change: boolean;
+  email_no_reply_message: string;
+  it_assignee_user_ids: string[];
+  it_assignee_pool_configured: boolean;
   categories: string[];
   category_options?: TicketingCategoryOption[];
   category_packs?: TicketingCategoryPack[];

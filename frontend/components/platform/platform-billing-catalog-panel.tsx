@@ -30,9 +30,9 @@ type TierDraft = {
   label: string;
   annual_discount_percent: string;
   included_paid_seats: string;
-  included_rfi_units: string;
+  included_tower_licenses: string;
   monthly_base_usd: string;
-  rfi_overage_usd: string;
+  tower_overage_usd: string;
   paid_seat_overage_usd: string;
 };
 
@@ -45,9 +45,9 @@ function tierToDraft(tier: PlatformPlanCatalogTier): TierDraft {
     label: tier.label,
     annual_discount_percent: String(tier.annual_discount_percent ?? ""),
     included_paid_seats: String(included.paid_seats ?? ""),
-    included_rfi_units: String(included.rfi_units ?? ""),
+    included_tower_licenses: String(included.tower_licenses ?? included.rfi_units ?? ""),
     monthly_base_usd: String(pricing.monthly_base_usd ?? ""),
-    rfi_overage_usd: String(pricing.rfi_overage_usd ?? ""),
+    tower_overage_usd: String(pricing.tower_overage_usd ?? pricing.rfi_overage_usd ?? ""),
     paid_seat_overage_usd: String(pricing.paid_seat_overage_usd ?? ""),
   };
 }
@@ -68,11 +68,11 @@ function buildPatch(
           : Number.parseFloat(tier.annual_discount_percent),
       included: {
         paid_seats: Number.parseInt(tier.included_paid_seats, 10),
-        rfi_units: Number.parseInt(tier.included_rfi_units, 10),
+        tower_licenses: Number.parseInt(tier.included_tower_licenses, 10),
       },
       pricing: {
         monthly_base_usd: Number.parseFloat(tier.monthly_base_usd),
-        rfi_overage_usd: Number.parseFloat(tier.rfi_overage_usd),
+        tower_overage_usd: Number.parseFloat(tier.tower_overage_usd),
         paid_seat_overage_usd: Number.parseFloat(tier.paid_seat_overage_usd),
       },
     })),
@@ -129,9 +129,9 @@ export function PlatformBillingCatalogPanel() {
             rates,
           ),
         ),
-        rfi_overage_usd: String(
+        tower_overage_usd: String(
           convertCurrencyAmount(
-            Number.parseFloat(tier.rfi_overage_usd) || 0,
+            Number.parseFloat(tier.tower_overage_usd) || 0,
             previousCurrency,
             nextCurrency,
             rates,
@@ -171,7 +171,7 @@ export function PlatformBillingCatalogPanel() {
       notify({
         level: "success",
         title: "Billing catalog saved",
-        message: "Currency, list prices, annual discount, and included RFI units are updated platform-wide.",
+        message: "Currency, list prices, annual discount, and included tower licenses are updated platform-wide.",
       });
     },
     onError: (error) =>
@@ -203,7 +203,8 @@ export function PlatformBillingCatalogPanel() {
       <CardHeader className="border-b border-border pb-4">
         <CardTitle className="text-base font-medium">Plan catalog & pricing</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Platform-wide list prices, annual prepay discount, and included RFI / paid seat limits.
+          Platform-wide list prices, annual prepay discount, and included tower license / paid seat
+          limits.
         </p>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
@@ -271,7 +272,8 @@ export function PlatformBillingCatalogPanel() {
                     <p className="text-sm font-medium text-foreground">{tier.label}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatMoney(Number.parseFloat(tier.monthly_base_usd) || 0, currency)}/mo ·{" "}
-                      {tier.included_rfi_units || "0"} RFI · {tier.included_paid_seats || "0"} seats
+                      {tier.included_tower_licenses || "0"} towers · {tier.included_paid_seats || "0"}{" "}
+                      seats
                     </p>
                   </div>
                   <ChevronDown
@@ -335,29 +337,29 @@ export function PlatformBillingCatalogPanel() {
                         }}
                       />
                       <FormInput
-                        label="Included RFI units"
-                        id={`${tier.plan_tier}-rfi`}
+                        label="Included tower licenses"
+                        id={`${tier.plan_tier}-towers`}
                         type="number"
                         min={0}
-                        value={tier.included_rfi_units}
+                        value={tier.included_tower_licenses}
                         disabled={!canManage}
                         onChange={(event) => {
                           const next = [...tierDrafts];
-                          next[index] = { ...tier, included_rfi_units: event.target.value };
+                          next[index] = { ...tier, included_tower_licenses: event.target.value };
                           setTierDrafts(next);
                         }}
                       />
                       <FormInput
-                        label={`+1 RFI / month (${currency})`}
-                        id={`${tier.plan_tier}-rfi-overage`}
+                        label={`+1 tower license / month (${currency})`}
+                        id={`${tier.plan_tier}-tower-overage`}
                         type="number"
                         min={0}
                         step={1}
-                        value={tier.rfi_overage_usd}
+                        value={tier.tower_overage_usd}
                         disabled={!canManage}
                         onChange={(event) => {
                           const next = [...tierDrafts];
-                          next[index] = { ...tier, rfi_overage_usd: event.target.value };
+                          next[index] = { ...tier, tower_overage_usd: event.target.value };
                           setTierDrafts(next);
                         }}
                       />

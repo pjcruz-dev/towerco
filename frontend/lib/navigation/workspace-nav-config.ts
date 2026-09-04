@@ -475,9 +475,10 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: ["dynamic_entities:fields:manage"],
           },
           {
-            title: "Relationship Studio",
+            title: "Relation Visual",
             href: "/dynamic-entities/relationships",
             permissions: ["dynamic_entities:fields:manage"],
+            module: "dynamic_entities",
           },
           {
             title: "Field Groups",

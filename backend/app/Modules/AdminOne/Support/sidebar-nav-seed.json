@@ -1213,6 +1213,21 @@
             "children": []
           },
           {
+            "key": "group.operations.system-core.relationship-studio",
+            "type": "internal_page",
+            "title": "Relation Visual",
+            "icon": null,
+            "href": "/dynamic-entities/relationships",
+            "entity_slug": null,
+            "required_permissions": [
+              "dynamic_entities:fields:manage"
+            ],
+            "permissions_match": "all",
+            "module": "dynamic_entities",
+            "sort_order": 3,
+            "children": []
+          },
+          {
             "key": "group.operations.system-core.field-groups",
             "type": "internal_page",
             "title": "Field Groups",
@@ -1224,7 +1239,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 2,
+            "sort_order": 4,
             "children": []
           },
           {

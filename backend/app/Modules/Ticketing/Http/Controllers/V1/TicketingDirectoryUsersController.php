@@ -6,13 +6,15 @@ namespace App\Modules\Ticketing\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Ticketing\Services\TicketingSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class TicketingAssignableUsersController extends AbstractApiController
+/**
+ * Full active-user directory for ticket managers (IT pool CRUD, create-on-behalf requester).
+ */
+class TicketingDirectoryUsersController extends AbstractApiController
 {
-    public function __invoke(Request $request, TicketingSettingsService $settings): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
         $user = $request->user();
         abort_unless(
@@ -20,19 +22,9 @@ class TicketingAssignableUsersController extends AbstractApiController
             403,
         );
 
-        $query = TenantUser::query()
+        $users = TenantUser::query()
             ->where('is_active', true)
-            ->orderBy('name');
-
-        $poolIds = $settings->itAssigneeUserIds();
-        if ($poolIds !== null) {
-            if ($poolIds === []) {
-                return $this->ok([]);
-            }
-            $query->whereIn('id', $poolIds);
-        }
-
-        $users = $query
+            ->orderBy('name')
             ->get(['id', 'name', 'email'])
             ->map(fn (TenantUser $row) => [
                 'id' => (string) $row->id,

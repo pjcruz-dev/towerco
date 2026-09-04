@@ -73,24 +73,12 @@ const STATUS_OPTIONS = [
   { value: "canceled", label: "Canceled" },
 ] as const;
 
-function toDatetimeLocalValue(iso: string | null | undefined): string {
-  if (!iso) {
-    return "";
-  }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function buildBillingOverrides(input: {
   clearOverrides: boolean;
   planTier: "starter" | "professional" | "enterprise";
   overrideSeatLimit: string;
-  overrideIncludedRfiUnits: string;
-  overrideGrandfatherRfiUnits: string;
+  overrideIncludedTowerLicenses: string;
+  overrideGrandfatherTowerLicenses: string;
   overrideAnnualDiscount: string;
   overrideFileUploads: boolean;
   overrideUnlimitedFiles: boolean;
@@ -112,14 +100,14 @@ function buildBillingOverrides(input: {
     overrides.seat_limit = seat;
   }
 
-  const includedRfi = Number.parseInt(input.overrideIncludedRfiUnits, 10);
-  if (Number.isFinite(includedRfi) && includedRfi >= 0) {
-    overrides.included_rfi_units = includedRfi;
+  const includedTowers = Number.parseInt(input.overrideIncludedTowerLicenses, 10);
+  if (Number.isFinite(includedTowers) && includedTowers >= 0) {
+    overrides.included_tower_licenses = includedTowers;
   }
 
-  const grandfatherRfi = Number.parseInt(input.overrideGrandfatherRfiUnits, 10);
-  if (Number.isFinite(grandfatherRfi) && grandfatherRfi >= 0) {
-    overrides.grandfather_rfi_units = grandfatherRfi;
+  const grandfatherTowers = Number.parseInt(input.overrideGrandfatherTowerLicenses, 10);
+  if (Number.isFinite(grandfatherTowers) && grandfatherTowers >= 0) {
+    overrides.grandfather_tower_licenses = grandfatherTowers;
   }
 
   if (input.overrideAnnualDiscount.trim() !== "") {
@@ -230,10 +218,9 @@ export function TenantBillingSheet({
   const [overrideTicketingUnlimitedAttachments, setOverrideTicketingUnlimitedAttachments] =
     useState(false);
   const [overrideTicketingMaxAttachments, setOverrideTicketingMaxAttachments] = useState("");
-  const [overrideIncludedRfiUnits, setOverrideIncludedRfiUnits] = useState("");
-  const [overrideGrandfatherRfiUnits, setOverrideGrandfatherRfiUnits] = useState("");
+  const [overrideIncludedTowerLicenses, setOverrideIncludedTowerLicenses] = useState("");
+  const [overrideGrandfatherTowerLicenses, setOverrideGrandfatherTowerLicenses] = useState("");
   const [overrideAnnualDiscount, setOverrideAnnualDiscount] = useState("");
-  const [billingMeterStartsAt, setBillingMeterStartsAt] = useState("");
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
   const [clearOverrides, setClearOverrides] = useState(false);
   const initTenantIdRef = useRef<string | null>(null);
@@ -284,16 +271,23 @@ export function TenantBillingSheet({
     setOverrideTicketingMaxAttachments(
       tk?.max_attachments_per_ticket != null ? String(tk.max_attachments_per_ticket) : "",
     );
-    setOverrideIncludedRfiUnits(
-      overrides?.included_rfi_units != null ? String(overrides.included_rfi_units) : "",
+    setOverrideIncludedTowerLicenses(
+      overrides?.included_tower_licenses != null
+        ? String(overrides.included_tower_licenses)
+        : overrides?.included_rfi_units != null
+          ? String(overrides.included_rfi_units)
+          : "",
     );
-    setOverrideGrandfatherRfiUnits(
-      overrides?.grandfather_rfi_units != null ? String(overrides.grandfather_rfi_units) : "",
+    setOverrideGrandfatherTowerLicenses(
+      overrides?.grandfather_tower_licenses != null
+        ? String(overrides.grandfather_tower_licenses)
+        : overrides?.grandfather_rfi_units != null
+          ? String(overrides.grandfather_rfi_units)
+          : "",
     );
     setOverrideAnnualDiscount(
       overrides?.annual_discount_percent != null ? String(overrides.annual_discount_percent) : "",
     );
-    setBillingMeterStartsAt(toDatetimeLocalValue(tenant.billing_meter_starts_at));
     setBillingInterval(tenant.billing_interval === "annual" ? "annual" : "monthly");
     setClearOverrides(false);
     onClearDowngradeWarnings();
@@ -336,17 +330,17 @@ export function TenantBillingSheet({
       return null;
     }
 
-    const parsedRfiOverride =
-      overrideIncludedRfiUnits.trim() !== ""
-        ? Number.parseInt(overrideIncludedRfiUnits, 10)
+    const parsedTowerOverride =
+      overrideIncludedTowerLicenses.trim() !== ""
+        ? Number.parseInt(overrideIncludedTowerLicenses, 10)
         : null;
     const parsedAnnualDiscount =
       overrideAnnualDiscount.trim() !== ""
         ? Number.parseFloat(overrideAnnualDiscount)
         : null;
     const parsedGrandfather =
-      overrideGrandfatherRfiUnits.trim() !== ""
-        ? Number.parseInt(overrideGrandfatherRfiUnits, 10)
+      overrideGrandfatherTowerLicenses.trim() !== ""
+        ? Number.parseInt(overrideGrandfatherTowerLicenses, 10)
         : 0;
 
     return computeTenantBillingEstimate({
@@ -360,10 +354,12 @@ export function TenantBillingSheet({
           ? parsedAnnualDiscount
           : null,
       effectiveSeatLimit: effectiveSeatPreview,
-      includedRfiUnitsOverride:
-        parsedRfiOverride != null && Number.isFinite(parsedRfiOverride) ? parsedRfiOverride : null,
-      grandfatherRfiUnits: Number.isFinite(parsedGrandfather) ? parsedGrandfather : 0,
-      rfiUsed: tenant.rfi_units_used ?? undefined,
+      includedTowerLicensesOverride:
+        parsedTowerOverride != null && Number.isFinite(parsedTowerOverride)
+          ? parsedTowerOverride
+          : null,
+      grandfatherTowerLicenses: Number.isFinite(parsedGrandfather) ? parsedGrandfather : 0,
+      towerLicensesUsed: tenant.tower_licenses_used ?? tenant.rfi_units_used ?? undefined,
     });
   }, [
     billingInterval,
@@ -372,9 +368,10 @@ export function TenantBillingSheet({
     catalogTiers,
     effectiveSeatPreview,
     overrideAnnualDiscount,
-    overrideGrandfatherRfiUnits,
-    overrideIncludedRfiUnits,
+    overrideGrandfatherTowerLicenses,
+    overrideIncludedTowerLicenses,
     planTier,
+    tenant.tower_licenses_used,
     tenant.rfi_units_used,
   ]);
 
@@ -396,9 +393,9 @@ export function TenantBillingSheet({
   const isDowngradeSelection =
     (TIER_RANK[planTier] ?? 0) < (TIER_RANK[initialTier] ?? 0);
 
-  const meteringActive = Boolean(billingMeterStartsAt);
-  const rfiUsed = tenant.rfi_units_used ?? 0;
-  const rfiLimit = tenant.effective_rfi_limit ?? 0;
+  const towerUsed = tenant.tower_licenses_used ?? tenant.rfi_units_used ?? 0;
+  const towerLimit =
+    tenant.effective_tower_license_limit ?? tenant.effective_rfi_limit ?? 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -406,7 +403,7 @@ export function TenantBillingSheet({
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>Billing & plan</SheetTitle>
           <SheetDescription>
-            Subscription, RFI metering, and seat limits for{" "}
+            Subscription, tower licenses, and seat limits for{" "}
             <span className="font-medium text-foreground">{label}</span>.
           </SheetDescription>
         </SheetHeader>
@@ -414,13 +411,13 @@ export function TenantBillingSheet({
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
-              <p className="text-xs font-medium text-muted-foreground">RFI units</p>
+              <p className="text-xs font-medium text-muted-foreground">Tower licenses</p>
               <p className="mt-1 text-lg font-medium tabular-nums text-foreground">
-                {rfiUsed}
-                <span className="text-sm font-normal text-muted-foreground"> / {rfiLimit}</span>
+                {towerUsed}
+                <span className="text-sm font-normal text-muted-foreground"> / {towerLimit}</span>
               </p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {meteringActive ? "Metering active" : "Metering off until go-live is set"}
+                Each active tower site uses one
               </p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
@@ -515,59 +512,49 @@ export function TenantBillingSheet({
           </PlatformBillingFormSection>
 
           <PlatformBillingFormSection
-            title="RFI metering"
-            description="Only RFIs recorded on or after go-live count toward limits. Tower inventory is never blocked."
+            title="Billing interval"
+            description="Monthly list price or annual prepay with catalog discount."
           >
-            <div className="grid gap-4 lg:grid-cols-2">
-              <FormInput
-                label="Go-live date & time"
-                id="billing-meter-starts"
-                dateTime
-                className="min-w-0"
-                value={billingMeterStartsAt}
-                onChange={(event) => setBillingMeterStartsAt(event.target.value)}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="billing-interval" className="text-xs font-medium text-muted-foreground">
-                  Billing interval
-                </Label>
-                <Select
-                  id="billing-interval"
-                  className="h-10 w-full"
-                  value={billingInterval}
-                  onChange={(event) =>
-                    setBillingInterval(event.target.value as "monthly" | "annual")
-                  }
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual prepay</option>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="billing-interval" className="text-xs font-medium text-muted-foreground">
+                Billing interval
+              </Label>
+              <Select
+                id="billing-interval"
+                className="h-10 w-full"
+                value={billingInterval}
+                onChange={(event) =>
+                  setBillingInterval(event.target.value as "monthly" | "annual")
+                }
+              >
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual prepay</option>
+              </Select>
             </div>
           </PlatformBillingFormSection>
 
           <PlatformBillingFormSection
             title="Sales overrides"
-            description="Grandfather RFI capacity or set a tenant-specific annual discount without changing the platform catalog."
+            description="Grandfather tower licenses or set a tenant-specific annual discount without changing the platform catalog."
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <FormInput
-                label="Included RFI units"
-                id="billing-override-rfi"
+                label="Included tower licenses"
+                id="billing-override-towers"
                 type="number"
                 min={0}
                 placeholder="Catalog default"
-                value={overrideIncludedRfiUnits}
-                onChange={(event) => setOverrideIncludedRfiUnits(event.target.value)}
+                value={overrideIncludedTowerLicenses}
+                onChange={(event) => setOverrideIncludedTowerLicenses(event.target.value)}
               />
               <FormInput
-                label="Grandfather RFI units"
-                id="billing-grandfather-rfi"
+                label="Grandfather tower licenses"
+                id="billing-grandfather-towers"
                 type="number"
                 min={0}
                 placeholder="0"
-                value={overrideGrandfatherRfiUnits}
-                onChange={(event) => setOverrideGrandfatherRfiUnits(event.target.value)}
+                value={overrideGrandfatherTowerLicenses}
+                onChange={(event) => setOverrideGrandfatherTowerLicenses(event.target.value)}
               />
               <FormInput
                 label="Annual discount %"
@@ -842,18 +829,14 @@ export function TenantBillingSheet({
                       ? null
                       : undefined,
                 seat_limit: parsedSeatLimit,
-                billing_meter_starts_at:
-                  billingMeterStartsAt !== ""
-                    ? new Date(billingMeterStartsAt).toISOString()
-                    : null,
                 billing_interval: billingInterval,
                 confirm_plan_downgrade: downgradeWarnings.length > 0 ? confirmDowngrade : undefined,
                 billing_overrides: buildBillingOverrides({
                   clearOverrides,
                   planTier,
                   overrideSeatLimit,
-                  overrideIncludedRfiUnits,
-                  overrideGrandfatherRfiUnits,
+                  overrideIncludedTowerLicenses,
+                  overrideGrandfatherTowerLicenses,
                   overrideAnnualDiscount,
                   overrideFileUploads,
                   overrideUnlimitedFiles,

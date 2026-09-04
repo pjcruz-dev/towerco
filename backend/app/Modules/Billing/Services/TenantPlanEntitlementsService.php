@@ -129,20 +129,46 @@ final class TenantPlanEntitlementsService
         return max(1, $included > 0 ? $included : 25);
     }
 
-    public function effectiveRfiLimit(Tenant $tenant): int
+    public function effectiveTowerLicenseLimit(Tenant $tenant): int
     {
         $overrides = is_array($tenant->billing_overrides) ? $tenant->billing_overrides : [];
         $tier = $this->normalizeTier($tenant->plan_tier);
 
-        $base = isset($overrides['included_rfi_units'])
-            ? max(0, (int) $overrides['included_rfi_units'])
-            : $this->catalog->tierIncluded($tier, 'rfi_units');
+        $base = $this->overrideInt(
+            $overrides,
+            'included_tower_licenses',
+            'included_rfi_units',
+        ) ?? $this->catalog->tierIncluded($tier, 'tower_licenses');
 
-        $grandfather = isset($overrides['grandfather_rfi_units'])
-            ? max(0, (int) $overrides['grandfather_rfi_units'])
-            : 0;
+        $grandfather = $this->overrideInt(
+            $overrides,
+            'grandfather_tower_licenses',
+            'grandfather_rfi_units',
+        ) ?? 0;
 
         return max(0, $base + $grandfather);
+    }
+
+    /** @deprecated Use effectiveTowerLicenseLimit() */
+    public function effectiveRfiLimit(Tenant $tenant): int
+    {
+        return $this->effectiveTowerLicenseLimit($tenant);
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function overrideInt(array $overrides, string $primary, string $legacy): ?int
+    {
+        if (array_key_exists($primary, $overrides)) {
+            return max(0, (int) $overrides[$primary]);
+        }
+
+        if (array_key_exists($legacy, $overrides)) {
+            return max(0, (int) $overrides[$legacy]);
+        }
+
+        return null;
     }
 
     public function effectiveAnnualDiscountPercent(Tenant $tenant): float

@@ -6,6 +6,7 @@ namespace App\Modules\Ticketing\Notifications;
 
 use App\Models\TicketingTicket;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
+use App\Modules\Ticketing\Services\TicketingSettingsService;
 use App\Modules\Ticketing\Support\TicketingNotificationCategory;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -55,6 +56,7 @@ final class TicketingTicketMailNotification extends Notification implements Shou
                 'reopened' => "{$prefix} Ticket reopened {$number}",
                 'resolved' => "{$prefix} Ticket resolved {$number}",
                 'assigned' => "{$prefix} Ticket assigned to you {$number}",
+                'status' => "{$prefix} Ticket status updated {$number}",
                 default => "{$prefix} Ticket update {$number}",
             };
 
@@ -63,7 +65,8 @@ final class TicketingTicketMailNotification extends Notification implements Shou
                 ->subject($subject)
                 ->greeting("{$brand} — ".__('Ticketing'))
                 ->line(__('Ticket: **:number**', ['number' => $number]))
-                ->line(__('Title: :title', ['title' => $title]));
+                ->line(__('Title: :title', ['title' => $title]))
+                ->line(__('Status: :status', ['status' => str_replace('_', ' ', (string) $this->ticket->status)]));
 
             if ($this->ticket->requester !== null) {
                 $message->line(__('Requester: :name', ['name' => $this->ticket->requester->name]));
@@ -89,6 +92,22 @@ final class TicketingTicketMailNotification extends Notification implements Shou
                 if ($this->actorName !== null) {
                     $message->line(__('Assigned by: :name', ['name' => $this->actorName]));
                 }
+            } elseif ($this->event === 'status') {
+                $message->line(__('Ticket status was updated.'));
+                if ($this->resolutionComment !== null && trim($this->resolutionComment) !== '') {
+                    $message->line(__('Previous status: :status', ['status' => str_replace('_', ' ', $this->resolutionComment)]));
+                }
+                if ($this->actorName !== null) {
+                    $message->line(__('Updated by: :name', ['name' => $this->actorName]));
+                }
+            }
+
+            $noReply = trim((string) app(TicketingSettingsService::class)->getString(
+                TicketingSettingsService::EMAIL_NO_REPLY_MESSAGE,
+                '',
+            ));
+            if ($noReply !== '') {
+                $message->line($noReply);
             }
 
             return $message

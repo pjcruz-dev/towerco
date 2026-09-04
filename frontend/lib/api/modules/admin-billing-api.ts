@@ -25,11 +25,17 @@ export type TenantBillingSnapshot = {
   seat_used: number;
   viewer_seats_used?: number;
   seats_available: number;
+  tower_licenses?: {
+    used: number;
+    limit: number;
+    available: number;
+  };
+  /** @deprecated Prefer tower_licenses */
   rfi_units?: {
     used: number;
     limit: number;
     available: number;
-    metering_active: boolean;
+    metering_active?: boolean;
   };
   billing_meter_starts_at?: string | null;
   billing_interval?: "monthly" | "annual";
@@ -55,20 +61,36 @@ export type TenantBillingEstimateSnapshot = {
   annual_discount_percent: number;
   monthly_base: number;
   catalog_included_paid_seats: number;
-  catalog_included_rfi_units: number;
+  catalog_included_tower_licenses?: number;
+  /** @deprecated Prefer catalog_included_tower_licenses */
+  catalog_included_rfi_units?: number;
   effective_paid_seats: number;
-  paid_rfi_capacity: number;
+  paid_tower_capacity?: number;
+  /** @deprecated Prefer paid_tower_capacity */
+  paid_rfi_capacity?: number;
+  grandfather_tower_licenses?: number;
+  /** @deprecated Prefer grandfather_tower_licenses */
   grandfather_rfi_units?: number;
   committed_extra_seats: number;
-  committed_extra_rfi_units: number;
+  committed_extra_tower_licenses?: number;
+  /** @deprecated Prefer committed_extra_tower_licenses */
+  committed_extra_rfi_units?: number;
   billable_extra_seats: number;
-  billable_extra_rfi_units: number;
+  billable_extra_tower_licenses?: number;
+  /** @deprecated Prefer billable_extra_tower_licenses */
+  billable_extra_rfi_units?: number;
   per_paid_seat_monthly: number;
-  per_rfi_unit_monthly: number;
+  per_tower_license_monthly?: number;
+  /** @deprecated Prefer per_tower_license_monthly */
+  per_rfi_unit_monthly?: number;
   add_one_paid_seat_monthly?: number;
+  add_one_tower_license_monthly?: number;
+  /** @deprecated Prefer add_one_tower_license_monthly */
   add_one_rfi_unit_monthly?: number;
   seat_addons_monthly: number;
-  rfi_addons_monthly: number;
+  tower_addons_monthly?: number;
+  /** @deprecated Prefer tower_addons_monthly */
+  rfi_addons_monthly?: number;
   addons_monthly: number;
   estimated_monthly_total: number;
   annual_base_prepaid: number;

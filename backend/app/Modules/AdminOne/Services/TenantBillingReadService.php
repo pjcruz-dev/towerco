@@ -9,7 +9,7 @@ use App\Modules\Billing\Support\PlatformBillingCurrencyCatalog;
 use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Billing\Services\StripeBillingService;
 use App\Modules\Billing\Services\TenantBillingEstimateService;
-use App\Modules\Billing\Services\TenantRfiMeterService;
+use App\Modules\Billing\Services\TenantTowerLicenseMeterService;
 use App\Modules\Billing\Services\TenantSubscriptionLifecycleService;
 
 class TenantBillingReadService
@@ -17,7 +17,7 @@ class TenantBillingReadService
     public function __construct(
         private readonly TenantSeatLimitService $seats,
         private readonly TenantPlanEntitlementsService $entitlements,
-        private readonly TenantRfiMeterService $rfiMeter,
+        private readonly TenantTowerLicenseMeterService $towerLicenses,
         private readonly TenantBillingEstimateService $billingEstimate,
         private readonly TenantSubscriptionLifecycleService $subscriptions,
         private readonly StripeBillingService $stripe,
@@ -54,11 +54,11 @@ class TenantBillingReadService
             ];
 
         $catalog = $this->entitlements->catalog();
-        $rfiSnapshot = $central !== null
-            ? $this->rfiMeter->snapshot($central)
-            : ['used' => 0, 'limit' => 0, 'available' => 0, 'metering_active' => false];
+        $towerSnapshot = $central !== null
+            ? $this->towerLicenses->snapshot($central)
+            : ['used' => 0, 'limit' => 0, 'available' => 0];
         $estimate = $central !== null
-            ? $this->billingEstimate->estimateForTenant($central, $seatUsed, (int) ($rfiSnapshot['used'] ?? 0))
+            ? $this->billingEstimate->estimateForTenant($central, $seatUsed, (int) ($towerSnapshot['used'] ?? 0))
             : null;
 
         return [
@@ -72,7 +72,7 @@ class TenantBillingReadService
             'seat_used' => $seatUsed,
             'viewer_seats_used' => $viewerCount,
             'seats_available' => max(0, $seatLimit - $seatUsed),
-            'rfi_units' => $rfiSnapshot,
+            'tower_licenses' => $towerSnapshot,
             'billing_estimate' => $estimate,
             'overage' => $estimate,
             'billing_meter_starts_at' => $central?->billing_meter_starts_at?->toIso8601String(),

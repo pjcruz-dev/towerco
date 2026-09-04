@@ -112,12 +112,15 @@ return [
             'sort' => 10,
             'included' => [
                 'paid_seats' => 5,
-                'rfi_units' => 10,
+                'tower_licenses' => 10,
                 'storage_gb' => 25,
             ],
             'pricing' => [
                 'monthly_base_usd' => (float) env('TOWEROS_LIST_PRICE_STARTER_USD', 0),
-                'rfi_overage_usd' => (float) env('TOWEROS_RFI_OVERAGE_STARTER_USD', 0),
+                'tower_overage_usd' => (float) env(
+                    'TOWEROS_TOWER_OVERAGE_STARTER_USD',
+                    env('TOWEROS_RFI_OVERAGE_STARTER_USD', 0),
+                ),
                 'paid_seat_overage_usd' => (float) env('TOWEROS_SEAT_OVERAGE_STARTER_USD', 0),
             ],
             'modules' => [
@@ -137,12 +140,15 @@ return [
             'sort' => 20,
             'included' => [
                 'paid_seats' => 15,
-                'rfi_units' => 50,
+                'tower_licenses' => 50,
                 'storage_gb' => 100,
             ],
             'pricing' => [
                 'monthly_base_usd' => (float) env('TOWEROS_LIST_PRICE_PROFESSIONAL_USD', 99),
-                'rfi_overage_usd' => (float) env('TOWEROS_RFI_OVERAGE_PROFESSIONAL_USD', 25),
+                'tower_overage_usd' => (float) env(
+                    'TOWEROS_TOWER_OVERAGE_PROFESSIONAL_USD',
+                    env('TOWEROS_RFI_OVERAGE_PROFESSIONAL_USD', 25),
+                ),
                 'paid_seat_overage_usd' => (float) env('TOWEROS_SEAT_OVERAGE_PROFESSIONAL_USD', 15),
             ],
             'modules' => [
@@ -162,12 +168,15 @@ return [
             'sort' => 30,
             'included' => [
                 'paid_seats' => 50,
-                'rfi_units' => 250,
+                'tower_licenses' => 250,
                 'storage_gb' => 500,
             ],
             'pricing' => [
                 'monthly_base_usd' => (float) env('TOWEROS_LIST_PRICE_ENTERPRISE_USD', 299),
-                'rfi_overage_usd' => (float) env('TOWEROS_RFI_OVERAGE_ENTERPRISE_USD', 20),
+                'tower_overage_usd' => (float) env(
+                    'TOWEROS_TOWER_OVERAGE_ENTERPRISE_USD',
+                    env('TOWEROS_RFI_OVERAGE_ENTERPRISE_USD', 20),
+                ),
                 'paid_seat_overage_usd' => (float) env('TOWEROS_SEAT_OVERAGE_ENTERPRISE_USD', 12),
             ],
             'modules' => [

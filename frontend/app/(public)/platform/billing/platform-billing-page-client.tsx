@@ -28,7 +28,8 @@ export function PlatformBillingPageClient() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Billing & revenue</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Subscription mix, indicative MRR, seat and RFI usage, plus platform catalog pricing.
+            Subscription mix, indicative MRR, seat and tower license usage, plus platform catalog
+            pricing.
           </p>
         </div>
         <Link href="/platform#tenant-directory" className={buttonVariants({ variant: "outline" })}>

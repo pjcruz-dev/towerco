@@ -25,10 +25,12 @@ final class CentralPlatformBillingCatalogUpdateController extends AbstractApiCon
             'tiers.*.annual_discount_percent' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:80'],
             'tiers.*.included' => ['sometimes', 'array'],
             'tiers.*.included.paid_seats' => ['sometimes', 'integer', 'min:1', 'max:10000'],
+            'tiers.*.included.tower_licenses' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'tiers.*.included.rfi_units' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'tiers.*.included.storage_gb' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
             'tiers.*.pricing' => ['sometimes', 'array'],
             'tiers.*.pricing.monthly_base_usd' => ['sometimes', 'numeric', 'min:0'],
+            'tiers.*.pricing.tower_overage_usd' => ['sometimes', 'numeric', 'min:0'],
             'tiers.*.pricing.rfi_overage_usd' => ['sometimes', 'numeric', 'min:0'],
             'tiers.*.pricing.paid_seat_overage_usd' => ['sometimes', 'numeric', 'min:0'],
         ]);
