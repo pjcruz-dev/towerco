@@ -136,6 +136,143 @@ final class EApprovalFileStorageService
         ];
     }
 
+    /**
+     * @return array{logo_path: string, logo_url: string, code: string}
+     */
+    public function storeFormSubsidiaryLogo(EApprovalForm $form, string $code, UploadedFile $file): array
+    {
+        $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
+
+        $this->assertUploadAllowed($file);
+
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $allowedLogo = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+        if (! in_array($extension, $allowedLogo, true)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Logo must be an image (png, jpg, gif, webp, svg).')],
+            ]);
+        }
+
+        $previousPath = $this->resolveFormSubsidiaryLogoStoragePath($form, $code);
+        if ($previousPath !== null) {
+            $this->deleteIfExists($previousPath);
+        }
+
+        $safeCode = preg_replace('/[^A-Z0-9_-]/', '', $code) ?: 'SUB';
+        $filename = 'subsidiary-'.$safeCode.'-logo-'.Str::uuid()->toString().'.'.$extension;
+        $storedPath = sprintf(
+            '%s/e-approval/forms/%s/%s',
+            $this->tenantStoragePrefix(),
+            $form->id,
+            $filename,
+        );
+
+        $stored = Storage::disk($this->disk())->putFileAs(
+            dirname($storedPath),
+            $file,
+            basename($storedPath),
+        );
+
+        if ($stored === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('Logo could not be stored. Check storage configuration and try again.')],
+            ]);
+        }
+
+        return [
+            'code' => $code,
+            'logo_path' => $storedPath,
+            'logo_url' => '/api/v1/e-approval/forms/'.$form->id.'/subsidiary-logos/'.$code,
+        ];
+    }
+
+    public function presentFormSubsidiaryLogoUrl(EApprovalForm $form, string $code): ?string
+    {
+        if ($this->resolveFormSubsidiaryLogoStoragePath($form, $code) === null) {
+            return null;
+        }
+
+        $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
+
+        return '/api/v1/e-approval/forms/'.$form->id.'/subsidiary-logos/'.$code;
+    }
+
+    public function streamFormSubsidiaryLogo(EApprovalForm $form, string $code): StreamedResponse
+    {
+        $path = $this->resolveFormSubsidiaryLogoStoragePath($form, $code);
+        if ($path === null) {
+            abort(404);
+        }
+
+        $disk = Storage::disk($this->disk());
+        if (! $disk->exists($path)) {
+            abort(404);
+        }
+
+        $filename = basename($path);
+
+        return $disk->response($path, $filename, [
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    public function resolveFormSubsidiaryLogoStoragePath(EApprovalForm $form, string $code): ?string
+    {
+        try {
+            $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
+        } catch (ValidationException) {
+            return null;
+        }
+
+        $raw = app(EApprovalSettingsService::class)->getJson('pdf_layout_form_'.$form->id);
+        $rawTemplate = is_array($raw['template'] ?? null) ? $raw['template'] : [];
+        $logos = is_array($rawTemplate['subsidiary_logos'] ?? null) ? $rawTemplate['subsidiary_logos'] : [];
+        $value = trim((string) ($logos[$code] ?? ''));
+
+        if ($value !== '') {
+            if (str_starts_with($value, '/storage/tenant/')) {
+                $candidate = substr($value, strlen('/storage/tenant/'));
+                if (Storage::disk($this->disk())->exists($candidate)) {
+                    return $candidate;
+                }
+            } elseif (! str_starts_with($value, '/api/') && str_contains($value, '/e-approval/forms/')) {
+                $candidate = ltrim($value, '/');
+                if (Storage::disk($this->disk())->exists($candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
+        return $this->findLatestFormSubsidiaryLogoPath((string) $form->id, $code);
+    }
+
+    public function deleteFormSubsidiaryLogo(EApprovalForm $form, string $code): void
+    {
+        $path = $this->resolveFormSubsidiaryLogoStoragePath($form, $code);
+        if ($path !== null) {
+            $this->deleteIfExists($path);
+        }
+    }
+
+    private function findLatestFormSubsidiaryLogoPath(string $formId, string $code): ?string
+    {
+        $prefix = sprintf('%s/e-approval/forms/%s/', $this->tenantStoragePrefix(), $formId);
+        $disk = Storage::disk($this->disk());
+        $files = $disk->files($prefix);
+        $needle = 'subsidiary-'.strtoupper($code).'-logo-';
+        $matches = array_values(array_filter(
+            $files,
+            static fn (string $path): bool => str_contains(basename($path), $needle),
+        ));
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, static fn (string $a, string $b): int => strcmp($b, $a));
+
+        return $matches[0];
+    }
+
     public function presentFormLogoUrl(EApprovalForm $form): ?string
     {
         if ($this->resolveFormLogoStoragePath($form) === null) {

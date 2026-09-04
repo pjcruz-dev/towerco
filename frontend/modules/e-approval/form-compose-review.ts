@@ -5,6 +5,7 @@ import {
 import { parseGridColumnDefs, parseGridValue } from "@/modules/e-approval/field-options";
 import type { FormComposeStep } from "@/modules/e-approval/form-compose-steps";
 import { formatCurrencyGrouping } from "@/lib/format-currency-input";
+import { formatDateRangeDisplay } from "@/modules/e-approval/field-type-options";
 import { isComposeFillableFieldType } from "@/modules/e-approval/form-compose-structural";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
@@ -183,6 +184,10 @@ export function buildComposeReviewSummaryRow(
 
   if (field.type === "currency") {
     return { ...base, value: formatCurrencyGrouping(value) || "—", table: null };
+  }
+
+  if (field.type === "date_range") {
+    return { ...base, value: formatDateRangeDisplay(value), table: null };
   }
 
   if (field.type === "checklist_matrix") {

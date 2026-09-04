@@ -457,6 +457,10 @@ export type EApprovalPrintPayload = {
   requestor_signature?: string | null;
   created_at: string | null;
   brand_logo_url?: string | null;
+  /** Presented subsidiary logo URLs keyed by subsidiary code. */
+  subsidiary_logos?: Record<string, string>;
+  /** Configured subsidiary codes for logo / select sync. */
+  subsidiary_codes?: string[];
   print_template_kind?: string | null;
   fields: EApprovalPrintField[];
   grids?: EApprovalPrintGrid[];

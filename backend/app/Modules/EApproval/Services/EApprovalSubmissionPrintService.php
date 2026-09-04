@@ -68,6 +68,14 @@ final class EApprovalSubmissionPrintService
 
         $fields = $this->resolvePrintFields($valuesByKey, $layoutRows, $layoutPersisted, $printTemplateKind);
 
+        $template['subsidiary_logos'] = $this->pdfLayout->presentSubsidiaryLogoUrls(
+            (string) $submission->form_id,
+            $template,
+        );
+        if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
+            $template['subsidiary_logo_field'] = 'subsidiary';
+        }
+
         return [
             'document_no' => $submission->document_no,
             'form_name' => $submission->form?->name,
@@ -81,6 +89,7 @@ final class EApprovalSubmissionPrintService
                 ? app(EApprovalFileStorageService::class)->presentFormLogoUrl($submission->form)
                     ?? $submission->form->brand_logo_url
                 : null,
+            'subsidiary_logos' => $template['subsidiary_logos'],
             'print_template_kind' => $printTemplateKind !== '' ? $printTemplateKind : null,
             'fields' => $fields,
             'grids' => $this->buildGridPrintModels(
@@ -114,38 +123,15 @@ final class EApprovalSubmissionPrintService
      */
     private function resolvePrintFields(array $valuesByKey, array $layoutRows, bool $layoutPersisted, string $printTemplateKind): array
     {
+        unset($layoutRows, $layoutPersisted);
+
         if ($this->usesDedicatedPrintTemplate($printTemplateKind)) {
             return $this->allPrintFields($valuesByKey);
         }
 
-        if (! $layoutPersisted) {
-            return $this->allPrintFields($valuesByKey);
-        }
-
-        $fields = [];
-        foreach ($layoutRows as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            if (empty($row['visible'])) {
-                continue;
-            }
-            $key = trim((string) ($row['key'] ?? ''));
-            if ($key === '' || ! isset($valuesByKey[$key])) {
-                continue;
-            }
-            $fields[] = [
-                'key' => $key,
-                'label' => (string) ($row['label'] ?? $valuesByKey[$key]['label']),
-                'value' => $valuesByKey[$key]['value'],
-            ];
-        }
-
-        if ($fields === []) {
-            return $this->allPrintFields($valuesByKey);
-        }
-
-        return $fields;
+        // Document design + generic print always receive the full field set.
+        // Field placement is controlled by template_html tokens, not visibility checkboxes.
+        return $this->allPrintFields($valuesByKey);
     }
 
     /**

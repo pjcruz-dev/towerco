@@ -89,4 +89,12 @@ describe("form compose review", () => {
     });
     expect(value).toBe("1 file selected");
   });
+
+  it("formats date_range values as a readable range", () => {
+    const field = makeField("activity_period", "date_range", "Activity / travel period");
+    expect(formatComposeReviewValue(field, '{"from":"2026-09-22","to":"2026-10-20"}')).toBe(
+      "2026-09-22 – 2026-10-20",
+    );
+    expect(formatComposeReviewValue(field, "2026-01-01|2026-01-05")).toBe("2026-01-01 – 2026-01-05");
+  });
 });

@@ -1197,6 +1197,61 @@ export async function uploadEApprovalFormLogo(formId: string, file: File): Promi
   return response.data.data;
 }
 
+export async function uploadEApprovalFormSubsidiaryLogo(
+  formId: string,
+  code: string,
+  file: File,
+): Promise<{
+  code: string;
+  logo_url: string;
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<{
+    data: {
+      code: string;
+      logo_url: string;
+      subsidiary_codes: string[];
+      subsidiary_logos: Record<string, string>;
+    };
+  }>(`/e-approval/forms/${formId}/subsidiary-logos/${encodeURIComponent(code)}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.data;
+}
+
+export async function deleteEApprovalFormSubsidiaryLogo(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-logos/${encodeURIComponent(code)}`);
+  return response.data.data;
+}
+
+export async function registerEApprovalFormSubsidiaryCode(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.post<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-codes`, { code });
+  return response.data.data;
+}
+
+export async function removeEApprovalFormSubsidiaryCode(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-codes/${encodeURIComponent(code)}`);
+  return response.data.data;
+}
+
 export type EApprovalFormOutboundFileRow = {
   id: string;
   form_id: string;

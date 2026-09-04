@@ -116,6 +116,11 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormImportController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormLogoShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormLogoStoreController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormSubsidiaryCodeDestroyController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormSubsidiaryCodeStoreController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormSubsidiaryLogoDestroyController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormSubsidiaryLogoShowController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormSubsidiaryLogoStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormMyDraftController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormOutboundFileDestroyController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormOutboundFileIndexController;
@@ -802,6 +807,20 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('e-approval/public-links/{publicLink}/reveal', EApprovalPublicFormLinkRevealController::class)->name('api.tenant.v1.e_approval.public_links.reveal');
     Route::get('e-approval/forms/{form}/logo', EApprovalFormLogoShowController::class)->name('api.tenant.v1.e_approval.forms.logo.show');
     Route::post('e-approval/forms/{form}/logo', EApprovalFormLogoStoreController::class)->name('api.tenant.v1.e_approval.forms.logo');
+    Route::get('e-approval/forms/{form}/subsidiary-logos/{code}', EApprovalFormSubsidiaryLogoShowController::class)
+        ->where('code', '[A-Za-z0-9][A-Za-z0-9_-]{0,23}')
+        ->name('api.tenant.v1.e_approval.forms.subsidiary_logos.show');
+    Route::post('e-approval/forms/{form}/subsidiary-logos/{code}', EApprovalFormSubsidiaryLogoStoreController::class)
+        ->where('code', '[A-Za-z0-9][A-Za-z0-9_-]{0,23}')
+        ->name('api.tenant.v1.e_approval.forms.subsidiary_logos.store');
+    Route::delete('e-approval/forms/{form}/subsidiary-logos/{code}', EApprovalFormSubsidiaryLogoDestroyController::class)
+        ->where('code', '[A-Za-z0-9][A-Za-z0-9_-]{0,23}')
+        ->name('api.tenant.v1.e_approval.forms.subsidiary_logos.destroy');
+    Route::post('e-approval/forms/{form}/subsidiary-codes', EApprovalFormSubsidiaryCodeStoreController::class)
+        ->name('api.tenant.v1.e_approval.forms.subsidiary_codes.store');
+    Route::delete('e-approval/forms/{form}/subsidiary-codes/{code}', EApprovalFormSubsidiaryCodeDestroyController::class)
+        ->where('code', '[A-Za-z0-9][A-Za-z0-9_-]{0,23}')
+        ->name('api.tenant.v1.e_approval.forms.subsidiary_codes.destroy');
     Route::get('e-approval/forms/{form}/export', EApprovalFormExportController::class)->name('api.tenant.v1.e_approval.forms.export');
     Route::get('e-approval/pdf-layout/{formId}', EApprovalPdfLayoutShowController::class)->name('api.tenant.v1.e_approval.pdf_layout.show');
     Route::put('e-approval/pdf-layout/{formId}', EApprovalPdfLayoutUpdateController::class)->name('api.tenant.v1.e_approval.pdf_layout.update');

@@ -153,6 +153,23 @@ export function dateRangeIsComplete(raw: string): boolean {
   return from !== "" && to !== "";
 }
 
+/** Human-readable date range for review, detail, and print (e.g. 2026-09-22 – 2026-10-20). */
+export function formatDateRangeDisplay(raw: string, empty = "—"): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return empty;
+  }
+
+  const { from, to } = parseDateRangeValue(trimmed);
+  if (!from && !to) {
+    return trimmed;
+  }
+
+  const fromDisplay = from || empty;
+  const toDisplay = to || empty;
+  return `${fromDisplay} – ${toDisplay}`;
+}
+
 export function validateDateRangeValue(raw: string, required: boolean, label: string): string | null {
   const { from, to } = parseDateRangeValue(raw);
   const hasAny = from !== "" || to !== "";

@@ -586,6 +586,7 @@ final class EApprovalSubmissionParentLinkService
             'purpose' => 'notes',
             'department' => 'department',
             'currency' => 'currency',
+            'subsidiary' => 'subsidiary',
         ] as $parentField => $childField) {
             if (! $this->childHasField($childForm, $childField)) {
                 continue;
