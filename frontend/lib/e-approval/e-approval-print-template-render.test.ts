@@ -80,7 +80,7 @@ describe("renderEApprovalPrintTemplateHtml", () => {
     expect(html).not.toContain("Sample Credit card expenses");
   });
 
-  it("moves Total* fields below grids and adds numeric column footers", () => {
+  it("omits Total* scalar fields when grids print column footers", () => {
     const html = renderEApprovalPrintTemplateHtml("{{system.form_body}}", samplePayload({
       fields: [
         { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
@@ -101,21 +101,15 @@ describe("renderEApprovalPrintTemplateHtml", () => {
       ],
     }));
 
-    const requestIdx = html.indexOf("Request details");
-    const gridIdx = html.indexOf("Credit card expenses");
-    const totalsIdx = html.indexOf("ea-form-totals-section");
-    expect(requestIdx).toBeGreaterThan(-1);
-    expect(gridIdx).toBeGreaterThan(requestIdx);
-    expect(totalsIdx).toBeGreaterThan(gridIdx);
-    expect(html.indexOf("Total personal")).toBeGreaterThan(totalsIdx);
+    expect(html).toContain("Credit card expenses");
     expect(html).toContain("ea-print-table-totals");
     expect(html).toContain("<strong>7,000</strong>");
     expect(html).toContain("<strong>8,000</strong>");
     expect(html).toContain("<strong>15,000</strong>");
-    expect(html).toContain("Total expenses");
-    // Request details should not list Total personal above the grid.
-    const requestBlock = html.slice(requestIdx, gridIdx);
-    expect(requestBlock).not.toContain("Total personal");
+    expect(html).not.toContain("ea-form-totals-section");
+    expect(html).not.toContain("Total personal");
+    expect(html).not.toContain("Total official");
+    expect(html).not.toContain("Total expenses");
   });
 
   it("renders a single grid via {{grid.*}} without escaping table HTML", () => {

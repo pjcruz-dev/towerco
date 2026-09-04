@@ -193,24 +193,21 @@ function renderScalarFieldRowHtml(label: string, value: string, wide: boolean): 
 
 function partitionPrintScalarFields(payload: EApprovalPrintPayload): {
   detailFields: EApprovalPrintPayload["fields"];
-  totalFields: EApprovalPrintPayload["fields"];
 } {
   const gridKeys = new Set((payload.grids ?? []).map((grid) => grid.key));
   const detailFields: EApprovalPrintPayload["fields"] = [];
-  const totalFields: EApprovalPrintPayload["fields"] = [];
+  const hasGrids = (payload.grids?.length ?? 0) > 0;
 
   for (const field of payload.fields ?? []) {
     const type = (field.field_type ?? "").toLowerCase();
     if (gridKeys.has(field.key)) continue;
     if (EXCLUDED_DYNAMIC_BODY_TYPES.has(type)) continue;
-    if ((payload.grids?.length ?? 0) > 0 && isPrintTotalScalarField(field)) {
-      totalFields.push(field);
-      continue;
-    }
+    // When line-item grids print with column footers, omit redundant Total* scalars.
+    if (hasGrids && isPrintTotalScalarField(field)) continue;
     detailFields.push(field);
   }
 
-  return { detailFields, totalFields };
+  return { detailFields };
 }
 
 function renderDynamicScalarFieldsHtml(
@@ -318,11 +315,11 @@ function renderDynamicGridsHtml(payload: EApprovalPrintPayload, onlyKey?: string
 }
 
 function renderDynamicFormBodyHtml(payload: EApprovalPrintPayload): string {
-  const { detailFields, totalFields } = partitionPrintScalarFields(payload);
+  const { detailFields } = partitionPrintScalarFields(payload);
   const gridsHtml = renderDynamicGridsHtml(payload);
   const parts: string[] = [];
 
-  if (detailFields.length > 0 || ((payload.grids?.length ?? 0) === 0 && totalFields.length === 0)) {
+  if (detailFields.length > 0 || (payload.grids?.length ?? 0) === 0) {
     parts.push(`<section class="ea-form-section">
   <h2 class="ea-form-section-title">Request details</h2>
   ${renderDynamicScalarFieldsHtml(detailFields)}
@@ -331,13 +328,6 @@ function renderDynamicFormBodyHtml(payload: EApprovalPrintPayload): string {
 
   if (gridsHtml) {
     parts.push(gridsHtml);
-  }
-
-  if (totalFields.length > 0) {
-    parts.push(`<section class="ea-form-section ea-form-totals-section">
-  <h2 class="ea-form-section-title">Totals</h2>
-  ${renderDynamicScalarFieldsHtml(totalFields)}
-</section>`);
   }
 
   return parts.join("\n");
@@ -628,7 +618,6 @@ export function defaultEApprovalDocumentDesignCss(): string {
 }
 .ea-print-table-total-label { text-align: left; }
 .ea-print-table-total-value { text-align: right; white-space: nowrap; }
-.ea-form-totals-section { margin-top: 12px; }
 
 @media print {
   .ea-form-doc { color: #000; }
@@ -696,16 +685,6 @@ export function buildEApprovalDocumentDesignPreviewPayload(
       rows: [sampleRow(0), sampleRow(1)],
     };
   });
-
-  // Sample totals for live preview when the form has Total* fields.
-  for (const field of previewFields) {
-    if (!isPrintTotalScalarField(field)) continue;
-    const label = `${field.label} ${field.key}`.toLowerCase();
-    if (/personal/.test(label)) field.value = "7,000.00";
-    else if (/official/.test(label)) field.value = "8,000.00";
-    else if (/expense/.test(label)) field.value = "15,000.00";
-    else field.value = "15,000.00";
-  }
 
   return {
     document_no: "EA-PREVIEW-001",
