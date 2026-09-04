@@ -25,9 +25,10 @@ export const DEFAULT_FORM_DOCUMENT_NUMBER: EApprovalFormDocumentNumberSettings =
   docNoTemplate: "",
 };
 
-export const DOCUMENT_NUMBER_TEMPLATE_PLACEHOLDER = "ATC-{department}-{documentType}-{seq:3}";
+export const DOCUMENT_NUMBER_TEMPLATE_PLACEHOLDER = "{subsidiary}-{department}-{documentType}-{seq:3}";
 
 export const DOCUMENT_NUMBER_BUILTIN_TOKENS: DocumentNumberTemplateToken[] = [
+  { id: "subsidiary", label: "Subsidiary", token: "{subsidiary}", kind: "builtin" },
   { id: "department", label: "Department", token: "{department}", kind: "builtin" },
   { id: "ownerCode", label: "Owner code", token: "{ownerCode}", kind: "builtin" },
   { id: "docTypeCode", label: "Document type code", token: "{docTypeCode}", kind: "builtin" },
@@ -35,9 +36,17 @@ export const DOCUMENT_NUMBER_BUILTIN_TOKENS: DocumentNumberTemplateToken[] = [
 ];
 
 /** Field names already covered by built-in tokens — avoid duplicate chips. */
-const BUILTIN_FIELD_TOKEN_NAMES = new Set(["department", "ownercode", "owner_code", "doctypecode", "doc_type_code"]);
+const BUILTIN_FIELD_TOKEN_NAMES = new Set([
+  "subsidiary",
+  "department",
+  "ownercode",
+  "owner_code",
+  "doctypecode",
+  "doc_type_code",
+]);
 
 export const DOCUMENT_NUMBER_TEMPLATE_TOKENS = [
+  "{subsidiary}",
   "{department}",
   "{documentType}",
   "{ownerCode}",
@@ -90,7 +99,7 @@ export function toggleTemplateToken(template: string, token: string, enabled: bo
 export function buildDocumentNumberPreview(
   settings: EApprovalFormDocumentNumberSettings,
   fields: EApprovalFormFieldInput[],
-  options?: { sampleDepartment?: string },
+  options?: { sampleDepartment?: string; sampleSubsidiary?: string },
 ): string {
   if (!settings.docNoCustomEnabled) {
     const owner = normalizeOwnerCode(settings.ownerCode);
@@ -101,6 +110,8 @@ export function buildDocumentNumberPreview(
   const template = settings.docNoTemplate.trim() || DOCUMENT_NUMBER_TEMPLATE_PLACEHOLDER;
   const sampleValues = sampleFieldValuesForPreview(fields);
   const sampleDepartment = options?.sampleDepartment?.trim() || sampleValues.department || "HR";
+  const sampleSubsidiary =
+    options?.sampleSubsidiary?.trim() || sampleValues.subsidiary || "ATC";
 
   return template.replace(/\{([^}]+)\}/g, (match, rawToken: string) => {
     const token = rawToken.trim();
@@ -121,6 +132,9 @@ export function buildDocumentNumberPreview(
     }
     if (normalized === "department") {
       return sanitizePreviewSegment(sampleDepartment);
+    }
+    if (normalized === "subsidiary") {
+      return sanitizePreviewSegment(sampleSubsidiary);
     }
 
     const raw = sampleValues[token] ?? sampleValues[normalized] ?? "";

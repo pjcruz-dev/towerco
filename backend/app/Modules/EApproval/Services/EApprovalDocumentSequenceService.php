@@ -77,11 +77,12 @@ final class EApprovalDocumentSequenceService
             'ownercode', 'owner_code' => (string) ($form->owner_code ?: 'GEN'),
             'doctypecode', 'doc_type_code' => (string) ($form->doc_type_code ?: 'F'),
             'department' => $this->resolveDepartment($values, $submitter),
+            'subsidiary' => $this->resolveSubsidiary($values),
             'documenttype', 'document_type' => (string) ($values['document_type'] ?? ''),
             default => (string) ($values[$token] ?? $values[$normalized] ?? ''),
         };
 
-        $sanitized = strtoupper(preg_replace('/[^A-Z0-9]/', '', $raw) ?? '');
+        $sanitized = preg_replace('/[^A-Z0-9]/', '', strtoupper($raw)) ?? '';
 
         return $sanitized !== '' ? $sanitized : 'X';
     }
@@ -103,6 +104,30 @@ final class EApprovalDocumentSequenceService
         }
 
         return trim((string) ($submitter->department ?? ''));
+    }
+
+    /**
+     * Resolve subsidiary code from the submission (field name: subsidiary).
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveSubsidiary(array $values): string
+    {
+        $fromForm = trim((string) ($values['subsidiary'] ?? ''));
+        if ($fromForm !== '') {
+            return $fromForm;
+        }
+
+        foreach ($values as $key => $value) {
+            if (strcasecmp((string) $key, 'subsidiary') === 0) {
+                $candidate = trim((string) $value);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**

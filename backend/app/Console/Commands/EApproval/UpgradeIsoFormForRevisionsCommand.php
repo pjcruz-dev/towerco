@@ -262,7 +262,7 @@ final class UpgradeIsoFormForRevisionsCommand extends Command
             'owner_code' => $form->owner_code ?? 'GEN',
             'doc_type_code' => $form->doc_type_code ?? 'F',
             'doc_no_custom_enabled' => (bool) $form->doc_no_custom_enabled,
-            'doc_no_template' => $form->doc_no_template ?? 'ATC-{department}-{document_type}-{seq:3}',
+            'doc_no_template' => $form->doc_no_template ?? '{subsidiary}-{department}-{document_type}-{seq:3}',
             'fields' => $fields,
             'steps' => $this->buildStepsPayload($form),
             'confirm_form_upgrade' => true,
