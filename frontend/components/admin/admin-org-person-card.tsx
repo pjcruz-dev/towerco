@@ -13,19 +13,23 @@ export function OrgPersonCard({
   person,
   emphasis = "default",
   compact = false,
+  showRoles = false,
   onSelect,
   onManageRoles,
 }: {
   person: OrgChartNode;
   emphasis?: "manager" | "focus" | "default";
   compact?: boolean;
+  /** When false, hide role badges and Assign roles (cleaner org chart). */
+  showRoles?: boolean;
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
 }) {
   const focused = emphasis === "focus";
   const license = entraLicenseChipLabel(person.license_label, person.license_names);
-  const roles = (person.roles ?? []).slice(0, compact ? 1 : 3);
-  const extraRoles = Math.max(0, (person.roles ?? []).length - roles.length);
+  const roles = showRoles ? (person.roles ?? []).slice(0, compact ? 1 : 3) : [];
+  const extraRoles = showRoles ? Math.max(0, (person.roles ?? []).length - roles.length) : 0;
+  const canAssignRoles = showRoles && Boolean(onManageRoles) && !person.external;
 
   return (
     <div
@@ -44,7 +48,7 @@ export function OrgPersonCard({
         className={cn(
           "w-full text-left hover:bg-muted/30",
           compact ? "px-3 py-2.5" : "px-4 py-3",
-          onManageRoles && !person.external ? "rounded-t-xl" : "rounded-xl",
+          canAssignRoles ? "rounded-t-xl" : "rounded-xl",
         )}
       >
         <div className="flex items-start gap-3">
@@ -103,7 +107,7 @@ export function OrgPersonCard({
           </div>
         </div>
       </button>
-      {onManageRoles && !person.external ? (
+      {canAssignRoles ? (
         <div className="border-t border-border px-2 py-1.5">
           <Button
             type="button"
@@ -112,7 +116,7 @@ export function OrgPersonCard({
             className="h-7 w-full justify-start gap-1.5 px-2 text-xs text-muted-foreground"
             onClick={(event) => {
               event.stopPropagation();
-              onManageRoles(person);
+              onManageRoles?.(person);
             }}
           >
             <Shield className="size-3.5" />

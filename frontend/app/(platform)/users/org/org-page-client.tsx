@@ -15,6 +15,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   buildOrgChartIndex,
@@ -37,8 +38,18 @@ import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
 const EMPTY_PEOPLE: [] = [];
+const SHOW_ROLES_STORAGE_KEY = "toweros.org-chart.show-roles";
 
 type OrgView = "line" | "all";
+
+function readShowRolesPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SHOW_ROLES_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function OrgPageClient() {
   const queryClient = useQueryClient();
@@ -49,8 +60,22 @@ export function OrgPageClient() {
   const [view, setView] = useState<OrgView>("all");
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrgChartFilters>(emptyOrgChartFilters);
+  const [showRoles, setShowRoles] = useState(false);
   const [rolesPerson, setRolesPerson] = useState<OrgChartNode | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
+
+  useEffect(() => {
+    setShowRoles(readShowRolesPreference());
+  }, []);
+
+  const setShowRolesPreference = (next: boolean) => {
+    setShowRoles(next);
+    try {
+      window.localStorage.setItem(SHOW_ROLES_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // ignore storage failures
+    }
+  };
 
   const chartQuery = useQuery({
     queryKey: ["admin", "users", "org-chart"],
@@ -139,7 +164,8 @@ export function OrgPageClient() {
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
               manager, job title, department, Microsoft 365 license, and profile photo onto existing {organizationLabel}{" "}
-              users. People without a Microsoft 365 license are hidden here. Assign tenant roles from any person card.
+              users. People without a Microsoft 365 license are hidden here. Turn on Show roles when you need to review
+              or assign tenant roles from the chart.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Last synced {formatTimestamp(chartQuery.data?.synced_at)}
@@ -240,16 +266,29 @@ export function OrgPageClient() {
                   ) : null}
                 </div>
               </div>
-              <Tabs value={view} onValueChange={(value) => setView(value as OrgView)}>
-                <TabsList>
-                  <TabsTrigger value="all" className="px-3">
-                    All organization
-                  </TabsTrigger>
-                  <TabsTrigger value="line" className="px-3">
-                    Reporting line
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="flex flex-col items-end gap-2">
+                <label
+                  htmlFor="org-show-roles"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                >
+                  <Switch
+                    id="org-show-roles"
+                    checked={showRoles}
+                    onCheckedChange={setShowRolesPreference}
+                  />
+                  <span className="text-xs font-medium text-foreground">Show roles</span>
+                </label>
+                <Tabs value={view} onValueChange={(value) => setView(value as OrgView)}>
+                  <TabsList>
+                    <TabsTrigger value="all" className="px-3">
+                      All organization
+                    </TabsTrigger>
+                    <TabsTrigger value="line" className="px-3">
+                      Reporting line
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </div>
             {suggestions.length > 0 ? (
               <ul className="mt-2 max-w-md divide-y divide-border rounded-lg border border-border bg-background">
@@ -295,6 +334,7 @@ export function OrgPageClient() {
                   focusedId={focusedId}
                   onSelect={selectPerson}
                   onManageRoles={openRoles}
+                  showRoles={showRoles}
                 />
               </AdminOrgCanvas>
             ) : focusedId && filteredIndex.byId.has(focusedId) ? (
@@ -305,6 +345,7 @@ export function OrgPageClient() {
                   onFocus={setFocusedId}
                   organizationLabel={organizationLabel}
                   onManageRoles={openRoles}
+                  showRoles={showRoles}
                 />
               </AdminOrgCanvas>
             ) : (

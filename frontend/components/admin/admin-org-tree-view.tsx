@@ -23,6 +23,7 @@ export function OrgChartBranch({
   onToggle,
   onSelect,
   onManageRoles,
+  showRoles = false,
 }: {
   person: OrgChartNode;
   index: OrgChartIndex;
@@ -33,6 +34,7 @@ export function OrgChartBranch({
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
+  showRoles?: boolean;
 }) {
   if (ancestors.has(person.id) || depth > 12) {
     return null;
@@ -48,6 +50,7 @@ export function OrgChartBranch({
         person={person}
         compact
         emphasis={person.id === focusedId ? "focus" : person.external ? "manager" : "default"}
+        showRoles={showRoles}
         onSelect={onSelect}
         onManageRoles={onManageRoles}
       />
@@ -78,6 +81,7 @@ export function OrgChartBranch({
               onToggle={onToggle}
               onSelect={onSelect}
               onManageRoles={onManageRoles}
+              showRoles={showRoles}
             />
           ) : (
             <div className="flex items-start">
@@ -100,6 +104,7 @@ export function OrgChartBranch({
                     onToggle={onToggle}
                     onSelect={onSelect}
                     onManageRoles={onManageRoles}
+                    showRoles={showRoles}
                   />
                 </div>
               ))}
@@ -116,11 +121,13 @@ export function AdminOrgTreeView({
   focusedId,
   onSelect,
   onManageRoles,
+  showRoles = false,
 }: {
   index: OrgChartIndex;
   focusedId: string | null;
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
+  showRoles?: boolean;
 }) {
   const roots = useMemo(() => orgChartRoots(index), [index]);
   const trees = useMemo(() => roots.filter((node) => node.direct_report_count > 0), [roots]);
@@ -177,6 +184,7 @@ export function AdminOrgTreeView({
               onToggle={toggle}
               onSelect={onSelect}
               onManageRoles={onManageRoles}
+              showRoles={showRoles}
             />
           </div>
         ))}
@@ -193,6 +201,7 @@ export function AdminOrgTreeView({
                 person={person}
                 compact
                 emphasis={person.id === focusedId ? "focus" : "default"}
+                showRoles={showRoles}
                 onSelect={onSelect}
                 onManageRoles={onManageRoles}
               />
