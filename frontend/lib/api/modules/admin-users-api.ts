@@ -360,6 +360,8 @@ export type AdminOrgChartPerson = {
   direct_report_count: number;
   license_label?: string | null;
   license_names?: string[];
+  roles?: string[];
+  photo_url?: string | null;
 };
 
 export type AdminOrgChartResponse = {

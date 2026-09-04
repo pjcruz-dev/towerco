@@ -20,6 +20,7 @@ use App\Modules\AdminOne\Http\Controllers\V1\TenantBillingUsageShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantSecuritySettingsShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantSecuritySettingsUpdateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserActivityIndexController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantUserAvatarShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkAssignRoleController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkDeactivateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantUserBulkResetPasswordController;
@@ -915,6 +916,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('users/bulk-assign-role', TenantUserBulkAssignRoleController::class)->name('api.tenant.v1.admin.users.bulk_assign_role');
         Route::post('users/bulk-reset-password', TenantUserBulkResetPasswordController::class)->name('api.tenant.v1.admin.users.bulk_reset_password');
         Route::patch('users/{user}', TenantUserUpdateController::class)->name('api.tenant.v1.admin.users.update');
+        Route::get('users/{user}/avatar', TenantUserAvatarShowController::class)->name('api.tenant.v1.admin.users.avatar');
         Route::get('users/{user}/activity', TenantUserActivityIndexController::class)->name('api.tenant.v1.admin.users.activity');
         Route::post('users/{user}/revoke-sessions', TenantUserRevokeSessionsController::class)->name('api.tenant.v1.admin.users.revoke_sessions');
         Route::post('users/{user}/revoke-passkeys', TenantUserRevokePasskeysController::class)

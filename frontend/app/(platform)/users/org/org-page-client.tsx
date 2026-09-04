@@ -6,17 +6,26 @@ import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { AdminOrgCanvas } from "@/components/admin/admin-org-canvas";
 import { AdminOrgChartView } from "@/components/admin/admin-org-chart-view";
+import { AdminOrgPersonRolesSheet } from "@/components/admin/admin-org-person-roles-sheet";
 import { AdminOrgTreeView } from "@/components/admin/admin-org-tree-view";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   buildOrgChartIndex,
+  collectOrgFilterOptions,
+  emptyOrgChartFilters,
+  filterOrgChartIndex,
   filterOrgPeople,
+  orgChartFiltersActive,
   pickDefaultFocus,
+  type OrgChartFilters,
+  type OrgChartNode,
 } from "@/lib/admin/org-chart";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { formatTimestamp } from "@/lib/admin/user-display";
@@ -39,6 +48,9 @@ export function OrgPageClient() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrgView>("all");
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<OrgChartFilters>(emptyOrgChartFilters);
+  const [rolesPerson, setRolesPerson] = useState<OrgChartNode | null>(null);
+  const [rolesOpen, setRolesOpen] = useState(false);
 
   const chartQuery = useQuery({
     queryKey: ["admin", "users", "org-chart"],
@@ -48,14 +60,22 @@ export function OrgPageClient() {
 
   const people = chartQuery.data?.people ?? EMPTY_PEOPLE;
   const index = useMemo(() => buildOrgChartIndex(people), [people]);
-  const suggestions = useMemo(() => filterOrgPeople(index.nodes, search), [index.nodes, search]);
+  const filterOptions = useMemo(() => collectOrgFilterOptions(index.nodes), [index.nodes]);
+  const filteredIndex = useMemo(() => filterOrgChartIndex(index, filters), [filters, index]);
+  const suggestions = useMemo(
+    () => filterOrgPeople(filteredIndex.nodes, search),
+    [filteredIndex.nodes, search],
+  );
 
   useEffect(() => {
-    if (focusedId && index.byId.has(focusedId)) {
+    if (focusedId && filteredIndex.byId.has(focusedId)) {
       return;
     }
-    setFocusedId(pickDefaultFocus(index, currentUserId));
-  }, [currentUserId, focusedId, index]);
+    if (focusedId && index.byId.has(focusedId) && !orgChartFiltersActive(filters)) {
+      return;
+    }
+    setFocusedId(pickDefaultFocus(filteredIndex, currentUserId));
+  }, [currentUserId, filteredIndex, filters, focusedId, index.byId]);
 
   const syncMutation = useMutation({
     mutationFn: syncAdminEntraOrg,
@@ -79,7 +99,7 @@ export function OrgPageClient() {
         level: timedOut ? "warning" : "error",
         title: timedOut ? "Sync is still running" : "Sync failed",
         message: timedOut
-          ? "Microsoft org sync is taking longer than the browser wait. Refresh this page — licensed people and reporting lines may already be saved."
+          ? "Microsoft org sync is taking longer than the browser wait. Refresh this page — licensed people, photos, and reporting lines may already be saved."
           : dropped
             ? "Organization sync failed before a result came back. Confirm the API is running, then try Sync again."
             : getErrorMessage(error),
@@ -101,6 +121,15 @@ export function OrgPageClient() {
     setView("line");
   };
 
+  const openRoles = (person: OrgChartNode) => {
+    setRolesPerson(person);
+    setRolesOpen(true);
+  };
+
+  const patchFilter = <K extends keyof OrgChartFilters>(key: K, value: OrgChartFilters[K]) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
+
   return (
     <PermissionGate requiredPermissions={[permissions.userManage]}>
       <div className="space-y-5">
@@ -109,8 +138,8 @@ export function OrgPageClient() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organization</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
-              manager, job title, department, and Microsoft 365 license onto existing {organizationLabel} users. People without a
-              Microsoft 365 license are hidden here.
+              manager, job title, department, Microsoft 365 license, and profile photo onto existing {organizationLabel}{" "}
+              users. People without a Microsoft 365 license are hidden here. Assign tenant roles from any person card.
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Last synced {formatTimestamp(chartQuery.data?.synced_at)}
@@ -130,17 +159,86 @@ export function OrgPageClient() {
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="border-b border-border px-4 py-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-search">
-                  Search people
-                </label>
-                <Input
-                  id="org-search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Name, email, job title, or department"
-                  className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
-                />
+              <div className="min-w-0 flex-1 space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-search">
+                    Search people
+                  </label>
+                  <Input
+                    id="org-search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Name, email, job title, department, or role"
+                    className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
+                  />
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-dept">
+                      Department
+                    </label>
+                    <Select
+                      id="org-filter-dept"
+                      value={filters.department}
+                      onChange={(event) => patchFilter("department", event.target.value)}
+                      className="h-9 min-w-[10rem]"
+                    >
+                      <option value="">All departments</option>
+                      {filterOptions.departments.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-license">
+                      License
+                    </label>
+                    <Select
+                      id="org-filter-license"
+                      value={filters.license}
+                      onChange={(event) => patchFilter("license", event.target.value)}
+                      className="h-9 min-w-[10rem]"
+                    >
+                      <option value="">All licenses</option>
+                      {filterOptions.licenses.map((license) => (
+                        <option key={license} value={license}>
+                          {license}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-role">
+                      Role
+                    </label>
+                    <Select
+                      id="org-filter-role"
+                      value={filters.role}
+                      onChange={(event) => patchFilter("role", event.target.value)}
+                      className="h-9 min-w-[10rem]"
+                    >
+                      <option value="">All roles</option>
+                      {filterOptions.roles.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  {orgChartFiltersActive(filters) ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mb-0.5"
+                      onClick={() => setFilters(emptyOrgChartFilters())}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : null}
+                </div>
               </div>
               <Tabs value={view} onValueChange={(value) => setView(value as OrgView)}>
                 <TabsList>
@@ -186,15 +284,29 @@ export function OrgPageClient() {
                 No licensed Microsoft 365 users to display. Sync from Microsoft to load licensed people. Unlicensed Entra
                 accounts stay hidden.
               </p>
+            ) : filteredIndex.nodes.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                No people match these filters. Clear filters to see the full organization.
+              </p>
             ) : view === "all" ? (
-              <AdminOrgTreeView index={index} focusedId={focusedId} onSelect={selectPerson} />
-            ) : focusedId ? (
-              <AdminOrgChartView
-                index={index}
-                focusedId={focusedId}
-                onFocus={setFocusedId}
-                organizationLabel={organizationLabel}
-              />
+              <AdminOrgCanvas resetKey={`all-${filters.department}-${filters.license}-${filters.role}`}>
+                <AdminOrgTreeView
+                  index={filteredIndex}
+                  focusedId={focusedId}
+                  onSelect={selectPerson}
+                  onManageRoles={openRoles}
+                />
+              </AdminOrgCanvas>
+            ) : focusedId && filteredIndex.byId.has(focusedId) ? (
+              <AdminOrgCanvas resetKey={`line-${focusedId}`}>
+                <AdminOrgChartView
+                  index={filteredIndex}
+                  focusedId={focusedId}
+                  onFocus={setFocusedId}
+                  organizationLabel={organizationLabel}
+                  onManageRoles={openRoles}
+                />
+              </AdminOrgCanvas>
             ) : (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 Search for a person to open their reporting line.
@@ -202,6 +314,12 @@ export function OrgPageClient() {
             )}
           </div>
         </div>
+
+        <AdminOrgPersonRolesSheet
+          person={rolesPerson}
+          open={rolesOpen}
+          onOpenChange={setRolesOpen}
+        />
       </div>
     </PermissionGate>
   );

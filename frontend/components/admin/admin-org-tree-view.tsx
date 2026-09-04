@@ -13,7 +13,7 @@ import {
   type OrgChartNode,
 } from "@/lib/admin/org-chart";
 
-function OrgChartBranch({
+export function OrgChartBranch({
   person,
   index,
   depth,
@@ -22,6 +22,7 @@ function OrgChartBranch({
   ancestors,
   onToggle,
   onSelect,
+  onManageRoles,
 }: {
   person: OrgChartNode;
   index: OrgChartIndex;
@@ -31,6 +32,7 @@ function OrgChartBranch({
   ancestors: Set<string>;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
+  onManageRoles?: (person: OrgChartNode) => void;
 }) {
   if (ancestors.has(person.id) || depth > 12) {
     return null;
@@ -47,10 +49,12 @@ function OrgChartBranch({
         compact
         emphasis={person.id === focusedId ? "focus" : person.external ? "manager" : "default"}
         onSelect={onSelect}
+        onManageRoles={onManageRoles}
       />
       {children.length > 0 ? (
         <button
           type="button"
+          data-org-no-pan=""
           className="mt-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-expanded={expanded}
           aria-label={expanded ? `Hide reports of ${person.name}` : `Show reports of ${person.name}`}
@@ -73,6 +77,7 @@ function OrgChartBranch({
               ancestors={new Set(ancestors).add(person.id)}
               onToggle={onToggle}
               onSelect={onSelect}
+              onManageRoles={onManageRoles}
             />
           ) : (
             <div className="flex items-start">
@@ -94,6 +99,7 @@ function OrgChartBranch({
                     ancestors={new Set(ancestors).add(person.id)}
                     onToggle={onToggle}
                     onSelect={onSelect}
+                    onManageRoles={onManageRoles}
                   />
                 </div>
               ))}
@@ -109,10 +115,12 @@ export function AdminOrgTreeView({
   index,
   focusedId,
   onSelect,
+  onManageRoles,
 }: {
   index: OrgChartIndex;
   focusedId: string | null;
   onSelect: (id: string) => void;
+  onManageRoles?: (person: OrgChartNode) => void;
 }) {
   const roots = useMemo(() => orgChartRoots(index), [index]);
   const trees = useMemo(() => roots.filter((node) => node.direct_report_count > 0), [roots]);
@@ -143,7 +151,7 @@ export function AdminOrgTreeView({
 
   return (
     <div className="px-3 py-3">
-      <div className="mb-2 flex items-center justify-end gap-1">
+      <div className="mb-2 flex items-center justify-end gap-1" data-org-no-pan="">
         <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedIds(new Set(allExpandable))}>
           Expand all
         </Button>
@@ -151,47 +159,47 @@ export function AdminOrgTreeView({
           Collapse all
         </Button>
       </div>
-      <div className="max-h-[min(75vh,52rem)] overflow-auto">
-        <div className="flex min-w-max flex-col items-center gap-16 px-4 py-4">
-          {trees.map((root, offset) => (
-            <div key={root.id} className="flex w-full flex-col items-center">
-              {trees.length > 1 ? (
-                <p className="mb-3 text-center text-[11px] font-medium text-muted-foreground">
-                  {offset === 0 ? "Reporting line" : "Separate reporting line"} · {root.name}
-                </p>
-              ) : null}
-              <OrgChartBranch
-                person={root}
-                index={index}
-                depth={0}
-                expandedIds={expandedIds}
-                focusedId={focusedId}
-                ancestors={new Set()}
-                onToggle={toggle}
-                onSelect={onSelect}
-              />
-            </div>
-          ))}
-        </div>
-        {unattached.length > 0 ? (
-          <div className="border-t border-border px-4 py-6">
-            <p className="mb-3 text-center text-[11px] font-medium text-muted-foreground">
-              No manager in this workspace ({unattached.length})
-            </p>
-            <div className="flex flex-wrap justify-center gap-3">
-              {unattached.map((person) => (
-                <OrgPersonCard
-                  key={person.id}
-                  person={person}
-                  compact
-                  emphasis={person.id === focusedId ? "focus" : "default"}
-                  onSelect={onSelect}
-                />
-              ))}
-            </div>
+      <div className="flex min-w-max flex-col items-center gap-16 px-4 py-4">
+        {trees.map((root, offset) => (
+          <div key={root.id} className="flex w-full flex-col items-center">
+            {trees.length > 1 ? (
+              <p className="mb-3 text-center text-[11px] font-medium text-muted-foreground">
+                {offset === 0 ? "Reporting line" : "Separate reporting line"} · {root.name}
+              </p>
+            ) : null}
+            <OrgChartBranch
+              person={root}
+              index={index}
+              depth={0}
+              expandedIds={expandedIds}
+              focusedId={focusedId}
+              ancestors={new Set()}
+              onToggle={toggle}
+              onSelect={onSelect}
+              onManageRoles={onManageRoles}
+            />
           </div>
-        ) : null}
+        ))}
       </div>
+      {unattached.length > 0 ? (
+        <div className="border-t border-border px-4 py-6">
+          <p className="mb-3 text-center text-[11px] font-medium text-muted-foreground">
+            No manager in this workspace ({unattached.length})
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {unattached.map((person) => (
+              <OrgPersonCard
+                key={person.id}
+                person={person}
+                compact
+                emphasis={person.id === focusedId ? "focus" : "default"}
+                onSelect={onSelect}
+                onManageRoles={onManageRoles}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

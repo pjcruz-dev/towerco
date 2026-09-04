@@ -7,6 +7,7 @@ import { ProcurementPrintPageStyles } from "@/components/e-approval/print/procur
 import {
   defaultEApprovalDocumentDesignCss,
   defaultEApprovalDocumentDesignHtml,
+  documentDesignEmbedsGrids,
   hasCustomPrintDocumentDesign,
   renderEApprovalPrintTemplateHtml,
 } from "@/lib/e-approval/e-approval-print-template-render";
@@ -53,14 +54,6 @@ export function EApprovalGenericFormPrintView({
     () => buildApprovalHistorySlots(hydratedData, template),
     [hydratedData, template],
   );
-  const gridKeys = useMemo(
-    () => new Set((hydratedData.grids ?? []).map((grid) => grid.key)),
-    [hydratedData.grids],
-  );
-  const scalarFields = useMemo(
-    () => hydratedData.fields.filter((field) => !gridKeys.has(field.key)),
-    [hydratedData.fields, gridKeys],
-  );
   const unattachedFiles = useMemo(
     () =>
       (hydratedData.attachments ?? []).filter(
@@ -73,17 +66,22 @@ export function EApprovalGenericFormPrintView({
 
   const title = template.header?.title?.trim() || hydratedData.form_name?.trim() || "Submission";
 
-  const documentHtml = useMemo(() => {
-    const designFields = scalarFields.map((field) => ({
-      name: field.key,
-      label: field.label,
-      type: "text",
-    }));
-    const sourceHtml = hasCustomPrintDocumentDesign(template)
-      ? String(template.template_html ?? "")
-      : defaultEApprovalDocumentDesignHtml(title, designFields);
-    return renderEApprovalPrintTemplateHtml(sourceHtml, hydratedData);
-  }, [hydratedData, scalarFields, template, title]);
+  const sourceHtml = useMemo(() => {
+    if (hasCustomPrintDocumentDesign(template)) {
+      return String(template.template_html ?? "");
+    }
+    return defaultEApprovalDocumentDesignHtml(title);
+  }, [template, title]);
+
+  const documentHtml = useMemo(
+    () => renderEApprovalPrintTemplateHtml(sourceHtml, hydratedData),
+    [hydratedData, sourceHtml],
+  );
+
+  const gridsEmbeddedInDesign = useMemo(
+    () => documentDesignEmbedsGrids(sourceHtml),
+    [sourceHtml],
+  );
 
   const documentCss = useMemo(() => {
     const saved = typeof template.template_css === "string" ? template.template_css.trim() : "";
@@ -105,7 +103,8 @@ export function EApprovalGenericFormPrintView({
             />
           ) : null}
 
-          {(hydratedData.grids ?? []).map((grid) => (
+          {!gridsEmbeddedInDesign
+            ? (hydratedData.grids ?? []).map((grid) => (
             <section key={grid.key} className="mt-6 overflow-hidden rounded border border-slate-300">
               <h2 className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
                 {grid.label}
@@ -147,7 +146,8 @@ export function EApprovalGenericFormPrintView({
                 </tbody>
               </table>
             </section>
-          ))}
+              ))
+            : null}
 
           {unattachedFiles.length > 0 ? (
             <section className="mt-6 rounded border border-slate-300 p-3">

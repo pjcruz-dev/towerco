@@ -57,6 +57,7 @@ final class EApprovalSubmissionPrintService
                     $usersById,
                     is_array($options) ? $options : null,
                 ),
+                'field_type' => is_string($type) ? $type : null,
             ];
         }
 
@@ -117,9 +118,9 @@ final class EApprovalSubmissionPrintService
     }
 
     /**
-     * @param  array<string, array{label: string, value: string|null}>  $valuesByKey
+     * @param  array<string, array{label: string, value: string|null, field_type?: string|null}>  $valuesByKey
      * @param  list<mixed>  $layoutRows
-     * @return list<array{key: string, label: string, value: string|null}>
+     * @return list<array{key: string, label: string, value: string|null, field_type: string|null}>
      */
     private function resolvePrintFields(array $valuesByKey, array $layoutRows, bool $layoutPersisted, string $printTemplateKind): array
     {
@@ -135,8 +136,8 @@ final class EApprovalSubmissionPrintService
     }
 
     /**
-     * @param  array<string, array{label: string, value: string|null}>  $valuesByKey
-     * @return list<array{key: string, label: string, value: string|null}>
+     * @param  array<string, array{label: string, value: string|null, field_type?: string|null}>  $valuesByKey
+     * @return list<array{key: string, label: string, value: string|null, field_type: string|null}>
      */
     private function allPrintFields(array $valuesByKey): array
     {
@@ -145,6 +146,9 @@ final class EApprovalSubmissionPrintService
                 'key' => $key,
                 'label' => $row['label'],
                 'value' => $row['value'],
+                'field_type' => isset($row['field_type']) && is_string($row['field_type'])
+                    ? $row['field_type']
+                    : null,
             ],
             $valuesByKey,
             array_keys($valuesByKey),
@@ -183,10 +187,7 @@ final class EApprovalSubmissionPrintService
                 $parsedRows = $this->gridRowsFromPurchaseRequisition($pr, $columns);
             }
 
-            if ($parsedRows === []) {
-                continue;
-            }
-
+            // Include empty grids so dynamic print body can still show column headers.
             $grids[] = [
                 'key' => $key,
                 'label' => (string) ($row->field?->label ?? $key),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrgChartIndex, orgChartRoots, personInitials, pickDefaultFocus, resolveManager } from "./org-chart";
+import { buildOrgChartIndex, collectOrgFilterOptions, filterOrgChartIndex, filterOrgPeople, orgChartRoots, personInitials, pickDefaultFocus, resolveManager } from "./org-chart";
 
 const people = [
   {
@@ -173,5 +173,73 @@ describe("buildOrgChartIndex", () => {
   it("builds initials from first and last name", () => {
     expect(personInitials("Peter Joseph Cruz")).toBe("PC");
     expect(personInitials("Admin")).toBe("AD");
+  });
+});
+
+describe("org chart filters", () => {
+  const filterPeople = [
+    {
+      id: "a",
+      name: "Ada",
+      email: "ada@example.com",
+      job_title: "Lead",
+      department: "Engineering",
+      manager_id: null,
+      manager_name: null,
+      direct_report_count: 1,
+      license_label: "Business Premium",
+      roles: ["tenant_admin"],
+    },
+    {
+      id: "b",
+      name: "Ben",
+      email: "ben@example.com",
+      job_title: "Engineer",
+      department: "Engineering",
+      manager_id: "a",
+      manager_name: null,
+      direct_report_count: 0,
+      license_label: "Business Standard",
+      roles: ["viewer"],
+    },
+    {
+      id: "c",
+      name: "Cara",
+      email: "cara@example.com",
+      job_title: "Analyst",
+      department: "Finance",
+      manager_id: null,
+      manager_name: null,
+      direct_report_count: 0,
+      license_label: "Business Premium",
+      roles: ["viewer"],
+    },
+  ];
+
+  it("collects filter options and keeps ancestors when filtering", () => {
+    const index = buildOrgChartIndex(filterPeople);
+    const options = collectOrgFilterOptions(index.nodes);
+    expect(options.departments).toEqual(["Engineering", "Finance"]);
+    expect(options.roles).toEqual(["tenant_admin", "viewer"]);
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Engineering",
+      license: "",
+      role: "",
+    });
+    expect(filtered.byId.has("a")).toBe(true);
+    expect(filtered.byId.has("b")).toBe(true);
+    expect(filtered.byId.has("c")).toBe(false);
+  });
+
+  it("filters by role and searches role names", () => {
+    const index = buildOrgChartIndex(filterPeople);
+    const filtered = filterOrgChartIndex(index, {
+      department: "",
+      license: "",
+      role: "tenant_admin",
+    });
+    expect([...filtered.byId.keys()]).toEqual(["a"]);
+    expect(filterOrgPeople(index.nodes, "tenant_admin").map((n) => n.id)).toEqual(["a"]);
   });
 });

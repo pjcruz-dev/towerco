@@ -19,7 +19,8 @@ import {
   uploadEApprovalFormSubsidiaryLogo,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
-import { printableDesignFields } from "@/lib/e-approval/e-approval-print-template-render";
+import { printableGridDesignFields, printableScalarDesignFields } from "@/lib/e-approval/e-approval-print-template-render";
+import { parseGridColumns } from "@/modules/e-approval/field-options";
 import { isPurchaseOrderPrintTemplate } from "@/modules/e-approval/purchase-order-template";
 import { isPurchaseRequisitionPrintTemplate } from "@/modules/e-approval/purchase-requisition-template";
 import {
@@ -82,18 +83,27 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
   }, [layoutQuery.data]);
 
   const designFields = useMemo(
-    () => fields.map((f) => ({ name: f.name, label: f.label, type: f.type })),
+    () =>
+      fields.map((f) => ({
+        name: f.name,
+        label: f.label,
+        type: f.type,
+        grid_columns: f.type === "grid" ? parseGridColumns(f) : undefined,
+      })),
     [fields],
   );
 
-  const fieldTokens = useMemo(
-    () =>
-      printableDesignFields(designFields).map((field) => ({
-        token: `{{field.${field.name}}}`,
-        label: field.label || field.name,
-      })),
-    [designFields],
-  );
+  const fieldTokens = useMemo(() => {
+    const scalars = printableScalarDesignFields(designFields).map((field) => ({
+      token: `{{field.${field.name}}}`,
+      label: field.label || field.name,
+    }));
+    const grids = printableGridDesignFields(designFields).map((field) => ({
+      token: `{{grid.${field.name}}}`,
+      label: `${field.label || field.name} (table)`,
+    }));
+    return [...scalars, ...grids];
+  }, [designFields]);
 
   const allVisibleLayout = useMemo(
     () =>

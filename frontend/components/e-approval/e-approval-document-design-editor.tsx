@@ -176,9 +176,10 @@ export function EApprovalDocumentDesignEditor({
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium text-foreground">Document design</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Form-style print body for this form. Insert starter layout builds letterhead + field table from your
-            current fields. Workflow approval signatures are stamped dynamically under the form from the
-            submission (not as static boxes in the layout).
+            Form-style print body for this form. Insert starter layout builds letterhead +{" "}
+            <span className="font-mono text-[11px]">{"{{system.form_body}}"}</span> so fields and
+            line-item grids update automatically from submissions. Workflow approval signatures are
+            stamped under the form from the submission (not as static boxes in the layout).
           </p>
         </div>
         <Button type="button" size="sm" onClick={seedDefaults}>
@@ -358,7 +359,7 @@ export function EApprovalDocumentDesignEditor({
                   <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center">
                     <p className="text-sm font-medium text-slate-700">No print layout yet</p>
                     <p className="max-w-xs text-xs text-slate-500">
-                      Insert starter layout to generate a form-style document with letterhead and all current fields.
+                      Insert starter layout for letterhead plus a dynamic form body (fields and grids).
                     </p>
                     <Button type="button" size="sm" onClick={seedDefaults}>
                       Insert starter layout

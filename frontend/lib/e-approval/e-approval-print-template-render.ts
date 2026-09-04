@@ -6,7 +6,20 @@ export type DocumentDesignFieldRef = {
   name: string;
   label: string;
   type?: string;
+  /** Grid column labels for live preview sample tables. */
+  grid_columns?: string[];
 };
+
+const NON_PRINT_BODY_FIELD_TYPES = new Set([
+  "section",
+  "page_break",
+  "pagebreak",
+  "divider",
+  "heading",
+  "html",
+  "static",
+  "info",
+]);
 
 function escapeHtml(value: string): string {
   return value
@@ -64,6 +77,12 @@ function systemValue(payload: EApprovalPrintPayload, key: string): string {
       return payload.form_name?.trim() ?? "";
     case "company_logo":
       return companyLogoHtml(payload);
+    case "form_body":
+      return renderDynamicFormBodyHtml(payload);
+    case "form_fields":
+      return renderDynamicScalarFieldsHtml(payload);
+    case "form_grids":
+      return renderDynamicGridsHtml(payload);
     case "subsidiary_logo": {
       const template = (payload.template ?? {}) as EApprovalPrintTemplate;
       const fieldName = (template.subsidiary_logo_field ?? "subsidiary").trim() || "subsidiary";
@@ -90,10 +109,130 @@ function systemValue(payload: EApprovalPrintPayload, key: string): string {
   }
 }
 
-/**
- * Merge {{field.*}} / {{system.*}} tokens into document design HTML.
- * Text values are escaped; company_logo injects a safe img tag.
- */
+const HTML_SYSTEM_TOKENS = new Set([
+  "company_logo",
+  "subsidiary_logo",
+  "form_body",
+  "form_fields",
+  "form_grids",
+]);
+
+const EXCLUDED_DYNAMIC_BODY_TYPES = new Set([
+  ...NON_PRINT_BODY_FIELD_TYPES,
+  "grid",
+  "approver",
+  "approver_list",
+  "signature",
+]);
+
+function isWidePrintFieldType(type: string | null | undefined): boolean {
+  const t = (type ?? "text").toLowerCase();
+  return t === "textarea" || t === "file" || t === "richtext" || t === "camera" || t === "date_range";
+}
+
+function renderScalarFieldRowHtml(label: string, value: string, wide: boolean): string {
+  const rowClass = wide ? "ea-form-row ea-form-row--wide" : "ea-form-row";
+  const display = value.trim() !== "" ? escapeHtml(value) : "—";
+  return `    <div class="${rowClass}">
+      <div class="ea-form-label">${escapeHtml(label)}</div>
+      <div class="ea-form-value">${display}</div>
+    </div>`;
+}
+
+function renderDynamicScalarFieldsHtml(payload: EApprovalPrintPayload): string {
+  const gridKeys = new Set((payload.grids ?? []).map((grid) => grid.key));
+  const rows = (payload.fields ?? [])
+    .filter((field) => {
+      const type = (field.field_type ?? "").toLowerCase();
+      if (gridKeys.has(field.key)) return false;
+      if (EXCLUDED_DYNAMIC_BODY_TYPES.has(type)) return false;
+      return true;
+    })
+    .map((field) =>
+      renderScalarFieldRowHtml(
+        field.label || field.key,
+        field.value ?? "",
+        isWidePrintFieldType(field.field_type),
+      ),
+    );
+
+  if (rows.length === 0) {
+    return `<div class="ea-form-grid">
+${renderScalarFieldRowHtml("Details", "No printable fields on this form.", true)}
+</div>`;
+  }
+
+  return `<div class="ea-form-grid">
+${rows.join("\n")}
+</div>`;
+}
+
+export function renderPrintGridTableHtml(grid: {
+  key: string;
+  label: string;
+  columns: string[];
+  rows: string[][];
+}): string {
+  const columns = grid.columns.length > 0 ? grid.columns : ["Value"];
+  const head = columns
+    .map((column) => `<th>${escapeHtml(column)}</th>`)
+    .join("");
+  const body =
+    grid.rows.length > 0
+      ? grid.rows
+          .map((row) => {
+            const cells = columns.map((_, index) => {
+              const cell = row[index] ?? "";
+              return `<td>${cell.trim() !== "" ? escapeHtml(cell) : "—"}</td>`;
+            });
+            return `<tr>${cells.join("")}</tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="${columns.length}">No line items</td></tr>`;
+
+  return `<section class="ea-form-section ea-form-grid-section" data-grid-key="${escapeHtml(grid.key)}">
+  <h2 class="ea-form-section-title">${escapeHtml(grid.label || grid.key)}</h2>
+  <div class="ea-print-table-wrap">
+    <table class="ea-print-table">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+  </div>
+</section>`;
+}
+
+function renderDynamicGridsHtml(payload: EApprovalPrintPayload, onlyKey?: string): string {
+  const grids = (payload.grids ?? []).filter((grid) =>
+    onlyKey ? grid.key === onlyKey : true,
+  );
+  if (grids.length === 0) {
+    return onlyKey
+      ? `<p class="ea-form-hint">No rows for ${escapeHtml(onlyKey)}.</p>`
+      : "";
+  }
+  return grids.map((grid) => renderPrintGridTableHtml(grid)).join("\n");
+}
+
+function renderDynamicFormBodyHtml(payload: EApprovalPrintPayload): string {
+  const fieldsHtml = renderDynamicScalarFieldsHtml(payload);
+  const gridsHtml = renderDynamicGridsHtml(payload);
+  return `<section class="ea-form-section">
+  <h2 class="ea-form-section-title">Request details</h2>
+  ${fieldsHtml}
+</section>
+${gridsHtml}`;
+}
+
+/** True when custom HTML already embeds grids via dynamic tokens (avoid duplicate React tables). */
+export function documentDesignEmbedsGrids(html: string | null | undefined): boolean {
+  const source = html ?? "";
+  return (
+    /\{\{\s*system\.form_body\s*\}\}/i.test(source) ||
+    /\{\{\s*system\.form_grids\s*\}\}/i.test(source) ||
+    /\{\{\s*grid\./i.test(source)
+  );
+}
+
 /** Removes legacy static sign-off placeholders (real stamps come from workflow approvals). */
 export function stripRedundantDocumentDesignSignoff(html: string): string {
   if (!html.trim()) return html;
@@ -103,8 +242,8 @@ export function stripRedundantDocumentDesignSignoff(html: string): string {
 }
 
 /**
- * Merge {{field.*}} / {{system.*}} tokens into document design HTML.
- * Text values are escaped; company_logo injects a safe img tag.
+ * Merge {{field.*}} / {{system.*}} / {{grid.*}} tokens into document design HTML.
+ * Text values are escaped; logo / form_body / grid tokens inject trusted HTML.
  * Strips legacy static Prepared/Approved boxes so they do not duplicate Approval history.
  */
 export function renderEApprovalPrintTemplateHtml(
@@ -122,10 +261,14 @@ export function renderEApprovalPrintTemplateHtml(
       const key = token.slice("field.".length);
       return escapeHtml(fields[key] ?? "");
     }
+    if (token.startsWith("grid.")) {
+      const key = token.slice("grid.".length);
+      return renderDynamicGridsHtml(payload, key);
+    }
     if (token.startsWith("system.")) {
       const key = token.slice("system.".length);
       const value = systemValue(payload, key);
-      if (key === "company_logo" || key === "subsidiary_logo") return value;
+      if (HTML_SYSTEM_TOKENS.has(key)) return value;
       return escapeHtml(value);
     }
     return "";
@@ -150,6 +293,9 @@ export function shouldAppendPrintAttachments(
 }
 
 export const EAPPROVAL_SYSTEM_PRINT_TOKENS = [
+  { token: "{{system.form_body}}", label: "Dynamic form body (fields + grids)" },
+  { token: "{{system.form_fields}}", label: "Dynamic fields only" },
+  { token: "{{system.form_grids}}", label: "Dynamic grids only" },
   { token: "{{system.document_no}}", label: "Document no." },
   { token: "{{system.form_name}}", label: "Form name" },
   { token: "{{system.status}}", label: "Status" },
@@ -159,18 +305,7 @@ export const EAPPROVAL_SYSTEM_PRINT_TOKENS = [
   { token: "{{system.company_logo}}", label: "Company logo" },
 ] as const;
 
-const NON_PRINT_BODY_FIELD_TYPES = new Set([
-  "section",
-  "page_break",
-  "pagebreak",
-  "divider",
-  "heading",
-  "html",
-  "static",
-  "info",
-]);
-
-/** Fields that belong in the form-style print body. */
+/** Fields that belong in the form-style print body (includes grids for token lists). */
 export function printableDesignFields(fields: DocumentDesignFieldRef[]): DocumentDesignFieldRef[] {
   return fields.filter((field) => {
     const type = (field.type ?? "text").toLowerCase();
@@ -180,40 +315,32 @@ export function printableDesignFields(fields: DocumentDesignFieldRef[]): Documen
   });
 }
 
-function fieldRowHtml(field: DocumentDesignFieldRef, wide: boolean): string {
-  const label = escapeHtml(field.label || field.name);
-  const token = `{{field.${field.name}}}`;
-  const rowClass = wide ? "ea-form-row ea-form-row--wide" : "ea-form-row";
-  return `    <div class="${rowClass}">
-      <div class="ea-form-label">${label}</div>
-      <div class="ea-form-value">${token}</div>
-    </div>`;
+/** Scalar fields only (grids use {{grid.*}} / form_body). */
+export function printableScalarDesignFields(
+  fields: DocumentDesignFieldRef[],
+): DocumentDesignFieldRef[] {
+  return printableDesignFields(fields).filter(
+    (field) => (field.type ?? "text").toLowerCase() !== "grid",
+  );
+}
+
+export function printableGridDesignFields(
+  fields: DocumentDesignFieldRef[],
+): DocumentDesignFieldRef[] {
+  return printableDesignFields(fields).filter(
+    (field) => (field.type ?? "").toLowerCase() === "grid",
+  );
 }
 
 /**
- * Form-style starter layout for any E-Approval form: letterhead, meta strip,
- * and labeled field rows. Workflow approval signatures are stamped separately
- * from the submission (Approval history block) — not as static placeholders.
+ * Form-style starter layout: letterhead + {{system.form_body}}.
+ * Fields and line-item grids resolve from the live print payload — no per-field HTML edits.
+ * Workflow approval signatures are stamped separately under the form.
  */
 export function defaultEApprovalDocumentDesignHtml(
   _formTitle?: string,
-  fields: DocumentDesignFieldRef[] = [],
+  _fields: DocumentDesignFieldRef[] = [],
 ): string {
-  const bodyFields = printableDesignFields(fields);
-  const rows =
-    bodyFields.length > 0
-      ? bodyFields
-          .map((field) => {
-            const type = (field.type ?? "text").toLowerCase();
-            const wide = type === "textarea" || type === "file" || type === "richtext" || type === "grid";
-            return fieldRowHtml(field, wide);
-          })
-          .join("\n")
-      : `    <div class="ea-form-row ea-form-row--wide">
-      <div class="ea-form-label">Details</div>
-      <div class="ea-form-value">Add fields on the Design tab, then re-insert this starter layout.</div>
-    </div>`;
-
   return `<div class="eapproval-printable ea-form-doc">
   <header class="ea-form-letterhead">
     <div class="ea-form-brand">
@@ -228,12 +355,7 @@ export function defaultEApprovalDocumentDesignHtml(
     </div>
   </header>
 
-  <section class="ea-form-section">
-    <h2 class="ea-form-section-title">Request details</h2>
-    <div class="ea-form-grid">
-${rows}
-    </div>
-  </section>
+  {{system.form_body}}
 </div>`;
 }
 
@@ -347,10 +469,44 @@ export function defaultEApprovalDocumentDesignCss(): string {
   word-break: break-word;
 }
 
+.ea-form-grid-section { margin-top: 16px; }
+.ea-form-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #64748b;
+}
+.ea-print-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+.ea-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.ea-print-table th,
+.ea-print-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+.ea-print-table thead th {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  font-size: 10px;
+}
+.ea-print-table tbody tr:nth-child(even) { background: #f8fafc; }
+
 @media print {
   .ea-form-doc { color: #000; }
   .ea-form-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ea-form-docmeta { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ea-print-table thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }`;
 }
 
@@ -368,14 +524,17 @@ export function buildEApprovalDocumentDesignPreviewPayload(
   const logos = options?.subsidiary_logos ?? {};
   const preferredCode = logos.ATC ? "ATC" : logos.ADIC ? "ADIC" : "ATC";
 
-  const previewFields = fields.map((field, index) => ({
-    key: field.name,
-    label: field.label || field.name,
-    value:
-      field.name === logoField
-        ? preferredCode
-        : samplePreviewValue(field.label || field.name, field.type, index),
-  }));
+  const previewFields = fields
+    .filter((field) => (field.type ?? "text").toLowerCase() !== "grid")
+    .map((field, index) => ({
+      key: field.name,
+      label: field.label || field.name,
+      value:
+        field.name === logoField
+          ? preferredCode
+          : samplePreviewValue(field.label || field.name, field.type, index),
+      field_type: field.type ?? "text",
+    }));
 
   // Ensure live preview can resolve {{system.subsidiary_logo}} even if the form
   // field list does not currently include Subsidiary (or it was filtered out).
@@ -384,8 +543,33 @@ export function buildEApprovalDocumentDesignPreviewPayload(
       key: logoField,
       label: "Subsidiary",
       value: preferredCode,
+      field_type: "select",
     });
   }
+
+  const grids = printableGridDesignFields(fields).map((field) => {
+    const columns =
+      field.grid_columns && field.grid_columns.length > 0
+        ? field.grid_columns
+        : ["Date", "Description", "Amount"];
+    return {
+      key: field.name,
+      label: field.label || field.name,
+      columns,
+      rows: [
+        columns.map((column, index) =>
+          index === columns.length - 1 && /amount|total|price/i.test(column)
+            ? "1,250.00"
+            : `Sample ${column}`,
+        ),
+        columns.map((column, index) =>
+          index === columns.length - 1 && /amount|total|price/i.test(column)
+            ? "480.00"
+            : `Sample ${column} 2`,
+        ),
+      ],
+    };
+  });
 
   return {
     document_no: "EA-PREVIEW-001",
@@ -402,6 +586,7 @@ export function buildEApprovalDocumentDesignPreviewPayload(
     brand_logo_url: options?.brand_logo_url ?? null,
     subsidiary_logos: logos,
     fields: previewFields,
+    grids,
     approvals: [],
     attachments: [],
     template: {
@@ -416,6 +601,7 @@ function samplePreviewValue(label: string, type: string | undefined, index: numb
   const t = (type ?? "text").toLowerCase();
   if (t === "currency" || t === "number") return String((index + 1) * 1000);
   if (t === "date") return "4 Sep 2026";
+  if (t === "date_range") return "2026-09-01 – 2026-09-04";
   if (t === "textarea" || t === "richtext") {
     return `Sample ${label} content for live preview. Replace with live submission values when printing.`;
   }
@@ -435,7 +621,7 @@ export function documentDesignPreviewRecommendations(
   if (!trimmedHtml) {
     tips.push(
       fieldCount > 0
-        ? "Click Insert starter layout to generate a form-style printout with all current fields."
+        ? "Click Insert starter layout for a letterhead + dynamic form body (fields and grids update automatically)."
         : "Add fields on the Design tab, then insert a starter layout.",
     );
     return tips;
@@ -443,8 +629,14 @@ export function documentDesignPreviewRecommendations(
   if (!/\{\{\s*system\.document_no\s*\}\}/.test(trimmedHtml)) {
     tips.push("Add {{system.document_no}} so printed copies show the submission number.");
   }
-  if (!/\{\{\s*field\./.test(trimmedHtml)) {
-    tips.push("Insert field tokens (or re-run Insert starter layout) so submission values appear.");
+  if (!documentDesignEmbedsGrids(trimmedHtml) && !/\{\{\s*field\./.test(trimmedHtml)) {
+    tips.push(
+      "Add {{system.form_body}} (or Insert starter layout) so fields and line-item grids print automatically.",
+    );
+  } else if (!documentDesignEmbedsGrids(trimmedHtml) && /\{\{\s*field\./.test(trimmedHtml)) {
+    tips.push(
+      "Re-insert starter layout to switch to {{system.form_body}} — new fields and grids will appear without editing HTML.",
+    );
   }
   if (!css.trim() || !/@page/.test(css)) {
     tips.push("Keep Styles with an @page rule so paper size and margins stay consistent.");

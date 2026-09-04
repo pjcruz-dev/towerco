@@ -418,6 +418,8 @@ export type EApprovalPrintField = {
   key: string;
   label: string;
   value: string | null;
+  /** Present on print payload so dynamic form_body can size rows (grid/file/textarea). */
+  field_type?: string | null;
 };
 
 export type EApprovalPrintApprovalRow = {

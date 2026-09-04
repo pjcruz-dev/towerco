@@ -4,6 +4,7 @@ import {
   buildEApprovalDocumentDesignPreviewPayload,
   defaultEApprovalDocumentDesignCss,
   defaultEApprovalDocumentDesignHtml,
+  documentDesignEmbedsGrids,
   documentDesignPreviewRecommendations,
   hasCustomPrintDocumentDesign,
   printableDesignFields,
@@ -21,8 +22,8 @@ function samplePayload(overrides: Partial<EApprovalPrintPayload> = {}): EApprova
     created_at: "2026-09-04T01:00:00Z",
     brand_logo_url: null,
     fields: [
-      { key: "subsidiary", label: "Subsidiary", value: "ATC" },
-      { key: "notes", label: "Notes", value: "<script>x</script>" },
+      { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+      { key: "notes", label: "Notes", value: "<script>x</script>", field_type: "textarea" },
     ],
     approvals: [],
     attachments: [],
@@ -47,6 +48,53 @@ describe("renderEApprovalPrintTemplateHtml", () => {
   it("returns empty for blank template", () => {
     expect(renderEApprovalPrintTemplateHtml("  ", samplePayload())).toBe("");
   });
+
+  it("renders dynamic form_body with scalar fields and grid tables", () => {
+    const html = renderEApprovalPrintTemplateHtml("{{system.form_body}}", samplePayload({
+      fields: [
+        { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+        {
+          key: "expense_lines",
+          label: "Credit card expenses",
+          value: "Sample Credit card expenses",
+          field_type: "grid",
+        },
+      ],
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Credit card expenses",
+          columns: ["Date", "Merchant", "Amount"],
+          rows: [["2026-09-01", "Cafe", "120.00"]],
+        },
+      ],
+    }));
+
+    expect(html).toContain("Request details");
+    expect(html).toContain("Subsidiary");
+    expect(html).toContain("ATC");
+    expect(html).toContain("ea-print-table");
+    expect(html).toContain("Credit card expenses");
+    expect(html).toContain("Merchant");
+    expect(html).toContain("Cafe");
+    expect(html).not.toContain("Sample Credit card expenses");
+  });
+
+  it("renders a single grid via {{grid.*}} without escaping table HTML", () => {
+    const html = renderEApprovalPrintTemplateHtml("{{grid.expense_lines}}", samplePayload({
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Expenses",
+          columns: ["Item", "Qty"],
+          rows: [["Laptop", "1"]],
+        },
+      ],
+    }));
+    expect(html).toContain("<table");
+    expect(html).toContain("Laptop");
+    expect(html).not.toContain("&lt;table");
+  });
 });
 
 describe("print design helpers", () => {
@@ -54,6 +102,13 @@ describe("print design helpers", () => {
     expect(hasCustomPrintDocumentDesign({ template_html: "<p>Hi</p>" })).toBe(true);
     expect(hasCustomPrintDocumentDesign({ template_html: "   " })).toBe(false);
     expect(hasCustomPrintDocumentDesign({})).toBe(false);
+  });
+
+  it("detects when design embeds grids", () => {
+    expect(documentDesignEmbedsGrids("{{system.form_body}}")).toBe(true);
+    expect(documentDesignEmbedsGrids("{{system.form_grids}}")).toBe(true);
+    expect(documentDesignEmbedsGrids("{{grid.expense_lines}}")).toBe(true);
+    expect(documentDesignEmbedsGrids("{{field.notes}}")).toBe(false);
   });
 
   it("defaults append attachments to true", () => {
@@ -73,7 +128,7 @@ describe("form-style starter layout", () => {
     expect(printable.map((f) => f.name)).toEqual(["subsidiary", "notes"]);
   });
 
-  it("builds letterhead and field rows from form fields", () => {
+  it("builds letterhead with dynamic form_body token", () => {
     const html = defaultEApprovalDocumentDesignHtml("Leave Request", [
       { name: "subsidiary", label: "Subsidiary", type: "select" },
       { name: "reason", label: "Reason", type: "textarea" },
@@ -83,24 +138,22 @@ describe("form-style starter layout", () => {
     expect(html).toContain("{{system.form_name}}");
     expect(html).toContain("{{system.document_no}}");
     expect(html).toContain("{{system.subsidiary_logo}}");
-    expect(html).toContain("{{field.subsidiary}}");
-    expect(html).toContain("{{field.reason}}");
-    expect(html).toContain("ea-form-row--wide");
+    expect(html).toContain("{{system.form_body}}");
+    expect(html).not.toContain("{{field.subsidiary}}");
     expect(html).not.toContain("ea-form-kicker");
-    expect(html).not.toContain("{{field.heading}}");
     expect(html).not.toContain("ea-form-signoff");
-    expect(html).not.toContain("See approval history");
 
     const rendered = renderEApprovalPrintTemplateHtml(html, samplePayload({
       form_name: "Leave Request",
       fields: [
-        { key: "subsidiary", label: "Subsidiary", value: "ATC" },
-        { key: "reason", label: "Reason", value: "Medical" },
+        { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+        { key: "reason", label: "Reason", value: "Medical", field_type: "textarea" },
       ],
     }));
     expect(rendered).toContain("Leave Request");
     expect(rendered).toContain("ATC");
     expect(rendered).toContain("Medical");
+    expect(rendered).toContain("Request details");
   });
 
   it("strips legacy static sign-off boxes when rendering", () => {
@@ -163,11 +216,39 @@ describe("form-style starter layout", () => {
     expect(html).toContain("subsidiary-logos/ATC");
   });
 
-  it("includes print CSS with form-style classes", () => {
+  it("preview payload builds sample grids for grid fields", () => {
+    const payload = buildEApprovalDocumentDesignPreviewPayload(
+      [
+        { name: "purpose", label: "Purpose", type: "textarea" },
+        {
+          name: "expense_lines",
+          label: "Credit card expenses",
+          type: "grid",
+          grid_columns: ["Date", "Merchant", "Amount"],
+        },
+      ],
+      "Credit Card Expense Report",
+    );
+    expect(payload.grids?.[0]?.key).toBe("expense_lines");
+    expect(payload.grids?.[0]?.columns).toEqual(["Date", "Merchant", "Amount"]);
+    expect(payload.grids?.[0]?.rows.length).toBeGreaterThan(0);
+    expect(payload.fields.some((f) => f.key === "expense_lines")).toBe(false);
+
+    const html = renderEApprovalPrintTemplateHtml(
+      defaultEApprovalDocumentDesignHtml(),
+      payload,
+    );
+    expect(html).toContain("Credit card expenses");
+    expect(html).toContain("Merchant");
+    expect(html).toContain("ea-print-table");
+  });
+
+  it("includes print CSS with form-style and table classes", () => {
     const css = defaultEApprovalDocumentDesignCss();
     expect(css).toContain("@page");
     expect(css).toContain(".ea-form-letterhead");
     expect(css).toContain(".ea-form-grid");
+    expect(css).toContain(".ea-print-table");
   });
 });
 
@@ -180,5 +261,14 @@ describe("documentDesignPreviewRecommendations", () => {
   it("asks for fields when form has none", () => {
     const tips = documentDesignPreviewRecommendations("", "", 0);
     expect(tips[0]).toMatch(/Add fields/i);
+  });
+
+  it("suggests migrating legacy per-field tokens to form_body", () => {
+    const tips = documentDesignPreviewRecommendations(
+      "<div>{{field.notes}}</div>",
+      "@page { size: A4; }",
+      2,
+    );
+    expect(tips.some((tip) => /form_body/i.test(tip))).toBe(true);
   });
 });

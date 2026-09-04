@@ -17,6 +17,7 @@ final class EntraOrgDirectoryService
     public function __construct(
         private readonly AzureGraphService $delegatedGraph,
         private readonly EntraGraphAppService $appGraph,
+        private readonly EntraUserAvatarService $avatars,
     ) {}
 
     public function syncFromDelegatedToken(TenantUser $user, string $accessToken): void
@@ -146,6 +147,9 @@ final class EntraOrgDirectoryService
                 $this->applyProfile($user, $found->person, $skuMap);
                 $hadManager = $user->manager_id;
                 $this->applyManager($user, $found->manager, $skuMap, $token);
+                if ($found->person->entraId !== '') {
+                    $this->avatars->syncPhotoFromGraph($user, $token, $found->person->entraId);
+                }
                 $user->entra_org_synced_at = now();
                 $user->save();
                 $updated++;
@@ -198,6 +202,7 @@ final class EntraOrgDirectoryService
 
         $query = TenantUser::query()
             ->where('is_active', true)
+            ->with('roles')
             ->orderBy('name');
         $this->constrainLicensedOrgUsers($query);
 
@@ -215,6 +220,7 @@ final class EntraOrgDirectoryService
             ...($this->hasLicenseColumns() ? ['entra_license_label', 'entra_license_names'] : []),
             ...($this->hasManagerLicenseColumns() ? ['entra_manager_licensed', 'entra_manager_license_label'] : []),
             ...($this->hasManagerParentColumn() ? ['entra_manager_parent_id'] : []),
+            ...($this->avatars->hasAvatarColumns() ? ['avatar_path'] : []),
         ]);
 
         $ids = $users->pluck('id')->map(static fn ($id): string => (string) $id)->all();
@@ -280,6 +286,8 @@ final class EntraOrgDirectoryService
                 'direct_report_count' => (int) ($reportCounts[(string) $user->id] ?? 0),
                 'license_label' => $this->hasLicenseColumns() ? $user->entra_license_label : null,
                 'license_names' => $this->hasLicenseColumns() ? $this->licenseNames($user) : [],
+                'roles' => $user->getRoleNames()->values()->all(),
+                'photo_url' => $this->avatars->presentAvatarUrl($user),
             ];
         })->values()->all();
 

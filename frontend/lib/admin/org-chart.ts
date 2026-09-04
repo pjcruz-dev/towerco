@@ -102,6 +102,8 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
         direct_report_count: 0,
         license_label: person.manager_license_label ?? null,
         license_names: [],
+        roles: [],
+        photo_url: null,
         external: true,
       });
       if (parentId) {
@@ -207,7 +209,118 @@ export function filterOrgPeople(nodes: OrgChartNode[], query: string): OrgChartN
 
   return nodes
     .filter((node) =>
-      `${node.name} ${node.email} ${node.job_title ?? ""} ${node.department ?? ""} ${node.license_label ?? ""}`.toLowerCase().includes(needle),
+      `${node.name} ${node.email} ${node.job_title ?? ""} ${node.department ?? ""} ${node.license_label ?? ""} ${(node.roles ?? []).join(" ")}`
+        .toLowerCase()
+        .includes(needle),
     )
     .slice(0, 12);
+}
+
+export type OrgChartFilters = {
+  department: string;
+  license: string;
+  role: string;
+};
+
+export function emptyOrgChartFilters(): OrgChartFilters {
+  return { department: "", license: "", role: "" };
+}
+
+export function orgChartFiltersActive(filters: OrgChartFilters): boolean {
+  return filters.department !== "" || filters.license !== "" || filters.role !== "";
+}
+
+export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
+  departments: string[];
+  licenses: string[];
+  roles: string[];
+} {
+  const departments = new Set<string>();
+  const licenses = new Set<string>();
+  const roles = new Set<string>();
+
+  for (const node of nodes) {
+    if (node.department?.trim()) departments.add(node.department.trim());
+    if (node.license_label?.trim()) licenses.add(node.license_label.trim());
+    for (const role of node.roles ?? []) {
+      if (role.trim()) roles.add(role.trim());
+    }
+  }
+
+  const sort = (list: string[]) =>
+    list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+  return {
+    departments: sort([...departments]),
+    licenses: sort([...licenses]),
+    roles: sort([...roles]),
+  };
+}
+
+function nodeMatchesFilters(node: OrgChartNode, filters: OrgChartFilters): boolean {
+  if (filters.department && (node.department ?? "").trim() !== filters.department) {
+    return false;
+  }
+  if (filters.license && (node.license_label ?? "").trim() !== filters.license) {
+    return false;
+  }
+  if (filters.role && !(node.roles ?? []).includes(filters.role)) {
+    return false;
+  }
+  return true;
+}
+
+/** Keep matches plus ancestors so reporting lines stay connected. */
+export function filterOrgChartIndex(index: OrgChartIndex, filters: OrgChartFilters): OrgChartIndex {
+  if (!orgChartFiltersActive(filters)) {
+    return index;
+  }
+
+  const matches = new Set(
+    index.nodes.filter((node) => nodeMatchesFilters(node, filters)).map((node) => node.id),
+  );
+  if (matches.size === 0) {
+    return { byId: new Map(), reports: new Map(), nodes: [] };
+  }
+
+  const keep = new Set(matches);
+  for (const id of matches) {
+    let current = index.byId.get(id);
+    while (current) {
+      keep.add(current.id);
+      const manager = resolveManager(index, current);
+      if (!manager || keep.has(manager.id)) {
+        break;
+      }
+      current = manager;
+    }
+  }
+
+  const byId = new Map<string, OrgChartNode>();
+  for (const id of keep) {
+    const node = index.byId.get(id);
+    if (node) {
+      byId.set(id, { ...node });
+    }
+  }
+
+  const reports = new Map<string, OrgChartNode[]>();
+  for (const [managerId, list] of index.reports) {
+    if (!keep.has(managerId)) continue;
+    const children = list.filter((child) => keep.has(child.id)).map((child) => byId.get(child.id)!);
+    if (children.length === 0) continue;
+    reports.set(managerId, sortNodes([...children]));
+    const manager = byId.get(managerId);
+    if (manager) {
+      manager.direct_report_count = children.length;
+    }
+  }
+
+  for (const node of byId.values()) {
+    if (!reports.has(node.id)) {
+      node.direct_report_count = 0;
+    }
+  }
+
+  return { byId, reports, nodes: sortNodes([...byId.values()]) };
 }
