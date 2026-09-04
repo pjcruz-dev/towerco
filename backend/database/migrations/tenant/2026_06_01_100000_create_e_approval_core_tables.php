@@ -73,7 +73,7 @@ return new class extends Migration
 
         Schema::create('e_approval_submissions', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->string('document_no', 50)->unique();
+            $table->string('document_no', 128)->unique();
             $table->foreignUuid('form_id')->constrained('e_approval_forms');
             $table->foreignUuid('requestor_id')->constrained('users');
             $table->string('status', 50)->default('pending');
@@ -86,7 +86,7 @@ return new class extends Migration
         });
 
         Schema::create('e_approval_document_sequences', function (Blueprint $table) {
-            $table->string('prefix', 30)->primary();
+            $table->string('prefix', 128)->primary();
             $table->unsignedInteger('next_no');
         });
 
