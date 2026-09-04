@@ -220,26 +220,18 @@ describe("org chart filters", () => {
     const index = buildOrgChartIndex(filterPeople);
     const options = collectOrgFilterOptions(index.nodes);
     expect(options.departments).toEqual(["Engineering", "Finance"]);
-    expect(options.roles).toEqual(["tenant_admin", "viewer"]);
 
     const filtered = filterOrgChartIndex(index, {
       department: "Engineering",
       license: "",
-      role: "",
     });
     expect(filtered.byId.has("a")).toBe(true);
     expect(filtered.byId.has("b")).toBe(true);
     expect(filtered.byId.has("c")).toBe(false);
   });
 
-  it("filters by role and searches role names", () => {
+  it("searches role names in people search", () => {
     const index = buildOrgChartIndex(filterPeople);
-    const filtered = filterOrgChartIndex(index, {
-      department: "",
-      license: "",
-      role: "tenant_admin",
-    });
-    expect([...filtered.byId.keys()]).toEqual(["a"]);
     expect(filterOrgPeople(index.nodes, "tenant_admin").map((n) => n.id)).toEqual(["a"]);
   });
 });

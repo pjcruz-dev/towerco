@@ -270,24 +270,6 @@ export function OrgPageClient() {
                       ))}
                     </Select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-role">
-                      Role
-                    </label>
-                    <Select
-                      id="org-filter-role"
-                      value={filters.role}
-                      onChange={(event) => patchFilter("role", event.target.value)}
-                      className="h-9 min-w-[10rem]"
-                    >
-                      <option value="">All roles</option>
-                      {filterOptions.roles.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
                   {orgChartFiltersActive(filters) ? (
                     <Button
                       type="button"
@@ -365,7 +347,7 @@ export function OrgPageClient() {
                 No people match these filters. Clear filters to see the full organization.
               </p>
             ) : view === "all" ? (
-              <AdminOrgCanvas resetKey={`all-${filters.department}-${filters.license}-${filters.role}`}>
+              <AdminOrgCanvas resetKey={`all-${filters.department}-${filters.license}`}>
                 <AdminOrgTreeView
                   index={filteredIndex}
                   focusedId={focusedId}

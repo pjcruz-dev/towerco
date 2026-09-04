@@ -219,32 +219,26 @@ export function filterOrgPeople(nodes: OrgChartNode[], query: string): OrgChartN
 export type OrgChartFilters = {
   department: string;
   license: string;
-  role: string;
 };
 
 export function emptyOrgChartFilters(): OrgChartFilters {
-  return { department: "", license: "", role: "" };
+  return { department: "", license: "" };
 }
 
 export function orgChartFiltersActive(filters: OrgChartFilters): boolean {
-  return filters.department !== "" || filters.license !== "" || filters.role !== "";
+  return filters.department !== "" || filters.license !== "";
 }
 
 export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
   departments: string[];
   licenses: string[];
-  roles: string[];
 } {
   const departments = new Set<string>();
   const licenses = new Set<string>();
-  const roles = new Set<string>();
 
   for (const node of nodes) {
     if (node.department?.trim()) departments.add(node.department.trim());
     if (node.license_label?.trim()) licenses.add(node.license_label.trim());
-    for (const role of node.roles ?? []) {
-      if (role.trim()) roles.add(role.trim());
-    }
   }
 
   const sort = (list: string[]) =>
@@ -253,7 +247,6 @@ export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
   return {
     departments: sort([...departments]),
     licenses: sort([...licenses]),
-    roles: sort([...roles]),
   };
 }
 
@@ -262,9 +255,6 @@ function nodeMatchesFilters(node: OrgChartNode, filters: OrgChartFilters): boole
     return false;
   }
   if (filters.license && (node.license_label ?? "").trim() !== filters.license) {
-    return false;
-  }
-  if (filters.role && !(node.roles ?? []).includes(filters.role)) {
     return false;
   }
   return true;
