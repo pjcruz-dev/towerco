@@ -146,6 +146,8 @@ export type CreateTicketingTicketInput = {
   source_reference_type?: string;
   source_reference_id?: string;
   source_label?: string;
+  /** Managers only: create as this user (requester / created by). */
+  requester_id?: string;
   assignee_id?: string;
   links?: TicketingLinkInput[];
 };

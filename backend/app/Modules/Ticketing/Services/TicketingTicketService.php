@@ -216,7 +216,10 @@ final class TicketingTicketService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function create(TenantUser $requester, array $data): TicketingTicket
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public function create(TenantUser $actor, array $data): TicketingTicket
     {
         $sourceModule = (string) ($data['source_module'] ?? TicketingSourceCatalog::MODULE_MANUAL);
         if (! $this->sources->isKnownModule($sourceModule)) {
@@ -232,7 +235,9 @@ final class TicketingTicketService
             ]);
         }
 
-        return DB::transaction(function () use ($requester, $data, $sourceModule, $category): TicketingTicket {
+        $requester = $this->resolveRequesterForCreate($actor, $data);
+
+        return DB::transaction(function () use ($actor, $requester, $data, $sourceModule, $category): TicketingTicket {
             $assigneeId = $data['assignee_id'] ?? null;
             if (($assigneeId === null || $assigneeId === '') && is_string($category)) {
                 $assigneeId = $this->assignment->resolveAssigneeId($category);
@@ -271,24 +276,73 @@ final class TicketingTicketService
 
             $this->syncSla($ticket, true);
 
+            $onBehalf = (string) $requester->id !== (string) $actor->id;
+            $summary = $onBehalf
+                ? 'Ticket created on behalf of '.$requester->name.' · '.$ticket->displayNumber()
+                : 'Ticket created · '.$ticket->displayNumber();
+
+            $changes = [
+                'status' => [
+                    'from' => null,
+                    'to' => TicketingTicket::STATUS_OPEN,
+                ],
+            ];
+            if ($onBehalf) {
+                $changes['requester_id'] = [
+                    'from' => null,
+                    'to' => (string) $requester->id,
+                ];
+            }
+
             $this->activity->record(
                 module: 'ticketing',
                 action: 'ticket.created',
-                summary: 'Ticket created · '.$ticket->displayNumber(),
+                summary: $summary,
                 entityType: 'ticket',
                 entityId: (string) $ticket->id,
                 entityLabel: $ticket->displayNumber(),
-                actor: $requester,
-                changes: WorkspaceAuditChanges::of([
-                    'status' => [
-                        'from' => null,
-                        'to' => TicketingTicket::STATUS_OPEN,
-                    ],
-                ]),
+                actor: $actor,
+                changes: WorkspaceAuditChanges::of($changes),
             );
 
             return $ticket->fresh();
         });
+    }
+
+    /**
+     * Managers may set requester_id to create a ticket on behalf of another active user.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveRequesterForCreate(TenantUser $actor, array $data): TenantUser
+    {
+        $requesterId = $data['requester_id'] ?? null;
+        if (! is_string($requesterId) || $requesterId === '') {
+            return $actor;
+        }
+
+        if (! $actor->can('ticketing:tickets:manage')) {
+            throw ValidationException::withMessages([
+                'requester_id' => [__('Only ticket managers can create tickets on behalf of another user.')],
+            ]);
+        }
+
+        if ((string) $requesterId === (string) $actor->id) {
+            return $actor;
+        }
+
+        $requester = TenantUser::query()
+            ->whereKey($requesterId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $requester instanceof TenantUser) {
+            throw ValidationException::withMessages([
+                'requester_id' => [__('Selected requester was not found or is inactive.')],
+            ]);
+        }
+
+        return $requester;
     }
 
     /**
