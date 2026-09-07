@@ -70,7 +70,11 @@ final class EApprovalFormSubsidiaryLogoTest extends TestCase
             'data.subsidiary_logos.ATC',
             '/api/v1/e-approval/forms/'.$form->id.'/subsidiary-logos/ATC',
         );
-        $upload->assertJsonPath('data.subsidiary_codes.0', 'ATC');
+        // Uploading ATC must not wipe default sibling codes (ADIC) from Print options.
+        $uploadCodes = $upload->json('data.subsidiary_codes');
+        $this->assertIsArray($uploadCodes);
+        $this->assertContains('ATC', $uploadCodes);
+        $this->assertContains('ADIC', $uploadCodes);
 
         $layout = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
@@ -81,6 +85,10 @@ final class EApprovalFormSubsidiaryLogoTest extends TestCase
             'data.template.subsidiary_logos.ATC',
             '/api/v1/e-approval/forms/'.$form->id.'/subsidiary-logos/ATC',
         );
+        $layoutCodes = $layout->json('data.template.subsidiary_codes');
+        $this->assertIsArray($layoutCodes);
+        $this->assertContains('ATC', $layoutCodes);
+        $this->assertContains('ADIC', $layoutCodes);
 
         $download = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
@@ -95,8 +103,11 @@ final class EApprovalFormSubsidiaryLogoTest extends TestCase
 
         $clear->assertOk();
         $clear->assertJsonMissingPath('data.subsidiary_logos.ATC');
-        // Clearing logo keeps the code registered.
-        $clear->assertJsonPath('data.subsidiary_codes.0', 'ATC');
+        // Clearing logo keeps the code registered (and sibling defaults).
+        $clearCodes = $clear->json('data.subsidiary_codes');
+        $this->assertIsArray($clearCodes);
+        $this->assertContains('ATC', $clearCodes);
+        $this->assertContains('ADIC', $clearCodes);
     }
 
     public function test_accepts_custom_subsidiary_code_and_syncs_select_choices(): void

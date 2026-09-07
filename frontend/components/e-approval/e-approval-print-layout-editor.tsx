@@ -35,6 +35,8 @@ type Props = {
   formId: string;
   fields: EApprovalFormFieldInput[];
   formTitle?: string;
+  /** When set, unsaved print defaults can prefer landscape for wide expense grids. */
+  formFamily?: string | null;
 };
 
 function asTemplate(raw: Record<string, unknown> | undefined | null): EApprovalPrintTemplate {
@@ -64,7 +66,7 @@ function resolveSubsidiaryCodes(
   return [...EAPPROVAL_DEFAULT_SUBSIDIARY_CODES];
 }
 
-export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props) {
+export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFamily }: Props) {
   const queryClient = useQueryClient();
   const push = useNotificationStore((s) => s.push);
   const [template, setTemplate] = useState<EApprovalPrintTemplate>({});
@@ -77,10 +79,22 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
   });
 
   useEffect(() => {
-    if (layoutQuery.data?.template) {
-      setTemplate(asTemplate(layoutQuery.data.template));
+    if (!layoutQuery.data?.template) {
+      return;
     }
-  }, [layoutQuery.data]);
+    const next = asTemplate(layoutQuery.data.template);
+    const prefersLandscape =
+      formFamily === "liquidation" ||
+      formFamily === "reimbursement" ||
+      fields.some((field) => field.type === "grid" && field.name.toLowerCase().includes("expense"));
+
+    // Unsaved defaults: ensure expense forms open as landscape even if global default is portrait.
+    if (!layoutQuery.data.layout_persisted && prefersLandscape && !next.orientation) {
+      next.orientation = "landscape";
+      next.page = { size: next.page?.size ?? "A4", marginMm: next.page?.marginMm ?? 8 };
+    }
+    setTemplate(next);
+  }, [layoutQuery.data, formFamily, fields]);
 
   const designFields = useMemo(
     () =>
@@ -134,12 +148,26 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
     subsidiary_codes?: string[];
     subsidiary_logos?: Record<string, string>;
   }) => {
-    setTemplate((prev) => ({
-      ...prev,
-      subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
-      subsidiary_codes: result.subsidiary_codes ?? prev.subsidiary_codes,
-      subsidiary_logos: result.subsidiary_logos ?? prev.subsidiary_logos,
-    }));
+    setTemplate((prev) => {
+      const prevCodes = Array.isArray(prev.subsidiary_codes)
+        ? prev.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
+        : [];
+      const nextCodes = Array.isArray(result.subsidiary_codes)
+        ? result.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
+        : [];
+      // Union codes so an upload for ATC never drops ADIC from the UI.
+      const mergedCodes = [...new Set([...prevCodes, ...nextCodes])];
+
+      return {
+        ...prev,
+        subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
+        subsidiary_codes: mergedCodes.length > 0 ? mergedCodes : prev.subsidiary_codes,
+        subsidiary_logos: {
+          ...(prev.subsidiary_logos ?? {}),
+          ...(result.subsidiary_logos ?? {}),
+        },
+      };
+    });
   };
 
   const saveMutation = useMutation({
@@ -185,7 +213,23 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
   const clearLogoMutation = useMutation({
     mutationFn: (code: string) => deleteEApprovalFormSubsidiaryLogo(formId, code),
     onSuccess: (result) => {
-      applySubsidiaryResult(result);
+      // Replace logos (do not merge) so the cleared code disappears from the UI.
+      setTemplate((prev) => {
+        const prevCodes = Array.isArray(prev.subsidiary_codes)
+          ? prev.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
+          : [];
+        const nextCodes = Array.isArray(result.subsidiary_codes)
+          ? result.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
+          : [];
+        const mergedCodes = [...new Set([...prevCodes, ...nextCodes])];
+
+        return {
+          ...prev,
+          subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
+          subsidiary_codes: mergedCodes.length > 0 ? mergedCodes : prev.subsidiary_codes,
+          subsidiary_logos: result.subsidiary_logos ?? {},
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
       push({ level: "success", title: `${result.code} logo cleared` });
     },
@@ -206,7 +250,13 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
   const removeCodeMutation = useMutation({
     mutationFn: (code: string) => removeEApprovalFormSubsidiaryCode(formId, code),
     onSuccess: (result) => {
-      applySubsidiaryResult(result);
+      // Replace codes on remove (do not union — user intentionally deleted a code).
+      setTemplate((prev) => ({
+        ...prev,
+        subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
+        subsidiary_codes: result.subsidiary_codes ?? prev.subsidiary_codes,
+        subsidiary_logos: result.subsidiary_logos ?? {},
+      }));
       queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
       push({ level: "success", title: `${result.code} removed` });
     },
@@ -295,7 +345,7 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="ea-print-page-size">Page size</Label>
             <Select
@@ -312,6 +362,23 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
               <option value="A4">A4</option>
               <option value="Letter">Letter</option>
               <option value="Legal">Legal</option>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ea-print-orientation">Orientation</Label>
+            <Select
+              id="ea-print-orientation"
+              className="h-9"
+              value={template.orientation ?? "portrait"}
+              onChange={(e) =>
+                setTemplate((prev) => ({
+                  ...prev,
+                  orientation: e.target.value === "landscape" ? "landscape" : "portrait",
+                }))
+              }
+            >
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
             </Select>
           </div>
           <div className="space-y-2">
@@ -334,6 +401,11 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
             />
           </div>
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          Landscape is recommended for liquidation and reimbursement expense grids. Use{" "}
+          <code className="rounded bg-muted px-1">{"{{system.form_body}}"}</code> (Insert starter layout) so expense
+          columns print dynamically. Preview and browser print use these settings after you save.
+        </p>
 
         <div className="space-y-3">
           <label className="flex items-center gap-3 text-sm text-foreground">
@@ -468,6 +540,8 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle }: Props)
           html={template.template_html ?? ""}
           css={template.template_css ?? ""}
           pageSize={template.page?.size ?? "A4"}
+          orientation={template.orientation ?? "portrait"}
+          marginMm={template.page?.marginMm ?? 12}
           subsidiaryLogos={subsidiaryLogos}
           subsidiaryLogoField={template.subsidiary_logo_field ?? "subsidiary"}
           onHtmlChange={(html) => setTemplate((prev) => ({ ...prev, template_html: html }))}

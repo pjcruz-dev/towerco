@@ -105,7 +105,8 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Presets match auto-total shortcuts. Use Amount for expense sums; Qty + Unit price for purchase lines.
+          Presets: Liquidation (Land/Sea/Air, Lodging) and Reimbursement (Landfare, Airfare, Toll Fee). Both include
+          Date, OR No, Supplier/Payee, VAT, and Total. PO lines use Qty + Unit price.
         </p>
       </div>
 
@@ -128,39 +129,38 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
               key={`col-${index}`}
               className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3"
             >
-              <div className="flex items-start gap-1">
-                <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Header label</Label>
-                    <Input
-                      disabled={disabled}
-                      value={col.label}
-                      onChange={(e) => updateColumn(index, { label: e.target.value })}
-                      placeholder={`Column ${index + 1}`}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Cell field type</Label>
-                    <Select
-                      disabled={disabled}
-                      value={col.type}
-                      onChange={(e) => updateColumn(index, { type: e.target.value as GridColumnType })}
-                    >
-                      {GRID_COLUMN_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {GRID_COLUMN_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
+              <div className="flex flex-col gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Header label</Label>
+                  <Input
+                    disabled={disabled}
+                    value={col.label}
+                    onChange={(e) => updateColumn(index, { label: e.target.value })}
+                    placeholder={`Column ${index + 1}`}
+                    className="h-9 w-full text-sm"
+                  />
                 </div>
-                <div className="flex shrink-0 flex-col gap-0.5 pt-5">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Cell field type</Label>
+                  <Select
+                    disabled={disabled}
+                    value={col.type}
+                    className="h-9 w-full"
+                    onChange={(e) => updateColumn(index, { type: e.target.value as GridColumnType })}
+                  >
+                    {GRID_COLUMN_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {GRID_COLUMN_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="flex items-center justify-end gap-0.5">
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-8 w-8"
                     disabled={disabled || index === 0}
                     onClick={() => moveColumn(index, -1)}
                     aria-label="Move column up"
@@ -171,7 +171,7 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7"
+                    className="h-8 w-8"
                     disabled={disabled || index === columns.length - 1}
                     onClick={() => moveColumn(index, 1)}
                     aria-label="Move column down"
@@ -182,7 +182,7 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7 text-destructive"
+                    className="h-8 w-8 text-destructive"
                     disabled={disabled}
                     onClick={() => removeColumn(index)}
                     aria-label="Remove column"

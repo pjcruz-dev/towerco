@@ -90,6 +90,33 @@ final class EApprovalFinanceProcurementTemplatesTest extends TestCase
         $liquidationTotalOrder = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'total_reimbursement')['step_order'] ?? 0;
         $liquidationGridOrder = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'expense_lines')['step_order'] ?? 0;
         $this->assertGreaterThan($liquidationGridOrder, $liquidationTotalOrder);
+
+        $lqColumns = collect($templates['liquidation']['fields'] ?? [])->firstWhere('name', 'expense_lines')['options']['columns'] ?? [];
+        $reColumns = collect($templates['reimbursement']['fields'] ?? [])->firstWhere('name', 'expense_lines')['options']['columns'] ?? [];
+        $lqLabels = collect($lqColumns)->pluck('label')->all();
+        $reLabels = collect($reColumns)->pluck('label')->all();
+
+        $this->assertContains('Transportation - Land', $lqLabels);
+        $this->assertContains('Lodging', $lqLabels);
+        $this->assertNotContains('Toll Fee', $lqLabels);
+
+        $this->assertContains('Landfare', $reLabels);
+        $this->assertContains('Toll Fee', $reLabels);
+        $this->assertNotContains('Lodging', $reLabels);
+        $this->assertNotContains('Transportation - Sea', $reLabels);
+
+        $reFields = collect($templates['reimbursement']['fields'] ?? [])->pluck('name')->all();
+        $this->assertContains('travel_period', $reFields);
+        $this->assertContains('place', $reFields);
+        $this->assertNotContains('expense_period_end', $reFields);
+        $this->assertNotContains('cash_advance_document_no', $reFields);
+
+        $lqFields = collect($templates['liquidation']['fields'] ?? [])->pluck('name')->all();
+        $this->assertContains('cash_advance_amount', $lqFields);
+        $this->assertContains('cash_overage_shortage', $lqFields);
+        $this->assertNotContains('employee_name', $lqFields);
+        $this->assertSame('landscape', $templates['liquidation']['metadata_json']['print_default_orientation'] ?? null);
+        $this->assertSame('landscape', $templates['reimbursement']['metadata_json']['print_default_orientation'] ?? null);
     }
 
     public function test_purchase_order_vendor_field_uses_master_data_key(): void

@@ -212,6 +212,8 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
                 ['type' => 'text', 'name' => 'cash_advance_document_no', 'label' => 'CA document no.', 'validation' => ['required' => true]],
 
+                ['type' => 'currency', 'name' => 'cash_advance_amount', 'label' => 'Cash advance'],
+
                 ['type' => 'date', 'name' => 'liquidation_date', 'label' => 'Liquidation date', 'validation' => ['required' => true]],
 
                 ['type' => 'textarea', 'name' => 'notes', 'label' => 'Notes'],
@@ -247,6 +249,8 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         $response->assertJsonPath('data.items.0.id', $caSubmissionId);
 
         $response->assertJsonPath('data.items.0.prefill_values.cash_advance_document_no', $caDocumentNo);
+
+        $response->assertJsonPath('data.items.0.prefill_values.cash_advance_amount', '2500.00');
 
         $response->assertJsonPath('data.items.0.prefill_values.notes', 'Field kit replenishment');
 

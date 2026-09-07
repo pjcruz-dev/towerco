@@ -96,7 +96,13 @@ final class EApprovalPdfLayoutService
 
         $existing = $this->settings->getJson($this->formKey($formId)) ?? [];
         $template = $payload['template'] ?? ($existing['template'] ?? $this->defaultTemplate());
-        $template = $this->sanitizeTemplate(is_array($template) ? $template : $this->defaultTemplate());
+        if (! is_array($template)) {
+            $template = $this->defaultTemplate();
+        }
+        $existingTemplate = is_array($existing['template'] ?? null) ? $existing['template'] : [];
+        $template = $this->mergeSubsidiaryLogoPersistence($existingTemplate, $template);
+        $template = $this->sanitizeTemplate($template);
+        $template['subsidiary_codes'] = $this->resolveSubsidiaryCodesForPersist($template);
 
         $stored = [
             'layout' => $sanitized,
@@ -237,9 +243,53 @@ final class EApprovalPdfLayoutService
                 'visible' => true,
                 'fieldType' => $f->type,
             ])->values()->all();
+            $payload['template'] = $this->applyExpenseFormPrintDefaults($form, is_array($payload['template'] ?? null) ? $payload['template'] : $globalTemplate);
         }
 
         return $payload;
+    }
+
+    /**
+     * Wide expense grids (liquidation / reimbursement) default to landscape + tighter margins.
+     *
+     * @param  array<string, mixed>  $template
+     * @return array<string, mixed>
+     */
+    private function applyExpenseFormPrintDefaults(EApprovalForm $form, array $template): array
+    {
+        if (! $this->formPrefersLandscapePrint($form)) {
+            return $template;
+        }
+
+        $template['orientation'] = 'landscape';
+        $page = is_array($template['page'] ?? null) ? $template['page'] : [];
+        $template['page'] = [
+            'size' => (string) ($page['size'] ?? 'A4'),
+            'marginMm' => isset($page['marginMm']) ? (int) $page['marginMm'] : 8,
+        ];
+
+        return $template;
+    }
+
+    private function formPrefersLandscapePrint(EApprovalForm $form): bool
+    {
+        $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+        $family = strtolower(trim((string) ($metadata['form_family'] ?? '')));
+        if (in_array($family, ['liquidation', 'reimbursement'], true)) {
+            return true;
+        }
+
+        $orientationHint = strtolower(trim((string) ($metadata['print_default_orientation'] ?? '')));
+        if ($orientationHint === 'landscape') {
+            return true;
+        }
+
+        $form->loadMissing('fields');
+
+        return $form->fields->contains(
+            static fn ($field): bool => (string) $field->type === 'grid'
+                && str_contains(strtolower((string) $field->name), 'expense'),
+        );
     }
 
     /**
@@ -271,6 +321,10 @@ final class EApprovalPdfLayoutService
                 'size' => 'A4',
                 'marginMm' => 12,
             ],
+            'orientation' => 'portrait',
+            'subsidiary_logo_field' => 'subsidiary',
+            'subsidiary_codes' => ['ATC', 'ADIC'],
+            'subsidiary_logos' => [],
             'header' => [
                 'showLogo' => false,
                 'title' => 'E-Approval',
@@ -319,6 +373,21 @@ final class EApprovalPdfLayoutService
             $template['orientation'] = in_array($orientation, ['portrait', 'landscape'], true)
                 ? $orientation
                 : 'portrait';
+        }
+
+        if (array_key_exists('page', $template)) {
+            $page = is_array($template['page']) ? $template['page'] : [];
+            $sizeRaw = strtolower(trim((string) ($page['size'] ?? 'A4')));
+            $size = match ($sizeRaw) {
+                'letter' => 'Letter',
+                'legal' => 'Legal',
+                default => 'A4',
+            };
+            $margin = isset($page['marginMm']) ? (int) $page['marginMm'] : 12;
+            $template['page'] = [
+                'size' => $size,
+                'marginMm' => max(0, min(40, $margin)),
+            ];
         }
 
         if (isset($template['footer']) && is_array($template['footer'])) {
@@ -447,6 +516,101 @@ final class EApprovalPdfLayoutService
     }
 
     /**
+     * Keep storage-path logos when the client echoes presentation URLs on Save.
+     * Never drop a registered code's logo just because the UI sent API URLs.
+     *
+     * @param  array<string, mixed>  $existingTemplate
+     * @param  array<string, mixed>  $incomingTemplate
+     * @return array<string, mixed>
+     */
+    private function mergeSubsidiaryLogoPersistence(array $existingTemplate, array $incomingTemplate): array
+    {
+        $existingLogos = $this->sanitizeSubsidiaryLogos(
+            is_array($existingTemplate['subsidiary_logos'] ?? null) ? $existingTemplate['subsidiary_logos'] : [],
+        );
+        $incomingLogosRaw = is_array($incomingTemplate['subsidiary_logos'] ?? null)
+            ? $incomingTemplate['subsidiary_logos']
+            : [];
+
+        $mergedLogos = $existingLogos;
+        foreach ($incomingLogosRaw as $rawCode => $rawValue) {
+            try {
+                $code = $this->normalizeSubsidiaryCode((string) $rawCode);
+            } catch (ValidationException) {
+                continue;
+            }
+            if (! is_string($rawValue)) {
+                continue;
+            }
+            $value = trim($rawValue);
+            if ($value === '') {
+                continue;
+            }
+            // Presentation URLs are display-only — keep the stored filesystem path.
+            if ($this->isPresentedSubsidiaryLogoUrl($value)) {
+                continue;
+            }
+            $mergedLogos[$code] = $value;
+        }
+
+        if (array_key_exists('subsidiary_codes', $incomingTemplate) && is_array($incomingTemplate['subsidiary_codes'])) {
+            $codes = $this->sanitizeSubsidiaryCodes($incomingTemplate['subsidiary_codes']);
+            foreach (array_keys($mergedLogos) as $code) {
+                if (! in_array($code, $codes, true)) {
+                    unset($mergedLogos[$code]);
+                }
+            }
+            $incomingTemplate['subsidiary_codes'] = $codes;
+        } else {
+            $incomingTemplate['subsidiary_codes'] = is_array($existingTemplate['subsidiary_codes'] ?? null)
+                ? $existingTemplate['subsidiary_codes']
+                : [];
+        }
+
+        $incomingTemplate['subsidiary_logos'] = $mergedLogos;
+
+        return $incomingTemplate;
+    }
+
+    private function isPresentedSubsidiaryLogoUrl(string $value): bool
+    {
+        return str_starts_with($value, '/api/v1/e-approval/forms/')
+            || (bool) preg_match('#/e-approval/forms/[^/]+/subsidiary-logos/#', $value);
+    }
+
+    /**
+     * Default subsidiary codes shown in Print options (match FE defaults).
+     *
+     * @return list<string>
+     */
+    public function defaultSubsidiaryCodes(): array
+    {
+        return ['ATC', 'ADIC'];
+    }
+
+    /**
+     * Merge stored codes + logo keys; seed defaults when the list would otherwise be empty.
+     *
+     * @param  array<string, mixed>  $template
+     * @param  list<string>  $extraCodes
+     * @return list<string>
+     */
+    public function resolveSubsidiaryCodesForPersist(array $template, array $extraCodes = []): array
+    {
+        $codes = is_array($template['subsidiary_codes'] ?? null) ? $template['subsidiary_codes'] : [];
+        $logos = is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [];
+        $merged = $this->sanitizeSubsidiaryCodes([...$codes, ...array_keys($logos), ...$extraCodes]);
+
+        // Legacy / first-upload: codes list was empty while the UI still showed ATC+ADIC defaults.
+        // Union defaults so uploading ATC does not persist codes as [ATC] only and hide ADIC.
+        if ($codes === []) {
+            $merged = $this->sanitizeSubsidiaryCodes([...$this->defaultSubsidiaryCodes(), ...$merged]);
+        }
+
+        return $merged !== [] ? $merged : $this->defaultSubsidiaryCodes();
+    }
+
+    /**
      * Persist a subsidiary logo path into the form's pdf_layout template.
      */
     public function setSubsidiaryLogoPath(string $formId, string $code, string $storagePath): array
@@ -459,9 +623,8 @@ final class EApprovalPdfLayoutService
         $logos = is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [];
         $logos[$code] = $storagePath;
         $template['subsidiary_logos'] = $this->sanitizeSubsidiaryLogos($logos);
-        $codes = is_array($template['subsidiary_codes'] ?? null) ? $template['subsidiary_codes'] : [];
-        $codes[] = $code;
-        $template['subsidiary_codes'] = $this->sanitizeSubsidiaryCodes([...$codes, ...array_keys($template['subsidiary_logos'])]);
+        // Keep existing codes (incl. ATC/ADIC defaults). Never collapse to only the uploaded code.
+        $template['subsidiary_codes'] = $this->resolveSubsidiaryCodesForPersist($template, [$code]);
         if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
             $template['subsidiary_logo_field'] = 'subsidiary';
         }
@@ -515,8 +678,10 @@ final class EApprovalPdfLayoutService
         $template = is_array($stored['template'] ?? null) ? $stored['template'] : $this->defaultTemplate();
         $codes = is_array($template['subsidiary_codes'] ?? null) ? $template['subsidiary_codes'] : [];
         $logos = is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [];
-        $template['subsidiary_codes'] = $this->sanitizeSubsidiaryCodes([...$codes, ...array_keys($logos), $code]);
-        if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
+        $template['subsidiary_codes'] = $this->resolveSubsidiaryCodesForPersist(
+            ['subsidiary_codes' => $codes, 'subsidiary_logos' => $logos],
+            [$code],
+        );        if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
             $template['subsidiary_logo_field'] = 'subsidiary';
         }
         $stored['template'] = $this->sanitizeTemplate($template);
@@ -544,7 +709,7 @@ final class EApprovalPdfLayoutService
             $template = is_array($stored['template'] ?? null) ? $stored['template'] : $this->defaultTemplate();
             $seed = $this->presentSubsidiaryCodes($template);
             if ($seed === []) {
-                $seed = ['ATC', 'ADIC'];
+                $seed = $this->defaultSubsidiaryCodes();
             }
             $template['subsidiary_codes'] = $this->sanitizeSubsidiaryCodes(
                 array_values(array_filter(
@@ -596,10 +761,7 @@ final class EApprovalPdfLayoutService
      */
     public function presentSubsidiaryCodes(array $template): array
     {
-        $codes = is_array($template['subsidiary_codes'] ?? null) ? $template['subsidiary_codes'] : [];
-        $logos = is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [];
-
-        return $this->sanitizeSubsidiaryCodes([...$codes, ...array_keys($logos)]);
+        return $this->resolveSubsidiaryCodesForPersist($template);
     }
 
     /**
@@ -620,7 +782,7 @@ final class EApprovalPdfLayoutService
 
         $codes = $this->presentSubsidiaryCodes($template);
         if ($codes === []) {
-            $codes = ['ATC', 'ADIC'];
+            $codes = $this->defaultSubsidiaryCodes();
         }
 
         $form = EApprovalForm::query()->with('fields')->find($formId);

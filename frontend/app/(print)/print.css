@@ -1,6 +1,6 @@
 @media print {
   @page {
-    size: A4 portrait;
+    /* Form Print options inject size + orientation; keep a safe fallback only. */
     margin: 10mm;
   }
 

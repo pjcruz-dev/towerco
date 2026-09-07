@@ -23,6 +23,39 @@ $steppedCompose = [
     'include_review_step' => true,
 ];
 
+/** ATC Expense lines of Liquidation (CA settlement). */
+$liquidationExpenseLinesColumns = [
+    ['label' => 'Date', 'type' => 'date'],
+    ['label' => 'OR No', 'type' => 'text'],
+    ['label' => 'Supplier/Payee', 'type' => 'text'],
+    ['label' => 'Description', 'type' => 'textarea'],
+    ['label' => 'Project Site No.', 'type' => 'text'],
+    ['label' => 'Transportation - Land', 'type' => 'currency'],
+    ['label' => 'Transportation - Sea', 'type' => 'currency'],
+    ['label' => 'Transportation - Air', 'type' => 'currency'],
+    ['label' => 'Gasoline', 'type' => 'currency'],
+    ['label' => 'Lodging', 'type' => 'currency'],
+    ['label' => 'Per Diem', 'type' => 'currency'],
+    ['label' => 'VAT', 'type' => 'currency'],
+    ['label' => 'Total', 'type' => 'currency'],
+];
+
+/** ATC Expense lines of Reimbursement (out-of-pocket travel). */
+$reimbursementExpenseLinesColumns = [
+    ['label' => 'Date', 'type' => 'date'],
+    ['label' => 'OR No', 'type' => 'text'],
+    ['label' => 'Supplier/Payee', 'type' => 'text'],
+    ['label' => 'Description', 'type' => 'textarea'],
+    ['label' => 'Project Site No.', 'type' => 'text'],
+    ['label' => 'Landfare', 'type' => 'currency'],
+    ['label' => 'Airfare', 'type' => 'currency'],
+    ['label' => 'Gasoline', 'type' => 'currency'],
+    ['label' => 'Toll Fee', 'type' => 'currency'],
+    ['label' => 'Per Diem', 'type' => 'currency'],
+    ['label' => 'VAT', 'type' => 'currency'],
+    ['label' => 'Total', 'type' => 'currency'],
+];
+
 $amountWorkflow = static function (string $amountField) use ($amountThreshold): array {
     return [
         ['type' => 'manager', 'step_order' => 1],
@@ -147,6 +180,7 @@ return [
             'form_family' => 'cash_advance',
             'related_template_ids' => ['liquidation', 'reimbursement'],
             'compose' => $steppedCompose,
+            'print_dynamic_form_body' => true,
         ],
         'fields' => [
             [
@@ -245,6 +279,9 @@ return [
             'requires_parent_submission' => true,
             'related_template_ids' => ['cash_advance'],
             'compose' => $steppedCompose,
+            // Print uses live field/grid definitions via {{system.form_body}} — column edits apply automatically.
+            'print_dynamic_form_body' => true,
+            'print_default_orientation' => 'landscape',
         ],
         'fields' => [
             [
@@ -277,49 +314,85 @@ return [
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_meta', 'slot' => 1]],
             ],
             [
+                'type' => 'text',
+                'name' => 'area',
+                'label' => 'Area',
+                'step_order' => 5,
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_area', 'slot' => 0]],
+            ],
+            [
                 'type' => 'grid',
                 'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 5,
+                'label' => 'Expense lines of Liquidation',
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Category', 'type' => 'text'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
-                    ],
+                    'columns' => $liquidationExpenseLinesColumns,
                 ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total liquidation amount',
-                'step_order' => 6,
-                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'step_order' => 7,
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'System total from expense lines (used for approval thresholds; shown as TOTAL EXPENSES on the grid).',
+                ],
                 'options' => [
                     'read_only' => true,
                     'computed_from' => [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
-                        'column' => 'Amount',
+                        'column' => 'Total',
                     ],
+                ],
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'cash_advance_amount',
+                'label' => 'Cash advance',
+                'step_order' => 8,
+                'validation' => [
+                    'help_text' => 'Filled from the linked cash advance when available.',
+                ],
+                'options' => [
+                    'read_only' => true,
+                    'layout' => ['width' => 'half', 'row_id' => 'lq_balance', 'slot' => 0],
+                ],
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'cash_overage_shortage',
+                'label' => 'Cash overage (shortage)',
+                'step_order' => 9,
+                'validation' => [
+                    'help_text' => 'Cash advance − total expenses (positive = overage, negative = shortage).',
+                ],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'subtract_fields',
+                        'left_field' => 'cash_advance_amount',
+                        'right_field' => 'total_reimbursement',
+                    ],
+                    'layout' => ['width' => 'half', 'row_id' => 'lq_balance', 'slot' => 1],
                 ],
             ],
             [
                 'type' => 'file',
                 'name' => 'receipts',
                 'label' => 'Receipts',
-                'step_order' => 7,
+                'step_order' => 10,
                 'validation' => ['required' => true],
             ],
             [
                 'type' => 'textarea',
                 'name' => 'notes',
                 'label' => 'Notes',
-                'step_order' => 8,
+                'step_order' => 11,
             ],
-            ...$approverFields(9),
+            ...$approverFields(12),
         ],
         'steps' => $amountWorkflow('total_reimbursement'),
     ],
@@ -332,6 +405,8 @@ return [
         'metadata_json' => [
             'form_family' => 'reimbursement',
             'compose' => $steppedCompose,
+            'print_dynamic_form_body' => true,
+            'print_default_orientation' => 'landscape',
         ],
         'fields' => [
             [
@@ -342,18 +417,10 @@ return [
             ],
             $subsidiaryField(2, ['width' => 'half', 'row_id' => 're_org', 'slot' => 0]),
             [
-                'type' => 'date',
-                'name' => 'expense_period_end',
-                'label' => 'Expense period end',
-                'step_order' => 3,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_org', 'slot' => 1]],
-            ],
-            [
                 'type' => 'select',
                 'name' => 'department',
                 'label' => 'Department',
-                'step_order' => 4,
+                'step_order' => 3,
                 'validation' => ['required' => true],
                 'options' => [
                     'choices' => [
@@ -361,36 +428,50 @@ return [
                         ['value' => 'finance', 'label' => 'Finance'],
                         ['value' => 'engineering', 'label' => 'Engineering'],
                     ],
-                    'layout' => ['width' => 'half', 'row_id' => 're_dates', 'slot' => 0],
+                    'layout' => ['width' => 'half', 'row_id' => 're_org', 'slot' => 1],
                 ],
+            ],
+            [
+                'type' => 'date_range',
+                'name' => 'travel_period',
+                'label' => 'From / To',
+                'step_order' => 4,
+                'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_travel', 'slot' => 0]],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'place',
+                'label' => 'Place',
+                'step_order' => 5,
+                'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_travel', 'slot' => 1]],
             ],
             [
                 'type' => 'grid',
                 'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 5,
+                'label' => 'Expense lines of Reimbursement',
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Category', 'type' => 'text'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
-                    ],
+                    'columns' => $reimbursementExpenseLinesColumns,
                 ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total reimbursement amount',
-                'step_order' => 6,
-                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'step_order' => 7,
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'System total from expense lines (used for approval thresholds; shown as TOTAL EXPENSES on the grid).',
+                ],
                 'options' => [
                     'read_only' => true,
                     'computed_from' => [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
-                        'column' => 'Amount',
+                        'column' => 'Total',
                     ],
                 ],
             ],
@@ -398,17 +479,17 @@ return [
                 'type' => 'textarea',
                 'name' => 'purpose',
                 'label' => 'Purpose / summary',
-                'step_order' => 7,
+                'step_order' => 8,
                 'validation' => ['required' => true],
             ],
             [
                 'type' => 'file',
                 'name' => 'receipts',
                 'label' => 'Receipts',
-                'step_order' => 8,
+                'step_order' => 9,
                 'validation' => ['required' => true],
             ],
-            ...$approverFields(9),
+            ...$approverFields(10),
         ],
         'steps' => $amountWorkflow('total_reimbursement'),
     ],

@@ -80,7 +80,7 @@ function systemValue(payload: EApprovalPrintPayload, key: string): string {
     case "form_body":
       return renderDynamicFormBodyHtml(payload);
     case "form_fields":
-      return renderDynamicScalarFieldsHtml(payload);
+      return renderDynamicScalarFieldsHtml(partitionPrintScalarFields(payload).detailFields);
     case "form_grids":
       return renderDynamicGridsHtml(payload);
     case "subsidiary_logo": {
@@ -165,15 +165,14 @@ export function parsePrintNumericCell(value: string): number | null {
 }
 
 export function formatPrintNumericTotal(value: number): string {
-  const hasFraction = Math.abs(value % 1) > 1e-9;
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: hasFraction ? 2 : 0,
+  return `₱${value.toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
+  })}`;
 }
 
 const SUMMABLE_COLUMN_LABEL =
-  /personal|official|total|amount|price|cost|qty|quantity|sum|subtotal|debit|credit|balance|hours|days/i;
+  /personal|official|total|amount|price|cost|qty|quantity|sum|subtotal|debit|credit|balance|hours|days|transport|gasoline|lodging|diem|vat|land|sea|air/i;
 
 export function shouldSumPrintGridColumn(columnLabel: string, cells: string[]): boolean {
   const numericCount = cells.filter((cell) => parsePrintNumericCell(cell) !== null).length;
@@ -211,16 +210,17 @@ function partitionPrintScalarFields(payload: EApprovalPrintPayload): {
 }
 
 function renderDynamicScalarFieldsHtml(
-  fields: EApprovalPrintPayload["fields"],
+  fields: EApprovalPrintPayload["fields"] | unknown,
   emptyMessage = "No printable fields on this form.",
 ): string {
-  if (fields.length === 0) {
+  const list = Array.isArray(fields) ? fields : [];
+  if (list.length === 0) {
     return `<div class="ea-form-grid">
 ${renderScalarFieldRowHtml("Details", emptyMessage, true)}
 </div>`;
   }
 
-  const rows = fields.map((field) =>
+  const rows = list.map((field) =>
     renderScalarFieldRowHtml(
       field.label || field.key,
       field.value ?? "",
@@ -246,22 +246,31 @@ function renderPrintGridTotalsFooterHtml(grid: {
   });
   if (!summable.some(Boolean)) return "";
 
-  const labelIndex = summable.findIndex((flag) => !flag);
-  const labelAt = labelIndex >= 0 ? labelIndex : 0;
+  let labelSpan = 0;
+  for (const flag of summable) {
+    if (flag) break;
+    labelSpan += 1;
+  }
+  labelSpan = Math.max(labelSpan, 1);
 
-  const cells = columns.map((_, index) => {
-    if (index === labelAt) {
-      return `<td class="ea-print-table-total-label"><strong>Total</strong></td>`;
-    }
+  const cells: string[] = [
+    `<td class="ea-print-table-total-label" colspan="${labelSpan}"><strong>TOTAL EXPENSES</strong></td>`,
+  ];
+
+  for (let index = labelSpan; index < columns.length; index += 1) {
     if (!summable[index]) {
-      return `<td></td>`;
+      cells.push(`<td></td>`);
+      continue;
     }
     const total = grid.rows.reduce((sum, row) => {
       const parsed = parsePrintNumericCell(row[index] ?? "");
       return parsed === null ? sum : sum + parsed;
     }, 0);
-    return `<td class="ea-print-table-total-value"><strong>${escapeHtml(formatPrintNumericTotal(total))}</strong></td>`;
-  });
+    const isTotalCol = /^total$/i.test(columns[index] ?? "");
+    cells.push(
+      `<td class="ea-print-table-total-value${isTotalCol ? " ea-print-table-total-col" : ""}"><strong>${escapeHtml(formatPrintNumericTotal(total))}</strong></td>`,
+    );
+  }
 
   return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
 }
@@ -274,15 +283,30 @@ export function renderPrintGridTableHtml(grid: {
 }): string {
   const columns = grid.columns.length > 0 ? grid.columns : ["Value"];
   const head = columns
-    .map((column) => `<th>${escapeHtml(column)}</th>`)
+    .map((column) => {
+      const isTotalCol = /^total$/i.test(column);
+      return `<th class="${isTotalCol ? "ea-print-table-total-col" : ""}">${escapeHtml(column)}</th>`;
+    })
     .join("");
   const body =
     grid.rows.length > 0
       ? grid.rows
           .map((row) => {
-            const cells = columns.map((_, index) => {
+            const cells = columns.map((column, index) => {
               const cell = row[index] ?? "";
-              return `<td>${cell.trim() !== "" ? escapeHtml(cell) : "—"}</td>`;
+              const isTotalCol = /^total$/i.test(column);
+              const isMoney = shouldSumPrintGridColumn(
+                column,
+                grid.rows.map((r) => r[index] ?? ""),
+              );
+              let display = cell.trim() !== "" ? cell : isMoney ? "₱0.00" : "—";
+              if (isMoney && cell.trim() !== "") {
+                const parsed = parsePrintNumericCell(cell);
+                if (parsed !== null) {
+                  display = formatPrintNumericTotal(parsed);
+                }
+              }
+              return `<td class="${isTotalCol ? "ea-print-table-total-col" : ""}">${escapeHtml(display)}</td>`;
             });
             return `<tr>${cells.join("")}</tr>`;
           })
@@ -469,8 +493,45 @@ export function defaultEApprovalDocumentDesignHtml(
 </div>`;
 }
 
-export function defaultEApprovalDocumentDesignCss(): string {
-  return `@page { size: A4; margin: 12mm; }
+export type EApprovalPrintPageOptions = {
+  size?: string;
+  marginMm?: number;
+  orientation?: "portrait" | "landscape";
+};
+
+export function normalizePrintPageSize(size?: string | null): string {
+  const raw = String(size ?? "A4").trim();
+  if (/^letter$/i.test(raw)) return "letter";
+  if (/^legal$/i.test(raw)) return "legal";
+  return "A4";
+}
+
+export function normalizePrintOrientation(
+  orientation?: string | null,
+): "portrait" | "landscape" {
+  return String(orientation ?? "").trim().toLowerCase() === "landscape" ? "landscape" : "portrait";
+}
+
+/** `@page` rule from saved Print options (size, orientation, margin). */
+export function buildEApprovalPrintPageCss(options?: EApprovalPrintPageOptions): string {
+  const size = normalizePrintPageSize(options?.size);
+  const margin = Math.min(40, Math.max(0, Number(options?.marginMm ?? 12) || 0));
+  const orientation = normalizePrintOrientation(options?.orientation);
+  return `@page { size: ${size} ${orientation}; margin: ${margin}mm; }`;
+}
+
+/** Merge document CSS with Print options `@page` (options win over any embedded @page). */
+export function mergeEApprovalPrintCss(
+  documentCss: string,
+  pageOptions?: EApprovalPrintPageOptions,
+): string {
+  const pageCss = buildEApprovalPrintPageCss(pageOptions);
+  const withoutPage = documentCss.replace(/@page\s*\{[\s\S]*?\}/gi, "").trim();
+  return withoutPage ? `${pageCss}\n\n${withoutPage}` : pageCss;
+}
+
+export function defaultEApprovalDocumentDesignCss(options?: EApprovalPrintPageOptions): string {
+  return `${buildEApprovalPrintPageCss(options)}
 
 .eapproval-printable,
 .ea-form-doc {
@@ -491,7 +552,7 @@ export function defaultEApprovalDocumentDesignCss(): string {
   justify-content: space-between;
   align-items: flex-start;
   padding-bottom: 14px;
-  border-bottom: 2px solid #0f172a;
+  border-bottom: 1px solid #e2e8f0;
   margin-bottom: 16px;
 }
 
@@ -587,37 +648,61 @@ export function defaultEApprovalDocumentDesignCss(): string {
 }
 .ea-print-table-wrap {
   overflow-x: auto;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
 }
 .ea-print-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 9px;
+  table-layout: auto;
 }
 .ea-print-table th,
 .ea-print-table td {
   border: 1px solid #e2e8f0;
-  padding: 6px 8px;
+  padding: 3px 4px;
   text-align: left;
   vertical-align: top;
   word-break: break-word;
 }
 .ea-print-table thead th {
   background: #f1f5f9;
-  color: #475569;
-  font-weight: 600;
-  font-size: 10px;
+  color: #0f172a;
+  font-weight: 500;
+  font-size: 8px;
+  text-align: center;
+  line-height: 1.25;
 }
 .ea-print-table tbody tr:nth-child(even) { background: #f8fafc; }
+.ea-print-table-total-col { background: #f1f5f9 !important; }
 .ea-print-table tfoot td {
-  background: #f1f5f9;
   font-weight: 600;
-  border-top: 2px solid #cbd5e1;
+  border-top: 1px solid #e2e8f0;
+  font-size: 9px;
 }
-.ea-print-table-total-label { text-align: left; }
-.ea-print-table-total-value { text-align: right; white-space: nowrap; }
+.ea-print-table-total-label {
+  text-align: center;
+  background: #f1f5f9 !important;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  font-size: 8px;
+}
+.ea-print-table-total-value { text-align: right; white-space: nowrap; background: #f8fafc; }
+
+/* Wide expense / liquidation grids stay readable on A4 */
+.ea-form-grid-section[data-grid-key="expense_lines"] .ea-print-table,
+.ea-form-grid-section[data-grid-key*="expense"] .ea-print-table {
+  font-size: 8px;
+}
+.ea-form-grid-section[data-grid-key="expense_lines"] .ea-print-table th,
+.ea-form-grid-section[data-grid-key="expense_lines"] .ea-print-table td,
+.ea-form-grid-section[data-grid-key*="expense"] .ea-print-table th,
+.ea-form-grid-section[data-grid-key*="expense"] .ea-print-table td {
+  padding: 2px 3px;
+}
 
 @media print {
   .ea-form-doc { color: #000; }
@@ -750,7 +835,12 @@ export function documentDesignPreviewRecommendations(
     );
   } else if (!documentDesignEmbedsGrids(trimmedHtml) && /\{\{\s*field\./.test(trimmedHtml)) {
     tips.push(
-      "Re-insert starter layout to switch to {{system.form_body}} — new fields and grids will appear without editing HTML.",
+      "Re-insert starter layout to switch to {{system.form_body}} — expense line grids and new columns print automatically without editing HTML.",
+    );
+  }
+  if (documentDesignEmbedsGrids(trimmedHtml) && !/\{\{\s*system\.form_body\s*\}\}/i.test(trimmedHtml) && !/\{\{\s*system\.form_grids\s*\}\}/i.test(trimmedHtml)) {
+    tips.push(
+      "Prefer {{system.form_body}} so expense columns stay dynamic when you edit the grid in the form builder.",
     );
   }
   if (!css.trim() || !/@page/.test(css)) {

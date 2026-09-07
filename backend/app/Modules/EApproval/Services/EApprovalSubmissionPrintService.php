@@ -162,7 +162,10 @@ final class EApprovalSubmissionPrintService
 
     private function buildGridPrintModels(EApprovalSubmission $submission, ?ProcurementPo $po = null, ?ProcurementPr $pr = null): array
     {
+        $submission->loadMissing(['form.fields', 'values.field']);
+
         $grids = [];
+        $seen = [];
 
         foreach ($submission->values as $row) {
             if ((string) ($row->field?->type ?? '') !== 'grid') {
@@ -194,6 +197,30 @@ final class EApprovalSubmissionPrintService
                 'columns' => $columns,
                 'rows' => $parsedRows,
             ];
+            $seen[$key] = true;
+        }
+
+        // Always print form-defined grids (live columns from builder), even without a value row yet.
+        foreach ($submission->form?->fields ?? [] as $field) {
+            if ((string) ($field->type ?? '') !== 'grid') {
+                continue;
+            }
+            $key = (string) ($field->name ?? '');
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $options = is_array($field->options) ? $field->options : [];
+            $columns = EApprovalFieldOptionsParser::gridColumns($options);
+            if ($columns === []) {
+                continue;
+            }
+            $grids[] = [
+                'key' => $key,
+                'label' => (string) ($field->label ?? $key),
+                'columns' => $columns,
+                'rows' => [],
+            ];
+            $seen[$key] = true;
         }
 
         if ($grids === [] && $po !== null) {

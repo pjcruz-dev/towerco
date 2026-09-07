@@ -6,6 +6,8 @@ import {
   type EApprovalSubmissionFieldValue,
 } from "@/modules/e-approval/display";
 import { formatSubmissionCurrencyDisplay } from "@/modules/e-approval/submission-form-content";
+import { formatGridCurrencyDisplay } from "@/modules/e-approval/grid-row-formulas";
+import { parseSubmissionAmount } from "@/modules/e-approval/parent-submission-link";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -116,6 +118,14 @@ function parseChecklistMatrixDisplay(display: string): { columns: string[]; rows
   return rows.length === 0 ? null : { columns, rows };
 }
 
+function isMoneyishColumn(label: string, values: string[]): boolean {
+  if (/total|amount|price|cost|transport|gasoline|lodging|diem|vat|land|sea|air/i.test(label)) {
+    return values.some((v) => parseSubmissionAmount(v) !== null);
+  }
+  const numeric = values.filter((v) => parseSubmissionAmount(v) !== null).length;
+  return numeric > 0 && numeric >= Math.ceil(values.length / 2);
+}
+
 export function EApprovalSubmissionFieldDisplay({ field, duplicateApproverIds }: Props) {
   const currencyDisplay = formatSubmissionCurrencyDisplay(field);
   const primary = currencyDisplay ?? formatEApprovalFieldDisplayValue(field);
@@ -132,15 +142,36 @@ export function EApprovalSubmissionFieldDisplay({ field, duplicateApproverIds }:
     field.field_type === "signature" ||
     (isMultiline && field.field_type !== "grid" && field.field_type !== "checklist_matrix");
 
+  const moneyFlags =
+    gridTable?.columns.map((col) =>
+      isMoneyishColumn(
+        col,
+        gridTable.rows.map((row) => row[col] ?? ""),
+      ),
+    ) ?? [];
+  const showExpenseFooter = Boolean(gridTable && moneyFlags.some(Boolean));
+  let labelSpan = 0;
+  for (const flag of moneyFlags) {
+    if (flag) break;
+    labelSpan += 1;
+  }
+  labelSpan = Math.max(labelSpan, 1);
+
   return (
     <div className="space-y-1.5">
       {table ? (
-        <div className="overflow-x-auto rounded-lg border border-border bg-background">
-          <table className="w-full border-collapse text-sm">
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full border-collapse text-[11px] leading-tight">
             <thead>
-              <tr className="border-b border-border bg-slate-700 text-white dark:bg-slate-800">
+              <tr className="border-b border-border bg-muted/80">
                 {table.columns.map((c) => (
-                  <th key={c} className="px-2 py-2 text-left text-xs font-medium">
+                  <th
+                    key={c}
+                    className={cn(
+                      "border border-border px-1.5 py-1.5 text-center text-[10px] font-medium text-foreground",
+                      /^total$/i.test(c) && "bg-muted text-foreground",
+                    )}
+                  >
                     <span className="line-clamp-2 break-words">{c}</span>
                   </th>
                 ))}
@@ -151,18 +182,69 @@ export function EApprovalSubmissionFieldDisplay({ field, duplicateApproverIds }:
                 <tr
                   key={rowIndex}
                   className={cn(
-                    "border-b border-border/60 last:border-0",
-                    rowIndex % 2 === 1 ? "bg-muted/20" : "bg-card",
+                    "border-b border-border last:border-0",
+                    rowIndex % 2 === 1 ? "bg-muted/30" : "bg-card",
                   )}
                 >
-                  {table.columns.map((col) => (
-                    <td key={col} className="px-2 py-1.5 align-top break-words">
-                      <span className="text-sm">{row[col] && row[col].trim() !== "" ? row[col] : "—"}</span>
-                    </td>
-                  ))}
+                  {table.columns.map((col, colIndex) => {
+                    const raw = row[col] ?? "";
+                    const money = moneyFlags[colIndex];
+                    const parsed = money ? parseSubmissionAmount(raw) : null;
+                    return (
+                      <td
+                        key={col}
+                        className={cn(
+                          "border border-border px-1.5 py-1 align-top break-words",
+                          /^total$/i.test(col) && "bg-muted/50",
+                          money && "text-right tabular-nums",
+                        )}
+                      >
+                        <span className="text-[11px]">
+                          {parsed !== null
+                            ? formatGridCurrencyDisplay(String(parsed))
+                            : raw.trim() !== ""
+                              ? raw
+                              : "—"}
+                        </span>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
+            {showExpenseFooter && gridTable ? (
+              <tfoot>
+                <tr>
+                  <td
+                    colSpan={labelSpan}
+                    className="border border-border bg-muted px-2 py-1.5 text-center text-[10px] font-medium tracking-wide text-foreground uppercase"
+                  >
+                    Total expenses
+                  </td>
+                  {gridTable.columns.map((col, colIndex) => {
+                    if (colIndex < labelSpan) return null;
+                    if (!moneyFlags[colIndex]) {
+                      return <td key={col} className="border border-border bg-card" />;
+                    }
+                    const total = gridTable.rows.reduce((sum, row) => {
+                      const parsed = parseSubmissionAmount(row[col] ?? "");
+                      return parsed === null ? sum : sum + parsed;
+                    }, 0);
+                    return (
+                      <td
+                        key={col}
+                        className={cn(
+                          "border border-border px-1.5 py-1.5 text-right text-[11px] font-medium tabular-nums",
+                          /^total$/i.test(col) ? "bg-muted/80" : "bg-muted/40",
+                        )}
+                      >
+                        {formatGridCurrencyDisplay(String(total))}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            ) : null}
           </table>
         </div>
       ) : looksLikeLongText ? (

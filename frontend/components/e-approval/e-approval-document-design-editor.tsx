@@ -12,6 +12,8 @@ import {
   defaultEApprovalDocumentDesignHtml,
   documentDesignPreviewRecommendations,
   EAPPROVAL_SYSTEM_PRINT_TOKENS,
+  mergeEApprovalPrintCss,
+  normalizePrintOrientation,
   printableDesignFields,
   renderEApprovalPrintTemplateHtml,
   type DocumentDesignFieldRef,
@@ -29,6 +31,8 @@ type Props = {
   html: string;
   css: string;
   pageSize?: string;
+  orientation?: "portrait" | "landscape";
+  marginMm?: number;
   subsidiaryLogos?: Record<string, string>;
   subsidiaryLogoField?: string;
   onHtmlChange: (html: string) => void;
@@ -39,26 +43,54 @@ const ZOOM_MIN = 50;
 const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
 
-function paperWidthMm(pageSize: string | undefined): number {
-  switch ((pageSize ?? "A4").toLowerCase()) {
-    case "letter":
-      return 216;
-    case "legal":
-      return 216;
-    default:
-      return 210;
-  }
+function paperWidthMm(pageSize: string | undefined, orientation: "portrait" | "landscape"): number {
+  const short =
+    (() => {
+      switch ((pageSize ?? "A4").toLowerCase()) {
+        case "letter":
+        case "legal":
+          return 216;
+        default:
+          return 210;
+      }
+    })();
+  const long =
+    (() => {
+      switch ((pageSize ?? "A4").toLowerCase()) {
+        case "letter":
+          return 279;
+        case "legal":
+          return 356;
+        default:
+          return 297;
+      }
+    })();
+  return orientation === "landscape" ? long : short;
 }
 
-function paperHeightMm(pageSize: string | undefined): number {
-  switch ((pageSize ?? "A4").toLowerCase()) {
-    case "letter":
-      return 279;
-    case "legal":
-      return 356;
-    default:
-      return 297;
-  }
+function paperHeightMm(pageSize: string | undefined, orientation: "portrait" | "landscape"): number {
+  const short =
+    (() => {
+      switch ((pageSize ?? "A4").toLowerCase()) {
+        case "letter":
+        case "legal":
+          return 216;
+        default:
+          return 210;
+      }
+    })();
+  const long =
+    (() => {
+      switch ((pageSize ?? "A4").toLowerCase()) {
+        case "letter":
+          return 279;
+        case "legal":
+          return 356;
+        default:
+          return 297;
+      }
+    })();
+  return orientation === "landscape" ? short : long;
 }
 
 export function EApprovalDocumentDesignEditor({
@@ -68,6 +100,8 @@ export function EApprovalDocumentDesignEditor({
   html,
   css,
   pageSize = "A4",
+  orientation = "portrait",
+  marginMm = 12,
   subsidiaryLogos,
   subsidiaryLogoField,
   onHtmlChange,
@@ -79,6 +113,7 @@ export function EApprovalDocumentDesignEditor({
   const deferredHtml = useDeferredValue(html);
   const deferredCss = useDeferredValue(css);
   const bodyFields = useMemo(() => printableDesignFields(fields), [fields]);
+  const resolvedOrientation = normalizePrintOrientation(orientation);
 
   useEffect(() => {
     if (mode !== "design") return;
@@ -161,14 +196,29 @@ export function EApprovalDocumentDesignEditor({
 
   function seedDefaults() {
     onHtmlChange(defaultEApprovalDocumentDesignHtml(formTitle, fields));
-    onCssChange(defaultEApprovalDocumentDesignCss());
+    onCssChange(
+      defaultEApprovalDocumentDesignCss({
+        size: pageSize,
+        marginMm,
+        orientation: resolvedOrientation,
+      }),
+    );
     setMode("design");
-    setZoom(75);
+    setZoom(resolvedOrientation === "landscape" ? 60 : 75);
   }
 
-  const widthMm = paperWidthMm(pageSize);
-  const heightMm = paperHeightMm(pageSize);
+  const widthMm = paperWidthMm(pageSize, resolvedOrientation);
+  const heightMm = paperHeightMm(pageSize, resolvedOrientation);
   const scale = zoom / 100;
+  const previewCss = useMemo(
+    () =>
+      mergeEApprovalPrintCss(deferredCss || defaultEApprovalDocumentDesignCss(), {
+        size: pageSize,
+        marginMm,
+        orientation: resolvedOrientation,
+      }),
+    [deferredCss, marginMm, pageSize, resolvedOrientation],
+  );
 
   return (
     <div className="space-y-4">
@@ -295,7 +345,8 @@ export function EApprovalDocumentDesignEditor({
             <div>
               <p className="text-xs font-medium text-foreground">Live preview</p>
               <p className="text-[11px] text-muted-foreground">
-                {pageSize} · sample data · updates live
+                {pageSize} · {resolvedOrientation === "landscape" ? "Landscape" : "Portrait"} · sample
+                data
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -349,7 +400,7 @@ export function EApprovalDocumentDesignEditor({
                   transformOrigin: "top left",
                 }}
               >
-                {deferredCss ? <style dangerouslySetInnerHTML={{ __html: deferredCss }} /> : null}
+                {previewCss ? <style dangerouslySetInnerHTML={{ __html: previewCss }} /> : null}
                 {previewHtml ? (
                   <div
                     className="eapproval-document-design-preview p-5"

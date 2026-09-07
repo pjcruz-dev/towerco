@@ -3,7 +3,6 @@
 import { Copy, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { EApprovalGridCell } from "@/components/e-approval/e-approval-grid-cell";
 import {
@@ -15,7 +14,14 @@ import {
   type GridColumnDef,
   type GridFieldValue,
 } from "@/modules/e-approval/field-options";
-import { applyGridRowAmountFormula } from "@/modules/e-approval/grid-row-formulas";
+import {
+  applyGridRowAmountFormula,
+  formatGridCurrencyDisplay,
+  isHighlightedTotalColumn,
+  leadingNonSummableColSpan,
+  sumGridColumnValues,
+  summableGridColumnIndexes,
+} from "@/modules/e-approval/grid-row-formulas";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
 type Props = {
@@ -45,7 +51,12 @@ export function EApprovalGridField({
 
   const columns = columnDefs.map((c) => c.label);
   const grid = parseGridValue(value, columns.length);
-  const comfortable = density === "comfortable";
+  // Wide expense grids stay dense even in comfortable compose dialogs.
+  const comfortable = false;
+  const touchComfortable = density === "comfortable";
+  const summable = summableGridColumnIndexes(columnDefs);
+  const showTotalsFooter = summable.some(Boolean) && grid.rows.length > 0;
+  const labelColSpan = leadingNonSummableColSpan(summable);
 
   const commit = (next: GridFieldValue) => {
     onChange(serializeGridValue(next));
@@ -100,53 +111,50 @@ export function EApprovalGridField({
     );
   }
 
-  const columnWidth =
-    columns.length > 0
-      ? `${Math.max(100 / columns.length, 8)}%`
-      : undefined;
-
   return (
-    <div className={cn("w-full min-w-0 space-y-2", comfortable && "-mx-1 sm:mx-0")}>
-      <div className="w-full overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-        <table
-          className={cn(
-            "w-full border-collapse",
-            comfortable ? "min-w-full text-sm" : "min-w-[520px] text-sm",
-          )}
-          style={{ tableLayout: columns.length <= 4 ? "fixed" : "auto" }}
-        >
+    <div className={cn("w-full min-w-0 space-y-1.5", touchComfortable && "-mx-1 sm:mx-0")}>
+      <div className="w-full overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+        <table className="w-full min-w-[720px] border-collapse text-[11px] leading-tight">
           <thead>
-            <tr className="border-b border-border bg-muted/50">
-              {columns.map((col) => (
+            <tr className="border-b border-border bg-muted/80">
+              {columnDefs.map((col) => (
                 <th
-                  key={col}
-                  title={col}
-                  style={columnWidth ? { width: columnWidth, minWidth: comfortable ? 120 : 96 } : undefined}
+                  key={`${col.label}-h`}
+                  title={col.label}
                   className={cn(
-                    "px-2 text-left font-medium text-muted-foreground",
-                    comfortable ? "py-2.5 text-xs sm:text-sm" : "py-2 text-xs",
+                    "border border-border px-1.5 py-1.5 text-center text-[10px] font-medium text-foreground",
+                    isHighlightedTotalColumn(col) && "bg-muted text-foreground",
                   )}
                 >
-                  <span className="line-clamp-2 break-words">{col}</span>
+                  <span className="line-clamp-2 break-words">{col.label}</span>
                 </th>
               ))}
               <th
-                className={cn("w-11 shrink-0 px-1", comfortable ? "py-2.5" : "py-2")}
+                className="w-9 shrink-0 border border-border px-0.5 py-1.5"
                 aria-label="Row actions"
               />
             </tr>
           </thead>
           <tbody>
             {grid.rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-b border-border/60 last:border-0">
+              <tr
+                key={rowIndex}
+                className={cn(
+                  "border-b border-border last:border-0",
+                  rowIndex % 2 === 1 ? "bg-muted/30" : "bg-card",
+                )}
+              >
                 {columnDefs.map((colDef, colIndex) => (
                   <td
                     key={`${rowIndex}-${colDef.label}-${colIndex}`}
-                    className={cn("px-2 align-top", comfortable ? "py-2" : "py-1.5")}
+                    className={cn(
+                      "border border-border px-1 py-1 align-middle",
+                      isHighlightedTotalColumn(colDef) && "bg-muted/50",
+                    )}
                   >
                     <EApprovalGridCell
                       column={colDef}
-                      disabled={disabled}
+                      disabled={disabled || isHighlightedTotalColumn(colDef)}
                       comfortable={comfortable}
                       allowRemoteLookups={allowRemoteLookups}
                       value={row[columnKey(colIndex, columns.length)] ?? ""}
@@ -154,41 +162,84 @@ export function EApprovalGridField({
                     />
                   </td>
                 ))}
-                <td className={cn("px-1 align-top", comfortable ? "py-2" : "py-1.5")}>
+                <td className="border border-border px-0.5 py-1 align-middle">
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className={cn("text-muted-foreground", comfortable ? "h-10 w-10" : "h-8 w-8")}
+                    className="h-7 w-7 text-muted-foreground"
                     disabled={disabled}
                     onClick={() => removeRow(rowIndex)}
                     aria-label="Remove row"
                   >
-                    <Trash2 className={cn(comfortable ? "h-4 w-4" : "h-3.5 w-3.5")} />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </td>
               </tr>
             ))}
           </tbody>
+          {showTotalsFooter ? (
+            <tfoot>
+              <tr className="border-t border-border">
+                <td
+                  colSpan={labelColSpan}
+                  className="border border-border bg-muted px-2 py-1.5 text-center text-[10px] font-medium tracking-wide text-foreground uppercase"
+                >
+                  Total expenses
+                </td>
+                {columnDefs.map((colDef, colIndex) => {
+                  if (colIndex < labelColSpan) {
+                    return null;
+                  }
+                  if (!summable[colIndex]) {
+                    return (
+                      <td
+                        key={`foot-${colIndex}`}
+                        className="border border-border bg-card px-1.5 py-1.5"
+                      />
+                    );
+                  }
+                  const total = sumGridColumnValues(grid.rows, colIndex, columns.length);
+                  return (
+                    <td
+                      key={`foot-${colIndex}`}
+                      className={cn(
+                        "border border-border px-1.5 py-1.5 text-right text-[11px] font-medium tabular-nums text-foreground",
+                        isHighlightedTotalColumn(colDef)
+                          ? "bg-muted/80"
+                          : "bg-muted/40",
+                      )}
+                    >
+                      {formatGridCurrencyDisplay(String(total))}
+                    </td>
+                  );
+                })}
+                <td className="border border-border bg-muted/40" />
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-2 border-t border-border px-3",
-            comfortable ? "py-3" : "py-2",
-          )}
-        >
-          <Button type="button" size={comfortable ? "default" : "sm"} variant="outline" disabled={disabled} onClick={addRow}>
-            <Plus className="mr-1.5 h-4 w-4" />
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-2 py-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            disabled={disabled}
+            onClick={addRow}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
             Add row
           </Button>
           <Button
             type="button"
-            size={comfortable ? "default" : "sm"}
+            size="sm"
             variant="outline"
+            className="h-7 px-2 text-xs"
             disabled={disabled || grid.rows.length === 0}
             onClick={duplicatePreviousRow}
           >
-            <Copy className="mr-1.5 h-4 w-4" />
+            <Copy className="mr-1 h-3.5 w-3.5" />
             Duplicate previous row
           </Button>
         </div>

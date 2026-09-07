@@ -49,15 +49,24 @@ export function ProcurementPrintHeader({ data, template, title }: Props) {
   );
 }
 
-export function ProcurementPrintPageStyles() {
+export function ProcurementPrintPageStyles(props?: {
+  size?: string;
+  marginMm?: number;
+  orientation?: "portrait" | "landscape";
+}) {
+  const size = (props?.size ?? "A4").trim() || "A4";
+  const orientation = props?.orientation === "landscape" ? "landscape" : "portrait";
+  const margin = Math.min(40, Math.max(0, Number(props?.marginMm ?? 10) || 0));
+
   return (
     <style
       dangerouslySetInnerHTML={{
         __html: `@media print {
-            @page { size: A4; margin: 10mm; }
+            @page { size: ${size} ${orientation}; margin: ${margin}mm; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .eapproval-procurement-print { background: #fff !important; }
             .eapproval-procurement-print-footer { break-inside: avoid; }
+            .eapproval-generic-form-print { background: #fff !important; }
           }`,
       }}
     />

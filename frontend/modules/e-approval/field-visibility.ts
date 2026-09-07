@@ -135,7 +135,61 @@ export function visibleFormFields(
   fields: EApprovalFormFieldInput[],
   values: Record<string, string>,
 ): EApprovalFormFieldInput[] {
-  return fields.filter((field) => isFieldVisible(field, values));
+  const visible = fields.filter((field) => isFieldVisible(field, values));
+  return omitRedundantExpenseTotalScalars(visible);
+}
+
+/**
+ * When an expense grid already shows TOTAL EXPENSES, hide scalar Total* fields
+ * (still computed/stored for workflow thresholds and cash overage).
+ */
+export function omitRedundantExpenseTotalScalars(
+  fields: EApprovalFormFieldInput[],
+): EApprovalFormFieldInput[] {
+  const hasExpenseGridWithMoney = fields.some((field) => {
+    if (field.type !== "grid") {
+      return false;
+    }
+    const name = field.name.trim().toLowerCase();
+    if (name === "expense_lines" || name.includes("expense")) {
+      return true;
+    }
+    const opts =
+      field.options && typeof field.options === "object" && !Array.isArray(field.options)
+        ? (field.options as Record<string, unknown>)
+        : {};
+    const columns = Array.isArray(opts.columns) ? opts.columns : [];
+    return columns.some((column) => {
+      const label =
+        column && typeof column === "object" && "label" in column
+          ? String((column as { label?: unknown }).label ?? "")
+          : String(column ?? "");
+      return /^total$/i.test(label.trim()) || /^amount$/i.test(label.trim());
+    });
+  });
+
+  if (!hasExpenseGridWithMoney) {
+    return fields;
+  }
+
+  return fields.filter((field) => {
+    const key = field.name.trim().toLowerCase();
+    const label = field.label.trim().toLowerCase();
+    if (field.type === "grid") {
+      return true;
+    }
+    // Keep cash overage / advance — only omit document total scalars mirrored by the footer.
+    if (key.includes("overage") || key.includes("shortage") || key.includes("cash_advance")) {
+      return true;
+    }
+    if (/^total([_\s-]|$)/.test(key) || /^totals?([_\s-]|$)/.test(key)) {
+      return false;
+    }
+    if (/^totals?\b/.test(label) && (field.type === "currency" || field.type === "number")) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export const E_APPROVAL_VISIBILITY_OPERATORS: { value: EApprovalVisibilityOperator; label: string }[] = [

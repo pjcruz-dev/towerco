@@ -9,10 +9,14 @@ import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
 export type EApprovalFormFieldBundleId =
   | "expense_lines_total"
+  | "reimbursement_expense_lines_total"
   | "po_line_items_total"
   | "purchase_order_full";
 
-export type EApprovalGridColumnPresetId = "expense_lines" | "po_line_items";
+export type EApprovalGridColumnPresetId =
+  | "expense_lines_liquidation"
+  | "expense_lines_reimbursement"
+  | "po_line_items";
 
 export const E_APPROVAL_FORM_FIELD_BUNDLES: {
   id: EApprovalFormFieldBundleId;
@@ -21,8 +25,13 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
 }[] = [
   {
     id: "expense_lines_total",
-    label: "Total + expense lines",
-    description: "Currency total auto-sums an Amount column in the grid below.",
+    label: "Total + liquidation expense lines",
+    description: "Currency total auto-sums the Total column (Land/Sea/Air, lodging, etc.).",
+  },
+  {
+    id: "reimbursement_expense_lines_total",
+    label: "Total + reimbursement expense lines",
+    description: "Currency total auto-sums the Total column (Landfare, Airfare, Toll Fee, etc.).",
   },
   {
     id: "po_line_items_total",
@@ -37,12 +46,39 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
 ];
 
 export const GRID_COLUMN_PRESETS: Record<EApprovalGridColumnPresetId, { label: string; columns: GridColumnDef[] }> = {
-  expense_lines: {
-    label: "Expense lines",
+  expense_lines_liquidation: {
+    label: "Expense lines of Liquidation",
     columns: [
       { label: "Date", type: "date" },
-      { label: "Description", type: "text" },
-      { label: "Amount", type: "currency" },
+      { label: "OR No", type: "text" },
+      { label: "Supplier/Payee", type: "text" },
+      { label: "Description", type: "textarea" },
+      { label: "Project Site No.", type: "text" },
+      { label: "Transportation - Land", type: "currency" },
+      { label: "Transportation - Sea", type: "currency" },
+      { label: "Transportation - Air", type: "currency" },
+      { label: "Gasoline", type: "currency" },
+      { label: "Lodging", type: "currency" },
+      { label: "Per Diem", type: "currency" },
+      { label: "VAT", type: "currency" },
+      { label: "Total", type: "currency" },
+    ],
+  },
+  expense_lines_reimbursement: {
+    label: "Expense lines of Reimbursement",
+    columns: [
+      { label: "Date", type: "date" },
+      { label: "OR No", type: "text" },
+      { label: "Supplier/Payee", type: "text" },
+      { label: "Description", type: "textarea" },
+      { label: "Project Site No.", type: "text" },
+      { label: "Landfare", type: "currency" },
+      { label: "Airfare", type: "currency" },
+      { label: "Gasoline", type: "currency" },
+      { label: "Toll Fee", type: "currency" },
+      { label: "Per Diem", type: "currency" },
+      { label: "VAT", type: "currency" },
+      { label: "Total", type: "currency" },
     ],
   },
   po_line_items: {
@@ -55,6 +91,9 @@ export const GRID_COLUMN_PRESETS: Record<EApprovalGridColumnPresetId, { label: s
   },
 };
 
+/** @deprecated Use expense_lines_liquidation */
+export const GRID_COLUMN_PRESETS_LEGACY_EXPENSE_LINES = GRID_COLUMN_PRESETS.expense_lines_liquidation;
+
 function uniqueName(label: string, taken: Set<string>): string {
   return suggestApiKeyFromLabel(label, taken);
 }
@@ -66,8 +105,12 @@ export function buildFormFieldBundle(
 ): EApprovalFormFieldInput[] | null {
   const taken = new Set(existingApiKeys);
 
-  if (bundleId === "expense_lines_total") {
-    const totalName = uniqueName("total_amount", taken);
+  if (bundleId === "expense_lines_total" || bundleId === "reimbursement_expense_lines_total") {
+    const isReimbursement = bundleId === "reimbursement_expense_lines_total";
+    const preset = isReimbursement
+      ? GRID_COLUMN_PRESETS.expense_lines_reimbursement
+      : GRID_COLUMN_PRESETS.expense_lines_liquidation;
+    const totalName = uniqueName(isReimbursement ? "total_reimbursement" : "total_amount", taken);
     taken.add(totalName);
     const gridName = uniqueName("expense_lines", taken);
 
@@ -75,7 +118,7 @@ export function buildFormFieldBundle(
       {
         type: "currency",
         name: totalName,
-        label: "Total amount",
+        label: isReimbursement ? "Total reimbursement amount" : "Total liquidation amount",
         step_order: startIndex + 1,
         validation: { required: true, help_text: "Auto-calculated from expense lines." },
         options: {
@@ -83,17 +126,17 @@ export function buildFormFieldBundle(
           computed_from: {
             operation: "sum_grid_column",
             source_field: gridName,
-            column: "Amount",
+            column: "Total",
           },
         },
       },
       {
         type: "grid",
         name: gridName,
-        label: "Expense lines",
+        label: preset.label,
         step_order: startIndex + 2,
         validation: { required: true },
-        options: { columns: GRID_COLUMN_PRESETS.expense_lines.columns },
+        options: { columns: preset.columns },
       },
     ];
   }

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildEApprovalDocumentDesignPreviewPayload,
+  buildEApprovalPrintPageCss,
   defaultEApprovalDocumentDesignCss,
   defaultEApprovalDocumentDesignHtml,
   documentDesignEmbedsGrids,
   documentDesignPreviewRecommendations,
   hasCustomPrintDocumentDesign,
+  mergeEApprovalPrintCss,
   printableDesignFields,
   renderEApprovalPrintTemplateHtml,
   shouldAppendPrintAttachments,
@@ -103,13 +105,13 @@ describe("renderEApprovalPrintTemplateHtml", () => {
 
     expect(html).toContain("Credit card expenses");
     expect(html).toContain("ea-print-table-totals");
-    expect(html).toContain("<strong>7,000</strong>");
-    expect(html).toContain("<strong>8,000</strong>");
-    expect(html).toContain("<strong>15,000</strong>");
+    expect(html).toContain("TOTAL EXPENSES");
+    expect(html).toContain("<strong>₱7,000.00</strong>");
+    expect(html).toContain("<strong>₱8,000.00</strong>");
+    expect(html).toContain("<strong>₱15,000.00</strong>");
     expect(html).not.toContain("ea-form-totals-section");
     expect(html).not.toContain("Total personal");
     expect(html).not.toContain("Total official");
-    expect(html).not.toContain("Total expenses");
   });
 
   it("renders a single grid via {{grid.*}} without escaping table HTML", () => {
@@ -186,6 +188,35 @@ describe("form-style starter layout", () => {
     expect(rendered).toContain("ATC");
     expect(rendered).toContain("Medical");
     expect(rendered).toContain("Request details");
+  });
+
+  it("renders system.form_fields without crashing", () => {
+    const html = renderEApprovalPrintTemplateHtml("{{system.form_fields}}", samplePayload({
+      fields: [
+        { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+        { key: "notes", label: "Notes", value: "Hello", field_type: "textarea" },
+      ],
+    }));
+    expect(html).toContain("Subsidiary");
+    expect(html).toContain("ATC");
+    expect(html).toContain("Notes");
+    expect(html).toContain("Hello");
+  });
+
+  it("builds @page CSS from print options including landscape", () => {
+    expect(buildEApprovalPrintPageCss({ size: "A4", orientation: "landscape", marginMm: 8 })).toBe(
+      "@page { size: A4 landscape; margin: 8mm; }",
+    );
+    expect(mergeEApprovalPrintCss("@page { size: Letter; margin: 20mm; }\n.ea-form-doc {}", {
+      size: "A4",
+      orientation: "landscape",
+      marginMm: 10,
+    })).toContain("@page { size: A4 landscape; margin: 10mm; }");
+    expect(mergeEApprovalPrintCss("@page { size: Letter; margin: 20mm; }\n.ea-form-doc {}", {
+      size: "A4",
+      orientation: "landscape",
+      marginMm: 10,
+    })).not.toContain("Letter");
   });
 
   it("strips legacy static sign-off boxes when rendering", () => {

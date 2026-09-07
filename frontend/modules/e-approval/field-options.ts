@@ -19,7 +19,16 @@ export type SelectChoice = {
   inputs?: SelectChoiceCompanionInput[];
 };
 
-export type GridColumnType = "text" | "number" | "currency" | "date" | "select";
+export type GridColumnType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "currency"
+  | "date"
+  | "select"
+  | "email"
+  | "phone"
+  | "boolean";
 
 export type GridColumnDef = {
   label: string;
@@ -30,10 +39,14 @@ export type GridColumnDef = {
 
 export const GRID_COLUMN_TYPE_LABELS: Record<GridColumnType, string> = {
   text: "Short text",
+  textarea: "Long text",
   number: "Number",
   currency: "Currency",
   date: "Date",
   select: "Dropdown list",
+  email: "Email",
+  phone: "Phone",
+  boolean: "Yes / No",
 };
 
 /** Parse legacy pipe choices (`Label|CODE`) and modern `{ choices: [...] }` shapes. */
@@ -228,7 +241,9 @@ function normalizeGridColumnDef(entry: unknown, index: number): GridColumnDef | 
   }
 
   const typeRaw = String(record.type ?? "text").trim().toLowerCase();
-  const type = (["text", "number", "currency", "date", "select"] as const).includes(typeRaw as GridColumnType)
+  const type = (
+    ["text", "textarea", "number", "currency", "date", "select", "email", "phone", "boolean"] as const
+  ).includes(typeRaw as GridColumnType)
     ? (typeRaw as GridColumnType)
     : "text";
 

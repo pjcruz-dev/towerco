@@ -1,5 +1,6 @@
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 import { parseSelectChoices } from "@/modules/e-approval/field-options";
+import { departmentDocCodeFromLabel } from "@/modules/e-approval/department-doc-code";
 
 export type EApprovalFormDocumentNumberSettings = {
   ownerCode: string;
@@ -131,7 +132,7 @@ export function buildDocumentNumberPreview(
       return sanitizePreviewSegment(sampleValues.document_type ?? sampleValues.documenttype ?? "X");
     }
     if (normalized === "department") {
-      return sanitizePreviewSegment(sampleDepartment);
+      return sanitizePreviewSegment(departmentDocCodeFromLabel(sampleDepartment));
     }
     if (normalized === "subsidiary") {
       return sanitizePreviewSegment(sampleSubsidiary);

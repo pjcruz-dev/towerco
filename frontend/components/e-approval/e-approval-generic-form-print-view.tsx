@@ -9,6 +9,7 @@ import {
   defaultEApprovalDocumentDesignHtml,
   documentDesignEmbedsGrids,
   hasCustomPrintDocumentDesign,
+  mergeEApprovalPrintCss,
   renderEApprovalPrintTemplateHtml,
   renderPrintGridTableHtml,
 } from "@/lib/e-approval/e-approval-print-template-render";
@@ -86,13 +87,21 @@ export function EApprovalGenericFormPrintView({
 
   const documentCss = useMemo(() => {
     const saved = typeof template.template_css === "string" ? template.template_css.trim() : "";
-    if (saved) return saved;
-    return defaultEApprovalDocumentDesignCss();
+    const base = saved || defaultEApprovalDocumentDesignCss();
+    return mergeEApprovalPrintCss(base, {
+      size: template.page?.size,
+      marginMm: template.page?.marginMm,
+      orientation: template.orientation,
+    });
   }, [template]);
 
   return (
     <>
-      <ProcurementPrintPageStyles />
+      <ProcurementPrintPageStyles
+        size={template.page?.size}
+        marginMm={template.page?.marginMm}
+        orientation={template.orientation}
+      />
       {documentCss ? <style dangerouslySetInnerHTML={{ __html: documentCss }} /> : null}
       <div className="eapproval-generic-form-print min-h-screen bg-slate-100 print:bg-white">
         <div className="mx-auto max-w-[210mm] bg-white px-6 py-8 shadow-sm print:max-w-none print:px-8 print:py-6 print:shadow-none">

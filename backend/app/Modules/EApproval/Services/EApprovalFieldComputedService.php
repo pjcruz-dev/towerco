@@ -141,7 +141,14 @@ final class EApprovalFieldComputedService
                 ? [
                     'operation' => 'sum_grid_column',
                     'source_field' => 'expense_lines',
-                    'column' => 'Amount',
+                    'column' => $this->expenseLinesSumColumn($fields),
+                ]
+                : null,
+            'cash_overage_shortage' => $this->fieldsExist($fields, ['cash_advance_amount', 'total_reimbursement'])
+                ? [
+                    'operation' => 'subtract_fields',
+                    'left_field' => 'cash_advance_amount',
+                    'right_field' => 'total_reimbursement',
                 ]
                 : null,
             'estimated_total' => $this->hasGridField($fields, 'line_items')
@@ -189,6 +196,38 @@ final class EApprovalFieldComputedService
                 : null,
             default => null,
         };
+    }
+
+    /**
+     * Prefer "Total" (liquidation expense sheet); fall back to legacy "Amount".
+     *
+     * @param  list<EApprovalFormField>  $fields
+     */
+    private function expenseLinesSumColumn(array $fields): string
+    {
+        foreach ($fields as $field) {
+            if ((string) $field->name !== 'expense_lines' || (string) $field->type !== 'grid') {
+                continue;
+            }
+            $options = is_array($field->options) ? $field->options : [];
+            $columns = is_array($options['columns'] ?? null) ? $options['columns'] : [];
+            $labels = [];
+            foreach ($columns as $column) {
+                if (is_array($column)) {
+                    $labels[] = strtolower(trim((string) ($column['label'] ?? '')));
+                } elseif (is_string($column)) {
+                    $labels[] = strtolower(trim($column));
+                }
+            }
+            if (in_array('total', $labels, true)) {
+                return 'Total';
+            }
+            if (in_array('amount', $labels, true)) {
+                return 'Amount';
+            }
+        }
+
+        return 'Amount';
     }
 
     /**
@@ -345,8 +384,14 @@ final class EApprovalFieldComputedService
         );
 
         if ($columnIndex === null) {
-            foreach ($columns as $index => $column) {
-                if (($column['type'] ?? 'text') === 'currency') {
+            $columnIndex = $this->resolveColumnIndex($columns, 'Total', null)
+                ?? $this->resolveColumnIndex($columns, 'Amount', null);
+        }
+
+        if ($columnIndex === null) {
+            // Prefer last currency column (row Total) over first category column.
+            for ($index = count($columns) - 1; $index >= 0; $index--) {
+                if (($columns[$index]['type'] ?? 'text') === 'currency') {
                     $columnIndex = $index;
                     break;
                 }

@@ -65,6 +65,7 @@ import {
   shouldUseSteppedCompose,
 } from "@/modules/e-approval/form-compose-config";
 import {
+  applyCashAdvanceParentSelection,
   applyParentPrefillValues,
   formRequiresParentSubmission,
   formUsesCashAdvanceParentPicker,
@@ -780,18 +781,14 @@ export function EApprovalSubmissionComposePanel({
         delete next.parent_submission_id;
         delete next.total_reimbursement;
         delete next.cash_advance_document_no;
+        delete next.cash_advance_amount;
         delete next._form;
         return next;
       });
 
-      if (!item) {
-        setValues((prev) => ({ ...prev, cash_advance_document_no: "" }));
-        return;
-      }
-
-      applyParentPrefill(item.prefill_values, item.document_no, "cash_advance_document_no");
+      setValues((prev) => applyComputedFieldValues(fields, applyCashAdvanceParentSelection(prev, item)));
     },
-    [applyParentPrefill],
+    [fields],
   );
 
   const handlePurchaseRequisitionSelect = useCallback(
@@ -827,7 +824,9 @@ export function EApprovalSubmissionComposePanel({
     const cashAdvance = openCashAdvancesQuery.data?.find((entry) => entry.id === parentSubmissionId);
     if (cashAdvance) {
       parentPrefillAppliedRef.current = parentSubmissionId;
-      applyParentPrefill(cashAdvance.prefill_values, cashAdvance.document_no, "cash_advance_document_no");
+      setValues((prev) =>
+        applyComputedFieldValues(fields, applyCashAdvanceParentSelection(prev, cashAdvance)),
+      );
       return;
     }
 
@@ -840,7 +839,7 @@ export function EApprovalSubmissionComposePanel({
         "purchase_requisition_document_no",
       );
     }
-  }, [applyParentPrefill, openCashAdvancesQuery.data, openPurchaseRequisitionsQuery.data, parentSubmissionId]);
+  }, [applyParentPrefill, fields, openCashAdvancesQuery.data, openPurchaseRequisitionsQuery.data, parentSubmissionId]);
 
   const removeSavedAttachmentMutation = useMutation({
     mutationFn: (attachmentId: string) => deleteEApprovalAttachment(attachmentId),

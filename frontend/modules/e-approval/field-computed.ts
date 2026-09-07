@@ -64,7 +64,15 @@ const CONVENTION_RULES: ConventionRule[] = [
     config: {
       operation: "sum_grid_column",
       source_field: "expense_lines",
-      column: "Amount",
+      column: "Total",
+    },
+  },
+  {
+    totalField: "cash_overage_shortage",
+    config: {
+      operation: "subtract_fields",
+      left_field: "cash_advance_amount",
+      right_field: "total_reimbursement",
     },
   },
   {
@@ -109,6 +117,29 @@ const CONVENTION_RULES: ConventionRule[] = [
     },
   },
 ];
+
+function expenseLinesSumColumn(fields: EApprovalFormFieldInput[]): "Total" | "Amount" {
+  const grid = fields.find((field) => field.name === "expense_lines" && field.type === "grid");
+  const options = grid ? fieldOptionsToRecord(grid) : {};
+  const columns = Array.isArray(options.columns) ? options.columns : [];
+  const labels = columns.map((column) => {
+    if (column && typeof column === "object" && "label" in column) {
+      return String((column as { label?: unknown }).label ?? "")
+        .trim()
+        .toLowerCase();
+    }
+    return String(column ?? "")
+      .trim()
+      .toLowerCase();
+  });
+  if (labels.includes("total")) {
+    return "Total";
+  }
+  if (labels.includes("amount")) {
+    return "Amount";
+  }
+  return "Amount";
+}
 
 function parseExplicitComputedConfig(field: EApprovalFormFieldInput): FieldComputedOperation | null {
   const options = fieldOptionsToRecord(field);
@@ -235,6 +266,13 @@ function resolveConvention(fieldName: string, fields: EApprovalFormFieldInput[])
     return sourceExists ? rule.config : null;
   }
 
+  if (fieldName === "total_reimbursement" && rule.config.operation === "sum_grid_column") {
+    return {
+      ...rule.config,
+      column: expenseLinesSumColumn(fields),
+    };
+  }
+
   return rule.config;
 }
 
@@ -296,11 +334,22 @@ function computeGridSumColumn(
   config: GridSumColumnOperation,
 ): number {
   const columns = parseGridColumnDefs(gridField);
-  const columnIndex =
+  const explicit =
     resolveColumnIndex(columns, config.column, config.column_index) ??
-    columns.findIndex((column) => column.type === "currency");
+    resolveColumnIndex(columns, "Total", undefined) ??
+    resolveColumnIndex(columns, "Amount", undefined);
+  let columnIndex = explicit;
+  if (columnIndex === null) {
+    // Prefer the last currency column (row Total) over the first category column.
+    for (let i = columns.length - 1; i >= 0; i -= 1) {
+      if (columns[i]?.type === "currency") {
+        columnIndex = i;
+        break;
+      }
+    }
+  }
 
-  if (columnIndex < 0) {
+  if (columnIndex === null || columnIndex < 0) {
     return 0;
   }
 

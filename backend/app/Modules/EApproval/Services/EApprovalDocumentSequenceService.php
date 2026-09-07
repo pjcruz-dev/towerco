@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalDepartmentDocCode;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
 
@@ -81,6 +82,12 @@ final class EApprovalDocumentSequenceService
             'documenttype', 'document_type' => (string) ($values['document_type'] ?? ''),
             default => (string) ($values[$token] ?? $values[$normalized] ?? ''),
         };
+
+        if ($normalized === 'department') {
+            $code = EApprovalDepartmentDocCode::fromLabel($raw);
+
+            return $code !== '' ? $code : 'X';
+        }
 
         $sanitized = preg_replace('/[^A-Z0-9]/', '', strtoupper($raw)) ?? '';
 

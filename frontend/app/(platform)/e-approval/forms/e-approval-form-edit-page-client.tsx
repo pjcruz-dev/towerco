@@ -1165,7 +1165,14 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
 
           {!isNew && formId ? (
             <TabsContent value="print" className="mt-0">
-              <EApprovalPrintLayoutEditor formId={formId} fields={fields} formTitle={name} />
+              <EApprovalPrintLayoutEditor
+                formId={formId}
+                fields={fields}
+                formTitle={name}
+                formFamily={
+                  typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null
+                }
+              />
             </TabsContent>
           ) : null}
         </Tabs>

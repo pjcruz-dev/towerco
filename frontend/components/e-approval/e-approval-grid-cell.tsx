@@ -1,8 +1,10 @@
 "use client";
 
 import { DatePicker } from "@/components/ui/date-picker";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
+import { Textarea } from "@/components/ui/textarea";
 import { useEApprovalFieldChoices } from "@/hooks/use-e-approval-field-choices";
 import {
   gridColumnAsSelectField,
@@ -26,7 +28,9 @@ export function EApprovalGridCell({
   comfortable,
   allowRemoteLookups = true,
 }: Props) {
-  const inputClass = comfortable ? "h-10 w-full min-w-0 text-sm" : "h-8 w-full min-w-0 text-xs";
+  const inputClass = comfortable
+    ? "h-10 w-full min-w-0 text-sm"
+    : "h-7 w-full min-w-0 px-1.5 text-[11px]";
 
   if (column.type === "select") {
     return (
@@ -41,6 +45,20 @@ export function EApprovalGridCell({
     );
   }
 
+  if (column.type === "boolean") {
+    const checked = value === "true" || value === "1" || value.toLowerCase() === "yes";
+    return (
+      <label className="inline-flex h-7 items-center gap-1.5 text-[11px]">
+        <Checkbox
+          disabled={disabled}
+          checked={checked}
+          onCheckedChange={(next) => onChange(next === true ? "true" : "false")}
+        />
+        <span className="text-muted-foreground">{checked ? "Yes" : "No"}</span>
+      </label>
+    );
+  }
+
   if (column.type === "number" || column.type === "currency") {
     return (
       <Input
@@ -49,6 +67,7 @@ export function EApprovalGridCell({
         className={inputClass}
         value={value}
         step={column.type === "currency" ? "0.01" : undefined}
+        placeholder={column.type === "currency" ? "0.00" : undefined}
         onChange={(e) => onChange(e.target.value)}
       />
     );
@@ -62,6 +81,45 @@ export function EApprovalGridCell({
         onChange={onChange}
         className={inputClass}
         placeholder="Select date"
+      />
+    );
+  }
+
+  if (column.type === "textarea") {
+    return (
+      <Textarea
+        disabled={disabled}
+        className={
+          comfortable
+            ? "min-h-16 w-full min-w-[10rem] text-sm"
+            : "min-h-9 w-full min-w-[7rem] px-1.5 py-1 text-[11px]"
+        }
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  if (column.type === "email") {
+    return (
+      <Input
+        disabled={disabled}
+        type="email"
+        className={inputClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  if (column.type === "phone") {
+    return (
+      <Input
+        disabled={disabled}
+        type="tel"
+        className={inputClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
       />
     );
   }
