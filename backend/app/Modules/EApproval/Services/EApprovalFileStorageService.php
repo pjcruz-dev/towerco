@@ -143,7 +143,7 @@ final class EApprovalFileStorageService
     {
         $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
 
-        $this->assertUploadAllowed($file);
+        $this->assertSubsidiaryLogoUploadAllowed($file);
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $allowedLogo = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
@@ -181,9 +181,43 @@ final class EApprovalFileStorageService
 
         return [
             'code' => $code,
-            'logo_path' => $storedPath,
+            'logo_path' => is_string($stored) && $stored !== '' ? $stored : $storedPath,
             'logo_url' => '/api/v1/e-approval/forms/'.$form->id.'/subsidiary-logos/'.$code,
         ];
+    }
+
+    /**
+     * Logo uploads allow SVG; general tenant_files mime list does not.
+     */
+    private function assertSubsidiaryLogoUploadAllowed(UploadedFile $file): void
+    {
+        $this->assertAllowedSize($file);
+
+        $mime = strtolower((string) $file->getMimeType());
+        $allowedMimes = [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+            'image/svg+xml',
+            'image/svg',
+            'text/plain', // some browsers mis-report svg
+            'application/octet-stream',
+        ];
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $allowedExt = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+
+        if (in_array($mime, $allowedMimes, true) && in_array($ext, $allowedExt, true)) {
+            return;
+        }
+
+        if (in_array($ext, $allowedExt, true) && ($mime === '' || str_starts_with($mime, 'image/') || $mime === 'application/octet-stream')) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'file' => [__('Logo must be an image (png, jpg, gif, webp, svg).')],
+        ]);
     }
 
     public function presentFormSubsidiaryLogoUrl(EApprovalForm $form, string $code): ?string

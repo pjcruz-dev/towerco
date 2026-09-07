@@ -17,7 +17,7 @@ export const RFP_COST_PRINT_ROWS: Array<{ printLabel: string; matchLabels: strin
   { printLabel: "CME-Labor", matchLabels: ["CME-Labor"] },
   {
     printLabel: "CME-Delivery & Handling",
-    matchLabels: ["CME-Delivery & Handling", "Logistics"],
+    matchLabels: ["CME-Delivery & Handling", "Logistics", "Logistics / Hauling"],
   },
   { printLabel: "Various Department", matchLabels: ["Various Department"] },
   { printLabel: "Finance and Accounting", matchLabels: ["Finance and Accounting"] },
@@ -112,32 +112,52 @@ export function defaultRequestForPaymentDocumentDesignHtml(): string {
   <header class="ea-rfp-header">
     <div class="ea-rfp-brand">
       <div class="ea-form-logo">{{system.subsidiary_logo}}</div>
+      <div class="ea-rfp-brand-meta">
+        <span>{{field.subsidiary}}</span>
+        <span aria-hidden="true">·</span>
+        <span>{{field.department}}</span>
+      </div>
     </div>
-    <h1 class="ea-rfp-title">REQUEST FOR PAYMENT</h1>
+    <div class="ea-rfp-title-wrap">
+      <p class="ea-rfp-kicker">Finance · E-Forms</p>
+      <h1 class="ea-rfp-title">Request for payment</h1>
+    </div>
     <div class="ea-rfp-docmeta">
       <div class="ea-rfp-docmeta-row"><span>Doc No.</span><strong>{{system.document_no}}</strong></div>
-      <div class="ea-rfp-docmeta-row"><span>Amount</span><strong>{{field.payment_amount}}</strong></div>
-      <div class="ea-rfp-docmeta-row"><span>Currency</span><strong>{{field.currency}}</strong></div>
+      <div class="ea-rfp-docmeta-row"><span>Amount</span><strong>{{field.payment_amount}} {{field.currency}}</strong></div>
+      <div class="ea-rfp-docmeta-row"><span>PO / Non-PO</span><strong>{{field.non_po}}</strong></div>
     </div>
   </header>
 
   <div class="ea-rfp-body">
     <section class="ea-rfp-left">
       <div class="ea-rfp-payee-box">
-        <div class="ea-rfp-payee-label">PAYEE</div>
+        <div class="ea-rfp-payee-label">Payee</div>
         <div class="ea-rfp-payee-value">{{field.payee}}</div>
       </div>
       <div class="ea-rfp-field-row">
-        <div class="ea-rfp-field-label">VAT Registration No. :</div>
+        <div class="ea-rfp-field-label">VAT Registration No.</div>
         <div class="ea-rfp-field-value">{{field.vat_registration_no}}</div>
       </div>
       <div class="ea-rfp-field-row">
-        <div class="ea-rfp-field-label">Contact Person :</div>
+        <div class="ea-rfp-field-label">Contact Person</div>
         <div class="ea-rfp-field-value">{{field.contact_person}}</div>
       </div>
       <div class="ea-rfp-field-row">
-        <div class="ea-rfp-field-label">Tel No :</div>
+        <div class="ea-rfp-field-label">Tel No.</div>
         <div class="ea-rfp-field-value">{{field.tel_no}}</div>
+      </div>
+      <div class="ea-rfp-field-row">
+        <div class="ea-rfp-field-label">Service / Travel Period</div>
+        <div class="ea-rfp-field-value">{{field.service_period}}</div>
+      </div>
+      <div class="ea-rfp-field-row">
+        <div class="ea-rfp-field-label">Passenger</div>
+        <div class="ea-rfp-field-value">{{field.passenger}}</div>
+      </div>
+      <div class="ea-rfp-field-row">
+        <div class="ea-rfp-field-label">Location / Site</div>
+        <div class="ea-rfp-field-value">{{field.location}}</div>
       </div>
       <div class="ea-rfp-payment-for">
         <div class="ea-rfp-payment-for-label">Payment for</div>
@@ -148,7 +168,7 @@ export function defaultRequestForPaymentDocumentDesignHtml(): string {
     <section class="ea-rfp-right">
       <table class="ea-rfp-bank">
         <thead>
-          <tr><th colspan="2">BANK DETAILS</th></tr>
+          <tr><th colspan="2">Bank details</th></tr>
         </thead>
         <tbody>
           <tr>
@@ -170,7 +190,13 @@ export function defaultRequestForPaymentDocumentDesignHtml(): string {
     </section>
   </div>
 
-  <p class="ea-rfp-footnote">PO / Non-PO: {{field.non_po}} · Requestor: {{system.requestor}} · Submitted: {{system.submitted_at}}</p>
+  <footer class="ea-rfp-footer">
+    <div class="ea-rfp-footer-note">100% full payment upon submission of service invoice.</div>
+    <div class="ea-rfp-footer-meta">
+      <span>Requestor: {{system.requestor}}</span>
+      <span>Submitted: {{system.submitted_at}}</span>
+    </div>
+  </footer>
 </div>`;
 }
 
@@ -203,46 +229,74 @@ export function defaultRequestForPaymentDocumentDesignCss(
 .ea-form-logo:empty { display: none; }
 .eapproval-print-logo {
   display: block;
-  max-height: 52px;
-  max-width: 200px;
+  max-height: 48px;
+  max-width: 180px;
   object-fit: contain;
 }
 
 .ea-rfp-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1.1fr 1.2fr 1fr;
   align-items: start;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
 }
 .ea-rfp-brand { min-width: 0; }
-.ea-rfp-title {
-  margin: 8px 0 0;
+.ea-rfp-brand-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #64748b;
+}
+.ea-rfp-title-wrap {
   text-align: center;
+  padding-top: 2px;
+}
+.ea-rfp-kicker {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.ea-rfp-title {
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  text-transform: uppercase;
-  white-space: nowrap;
   color: #0f172a;
 }
 .ea-rfp-docmeta {
   justify-self: end;
-  min-width: 150px;
+  min-width: 168px;
+  max-width: 220px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #f8fafc;
-  padding: 6px 8px;
+  padding: 8px 10px;
   font-size: 10px;
 }
 .ea-rfp-docmeta-row {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  padding: 2px 0;
+  gap: 10px;
+  padding: 3px 0;
 }
-.ea-rfp-docmeta-row span { color: #64748b; }
-.ea-rfp-docmeta-row strong { color: #0f172a; font-weight: 600; text-align: right; }
+.ea-rfp-docmeta-row + .ea-rfp-docmeta-row {
+  border-top: 1px solid #e2e8f0;
+}
+.ea-rfp-docmeta-row span { color: #64748b; flex-shrink: 0; }
+.ea-rfp-docmeta-row strong {
+  color: #0f172a;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
 
 .ea-rfp-body {
   display: grid;
@@ -251,7 +305,7 @@ export function defaultRequestForPaymentDocumentDesignCss(
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   overflow: hidden;
-  min-height: 420px;
+  min-height: 440px;
   background: #fff;
 }
 .ea-rfp-left {
@@ -268,14 +322,14 @@ export function defaultRequestForPaymentDocumentDesignCss(
 
 .ea-rfp-payee-box {
   border-bottom: 1px solid #e2e8f0;
-  min-height: 72px;
-  padding: 8px 10px;
+  min-height: 68px;
+  padding: 10px 12px;
   background: #f8fafc;
 }
 .ea-rfp-payee-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #475569;
   margin-bottom: 4px;
@@ -284,21 +338,21 @@ export function defaultRequestForPaymentDocumentDesignCss(
   font-size: 13px;
   font-weight: 600;
   color: #0f172a;
-  min-height: 36px;
+  min-height: 32px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .ea-rfp-field-row {
   display: grid;
-  grid-template-columns: 42% 1fr;
+  grid-template-columns: 40% 1fr;
   border-bottom: 1px solid #e2e8f0;
-  min-height: 32px;
+  min-height: 30px;
 }
 .ea-rfp-field-label {
   padding: 6px 10px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   color: #475569;
   border-right: 1px solid #e2e8f0;
   background: #f1f5f9;
@@ -313,12 +367,14 @@ export function defaultRequestForPaymentDocumentDesignCss(
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 180px;
-  padding: 10px;
+  min-height: 140px;
+  padding: 10px 12px;
 }
 .ea-rfp-payment-for-label {
-  font-style: italic;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: #475569;
   margin-bottom: 6px;
 }
@@ -337,27 +393,27 @@ export function defaultRequestForPaymentDocumentDesignCss(
 .ea-rfp-bank thead th {
   background: #f1f5f9;
   color: #0f172a;
-  text-align: center;
-  font-size: 11px;
+  text-align: left;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 7px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid #e2e8f0;
 }
 .ea-rfp-bank tbody th {
   width: 38%;
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #475569;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 10px;
   text-align: left;
-  padding: 7px 8px;
+  padding: 7px 10px;
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
 }
 .ea-rfp-bank tbody td {
-  padding: 7px 8px;
+  padding: 7px 10px;
   color: #0f172a;
   border-bottom: 1px solid #e2e8f0;
   word-break: break-word;
@@ -406,10 +462,24 @@ export function defaultRequestForPaymentDocumentDesignCss(
 .ea-rfp-cost-cell { font-size: 10px; }
 .ea-rfp-cost-row--others .ea-rfp-cost-label { font-style: italic; color: #64748b; }
 
-.ea-rfp-footnote {
-  margin: 8px 0 0;
+.ea-rfp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
   font-size: 10px;
   color: #64748b;
+}
+.ea-rfp-footer-note { font-weight: 500; color: #475569; }
+.ea-rfp-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: flex-end;
+  text-align: right;
 }
 
 @media print {

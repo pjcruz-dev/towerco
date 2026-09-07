@@ -78,23 +78,29 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
     queryFn: () => fetchEApprovalPdfLayout(formId),
   });
 
+  const prefersExpenseLandscape = useMemo(
+    () =>
+      formFamily === "liquidation" ||
+      formFamily === "reimbursement" ||
+      fields.some((field) => field.type === "grid" && field.name.toLowerCase().includes("expense")),
+    [formFamily, fields],
+  );
+
   useEffect(() => {
     if (!layoutQuery.data?.template) {
       return;
     }
     const next = asTemplate(layoutQuery.data.template);
-    const prefersLandscape =
-      formFamily === "liquidation" ||
-      formFamily === "reimbursement" ||
-      fields.some((field) => field.type === "grid" && field.name.toLowerCase().includes("expense"));
 
     // Unsaved defaults: ensure expense forms open as landscape even if global default is portrait.
-    if (!layoutQuery.data.layout_persisted && prefersLandscape && !next.orientation) {
+    if (!layoutQuery.data.layout_persisted && prefersExpenseLandscape && !next.orientation) {
       next.orientation = "landscape";
       next.page = { size: next.page?.size ?? "A4", marginMm: next.page?.marginMm ?? 8 };
     }
     setTemplate(next);
-  }, [layoutQuery.data, formFamily, fields]);
+    // Only re-hydrate from the server when layout payload changes — not when `fields` identity
+    // changes (that was wiping subsidiary logos right after upload).
+  }, [layoutQuery.data, prefersExpenseLandscape]);
 
   const designFields = useMemo(
     () =>
@@ -204,7 +210,45 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
           [result.code]: result.logo_url,
         },
       });
-      queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
+      queryClient.setQueryData(["e-approval", "pdf-layout", formId], (prev: unknown) => {
+        if (!prev || typeof prev !== "object") return prev;
+        const row = prev as {
+          template?: Record<string, unknown>;
+          [key: string]: unknown;
+        };
+        const prevTemplate =
+          row.template && typeof row.template === "object"
+            ? (row.template as Record<string, unknown>)
+            : {};
+        const prevLogos =
+          prevTemplate.subsidiary_logos && typeof prevTemplate.subsidiary_logos === "object"
+            ? (prevTemplate.subsidiary_logos as Record<string, string>)
+            : {};
+        const prevCodes = Array.isArray(prevTemplate.subsidiary_codes)
+          ? (prevTemplate.subsidiary_codes as string[])
+          : [];
+        const nextCodes = [
+          ...new Set([
+            ...prevCodes.map(String),
+            ...(Array.isArray(result.subsidiary_codes) ? result.subsidiary_codes.map(String) : []),
+            result.code,
+          ]),
+        ];
+        return {
+          ...row,
+          layout_persisted: true,
+          template: {
+            ...prevTemplate,
+            subsidiary_logo_field: prevTemplate.subsidiary_logo_field ?? "subsidiary",
+            subsidiary_codes: nextCodes,
+            subsidiary_logos: {
+              ...prevLogos,
+              ...(result.subsidiary_logos ?? {}),
+              [result.code]: result.logo_url,
+            },
+          },
+        };
+      });
       push({ level: "success", title: `${result.code} logo uploaded` });
     },
     onError: (e) => push({ level: "error", title: "Logo upload failed", message: getErrorMessage(e) }),

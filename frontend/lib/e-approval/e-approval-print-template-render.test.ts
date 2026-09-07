@@ -317,14 +317,17 @@ describe("form-style starter layout", () => {
   it("request_for_payment starter matches paper RFP layout", () => {
     const html = defaultEApprovalDocumentDesignHtml("RFP", [], "request_for_payment");
     const css = defaultEApprovalDocumentDesignCss(undefined, "request_for_payment");
-    expect(html).toContain("REQUEST FOR PAYMENT");
+    expect(html).toContain("Request for payment");
     expect(html).toContain("{{field.payee}}");
     expect(html).toContain("{{field.cost_application}}");
-    expect(html).toContain("BANK DETAILS");
+    expect(html).toContain("Bank details");
+    expect(html).toContain("{{field.service_period}}");
     expect(html).toContain("ea-rfp-body");
+    expect(html).toContain("ea-rfp-footer");
     expect(html).not.toContain("{{system.form_body}}");
     expect(css).toContain(".ea-rfp-doc");
     expect(css).toContain(".ea-rfp-bank");
+    expect(css).toContain(".ea-rfp-footer");
     expect(css).toContain("#f1f5f9");
     expect(css).not.toContain("#1e3a5f");
 

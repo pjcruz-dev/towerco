@@ -501,6 +501,7 @@ final class EApprovalPdfLayoutService
                 || (
                     ! str_starts_with($value, '/api/v1/e-approval/forms/')
                     && ! str_contains($value, '/e-approval/forms/')
+                    && ! str_contains($value, 'e-approval/forms/')
                     && ! str_starts_with($value, '/storage/')
                 )
             ) {
