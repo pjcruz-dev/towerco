@@ -343,6 +343,16 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
     if (isFieldReadOnlyForRole(accessMatrix, entitySlug, field.name)) {
       return renderViewField(field);
     }
+    if (field.type === "automatic_id") {
+      return (
+        <Input
+          value={draft[field.name] ?? ""}
+          readOnly
+          disabled
+          className="bg-muted/40 text-muted-foreground"
+        />
+      );
+    }
     if (field.type === "relationship") {
       return (
         <DynRelationshipPicker

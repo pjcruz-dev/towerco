@@ -239,6 +239,8 @@ export function typeGlyph(type: string): string {
       return "D";
     case "relationship":
       return "↔";
+    case "automatic_id":
+      return "#";
     case "select":
     case "multiselect":
       return "▾";

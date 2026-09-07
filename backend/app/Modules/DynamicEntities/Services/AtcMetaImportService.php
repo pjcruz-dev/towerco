@@ -243,6 +243,7 @@ final class AtcMetaImportService
             in_array($source, ['file', 'image', 'attachment'], true) => DynFieldType::FILE,
             in_array($source, ['email'], true) => DynFieldType::EMAIL,
             in_array($source, ['phone', 'tel'], true) => DynFieldType::PHONE,
+            in_array($source, ['automatic_id', 'auto_id', 'autoid', 'auto_number', 'autonumber'], true) => DynFieldType::AUTOMATIC_ID,
             default => DynFieldType::TEXT,
         };
     }

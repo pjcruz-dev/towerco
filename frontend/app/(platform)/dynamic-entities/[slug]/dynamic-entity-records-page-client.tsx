@@ -88,9 +88,12 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   const canView = canEntityAction(accessMatrix, slug, "view");
   const [entity, setEntity] = useState<DynEntityDetail | null>(null);
   const [rows, setRows] = useState<DynRecordListRow[]>([]);
-  const [meta, setMeta] = useState<{ current_page: number; last_page: number; total: number } | null>(
-    null,
-  );
+  const [meta, setMeta] = useState<{
+    current_page: number;
+    last_page: number;
+    total: number;
+    column_totals: Record<string, number>;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +130,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
         current_page: list.meta.current_page,
         last_page: list.meta.last_page,
         total: list.meta.total,
+        column_totals: list.meta.column_totals ?? {},
       });
       setError(null);
       setSelected(new Set());
@@ -220,6 +224,11 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
     () => (entity?.fields ?? []).filter((f) => f.calculate_totals),
     [entity],
   );
+  const visibleTotalFieldNames = useMemo(() => {
+    const names = new Set(totalFields.map((f) => f.name));
+    return visibleColumns.filter((c) => names.has(c.id)).map((c) => c.id);
+  }, [totalFields, visibleColumns]);
+  const showColumnTotals = visibleTotalFieldNames.length > 0 && meta != null;
 
   const printTemplates = useMemo(
     () => listPrintTemplates(entity?.print_settings, entity?.name ?? slug),
@@ -844,6 +853,40 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
                     </tr>
                   ) : null}
                 </tbody>
+                {showColumnTotals && meta ? (
+                  <tfoot className="sticky bottom-0 z-[1]">
+                    <tr className="border-t border-slate-700 bg-slate-900 text-slate-50 dark:bg-slate-950">
+                      <td
+                        className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-slate-300"
+                        colSpan={1 + chromeColCount}
+                      >
+                        Totals
+                        <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+                          ({meta.total.toLocaleString()} matching)
+                        </span>
+                      </td>
+                      {visibleColumns.map((col) => {
+                        const field = fieldByName.get(col.id);
+                        const isTotalCol = Boolean(field?.calculate_totals);
+                        if (!isTotalCol) {
+                          return <td key={col.id} className="px-3 py-2.5" />;
+                        }
+                        const raw = meta.column_totals[col.id] ?? 0;
+                        return (
+                          <td
+                            key={col.id}
+                            className="px-3 py-2.5 text-right text-sm font-medium tabular-nums whitespace-nowrap"
+                          >
+                            <div className="text-[10px] font-normal uppercase tracking-wide text-slate-400">
+                              {col.label} Total
+                            </div>
+                            <div>{formatDynListCell(raw, field)}</div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                ) : null}
               </table>
             </DndContext>
           </div>

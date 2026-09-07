@@ -32,6 +32,9 @@ final class DynFieldType
 
     public const PHONE = 'phone';
 
+    /** Server-generated control / document number (prefix + date/seq format). */
+    public const AUTOMATIC_ID = 'automatic_id';
+
     /**
      * @return list<string>
      */
@@ -51,6 +54,7 @@ final class DynFieldType
             self::FILE,
             self::EMAIL,
             self::PHONE,
+            self::AUTOMATIC_ID,
         ];
     }
 }

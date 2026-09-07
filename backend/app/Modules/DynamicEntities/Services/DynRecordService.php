@@ -23,6 +23,7 @@ final class DynRecordService
     public function __construct(
         private readonly DynEntityAdminService $entityAdmin,
         private readonly TenantActivityLogger $activity,
+        private readonly DynAutomaticIdService $automaticIds,
     ) {}
 
     /**
@@ -31,9 +32,78 @@ final class DynRecordService
      */
     public function paginate(DynEntity $entity, array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
+        $query = $this->filteredRecordsQuery($entity, $filters);
+
+        $sort = (string) ($filters['sort'] ?? '-updated_at');
+        $desc = str_starts_with($sort, '-');
+        $sortCol = ltrim($sort, '-');
+
+        if (in_array($sortCol, ['updated_at', 'created_at', 'title', 'status'], true)) {
+            $query->orderBy($sortCol, $desc ? 'desc' : 'asc');
+        } elseif (preg_match('/^[a-z][a-z0-9_]{0,63}$/', $sortCol) === 1) {
+            // Sort by indexed dyn field value when present.
+            $direction = $desc ? 'desc' : 'asc';
+            $query->orderByRaw(
+                '(select coalesce(dyn_record_indexes.value_string, cast(dyn_record_indexes.value_number as char), dyn_record_indexes.value_date)
+                  from dyn_record_indexes
+                  where dyn_record_indexes.record_id = dyn_records.id
+                    and dyn_record_indexes.entity_id = ?
+                    and dyn_record_indexes.field_name = ?
+                  limit 1) '.$direction,
+                [$entity->id, $sortCol]
+            );
+        } else {
+            $query->orderBy('updated_at', 'desc');
+        }
+
+        return $query->paginate(max(1, min(100, $perPage)));
+    }
+
+    /**
+     * Sum calculate_totals fields over the same filtered set as the list (not just the current page).
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, float>
+     */
+    public function columnTotals(DynEntity $entity, array $filters = []): array
+    {
+        $entity->loadMissing('fields');
+        $fields = $entity->fields
+            ->filter(static fn (DynField $f): bool => (bool) $f->calculate_totals && ! (bool) $f->is_virtual)
+            ->values();
+
+        if ($fields->isEmpty()) {
+            return [];
+        }
+
+        $matchingIds = $this->filteredRecordsQuery($entity, $filters)->select('dyn_records.id');
+        $totals = [];
+
+        foreach ($fields as $field) {
+            $name = (string) $field->name;
+            $sum = DynRecordIndex::query()
+                ->where('entity_id', $entity->id)
+                ->where('field_name', $name)
+                ->whereIn('record_id', (clone $matchingIds))
+                ->sum('value_number');
+
+            $totals[$name] = round((float) $sum, 6);
+        }
+
+        return $totals;
+    }
+
+    /**
+     * Shared list filters (search / status / column filters / role / view-own) without sort or pagination.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return \Illuminate\Database\Eloquent\Builder<DynRecord>
+     */
+    private function filteredRecordsQuery(DynEntity $entity, array $filters = [])
+    {
         $query = DynRecord::query()
-            ->where('entity_id', $entity->id)
-            ->where('is_deleted', false);
+            ->where('dyn_records.entity_id', $entity->id)
+            ->where('dyn_records.is_deleted', false);
 
         if (! empty($filters['parent_record_id'])) {
             $parentId = (string) $filters['parent_record_id'];
@@ -112,29 +182,7 @@ final class DynRecordService
             });
         }
 
-        $sort = (string) ($filters['sort'] ?? '-updated_at');
-        $desc = str_starts_with($sort, '-');
-        $sortCol = ltrim($sort, '-');
-
-        if (in_array($sortCol, ['updated_at', 'created_at', 'title', 'status'], true)) {
-            $query->orderBy($sortCol, $desc ? 'desc' : 'asc');
-        } elseif (preg_match('/^[a-z][a-z0-9_]{0,63}$/', $sortCol) === 1) {
-            // Sort by indexed dyn field value when present.
-            $direction = $desc ? 'desc' : 'asc';
-            $query->orderByRaw(
-                '(select coalesce(dyn_record_indexes.value_string, cast(dyn_record_indexes.value_number as char), dyn_record_indexes.value_date)
-                  from dyn_record_indexes
-                  where dyn_record_indexes.record_id = dyn_records.id
-                    and dyn_record_indexes.entity_id = ?
-                    and dyn_record_indexes.field_name = ?
-                  limit 1) '.$direction,
-                [$entity->id, $sortCol]
-            );
-        } else {
-            $query->orderBy('updated_at', 'desc');
-        }
-
-        return $query->paginate(max(1, min(100, $perPage)));
+        return $query;
     }
 
     /**
@@ -142,11 +190,12 @@ final class DynRecordService
      */
     public function create(DynEntity $entity, array $data, TenantUser $actor, bool $audit = true): DynRecord
     {
-        $values = $this->normalizeValues($entity, $data['values'] ?? []);
-        $this->assertRequired($entity, $values);
-        $this->assertUniqueFieldValues($entity, $values, null);
+        $record = DB::transaction(function () use ($entity, $data, $actor): DynRecord {
+            $values = $this->normalizeValues($entity, $data['values'] ?? []);
+            $values = $this->automaticIds->assignOnCreate($entity, $values);
+            $this->assertRequired($entity, $values);
+            $this->assertUniqueFieldValues($entity, $values, null);
 
-        $record = DB::transaction(function () use ($entity, $data, $values, $actor): DynRecord {
             $record = DynRecord::query()->create([
                 'entity_id' => $entity->id,
                 'status' => isset($data['status']) ? (string) $data['status'] : ($values['status'] ?? null),
@@ -205,7 +254,10 @@ final class DynRecordService
             $existing = $record->values_json ?? [];
             $incoming = [];
             if (isset($data['values']) && is_array($data['values'])) {
-                $incoming = $this->normalizeValues($entity, $data['values']);
+                $incoming = $this->automaticIds->stripFromUpdate(
+                    $entity,
+                    $this->normalizeValues($entity, $data['values']),
+                );
             }
             $values = array_merge($existing, $incoming);
             // On update, only enforce required for fields included in this patch
@@ -304,7 +356,9 @@ final class DynRecordService
 
         $fields = $entity->fields()
             ->where(function ($q): void {
-                $q->where('is_filterable', true)->orWhere('show_in_table', true);
+                $q->where('is_filterable', true)
+                    ->orWhere('show_in_table', true)
+                    ->orWhere('calculate_totals', true);
             })
             ->get();
         $values = $record->values_json ?? [];
@@ -504,6 +558,10 @@ final class DynRecordService
 
         foreach ($entity->fields as $field) {
             if (! $field->is_required || $field->is_virtual) {
+                continue;
+            }
+            // Server-generated on create; never require client input.
+            if ($field->type === DynFieldType::AUTOMATIC_ID) {
                 continue;
             }
             if ($only !== null && ! isset($only[$field->name])) {

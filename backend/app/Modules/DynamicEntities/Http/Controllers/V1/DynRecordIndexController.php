@@ -40,8 +40,7 @@ final class DynRecordIndexController extends AbstractApiController
             }
         }
 
-        $perPage = (int) $request->integer('per_page', 25);
-        $paginator = $service->paginate($model, [
+        $filterPayload = [
             'search' => $request->query('search'),
             'status' => $request->query('status'),
             'parent_record_id' => $request->query('parent_record_id'),
@@ -51,7 +50,11 @@ final class DynRecordIndexController extends AbstractApiController
             'advanced_filter_rules' => DynRecordQueryFilterParser::fromRequest($request, $model),
             'role_data_filter_groups' => $roleFilters,
             'view_own_user_id' => $viewOwnUserId,
-        ], $perPage);
+        ];
+
+        $perPage = (int) $request->integer('per_page', 25);
+        $paginator = $service->paginate($model, $filterPayload, $perPage);
+        $columnTotals = $service->columnTotals($model, $filterPayload);
 
         $rows = collect($paginator->items())->map(
             fn ($record) => $service->presentListRow($model, $record)
@@ -62,6 +65,7 @@ final class DynRecordIndexController extends AbstractApiController
             'per_page' => $paginator->perPage(),
             'total' => $paginator->total(),
             'last_page' => $paginator->lastPage(),
+            'column_totals' => $columnTotals,
         ]);
     }
 }

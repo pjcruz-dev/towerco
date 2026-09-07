@@ -170,6 +170,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
     try {
       const payloadValues: Record<string, unknown> = {};
       for (const field of fields) {
+        if (field.type === "automatic_id") continue;
         const raw = values[field.name];
         if (raw === undefined || raw === "") continue;
         if (field.type === "number" || field.type === "decimal") {
@@ -209,6 +210,17 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   }
 
   function renderFormField(field: DynField) {
+    if (field.type === "automatic_id") {
+      return (
+        <Input
+          value=""
+          readOnly
+          disabled
+          placeholder={field.placeholder?.trim() || "Auto-generated on save"}
+          className="bg-muted/40 text-muted-foreground"
+        />
+      );
+    }
     if (field.type === "relationship") {
       return (
         <DynRelationshipPicker

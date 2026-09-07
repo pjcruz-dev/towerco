@@ -22,6 +22,7 @@ import {
   createDynFieldGroup,
   deleteDynFieldGroup,
   fetchDynEntities,
+  fetchDynEntity,
   updateDynField,
   updateDynFieldGroup,
   type DynConditionalRule,
@@ -38,6 +39,11 @@ import {
   workflowButtonsPayload,
   type DynWorkflowActionDef,
 } from "@/lib/dynamic-entities/dyn-workflow-actions";
+import {
+  DYN_RELATION_FILTER_OPS,
+  parseDynRelationFilters,
+  relationFilterFieldOptions,
+} from "@/lib/dynamic-entities/dyn-relation-filters";
 import {
   DYN_SELECT_BADGE_OPTIONS,
   emptyDynSelectChoice,
@@ -56,6 +62,11 @@ import {
   serializeDynTextOptions,
   type DynTextOptionsConfig,
 } from "@/lib/dynamic-entities/text-options";
+import {
+  parseDynAutomaticIdOptions,
+  serializeDynAutomaticIdOptions,
+  type DynAutomaticIdOptionsConfig,
+} from "@/lib/dynamic-entities/automatic-id-options";
 
 const FIELD_TYPE_OPTIONS = [
   { value: "text", label: "Text" },
@@ -70,6 +81,7 @@ const FIELD_TYPE_OPTIONS = [
   { value: "email", label: "Email" },
   { value: "phone", label: "Phone" },
   { value: "relationship", label: "Link to another Record" },
+  { value: "automatic_id", label: "Automatic ID" },
   { value: "file", label: "File" },
 ] as const;
 
@@ -445,22 +457,6 @@ function WorkflowFieldEditorForm({
   );
 }
 
-function parseRelationFilters(options: unknown): DynRelationFilter[] {
-  if (!options || typeof options !== "object" || Array.isArray(options)) return [];
-  const filters = (options as { filters?: unknown }).filters;
-  if (!Array.isArray(filters)) return [];
-  return filters
-    .map((row): DynRelationFilter | null => {
-      if (!row || typeof row !== "object") return null;
-      const r = row as Record<string, unknown>;
-      const field = String(r.field ?? "").trim();
-      if (!field) return null;
-      const op = (["eq", "neq", "contains"].includes(String(r.op)) ? String(r.op) : "eq") as DynRelationFilter["op"];
-      return { field, op, value: String(r.value ?? "") };
-    })
-    .filter((r): r is DynRelationFilter => r !== null);
-}
-
 function normalizeRules(raw: DynField["conditional_rules"]): DynConditionalRule[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -510,10 +506,14 @@ function FieldEditorForm({
   const [textOptions, setTextOptions] = useState<DynTextOptionsConfig>(() =>
     parseDynTextOptions(field?.options),
   );
+  const [automaticIdOptions, setAutomaticIdOptions] = useState<DynAutomaticIdOptionsConfig>(() =>
+    parseDynAutomaticIdOptions(field?.options),
+  );
   const [targetEntityId, setTargetEntityId] = useState(field?.target_entity_id ?? "");
   const [relationFilters, setRelationFilters] = useState<DynRelationFilter[]>(() =>
-    parseRelationFilters(field?.options),
+    parseDynRelationFilters(field?.options),
   );
+  const [targetEntityFields, setTargetEntityFields] = useState<DynField[]>([]);
   const [rules, setRules] = useState<DynConditionalRule[]>(() => normalizeRules(field?.conditional_rules));
   const [entities, setEntities] = useState<DynEntitySummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -552,8 +552,9 @@ function FieldEditorForm({
     setSelectOptions(parseDynSelectOptions(field.options));
     setNumberOptions(parseDynNumberOptions(field.options));
     setTextOptions(parseDynTextOptions(field.options));
+    setAutomaticIdOptions(parseDynAutomaticIdOptions(field.options));
     setTargetEntityId(field.target_entity_id ?? "");
-    setRelationFilters(parseRelationFilters(field.options));
+    setRelationFilters(parseDynRelationFilters(field.options));
     setRules(normalizeRules(field.conditional_rules));
     setError(null);
     setTab("basics");
@@ -579,9 +580,32 @@ function FieldEditorForm({
     };
   }, []);
 
+  useEffect(() => {
+    if (type !== "relationship" || !targetEntityId) {
+      setTargetEntityFields([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchDynEntity(targetEntityId)
+      .then((detail) => {
+        if (!cancelled) setTargetEntityFields(detail.fields ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setTargetEntityFields([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [type, targetEntityId]);
+
   const otherFields = useMemo(
     () => siblingFields.filter((f) => f.id !== field?.id),
     [siblingFields, field?.id],
+  );
+
+  const targetFilterFieldOptions = useMemo(
+    () => relationFilterFieldOptions(targetEntityFields),
+    [targetEntityFields],
   );
 
   function buildOptionsJson(): unknown {
@@ -593,6 +617,9 @@ function FieldEditorForm({
     }
     if (type === "text" || type === "textarea" || type === "email") {
       return serializeDynTextOptions(textOptions);
+    }
+    if (type === "automatic_id") {
+      return serializeDynAutomaticIdOptions(automaticIdOptions);
     }
     if (type === "relationship") {
       const filters = relationFilters.filter((f) => f.field.trim());
@@ -899,7 +926,11 @@ function FieldEditorForm({
                   <Select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={targetEntityId}
-                    onChange={(e) => setTargetEntityId(e.target.value)}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setTargetEntityId(nextId);
+                      setRelationFilters([]);
+                    }}
                   >
                     <option value="">Select entity…</option>
                     {entities.map((e) => (
@@ -917,20 +948,36 @@ function FieldEditorForm({
                       Only records matching every condition below appear in the picker.
                     </p>
                   </div>
+                  {!targetEntityId ? (
+                    <p className="text-xs text-muted-foreground">
+                      Select a target entity first to choose filter fields.
+                    </p>
+                  ) : null}
                   {relationFilters.map((filter, index) => (
                     <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
-                      <Input
-                        className="min-w-[7rem] flex-1"
-                        placeholder="Field name"
+                      <Select
+                        className="h-9 min-w-[9rem] flex-1 rounded-md border border-input bg-background px-2 text-sm"
                         value={filter.field}
+                        disabled={!targetEntityId}
                         onChange={(e) => {
                           const next = [...relationFilters];
                           next[index] = { ...filter, field: e.target.value };
                           setRelationFilters(next);
                         }}
-                      />
+                      >
+                        <option value="">— Select Field —</option>
+                        {targetFilterFieldOptions.map((opt) => (
+                          <option key={opt.name} value={opt.name}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        {filter.field &&
+                        !targetFilterFieldOptions.some((opt) => opt.name === filter.field) ? (
+                          <option value={filter.field}>{filter.field} (saved)</option>
+                        ) : null}
+                      </Select>
                       <Select
-                        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                        className="h-9 min-w-[8.5rem] rounded-md border border-input bg-background px-2 text-sm"
                         value={filter.op}
                         onChange={(e) => {
                           const next = [...relationFilters];
@@ -941,13 +988,15 @@ function FieldEditorForm({
                           setRelationFilters(next);
                         }}
                       >
-                        <option value="eq">equals</option>
-                        <option value="neq">not equals</option>
-                        <option value="contains">contains</option>
+                        {DYN_RELATION_FILTER_OPS.map((op) => (
+                          <option key={op.value} value={op.value}>
+                            {op.label}
+                          </option>
+                        ))}
                       </Select>
                       <Input
                         className="min-w-[7rem] flex-1"
-                        placeholder="Value"
+                        placeholder={filter.op === "in" ? "a, b, c" : "Value"}
                         value={filter.value}
                         onChange={(e) => {
                           const next = [...relationFilters];
@@ -970,6 +1019,7 @@ function FieldEditorForm({
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={!targetEntityId}
                     onClick={() =>
                       setRelationFilters([...relationFilters, { field: "", op: "eq", value: "" }])
                     }
@@ -978,6 +1028,55 @@ function FieldEditorForm({
                     Add condition
                   </Button>
                 </div>
+              </Section>
+            ) : type === "automatic_id" ? (
+              <Section title="Automatic ID">
+                <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">ID Prefix</span>
+                    <Input
+                      value={automaticIdOptions.id_prefix}
+                      placeholder="e.g., 2307-"
+                      onChange={(e) =>
+                        setAutomaticIdOptions((prev) => ({ ...prev, id_prefix: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">ID Format</span>
+                    <Input
+                      value={automaticIdOptions.id_format}
+                      placeholder="e.g., Y-####"
+                      onChange={(e) =>
+                        setAutomaticIdOptions((prev) => ({ ...prev, id_format: e.target.value }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use YYYY, MM, DD for dates and # for the sequential number.
+                    </p>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Generated on save (read-only on the form). Example with prefix{" "}
+                  <span className="font-mono text-foreground">
+                    {automaticIdOptions.id_prefix || "(none)"}
+                  </span>{" "}
+                  and format{" "}
+                  <span className="font-mono text-foreground">
+                    {automaticIdOptions.id_format || "####"}
+                  </span>
+                  :{" "}
+                  <span className="font-mono text-foreground">
+                    {automaticIdOptions.id_prefix}
+                    {(automaticIdOptions.id_format || "####")
+                      .replaceAll("YYYY", "2026")
+                      .replaceAll("YY", "26")
+                      .replace(/(?<![Y0-9])Y(?![Y0-9])/g, "2026")
+                      .replaceAll("MM", "09")
+                      .replaceAll("DD", "07")
+                      .replace(/#+/, (run) => "1".padStart(run.length, "0"))}
+                  </span>
+                </p>
               </Section>
             ) : type === "text" || type === "textarea" || type === "email" ? (
               <Section title="Text behaviour & default value">

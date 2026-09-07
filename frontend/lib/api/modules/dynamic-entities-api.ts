@@ -68,9 +68,11 @@ export type DynConditionalRule = {
   value?: string;
 };
 
+export type DynRelationFilterOp = "eq" | "neq" | "gt" | "lt" | "contains" | "in";
+
 export type DynRelationFilter = {
   field: string;
-  op: "eq" | "neq" | "contains";
+  op: DynRelationFilterOp;
   value: string;
 };
 
