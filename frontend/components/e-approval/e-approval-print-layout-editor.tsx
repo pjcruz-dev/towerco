@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EApprovalDocumentDesignEditor } from "@/components/e-approval/e-approval-document-design-editor";
@@ -10,14 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import {
-  deleteEApprovalFormSubsidiaryLogo,
-  fetchEApprovalPdfLayout,
-  registerEApprovalFormSubsidiaryCode,
-  removeEApprovalFormSubsidiaryCode,
-  updateEApprovalPdfLayout,
-  uploadEApprovalFormSubsidiaryLogo,
-} from "@/lib/api/modules/e-approval-api";
+import { fetchEApprovalPdfLayout, updateEApprovalPdfLayout } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { printableGridDesignFields, printableScalarDesignFields } from "@/lib/e-approval/e-approval-print-template-render";
 import { parseGridColumns } from "@/modules/e-approval/field-options";
@@ -70,8 +64,6 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
   const queryClient = useQueryClient();
   const push = useNotificationStore((s) => s.push);
   const [template, setTemplate] = useState<EApprovalPrintTemplate>({});
-  const [newCode, setNewCode] = useState("");
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const layoutQuery = useQuery({
     queryKey: ["e-approval", "pdf-layout", formId],
@@ -150,32 +142,6 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
     return map;
   }, [template.subsidiary_logos]);
 
-  const applySubsidiaryResult = (result: {
-    subsidiary_codes?: string[];
-    subsidiary_logos?: Record<string, string>;
-  }) => {
-    setTemplate((prev) => {
-      const prevCodes = Array.isArray(prev.subsidiary_codes)
-        ? prev.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
-        : [];
-      const nextCodes = Array.isArray(result.subsidiary_codes)
-        ? result.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
-        : [];
-      // Union codes so an upload for ATC never drops ADIC from the UI.
-      const mergedCodes = [...new Set([...prevCodes, ...nextCodes])];
-
-      return {
-        ...prev,
-        subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
-        subsidiary_codes: mergedCodes.length > 0 ? mergedCodes : prev.subsidiary_codes,
-        subsidiary_logos: {
-          ...(prev.subsidiary_logos ?? {}),
-          ...(result.subsidiary_logos ?? {}),
-        },
-      };
-    });
-  };
-
   const saveMutation = useMutation({
     mutationFn: () => {
       if (allVisibleLayout.length === 0) {
@@ -199,125 +165,12 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
     onError: (e) => push({ level: "error", title: "Save failed", message: getErrorMessage(e) }),
   });
 
-  const uploadLogoMutation = useMutation({
-    mutationFn: ({ code, file }: { code: string; file: File }) =>
-      uploadEApprovalFormSubsidiaryLogo(formId, code, file),
-    onSuccess: (result) => {
-      applySubsidiaryResult({
-        subsidiary_codes: result.subsidiary_codes,
-        subsidiary_logos: {
-          ...(result.subsidiary_logos ?? {}),
-          [result.code]: result.logo_url,
-        },
-      });
-      queryClient.setQueryData(["e-approval", "pdf-layout", formId], (prev: unknown) => {
-        if (!prev || typeof prev !== "object") return prev;
-        const row = prev as {
-          template?: Record<string, unknown>;
-          [key: string]: unknown;
-        };
-        const prevTemplate =
-          row.template && typeof row.template === "object"
-            ? (row.template as Record<string, unknown>)
-            : {};
-        const prevLogos =
-          prevTemplate.subsidiary_logos && typeof prevTemplate.subsidiary_logos === "object"
-            ? (prevTemplate.subsidiary_logos as Record<string, string>)
-            : {};
-        const prevCodes = Array.isArray(prevTemplate.subsidiary_codes)
-          ? (prevTemplate.subsidiary_codes as string[])
-          : [];
-        const nextCodes = [
-          ...new Set([
-            ...prevCodes.map(String),
-            ...(Array.isArray(result.subsidiary_codes) ? result.subsidiary_codes.map(String) : []),
-            result.code,
-          ]),
-        ];
-        return {
-          ...row,
-          layout_persisted: true,
-          template: {
-            ...prevTemplate,
-            subsidiary_logo_field: prevTemplate.subsidiary_logo_field ?? "subsidiary",
-            subsidiary_codes: nextCodes,
-            subsidiary_logos: {
-              ...prevLogos,
-              ...(result.subsidiary_logos ?? {}),
-              [result.code]: result.logo_url,
-            },
-          },
-        };
-      });
-      push({ level: "success", title: `${result.code} logo uploaded` });
-    },
-    onError: (e) => push({ level: "error", title: "Logo upload failed", message: getErrorMessage(e) }),
-  });
-
-  const clearLogoMutation = useMutation({
-    mutationFn: (code: string) => deleteEApprovalFormSubsidiaryLogo(formId, code),
-    onSuccess: (result) => {
-      // Replace logos (do not merge) so the cleared code disappears from the UI.
-      setTemplate((prev) => {
-        const prevCodes = Array.isArray(prev.subsidiary_codes)
-          ? prev.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
-          : [];
-        const nextCodes = Array.isArray(result.subsidiary_codes)
-          ? result.subsidiary_codes.map((c) => normalizeSubsidiaryCode(String(c))).filter((c): c is string => c !== null)
-          : [];
-        const mergedCodes = [...new Set([...prevCodes, ...nextCodes])];
-
-        return {
-          ...prev,
-          subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
-          subsidiary_codes: mergedCodes.length > 0 ? mergedCodes : prev.subsidiary_codes,
-          subsidiary_logos: result.subsidiary_logos ?? {},
-        };
-      });
-      queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
-      push({ level: "success", title: `${result.code} logo cleared` });
-    },
-    onError: (e) => push({ level: "error", title: "Could not clear logo", message: getErrorMessage(e) }),
-  });
-
-  const addCodeMutation = useMutation({
-    mutationFn: (code: string) => registerEApprovalFormSubsidiaryCode(formId, code),
-    onSuccess: (result) => {
-      applySubsidiaryResult(result);
-      setNewCode("");
-      queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
-      push({ level: "success", title: `${result.code} added` });
-    },
-    onError: (e) => push({ level: "error", title: "Could not add subsidiary", message: getErrorMessage(e) }),
-  });
-
-  const removeCodeMutation = useMutation({
-    mutationFn: (code: string) => removeEApprovalFormSubsidiaryCode(formId, code),
-    onSuccess: (result) => {
-      // Replace codes on remove (do not union — user intentionally deleted a code).
-      setTemplate((prev) => ({
-        ...prev,
-        subsidiary_logo_field: prev.subsidiary_logo_field ?? "subsidiary",
-        subsidiary_codes: result.subsidiary_codes ?? prev.subsidiary_codes,
-        subsidiary_logos: result.subsidiary_logos ?? {},
-      }));
-      queryClient.invalidateQueries({ queryKey: ["e-approval", "pdf-layout", formId] });
-      push({ level: "success", title: `${result.code} removed` });
-    },
-    onError: (e) => push({ level: "error", title: "Could not remove subsidiary", message: getErrorMessage(e) }),
-  });
-
   const isProcurementTemplate =
     isPurchaseOrderPrintTemplate(template as Record<string, unknown>) ||
     isPurchaseRequisitionPrintTemplate(template as Record<string, unknown>) ||
     fields.some((field) => field.name === "grand_total");
 
   const canSave = allVisibleLayout.length > 0;
-  const logosBusy =
-    uploadLogoMutation.isPending ||
-    clearLogoMutation.isPending ||
-    addCodeMutation.isPending ||
-    removeCodeMutation.isPending;
 
   const patchFooter = (patch: Partial<NonNullable<EApprovalPrintTemplate["footer"]>>) => {
     setTemplate((prev) => ({
@@ -333,28 +186,6 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
     }));
   };
 
-  const onPickLogo = (code: string, file: File | undefined) => {
-    if (!file) return;
-    uploadLogoMutation.mutate({ code, file });
-  };
-
-  const onAddCode = () => {
-    const code = normalizeSubsidiaryCode(newCode);
-    if (!code) {
-      push({
-        level: "error",
-        title: "Invalid code",
-        message: "Use 1–24 characters: letters, numbers, _ or -.",
-      });
-      return;
-    }
-    if (subsidiaryCodes.includes(code)) {
-      push({ level: "error", title: "Already added", message: `${code} is already in the list.` });
-      return;
-    }
-    addCodeMutation.mutate(code);
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -367,29 +198,22 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
           {isProcurementTemplate ? (
             <p className="mt-2 text-xs text-muted-foreground">
               This form also has a structured PO/PR layout. If you save a Document design, that custom HTML is used
-              when printing instead of the default procurement template.
+              for print; otherwise the structured layout is used.
             </p>
           ) : null}
         </div>
         <Button
           type="button"
           size="sm"
+          disabled={!canSave || saveMutation.isPending}
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !canSave}
         >
           {saveMutation.isPending ? "Saving…" : "Save print design"}
         </Button>
       </div>
 
       <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Print options</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Applies to browser print and merged PDF export for this form.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="ea-print-page-size">Page size</Label>
             <Select
@@ -399,7 +223,7 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
               onChange={(e) =>
                 setTemplate((prev) => ({
                   ...prev,
-                  page: { ...prev.page, size: e.target.value, marginMm: prev.page?.marginMm ?? 12 },
+                  page: { size: e.target.value, marginMm: prev.page?.marginMm ?? 12 },
                 }))
               }
             >
@@ -477,36 +301,21 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
       </section>
 
       <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div>
-          <h3 className="text-sm font-medium text-foreground">Subsidiary logos</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Add any subsidiary codes and upload logos. Print uses{" "}
-            <code className="rounded bg-muted px-1">{"{{system.subsidiary_logo}}"}</code> from the form’s{" "}
-            Subsidiary field. Choices on that field stay in sync with this list.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[10rem] flex-1 space-y-1.5 sm:max-w-xs">
-            <Label htmlFor="ea-subsidiary-code">Add subsidiary code</Label>
-            <Input
-              id="ea-subsidiary-code"
-              className="h-9 uppercase"
-              placeholder="e.g. ATC, ADIC, NEWCO"
-              value={newCode}
-              disabled={logosBusy}
-              onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onAddCode();
-                }
-              }}
-            />
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">Subsidiary logos</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Inherited from tenant settings. Print uses{" "}
+              <code className="rounded bg-muted px-1">{"{{system.subsidiary_logo}}"}</code> from the form’s Subsidiary
+              field.
+            </p>
           </div>
-          <Button type="button" size="sm" disabled={logosBusy || !newCode.trim()} onClick={onAddCode}>
-            {addCodeMutation.isPending ? "Adding…" : "Add"}
-          </Button>
+          <Link
+            href="/e-approval/settings"
+            className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
+          >
+            Manage in Settings
+          </Link>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -514,55 +323,12 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
             const logoPath = subsidiaryLogos[code] ?? null;
             return (
               <div key={code} className="rounded-lg border border-border bg-background p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{code}</p>
-                    <p className="text-[11px] text-muted-foreground">Shown when Subsidiary = {code}</p>
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={logosBusy}
-                      onClick={() => fileInputRefs.current[code]?.click()}
-                    >
-                      {logoPath ? "Replace" : "Upload"}
-                    </Button>
-                    {logoPath ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={logosBusy}
-                        onClick={() => clearLogoMutation.mutate(code)}
-                      >
-                        Clear
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={logosBusy}
-                      onClick={() => removeCodeMutation.mutate(code)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{code}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {logoPath ? `Shown when Subsidiary = ${code}` : "No tenant logo uploaded yet"}
+                  </p>
                 </div>
-                <input
-                  ref={(el) => {
-                    fileInputRefs.current[code] = el;
-                  }}
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-                  className="hidden"
-                  onChange={(e) => {
-                    onPickLogo(code, e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
                 <div className="mt-3 flex min-h-[56px] items-center justify-center rounded-md border border-dashed border-border bg-muted/30 px-3 py-2">
                   <EApprovalAuthenticatedImage
                     pathOrUrl={logoPath}

@@ -1222,6 +1222,69 @@ export async function uploadEApprovalFormSubsidiaryLogo(
   return response.data.data;
 }
 
+export async function fetchEApprovalTenantSubsidiaryLogos(): Promise<{
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const response = await apiClient.get<{
+    data: { subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>("/e-approval/subsidiary-logos");
+  return response.data.data;
+}
+
+export async function uploadEApprovalTenantSubsidiaryLogo(
+  code: string,
+  file: File,
+): Promise<{
+  code: string;
+  logo_url: string;
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<{
+    data: {
+      code: string;
+      logo_url: string;
+      subsidiary_codes: string[];
+      subsidiary_logos: Record<string, string>;
+    };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.data;
+}
+
+export async function clearEApprovalTenantSubsidiaryLogo(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`, {
+    params: { clear_only: 1 },
+  });
+  return response.data.data;
+}
+
+export async function removeEApprovalTenantSubsidiaryCode(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`);
+  return response.data.data;
+}
+
+export async function registerEApprovalTenantSubsidiaryCode(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.post<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>("/e-approval/subsidiary-codes", { code });
+  return response.data.data;
+}
+
 export async function deleteEApprovalFormSubsidiaryLogo(
   formId: string,
   code: string,

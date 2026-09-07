@@ -187,6 +187,118 @@ final class EApprovalFileStorageService
     }
 
     /**
+     * Tenant-wide subsidiary logo (Settings catalog).
+     *
+     * @return array{logo_path: string, logo_url: string, code: string}
+     */
+    public function storeTenantSubsidiaryLogo(string $code, UploadedFile $file): array
+    {
+        $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
+        $this->assertSubsidiaryLogoUploadAllowed($file);
+
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $allowedLogo = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+        if (! in_array($extension, $allowedLogo, true)) {
+            throw ValidationException::withMessages([
+                'file' => [__('Logo must be an image (png, jpg, gif, webp, svg).')],
+            ]);
+        }
+
+        $previousPath = $this->resolveTenantSubsidiaryLogoStoragePath($code);
+        if ($previousPath !== null && str_contains($previousPath, '/e-approval/subsidiaries/')) {
+            $this->deleteIfExists($previousPath);
+        }
+
+        $safeCode = preg_replace('/[^A-Z0-9_-]/', '', $code) ?: 'SUB';
+        $filename = 'logo-'.Str::uuid()->toString().'.'.$extension;
+        $storedPath = sprintf(
+            '%s/e-approval/subsidiaries/%s/%s',
+            $this->tenantStoragePrefix(),
+            $safeCode,
+            $filename,
+        );
+
+        $stored = Storage::disk($this->disk())->putFileAs(
+            dirname($storedPath),
+            $file,
+            basename($storedPath),
+        );
+
+        if ($stored === false) {
+            throw ValidationException::withMessages([
+                'file' => [__('Logo could not be stored. Check storage configuration and try again.')],
+            ]);
+        }
+
+        return [
+            'code' => $code,
+            'logo_path' => is_string($stored) && $stored !== '' ? $stored : $storedPath,
+            'logo_url' => '/api/v1/e-approval/subsidiary-logos/'.$code,
+        ];
+    }
+
+    public function presentTenantSubsidiaryLogoUrl(string $code): ?string
+    {
+        if ($this->resolveTenantSubsidiaryLogoStoragePath($code) === null) {
+            return null;
+        }
+
+        $code = app(EApprovalPdfLayoutService::class)->normalizeSubsidiaryCode($code);
+
+        return '/api/v1/e-approval/subsidiary-logos/'.$code;
+    }
+
+    public function streamTenantSubsidiaryLogo(string $code): StreamedResponse
+    {
+        $path = $this->resolveTenantSubsidiaryLogoStoragePath($code);
+        if ($path === null) {
+            abort(404);
+        }
+
+        $disk = Storage::disk($this->disk());
+        if (! $disk->exists($path)) {
+            abort(404);
+        }
+
+        return $disk->response($path, basename($path), [
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    public function resolveTenantSubsidiaryLogoStoragePath(string $code): ?string
+    {
+        $path = app(EApprovalSubsidiaryLogoCatalogService::class)->logoPath($code);
+        if ($path === null) {
+            return null;
+        }
+
+        if (str_starts_with($path, '/storage/tenant/')) {
+            $candidate = substr($path, strlen('/storage/tenant/'));
+            if (Storage::disk($this->disk())->exists($candidate)) {
+                return $candidate;
+            }
+
+            return null;
+        }
+
+        if (str_starts_with($path, '/api/')) {
+            return null;
+        }
+
+        $candidate = ltrim($path, '/');
+        if (Storage::disk($this->disk())->exists($candidate)) {
+            return $candidate;
+        }
+
+        // Catalog may still point at a legacy form-scoped path after soft seed.
+        if (Storage::disk($this->disk())->exists($path)) {
+            return $path;
+        }
+
+        return null;
+    }
+
+    /**
      * Logo uploads allow SVG; general tenant_files mime list does not.
      */
     private function assertSubsidiaryLogoUploadAllowed(UploadedFile $file): void
@@ -277,7 +389,13 @@ final class EApprovalFileStorageService
             }
         }
 
-        return $this->findLatestFormSubsidiaryLogoPath((string) $form->id, $code);
+        $formPath = $this->findLatestFormSubsidiaryLogoPath((string) $form->id, $code);
+        if ($formPath !== null) {
+            return $formPath;
+        }
+
+        // Inherit tenant catalog when this form has no override.
+        return $this->resolveTenantSubsidiaryLogoStoragePath($code);
     }
 
     public function deleteFormSubsidiaryLogo(EApprovalForm $form, string $code): void

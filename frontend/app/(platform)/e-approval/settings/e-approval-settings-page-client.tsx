@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { EApprovalTenantSubsidiaryLogosPanel } from "@/components/e-approval/e-approval-tenant-subsidiary-logos-panel";
 import { EApprovalUserGuidesSettingsCard } from "@/components/help/e-approval-user-guides-settings-card";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,13 @@ export function EApprovalSettingsPageClient() {
         {saved ? <p className="text-sm text-green-600 dark:text-green-400">Settings saved.</p> : null}
         {webhookMessage ? <p className="text-sm text-green-600 dark:text-green-400">{webhookMessage}</p> : null}
         {isLoading && !data ? <p className="text-sm text-muted-foreground">Loading settings…</p> : null}
+
+        <EApprovalSectionCard
+          title="Subsidiary logos"
+          description="Tenant letterhead logos for ATC, ADIC, and other subsidiaries. Managed once here — all forms inherit them on print."
+        >
+          <EApprovalTenantSubsidiaryLogosPanel />
+        </EApprovalSectionCard>
 
         <EApprovalSectionCard
           title="Approval SLA"

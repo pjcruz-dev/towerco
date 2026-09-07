@@ -576,7 +576,9 @@ final class EApprovalPdfLayoutService
     private function isPresentedSubsidiaryLogoUrl(string $value): bool
     {
         return str_starts_with($value, '/api/v1/e-approval/forms/')
-            || (bool) preg_match('#/e-approval/forms/[^/]+/subsidiary-logos/#', $value);
+            || str_starts_with($value, '/api/v1/e-approval/subsidiary-logos/')
+            || (bool) preg_match('#/e-approval/forms/[^/]+/subsidiary-logos/#', $value)
+            || (bool) preg_match('#/e-approval/subsidiary-logos/#', $value);
     }
 
     /**
@@ -747,10 +749,19 @@ final class EApprovalPdfLayoutService
      */
     public function presentSubsidiaryLogoUrls(string $formId, array $template): array
     {
-        $logos = is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [];
+        $formLogos = $this->sanitizeSubsidiaryLogos(
+            is_array($template['subsidiary_logos'] ?? null) ? $template['subsidiary_logos'] : [],
+        );
+        $catalog = app(EApprovalSubsidiaryLogoCatalogService::class);
+        $tenantLogos = $catalog->logoPaths();
         $presented = [];
-        foreach ($this->sanitizeSubsidiaryLogos($logos) as $code => $value) {
-            $presented[$code] = '/api/v1/e-approval/forms/'.$formId.'/subsidiary-logos/'.$code;
+
+        foreach ($this->presentSubsidiaryCodes($template) as $code) {
+            if (isset($formLogos[$code])) {
+                $presented[$code] = '/api/v1/e-approval/forms/'.$formId.'/subsidiary-logos/'.$code;
+            } elseif (isset($tenantLogos[$code])) {
+                $presented[$code] = '/api/v1/e-approval/subsidiary-logos/'.$code;
+            }
         }
 
         return $presented;
@@ -762,7 +773,10 @@ final class EApprovalPdfLayoutService
      */
     public function presentSubsidiaryCodes(array $template): array
     {
-        return $this->resolveSubsidiaryCodesForPersist($template);
+        $formCodes = $this->resolveSubsidiaryCodesForPersist($template);
+        $tenantCodes = app(EApprovalSubsidiaryLogoCatalogService::class)->codes();
+
+        return $this->sanitizeSubsidiaryCodes([...$tenantCodes, ...$formCodes]);
     }
 
     /**
