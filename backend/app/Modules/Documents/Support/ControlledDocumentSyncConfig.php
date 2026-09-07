@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Support;
 
 /**
- * Parsed from E-Approval form metadata_json.controlledDocumentSync.
+ * Parsed from E-Forms form metadata_json.controlledDocumentSync.
  */
 final class ControlledDocumentSyncConfig
 {

@@ -12,7 +12,7 @@ final class ProcurementOneMigratePrsCommand extends Command
 {
     protected $signature = 'procurement-one:migrate-prs {--tenant=} {--all}';
 
-    protected $description = 'Import purchase requisitions from E-Approval submissions into Procurement-One';
+    protected $description = 'Import purchase requisitions from E-Forms submissions into Procurement-One';
 
     public function handle(ProcurementPrMigrationService $migration): int
     {

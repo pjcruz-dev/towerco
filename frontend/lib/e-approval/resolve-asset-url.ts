@@ -1,5 +1,5 @@
 /**
- * Resolve E-Approval asset URLs (form logos, etc.) for browser display.
+ * Resolve E-Forms asset URLs (form logos, etc.) for browser display.
  */
 export function resolveEApprovalAssetUrl(path: string | null | undefined): string {
   if (!path?.trim()) {

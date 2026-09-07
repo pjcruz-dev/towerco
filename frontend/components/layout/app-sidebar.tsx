@@ -208,7 +208,7 @@ export function AppSidebar() {
       });
 
       if (group.group === "Operations" && workspaceTopLevelItems.length > 0) {
-        const eApprovalIndex = items.findIndex((item) => item.title === "E-Approval");
+        const eApprovalIndex = items.findIndex((item) => item.title === "E-Forms");
         const insertAt = eApprovalIndex >= 0 ? eApprovalIndex : items.length;
         items = [
           ...items.slice(0, insertAt),
@@ -243,7 +243,7 @@ export function AppSidebar() {
                     dataHelp={
                       item.title === "Settings"
                         ? "ea-nav-settings"
-                        : item.title === "E-Approval"
+                        : item.title === "E-Forms"
                           ? "ea-nav-e-approval"
                           : item.title === "Ticketing"
                             ? "tk-nav-ticketing"
@@ -252,7 +252,7 @@ export function AppSidebar() {
                     forceOpen={
                       tourActive &&
                       (item.title === "Settings" ||
-                        item.title === "E-Approval" ||
+                        item.title === "E-Forms" ||
                         item.title === "Ticketing")
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {

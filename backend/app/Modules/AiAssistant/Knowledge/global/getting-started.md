@@ -1,5 +1,5 @@
 ---
-title: Getting started with TowerOS
+title: Getting started with INFRA SUITE
 slug: getting-started
 module: core
 audience: tenant_user
@@ -12,9 +12,9 @@ related_routes:
 last_reviewed: 2026-07-17
 ---
 
-# Getting started with TowerOS
+# Getting started with INFRA SUITE
 
-TowerOS is your workspace for telecom site operations, approvals, documents, projects, and tickets.
+INFRA SUITE is your workspace for telecom site operations, approvals, documents, projects, and tickets.
 
 ## Prerequisites
 

@@ -150,7 +150,7 @@ export function EApprovalSettingsPageClient() {
     <PermissionGate requiredPermissions={[permissions.eApprovalSettingsManage]}>
       <div className="space-y-6">
         <EApprovalPageHeader
-          title="E-Approval settings"
+          title="E-Forms settings"
           description="SLA timers, tenant finance controls, external submitter notifications, and Teams webhooks."
           actions={
             <Button

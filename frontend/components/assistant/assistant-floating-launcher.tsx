@@ -143,7 +143,7 @@ export function AssistantFloatingLauncher() {
       type="button"
       onPointerDown={onPointerDown}
       onClick={onClick}
-      aria-label="Ask TowerOS"
+      aria-label="Ask INFRA SUITE"
       className={cn(
         "fixed z-40 flex h-14 w-14 touch-none items-center justify-center rounded-full",
         "bg-primary text-primary-foreground shadow-lg ring-1 ring-black/5",

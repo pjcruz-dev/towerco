@@ -230,7 +230,7 @@ function EApprovalDashboardPageInner() {
       <div className="space-y-6">
         <LiveProductTourHost />
         <EApprovalPageHeader
-          title="E-Approval"
+          title="E-Forms"
           description={data?.message ?? "Your inbox for approvals, returns, and open requests."}
           actions={
             <div data-help="ea-overview-quick-actions" className="flex flex-wrap items-center gap-2">
@@ -262,7 +262,7 @@ function EApprovalDashboardPageInner() {
 
         {showSkeleton ? <DashboardContentSkeleton /> : null}
 
-        {isError ? <p className="text-sm text-destructive">Could not load E-Approval overview.</p> : null}
+        {isError ? <p className="text-sm text-destructive">Could not load E-Forms overview.</p> : null}
 
         {!showSkeleton ? (
           <>

@@ -46,10 +46,10 @@ final class EApprovalManagerLookupTestService
             'ok' => true,
             'code' => $lookup->code,
             'message' => $managerUser !== null
-                ? 'Manager resolved and mapped to an active TowerOS user ('.$lookup->manager->displayName.').'
+                ? 'Manager resolved and mapped to an active INFRA SUITE user ('.$lookup->manager->displayName.').'
                 : ($autoProvision
-                    ? 'Manager found in Entra ('.$lookup->manager->displayName.'). A TowerOS approver account will be auto-provisioned on first submission.'
-                    : 'Manager found in Entra ('.$lookup->manager->displayName.') but no matching active TowerOS user. Enable auto-provision in E-Approval settings or create the user.'),
+                    ? 'Manager found in Entra ('.$lookup->manager->displayName.'). A INFRA SUITE approver account will be auto-provisioned on first submission.'
+                    : 'Manager found in Entra ('.$lookup->manager->displayName.') but no matching active INFRA SUITE user. Enable auto-provision in E-Forms settings or create the user.'),
             'requestor_email' => strtolower(trim($requestorEmail)),
             'manager_email' => $managerEmail,
             'manager_name' => $lookup->manager->displayName,

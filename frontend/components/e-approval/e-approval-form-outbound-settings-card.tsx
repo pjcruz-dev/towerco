@@ -71,7 +71,7 @@ export function EApprovalFormOutboundSettingsCard({ formId, value, onChange, dis
   return (
     <EApprovalSectionCard
       title="External deliverables"
-      description="Upload the files TowerOS should email to the vendor after an external submission is approved. Requires tenant external-approved email to be enabled."
+      description="Upload the files INFRA SUITE should email to the vendor after an external submission is approved. Requires tenant external-approved email to be enabled."
     >
       <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
         <div className="space-y-1">

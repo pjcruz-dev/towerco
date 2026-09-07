@@ -14,7 +14,7 @@ final class ProcurementOneMigrateVendorsCommand extends Command
         {--tenant= : Tenant id or domain}
         {--all : Run for all tenants}';
 
-    protected $description = 'Sync procurement_vendors from E-Approval master data vendors';
+    protected $description = 'Sync procurement_vendors from E-Forms master data vendors';
 
     public function handle(ProcurementVendorMigrationService $migration): int
     {

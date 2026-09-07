@@ -46,7 +46,7 @@ The site binder shows organized documents, and new uploads appear under the corr
 ## Related workflows
 
 - Document register (controlled / ISO documents)
-- E-Approval (when a document needs formal approval)
+- E-Forms (when a document needs formal approval)
 - Sites overview
 - PROJECT-ONE gate approvals (site binder checklist)
 

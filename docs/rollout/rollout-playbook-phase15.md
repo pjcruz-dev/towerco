@@ -1,6 +1,6 @@
 # Rollout Playbook — Phase 15 (BTS process v3) ✅
 
-Align TowerOS BTS (and RTB-shaped) timelines to the operational process:
+Align INFRA SUITE BTS (and RTB-shaped) timelines to the operational process:
 
 **Pre-assessment (MNO) after SAQ select → MOC/COL before TSSR → Day-1 at TSSR MNO approval → RFI = site ready → Site License → Handover to Operations.**
 

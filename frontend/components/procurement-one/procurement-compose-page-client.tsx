@@ -175,7 +175,7 @@ export function ProcurementComposePageClient({ kind, mode, documentId, prId, poI
             </Link>
           }
           title={mode === "edit" ? labels.editTitle : labels.createTitle}
-          description="Form fields and approval steps are driven by your tenant E-Approval configuration."
+          description="Form fields and approval steps are driven by your tenant E-Forms configuration."
         />
 
         <ProcurementSchemaComposePanel

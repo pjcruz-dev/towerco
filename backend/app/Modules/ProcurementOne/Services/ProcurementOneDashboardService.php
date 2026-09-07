@@ -78,7 +78,7 @@ final class ProcurementOneDashboardService
         $settings = app(ProcurementOneSettingsService::class);
         $message = trim((string) $settings->getString(ProcurementOneSettingsService::MODULE_MESSAGE, ''));
         if ($message === '') {
-            $message = 'Purchase requisitions, purchase orders, and goods receipts — lifecycle documents with E-Approval integration.';
+            $message = 'Purchase requisitions, purchase orders, and goods receipts — lifecycle documents with E-Forms integration.';
         }
 
         $budgetSummary = $this->aggregateBudgetSummary();

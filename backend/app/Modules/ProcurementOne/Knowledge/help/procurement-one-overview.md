@@ -42,5 +42,5 @@ Procurement-One manages sourcing and purchasing: vendors, requests for quotation
 
 ## Related workflows
 
-- E-Approval (for procurement-related approvals)
+- E-Forms (for procurement-related approvals)
 - Finance-One (for AP invoices and payments)

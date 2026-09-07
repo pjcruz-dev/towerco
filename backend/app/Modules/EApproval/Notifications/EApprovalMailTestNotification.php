@@ -35,9 +35,9 @@ final class EApprovalMailTestNotification extends Notification
         return (new MailMessage())
             ->mailer($mailer)
             ->from((string) config('mail.from.address'), $brand)
-            ->subject("{$prefix} E-Approval test email")
-            ->greeting("{$brand} — ".__('E-Approval mail test'))
-            ->line(__('This message confirms :brand can send E-Approval notifications using the configured mail transport.', [
+            ->subject("{$prefix} E-Forms test email")
+            ->greeting("{$brand} — ".__('E-Forms mail test'))
+            ->line(__('This message confirms :brand can send E-Forms notifications using the configured mail transport.', [
                 'brand' => $brand,
             ]))
             ->line(__('Organization: :tenant', ['tenant' => $this->tenantLabel]))

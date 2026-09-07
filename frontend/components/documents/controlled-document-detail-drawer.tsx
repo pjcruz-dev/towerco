@@ -335,7 +335,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                           </p>
                         ) : null}
 
-                        {/* File / E-Approval links */}
+                        {/* File / E-Forms links */}
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2.5">
                           {revision.has_file ? (
                             <Button
@@ -409,7 +409,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                               className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                             >
                               <ExternalLink className="h-3 w-3" />
-                              {revision.e_approval_document_no ?? "E-Approval"}
+                              {revision.e_approval_document_no ?? "E-Forms"}
                             </a>
                           ) : null}
                         </div>

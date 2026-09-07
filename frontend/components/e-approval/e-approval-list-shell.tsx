@@ -10,7 +10,7 @@ type Props = {
   className?: string;
 };
 
-/** Shared bordered list container for E-Approval table and gallery views. */
+/** Shared bordered list container for E-Forms table and gallery views. */
 export function EApprovalListShell({ toolbar, children, footer, error, className }: Props) {
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}>

@@ -1,7 +1,7 @@
-# TowerOS release process — Phase 1 (manual promote)
+# INFRA SUITE release process — Phase 1 (manual promote)
 
 **Status:** Phase 1 active  
-**Scope:** Process only — no product module code changes (Ticketing, Project-One, E-Approval, etc. are unchanged).  
+**Scope:** Process only — no product module code changes (Ticketing, Project-One, E-Forms, etc. are unchanged).  
 **Goal:** Staging first → tag a release → Production promote → rollback to previous tag if needed.
 
 ---
@@ -67,7 +67,7 @@ Run on the **staging tenant** (not production):
 | 3 | Dashboard / home loads | |
 | 4 | Project-One: open a rollout or gate approvals list | |
 | 5 | Ticketing: list tickets + open New ticket | |
-| 6 | E-Approval: open forms or a submission (if enabled) | |
+| 6 | E-Forms: open forms or a submission (if enabled) | |
 | 7 | Documents / Sites: open one record (if enabled) | |
 | 8 | No console/API 500s on those flows | |
 
@@ -119,7 +119,7 @@ Footer version in the UI (if shown) should match the deployed tag when you wire 
 
 ## What Phase 1 does **not** include
 
-- No button inside TowerOS to deploy Production
+- No button inside INFRA SUITE to deploy Production
 - No automatic ECR / ECS promote (see later phases)
 - No changes to Ticketing, Project-One, or other modules
 

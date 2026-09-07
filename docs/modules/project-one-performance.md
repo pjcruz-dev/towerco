@@ -67,5 +67,5 @@ Exports always use `view=full` internally.
 
 ## Related platform work
 
-- E-Approval performance: slim form payloads, assignable-user cache — see prior architecture notes.
+- E-Forms performance: slim form payloads, assignable-user cache — see prior architecture notes.
 - Global: React Query `staleTime`, avoid blocking UI on secondary requests, `/me` permission cache.

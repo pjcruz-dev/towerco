@@ -300,7 +300,7 @@ final class AssistantToolRouter
             return strtoupper($m[1]);
         }
 
-        // Typical E-Approval sequence numbers: OWNER-TYPE-00042 where TYPE is short (F, P, CA…).
+        // Typical E-Forms sequence numbers: OWNER-TYPE-00042 where TYPE is short (F, P, CA…).
         // Avoid site-style codes like PH-CEB-042 (longer region segment).
         if (preg_match('/\b([A-Z]{2,}-[A-Z0-9]{1,3}-\d{3,})\b/i', $question, $m) === 1) {
             $code = strtoupper($m[1]);
@@ -310,7 +310,7 @@ final class AssistantToolRouter
             }
         }
 
-        // Revision submission numbers: ATC-P-SCM-001-R001 (E-Approval revision requests).
+        // Revision submission numbers: ATC-P-SCM-001-R001 (E-Forms revision requests).
         if (preg_match('/\b([A-Z]{2,}(?:-[A-Z0-9]+)+-R\d{2,})\b/i', $question, $m) === 1
             && ($moduleContext === 'e_approval'
                 || $this->matches($q, ['submission', 'request', 'approval', 'status', 'state', 'returned', 'where is', 'look up', 'lookup']))) {
@@ -335,7 +335,7 @@ final class AssistantToolRouter
             $candidate = $m[1];
         } elseif (preg_match('/\b(?:status|revision|state)\s+of\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+){2,})\b/i', $question, $m) === 1) {
             $candidate = $m[1];
-            // OWNER-TYPE-##### and …-R001 are E-Approval document numbers, not register codes.
+            // OWNER-TYPE-##### and …-R001 are E-Forms document numbers, not register codes.
             if (preg_match('/^[A-Z]{2,}-[A-Z0-9]+-\d{3,}$/i', $candidate) === 1
                 || preg_match('/-R\d{2,}$/i', $candidate) === 1) {
                 return null;

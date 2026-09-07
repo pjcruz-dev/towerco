@@ -13,7 +13,7 @@ const MODULE_ROOTS: Record<string, { label: string; href: string }> = {
   "tower-one": { label: "TOWER-ONE", href: "/tower-one" },
   "fiber-one": { label: "FIBER-ONE", href: "/fiber-one" },
   "asset-one": { label: "ASSET-ONE", href: "/asset-one" },
-  "e-approval": { label: "E-Approval", href: "/e-approval" },
+  "e-approval": { label: "E-Forms", href: "/e-approval" },
   procurement: { label: "Procurement-One", href: "/procurement" },
   finance: { label: "Finance-One", href: FINANCE_ONE_HOME },
 };

@@ -12,7 +12,7 @@ use App\Modules\Identity\Models\TenantUser;
 use RuntimeException;
 
 /**
- * Proposes an E-Approval draft submission. Requires a form_id on confirm (user must supply).
+ * Proposes an E-Forms draft submission. Requires a form_id on confirm (user must supply).
  */
 final class DraftEApprovalSubmissionAction implements AssistantActionInterface
 {
@@ -27,7 +27,7 @@ final class DraftEApprovalSubmissionAction implements AssistantActionInterface
 
     public function description(): string
     {
-        return 'Propose drafting an E-Approval submission. Requires form_id before confirm.';
+        return 'Propose drafting an E-Forms submission. Requires form_id before confirm.';
     }
 
     public function requiredModule(): ?string
@@ -63,8 +63,8 @@ final class DraftEApprovalSubmissionAction implements AssistantActionInterface
 
         return new ActionProposalDraft(
             action: $this->name(),
-            title: 'Draft E-Approval submission',
-            summary: 'I can create an E-Approval draft after you confirm. Provide a published form ID — nothing is submitted until you confirm.',
+            title: 'Draft E-Forms submission',
+            summary: 'I can create an E-Forms draft after you confirm. Provide a published form ID — nothing is submitted until you confirm.',
             payload: [
                 'form_id' => $formId,
                 'values' => $values,
@@ -88,7 +88,7 @@ final class DraftEApprovalSubmissionAction implements AssistantActionInterface
     {
         $formId = isset($payload['form_id']) ? (string) $payload['form_id'] : '';
         if ($formId === '') {
-            throw new RuntimeException('form_id is required to create an E-Approval draft.');
+            throw new RuntimeException('form_id is required to create an E-Forms draft.');
         }
 
         $values = isset($payload['values']) && is_array($payload['values']) ? $payload['values'] : [];

@@ -1,6 +1,6 @@
 # Ticketing module
 
-Cross-module issue tracking for TowerOS tenants. Users can raise tickets manually or from other modules via API links. Attachments and pictures are supported on Enterprise plans.
+Cross-module issue tracking for INFRA SUITE tenants. Users can raise tickets manually or from other modules via API links. Attachments and pictures are supported on Enterprise plans.
 
 ## Commercial gating
 
@@ -19,7 +19,7 @@ Platform operators can also:
 
 The module must be in the **platform catalog** and **effective for the tenant**:
 
-1. `TOWEROS_TENANT_ENABLED_MODULES` must include `ticketing` (default in `config/toweros.php` since TowerOS ships with this module).
+1. `TOWEROS_TENANT_ENABLED_MODULES` must include `ticketing` (default in `config/toweros.php` since INFRA SUITE ships with this module).
 2. Tenant `enabled_modules` is null (inherits platform list) **or** explicitly includes `ticketing`.
 3. Run RBAC sync after enabling: `php artisan tenants:ensure-rbac`
 4. User must log out/in (or refresh `/me`) so `enabled_modules` and `ticketing:*` permissions load.
@@ -27,7 +27,7 @@ The module must be in the **platform catalog** and **effective for the tenant**:
 
 ## Deployment (standard)
 
-TowerOS does **not** support runtime upload of PHP/JS module code. The recommended approach:
+INFRA SUITE does **not** support runtime upload of PHP/JS module code. The recommended approach:
 
 1. Deploy a new application release (backend + frontend)
 2. Run `php artisan migrate` and `php artisan tenants:migrate`
@@ -53,10 +53,10 @@ TowerOS does **not** support runtime upload of PHP/JS module code. The recommend
 
 | Feature | Behavior |
 |---------|----------|
-| Raise from E-Approval | **Raise ticket** on submission detail; pre-filled source + link |
+| Raise from E-Forms | **Raise ticket** on submission detail; pre-filled source + link |
 | Raise from Project-One | **Raise ticket** on rollout and project detail headers |
 | Related tickets | List tickets by `source_module` + `source_reference_id` on source records |
-| Ticket links | Ticket detail shows deep links back to E-Approval / Project-One |
+| Ticket links | Ticket detail shows deep links back to E-Forms / Project-One |
 | Assignee notifications | Email + in-app when assignee is set on create or reassigned |
 | Source filter | `GET /ticketing/tickets?source_module=&source_reference_id=` |
 
@@ -147,7 +147,7 @@ After tenant deploy, run `php artisan tenants:migrate` for SLA columns (`sla_due
 ```json
 POST /api/v1/ticketing/tickets
 {
-  "title": "E-Approval submission blocked",
+  "title": "E-Forms submission blocked",
   "description": "...",
   "source_module": "e_approval",
   "source_reference_type": "submission",

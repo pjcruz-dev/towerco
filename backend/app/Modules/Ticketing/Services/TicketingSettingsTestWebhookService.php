@@ -28,7 +28,7 @@ final class TicketingSettingsTestWebhookService
         TeamsWebhookHttpPoster::postOrThrow(
             $url,
             TeamsWebhookCardFactory::build(
-                title: __('TowerOS Ticketing test'),
+                title: __('INFRA SUITE Ticketing test'),
                 bodyText: __('This is a test message from the Ticketing module webhook integration.'),
             ),
             10,

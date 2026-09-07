@@ -17,7 +17,7 @@ class EApprovalImportLegacyCommand extends Command
         {--only= : Comma-separated: users,forms,submissions,master-data,settings,delegations}
     ';
 
-    protected $description = 'Import legacy formbuilder MySQL data into E-Approval tenant tables.';
+    protected $description = 'Import legacy formbuilder MySQL data into E-Forms tenant tables.';
 
     public function handle(EApprovalLegacyImportService $importer): int
     {

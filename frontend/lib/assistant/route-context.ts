@@ -5,9 +5,9 @@ export type AssistantRouteContext = {
 };
 
 const DEFAULT_SUGGESTIONS = [
-  "How do I get started in TowerOS?",
+  "How do I get started in INFRA SUITE?",
   "Why can’t I see a page or module?",
-  "How do I create an E-Approval request?",
+  "How do I create an E-Forms request?",
 ];
 
 const ROUTE_RULES: Array<{
@@ -19,7 +19,7 @@ const ROUTE_RULES: Array<{
     match: /^\/e-approval(\/|$)/,
     moduleKey: "e_approval",
     suggestions: [
-      "How do I create an E-Approval request?",
+      "How do I create an E-Forms request?",
       "How do I approve a request waiting for me?",
       "Where do I find my submissions?",
     ],
@@ -65,7 +65,7 @@ const ROUTE_RULES: Array<{
     moduleKey: "sites",
     suggestions: [
       "How do I find a site by site code?",
-      "What is linked to a site in TowerOS?",
+      "What is linked to a site in INFRA SUITE?",
     ],
   },
   {

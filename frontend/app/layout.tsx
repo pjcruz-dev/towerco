@@ -3,7 +3,7 @@ import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TowerOS",
+  title: "INFRA SUITE",
   description: "Enterprise telecom SaaS platform dashboard",
 };
 

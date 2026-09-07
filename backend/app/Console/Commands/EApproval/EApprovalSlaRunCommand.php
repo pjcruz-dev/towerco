@@ -15,7 +15,7 @@ class EApprovalSlaRunCommand extends Command
         {--tenants=* : Tenant UUID(s)}
     ';
 
-    protected $description = 'Run E-Approval SLA reminders and escalations for tenant(s).';
+    protected $description = 'Run E-Forms SLA reminders and escalations for tenant(s).';
 
     public function handle(EApprovalSlaRunnerService $runner): int
     {

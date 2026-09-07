@@ -1026,7 +1026,7 @@ export type EApprovalTestEmailResult = {
   mailer: string;
 };
 
-/** Sends a TowerOS test message to the current admin (Microsoft 365 SMTP / SES — not legacy mail). */
+/** Sends a INFRA SUITE test message to the current admin (Microsoft 365 SMTP / SES — not legacy mail). */
 export async function sendEApprovalSettingsTestEmail(): Promise<EApprovalTestEmailResult> {
   const response = await apiClient.post<{ data: EApprovalTestEmailResult }>(
     "/e-approval/settings/test-email",

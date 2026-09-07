@@ -66,7 +66,7 @@ export const settingsHubSections: SettingsHubSection[] = [
   },
   {
     id: "e-approval",
-    title: "E-Approval",
+    title: "E-Forms",
     items: [
       {
         id: "ea-policies",
@@ -74,7 +74,7 @@ export const settingsHubSections: SettingsHubSection[] = [
         description: "Cash advance, liquidation, and PO overspend rules.",
         href: "/e-approval/settings",
         icon: ClipboardCheck,
-        section: "E-Approval",
+        section: "E-Forms",
         module: "e_approval",
         requiredPermissions: [permissions.eApprovalSettingsManage],
       },
@@ -84,7 +84,7 @@ export const settingsHubSections: SettingsHubSection[] = [
         description: "Delegation-of-authority matrix for compiled workflows.",
         href: "/e-approval/approval-policies",
         icon: ClipboardCheck,
-        section: "E-Approval",
+        section: "E-Forms",
         module: "e_approval",
         requiredPermissions: [permissions.eApprovalSettingsManage],
       },
@@ -94,7 +94,7 @@ export const settingsHubSections: SettingsHubSection[] = [
         description: "Lookup sets used by forms, workflows, and vendor registration.",
         href: "/e-approval/master-data",
         icon: ClipboardCheck,
-        section: "E-Approval",
+        section: "E-Forms",
         module: "e_approval",
         requiredPermissions: [permissions.eApprovalSettingsManage],
       },
@@ -165,7 +165,7 @@ export const settingsHubSections: SettingsHubSection[] = [
       {
         id: "assistant-knowledge",
         title: "Knowledge base",
-        description: "Tenant SOPs and internal help articles used by Ask TowerOS.",
+        description: "Tenant SOPs and internal help articles used by Ask INFRA SUITE.",
         href: "/settings/ai-assistant/knowledge",
         icon: MessageSquareText,
         section: "AI Assistant",

@@ -15,7 +15,7 @@ import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
 type EApprovalTourSoftPromptProps = {
-  /** Defaults to full E-Approval live tour. */
+  /** Defaults to full E-Forms live tour. */
   tourId?: string;
 };
 
@@ -62,14 +62,14 @@ function EApprovalTourSoftPromptInner({ tourId = "e-approval" }: EApprovalTourSo
   return (
     <aside
       className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-sky-900/50 dark:bg-sky-950/30"
-      aria-label="E-Approval tour invitation"
+      aria-label="E-Forms tour invitation"
     >
       <div className="flex min-w-0 items-start gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-100">
           <Route className="size-4" aria-hidden />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">Take a 2-minute E-Approval tour</p>
+          <p className="text-sm font-medium text-foreground">Take a 2-minute E-Forms tour</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
@@ -86,7 +86,7 @@ function EApprovalTourSoftPromptInner({ tourId = "e-approval" }: EApprovalTourSo
 }
 
 /**
- * One-time soft prompt on E-Approval Overview for users who have not dismissed
+ * One-time soft prompt on E-Forms Overview for users who have not dismissed
  * or completed the interactive tour (scoped by user + tenant in localStorage).
  */
 export function EApprovalTourSoftPrompt(props: EApprovalTourSoftPromptProps) {

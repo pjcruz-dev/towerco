@@ -1,4 +1,4 @@
-# TowerOS — Podman Desktop (Windows)
+# INFRA SUITE — Podman Desktop (Windows)
 
 Use Podman Desktop instead of Docker Desktop for local MySQL, Soketi, and optional API/web containers.
 
@@ -21,7 +21,7 @@ podman machine list
 
 Both should succeed without errors.
 
-## 2. Configure TowerOS
+## 2. Configure INFRA SUITE
 
 In repo root `.env.docker`:
 
@@ -114,7 +114,7 @@ php artisan toweros:migrate
 
 ## 6. Optional — Docker-compatible CLI
 
-Podman Desktop → **Settings** → enable **Docker compatibility** if you want `docker` commands to route to Podman. TowerOS does not require this when `TOWEROS_CONTAINER_CLI=podman`.
+Podman Desktop → **Settings** → enable **Docker compatibility** if you want `docker` commands to route to Podman. INFRA SUITE does not require this when `TOWEROS_CONTAINER_CLI=podman`.
 
 ## 7. Troubleshooting
 
@@ -128,7 +128,7 @@ Podman Desktop → **Settings** → enable **Docker compatibility** if you want 
 
 ## Auto-detect (Docker or Podman)
 
-Leave `TOWEROS_CONTAINER_CLI=auto` (default in `env.docker.example`). TowerOS uses Podman if its engine is running, otherwise Docker.
+Leave `TOWEROS_CONTAINER_CLI=auto` (default in `env.docker.example`). INFRA SUITE uses Podman if its engine is running, otherwise Docker.
 
 ---
 

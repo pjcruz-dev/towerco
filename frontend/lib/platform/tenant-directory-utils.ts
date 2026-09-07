@@ -39,7 +39,7 @@ export function formatModulesLabel(row: PlatformTenantRow): string {
 }
 
 const MODULE_BADGE_CLASSES: Record<string, string> = {
-  "E-Approval": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  "E-Forms": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   "Project-One": "bg-sky-500/10 text-sky-700 dark:text-sky-300",
   Ticketing: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
   "Procurement-One": "bg-teal-500/10 text-teal-800 dark:text-teal-300",
@@ -107,7 +107,7 @@ export function exportTenantsCsv(rows: PlatformTenantRow[]): void {
 export function moduleFilterLabel(value: string): string {
   switch (value) {
     case "e_approval_only":
-      return "E-Approval only";
+      return "E-Forms only";
     case "project_one":
       return "Includes Project-One";
     case "ticketing":

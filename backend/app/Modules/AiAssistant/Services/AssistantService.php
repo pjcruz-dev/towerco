@@ -378,10 +378,10 @@ final class AssistantService
         $path = rtrim($path, '/') ?: '/';
 
         return match (true) {
-            $path === '/e-approval/submissions/new' => 'New E-Approval submission',
-            $path === '/e-approval/submissions' => 'E-Approval submissions',
-            str_starts_with($path, '/e-approval/approvals') => 'E-Approval approvals',
-            $path === '/e-approval' => 'E-Approval',
+            $path === '/e-approval/submissions/new' => 'New E-Forms submission',
+            $path === '/e-approval/submissions' => 'E-Forms submissions',
+            str_starts_with($path, '/e-approval/approvals') => 'E-Forms approvals',
+            $path === '/e-approval' => 'E-Forms',
             $path === '/documents/controlled' => 'Document register',
             default => $href,
         };

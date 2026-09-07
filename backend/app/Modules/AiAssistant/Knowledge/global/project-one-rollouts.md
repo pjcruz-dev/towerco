@@ -47,5 +47,5 @@ You can locate a rollout or project, understand its status, and complete gate ac
 
 - Sites overview
 - Documents (lease package / site binders)
-- E-Approval (when forms are used alongside rollout gates)
+- E-Forms (when forms are used alongside rollout gates)
 - Notifications

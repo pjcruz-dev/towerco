@@ -20,13 +20,13 @@ final class NominatimReverseGeocoder implements ReverseGeocoderInterface
     {
         $baseUrl = rtrim((string) config('geocoding.nominatim.base_url'), '/');
         $timeout = (int) config('geocoding.timeout_seconds', 8);
-        $userAgent = trim((string) config('geocoding.nominatim.user_agent', 'TowerOS/1.0'));
+        $userAgent = trim((string) config('geocoding.nominatim.user_agent', 'INFRA SUITE/1.0'));
         $email = trim((string) config('geocoding.nominatim.email', ''));
         $country = strtolower((string) config('geocoding.country', 'ph'));
 
         $response = Http::timeout($timeout)
             ->withHeaders([
-                'User-Agent' => $userAgent !== '' ? $userAgent : 'TowerOS/1.0',
+                'User-Agent' => $userAgent !== '' ? $userAgent : 'INFRA SUITE/1.0',
                 'Accept' => 'application/json',
             ])
             ->get($baseUrl.'/reverse', array_filter([
@@ -69,13 +69,13 @@ final class NominatimReverseGeocoder implements ReverseGeocoderInterface
     {
         $baseUrl = rtrim((string) config('geocoding.nominatim.base_url'), '/');
         $timeout = (int) config('geocoding.timeout_seconds', 8);
-        $userAgent = trim((string) config('geocoding.nominatim.user_agent', 'TowerOS/1.0'));
+        $userAgent = trim((string) config('geocoding.nominatim.user_agent', 'INFRA SUITE/1.0'));
         $email = trim((string) config('geocoding.nominatim.email', ''));
         $country = strtolower((string) config('geocoding.country', 'ph'));
 
         $response = Http::timeout($timeout)
             ->withHeaders([
-                'User-Agent' => $userAgent !== '' ? $userAgent : 'TowerOS/1.0',
+                'User-Agent' => $userAgent !== '' ? $userAgent : 'INFRA SUITE/1.0',
                 'Accept' => 'application/json',
             ])
             ->get($baseUrl.'/search', array_filter([

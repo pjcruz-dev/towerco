@@ -16,7 +16,7 @@ final class ProcurementPoPrintEnrichmentService
     ) {}
 
     /**
-     * Merge procurement PO registry values into E-Approval print field payloads.
+     * Merge procurement PO registry values into E-Forms print field payloads.
      *
      * @param  array<string, array{label: string, value: string|null}>  $valuesByKey
      * @return array<string, array{label: string, value: string|null}>

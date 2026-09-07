@@ -9,7 +9,7 @@ use App\Modules\ProcurementOne\Support\ProcurementComposeMetadata;
 final class ProcurementFormValuesEApprovalMerger
 {
     /**
-     * Merge compose-only form fields (approvers, etc.) onto PR-backed E-Approval values.
+     * Merge compose-only form fields (approvers, etc.) onto PR-backed E-Forms values.
 
      *
 

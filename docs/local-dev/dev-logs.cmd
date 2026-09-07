@@ -21,7 +21,7 @@ echo Unknown target: %TARGET%
 goto :help
 
 :help
-echo TowerOS dev logs
+echo INFRA SUITE dev logs
 echo.
 echo   dev-logs.cmd           Laravel API log ^(default — use in terminal 2^)
 echo   dev-logs.cmd api       Same as above

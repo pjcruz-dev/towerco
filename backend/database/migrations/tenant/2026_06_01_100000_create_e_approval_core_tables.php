@@ -7,7 +7,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * E-Approval tenant schema (ported from legacy/atcformbuiilder; users table excluded — uses tenant users).
+ * E-Forms tenant schema (ported from legacy/atcformbuiilder; users table excluded — uses tenant users).
  */
 return new class extends Migration
 {

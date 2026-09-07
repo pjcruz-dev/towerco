@@ -721,7 +721,7 @@ export function ProcurementOneSettingsPageClient() {
               <p className="text-sm text-muted-foreground">
                 Approval routing for PR and PO forms is managed in{" "}
                 <Link href="/e-approval/approval-policies" className="font-medium text-primary hover:underline">
-                  E-Approval → Approval policies
+                  E-Forms → Approval policies
                 </Link>
                 . Enable <code className="text-xs">use_approval_policy</code> on each form to compile steps from the tenant DOA matrix.
               </p>

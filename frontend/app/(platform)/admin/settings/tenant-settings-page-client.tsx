@@ -535,7 +535,7 @@ export function TenantSettingsPageClient() {
               <p className="font-medium">Graph permissions for manager and org chart</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Delegated <code className="rounded bg-muted px-1">User.Read.All</code> is used when someone signs in
-                with Microsoft (manager and direct reports on that user). E-Approval Direct manager and{" "}
+                with Microsoft (manager and direct reports on that user). E-Forms Direct manager and{" "}
                 <span className="font-medium text-foreground">Sync org chart</span> need{" "}
                 <span className="font-medium text-foreground">Application</span>{" "}
                 <code className="rounded bg-muted px-1">User.Read.All</code> with admin consent. Keep both — do not

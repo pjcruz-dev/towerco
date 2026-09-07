@@ -1,4 +1,4 @@
-# TowerOS Performance Runbook
+# INFRA SUITE Performance Runbook
 
 This runbook documents the performance optimization pass (caching, query rewrites, DB indexes,
 SLA denormalization, and frontend bundle/fetching work) and the operational steps required to
@@ -26,7 +26,7 @@ table is missing, so these are safe without Redis, but see the infra checklist f
 
 ## 2. Query rewrites / N+1 removal (in-repo)
 
-- E-Approval submissions-over-time: one `GROUP BY DATE(created_at)` instead of a COUNT per day.
+- E-Forms submissions-over-time: one `GROUP BY DATE(created_at)` instead of a COUNT per day.
 - `EApprovalMasterDataService::listSets`: `withCount('rows')` instead of a COUNT per row.
 - `FeedbackGapReportService::gaps`: batch-prefetch prior user questions by `conversation_id`.
 - `EApprovalFormWorkspaceService`: cached published slug -> form-id map (60s) with an authoritative
@@ -67,7 +67,7 @@ table is missing, so these are safe without Redis, but see the infra checklist f
 - Controlled-documents search debounced (300ms) via `useDebouncedValue`.
 - Reduced global polling: sidebar gate-count no longer polls (relies on rollout Echo invalidation +
   focus refetch); tenant notifications relaxed from 60s to 120s.
-- Unified E-Approval workspace query key (`EAPPROVAL_FORM_WORKSPACES_QUERY_KEY`) so the sidebar and
+- Unified E-Forms workspace query key (`EAPPROVAL_FORM_WORKSPACES_QUERY_KEY`) so the sidebar and
   command palette share one cached fetch.
 - Gate-approvals list/count queries dropped `staleTime: 0` + `refetchOnMount: "always"` for
   15s/30s staleTimes (still invalidated by mutations + Echo).

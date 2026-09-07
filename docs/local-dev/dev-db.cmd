@@ -6,7 +6,7 @@ if not exist ".env.docker" (
   if exist "env.docker.example" copy /Y "env.docker.example" ".env.docker" >nul
 )
 
-echo TowerOS MySQL connection
+echo INFRA SUITE MySQL connection
 echo   Host:        127.0.0.1
 echo   Port:        3307
 echo   Database:    toweros

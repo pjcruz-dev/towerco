@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { WorkspaceAwaitingMeItem } from "@/modules/workspace/types";
 
 const moduleLabels: Record<string, string> = {
-  e_approval: "E-Approval",
+  e_approval: "E-Forms",
   project_one: "PROJECT-ONE",
   ticketing: "Ticketing",
   notifications: "Notifications",

@@ -29,7 +29,7 @@ final class ProcurementOptionalForeignKeyNormalizer
         if (! Str::isUuid($string)) {
             throw ValidationException::withMessages([
                 "values.{$valuesKey}" => [
-                    __(':label must be a valid TowerOS record ID (UUID), or left blank.', ['label' => $label]),
+                    __(':label must be a valid INFRA SUITE record ID (UUID), or left blank.', ['label' => $label]),
                 ],
             ]);
         }

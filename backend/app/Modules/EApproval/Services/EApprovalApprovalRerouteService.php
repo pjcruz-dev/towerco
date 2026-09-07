@@ -25,7 +25,7 @@ final class EApprovalApprovalRerouteService
     ): EApprovalRequestApproval {
         if (! $actor->can('e_approval:forms:manage')) {
             throw ValidationException::withMessages([
-                'approval' => [__('Only E-Approval administrators can reroute approvals.')],
+                'approval' => [__('Only E-Forms administrators can reroute approvals.')],
             ]);
         }
 

@@ -27,12 +27,12 @@ A purchase order commits your organisation to buy goods or services from a vendo
 1. Open **Procurement → Purchase orders**.
 2. Choose **New PO** and select the vendor.
 3. Add line items (description, quantity, unit price) — totals calculate automatically.
-4. Set delivery date and any terms, then save. Depending on tenant settings the PO may route through E-Approval before it can be sent.
+4. Set delivery date and any terms, then save. Depending on tenant settings the PO may route through E-Forms before it can be sent.
 
 ## PO lifecycle
 
 1. **Draft** — editable; not yet committed.
-2. **Approved** — passed E-Approval (if required).
+2. **Approved** — passed E-Forms (if required).
 3. **Sent** — issued to the vendor.
 4. **Partially received / Received** — goods recorded via Goods Receipt (GRN).
 5. **Closed / Cancelled** — completed or withdrawn.
@@ -51,5 +51,5 @@ A purchase order commits your organisation to buy goods or services from a vendo
 ## Related workflows
 
 - Goods receipt (GRN) — record deliveries against the PO.
-- E-Approval — approve POs above threshold.
+- E-Forms — approve POs above threshold.
 - Ticketing — raise and track delivery or vendor issues.

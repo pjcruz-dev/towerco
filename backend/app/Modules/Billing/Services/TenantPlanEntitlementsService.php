@@ -159,7 +159,7 @@ final class TenantPlanEntitlementsService
     }
 
     /**
-     * E-Approval slice (backward compatible with legacy plan_features shape).
+     * E-Forms slice (backward compatible with legacy plan_features shape).
      *
      * @return array{plan_tier: string, file_uploads: bool, max_file_fields: int|null}
      */

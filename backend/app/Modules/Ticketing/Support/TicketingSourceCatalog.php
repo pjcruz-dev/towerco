@@ -54,7 +54,7 @@ final class TicketingSourceCatalog
             self::MODULE_MANUAL => 'Manual',
             self::MODULE_PROCUREMENT_ONE => 'Procurement-One',
             self::MODULE_PROJECT_ONE => 'Project-One',
-            self::MODULE_E_APPROVAL => 'E-Approval',
+            self::MODULE_E_APPROVAL => 'E-Forms',
             self::MODULE_SITES => 'Sites',
             self::MODULE_TOWER_ONE => 'Tower-One',
             self::MODULE_FIBER_ONE => 'Fiber-One',

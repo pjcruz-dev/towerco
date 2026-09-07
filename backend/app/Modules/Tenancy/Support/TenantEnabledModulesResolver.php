@@ -34,7 +34,7 @@ final class TenantEnabledModulesResolver
         'core' => 'Dashboard',
         'team_access' => 'Team & Access',
         'project_one' => 'Project-One',
-        'e_approval' => 'E-Approval',
+        'e_approval' => 'E-Forms',
         'gis' => 'GIS',
         'sites' => 'Sites',
         'tower_one' => 'Tower-One',
@@ -53,7 +53,7 @@ final class TenantEnabledModulesResolver
     public const MODULE_DESCRIPTIONS = [
         'billings' => 'Tenant subscription, usage, and self-serve plan billing (/billing).',
         'documents' => 'Expiring leases, permits, and contracts across sites.',
-        'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Approval.',
+        'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Forms.',
         'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
     ];
 

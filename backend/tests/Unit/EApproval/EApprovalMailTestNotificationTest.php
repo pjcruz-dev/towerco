@@ -32,8 +32,8 @@ final class EApprovalMailTestNotificationTest extends TestCase
             'email' => 'admin@atc.localhost',
         ]));
 
-        $this->assertSame('[ATC] E-Approval test email', $mail->subject);
-        $this->assertStringNotContainsString('TowerOS', (string) $mail->subject);
+        $this->assertSame('[ATC] E-Forms test email', $mail->subject);
+        $this->assertStringNotContainsString('INFRA SUITE', (string) $mail->subject);
         $this->assertStringContainsString('ATC', (string) $mail->greeting);
         $this->assertSame('ATC', app(TenantAppUrlResolver::class)->mailBrandLabel());
 

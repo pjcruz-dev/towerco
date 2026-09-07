@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Data;
 
 /**
- * Platform definition for the Site document review E-Approval form.
+ * Platform definition for the Site document review E-Forms form.
  */
 final class SiteDocumentReviewFormTemplate
 {

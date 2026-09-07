@@ -125,7 +125,7 @@ export function AssistantKnowledgePageClient() {
       notify({
         level: "success",
         title: "Published",
-        message: "Article queued for indexing. Ask TowerOS can use it after ingest completes.",
+        message: "Article queued for indexing. Ask INFRA SUITE can use it after ingest completes.",
       });
     },
     onError: (error) =>
@@ -258,7 +258,7 @@ export function AssistantKnowledgePageClient() {
               Assistant knowledge
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Tenant SOPs and internal processes used only by Ask TowerOS inside this tenant.
+              Tenant SOPs and internal processes used only by Ask INFRA SUITE inside this tenant.
               Publish to index; drafts and archived articles are not retrieved.
             </p>
           </div>
@@ -335,7 +335,7 @@ export function AssistantKnowledgePageClient() {
             <SheetHeader>
               <SheetTitle>{editingId ? "Edit article" : "New article"}</SheetTitle>
               <SheetDescription>
-                Markdown supported. Publishing indexes content for Ask TowerOS in this tenant only.
+                Markdown supported. Publishing indexes content for Ask INFRA SUITE in this tenant only.
               </SheetDescription>
             </SheetHeader>
 

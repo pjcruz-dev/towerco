@@ -25,7 +25,7 @@ describe("resolveWorkspaceBreadcrumbs", () => {
 
   it("maps e-approval routes", () => {
     expect(resolveWorkspaceBreadcrumbs("/e-approval/approvals")).toEqual([
-      { label: "E-Approval", href: "/e-approval" },
+      { label: "E-Forms", href: "/e-approval" },
       { label: "Approvals" },
     ]);
   });

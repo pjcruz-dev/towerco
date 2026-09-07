@@ -7,7 +7,7 @@ return [
     | Cross-Origin Resource Sharing (CORS) Configuration
     |--------------------------------------------------------------------------
     |
-    | TowerOS merges tenant UI origins at runtime (see CorsAllowedOriginResolver).
+    | INFRA SUITE merges tenant UI origins at runtime (see CorsAllowedOriginResolver).
     | Do not set allowed_origins to "*" in production — use FRONTEND_APP_URL,
     | TOWEROS_TENANT_APP_URL, and optional TOWEROS_CORS_ALLOWED_ORIGINS instead.
     |

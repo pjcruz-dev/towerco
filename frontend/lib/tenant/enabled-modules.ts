@@ -4,7 +4,7 @@ export const TENANT_MODULE_LABELS: Record<string, string> = {
   core: "Dashboard",
   team_access: "Team & Access",
   project_one: "Project-One",
-  e_approval: "E-Approval",
+  e_approval: "E-Forms",
   gis: "GIS",
   sites: "Sites",
   tower_one: "Tower-One",
@@ -23,7 +23,7 @@ export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
   billings: "Tenant subscription, usage, and self-serve plan billing (/billing).",
   documents: "Expiring leases, permits, and contracts across sites.",
   document_register:
-    "ISO master list of approved documents; start requests and revisions via E-Approval.",
+    "ISO master list of approved documents; start requests and revisions via E-Forms.",
   ai_assistant:
     "In-app help assistant for workflows, permissions, and how-to guidance.",
 };

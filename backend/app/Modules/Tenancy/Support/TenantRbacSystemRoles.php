@@ -46,7 +46,7 @@ final class TenantRbacSystemRoles
         'documents_admin',
         // Sites
         'sites_viewer',
-        // E-Approval tiers
+        // E-Forms tiers
         'e_approval_viewer',
         'e_approval_requestor',
         'e_approval_approver',

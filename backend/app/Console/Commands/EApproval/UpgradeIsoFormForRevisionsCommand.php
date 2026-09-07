@@ -22,7 +22,7 @@ final class UpgradeIsoFormForRevisionsCommand extends Command
     protected $signature = 'e-approval:upgrade-iso-form-revisions
         {--tenant= : Tenant UUID}
         {--domain= : Tenant domain hostname}
-        {--form= : E-Approval form UUID (required)}
+        {--form= : E-Forms form UUID (required)}
         {--dry-run : Preview without saving}
     ';
 
@@ -82,7 +82,7 @@ final class UpgradeIsoFormForRevisionsCommand extends Command
             }
 
             $this->info("Saved. Status: {$updated->status}, schema_version: {$updated->schema_version}");
-            $this->line('Open the form in E-Approval → Setup to verify mappings, then test a revision submission.');
+            $this->line('Open the form in E-Forms → Setup to verify mappings, then test a revision submission.');
 
             return self::SUCCESS;
         });

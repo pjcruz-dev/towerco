@@ -122,7 +122,7 @@ final class ReverseGeocodeServiceTest extends TestCase
         config([
             'geocoding.driver' => 'nominatim',
             'geocoding.nominatim.base_url' => 'https://nominatim.openstreetmap.org',
-            'geocoding.nominatim.user_agent' => 'TowerOS-Test/1.0',
+            'geocoding.nominatim.user_agent' => 'INFRA SUITE-Test/1.0',
             'geocoding.country' => 'ph',
         ]);
 
@@ -152,7 +152,7 @@ final class ReverseGeocodeServiceTest extends TestCase
         config([
             'geocoding.driver' => 'nominatim',
             'geocoding.nominatim.base_url' => 'https://nominatim.openstreetmap.org',
-            'geocoding.nominatim.user_agent' => 'TowerOS-Test/1.0',
+            'geocoding.nominatim.user_agent' => 'INFRA SUITE-Test/1.0',
             'geocoding.country' => 'ph',
         ]);
 

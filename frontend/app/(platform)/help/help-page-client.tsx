@@ -37,7 +37,7 @@ function groupGuidesByModule(guides: HelpGuideListRow[]): Array<{ moduleKey: str
   const map = new Map<string, HelpGuideListRow[]>();
 
   for (const guide of guides) {
-    // E-Approval / Ticketing use Visual guide + live tour instead of written role cards.
+    // E-Forms / Ticketing use Visual guide + live tour instead of written role cards.
     if (guide.module_key === "e_approval" || guide.module_key === "ticketing") {
       continue;
     }
@@ -62,7 +62,7 @@ function EApprovalVisualGuideCard() {
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
       <p className="text-xs font-medium text-muted-foreground">Guide</p>
-      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval tour guide</h3>
+      <h3 className="mt-2 text-base font-medium text-foreground">E-Forms tour guide</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Annotated screenshots plus jump-into-chapter starts — overview, submissions, compose, decide,
         cancel, and follow-up. Print-friendly for desk training.
@@ -92,7 +92,7 @@ function EApprovalTourGuideCard() {
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
-      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval product tour</h3>
+      <h3 className="mt-2 text-base font-medium text-foreground">E-Forms product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Walk the real screens with coach marks. Sample UI appears while the tour runs and is never
         saved — jump into chapters from the tour guide anytime.
@@ -226,7 +226,7 @@ export function HelpPageClient() {
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Help</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Product tours and guides for E-Approval, Ticketing, and account security.
+            Product tours and guides for E-Forms, Ticketing, and account security.
           </p>
         </header>
 
@@ -238,7 +238,7 @@ export function HelpPageClient() {
         ) : null}
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-foreground">E-Approval</h2>
+          <h2 className="text-xl font-semibold text-foreground">E-Forms</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <EApprovalVisualGuideCard />
             <EApprovalTourGuideCard />

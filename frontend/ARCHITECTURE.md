@@ -1,4 +1,4 @@
-# TowerOS Frontend Architecture (Next.js App Router)
+# INFRA SUITE Frontend Architecture (Next.js App Router)
 
 ## Folder Structure
 

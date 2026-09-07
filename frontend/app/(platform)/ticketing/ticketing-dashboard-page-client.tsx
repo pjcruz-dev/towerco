@@ -100,7 +100,7 @@ export function TicketingDashboardPageClient() {
           title="Ticketing"
           description={
             data?.message ??
-            "Cross-module issue tracking — raise tickets from any TowerOS module or manually."
+            "Cross-module issue tracking — raise tickets from any INFRA SUITE module or manually."
           }
           actions={
             <>

@@ -51,13 +51,13 @@ final class AssistantProviderErrorClassifier
             self::OPENAI_QUOTA_EXCEEDED => [
                 'provider' => 'openai',
                 'title' => 'OpenAI quota exceeded',
-                'message' => 'Ask TowerOS cannot answer right now because the configured OpenAI API key has exceeded its quota or billing limit.',
+                'message' => 'Ask INFRA SUITE cannot answer right now because the configured OpenAI API key has exceeded its quota or billing limit.',
                 'admin_action' => 'Ask your workspace administrator to restore OpenAI billing or credits, then try again.',
             ],
             self::CURSOR_RATE_LIMIT_EXCEEDED => [
                 'provider' => 'cursor',
                 'title' => 'Cursor API limit reached',
-                'message' => 'Ask TowerOS cannot answer right now because the configured Cursor API key hit a rate or usage limit.',
+                'message' => 'Ask INFRA SUITE cannot answer right now because the configured Cursor API key hit a rate or usage limit.',
                 'admin_action' => 'Ask your workspace administrator to check Cursor billing/limits or retry in a few minutes.',
             ],
             default => null,

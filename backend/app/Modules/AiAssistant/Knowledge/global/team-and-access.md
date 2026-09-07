@@ -15,7 +15,7 @@ last_reviewed: 2026-07-17
 
 # Team and Access for workspace users
 
-Team & Access lets tenant administrators manage users and roles inside your workspace (not platform / TowerOS operator consoles).
+Team & Access lets tenant administrators manage users and roles inside your workspace (not platform / INFRA SUITE operator consoles).
 
 ## Prerequisites
 
@@ -44,4 +44,4 @@ Users can sign in with the correct roles and only see modules and actions their 
 ## Related workflows
 
 - Permissions and why a page may be missing
-- Getting started with TowerOS
+- Getting started with INFRA SUITE

@@ -115,7 +115,7 @@ export function TenantBrandingSheet({
           <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
             <TenantBrandMark size="lg" src={logoUrl.trim() || null} />
             <p className="text-sm text-muted-foreground">
-              Preview of the sidebar mark. Empty values fall back to the TowerOS icon.
+              Preview of the sidebar mark. Empty values fall back to the INFRA SUITE icon.
             </p>
           </div>
 

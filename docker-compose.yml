@@ -1,4 +1,4 @@
-# TowerOS local/production stack only (API + web + MySQL + Redis + Soketi).
+# INFRA SUITE local/production stack only (API + web + MySQL + Redis + Soketi).
 name: toweros
 
 services:

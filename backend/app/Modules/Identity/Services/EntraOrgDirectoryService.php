@@ -59,7 +59,7 @@ final class EntraOrgDirectoryService
     }
 
     /**
-     * Match TowerOS users to Entra and copy manager / job title / department.
+     * Match INFRA SUITE users to Entra and copy manager / job title / department.
      *
      * @return array{
      *     ok: bool,
@@ -422,7 +422,7 @@ final class EntraOrgDirectoryService
     }
 
     /**
-     * Fill empty departments from TowerOS manager chain (handles sync order + depth).
+     * Fill empty departments from INFRA SUITE manager chain (handles sync order + depth).
      *
      * @return int Number of users updated
      */

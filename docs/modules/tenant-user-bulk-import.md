@@ -14,7 +14,7 @@ CSV columns: `email`, `name`, `role` (optional, defaults to `viewer`).
 
 ## Microsoft sign-in (no duplicates)
 
-- TowerOS matches users by **email address** (case-insensitive).
+- INFRA SUITE matches users by **email address** (case-insensitive).
 - **Import first**, then users sign in with Microsoft using the **same work email** (UPN).
 - Microsoft sign-in **reuses** the imported account — it does **not** create a second user.
 - Re-importing the same email (any casing) is **skipped** (`skipped` count in the API response).

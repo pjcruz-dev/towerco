@@ -31,11 +31,11 @@ final class WebAuthnRelyingParty
         if ($tenant instanceof Tenant) {
             $slug = trim((string) ($tenant->slug ?? ''));
             if ($slug !== '') {
-                return strtoupper($slug).' TowerOS';
+                return strtoupper($slug).' INFRA SUITE';
             }
         }
 
-        return (string) config('app.name', 'TowerOS');
+        return (string) config('app.name', 'INFRA SUITE');
     }
 
     /**

@@ -195,7 +195,7 @@ final class EApprovalSubmissionShareLinkService
         $isRequestor = (string) $submission->requestor_id === (string) $actor->id;
         if (! $isRequestor && ! $canViewAll && ! $actor->can('e_approval:audit:view')) {
             throw ValidationException::withMessages([
-                'submission' => [__('Only the requestor or an E-Approval administrator can create share links.')],
+                'submission' => [__('Only the requestor or an E-Forms administrator can create share links.')],
             ]);
         }
     }

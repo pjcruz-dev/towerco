@@ -1,7 +1,7 @@
-# TowerOS AI Assistant — Module Help Packs
+# INFRA SUITE AI Assistant — Module Help Packs
 
-This document defines the **Module Help Pack** convention. Any TowerOS module can make
-itself discoverable by the in-product assistant (Ask TowerOS) simply by shipping a help
+This document defines the **Module Help Pack** convention. Any INFRA SUITE module can make
+itself discoverable by the in-product assistant (Ask INFRA SUITE) simply by shipping a help
 pack — no changes to the AiAssistant module are required.
 
 ## Convention
@@ -94,7 +94,7 @@ Tenant-specific procedures are **not** markdown help packs. Workspace admins pub
 **Settings → AI Assistant → Knowledge** (`ai_assistant:knowledge:manage`).
 
 - Scope: `tenant` (isolated per tenant DB)
-- Set `module_key` when the SOP belongs to a module — Ask TowerOS biases retrieval toward the
+- Set `module_key` when the SOP belongs to a module — Ask INFRA SUITE biases retrieval toward the
   current page module and prefers matching tenant SOPs over unrelated global guides.
 - After publish, ingestion embeds the article for RAG automatically.
 

@@ -30,7 +30,7 @@ return [
         'base_url' => env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'),
         'user_agent' => env(
             'GEOCODING_USER_AGENT',
-            'TowerOS/1.0 (geocoding; '.env('APP_URL', 'http://localhost').')',
+            'INFRA SUITE/1.0 (geocoding; '.env('APP_URL', 'http://localhost').')',
         ),
         'email' => env('GEOCODING_CONTACT_EMAIL'),
     ],

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { resolveEApprovalAuthenticatedAssetDataUrl } from "@/lib/e-approval/fetch-authenticated-asset";
 
 /**
- * Load a protected E-Approval asset URL via the API client (bearer + tenant)
+ * Load a protected E-Forms asset URL via the API client (bearer + tenant)
  * and expose a data URL safe for <img src>.
  */
 export function useEApprovalAuthenticatedAssetUrl(

@@ -116,7 +116,7 @@ final class TenantRbacPermissionCatalog
         'core' => 'Dashboard',
         'team_access' => 'Team & Access',
         'project_one' => 'Project-One',
-        'e_approval' => 'E-Approval',
+        'e_approval' => 'E-Forms',
         'ticketing' => 'Ticketing',
         'procurement_one' => 'Procurement-One',
         'finance_one' => 'Finance-One',

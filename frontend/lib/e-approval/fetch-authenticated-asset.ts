@@ -1,7 +1,7 @@
 import { apiClient } from "@/lib/api/client";
 
 /**
- * Normalize an E-Approval asset URL/path to an apiClient-relative path
+ * Normalize an E-Forms asset URL/path to an apiClient-relative path
  * (e.g. `/e-approval/forms/{id}/subsidiary-logos/ATC`).
  */
 export function toEApprovalApiAssetPath(pathOrUrl: string): string | null {
@@ -34,7 +34,7 @@ export function toEApprovalApiAssetPath(pathOrUrl: string): string | null {
   return null;
 }
 
-/** Fetch a protected E-Approval image/asset with bearer + tenant headers. */
+/** Fetch a protected E-Forms image/asset with bearer + tenant headers. */
 export async function fetchEApprovalAuthenticatedAssetBlob(pathOrUrl: string): Promise<Blob> {
   const apiPath = toEApprovalApiAssetPath(pathOrUrl);
   if (!apiPath) {

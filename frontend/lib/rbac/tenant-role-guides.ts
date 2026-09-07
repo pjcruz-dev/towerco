@@ -68,7 +68,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Finance or audit read-only on procurement.",
   },
   procurement_contributor: {
-    summary: "Create PR/PO/RFQ and E-Approval submissions; view and resubmit returned forms.",
+    summary: "Create PR/PO/RFQ and E-Forms submissions; view and resubmit returned forms.",
     assignWhen: "Requestors and buyers who do not approve or manage vendors.",
   },
   procurement_operator: {
@@ -76,7 +76,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Procurement officers and buyers.",
   },
   procurement_admin: {
-    summary: "Procurement operator plus module settings and E-Approval approvals.",
+    summary: "Procurement operator plus module settings and E-Forms approvals.",
     assignWhen: "Head of procurement.",
   },
   finance_viewer: {
@@ -84,7 +84,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Controllers and auditors.",
   },
   finance_contributor: {
-    summary: "Submit AP invoices and E-Approval forms; view and resubmit returned items.",
+    summary: "Submit AP invoices and E-Forms forms; view and resubmit returned items.",
     assignWhen: "AP clerks who create but do not approve payments.",
   },
   finance_operator: {
@@ -120,11 +120,11 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Staff who need read access to controlled documents.",
   },
   dcf_author: {
-    summary: "Submit new controlled documents and revisions via E-Approval.",
+    summary: "Submit new controlled documents and revisions via E-Forms.",
     assignWhen: "Process owners and document authors.",
   },
   dcf_approver: {
-    summary: "Approve controlled-document E-Approval workflow steps.",
+    summary: "Approve controlled-document E-Forms workflow steps.",
     assignWhen: "Department heads and designated approvers.",
   },
   dcf_controller: {
@@ -132,7 +132,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Document controllers and quality managers.",
   },
   dcf_admin: {
-    summary: "Full DCF control plus bulk import, E-Approval form management, and audit.",
+    summary: "Full DCF control plus bulk import, E-Forms form management, and audit.",
     assignWhen: "Quality system administrators.",
   },
   sites_viewer: {
@@ -140,7 +140,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Network planning viewers.",
   },
   ai_assistant_user: {
-    summary: "Ask TowerOS help assistant for how-to and workflow guidance.",
+    summary: "Ask INFRA SUITE help assistant for how-to and workflow guidance.",
     assignWhen: "All operational users who need in-app help.",
   },
   ai_assistant_admin: {
@@ -160,7 +160,7 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Line managers and approvers.",
   },
   e_approval_admin: {
-    summary: "Forms, policies, audit, and E-Approval settings.",
+    summary: "Forms, policies, audit, and E-Forms settings.",
     assignWhen: "Process owners.",
   },
   saq_approver: {

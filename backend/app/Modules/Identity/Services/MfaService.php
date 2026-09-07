@@ -372,7 +372,7 @@ class MfaService
             }
         }
 
-        return (string) config('app.name', 'TowerOS');
+        return (string) config('app.name', 'INFRA SUITE');
     }
 
     /**

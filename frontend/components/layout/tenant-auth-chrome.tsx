@@ -6,7 +6,7 @@ import { resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
 import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
 
 /**
- * Split-screen auth shell (NextAdmin-style layout, TowerOS operational styling).
+ * Split-screen auth shell (NextAdmin-style layout, INFRA SUITE operational styling).
  * Form on the left; brand panel on the right (desktop). Not purple marketing chrome.
  */
 export function TenantAuthChrome({ children }: { children: React.ReactNode }) {

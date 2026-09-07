@@ -126,7 +126,7 @@ export function ProcurementPrComposePageClient({ prId }: Props) {
             </Link>
           }
           title={isEdit ? "Edit purchase requisition" : "New purchase requisition"}
-          description="Draft a PR with line items; submit when ready for E-Approval workflow."
+          description="Draft a PR with line items; submit when ready for E-Forms workflow."
         />
 
         <form

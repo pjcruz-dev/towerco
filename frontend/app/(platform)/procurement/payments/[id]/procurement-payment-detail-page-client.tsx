@@ -165,7 +165,7 @@ export function ProcurementPaymentDetailPageClient({ id }: { id: string }) {
             <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <h2 className="text-base font-medium">Workflow</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Track payment status from approval through scheduling, paid, and reconciled. No bank execution in TowerOS.
+                Track payment status from approval through scheduling, paid, and reconciled. No bank execution in INFRA SUITE.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {payment.status === "draft" ? (

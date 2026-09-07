@@ -14,7 +14,7 @@ last_reviewed: 2026-07-17
 
 # Document register (controlled documents)
 
-The document register is the ISO-style master list of controlled documents. Use it to find the approved revision. To **submit** a new controlled document or revision for approval, use **Submit a Document Approval request** (E-Approval Document Control form).
+The document register is the ISO-style master list of controlled documents. Use it to find the approved revision. To **submit** a new controlled document or revision for approval, use **Submit a Document Approval request** (E-Forms Document Control form).
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ The document register is the ISO-style master list of controlled documents. Use 
 1. Open **Document register**.
 2. Search by document code or title.
 3. Open a controlled document to see status, current revision, and department.
-4. If you need a new document or revision, start **E-Approval → New submission** and choose the Document Control / ISO form.
+4. If you need a new document or revision, start **E-Forms → New submission** and choose the Document Control / ISO form.
 5. Download or stream the published revision only when your role allows it.
 
 ## Expected result
@@ -44,4 +44,4 @@ You locate the correct controlled document and know which revision is current an
 
 - Submit a Document Approval request
 - Documents and site binders
-- Approve an E-Approval request (approvers only)
+- Approve an E-Forms request (approvers only)

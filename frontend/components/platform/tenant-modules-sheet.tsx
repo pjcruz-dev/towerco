@@ -191,7 +191,7 @@ export function TenantModulesSheet({ open, onOpenChange, tenant, isPending, onSa
           !selected.has("documents") &&
           !selected.has("document_register") ? (
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Enable at least E-Approval, Project-One, Procurement-One, Documents, or Document register so
+              Enable at least E-Forms, Project-One, Procurement-One, Documents, or Document register so
               users have an operational workspace module.
             </p>
           ) : null}

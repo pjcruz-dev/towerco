@@ -104,7 +104,7 @@ final class EApprovalLegacyImportService
                 ->first();
 
             if ($tenantUser === null) {
-                $result->warnings[] = "No TowerOS user for legacy email {$email}; related rows may be skipped.";
+                $result->warnings[] = "No INFRA SUITE user for legacy email {$email}; related rows may be skipped.";
 
                 continue;
             }

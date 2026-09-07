@@ -1,5 +1,5 @@
 ---
-title: Form not listed in E-Approval
+title: Form not listed in E-Forms
 slug: e-approval-form-not-listed
 module: e_approval
 audience: tenant_user
@@ -13,18 +13,18 @@ related_routes:
 last_reviewed: 2026-07-20
 ---
 
-# Form not listed in E-Approval
+# Form not listed in E-Forms
 
 Use this when the form you need (including **Document Control** / **ISO Document Control**) does not appear under **New submission**.
 
 ## Prerequisites
 
-- E-Approval module is enabled.
+- E-Forms module is enabled.
 - You usually need `e_approval:view` and `e_approval:submissions:create`.
 
 ## Steps
 
-1. Open **E-Approval → New submission** and search or filter for the form name.
+1. Open **E-Forms → New submission** and search or filter for the form name.
 2. Confirm you are looking for the correct form family (Document Control / ISO vs a different workflow form).
 3. If it still is not listed, ask a tenant admin to:
    - **Publish** the form for this tenant.
@@ -44,6 +44,6 @@ The correct published form appears in New submission and you can start the right
 
 ## Related workflows
 
-- Create an E-Approval request
+- Create an E-Forms request
 - Submit a Document Approval request
 - Team and access

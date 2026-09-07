@@ -37,7 +37,7 @@ export function EApprovalProfilePageClient() {
       <div className="space-y-6">
         <LiveProductTourHost />
         <EApprovalPageHeader
-          title="My E-Approval profile"
+          title="My E-Forms profile"
           description={
             <>
               <EApprovalBackLink href="/e-approval">Dashboard</EApprovalBackLink>

@@ -27,7 +27,7 @@ class TicketingSettingsTestWebhookController extends AbstractApiController
         $service->send(isset($data['teams_webhook_url']) ? (string) $data['teams_webhook_url'] : null);
 
         return $this->ok([
-            'message' => __('Test webhook sent. Check your Teams channel for the TowerOS Ticketing test message.'),
+            'message' => __('Test webhook sent. Check your Teams channel for the INFRA SUITE Ticketing test message.'),
         ]);
     }
 }

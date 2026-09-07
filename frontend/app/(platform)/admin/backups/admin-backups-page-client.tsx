@@ -67,7 +67,7 @@ export function AdminBackupsPageClient() {
         <h1 className="text-2xl font-semibold text-foreground">Backups</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Download completed database backups for this organization. Create and restore are managed by
-          TowerOS platform operators.
+          INFRA SUITE platform operators.
         </p>
       </header>
 

@@ -101,7 +101,7 @@ final class TicketingDashboardService
             ],
             'recent_tickets' => $recent,
             'by_category' => $this->categoryAnalytics($user, $canManage),
-            'message' => 'Cross-module issue tracking — raise tickets from any TowerOS module or manually.',
+            'message' => 'Cross-module issue tracking — raise tickets from any INFRA SUITE module or manually.',
         ];
     }
 

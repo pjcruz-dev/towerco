@@ -73,7 +73,7 @@ final class ApplyTssrOptionBLayoutCommand extends Command
     protected $signature = 'e-approval:apply-tssr-option-b-layout
         {--tenant= : Tenant UUID}
         {--domain= : Tenant domain hostname}
-        {--form= : E-Approval form UUID (defaults to name match TSSR)}
+        {--form= : E-Forms form UUID (defaults to name match TSSR)}
         {--dry-run : Preview changes without writing}
     ';
 

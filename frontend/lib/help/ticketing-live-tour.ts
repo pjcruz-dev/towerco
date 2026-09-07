@@ -24,7 +24,7 @@ export type TicketingTourChapterStart = {
   audience?: LiveTourAudience;
 };
 
-/** Chapter titles on the Ticketing tour guide (shared labels stay E-Approval-oriented). */
+/** Chapter titles on the Ticketing tour guide (shared labels stay E-Forms-oriented). */
 export const TICKETING_TOUR_CHAPTER_LABELS: Record<
   TicketingTourChapterStart["id"],
   string

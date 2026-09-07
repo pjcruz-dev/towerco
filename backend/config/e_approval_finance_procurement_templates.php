@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Built-in E-Approval form templates — finance & procurement.
+ * Built-in E-Forms form templates — finance & procurement.
  *
  * Field names align with open-parent APIs when parent_submission_id is set:
  * - CA: `requested_amount` / child `total_reimbursement` (EApprovalCashAdvanceService)

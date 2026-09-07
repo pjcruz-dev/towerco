@@ -137,7 +137,7 @@ export function ProcurementGrnPrintView({ data }: Props) {
           ) : null}
 
           <footer className="mt-8 border-t border-slate-200 pt-3 text-xs text-slate-500">
-            Generated from TowerOS Procurement-One · {new Date(data.printed_at).toLocaleString()}
+            Generated from INFRA SUITE Procurement-One · {new Date(data.printed_at).toLocaleString()}
           </footer>
         </div>
       </div>

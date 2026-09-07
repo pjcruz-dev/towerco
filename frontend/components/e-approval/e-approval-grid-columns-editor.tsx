@@ -291,7 +291,7 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
         Requestors see a table with one row per line item. Configure each column&apos;s input type (aligned with legacy
         form builder). Master data sets are managed in{" "}
         <Link href="/e-approval/master-data" className="text-primary underline-offset-2 hover:underline">
-          E-Approval → Master data
+          E-Forms → Master data
         </Link>
         .
       </p>

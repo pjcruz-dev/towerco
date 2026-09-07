@@ -112,7 +112,7 @@ export function ControlledDocumentRegisterAccessCard() {
           <RefreshingHint label="Loading access rules" />
         ) : !configured ? (
           <p className="text-xs text-muted-foreground">
-            Publish an E-Approval form with controlled document sync enabled before configuring register access.
+            Publish an E-Forms form with controlled document sync enabled before configuring register access.
           </p>
         ) : (
           <div className="space-y-4">

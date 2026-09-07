@@ -292,7 +292,7 @@ export function BillingPageClient() {
                 <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm">
                   <p className="font-medium text-foreground">Upgrade for file uploads</p>
                   <p className="mt-1 text-muted-foreground">
-                    E-Approval file fields require <strong className="font-medium">Professional</strong>{" "}
+                    E-Forms file fields require <strong className="font-medium">Professional</strong>{" "}
                     or <strong className="font-medium">Enterprise</strong>.
                     {selfServe ? " Use checkout below or contact support." : " Contact support to change your plan."}
                   </p>
@@ -312,13 +312,13 @@ export function BillingPageClient() {
             ) : usageQuery.data ? (
               <EApprovalSectionCard
                 title="Usage (last 30 days)"
-                description="Operational activity across E-Approval, PROJECT-ONE, and Procurement-One."
+                description="Operational activity across E-Forms, PROJECT-ONE, and Procurement-One."
                 bodyClassName="p-0"
               >
                 <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4 sm:divide-x divide-border">
                   {[
                     {
-                      label: "E-Approval forms",
+                      label: "E-Forms forms",
                       value: usageQuery.data.modules.e_approval.forms_published,
                       sub: `${usageQuery.data.modules.e_approval.forms_total} total`,
                     },
@@ -405,7 +405,7 @@ export function BillingPageClient() {
               {snapshot.support_email}
             </a>
           ) : (
-            "your TowerOS account team"
+            "your INFRA SUITE account team"
           )}
           . Platform operators update billing under{" "}
           <Link href="/platform" className="font-medium text-primary underline-offset-2 hover:underline">

@@ -1,4 +1,4 @@
-/** Per-user, per-tenant dismissal of the E-Approval live-tour soft prompt. */
+/** Per-user, per-tenant dismissal of the E-Forms live-tour soft prompt. */
 
 const STORAGE_PREFIX = "toweros.help.liveTourPrompt.dismissed";
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\ProcurementOne\Support;
 
 /**
- * Normalizes E-Approval grid field payloads (indexed rows or labeled rows).
+ * Normalizes E-Forms grid field payloads (indexed rows or labeled rows).
  */
 final class ProcurementGridValueParser
 {

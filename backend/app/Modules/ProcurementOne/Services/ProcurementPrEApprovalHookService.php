@@ -8,7 +8,7 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
 
 /**
- * Keeps procurement PR/PO projections aligned with E-Approval submission lifecycle events.
+ * Keeps procurement PR/PO projections aligned with E-Forms submission lifecycle events.
  */
 final class ProcurementPrEApprovalHookService
 {

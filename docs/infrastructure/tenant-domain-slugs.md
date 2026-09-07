@@ -40,7 +40,7 @@ Recommended endpoints are stored in `tenant_domain_endpoints` for DNS/runbook re
 
 ## Multiple environments (staging + production)
 
-TowerOS uses **one tenant record per environment**. Each environment has its own database, domain, and rollout data.
+INFRA SUITE uses **one tenant record per environment**. Each environment has its own database, domain, and rollout data.
 
 **Operator checklist (Phase 2):** [`tenant-environments-phase-2.md`](./tenant-environments-phase-2.md)
 
@@ -78,7 +78,7 @@ Use a dedicated hostname for the public App Menu landing (not the corporate apex
 
 | Step | Action |
 |------|--------|
-| 1 | DNS: CNAME `appmenu` → same TowerOS **web** ALB / edge as `app.` |
+| 1 | DNS: CNAME `appmenu` → same INFRA SUITE **web** ALB / edge as `app.` |
 | 2 | TLS: include `appmenu.alliancetowers.com` on the cert |
 | 3 | Proxy: route that host to the Next.js **web** service (same as tenant SPA) |
 | 4 | Frontend env: `NEXT_PUBLIC_CENTRAL_API_BASE_URL` must point at the central API |
@@ -106,7 +106,7 @@ Confirm in the browser: padlock → certificate → Subject Alternative Name lis
 
 ## DNS checklist (test / prod)
 
-1. CNAME `staging` → TowerOS load balancer / CloudFront (→ `staging.alliancetowers.com`).
+1. CNAME `staging` → INFRA SUITE load balancer / CloudFront (→ `staging.alliancetowers.com`).
 2. CNAME `app` → same (or separate origin for prod) (→ `app.alliancetowers.com`).
 3. CNAME `appmenu` → same web origin (→ `appmenu.alliancetowers.com` public App Menu hub).
 4. TLS cert covers `app.alliancetowers.com`, `staging.alliancetowers.com`, `appmenu.alliancetowers.com` (and optionally apex / wildcards).

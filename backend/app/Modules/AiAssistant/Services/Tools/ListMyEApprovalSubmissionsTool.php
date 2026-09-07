@@ -19,7 +19,7 @@ final class ListMyEApprovalSubmissionsTool implements AssistantToolInterface
 
     public function description(): string
     {
-        return 'List the viewer\'s own E-Approval submissions by status.';
+        return 'List the viewer\'s own E-Forms submissions by status.';
     }
 
     public function requiredModule(): ?string
@@ -79,8 +79,8 @@ final class ListMyEApprovalSubmissionsTool implements AssistantToolInterface
                 'returned' => count($rows),
             ],
             summary: $total === 0
-                ? sprintf('You have no %s E-Approval submissions.', $label)
-                : sprintf('You have %d %s E-Approval submission(s) (showing %d).', $total, $label, count($rows)),
+                ? sprintf('You have no %s E-Forms submissions.', $label)
+                : sprintf('You have %d %s E-Forms submission(s) (showing %d).', $total, $label, count($rows)),
             moduleKey: 'e_approval',
             relatedRoutes: ['/e-approval/submissions?mine=1&status='.($status === 'open' ? 'pending' : $status)],
             rowCount: count($rows),

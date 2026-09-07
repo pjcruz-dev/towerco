@@ -18,7 +18,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       entryPath: "/dashboard",
       target: "ea-account-menu",
       title: "Open your account menu",
-      body: "In the top-right header, open your account menu. Authenticator MFA is under My security — separate from E-Approval.",
+      body: "In the top-right header, open your account menu. Authenticator MFA is under My security — separate from E-Forms.",
       missingHint: "Look for your name or avatar in the top-right corner of the workspace.",
     },
     {
@@ -47,7 +47,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       query: { tab: "mfa" },
       target: "ea-security-page",
       title: "After you sign in",
-      body: "If MFA is required and you have not enrolled yet, TowerOS opens the split-screen Set up MFA page after Sign in with Microsoft (and after email & password). Passkey may skip authenticator MFA when org policy allows. That screen has its own short guided tour before the workspace opens.",
+      body: "If MFA is required and you have not enrolled yet, INFRA SUITE opens the split-screen Set up MFA page after Sign in with Microsoft (and after email & password). Passkey may skip authenticator MFA when org policy allows. That screen has its own short guided tour before the workspace opens.",
     },
     {
       id: "mfa-tab",

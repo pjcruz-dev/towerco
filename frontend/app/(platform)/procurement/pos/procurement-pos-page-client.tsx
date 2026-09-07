@@ -66,7 +66,7 @@ export function ProcurementPosPageClient() {
             </Link>
           }
           title="Purchase orders"
-          description="Official PO documents with VAT totals, PR linkage, E-Approval workflow, and print."
+          description="Official PO documents with VAT totals, PR linkage, E-Forms workflow, and print."
           actions={
             <div className="flex gap-2">
               <PermissionGate requiredPermissions={[permissions.procurementOneDocumentsCreate]}>

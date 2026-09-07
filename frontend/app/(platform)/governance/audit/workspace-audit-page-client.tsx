@@ -184,7 +184,7 @@ export function WorkspaceAuditPageClient() {
             </Label>
             <Select id="audit-module" value={module} onChange={(event) => setModule(event.target.value)}>
               <option value="">All modules</option>
-              <option value="e_approval">E-Approval</option>
+              <option value="e_approval">E-Forms</option>
               <option value="documents">Documents</option>
               <option value="team_access">Team &amp; access</option>
               <option value="procurement_one">Procurement</option>

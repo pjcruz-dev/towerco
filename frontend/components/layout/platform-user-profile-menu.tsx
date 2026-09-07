@@ -139,7 +139,7 @@ function PlatformRoleBadge({ role }: { role: string | undefined }) {
     <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
       <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">TowerOS Central</p>
+        <p className="truncate font-medium text-foreground">INFRA SUITE Central</p>
         <p className="truncate text-xs text-muted-foreground">{platformRoleLabel(role)}</p>
       </div>
     </div>

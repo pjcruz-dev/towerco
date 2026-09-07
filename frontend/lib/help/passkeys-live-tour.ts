@@ -1,6 +1,6 @@
 import type { LiveTourDefinition, LiveTourStep } from "@/lib/help/e-approval-live-tour";
 
-/** Standalone product tour — not part of E-Approval. */
+/** Standalone product tour — not part of E-Forms. */
 export const PASSKEYS_LIVE_TOUR_ID = "passkeys";
 
 export const PASSKEYS_TOUR_HELP_PATH = "/help";
@@ -15,7 +15,7 @@ export const passkeysLiveTour: LiveTourDefinition = {
       entryPath: "/dashboard",
       target: "ea-account-menu",
       title: "Open your account menu",
-      body: "In the top-right header, open your account menu (name / avatar). Passkeys are under personal security — not under E-Approval.",
+      body: "In the top-right header, open your account menu (name / avatar). Passkeys are under personal security — not under E-Forms.",
       missingHint: "Look for your name or avatar in the top-right corner of the workspace.",
     },
     {
@@ -86,7 +86,7 @@ export const passkeysLiveTour: LiveTourDefinition = {
   ],
 };
 
-/** Start on Dashboard so the tour begins at the account menu (same pattern as E-Approval sidebar chapters). */
+/** Start on Dashboard so the tour begins at the account menu (same pattern as E-Forms sidebar chapters). */
 export function passkeysTourStartHref(stepIndex = 0): string {
   const clamped = Math.max(0, Math.min(stepIndex, passkeysLiveTour.steps.length - 1));
   return `/dashboard?tour=${PASSKEYS_LIVE_TOUR_ID}&tourStep=${clamped}`;

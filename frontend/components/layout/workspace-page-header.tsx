@@ -6,7 +6,7 @@ type Props = {
   actions?: ReactNode;
 };
 
-/** Shared tenant / workspace page header (aligned with E-Approval settings). */
+/** Shared tenant / workspace page header (aligned with E-Forms settings). */
 export function WorkspacePageHeader({ title, description, actions }: Props) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-3">

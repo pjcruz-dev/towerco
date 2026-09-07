@@ -42,7 +42,7 @@ export function AssistantDrawer() {
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
             <h2 id="assistant-chat-title" className="truncate text-sm font-semibold text-foreground">
-              Ask TowerOS
+              Ask INFRA SUITE
             </h2>
             <p className="truncate text-xs text-muted-foreground">
               How-to and process guidance for your workspace

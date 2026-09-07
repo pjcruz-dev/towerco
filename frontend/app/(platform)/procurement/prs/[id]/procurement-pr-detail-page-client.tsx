@@ -361,7 +361,7 @@ export function ProcurementPrDetailPageClient({ prId }: Props) {
             href={`/e-approval/submissions/${pr.e_approval_submission_id}`}
             className={cn(buttonVariants({ variant: "link", size: "sm" }), "inline-flex items-center gap-1 px-0")}
           >
-            View E-Approval submission
+            View E-Forms submission
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </Link>
         ) : null}

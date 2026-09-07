@@ -1,5 +1,5 @@
 ---
-title: Approve an E-Approval request
+title: Approve an E-Forms request
 slug: e-approval-approve-request
 module: e_approval
 audience: tenant_user
@@ -13,21 +13,21 @@ related_routes:
 last_reviewed: 2026-07-17
 ---
 
-# Approve an E-Approval request
+# Approve an E-Forms request
 
-This guide is for **approvers only**. If you need to **submit** a Document Approval or other form, use **Submit a Document Approval request** or **Create an E-Approval request** instead.
+This guide is for **approvers only**. If you need to **submit** a Document Approval or other form, use **Submit a Document Approval request** or **Create an E-Forms request** instead.
 
 Approvers review submissions assigned to them and decide (approve, return, or reject according to policy).
 
 ## Prerequisites
 
-- E-Approval module is enabled.
+- E-Forms module is enabled.
 - You have `e_approval:approve`.
 - A submission is waiting in your approval inbox (or you are a delegated approver).
 
 ## Steps
 
-1. Open **E-Approval → Approvals** (Awaiting me).
+1. Open **E-Forms → Approvals** (Awaiting me).
 2. Or open the item from **Notifications**.
 3. Review form answers, attachments, and prior comments.
 4. Decide:
@@ -48,6 +48,6 @@ The approval step is recorded, the submitter is notified, and the workflow moves
 ## Related workflows
 
 - Submit a Document Approval request
-- Create an E-Approval request
+- Create an E-Forms request
 - Notifications
 - Common troubleshooting

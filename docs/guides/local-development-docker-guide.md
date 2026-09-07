@@ -1,4 +1,4 @@
-# TowerOS local development — Docker guide (zero to first tenant)
+# INFRA SUITE local development — Docker guide (zero to first tenant)
 
 Step-by-step guide for **Windows** using Docker Desktop. No local PHP or Node install required.
 
@@ -30,7 +30,7 @@ Dump first if you need to keep local data.
 
 You will be able to log in as **platform superadmin** and **create your first tenant** (e.g. `atc.localhost`).
 
-**E-Approval:** Forms and approvals run inside this stack only (`/e-approval` in the main Next.js app). The old standalone formbuilder was decommissioned (P4) and removed from this repo — **do not** run a second formbuilder app for TowerOS development.
+**E-Forms:** Forms and approvals run inside this stack only (`/e-approval` in the main Next.js app). The old standalone formbuilder was decommissioned (P4) and removed from this repo — **do not** run a second formbuilder app for INFRA SUITE development.
 
 ---
 
@@ -103,13 +103,13 @@ Open http://localhost. **Switch back to Docker API:** stop the host `php artisan
 1. **Podman Desktop** or **Docker Desktop** installed and running.  
    Podman: [docs/podman-desktop-setup.md](podman-desktop-setup.md) — create/start a machine under **Resources** first.  
    Docker: [nodejs.org](https://nodejs.org/) LTS for root `npm` scripts only.
-2. **Git** — repo cloned, e.g. `C:\LaravelProject\TowerOS`.
+2. **Git** — repo cloned, e.g. `C:\LaravelProject\INFRA SUITE`.
 
 ---
 
 ## Part 1 — One-time project setup
 
-Open **PowerShell** or **Git Bash** in the repo root (`TowerOS`).
+Open **PowerShell** or **Git Bash** in the repo root (`INFRA SUITE`).
 
 ### Step 1 — Create Docker env file
 
@@ -192,7 +192,7 @@ This creates:
 - Published rollout playbooks **v1** and **v2**
 - Published policy **`towerco-default`** (v1 baseline + email notifications)
 - Published policy **`towerco-full-gate-approval`** (v2, all phases gated + email notifications)
-- Helper center glossary (~47 operational acronyms, same as **Sync TowerOS defaults**)
+- Helper center glossary (~47 operational acronyms, same as **Sync INFRA SUITE defaults**)
 - Passport personal access client (for platform login)
 
 ---
@@ -338,7 +338,7 @@ Watch API logs while creating:
 npm run dev:logs:api
 ```
 
-### E-Approval import: “File upload fields require a Professional or Enterprise plan”
+### E-Forms import: “File upload fields require a Professional or Enterprise plan”
 
 Tenant `plan_tier` is **starter** by default in production; local new tenants default to **professional**.
 
@@ -410,7 +410,7 @@ Polling env vars (`WATCHPACK_POLLING`) are set in `docker-compose.yml` for Windo
 
 ---
 
-TowerOS **local** Docker is tuned for laptops (~8 GB RAM). **AWS production** uses ECS/Fargate with separate sizing — do not mirror local dev memory limits in prod.
+INFRA SUITE **local** Docker is tuned for laptops (~8 GB RAM). **AWS production** uses ECS/Fargate with separate sizing — do not mirror local dev memory limits in prod.
 
 ### Why `toweros-web` uses so much RAM
 
@@ -548,9 +548,9 @@ docker compose --env-file .env.docker exec api php artisan toweros:migrate
 
 ---
 
-## E-Approval (tenant module)
+## E-Forms (tenant module)
 
-After tenant login with a user that has E-Approval permissions (e.g. `tenant_admin`):
+After tenant login with a user that has E-Forms permissions (e.g. `tenant_admin`):
 
 | Page | URL |
 |------|-----|
@@ -575,5 +575,5 @@ Module docs: [docs/modules/e-approval.md](modules/e-approval.md)
 - [Podman Desktop setup](podman-desktop-setup.md)
 - [Tenant isolation (MySQL)](architecture/tenant-isolation-mysql.md)
 - [Tenant domain slugs](infrastructure/tenant-domain-slugs.md)
-- [E-Approval module](modules/e-approval.md)
+- [E-Forms module](modules/e-approval.md)
 - [README — local development](../README.md)

@@ -328,7 +328,7 @@ export function EApprovalTourCompleteAnchor() {
       className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm dark:border-emerald-900/50 dark:bg-emerald-950/30"
       aria-label="Tour complete"
     >
-      <p className="text-sm font-medium text-foreground">E-Approval tour finished</p>
+      <p className="text-sm font-medium text-foreground">E-Forms tour finished</p>
       <p className="mt-1 text-xs text-muted-foreground">
         You covered requestor and approver flows. Click Done to close — sample UI goes away and real empty
         states return.

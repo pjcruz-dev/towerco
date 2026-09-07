@@ -33,7 +33,7 @@ const NAV_TILES: NavTile[] = [
   {
     href: "/procurement/prs",
     label: "Purchase requisitions",
-    description: "Create and track PRs with E-Approval workflow and project budget checks.",
+    description: "Create and track PRs with E-Forms workflow and project budget checks.",
     icon: FileText,
     permission: permissions.procurementOneView,
   },
@@ -158,7 +158,7 @@ export function ProcurementOneDashboardPageClient() {
           title="Procurement-One"
           description={
             data?.message ??
-            "Purchase requisitions, purchase orders, and goods receipts — lifecycle documents with E-Approval integration."
+            "Purchase requisitions, purchase orders, and goods receipts — lifecycle documents with E-Forms integration."
           }
           actions={
             <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>

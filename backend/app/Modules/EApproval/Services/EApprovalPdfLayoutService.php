@@ -327,7 +327,7 @@ final class EApprovalPdfLayoutService
             'subsidiary_logos' => [],
             'header' => [
                 'showLogo' => false,
-                'title' => 'E-Approval',
+                'title' => 'E-Forms',
                 'subtitle' => '',
             ],
             'footer' => [
@@ -335,7 +335,7 @@ final class EApprovalPdfLayoutService
                 'showApprovalHistory' => true,
                 'showRequestorSignature' => false,
                 'appendAttachments' => true,
-                'text' => 'Generated from TowerOS E-Approval',
+                'text' => 'Generated from INFRA SUITE E-Forms',
             ],
         ];
     }

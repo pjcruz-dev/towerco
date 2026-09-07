@@ -48,12 +48,12 @@ export type EApprovalTourChapterStart = {
 export const E_APPROVAL_TOUR_CHAPTER_STARTS: EApprovalTourChapterStart[] = [
   {
     id: "overview",
-    how: "E-Approval → Overview → status cards",
+    how: "E-Forms → Overview → status cards",
     audience: "all",
   },
   {
     id: "track",
-    how: "E-Approval → Submissions → filters / gallery / table",
+    how: "E-Forms → Submissions → filters / gallery / table",
     audience: "requestor",
   },
   {
@@ -68,22 +68,22 @@ export const E_APPROVAL_TOUR_CHAPTER_STARTS: EApprovalTourChapterStart[] = [
   },
   {
     id: "follow_up",
-    how: "E-Approval → Submissions → open pending → Decide → Cancel / Follow-up",
+    how: "E-Forms → Submissions → open pending → Decide → Cancel / Follow-up",
     audience: "requestor",
   },
   {
     id: "approvals",
-    how: "E-Approval → Approvals → queue",
+    how: "E-Forms → Approvals → queue",
     audience: "approver",
   },
   {
     id: "signature",
-    how: "Settings → My E-Approval profile → save signature",
+    how: "Settings → My E-Forms profile → save signature",
     audience: "approver",
   },
   {
     id: "decide",
-    how: "E-Approval → Approvals → Decide tab",
+    how: "E-Forms → Approvals → Decide tab",
     audience: "approver",
   },
 ];
@@ -173,7 +173,7 @@ export type EApprovalTourCapabilities = {
   canCreate: boolean;
 };
 
-/** Unified capabilities for role-filtered live tours (E-Approval + Ticketing). */
+/** Unified capabilities for role-filtered live tours (E-Forms + Ticketing). */
 export type LiveTourCapabilities = EApprovalTourCapabilities & {
   canCreateTickets?: boolean;
   canManageTickets?: boolean;
@@ -425,19 +425,19 @@ export function tourById(id: string): LiveTourDefinition | null {
   return null;
 }
 
-/** Live coach-mark tour for E-Approval (Overview → Submissions → Compose → Detail → Approvals). */
+/** Live coach-mark tour for E-Forms (Overview → Submissions → Compose → Detail → Approvals). */
 export const eApprovalLiveTour: LiveTourDefinition = {
   id: "e-approval",
-  title: "E-Approval tour",
+  title: "E-Forms tour",
   steps: [
     {
       id: "nav-e-approval",
       path: "/e-approval",
       entryPath: "/e-approval",
       target: "ea-nav-e-approval",
-      title: "Open E-Approval",
-      body: "In the sidebar menu, open E-Approval. That module is where you track requests, create submissions, and decide.",
-      missingHint: "On a phone, open the menu (☰) first. Expand E-Approval if it is collapsed, then continue.",
+      title: "Open E-Forms",
+      body: "In the sidebar menu, open E-Forms. That module is where you track requests, create submissions, and decide.",
+      missingHint: "On a phone, open the menu (☰) first. Expand E-Forms if it is collapsed, then continue.",
     },
     {
       id: "nav-e-approval-overview",
@@ -445,8 +445,8 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval",
       target: "ea-nav-e-approval-overview",
       title: "Overview",
-      body: "Click Overview for your E-Approval home — status cards and work waiting on you.",
-      missingHint: "Expand E-Approval in the sidebar to see Overview.",
+      body: "Click Overview for your E-Forms home — status cards and work waiting on you.",
+      missingHint: "Expand E-Forms in the sidebar to see Overview.",
     },
     {
       id: "overview-kpis",
@@ -485,8 +485,8 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval",
       target: "ea-nav-e-approval-submissions",
       title: "Open Submissions",
-      body: "Under E-Approval in the sidebar, click Submissions to track requests in workflow.",
-      missingHint: "Expand E-Approval in the sidebar to see Submissions.",
+      body: "Under E-Forms in the sidebar, click Submissions to track requests in workflow.",
+      missingHint: "Expand E-Forms in the sidebar to see Submissions.",
     },
     {
       id: "submissions-filters",
@@ -752,10 +752,10 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval",
       target: "ea-nav-e-approval",
       chapter: "follow_up",
-      title: "Open E-Approval",
-      body: "In the sidebar, open E-Approval. Cancel and follow-up start from your submissions list.",
+      title: "Open E-Forms",
+      body: "In the sidebar, open E-Forms. Cancel and follow-up start from your submissions list.",
       audience: "requestor",
-      missingHint: "On a phone, open the menu (☰) first. Expand E-Approval if it is collapsed, then continue.",
+      missingHint: "On a phone, open the menu (☰) first. Expand E-Forms if it is collapsed, then continue.",
     },
     {
       id: "follow-up-nav-submissions",
@@ -764,9 +764,9 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       target: "ea-nav-e-approval-submissions",
       chapter: "follow_up",
       title: "Open Submissions",
-      body: "Under E-Approval, click Submissions to find a pending request you own.",
+      body: "Under E-Forms, click Submissions to find a pending request you own.",
       audience: "requestor",
-      missingHint: "Expand E-Approval in the sidebar to see Submissions.",
+      missingHint: "Expand E-Forms in the sidebar to see Submissions.",
     },
     {
       id: "follow-up-open-request",
@@ -844,9 +844,9 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval/submissions",
       target: "ea-nav-e-approval-approvals",
       title: "Open Approvals",
-      body: "Under E-Approval → Decide in the sidebar, click Approvals for items waiting on your sign-off.",
+      body: "Under E-Forms → Decide in the sidebar, click Approvals for items waiting on your sign-off.",
       audience: "approver",
-      missingHint: "Expand E-Approval in the sidebar to see Approvals.",
+      missingHint: "Expand E-Forms in the sidebar to see Approvals.",
     },
     {
       id: "approvals-tabs",
@@ -872,7 +872,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval/approvals",
       target: "ea-nav-settings",
       title: "Open Settings",
-      body: "In the left sidebar, open Settings. Your signature is under personal E-Approval settings — not on the Approvals list.",
+      body: "In the left sidebar, open Settings. Your signature is under personal E-Forms settings — not on the Approvals list.",
       audience: "approver",
       missingHint: "Expand Settings in the sidebar if it is collapsed, then continue.",
     },
@@ -881,10 +881,10 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       path: "/e-approval/approvals",
       entryPath: "/e-approval/approvals",
       target: "ea-nav-e-approval-profile",
-      title: "My E-Approval profile",
-      body: "Under Settings, click My E-Approval profile. Next opens that page so you can save your signature.",
+      title: "My E-Forms profile",
+      body: "Under Settings, click My E-Forms profile. Next opens that page so you can save your signature.",
       audience: "approver",
-      missingHint: "Expand Settings in the sidebar to see My E-Approval profile.",
+      missingHint: "Expand Settings in the sidebar to see My E-Forms profile.",
     },
     {
       id: "profile-signature",
@@ -947,9 +947,9 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval/profile",
       target: "ea-nav-e-approval-approvals",
       title: "Open Approvals to decide",
-      body: "In the sidebar under E-Approval → Decide, open Approvals. Next opens a sample request on the Decide tab.",
+      body: "In the sidebar under E-Forms → Decide, open Approvals. Next opens a sample request on the Decide tab.",
       audience: "approver",
-      missingHint: "Expand E-Approval in the sidebar to see Approvals.",
+      missingHint: "Expand E-Forms in the sidebar to see Approvals.",
     },
     {
       id: "decide-tab",
@@ -983,7 +983,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       query: { tab: "decide" },
       target: "ea-decide-signature",
       title: "Your signature",
-      body: "If you saved one in My E-Approval profile, it loads here automatically. Otherwise draw, type, or upload — then accept consent.",
+      body: "If you saved one in My E-Forms profile, it loads here automatically. Otherwise draw, type, or upload — then accept consent.",
       missingHint: "Open the Decide tab — the signature block is under Your decision.",
       audience: "approver",
     },
@@ -1059,7 +1059,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
   ],
 };
 
-/** Role-aware E-Approval tour steps (requestors skip Approvals / Decide / profile signature). */
+/** Role-aware E-Forms tour steps (requestors skip Approvals / Decide / profile signature). */
 export function resolveEApprovalTourSteps(
   capabilities: EApprovalTourCapabilities,
 ): LiveTourStep[] {

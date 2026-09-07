@@ -218,7 +218,7 @@ return [
         'default_disable_password_when_sso' => env('TOWEROS_TENANT_DEFAULT_DISABLE_PASSWORD_WHEN_SSO', true),
         /**
          * Roles assigned on first Microsoft SSO auto-provision (comma-separated).
-         * Default: E-Approval requestor + Ticketing contributor (dashboard, submissions, tickets).
+         * Default: E-Forms requestor + Ticketing contributor (dashboard, submissions, tickets).
          * Legacy TENANT_SSO_DEFAULT_ROLE (single role) is used when TENANT_SSO_DEFAULT_ROLES is unset.
          */
         'default_sso_roles' => (static function (): array {
@@ -242,7 +242,7 @@ return [
 
     'tenant_provisioning' => [
         /**
-         * Central tenants.plan_tier for new orgs (gates E-Approval file fields: professional+).
+         * Central tenants.plan_tier for new orgs (gates E-Forms file fields: professional+).
          * Local default is professional so form imports with attachments work without billing setup.
          */
         'default_plan_tier' => env(
@@ -361,7 +361,7 @@ return [
     ],
 
     /**
-     * Module notification email (E-Approval, Project One gate approvals, etc.).
+     * Module notification email (E-Forms, Project One gate approvals, etc.).
      * Use smtp for Microsoft 365 (smtp.office365.com), ses for AWS, log for local dev.
      * Not the legacy formbuilder Graph sidecar — platform Laravel mail only.
      */
@@ -391,7 +391,7 @@ return [
     ],
 
     /**
-     * E-Approval module (forms, workflows, legacy import).
+     * E-Forms module (forms, workflows, legacy import).
      */
     'e_approval' => [
         'legacy_connection' => env('LEGACY_FORMBUILDER_DB_CONNECTION', 'legacy_formbuilder'),

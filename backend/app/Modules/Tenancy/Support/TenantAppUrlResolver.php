@@ -64,7 +64,7 @@ final class TenantAppUrlResolver
             }
         }
 
-        return (string) config('app.name', 'TowerOS');
+        return (string) config('app.name', 'INFRA SUITE');
     }
 
     public function subjectPrefix(): string

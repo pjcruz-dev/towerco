@@ -18,7 +18,7 @@ class DocumentsEnsureSiteReviewFormCommand extends Command
         {--tenants=* : Tenant UUID(s)}
     ';
 
-    protected $description = 'Create and publish the Site document review E-Approval form for site binder requests.';
+    protected $description = 'Create and publish the Site document review E-Forms form for site binder requests.';
 
     public function handle(
         DocumentSiteReviewFormProvisionerService $provisioner,

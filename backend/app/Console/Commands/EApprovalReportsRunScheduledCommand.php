@@ -18,7 +18,7 @@ final class EApprovalReportsRunScheduledCommand extends Command
         {--force : Ignore schedule window and run all enabled schedules}
     ';
 
-    protected $description = 'Run due scheduled E-Approval saved reports and record export history.';
+    protected $description = 'Run due scheduled E-Forms saved reports and record export history.';
 
     public function handle(
         EApprovalReportService $reports,
@@ -71,7 +71,7 @@ final class EApprovalReportsRunScheduledCommand extends Command
             });
         }
 
-        $this->info("Scheduled E-Approval reports complete. {$ranTotal} run(s).");
+        $this->info("Scheduled E-Forms reports complete. {$ranTotal} run(s).");
 
         return self::SUCCESS;
     }

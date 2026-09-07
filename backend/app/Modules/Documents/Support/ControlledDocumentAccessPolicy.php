@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Support;
 
 /**
- * Parsed from E-Approval form metadata_json.controlledDocumentSync.accessPolicy.
+ * Parsed from E-Forms form metadata_json.controlledDocumentSync.accessPolicy.
  *
  * Layered access (no code changes per tenant):
  * 1. Spatie permission documents:controlled:view (required for registry)
@@ -71,7 +71,7 @@ final class ControlledDocumentAccessPolicy
             viewerRoles: [],
             fullAccessRoles: ['document_controller', 'quality_manager', 'dcf_controller', 'dcf_admin'],
             fullAccessPermissions: ['documents:controlled:manage'],
-            // Authors submit via E-Approval; registry shows their own published documents only.
+            // Authors submit via E-Forms; registry shows their own published documents only.
             ownOnlyRoles: ['dcf_author'],
             roleDepartmentMap: [],
         );

@@ -367,7 +367,7 @@ final class TenantRbacModuleRoleTemplates
     }
 
     /**
-     * Controlled Document Form (DCF) roles — managed through E-Approval workflow.
+     * Controlled Document Form (DCF) roles — managed through E-Forms workflow.
      *
      * @return array<string, list<string>>
      */
@@ -379,7 +379,7 @@ final class TenantRbacModuleRoleTemplates
                 'dashboard:view',
                 'documents:controlled:view',
             ],
-            // Can submit new controlled documents and revisions via E-Approval.
+            // Can submit new controlled documents and revisions via E-Forms.
             'dcf_author' => [
                 'dashboard:view',
                 'documents:controlled:view',
@@ -388,7 +388,7 @@ final class TenantRbacModuleRoleTemplates
                 'e_approval:submissions:create',
                 'e_approval:submissions:view',
             ],
-            // Can approve controlled-document E-Approval workflow steps.
+            // Can approve controlled-document E-Forms workflow steps.
             'dcf_approver' => [
                 'dashboard:view',
                 'documents:controlled:view',
@@ -409,7 +409,7 @@ final class TenantRbacModuleRoleTemplates
                 'e_approval:submissions:view',
                 'e_approval:approve',
             ],
-            // Admin: full DCF control including bulk import and E-Approval form management.
+            // Admin: full DCF control including bulk import and E-Forms form management.
             'dcf_admin' => [
                 'dashboard:view',
                 'documents:controlled:view',

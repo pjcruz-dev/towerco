@@ -23,7 +23,7 @@ final class ListMyPendingApprovalsTool implements AssistantToolInterface
 
     public function description(): string
     {
-        return 'List E-Approval items currently awaiting the viewer\'s decision.';
+        return 'List E-Forms items currently awaiting the viewer\'s decision.';
     }
 
     public function requiredModule(): ?string

@@ -27,7 +27,7 @@ export const ALLOWED_FILE_TYPE_LABELS: Record<EApprovalAllowedFileType, string> 
   pptx: "PowerPoint (.pptx)",
 };
 
-/** Default types for general E-Approval uploads. */
+/** Default types for general E-Forms uploads. */
 const DEFAULT_ALLOWED: EApprovalAllowedFileType[] = ["jpeg", "png", "pdf"];
 
 /** ISO / controlled-document forms typically need Office formats. */

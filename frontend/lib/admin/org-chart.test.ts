@@ -35,7 +35,7 @@ const people = [
 ];
 
 describe("buildOrgChartIndex", () => {
-  it("nests TowerOS reports and external Entra managers", () => {
+  it("nests INFRA SUITE reports and external Entra managers", () => {
     const index = buildOrgChartIndex(people);
     expect(index.reports.get("alvin")?.map((person) => person.id)).toEqual(["terrence"]);
     const external = [...index.byId.values()].find((node) => node.external);
@@ -50,7 +50,7 @@ describe("buildOrgChartIndex", () => {
     expect(pickDefaultFocus(index, null)).toBe("alvin");
   });
 
-  it("shows an Entra-only manager above a person with no TowerOS manager_id", () => {
+  it("shows an Entra-only manager above a person with no INFRA SUITE manager_id", () => {
     const index = buildOrgChartIndex([
       {
         id: "peter",

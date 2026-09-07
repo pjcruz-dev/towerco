@@ -1,6 +1,6 @@
 /**
  * Procurement document compose shells.
- * Grid-heavy PR/PO/AP forms share the E-Approval wide form width.
+ * Grid-heavy PR/PO/AP forms share the E-Forms wide form width.
  */
 import {
   E_APPROVAL_FORM_SHELL_CLASS,

@@ -11,7 +11,7 @@ if not "%~1"=="" (
 :menu
 cls
 echo.
-echo  TowerOS Development Menu
+echo  INFRA SUITE Development Menu
 echo  ========================
 echo.
 echo    1  Start dev stack       MySQL + API + Web
@@ -83,13 +83,13 @@ pause
 exit /b 99
 
 :act_logs_api
-start "TowerOS API logs" cmd /k "%~dp0dev-logs.cmd" api
+start "INFRA SUITE API logs" cmd /k "%~dp0dev-logs.cmd" api
 echo Opened API logs in a new window.
 timeout /t 2 /nobreak >nul
 exit /b 99
 
 :act_logs_mysql
-start "TowerOS MySQL logs" cmd /k "%~dp0dev-logs.cmd" mysql
+start "INFRA SUITE MySQL logs" cmd /k "%~dp0dev-logs.cmd" mysql
 echo Opened MySQL logs in a new window.
 timeout /t 2 /nobreak >nul
 exit /b 99

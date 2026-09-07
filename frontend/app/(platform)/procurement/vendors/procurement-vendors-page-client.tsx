@@ -102,10 +102,10 @@ export function ProcurementVendorsPageClient() {
           <OperationalAlert
             level="info"
             title="Vendor registration form not ready"
-            description="Publish your vendor registration form in E-Approval to enable Register vendor from this page."
+            description="Publish your vendor registration form in E-Forms to enable Register vendor from this page."
             actions={
               <Button size="sm" variant="outline" render={<Link href="/e-approval/forms" />}>
-                Open E-Approval forms
+                Open E-Forms forms
               </Button>
             }
           />

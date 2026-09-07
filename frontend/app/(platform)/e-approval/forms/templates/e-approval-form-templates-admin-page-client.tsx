@@ -140,7 +140,7 @@ export function EApprovalFormTemplatesAdminPageClient() {
           description={
             <>
               <EApprovalBackLink href="/e-approval/forms">Back to forms</EApprovalBackLink>
-              {" · "}System templates ship with TowerOS. Tenant templates are stored per tenant.
+              {" · "}System templates ship with INFRA SUITE. Tenant templates are stored per tenant.
             </>
           }
           actions={

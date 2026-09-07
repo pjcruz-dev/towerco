@@ -234,7 +234,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
       <div className="space-y-5">
         <nav className="text-sm text-muted-foreground">
           <Link href="/e-approval" className="hover:text-foreground">
-            E-Approval
+            E-Forms
           </Link>
           <span className="px-2">/</span>
           <span className="text-foreground">Workspaces</span>

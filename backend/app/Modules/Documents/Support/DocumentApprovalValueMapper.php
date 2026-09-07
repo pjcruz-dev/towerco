@@ -8,7 +8,7 @@ use App\Modules\Documents\Models\Document;
 use App\Modules\EApproval\Models\EApprovalForm;
 
 /**
- * Maps TowerOS document context onto E-Approval form field names when present.
+ * Maps INFRA SUITE document context onto E-Forms form field names when present.
  */
 final class DocumentApprovalValueMapper
 {

@@ -535,6 +535,7 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
       <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <EApprovalDocumentDesignEditor
           formTitle={formTitle}
+          formFamily={formFamily}
           fields={designFields}
           fieldTokens={fieldTokens}
           html={template.template_html ?? ""}

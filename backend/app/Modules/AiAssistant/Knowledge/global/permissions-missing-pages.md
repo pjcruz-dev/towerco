@@ -14,7 +14,7 @@ last_reviewed: 2026-07-17
 
 # Permissions and why a page may be missing
 
-If a menu item, button, or page is missing, TowerOS is usually hiding it because of module enablement or your role permissions.
+If a menu item, button, or page is missing, INFRA SUITE is usually hiding it because of module enablement or your role permissions.
 
 ## Prerequisites
 
@@ -46,4 +46,4 @@ After the correct module enablement and role assignment, the page and actions ap
 
 - Team and Access for workspace users
 - Common troubleshooting
-- Getting started with TowerOS
+- Getting started with INFRA SUITE

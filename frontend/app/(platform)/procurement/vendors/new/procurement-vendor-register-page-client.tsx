@@ -40,15 +40,15 @@ export function ProcurementVendorRegisterPageClient() {
               </Link>
             }
             title="Register vendor"
-            description="Vendor intake is driven by your published E-Approval vendor registration form."
+            description="Vendor intake is driven by your published E-Forms vendor registration form."
           />
           <OperationalAlert
             level="warning"
             title="No published vendor registration form"
-            description="Publish a form with form family vendor_registration in E-Approval before registering suppliers here."
+            description="Publish a form with form family vendor_registration in E-Forms before registering suppliers here."
             actions={
               <Button size="sm" variant="outline" render={<Link href="/e-approval/forms" />}>
-                Open E-Approval forms
+                Open E-Forms forms
               </Button>
             }
           />

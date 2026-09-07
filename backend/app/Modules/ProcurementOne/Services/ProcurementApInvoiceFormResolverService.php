@@ -27,7 +27,7 @@ final class ProcurementApInvoiceFormResolverService
     public function resolvePublishedFormOrFail(): EApprovalForm
     {
         $form = $this->resolvePublishedForm();
-        abort_if($form === null, 422, __('No published AP invoice form is configured. Install the finance & procurement template pack in E-Approval.'));
+        abort_if($form === null, 422, __('No published AP invoice form is configured. Install the finance & procurement template pack in E-Forms.'));
 
         return $form;
     }

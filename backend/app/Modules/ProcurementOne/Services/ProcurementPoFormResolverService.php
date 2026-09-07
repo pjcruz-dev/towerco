@@ -26,7 +26,7 @@ final class ProcurementPoFormResolverService
     public function resolvePublishedFormOrFail(): EApprovalForm
     {
         $form = $this->resolvePublishedForm();
-        abort_if($form === null, 422, __('No published purchase order form is configured. Install the finance & procurement template pack in E-Approval.'));
+        abort_if($form === null, 422, __('No published purchase order form is configured. Install the finance & procurement template pack in E-Forms.'));
 
         return $form;
     }

@@ -1,4 +1,4 @@
-# TowerOS enterprise SaaS design system
+# INFRA SUITE enterprise SaaS design system
 
 > **Canonical full design system:** [`DESIGN_SYSTEM.md`](./DESIGN_SYSTEM.md). This file is the shorter token / component summary for day-to-day UI work.
 
@@ -6,7 +6,7 @@
 **Style:** Telecom enterprise SaaS, modern ERP, operational clarity — aligned with Azure Portal, ServiceNow, Atlassian Jira.  
 **Philosophy:** Operational minimalism (see `.cursor/rules/uiux-theme.mdc`). Data-first, map-first where relevant, low motion.
 
-**Board presentation alignment:** Use [`docs/Rules/TowerOS_Board_Presentation.pdf`](../Rules/TowerOS_Board_Presentation.pdf) to lock module naming and information architecture. The app follows the **Infrastructure** / **Governance** grouping and module labels defined in `app-sidebar.tsx` and `platform-console-sidebar.tsx`.
+**Board presentation alignment:** Use [`docs/Rules/INFRA SUITE_Board_Presentation.pdf`](../Rules/INFRA SUITE_Board_Presentation.pdf) to lock module naming and information architecture. The app follows the **Infrastructure** / **Governance** grouping and module labels defined in `app-sidebar.tsx` and `platform-console-sidebar.tsx`.
 
 ---
 
@@ -323,7 +323,7 @@ Base unit **4px**. Align with Tailwind default scale.
 
 ### 18.2 Application order
 
-1. Load TowerOS **default** theme (light/dark base).
+1. Load INFRA SUITE **default** theme (light/dark base).
 2. Merge tenant overrides for the active mode (`light` / `dark` keys in JSON or flat with mode suffix).
 3. Apply via **`style` on `html` or a single injected `<style id="tenant-theme">`** setting CSS variables — avoid flash with inline critical variables on first paint when possible.
 
@@ -335,14 +335,14 @@ Base unit **4px**. Align with Tailwind default scale.
 
 ### 18.4 Product rules
 
-- **Platform console** (central): always default TowerOS branding — no tenant theme merge on operator tools unless explicitly scoped “preview as tenant.”
+- **Platform console** (central): always default INFRA SUITE branding — no tenant theme merge on operator tools unless explicitly scoped “preview as tenant.”
 - **Documentation:** tenant admin UI explains that extreme contrast choices may be adjusted for accessibility.
 
 ---
 
 ## 19. Charting standard (Recharts)
 
-**Decision:** **Recharts** is the canonical chart library for TowerOS (Next.js 14, React tree, composable with design tokens).
+**Decision:** **Recharts** is the canonical chart library for INFRA SUITE (Next.js 14, React tree, composable with design tokens).
 
 ### 19.1 Usage
 
@@ -364,12 +364,12 @@ Base unit **4px**. Align with Tailwind default scale.
 
 ## 20. GIS standard (MapLibre GL JS)
 
-**Decision:** **MapLibre GL JS** is the canonical 2D map runtime for TowerOS (open stack, vector tiles, style JSON, aligns with operational NOC/GIS layouts in §16).
+**Decision:** **MapLibre GL JS** is the canonical 2D map runtime for INFRA SUITE (open stack, vector tiles, style JSON, aligns with operational NOC/GIS layouts in §16).
 
 ### 20.1 Usage
 
 - **Basemap:** vector style JSON (hosted or bundled); prefer **dark operational** styles for NOC; tenant-branded maps may swap style URL if provided URLs pass CSP and HTTPS checks.
-- **Controls:** custom TowerOS toolbar (§16) calling MapLibre API — avoid default control clutter where product UX requires density.
+- **Controls:** custom INFRA SUITE toolbar (§16) calling MapLibre API — avoid default control clutter where product UX requires density.
 - **Layers:** GeoJSON sources + symbol/circle/fill layers; use **clustering** for point density; severity from data-driven styling where possible.
 
 ### 20.2 Mapbox compatibility

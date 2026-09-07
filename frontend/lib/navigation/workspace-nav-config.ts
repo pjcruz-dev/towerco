@@ -285,7 +285,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         ],
       },
       {
-        title: "E-Approval",
+        title: "E-Forms",
         icon: ClipboardCheck,
         module: "e_approval",
         permissions: [
@@ -397,30 +397,30 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: ["ai_assistant:knowledge:manage"],
           },
           {
-            title: "My E-Approval profile",
+            title: "My E-Forms profile",
             href: "/e-approval/profile",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:view"],
           },
           {
             title: "Module policies",
             href: "/e-approval/settings",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
           },
           {
             title: "Approval policies",
             href: "/e-approval/approval-policies",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
           },
           {
             title: "Master data",
             href: "/e-approval/master-data",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
           },
@@ -479,7 +479,7 @@ export const workspaceQuickActions: WorkspaceQuickAction[] = [
   },
   {
     id: "ea-new-request",
-    title: "New E-Approval request",
+    title: "New E-Forms request",
     description: "Choose a published form and start a submission",
     href: "/e-approval/submissions/new",
     icon: PlusCircle,
@@ -489,7 +489,7 @@ export const workspaceQuickActions: WorkspaceQuickAction[] = [
   },
   {
     id: "ea-my-approvals",
-    title: "My E-Approval inbox",
+    title: "My E-Forms inbox",
     description: "Open submissions awaiting your decision",
     href: "/e-approval/approvals?awaiting_me=1",
     icon: ClipboardCheck,

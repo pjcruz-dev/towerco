@@ -28,7 +28,7 @@ final class ProcurementVendorFormResolverService
         abort_if(
             $form === null,
             422,
-            __('No published vendor registration form is configured. Publish the vendor registration form in E-Approval.'),
+            __('No published vendor registration form is configured. Publish the vendor registration form in E-Forms.'),
         );
 
         return $form;

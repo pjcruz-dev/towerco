@@ -26,7 +26,7 @@ const MODULE_GROUP_ORDER: { id: string; label: string; prefix: string }[] = [
   { id: "documents", label: "Documents", prefix: "documents_" },
   { id: "document_register", label: "Document register", prefix: "dcf_" },
   { id: "sites", label: "Sites", prefix: "sites_" },
-  { id: "e_approval", label: "E-Approval", prefix: "e_approval_" },
+  { id: "e_approval", label: "E-Forms", prefix: "e_approval_" },
   { id: "ai_assistant", label: "AI Assistant", prefix: "ai_assistant_" },
 ];
 

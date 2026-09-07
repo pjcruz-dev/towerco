@@ -1,4 +1,4 @@
-# TowerOS production — Amazon EC2 + RDS MySQL
+# INFRA SUITE production — Amazon EC2 + RDS MySQL
 
 **Status:** Confirmed production baseline (AWS 1-year subscription).  
 **Scale path later:** [ECS Fargate + Aurora](./aws-ecs-cicd.md).
@@ -9,7 +9,7 @@ Copy secrets from [`backend/.env.production.example`](../../backend/.env.product
 
 ## Confirmed AWS resources
 
-| Resource | Spec | TowerOS use |
+| Resource | Spec | INFRA SUITE use |
 |----------|------|-------------|
 | **Amazon EC2** | `t3.large` — 2 vCPU, 8 GB RAM, 50 GB root | Docker: API + Next.js web + Redis + queue worker (+ optional Soketi) |
 | **Amazon EBS** | 100 GB General Purpose SSD (`gp3`) | Docker images, logs, build/temp |
@@ -38,7 +38,7 @@ All five fit on your existing **EC2 t3.large** without buying ElastiCache or an 
 
 ### 1. Redis — run Compose Redis on the EC2
 
-TowerOS already ships a `redis` service in `docker-compose.yml`. On production, start it with the API (do **not** expose Redis to the internet).
+INFRA SUITE already ships a `redis` service in `docker-compose.yml`. On production, start it with the API (do **not** expose Redis to the internet).
 
 ```bash
 cd /opt/toweros
@@ -75,7 +75,7 @@ Create `/etc/systemd/system/toweros-worker.service`:
 
 ```ini
 [Unit]
-Description=TowerOS queue worker
+Description=INFRA SUITE queue worker
 After=docker.service
 Requires=docker.service
 
@@ -154,7 +154,7 @@ Set `APP_URL` / frontend URLs to `https://…` and force HTTPS at the proxy (`X-
 
 ### 5. SES — Amazon Simple Email Service
 
-TowerOS already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend). Prefer an **EC2 instance role** over access keys.
+INFRA SUITE already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend). Prefer an **EC2 instance role** over access keys.
 
 1. **SES console** (same region as the app, e.g. `ap-southeast-1`):
    - Verify domain `yourdomain.com` (DKIM via Route 53).
@@ -176,7 +176,7 @@ TowerOS already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend)
 MAIL_MAILER=ses
 TOWEROS_NOTIFICATIONS_MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
-MAIL_FROM_NAME=TowerOS
+MAIL_FROM_NAME=INFRA SUITE
 AWS_DEFAULT_REGION=ap-southeast-1
 # Leave AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY empty when using the instance role
 ```
@@ -185,7 +185,7 @@ AWS_DEFAULT_REGION=ap-southeast-1
 
 ```bash
 docker compose --env-file .env.docker exec api php artisan tinker
->>> Mail::raw('TowerOS SES OK', fn ($m) => $m->to('you@yourdomain.com')->subject('SES test'));
+>>> Mail::raw('INFRA SUITE SES OK', fn ($m) => $m->to('you@yourdomain.com')->subject('SES test'));
 ```
 
 **Alternative:** Microsoft 365 SMTP if the customer already uses it:
@@ -381,7 +381,7 @@ docker compose --env-file .env.docker exec api php artisan config:cache
 
 ```ini
 [Unit]
-Description=TowerOS queue worker
+Description=INFRA SUITE queue worker
 After=docker.service
 Requires=docker.service
 

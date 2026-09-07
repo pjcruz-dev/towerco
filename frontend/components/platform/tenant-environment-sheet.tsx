@@ -147,7 +147,7 @@ export function TenantEnvironmentSheet({
                 Stancl will register <span className="font-mono text-foreground">{effectiveDomain}</span> for login.
                 {environment === "local" || effectiveDomain.endsWith(".localhost")
                   ? ` Open http://${effectiveDomain}:${resolveDevAppPort()}/login after create.`
-                  : " Point DNS to TowerOS before go-live."}
+                  : " Point DNS to INFRA SUITE before go-live."}
               </p>
 
               <div className="space-y-2 rounded-lg border border-border p-3">

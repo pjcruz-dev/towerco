@@ -17,7 +17,7 @@ Phase 5 adds **enterprise custom limits**, **tenant usage reporting**, and a **p
 - `GET /api/v1/admin/billing/usage` (`tenant:manage`)
 - **Service:** `TenantUsageReportService` — last 30 days:
   - Active/total users, seat usage
-  - E-Approval forms & submissions
+  - E-Forms forms & submissions
   - PROJECT-ONE rollouts
 - **UI:** `/billing` → Usage section
 

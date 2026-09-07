@@ -1,6 +1,6 @@
-# E-Approval — email notifications (TowerOS modern mail)
+# E-Forms — email notifications (INFRA SUITE modern mail)
 
-E-Approval uses **Laravel queued notifications** on the `toweros-notifications` queue. Transport is **platform mail** (Microsoft 365 SMTP or AWS SES) — **not** the legacy standalone formbuilder Graph sidecar.
+E-Forms uses **Laravel queued notifications** on the `toweros-notifications` queue. Transport is **platform mail** (Microsoft 365 SMTP or AWS SES) — **not** the legacy standalone formbuilder Graph sidecar.
 
 Related: [e-approval.md](./e-approval.md) · [e-approval-go-live-checklist.md](./e-approval-go-live-checklist.md)
 
@@ -40,7 +40,7 @@ All default **off** in `e_approval_settings`. Recipients are `external_submitter
 
 Internal sponsor/approver mails above are unchanged when these toggles are enabled.
 
-**In-app** bell notifications are separate; users still see actions in TowerOS if email is misconfigured.
+**In-app** bell notifications are separate; users still see actions in INFRA SUITE if email is misconfigured.
 
 **Comments** do not send email (in-app only).
 
@@ -82,7 +82,7 @@ MAIL_USERNAME=noreply@yourdomain.com
 MAIL_PASSWORD=your-app-password-or-secret
 MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
-MAIL_FROM_NAME="TowerOS"
+MAIL_FROM_NAME="INFRA SUITE"
 ```
 
 Use a **Microsoft 365 mailbox** with SMTP AUTH enabled, or an app registration–backed relay your infra team approves. Entra **sign-in** settings (Administration → Sign-in & security) are unrelated to SMTP — do not confuse them.
@@ -123,7 +123,7 @@ With `QUEUE_CONNECTION=sync`, jobs run inline after the HTTP response (acceptabl
 
 ## Deep links in email
 
-Notification URLs use the tenant’s primary domain (e.g. `http://atc.localhost/project-one/gate-approvals`), not bare `http://localhost`. Subject lines and the mail header use the **tenant slug** (e.g. `[ATC]`), not `TowerOS`.
+Notification URLs use the tenant’s primary domain (e.g. `http://atc.localhost/project-one/gate-approvals`), not bare `http://localhost`. Subject lines and the mail header use the **tenant slug** (e.g. `[ATC]`), not `INFRA SUITE`.
 
 Optional: set `TOWEROS_TENANT_APP_URL` only when you need a non-default scheme/port; hostname always comes from the tenant domain record.
 
@@ -177,4 +177,4 @@ Use cron / Laravel scheduler in production (e.g. every 15–60 minutes).
 
 ## Legacy formbuilder
 
-The old app’s `test-email` route and any Graph sidecar for mail are **not** used. TowerOS sends mail only through Laravel `config/mail.php` and `toweros.notifications_mail_mailer`.
+The old app’s `test-email` route and any Graph sidecar for mail are **not** used. INFRA SUITE sends mail only through Laravel `config/mail.php` and `toweros.notifications_mail_mailer`.

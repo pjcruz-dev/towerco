@@ -28,7 +28,7 @@ Use this when you have a ticket number (for example **TKT-00004**) and want its 
 1. Open **Ticketing → Tickets**.
 2. Search by ticket number (e.g. `TKT-00004`) or title.
 3. Open the ticket to see status, priority, assignee, and comments.
-4. You can also ask Ask TowerOS: “What is the status of TKT-00004?”
+4. You can also ask Ask INFRA SUITE: “What is the status of TKT-00004?”
 
 ## Expected result
 

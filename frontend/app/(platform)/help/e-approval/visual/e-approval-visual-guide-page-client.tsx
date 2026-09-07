@@ -111,7 +111,7 @@ export function EApprovalVisualGuidePageClient() {
       <div className="mx-auto max-w-5xl space-y-6 print:max-w-none">
         <div className="flex flex-wrap items-start justify-between gap-3 print:block">
           <header className="min-w-0 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">E-Approval</p>
+            <p className="text-xs font-medium text-muted-foreground">E-Forms</p>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Tour guide
             </h1>

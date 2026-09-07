@@ -482,7 +482,7 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
 
       {approvalDocId ? (
         <div className="border-t border-border bg-muted/20 px-4 py-3">
-          <p className="text-sm font-medium">Request E-Approval</p>
+          <p className="text-sm font-medium">Request E-Forms</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Document fields are auto-filled when the form has matching field names (e.g. document_title,
             site_code).

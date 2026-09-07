@@ -6,7 +6,7 @@ If you **approve** other people’s requests, open the [approver guide](/help/e-
 
 ## What you can do with this guide
 
-1. Open E-Approval  
+1. Open E-Forms  
 2. Start and submit a request  
 3. Track your request  
 4. Fix a request that was sent back  
@@ -20,22 +20,22 @@ You need:
 
 - Access to your **company workspace**  
 - Your login (email + password, or **Sign in with Microsoft**)  
-- Permission to use **E-Approval**
+- Permission to use **E-Forms**
 
 Ask IT or your admin for your workspace login address if you are unsure.
 
 ---
 
-## Step 1 — Open E-Approval
+## Step 1 — Open E-Forms
 
-1. In the left sidebar, click **E-Approval**.  
+1. In the left sidebar, click **E-Forms**.  
 2. You will mainly use:
 
 | Menu item | What it is for |
 |-----------|----------------|
 | **Overview** | Quick summary and shortcuts |
 | **Submissions** | Your requests and drafts |
-| **My E-Approval profile** | Optional: save your signature |
+| **My E-Forms profile** | Optional: save your signature |
 
 ---
 
@@ -43,7 +43,7 @@ Ask IT or your admin for your workspace login address if you are unsure.
 
 Some forms ask you to sign when you submit. Saving a signature once saves time later.
 
-1. Go to **E-Approval → My E-Approval profile**.  
+1. Go to **E-Forms → My E-Forms profile**.  
 2. Open **My signature**.  
 3. Choose **Draw**, **Type**, or **Upload**.  
 4. Tick the consent checkbox(es) shown on the page.  
@@ -55,7 +55,7 @@ If your form does not ask for a signature, you can skip this step.
 
 ## Step 3 — Start a new request
 
-1. Go to **E-Approval → Submissions**.  
+1. Go to **E-Forms → Submissions**.  
 2. Click **New submission**  
    (or from **Overview**, click **New submission**).  
 3. Find the form you need (use search if the list is long).  
@@ -71,7 +71,7 @@ You should see a success message (for example **Submission sent**).
 ### Save a draft (finish later)
 
 1. While filling the form, click **Save draft**.  
-2. Later: **E-Approval → Submissions** → open the **Draft** → **Continue editing** → **Submit request**.
+2. Later: **E-Forms → Submissions** → open the **Draft** → **Continue editing** → **Submit request**.
 
 ### If you cannot submit
 
@@ -85,7 +85,7 @@ You should see a success message (for example **Submission sent**).
 
 ## Step 4 — Track your request
 
-1. Go to **E-Approval → Submissions**.  
+1. Go to **E-Forms → Submissions**.  
 2. Find your request (search by document number if needed).  
 3. Click it to open details.
 
@@ -115,7 +115,7 @@ You should see a success message (for example **Submission sent**).
 
 ## Step 5 — If your request was sent back (Needs revision)
 
-1. Open **E-Approval → Submissions**.  
+1. Open **E-Forms → Submissions**.  
 2. Open the request with status **Needs revision**.  
 3. Read the **revision remarks** carefully (banner and **Activity** tab).  
 4. Choose:
@@ -155,7 +155,7 @@ You may also get **email** when someone approves, rejects, or returns your reque
 
 ## Quick checklist
 
-- [ ] Open **E-Approval → Submissions → New submission**  
+- [ ] Open **E-Forms → Submissions → New submission**  
 - [ ] **Start request** → fill form → **Submit request**  
 - [ ] Note the document number  
 - [ ] Check status under **Submissions** (**Pending**)  
@@ -166,8 +166,8 @@ You may also get **email** when someone approves, rejects, or returns your reque
 
 ## FAQ
 
-**I do not see E-Approval in the menu.**  
-Ask your admin to enable E-Approval and give you requestor access.
+**I do not see E-Forms in the menu.**  
+Ask your admin to enable E-Forms and give you requestor access.
 
 **Can I edit after I submit?**  
 Not while it is **Pending**, unless an approver uses **Request revision**, or you **Cancel** and start again.

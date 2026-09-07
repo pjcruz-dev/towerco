@@ -1,6 +1,6 @@
 # RegistryDataTableView
 
-TowerOS list/registry tables use TanStack Table via `RegistryDataTableView`. Prefer this over plain `Table` for paginated, filterable, column-toggle list pages.
+INFRA SUITE list/registry tables use TanStack Table via `RegistryDataTableView`. Prefer this over plain `Table` for paginated, filterable, column-toggle list pages.
 
 ## When to use
 

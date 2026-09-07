@@ -62,7 +62,7 @@ export function buildPurchaseOrderPrintTemplate(): Record<string, unknown> {
       showApprovalHistory: true,
       showRequestorSignature: true,
       showPageNumbers: true,
-      text: "Generated from TowerOS E-Approval",
+      text: "Generated from INFRA SUITE E-Forms",
     },
     blocks: {
       party_row: ["supplier", "ship_to"],

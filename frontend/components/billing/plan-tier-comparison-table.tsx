@@ -167,7 +167,7 @@ export function PlanTierComparisonTable({ tiers, currentTier, currency = "USD", 
             ))}
           </tr>
           <tr>
-            <td className="px-4 py-3 text-muted-foreground">E-Approval form file fields</td>
+            <td className="px-4 py-3 text-muted-foreground">E-Forms form file fields</td>
             {sorted.map((tier) => (
               <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
                 {formatFileFields(tier)}
@@ -175,7 +175,7 @@ export function PlanTierComparisonTable({ tiers, currentTier, currency = "USD", 
             ))}
           </tr>
           <tr>
-            <td className="px-4 py-3 text-muted-foreground">E-Approval submission attachments</td>
+            <td className="px-4 py-3 text-muted-foreground">E-Forms submission attachments</td>
             {sorted.map((tier) => (
               <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
                 {tier.modules.e_approval?.file_uploads ? "Allowed" : "Blocked"}

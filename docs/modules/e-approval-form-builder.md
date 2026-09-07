@@ -1,6 +1,6 @@
-# E-Approval form builder
+# E-Forms form builder
 
-TowerOS E-Approval lets tenant administrators design **published forms** with multi-step approval workflows. Requestors submit requests; approvers act in the approvals inbox.
+INFRA SUITE E-Forms lets tenant administrators design **published forms** with multi-step approval workflows. Requestors submit requests; approvers act in the approvals inbox.
 
 ## Routes (frontend)
 
@@ -366,7 +366,7 @@ Tests: `backend/tests/Feature/EApproval/EApprovalFinanceProcurementDashboardTest
 
 ### Related form navigation (D2)
 
-Finance & procurement templates declare `related_template_ids` in `metadata_json`. When forms are provisioned, TowerOS stores resolved UUIDs on `related_form_ids` for form-level navigation hints.
+Finance & procurement templates declare `related_template_ids` in `metadata_json`. When forms are provisioned, INFRA SUITE stores resolved UUIDs on `related_form_ids` for form-level navigation hints.
 
 **Gallery bundle** — creates all six finance/procurement templates and wires links in one step:
 
@@ -440,7 +440,7 @@ Tests: `backend/tests/Feature/EApproval/EApprovalSubmissionFinanceAuditTest.php`
 - **From approver field** — value chosen on the form
 - **Direct manager (Entra)** — resolved at submit from Microsoft Entra; test lookup on Workflow tab
 
-Requires tenant Entra settings and E-Approval workflow settings (auto-provision manager users optional).
+Requires tenant Entra settings and E-Forms workflow settings (auto-provision manager users optional).
 
 ## Templates
 
@@ -464,7 +464,7 @@ Built-in templates (config: `backend/config/e_approval.php` + `e_approval_financ
 - Purchase order (PO) — vendor master data + PR reference
 - Vendor registration — internal or public-link vendor intake
 
-After creating from template, assign fixed approvers on **Workflow** (empty `user` steps) or publish when approver fields are used. Load vendors under **E-Approval → Master data** with key `vendors` for the PO vendor dropdown.
+After creating from template, assign fixed approvers on **Workflow** (empty `user` steps) or publish when approver fields are used. Load vendors under **E-Forms → Master data** with key `vendors` for the PO vendor dropdown.
 
 API: `GET /e-approval/form-templates`, `POST /e-approval/form-templates` with `{ "template_id": "leave_request" }`.
 
@@ -562,10 +562,10 @@ Submissions snapshot `schema_snapshot_json`, `workflow_snapshot_json`, and `work
 
 | Priority | Item |
 |----------|------|
-| — | Visual template builder (JSON editor today); central platform-wide E-Approval analytics |
+| — | Visual template builder (JSON editor today); central platform-wide E-Forms analytics |
 
 ## Related docs
 
-- Master data: E-Approval → Master data UI
-- Tenant settings: Entra / workflow settings under E-Approval → Settings
+- Master data: E-Forms → Master data UI
+- Tenant settings: Entra / workflow settings under E-Forms → Settings
 - Impersonation (support): [tenant-user-impersonation.md](./tenant-user-impersonation.md)

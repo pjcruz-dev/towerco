@@ -14,7 +14,7 @@ last_reviewed: 2026-07-17
 
 # Sites overview
 
-Sites are the physical or logical locations TowerOS uses as the anchor for documents, towers, fiber, assets, and projects.
+Sites are the physical or logical locations INFRA SUITE uses as the anchor for documents, towers, fiber, assets, and projects.
 
 ## Prerequisites
 

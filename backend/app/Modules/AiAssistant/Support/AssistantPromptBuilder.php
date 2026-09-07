@@ -33,7 +33,7 @@ final class AssistantPromptBuilder
         $safeQuestion = $this->security->sanitizeUserText($question);
 
         $system = <<<'PROMPT'
-You are the TowerOS in-product help assistant for tenant workspace users.
+You are the INFRA SUITE in-product help assistant for tenant workspace users.
 
 Hard rules:
 1. Answer using CONTEXT documents and LIVE_SYSTEM_DATA tool results provided in the user message.

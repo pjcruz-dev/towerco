@@ -1,4 +1,4 @@
-# TowerOS documentation (non-production)
+# INFRA SUITE documentation (non-production)
 
 All playbooks, phase notes, board rules, local launchers, and archives live under **`docs/`**.
 
@@ -31,7 +31,7 @@ docs/
 ├── frontend/           Frontend engineering notes
 ├── infrastructure/     AWS EC2/RDS, ECS, CI/CD, hardening, runbooks
 ├── modules/            Module guides (e-approval, billing phases, …)
-├── samples/            E-Approval import JSON samples
+├── samples/            E-Forms import JSON samples
 └── exports/            Generated spreadsheets
 ```
 
@@ -41,7 +41,7 @@ docs/
 |------|------|
 | Local Docker guide | [guides/local-development-docker-guide.md](./guides/local-development-docker-guide.md) |
 | Production (EC2 + RDS) | [infrastructure/aws-ec2-rds-production.md](./infrastructure/aws-ec2-rds-production.md) |
-| E-Approval end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
+| E-Forms end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
 | PROJECT-ONE roadmap | [roadmaps/project-one-roadmap.md](./roadmaps/project-one-roadmap.md) |
 | Tenant passkeys (fingerprint / WebAuthn) | [roadmaps/tenant-passkeys-roadmap.md](./roadmaps/tenant-passkeys-roadmap.md) |
 | Tenant database backups | [modules/tenant-database-backups.md](./modules/tenant-database-backups.md) |
@@ -51,6 +51,6 @@ docs/
 | Passkeys Phase 4 (MFA policy) | [architecture/tenant-passkeys-phase-4.md](./architecture/tenant-passkeys-phase-4.md) |
 | Passkeys staging checklist | [ops/tenant-passkeys-staging-checklist.md](./ops/tenant-passkeys-staging-checklist.md) |
 | Rollout playbooks | [rollout/](./rollout/) |
-| Board presentation | [Rules/TowerOS_Board_Presentation.pdf](./Rules/TowerOS_Board_Presentation.pdf) |
+| Board presentation | [Rules/INFRA SUITE_Board_Presentation.pdf](./Rules/INFRA SUITE_Board_Presentation.pdf) |
 | Design system | [design-system/DESIGN_SYSTEM.md](./design-system/DESIGN_SYSTEM.md) |
 | Dev menu (optional) | [local-dev/tower.cmd](./local-dev/tower.cmd) — or `npm run dev` |

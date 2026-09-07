@@ -1053,7 +1053,7 @@ export function LiveProductTour() {
     (spotlightTarget === SIDEBAR_TRIGGER_HELP || (missing && !hole));
 
   const stepBody = waitingForMobileNav
-    ? "On a phone, navigation is behind the menu (☰). We open it for you — then E-Approval is highlighted in that menu."
+    ? "On a phone, navigation is behind the menu (☰). We open it for you — then E-Forms is highlighted in that menu."
     : step.body;
 
   const stepMissingHint = waitingForMobileNav

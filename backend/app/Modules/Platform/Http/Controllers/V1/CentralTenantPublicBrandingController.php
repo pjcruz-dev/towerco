@@ -37,7 +37,7 @@ class CentralTenantPublicBrandingController extends AbstractApiController
         );
 
         // Brand DNS (e.g. staging.alliancetowers.com) has no slug in the host; login UI needs this
-        // before auth so chrome does not fall back to the product name "TowerOS".
+        // before auth so chrome does not fall back to the product name "INFRA SUITE".
         if ($tenant !== null) {
             $slug = trim((string) ($tenant->slug ?? ''));
             if ($slug !== '') {

@@ -27,7 +27,7 @@ class TicketingSettingsTestEmailController extends AbstractApiController
         $result = $service->sendToUser($user);
 
         return $this->ok([
-            'message' => __('Test email sent. Check your inbox (and spam) for the TowerOS Ticketing test message.'),
+            'message' => __('Test email sent. Check your inbox (and spam) for the INFRA SUITE Ticketing test message.'),
             'sent_to' => $result['sent_to'],
             'mailer' => $result['mailer'],
         ]);

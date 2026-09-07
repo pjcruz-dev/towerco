@@ -210,7 +210,7 @@ export function RolloutMilestoneCyclesGrid({ detail, defaultZoom }: Props) {
           >
             <span className="inline-flex items-center gap-1.5">
               <Download className="h-3 w-3" />
-              TowerOS milestone grid
+              INFRA SUITE milestone grid
             </span>
             <LegendSwatch color="#22c55e" label="Completed" />
             <LegendSwatch color="#3b82f6" label="In progress" />

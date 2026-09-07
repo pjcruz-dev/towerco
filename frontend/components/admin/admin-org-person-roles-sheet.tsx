@@ -99,7 +99,7 @@ export function AdminOrgPersonRolesSheet({ person, open, onOpenChange }: Props) 
         <div className="flex-1 overflow-y-auto px-4">
           {person?.external ? (
             <p className="text-sm text-muted-foreground">
-              This person exists only in Microsoft Entra. Create a TowerOS user account before assigning roles.
+              This person exists only in Microsoft Entra. Create a INFRA SUITE user account before assigning roles.
             </p>
           ) : catalogQuery.isLoading ? (
             <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">

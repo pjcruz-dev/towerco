@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Support;
 
 /**
- * TowerOS telecom operations acronym glossary (platform-managed, tenant-facing).
+ * INFRA SUITE telecom operations acronym glossary (platform-managed, tenant-facing).
  */
 final class OperationalAcronymDefaults
 {

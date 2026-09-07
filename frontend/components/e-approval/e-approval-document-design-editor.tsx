@@ -26,6 +26,7 @@ type DesignMode = "design" | "styles" | "source";
 
 type Props = {
   formTitle?: string;
+  formFamily?: string | null;
   fields: DocumentDesignFieldRef[];
   fieldTokens: Array<{ token: string; label: string }>;
   html: string;
@@ -95,6 +96,7 @@ function paperHeightMm(pageSize: string | undefined, orientation: "portrait" | "
 
 export function EApprovalDocumentDesignEditor({
   formTitle,
+  formFamily,
   fields,
   fieldTokens,
   html,
@@ -195,13 +197,16 @@ export function EApprovalDocumentDesignEditor({
   }
 
   function seedDefaults() {
-    onHtmlChange(defaultEApprovalDocumentDesignHtml(formTitle, fields));
+    onHtmlChange(defaultEApprovalDocumentDesignHtml(formTitle, fields, formFamily));
     onCssChange(
-      defaultEApprovalDocumentDesignCss({
-        size: pageSize,
-        marginMm,
-        orientation: resolvedOrientation,
-      }),
+      defaultEApprovalDocumentDesignCss(
+        {
+          size: pageSize,
+          marginMm,
+          orientation: resolvedOrientation,
+        },
+        formFamily,
+      ),
     );
     setMode("design");
     setZoom(resolvedOrientation === "landscape" ? 60 : 75);

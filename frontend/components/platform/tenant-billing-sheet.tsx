@@ -664,7 +664,7 @@ export function TenantBillingSheet({
                         checked={overrideFileUploads}
                         onCheckedChange={(v) => setOverrideFileUploads(v === true)}
                       />
-                      E-Approval file uploads
+                      E-Forms file uploads
                     </label>
                     {overrideFileUploads ? (
                       <div className="ml-6 space-y-2">
@@ -763,7 +763,7 @@ export function TenantBillingSheet({
 
           {isDowngradeSelection && downgradeWarnings.length === 0 ? (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Downgrading may block E-Approval forms that use file fields. Save once to see
+              Downgrading may block E-Forms forms that use file fields. Save once to see
               warnings, then confirm if required.
             </p>
           ) : null}

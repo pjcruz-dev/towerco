@@ -9,7 +9,7 @@ use App\Modules\Identity\Models\TenantUser;
 /**
  * Capability checks for the tenant AI Assistant module.
  *
- * Controllers also call $user->can(...) directly (TowerOS convention); this policy
+ * Controllers also call $user->can(...) directly (INFRA SUITE convention); this policy
  * centralizes the same checks for future conversation/knowledge authorization.
  */
 final class AiAssistantPolicy

@@ -1,6 +1,6 @@
-# E-Approval — tenant go-live checklist
+# E-Forms — tenant go-live checklist
 
-Use this checklist when moving a tenant from the former standalone formbuilder to TowerOS E-Approval.
+Use this checklist when moving a tenant from the former standalone formbuilder to INFRA SUITE E-Forms.
 
 Related: [e-approval.md](./e-approval.md) · [e-approval-api-parity.md](./e-approval-api-parity.md)
 
@@ -8,12 +8,12 @@ Related: [e-approval.md](./e-approval.md) · [e-approval-api-parity.md](./e-appr
 
 ## 1. Prerequisites
 
-- [ ] TowerOS deployed with E-Approval module (P0–P6 merged)
+- [ ] INFRA SUITE deployed with E-Forms module (P0–P6 merged)
 - [ ] Tenant database migrated: `php artisan tenants:migrate` (or `npm run dev:fresh` locally)
 - [ ] Tenant RBAC baseline includes `e_approval:*` permissions (`TenantRbacBaselineService`)
 - [ ] **Administration → Tenant settings → Microsoft Entra ID** configured if using sign-in with Microsoft or **manager** workflow steps (per-tenant app registration; no global `.env` keys required)
 - [ ] MFA is **off by default** for new tenants; enable per tenant in platform console when ready (`tenants.mfa_required`)
-- [ ] TowerOS mail transport configured — see [e-approval-email.md](./e-approval-email.md) (`TOWEROS_NOTIFICATIONS_MAIL_MAILER=smtp` for Microsoft 365 or `ses` for AWS; **not** legacy formbuilder mail)
+- [ ] INFRA SUITE mail transport configured — see [e-approval-email.md](./e-approval-email.md) (`TOWEROS_NOTIFICATIONS_MAIL_MAILER=smtp` for Microsoft 365 or `ses` for AWS; **not** legacy formbuilder mail)
 - [ ] `POST /e-approval/settings/test-email` succeeds for an admin (inbox receives test message)
 - [ ] Queue worker on `toweros-notifications` when `QUEUE_CONNECTION=redis`
 
@@ -49,7 +49,7 @@ Assign roles under **Administration → Users** (or Entra group → role mapping
 
 ## 3. Legacy data import (if applicable)
 
-Skip if starting fresh in TowerOS.
+Skip if starting fresh in INFRA SUITE.
 
 1. Configure legacy MySQL in `backend/.env`:
 
@@ -156,7 +156,7 @@ docker compose exec backend php artisan test --filter=EApproval
 
 ## 7. Production cutover
 
-- [ ] Communicate new URL (TowerOS tenant app, **E-APPROVAL** sidebar)
+- [ ] Communicate new URL (INFRA SUITE tenant app, **E-APPROVAL** sidebar)
 - [ ] Disable standalone formbuilder hosts (nginx/pm2/DNS)
 - [ ] Monitor first 48h: failed jobs, mail delivery, Graph manager failures in logs
 - [ ] Keep any former formbuilder DB read-only backup until sign-off
@@ -171,7 +171,7 @@ docker compose exec backend php artisan test --filter=EApproval
 | Form logo URL | `/storage/tenant/...` must be served by your stack |
 | Manager step | Skipped if Graph credentials missing or manager not found |
 | Legacy builder | No full formula/layout-span UI from old `FormBuilder.tsx` |
-| Import | Users must exist in TowerOS with matching emails |
+| Import | Users must exist in INFRA SUITE with matching emails |
 
 ---
 

@@ -1,6 +1,6 @@
-# E-Approval form import samples (ATC)
+# E-Forms form import samples (ATC)
 
-Three `atc-form-export` JSON files ready for **E-Approval → Forms → Edit → Import** (or `POST /api/v1/e-approval/forms/import`).
+Three `atc-form-export` JSON files ready for **E-Forms → Forms → Edit → Import** (or `POST /api/v1/e-approval/forms/import`).
 
 | File | Form |
 |------|------|
@@ -25,7 +25,7 @@ Three `atc-form-export` JSON files ready for **E-Approval → Forms → Edit →
    - **CLI (Docker):**  
      `docker compose --env-file .env.docker exec api php artisan tenants:set-plan-tier professional --domain=atc.localhost`  
    - New tenants in **local** `APP_ENV` default to `professional` automatically (see `TOWEROS_TENANT_DEFAULT_PLAN_TIER`).
-3. Open **E-Approval → Forms**, create or open a form, use **Import** and select one JSON file per form.
+3. Open **E-Forms → Forms**, create or open a form, use **Import** and select one JSON file per form.
 4. Upload brand logo under form settings if needed.
 5. Set **Published** when the workflow looks correct.
 
@@ -69,7 +69,7 @@ Import `03-document-control-form.json` for the Alliance Towers **Document Contro
 
 | Paper field | System |
 |-------------|--------|
-| DCF Number | E-Approval submission **document no.** (template `DCF-{seq:4}`) |
+| DCF Number | E-Forms submission **document no.** (template `DCF-{seq:4}`) |
 | Document number | `document_code` — registry picker on revision |
 | Document title | `document_title` |
 | Previous revision | `previous_revision` — auto from registry |

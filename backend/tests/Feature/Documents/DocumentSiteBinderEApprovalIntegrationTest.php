@@ -53,7 +53,7 @@ final class DocumentSiteBinderEApprovalIntegrationTest extends TestCase
         app(TenantRbacBaselineService::class)->ensure();
         $this->site = Site::query()->create([
             'site_code' => 'ATC-BINDER-EA',
-            'name' => 'Binder E-Approval Site',
+            'name' => 'Binder E-Forms Site',
             'status' => 'active',
         ]);
         tenancy()->end();

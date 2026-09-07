@@ -3,7 +3,7 @@ import type { VisualGuideTab } from "@/lib/help/visual-guide";
 export type { VisualCallout, VisualGuideSection, VisualGuideTab } from "@/lib/help/visual-guide";
 
 /**
- * Diagrams-first E-Approval visual guide.
+ * Diagrams-first E-Forms visual guide.
  * Callout x/y are % of full screenshots (~1910×900) that include the left sidebar.
  * Calibrated against 10% grid overlays on the source PNGs (Aug 2026).
  */
@@ -14,11 +14,11 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
     sections: [
       {
         id: "overview-home",
-        title: "Your E-Approval home",
+        title: "Your E-Forms home",
         description:
           "Start here for counts of work waiting on you, open drafts, and shortcuts into Submissions or Approvals.",
         imageSrc: "/help/e-approval/01-overview.png",
-        imageAlt: "E-Approval overview dashboard",
+        imageAlt: "E-Forms overview dashboard",
         callouts: [
           {
             n: 1,
@@ -62,7 +62,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
         description:
           "Track every request you own. Filter by status, search by document number, and switch gallery or table.",
         imageSrc: "/help/e-approval/02-submissions.png",
-        imageAlt: "E-Approval submissions gallery",
+        imageAlt: "E-Forms submissions gallery",
         callouts: [
           {
             n: 1,
@@ -301,7 +301,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
         description:
           "Under Decide → Approvals. Use Awaiting me for items that need your sign-off.",
         imageSrc: "/help/e-approval/07-approval-inbox.png",
-        imageAlt: "E-Approval approval inbox",
+        imageAlt: "E-Forms approval inbox",
         callouts: [
           {
             n: 1,

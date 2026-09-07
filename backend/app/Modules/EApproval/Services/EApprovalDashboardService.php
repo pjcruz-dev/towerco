@@ -210,7 +210,7 @@ final class EApprovalDashboardService
             ])),
             'recent_audit' => $recentAudit,
             'phase' => 'P7',
-            'message' => 'Your E-Approval inbox — approvals, returns, and open requests.',
+            'message' => 'Your E-Forms inbox — approvals, returns, and open requests.',
         ];
     }
 

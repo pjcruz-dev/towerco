@@ -67,7 +67,7 @@ final class ControlledDocumentRegisterAccessService
         $form = $this->resolveControlledDocumentForm();
         if (! $form instanceof EApprovalForm) {
             throw ValidationException::withMessages([
-                'form' => ['No controlled document E-Approval form is configured. Publish a form with controlled document sync enabled first.'],
+                'form' => ['No controlled document E-Forms form is configured. Publish a form with controlled document sync enabled first.'],
             ]);
         }
 

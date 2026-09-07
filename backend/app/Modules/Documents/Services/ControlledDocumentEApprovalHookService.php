@@ -9,7 +9,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 
 /**
- * Publishes approved E-Approval submissions into the controlled document registry.
+ * Publishes approved E-Forms submissions into the controlled document registry.
  */
 final class ControlledDocumentEApprovalHookService
 {

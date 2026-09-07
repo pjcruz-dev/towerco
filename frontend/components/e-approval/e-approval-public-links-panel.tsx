@@ -129,7 +129,7 @@ export function EApprovalPublicLinksPanel({ formId, formPublished }: Props) {
   return (
     <EApprovalSectionCard
       title="External sharing"
-      description="Secure links for vendors and partners to submit without a TowerOS account. Ops users can also copy the active link from New submission. Internal sponsor receives notifications; approvals stay in your workflow."
+      description="Secure links for vendors and partners to submit without a INFRA SUITE account. Ops users can also copy the active link from New submission. Internal sponsor receives notifications; approvals stay in your workflow."
     >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">

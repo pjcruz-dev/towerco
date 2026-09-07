@@ -12,7 +12,7 @@ class SyncOperationalAcronymDefaultsCommand extends Command
 {
     protected $signature = 'operational-acronyms:sync-defaults';
 
-    protected $description = 'Upsert TowerOS default operational acronyms into the central glossary';
+    protected $description = 'Upsert INFRA SUITE default operational acronyms into the central glossary';
 
     public function handle(OperationalAcronymService $service): int
     {

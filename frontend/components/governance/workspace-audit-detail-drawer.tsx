@@ -40,7 +40,7 @@ function sourceLabel(source: string): string {
     case "workspace":
       return "Workspace";
     case "e_approval":
-      return "E-Approval";
+      return "E-Forms";
     case "auth":
       return "Authentication";
     default:

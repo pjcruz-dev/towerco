@@ -22,7 +22,7 @@ final class ProcurementOneRepairLineMetadataCommand extends Command
         {--po= : Optional purchase order UUID}
     ';
 
-    protected $description = 'Backfill procurement PR/PO line metadata_json from E-Approval submission grid values.';
+    protected $description = 'Backfill procurement PR/PO line metadata_json from E-Forms submission grid values.';
 
     public function handle(ProcurementLineMetadataRepairService $repair): int
     {

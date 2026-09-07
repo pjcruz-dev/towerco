@@ -63,7 +63,7 @@ export function ProcurementPrsPageClient() {
             </Link>
           }
           title="Purchase requisitions"
-          description="First-class PR records with E-Approval workflow, project linkage, and budget checks."
+          description="First-class PR records with E-Forms workflow, project linkage, and budget checks."
           actions={
             <PermissionGate requiredPermissions={[permissions.procurementOneDocumentsCreate]}>
               <Button size="sm" render={<Link href="/procurement/prs/new" />}>

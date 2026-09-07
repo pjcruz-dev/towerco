@@ -1,6 +1,6 @@
-# E-Approval Form Workspace
+# E-Forms Form Workspace
 
-Per-form operational dashboards on top of the existing E-Approval engine (submit, approve, print, export).
+Per-form operational dashboards on top of the existing E-Forms engine (submit, approve, print, export).
 
 ## Pilot (Phase 1 — shipped)
 
@@ -14,7 +14,7 @@ Per-form operational dashboards on top of the existing E-Approval engine (submit
 - Submissions table scoped to the form (`form_id` filter)
 - Visibility: requestors see own + approver assignments; form admins / auditors see all for this form
 - Actions: New request (focused ISO flow), Open detail, Print
-- **Sidebar:** enabled workspaces appear as **top-level Operations items** (peer to Sites, E-Approval), not nested under E-Approval
+- **Sidebar:** enabled workspaces appear as **top-level Operations items** (peer to Sites, E-Forms), not nested under E-Forms
 - ISO upgrade command writes `metadata_json.workspace` on upgrade
 
 ### Enable workspace on existing ISO form
@@ -27,7 +27,7 @@ Published ISO forms with `form_family: iso_document_control` **do not** auto-ena
 
 ### Enable workspace via form editor (Phase 2)
 
-1. Open **E-Approval → Forms → Edit form**
+1. Open **E-Forms → Forms → Edit form**
 2. Open the **Workspace** tab
 3. Enable workspace, set slug/title/visibility, save and publish
 4. Sidebar refreshes from `GET /api/v1/e-approval/workspaces` after save
@@ -67,7 +67,7 @@ Configure on the form editor **Workspace** tab → **Access & grouping**:
 - **Multi-form UI:** submissions table and recent activity show `form_name`; dashboard returns `is_multi_form` and `forms[]`
 - **Workspace audit log widget:** optional dashboard widget backed by `recent_audit` from `e_approval_audit_logs` for the scoped forms/submissions
 - **Command palette:** workspaces appear under **Go to** when the user can access them (`GET /api/v1/e-approval/workspaces`)
-- **Breadcrumbs:** `E-Approval / Workspaces / {title}` on the workspace page
+- **Breadcrumbs:** `E-Forms / Workspaces / {title}` on the workspace page
 
 **Access enforcement:**
 

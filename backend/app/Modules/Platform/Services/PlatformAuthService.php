@@ -18,7 +18,7 @@ final class PlatformAuthService
     /**
      * @return array<string, mixed>
      */
-    public function beginAuthenticatedSession(User $user, string $tokenName = 'TowerOS Platform Console'): array
+    public function beginAuthenticatedSession(User $user, string $tokenName = 'INFRA SUITE Platform Console'): array
     {
         $loginSession = $this->mfa->createLoginSession($user);
 
@@ -60,7 +60,7 @@ final class PlatformAuthService
         string $loginSessionId,
         string $challengeId,
         string $code,
-        string $tokenName = 'TowerOS Platform Console',
+        string $tokenName = 'INFRA SUITE Platform Console',
     ): array {
         $this->mfa->resolveLoginSession($loginSessionId, (string) $user->id);
         $this->mfa->verifyChallenge($challengeId, $code);
@@ -76,7 +76,7 @@ final class PlatformAuthService
         User $user,
         string $loginSessionId,
         string $recoveryCode,
-        string $tokenName = 'TowerOS Platform Console',
+        string $tokenName = 'INFRA SUITE Platform Console',
     ): array {
         $this->mfa->verifyRecoveryCode($user, $loginSessionId, $recoveryCode);
         $this->audit->log('platform.auth.mfa.recovery.verified', $user, [], 'high');
@@ -91,7 +91,7 @@ final class PlatformAuthService
         User $user,
         string $loginSessionId,
         string $code,
-        string $tokenName = 'TowerOS Platform Console',
+        string $tokenName = 'INFRA SUITE Platform Console',
     ): array {
         $this->mfa->resolveLoginSession($loginSessionId, (string) $user->id);
         $recoveryCodes = $this->mfa->completeEnrollment($user, $code);

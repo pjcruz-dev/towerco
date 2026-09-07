@@ -188,7 +188,7 @@ final class AssistantActionsTest extends TestCase
                 'description' => null,
                 'category' => 'general',
                 'source_module' => 'ai_assistant',
-                'source_label' => 'Ask TowerOS',
+                'source_label' => 'Ask INFRA SUITE',
             ],
             'preview' => [
                 'title' => 'Create ticket',

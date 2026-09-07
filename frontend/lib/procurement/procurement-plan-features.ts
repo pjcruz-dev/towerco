@@ -33,7 +33,7 @@ export function procurementPlanUpgradeMessage(
   const tier = planFeatures?.plan_tier ?? "starter";
 
   if (tier === "enterprise") {
-    return `${label} is not enabled for your organization. Contact your TowerOS account team if you expected this capability.`;
+    return `${label} is not enabled for your organization. Contact your INFRA SUITE account team if you expected this capability.`;
   }
 
   if (tier === "professional") {

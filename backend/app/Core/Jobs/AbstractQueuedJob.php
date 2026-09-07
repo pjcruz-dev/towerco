@@ -11,7 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Base for asynchronous work that should always run on a named TowerOS queue.
+ * Base for asynchronous work that should always run on a named INFRA SUITE queue.
  */
 abstract class AbstractQueuedJob implements ShouldQueue
 {

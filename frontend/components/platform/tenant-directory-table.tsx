@@ -155,7 +155,7 @@ export function TenantDirectoryTable({
                 aria-label="Filter by modules"
               >
                 <option value="">All modules</option>
-                <option value="e_approval_only">E-Approval only</option>
+                <option value="e_approval_only">E-Forms only</option>
                 <option value="project_one">Includes Project-One</option>
                 <option value="ticketing">Includes Ticketing</option>
               </Select>
@@ -216,7 +216,7 @@ export function TenantDirectoryTable({
                 <span className="hidden sm:inline">·</span>
                 <span>{mfaOnCount} MFA on (page)</span>
                 <span className="hidden sm:inline">·</span>
-                <span>{eaOnlyCount} E-Approval only (page)</span>
+                <span>{eaOnlyCount} E-Forms only (page)</span>
                 {blockedCount > 0 ? (
                   <>
                     <span className="hidden sm:inline">·</span>

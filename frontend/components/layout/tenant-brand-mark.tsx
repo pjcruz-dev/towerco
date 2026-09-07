@@ -47,7 +47,7 @@ function FallbackMark({
 }
 
 /**
- * Tenant logo from superadmin branding (theme_tokens.logo_url) or TowerOS fallback mark.
+ * Tenant logo from superadmin branding (theme_tokens.logo_url) or INFRA SUITE fallback mark.
  */
 export function TenantBrandMark({ className, iconClassName, size = "md", src }: Props) {
   const storedUrl = useTenantBrandingStore((s) => s.branding?.logo_url);

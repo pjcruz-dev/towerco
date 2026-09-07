@@ -313,6 +313,62 @@ describe("form-style starter layout", () => {
     expect(css).toContain(".ea-form-grid");
     expect(css).toContain(".ea-print-table");
   });
+
+  it("request_for_payment starter matches paper RFP layout", () => {
+    const html = defaultEApprovalDocumentDesignHtml("RFP", [], "request_for_payment");
+    const css = defaultEApprovalDocumentDesignCss(undefined, "request_for_payment");
+    expect(html).toContain("REQUEST FOR PAYMENT");
+    expect(html).toContain("{{field.payee}}");
+    expect(html).toContain("{{field.cost_application}}");
+    expect(html).toContain("BANK DETAILS");
+    expect(html).toContain("ea-rfp-body");
+    expect(html).not.toContain("{{system.form_body}}");
+    expect(css).toContain(".ea-rfp-doc");
+    expect(css).toContain(".ea-rfp-bank");
+    expect(css).toContain("#f1f5f9");
+    expect(css).not.toContain("#1e3a5f");
+
+    const rendered = renderEApprovalPrintTemplateHtml(html, {
+      document_no: "RFP-1",
+      form_name: "Request for payment",
+      status: "approved",
+      requestor: "Ada",
+      created_at: "2026-09-07",
+      brand_logo_url: null,
+      fields: [
+        { key: "payee", label: "Payee", value: "Vendor Co", field_type: "text" },
+        { key: "vat_registration_no", label: "VAT", value: "123", field_type: "text" },
+        { key: "contact_person", label: "Contact", value: "Sam", field_type: "text" },
+        { key: "tel_no", label: "Tel", value: "09", field_type: "phone" },
+        {
+          key: "payment_purpose",
+          label: "Payment purpose",
+          value: "Site survey",
+          field_type: "textarea",
+        },
+        { key: "bank_name", label: "Bank", value: "BDO", field_type: "text" },
+        { key: "bank_account_name", label: "Acct name", value: "Vendor Co", field_type: "text" },
+        { key: "bank_account_no", label: "Acct no", value: "001", field_type: "text" },
+        { key: "payment_amount", label: "Amount", value: "5000", field_type: "currency" },
+        { key: "currency", label: "Currency", value: "PHP", field_type: "select" },
+        { key: "non_po", label: "Non-PO", value: "Non-PO urgent", field_type: "text" },
+        {
+          key: "cost_application",
+          label: "Cost application",
+          value: "SAQ-Site Survey — Project Site No: S1; Ref No: R1; OR No.: O1",
+          field_type: "checklist_matrix",
+        },
+      ],
+      grids: [],
+      approvals: [],
+      attachments: [],
+    });
+    expect(rendered).toContain("Vendor Co");
+    expect(rendered).toContain("ea-rfp-cost");
+    expect(rendered).toContain("☑");
+    expect(rendered).toContain("S1");
+    expect(rendered).toContain("☐");
+  });
 });
 
 describe("documentDesignPreviewRecommendations", () => {

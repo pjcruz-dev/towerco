@@ -1,6 +1,11 @@
 import { resolvePrintAssetUrl } from "@/modules/e-approval/print-utils";
 import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
 import type { EApprovalPrintTemplate } from "@/modules/e-approval/print-template-types";
+import {
+  defaultRequestForPaymentDocumentDesignCss,
+  defaultRequestForPaymentDocumentDesignHtml,
+  renderRfpCostApplicationPrintHtml,
+} from "@/lib/e-approval/e-approval-rfp-print-template";
 
 export type DocumentDesignFieldRef = {
   name: string;
@@ -220,17 +225,31 @@ ${renderScalarFieldRowHtml("Details", emptyMessage, true)}
 </div>`;
   }
 
-  const rows = list.map((field) =>
-    renderScalarFieldRowHtml(
-      field.label || field.key,
-      field.value ?? "",
-      isWidePrintFieldType(field.field_type),
-    ),
-  );
+  const scalarRows: string[] = [];
+  const checklistBlocks: string[] = [];
+  for (const field of list) {
+    const type = (field.field_type ?? "").toLowerCase();
+    if (type === "checklist_matrix") {
+      checklistBlocks.push(renderRfpCostApplicationPrintHtml(field.value ?? ""));
+      continue;
+    }
+    scalarRows.push(
+      renderScalarFieldRowHtml(
+        field.label || field.key,
+        field.value ?? "",
+        isWidePrintFieldType(field.field_type),
+      ),
+    );
+  }
 
-  return `<div class="ea-form-grid">
-${rows.join("\n")}
-</div>`;
+  const parts: string[] = [];
+  if (scalarRows.length > 0) {
+    parts.push(`<div class="ea-form-grid">
+${scalarRows.join("\n")}
+</div>`);
+  }
+  parts.push(...checklistBlocks);
+  return parts.join("\n");
 }
 
 function renderPrintGridTotalsFooterHtml(grid: {
@@ -387,13 +406,19 @@ export function renderEApprovalPrintTemplateHtml(
   if (!html.trim()) return "";
 
   const fields = fieldMap(payload);
+  const fieldsByKey = new Map((payload.fields ?? []).map((field) => [field.key, field]));
   const source = stripRedundantDocumentDesignSignoff(html);
 
   return source.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, rawToken: string) => {
     const token = String(rawToken).trim();
     if (token.startsWith("field.")) {
       const key = token.slice("field.".length);
-      return escapeHtml(fields[key] ?? "");
+      const meta = fieldsByKey.get(key);
+      const raw = fields[key] ?? "";
+      if ((meta?.field_type ?? "").toLowerCase() === "checklist_matrix") {
+        return renderRfpCostApplicationPrintHtml(raw);
+      }
+      return escapeHtml(raw);
     }
     if (token.startsWith("grid.")) {
       const key = token.slice("grid.".length);
@@ -470,11 +495,17 @@ export function printableGridDesignFields(
  * Form-style starter layout: letterhead + {{system.form_body}}.
  * Fields and line-item grids resolve from the live print payload — no per-field HTML edits.
  * Workflow approval signatures are stamped separately under the form.
+ * Request for payment uses the paper-style ATC/ADIC RFP layout.
  */
 export function defaultEApprovalDocumentDesignHtml(
   _formTitle?: string,
   _fields: DocumentDesignFieldRef[] = [],
+  formFamily?: string | null,
 ): string {
+  if (formFamily === "request_for_payment") {
+    return defaultRequestForPaymentDocumentDesignHtml();
+  }
+
   return `<div class="eapproval-printable ea-form-doc">
   <header class="ea-form-letterhead">
     <div class="ea-form-brand">
@@ -530,7 +561,14 @@ export function mergeEApprovalPrintCss(
   return withoutPage ? `${pageCss}\n\n${withoutPage}` : pageCss;
 }
 
-export function defaultEApprovalDocumentDesignCss(options?: EApprovalPrintPageOptions): string {
+export function defaultEApprovalDocumentDesignCss(
+  options?: EApprovalPrintPageOptions,
+  formFamily?: string | null,
+): string {
+  if (formFamily === "request_for_payment") {
+    return defaultRequestForPaymentDocumentDesignCss(options);
+  }
+
   return `${buildEApprovalPrintPageCss(options)}
 
 .eapproval-printable,
@@ -808,6 +846,9 @@ function samplePreviewValue(label: string, type: string | undefined, index: numb
   if (t === "select" || t === "radio") return `Option ${index + 1}`;
   if (t === "checkbox" || t === "boolean") return "Yes";
   if (t === "file") return "sample-attachment.pdf";
+  if (t === "checklist_matrix") {
+    return "SAQ-Site Survey — Project Site No: SITE-01; Ref No: REF-100; OR No.: OR-55\nCME-Materials — Project Site No: SITE-02; Ref No: ; OR No.: ";
+  }
   return `Sample ${label}`;
 }
 

@@ -471,7 +471,7 @@ export function ProcurementSchemaComposePanel({
         level: "success",
         title: variables.submit ? "Submitted for approval" : "Draft saved",
         message: variables.submit
-          ? "Approvers have been notified through the E-Approval workflow."
+          ? "Approvers have been notified through the E-Forms workflow."
           : "You can return and continue editing this draft.",
       });
       onSaved({ id, kind });
@@ -516,7 +516,7 @@ export function ProcurementSchemaComposePanel({
       <OperationalAlert
         level="warning"
         title="No published form"
-        description="Install and publish the finance & procurement template pack under E-Approval → Forms, then return here."
+        description="Install and publish the finance & procurement template pack under E-Forms → Forms, then return here."
       />
     );
   }
@@ -526,7 +526,7 @@ export function ProcurementSchemaComposePanel({
       <OperationalAlert
         level="warning"
         title="Form not published"
-        description="Publish the procurement form in E-Approval before creating documents here."
+        description="Publish the procurement form in E-Forms before creating documents here."
       />
     );
   }
@@ -644,7 +644,7 @@ export function ProcurementSchemaComposePanel({
 
       <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-muted-foreground">
-          Fields and approval routing follow your published E-Approval form. Customize them under E-Approval → Forms.
+          Fields and approval routing follow your published E-Forms form. Customize them under E-Forms → Forms.
         </p>
         <div className="flex flex-wrap justify-end gap-2">
           {onCancel ? (

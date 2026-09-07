@@ -236,7 +236,7 @@ export function ProcurementApInvoiceDetailPageClient({ id }: { id: string }) {
               {invoice.e_approval_submission_id ? (
                 <p className="mt-3 text-sm">
                   <Link href={`/e-approval/submissions/${invoice.e_approval_submission_id}`} className="text-primary hover:underline">
-                    View E-Approval submission
+                    View E-Forms submission
                   </Link>
                 </p>
               ) : null}

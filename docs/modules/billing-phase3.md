@@ -31,7 +31,7 @@ Migration `2026_06_06_100000_add_tenant_subscription_lifecycle_fields.php` on `t
 
 - Middleware `tenant.subscription` on tenant API routes (after tenancy init)
 - `TenantSubscriptionSuspendedException` → HTTP **402** with code `subscription_suspended`
-- Exempt: auth, E-Approval health, `GET /admin/billing`
+- Exempt: auth, E-Forms health, `GET /admin/billing`
 
 ### Scheduler
 

@@ -81,7 +81,7 @@ export function EApprovalSubmissionSharePanel({ submissionId, enabled = true }: 
   return (
     <EApprovalSectionCard
       title="Share approved request"
-      description="Create a read-only link for people outside TowerOS. Links only work while the request stays approved and before expiry."
+      description="Create a read-only link for people outside INFRA SUITE. Links only work while the request stays approved and before expiry."
     >
       <div className="mt-3 space-y-4">
         <div className="grid gap-3 sm:grid-cols-[1fr_7rem_auto] sm:items-end">

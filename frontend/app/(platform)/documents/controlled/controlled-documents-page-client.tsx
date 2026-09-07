@@ -114,7 +114,7 @@ export function ControlledDocumentsPageClient() {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               ISO master list of approved documents. Start new requests here; submit revisions from each row — the
-              E-Approval form stays focused on document content and authorization.
+              E-Forms form stays focused on document content and authorization.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -210,7 +210,7 @@ export function ControlledDocumentsPageClient() {
             isEmpty={!query.isLoading && rows.length === 0}
             emptyMessage={
               canCreate
-                ? "No controlled documents visible for your account. Authors only see documents from their approved E-Approval requests."
+                ? "No controlled documents visible for your account. Authors only see documents from their approved E-Forms requests."
                 : "No controlled documents yet."
             }
             enableColumnVisibility

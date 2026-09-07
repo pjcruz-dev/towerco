@@ -18,7 +18,7 @@ const PROJECT_ONE_ACTION_TYPES = new Set(["gate_submitted", "gate_escalated"]);
 export function notificationModuleLabel(module: string): string {
   switch (module) {
     case "e_approval":
-      return "E-Approval";
+      return "E-Forms";
     case "project_one":
       return "PROJECT-ONE";
     default:

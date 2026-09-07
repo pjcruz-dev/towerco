@@ -61,7 +61,7 @@ type RegistryDataTableViewProps<TData> = {
 };
 
 /**
- * TanStack Table + shadcn table markup with TowerOS registry styling.
+ * TanStack Table + shadcn table markup with INFRA SUITE registry styling.
  * Server pagination/sorting stay in the parent; this renders the current page only.
  *
  * Prefer this for list/registry pages. Keep plain `Table` for editable grids,

@@ -35,7 +35,7 @@ Response (same shape as login):
 - `access_token`, `refresh_token`, `session_id`
 - `user` with `is_impersonating: true` and `impersonator: { id, name, email }`
 
-**TowerOS UI (Team & Access → Users):** Click **View as user** on an eligible row, enter a reason, then **Start session**. A warning banner appears on every page until **End session**. Parent admin tokens are stored in `sessionStorage` automatically.
+**INFRA SUITE UI (Team & Access → Users):** Click **View as user** on an eligible row, enter a reason, then **Start session**. A warning banner appears on every page until **End session**. Parent admin tokens are stored in `sessionStorage` automatically.
 
 **Manual API client:** Before swapping tokens, store the administrator’s `access_token`, `refresh_token`, and `session_id`. Then apply the impersonation tokens and reload `/me`.
 

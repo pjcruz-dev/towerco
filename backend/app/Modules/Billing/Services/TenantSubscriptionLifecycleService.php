@@ -88,10 +88,10 @@ final class TenantSubscriptionLifecycleService
 
         $message = match ($accessMode) {
             'blocked' => $operatorMode === TenantOperatorAccessMode::BLOCKED
-                ? __('This organization has been suspended by TowerOS operations. Contact support to restore access.')
+                ? __('This organization has been suspended by INFRA SUITE operations. Contact support to restore access.')
                 : ($status === self::STATUS_CANCELED
-                    ? __('This organization subscription has been canceled. Contact TowerOS to restore access.')
-                    : __('Subscription access is suspended after the payment grace period. Contact TowerOS billing.')),
+                    ? __('This organization subscription has been canceled. Contact INFRA SUITE to restore access.')
+                    : __('Subscription access is suspended after the payment grace period. Contact INFRA SUITE billing.')),
             'read_only' => __('This organization is in read-only mode. You can view data but cannot make changes.'),
             'grace' => __('Subscription is past due. Update billing before :date to avoid suspension.', [
                 'date' => $tenant->past_due_grace_ends_at?->toFormattedDateString() ?? 'the grace deadline',

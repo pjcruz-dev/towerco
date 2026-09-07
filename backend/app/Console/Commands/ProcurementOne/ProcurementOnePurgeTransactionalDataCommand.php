@@ -19,12 +19,12 @@ final class ProcurementOnePurgeTransactionalDataCommand extends Command
         {--all : Run for every tenant}
         {--dry-run : Preview row counts without deleting}
         {--force : Required to perform destructive deletes}
-        {--keep-e-approval-submissions : Keep PR/PO/AP E-Approval submissions}
+        {--keep-e-approval-submissions : Keep PR/PO/AP E-Forms submissions}
         {--with-vendors : Also delete vendor master records}
         {--with-budget : Also delete cost centers and budget lines}
         {--with-inventory-locations : Also delete inventory location master data}
-        {--with-vendor-registration-submissions : Also delete vendor registration E-Approval submissions}
-        {--keep-numbering : Do not reset procurement / E-Approval document sequences}
+        {--with-vendor-registration-submissions : Also delete vendor registration E-Forms submissions}
+        {--keep-numbering : Do not reset procurement / E-Forms document sequences}
     ';
 
     protected $description = 'Delete procurement transactional data (PR, PO, RFQ, GRN, AP, payments, contracts) for a clean form rollout.';

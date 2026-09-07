@@ -82,7 +82,7 @@ export function AssistantMessage({
                 </p>
                 <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90">
                   {message.providerNotice?.message ??
-                    "Ask TowerOS cannot answer right now because the configured OpenAI API key has exceeded its quota or billing limit."}
+                    "Ask INFRA SUITE cannot answer right now because the configured OpenAI API key has exceeded its quota or billing limit."}
                 </p>
                 {message.providerNotice?.admin_action ? (
                   <p className="text-xs leading-relaxed text-amber-900/80 dark:text-amber-100/80">
