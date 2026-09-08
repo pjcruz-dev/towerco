@@ -23,6 +23,7 @@ import {
   emptyOrgChartFilters,
   filterOrgChartIndex,
   filterOrgPeople,
+  ORG_CHART_NO_DEPARTMENT,
   orgChartFiltersActive,
   pickDefaultFocus,
   type OrgChartFilters,
@@ -257,6 +258,9 @@ export function OrgPageClient() {
                       className="h-9 min-w-[10rem]"
                     >
                       <option value="">All departments</option>
+                      {filterOptions.hasUnassignedDepartment ? (
+                        <option value={ORG_CHART_NO_DEPARTMENT}>No department</option>
+                      ) : null}
                       {filterOptions.departments.map((dept) => (
                         <option key={dept} value={dept}>
                           {dept}

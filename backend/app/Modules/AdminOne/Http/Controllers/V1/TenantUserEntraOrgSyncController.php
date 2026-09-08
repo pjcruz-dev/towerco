@@ -9,7 +9,6 @@ use App\Modules\Identity\Jobs\SyncEntraOrgDirectoryJob;
 use App\Modules\Identity\Services\EntraOrgDirectoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 
 final class TenantUserEntraOrgSyncController extends AbstractApiController
@@ -41,12 +40,11 @@ final class TenantUserEntraOrgSyncController extends AbstractApiController
         }
 
         try {
-            // ACK immediately so nginx/gateway (~60s) cannot return 504 while Graph sync runs.
-            // Continues after the HTTP response (fastcgi_finish_request) — no queue worker required.
-            Bus::dispatchAfterResponse(function () use ($tenantId): void {
-                (new SyncEntraOrgDirectoryJob($tenantId, true))
-                    ->handle(app(EntraOrgDirectoryService::class));
-            });
+            // Queue only — never run Graph sync in the HTTP request or afterResponse.
+            // afterResponse still occupies PHP-FPM until terminate finishes, so host nginx
+            // (default proxy_read_timeout ~60s) returns 504 while sync continues.
+            // Requires QUEUE_CONNECTION=redis (or database) and toweros-worker / queue:work.
+            SyncEntraOrgDirectoryJob::dispatch($tenantId, true);
         } catch (\Throwable $exception) {
             Log::error('Entra org sync could not be dispatched', [
                 'message' => $exception->getMessage(),

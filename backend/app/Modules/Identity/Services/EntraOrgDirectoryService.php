@@ -55,7 +55,6 @@ final class EntraOrgDirectoryService
 
         $user->entra_org_synced_at = now();
         $user->save();
-        $this->propagateDepartmentsFromManagers();
     }
 
     /**
@@ -174,16 +173,11 @@ final class EntraOrgDirectoryService
             }
         }
 
-        $inherited = $this->propagateDepartmentsFromManagers();
-
         $message = $updated === 0
             ? 'No '.$this->workspaceLabel().' users matched Microsoft Entra mailboxes.'
             : "Updated {$updated} user".($updated === 1 ? '' : 's').' from Microsoft Entra.';
         if ($skippedUnlicensed > 0) {
             $message .= ' Hidden '.$skippedUnlicensed.' unlicensed account'.($skippedUnlicensed === 1 ? '' : 's').' from the organization chart.';
-        }
-        if ($inherited > 0) {
-            $message .= ' Inherited department for '.$inherited.' report'.($inherited === 1 ? '' : 's').' from their manager.';
         }
 
         return [
@@ -382,8 +376,11 @@ final class EntraOrgDirectoryService
         if ($person->jobTitle !== null) {
             $user->job_title = $this->clip($person->jobTitle, 180);
         }
-        if ($person->department !== null && $this->hasDepartmentColumn()) {
-            $user->department = $this->clip($person->department, 180);
+        // Entra department is source of truth: empty/null clears a prior value (e.g. stale QMS).
+        if ($this->hasDepartmentColumn()) {
+            $user->department = $person->department !== null
+                ? $this->clip($person->department, 180)
+                : null;
         }
         if (trim((string) $user->name) === '' || $user->name === $user->email) {
             $user->name = $this->clip($person->displayName, 255) ?? $person->email;
@@ -434,7 +431,6 @@ final class EntraOrgDirectoryService
         if ($managerUser === null || (string) $managerUser->id === (string) $user->id) {
             $user->manager_id = null;
             $this->linkEntraOnlyManagerParent($user, $manager, $token);
-            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -443,7 +439,6 @@ final class EntraOrgDirectoryService
 
         if ($this->wouldCreateCycle((string) $user->id, (string) $managerUser->id)) {
             $user->manager_id = null;
-            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -460,106 +455,6 @@ final class EntraOrgDirectoryService
                 ]);
             }
         }
-
-        $this->inheritDepartmentIfEmpty($user, $manager, $managerUser);
-    }
-
-    /**
-     * When Entra has no department on the report, copy the manager's department
-     * so operators do not need every employee populated in Active Directory.
-     */
-    private function inheritDepartmentIfEmpty(
-        TenantUser $user,
-        ?EntraDirectoryPerson $manager,
-        ?TenantUser $managerUser,
-    ): void {
-        if (! $this->hasDepartmentColumn()) {
-            return;
-        }
-        if ($this->clip($user->department, 180) !== null) {
-            return;
-        }
-
-        $fromGraph = $manager !== null ? $this->clip($manager->department, 180) : null;
-        if ($fromGraph !== null) {
-            $user->department = $fromGraph;
-
-            return;
-        }
-
-        if ($managerUser !== null) {
-            $fromManagerUser = $this->clip($managerUser->department, 180);
-            if ($fromManagerUser !== null) {
-                $user->department = $fromManagerUser;
-            }
-        }
-    }
-
-    /**
-     * Fill empty departments from INFRA SUITE manager chain (handles sync order + depth).
-     *
-     * @return int Number of users updated
-     */
-    private function propagateDepartmentsFromManagers(): int
-    {
-        if (! $this->hasDepartmentColumn()) {
-            return 0;
-        }
-
-        $total = 0;
-        for ($pass = 0; $pass < 8; $pass++) {
-            $changed = 0;
-            $reports = TenantUser::query()
-                ->where('is_active', true)
-                ->whereNotNull('manager_id')
-                ->where(static function ($query): void {
-                    $query->whereNull('department')->orWhere('department', '');
-                })
-                ->get(['id', 'manager_id', 'department']);
-
-            foreach ($reports as $report) {
-                $managerDept = TenantUser::query()
-                    ->where('id', $report->manager_id)
-                    ->value('department');
-                $clipped = $this->clip(is_string($managerDept) ? $managerDept : null, 180);
-                if ($clipped === null) {
-                    continue;
-                }
-                $report->department = $clipped;
-                $report->save();
-                $changed++;
-            }
-
-            // Entra-only managers: use stored Graph manager department.
-            if ($this->hasManagerDepartmentColumn()) {
-                $externalReports = TenantUser::query()
-                    ->where('is_active', true)
-                    ->whereNull('manager_id')
-                    ->whereNotNull('entra_manager_department')
-                    ->where('entra_manager_department', '!=', '')
-                    ->where(static function ($query): void {
-                        $query->whereNull('department')->orWhere('department', '');
-                    })
-                    ->get(['id', 'department', 'entra_manager_department']);
-
-                foreach ($externalReports as $report) {
-                    $clipped = $this->clip($report->entra_manager_department, 180);
-                    if ($clipped === null) {
-                        continue;
-                    }
-                    $report->department = $clipped;
-                    $report->save();
-                    $changed++;
-                }
-            }
-
-            $total += $changed;
-            if ($changed === 0) {
-                break;
-            }
-        }
-
-        return $total;
     }
 
     private function storeManagerDepartment(TenantUser $user, EntraDirectoryPerson $manager): void

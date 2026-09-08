@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrgChartIndex, collectOrgFilterOptions, filterOrgChartIndex, filterOrgPeople, orgChartRoots, personInitials, pickDefaultFocus, resolveManager } from "./org-chart";
+import {
+  buildOrgChartIndex,
+  collectOrgFilterOptions,
+  filterOrgChartIndex,
+  filterOrgPeople,
+  ORG_CHART_NO_DEPARTMENT,
+  orgChartRoots,
+  personInitials,
+  pickDefaultFocus,
+  resolveManager,
+} from "./org-chart";
 
 const people = [
   {
@@ -220,6 +230,7 @@ describe("org chart filters", () => {
     const index = buildOrgChartIndex(filterPeople);
     const options = collectOrgFilterOptions(index.nodes);
     expect(options.departments).toEqual(["Engineering", "Finance"]);
+    expect(options.hasUnassignedDepartment).toBe(false);
 
     const filtered = filterOrgChartIndex(index, {
       department: "Engineering",
@@ -228,6 +239,93 @@ describe("org chart filters", () => {
     expect(filtered.byId.has("a")).toBe(true);
     expect(filtered.byId.has("b")).toBe(true);
     expect(filtered.byId.has("c")).toBe(false);
+  });
+
+  it("keeps descendants of department matches even when they have no department", () => {
+    const people = [
+      {
+        id: "terrence",
+        name: "Terrence Galang",
+        email: "terrence@example.com",
+        job_title: "Lead",
+        department: "Technology and Quality Governance",
+        manager_id: "alvin",
+        manager_name: null,
+        direct_report_count: 2,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "alvin",
+        name: "Alvin Tolentino",
+        email: "alvin@example.com",
+        job_title: "Director",
+        department: "Executive Office",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 1,
+        license_label: "Business Standard",
+        roles: [],
+      },
+      {
+        id: "denver",
+        name: "Denver Arquiza",
+        email: "denver@example.com",
+        job_title: "Engineer",
+        department: "Technology and Quality Governance",
+        manager_id: "terrence",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "jerico",
+        name: "Jerico Fortuna",
+        email: "jerico@example.com",
+        job_title: "ISO Officer",
+        department: null,
+        manager_id: "terrence",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard +1",
+        roles: [],
+      },
+      {
+        id: "outsider",
+        name: "Other Team",
+        email: "other@example.com",
+        job_title: "Analyst",
+        department: "Finance",
+        manager_id: "alvin",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+    ];
+
+    const index = buildOrgChartIndex(people);
+    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(true);
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Technology and Quality Governance",
+      license: "",
+    });
+    expect(filtered.byId.has("alvin")).toBe(true);
+    expect(filtered.byId.has("terrence")).toBe(true);
+    expect(filtered.byId.has("denver")).toBe(true);
+    expect(filtered.byId.has("jerico")).toBe(true);
+    expect(filtered.byId.has("outsider")).toBe(false);
+    expect(filtered.reports.get("terrence")?.map((n) => n.id).sort()).toEqual(["denver", "jerico"]);
+
+    const unassigned = filterOrgChartIndex(index, {
+      department: ORG_CHART_NO_DEPARTMENT,
+      license: "",
+    });
+    expect(unassigned.byId.has("jerico")).toBe(true);
+    expect(unassigned.byId.has("terrence")).toBe(true);
+    expect(unassigned.byId.has("denver")).toBe(false);
   });
 
   it("searches role names in people search", () => {

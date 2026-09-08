@@ -216,6 +216,9 @@ export function filterOrgPeople(nodes: OrgChartNode[], query: string): OrgChartN
     .slice(0, 12);
 }
 
+/** Sentinel for the department filter: people with blank / unset department. */
+export const ORG_CHART_NO_DEPARTMENT = "__none__";
+
 export type OrgChartFilters = {
   department: string;
   license: string;
@@ -232,12 +235,19 @@ export function orgChartFiltersActive(filters: OrgChartFilters): boolean {
 export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
   departments: string[];
   licenses: string[];
+  hasUnassignedDepartment: boolean;
 } {
   const departments = new Set<string>();
   const licenses = new Set<string>();
+  let hasUnassignedDepartment = false;
 
   for (const node of nodes) {
-    if (node.department?.trim()) departments.add(node.department.trim());
+    const dept = node.department?.trim() ?? "";
+    if (dept) {
+      departments.add(dept);
+    } else if (!node.external) {
+      hasUnassignedDepartment = true;
+    }
     if (node.license_label?.trim()) licenses.add(node.license_label.trim());
   }
 
@@ -247,12 +257,20 @@ export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
   return {
     departments: sort([...departments]),
     licenses: sort([...licenses]),
+    hasUnassignedDepartment,
   };
 }
 
 function nodeMatchesFilters(node: OrgChartNode, filters: OrgChartFilters): boolean {
-  if (filters.department && (node.department ?? "").trim() !== filters.department) {
-    return false;
+  if (filters.department) {
+    const dept = (node.department ?? "").trim();
+    if (filters.department === ORG_CHART_NO_DEPARTMENT) {
+      if (dept !== "") {
+        return false;
+      }
+    } else if (dept !== filters.department) {
+      return false;
+    }
   }
   if (filters.license && (node.license_label ?? "").trim() !== filters.license) {
     return false;
@@ -260,7 +278,10 @@ function nodeMatchesFilters(node: OrgChartNode, filters: OrgChartFilters): boole
   return true;
 }
 
-/** Keep matches plus ancestors so reporting lines stay connected. */
+/**
+ * Keep filter matches, their ancestors (context), and descendants of matches
+ * (full team under a matched manager — including reports with no department).
+ */
 export function filterOrgChartIndex(index: OrgChartIndex, filters: OrgChartFilters): OrgChartIndex {
   if (!orgChartFiltersActive(filters)) {
     return index;
@@ -283,6 +304,19 @@ export function filterOrgChartIndex(index: OrgChartIndex, filters: OrgChartFilte
         break;
       }
       current = manager;
+    }
+  }
+
+  const queue = [...matches];
+  while (queue.length > 0) {
+    const managerId = queue.pop()!;
+    const children = index.reports.get(managerId) ?? [];
+    for (const child of children) {
+      if (keep.has(child.id)) {
+        continue;
+      }
+      keep.add(child.id);
+      queue.push(child.id);
     }
   }
 
