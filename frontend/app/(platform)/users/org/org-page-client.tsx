@@ -131,13 +131,25 @@ export function OrgPageClient() {
   const syncMutation = useMutation({
     mutationFn: syncAdminEntraOrg,
     onSuccess: (result) => {
+      const started = result.code === "started" || result.code === "already_running";
       notify({
         level: result.ok ? "success" : "warning",
-        title: result.ok ? "Org chart updated" : "Sync did not complete",
+        title: started ? "Sync started" : result.ok ? "Org chart updated" : "Sync did not complete",
         message: result.message,
       });
       void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       void queryClient.invalidateQueries({ queryKey: ["admin", "users", "org-chart"] });
+      if (started) {
+        // Background Graph sync usually finishes within 1–2 minutes; refresh chart when done.
+        window.setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+          void queryClient.invalidateQueries({ queryKey: ["admin", "users", "org-chart"] });
+        }, 45_000);
+        window.setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+          void queryClient.invalidateQueries({ queryKey: ["admin", "users", "org-chart"] });
+        }, 120_000);
+      }
     },
     onError: (error) => {
       const timedOut =

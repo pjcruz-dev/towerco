@@ -71,7 +71,7 @@ final class EntraOrgDirectoryService
      *     skipped_unlicensed: int
      * }
      */
-    public function syncDirectoryFromApp(int $limit = 200): array
+    public function syncDirectoryFromApp(int $limit = 200, bool $syncPhotos = true): array
     {
         if (! $this->hasOrgColumns()) {
             return $this->syncFailure(
@@ -118,6 +118,8 @@ final class EntraOrgDirectoryService
         }
         $users = TenantUser::query()
             ->where('is_active', true)
+            ->orderByRaw('entra_org_synced_at IS NOT NULL')
+            ->orderBy('entra_org_synced_at')
             ->orderBy('name')
             ->limit(max(1, min(500, $limit)))
             ->get();
@@ -147,7 +149,11 @@ final class EntraOrgDirectoryService
                 $this->applyProfile($user, $found->person, $skuMap);
                 $hadManager = $user->manager_id;
                 $this->applyManager($user, $found->manager, $skuMap, $token);
-                if ($found->person->entraId !== '') {
+                if (
+                    $syncPhotos
+                    && $found->person->entraId !== ''
+                    && $this->shouldRefreshAvatar($user)
+                ) {
                     $this->avatars->syncPhotoFromGraph($user, $token, $found->person->entraId);
                 }
                 $user->entra_org_synced_at = now();
@@ -189,6 +195,74 @@ final class EntraOrgDirectoryService
             'managers_linked' => $linked,
             'skipped_unlicensed' => $skippedUnlicensed,
         ];
+    }
+
+    /**
+     * Fast checks used before queueing a long-running sync (avoids 504 on gateway).
+     *
+     * @return array{
+     *     ok: bool,
+     *     message: string,
+     *     code: string,
+     *     scanned: int,
+     *     updated: int,
+     *     managers_linked: int,
+     *     skipped_unlicensed: int
+     * }|null Null means preflight passed and sync may start.
+     */
+    public function preflightSyncOrFailure(): ?array
+    {
+        if (! $this->hasOrgColumns()) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_GRAPH_ERROR,
+                'Organization fields are not migrated on this tenant database yet.',
+            );
+        }
+
+        if (! $this->appGraph->isConfigured()) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_NOT_CONFIGURED,
+                'Microsoft Entra is not configured for this organization. Add the app client ID and secret under Administration → Sign-in & security.',
+            );
+        }
+
+        $directory = $this->appGraph->directoryIdentifier();
+        if ($directory === '' || $directory === 'common' || $directory === 'organizations' || $directory === 'consumers') {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_DIRECTORY_COMMON,
+                'Set Directory ID to your Entra tenant GUID (not “common”). Client-credential Graph calls require the directory ID.',
+            );
+        }
+
+        try {
+            $token = $this->appGraph->getAppAccessToken();
+        } catch (\Throwable $exception) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_TOKEN_FAILED,
+                'Could not reach Microsoft login to get an app token. '.$exception->getMessage(),
+            );
+        }
+        if ($token === null) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_TOKEN_FAILED,
+                $this->appGraph->tokenFailureMessage()
+                    ?? 'Could not get an app token from Microsoft. Check the client secret and Directory ID.',
+            );
+        }
+
+        return null;
+    }
+
+    private function shouldRefreshAvatar(TenantUser $user): bool
+    {
+        if (! $this->avatars->hasAvatarColumns()) {
+            return false;
+        }
+
+        $path = is_string($user->avatar_path ?? null) ? trim((string) $user->avatar_path) : '';
+
+        // Always refresh missing photos; skip existing ones on bulk sync to avoid gateway timeouts.
+        return $path === '';
     }
 
     /**

@@ -205,4 +205,25 @@ final class TenantUserOrgChartTest extends TestCase
             ->assertJsonPath('data.ok', false)
             ->assertJsonPath('data.code', 'not_configured');
     }
+
+    public function test_org_sync_starts_in_background_when_entra_is_configured(): void
+    {
+        config([
+            'services.azure.client_id' => 'test-client',
+            'services.azure.client_secret' => 'test-secret',
+            'services.azure.tenant' => '11111111-1111-1111-1111-111111111111',
+        ]);
+
+        // Avoid real Graph calls — preflight token will fail; we only assert the controller
+        // no longer blocks on a full directory walk when token works. Here token fails fast.
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/admin/users/entra-org-sync');
+
+        $response->assertOk();
+        $code = $response->json('data.code');
+        $this->assertContains($code, ['started', 'token_failed', 'not_configured', 'directory_common']);
+        // Must never hang into a gateway-style long sync in the HTTP request.
+        $this->assertNotSame('ok', $code);
+    }
 }

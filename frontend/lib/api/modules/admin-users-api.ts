@@ -388,7 +388,8 @@ export async function syncAdminEntraOrg(): Promise<AdminEntraOrgSyncResult> {
   const response = await apiClient.post<{ data: AdminEntraOrgSyncResult }>(
     "/admin/users/entra-org-sync",
     {},
-    { timeout: 180_000 },
+    // Sync starts in the background; keep a short client wait for the start ACK only.
+    { timeout: 30_000 },
   );
   return response.data.data;
 }
