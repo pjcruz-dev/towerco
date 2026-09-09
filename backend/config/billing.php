@@ -133,6 +133,9 @@ return [
                     'file_uploads' => false,
                     'max_attachments_per_ticket' => 0,
                 ],
+                'doc_extract' => [
+                    'enabled' => false,
+                ],
                 'procurement_one' => [
                     'enabled' => false,
                     'goods_receipt' => false,
@@ -176,6 +179,9 @@ return [
                     'file_uploads' => false,
                     'max_attachments_per_ticket' => 0,
                 ],
+                'doc_extract' => [
+                    'enabled' => true,
+                ],
                 'procurement_one' => [
                     'enabled' => true,
                     'goods_receipt' => false,
@@ -218,6 +224,9 @@ return [
                     'enabled' => true,
                     'file_uploads' => true,
                     'max_attachments_per_ticket' => 10,
+                ],
+                'doc_extract' => [
+                    'enabled' => true,
                 ],
                 'procurement_one' => [
                     'enabled' => true,

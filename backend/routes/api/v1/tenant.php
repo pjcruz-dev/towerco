@@ -91,6 +91,17 @@ use App\Modules\Documents\Http\Controllers\V1\DocumentSiteRolloutOptionsControll
 use App\Modules\Documents\Http\Controllers\V1\DocumentSiteWorkspaceShowController;
 use App\Modules\Documents\Http\Controllers\V1\DocumentSiteWorkspaceUpdateController;
 use App\Modules\Documents\Http\Controllers\V1\DocumentUploadCapabilitiesShowController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchExportController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchFieldsUpdateController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchIndexController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchSaveTemplateController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchShowController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchStoreController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractDocumentUpdateController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateDestroyController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateIndexController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateStoreController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateUpdateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalAnalyticsShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalApprovalDecideController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalApprovalIndexController;
@@ -568,6 +579,19 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('assistant/knowledge/{source}/archive', AssistantKnowledgeArchiveController::class)->name('api.tenant.v1.assistant.knowledge.archive');
         Route::post('assistant/knowledge/{source}/reindex', AssistantKnowledgeReindexController::class)->name('api.tenant.v1.assistant.knowledge.reindex');
         Route::delete('assistant/knowledge/{source}', AssistantKnowledgeDestroyController::class)->name('api.tenant.v1.assistant.knowledge.destroy');
+    });
+    Route::middleware(['tenant.module:doc_extract'])->group(function () {
+        Route::get('doc-extract/templates', DocExtractTemplateIndexController::class)->name('api.tenant.v1.doc_extract.templates.index');
+        Route::post('doc-extract/templates', DocExtractTemplateStoreController::class)->name('api.tenant.v1.doc_extract.templates.store');
+        Route::put('doc-extract/templates/{template}', DocExtractTemplateUpdateController::class)->name('api.tenant.v1.doc_extract.templates.update');
+        Route::delete('doc-extract/templates/{template}', DocExtractTemplateDestroyController::class)->name('api.tenant.v1.doc_extract.templates.destroy');
+        Route::get('doc-extract/batches', DocExtractBatchIndexController::class)->name('api.tenant.v1.doc_extract.batches.index');
+        Route::post('doc-extract/batches', DocExtractBatchStoreController::class)->name('api.tenant.v1.doc_extract.batches.store');
+        Route::get('doc-extract/batches/{batch}', DocExtractBatchShowController::class)->name('api.tenant.v1.doc_extract.batches.show');
+        Route::post('doc-extract/batches/{batch}/save-template', DocExtractBatchSaveTemplateController::class)->name('api.tenant.v1.doc_extract.batches.save_template');
+        Route::patch('doc-extract/batches/{batch}/fields', DocExtractBatchFieldsUpdateController::class)->name('api.tenant.v1.doc_extract.batches.fields');
+        Route::get('doc-extract/batches/{batch}/export', DocExtractBatchExportController::class)->name('api.tenant.v1.doc_extract.batches.export');
+        Route::patch('doc-extract/documents/{document}', DocExtractDocumentUpdateController::class)->name('api.tenant.v1.doc_extract.documents.update');
     });
     Route::get('project-one/dashboard', ProjectOneDashboardController::class)->name('api.tenant.v1.project_one.dashboard');
     Route::get('project-one/dashboard/map', ProjectOneDashboardMapController::class)->name('api.tenant.v1.project_one.dashboard.map');

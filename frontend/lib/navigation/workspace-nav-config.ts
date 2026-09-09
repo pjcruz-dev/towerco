@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   CreditCard,
   FileText,
+  FileScan,
   LifeBuoy,
   Landmark,
   LayoutDashboard,
@@ -157,6 +158,33 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         items: [
           { title: "Overview", href: "/asset-one", exact: true, permissions: ["asset_one:view"] },
           { title: "Assets", href: "/asset-one/assets", permissions: ["asset_one:view"] },
+        ],
+      },
+      {
+        title: "DocExtract",
+        icon: FileScan,
+        module: "doc_extract",
+        permissions: ["doc-extract:view", "doc-extract:run", "doc-extract:templates:manage"],
+        items: [
+          {
+            title: "Batches",
+            href: "/doc-extract",
+            exact: true,
+            section: "Operate",
+            permissions: ["doc-extract:view"],
+          },
+          {
+            title: "New extraction",
+            href: "/doc-extract/new",
+            section: "Operate",
+            permissions: ["doc-extract:run"],
+          },
+          {
+            title: "Templates",
+            href: "/doc-extract/templates",
+            section: "Setup",
+            permissions: ["doc-extract:templates:manage"],
+          },
         ],
       },
       {

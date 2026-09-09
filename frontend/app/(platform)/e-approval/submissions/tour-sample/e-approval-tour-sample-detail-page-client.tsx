@@ -132,6 +132,7 @@ function TourSampleDetailInner() {
 
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
+  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [decisionRemarks, setDecisionRemarks] = useState("");
 
@@ -362,7 +363,13 @@ function TourSampleDetailInner() {
                   value={approvalSignature}
                   onChange={setApprovalSignature}
                   consentAccepted={signatureConsentAccepted}
-                  onConsentChange={setSignatureConsentAccepted}
+                  onConsentChange={(accepted) => {
+                    setSignatureConsentAccepted(accepted);
+                    if (accepted) {
+                      setHighlightSignatureConsents(false);
+                    }
+                  }}
+                  highlightMissingConsents={highlightSignatureConsents}
                   disabled={false}
                   error={approvalSignatureError}
                   onErrorChange={setApprovalSignatureError}
@@ -384,7 +391,24 @@ function TourSampleDetailInner() {
                   className="mt-2 flex flex-wrap gap-2 border-t border-border pt-4"
                 >
                   <span data-help="ea-decide-approve" className="inline-flex">
-                    <Button type="button" size="sm" disabled>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={!signatureConsentAccepted ? "opacity-50" : undefined}
+                      onClick={() => {
+                        if (!signatureConsentAccepted) {
+                          setHighlightSignatureConsents(true);
+                          setApprovalSignatureError(
+                            "Accept both electronic signature consents before approving.",
+                          );
+                          document
+                            .querySelector('[data-help="ea-decide-signature-consent"]')
+                            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          return;
+                        }
+                        setApprovalSignatureError("Sample only — Approve does not save.");
+                      }}
+                    >
                       Approve
                     </Button>
                   </span>

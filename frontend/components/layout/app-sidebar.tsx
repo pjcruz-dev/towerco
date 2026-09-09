@@ -30,6 +30,7 @@ import {
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
 import { useProcurementPlanFeatures } from "@/hooks/use-procurement-plan-features";
 import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
 import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
@@ -101,7 +102,10 @@ function SidebarNavLink({
 
 export function AppSidebar() {
   const searchParams = useSearchParams();
-  const tourActive = isEApprovalTourActive(searchParams) || isTicketingTourActive(searchParams);
+  const tourActive =
+    isEApprovalTourActive(searchParams) ||
+    isTicketingTourActive(searchParams) ||
+    isDocExtractTourActive(searchParams);
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
@@ -247,13 +251,16 @@ export function AppSidebar() {
                           ? "ea-nav-e-approval"
                           : item.title === "Ticketing"
                             ? "tk-nav-ticketing"
-                            : undefined
+                            : item.title === "DocExtract"
+                              ? "dx-nav-doc-extract"
+                              : undefined
                     }
                     forceOpen={
                       tourActive &&
                       (item.title === "Settings" ||
                         item.title === "E-Forms" ||
-                        item.title === "Ticketing")
+                        item.title === "Ticketing" ||
+                        item.title === "DocExtract")
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {
                       const pathOnly = href.split("?")[0] ?? href;
@@ -295,7 +302,18 @@ export function AppSidebar() {
                                     tourNav: "/ticketing/settings",
                                   }
                                 : null;
-                      const tourNavMeta = eApprovalNav ?? ticketingNav;
+                      const docExtractNav =
+                        pathOnly === "/doc-extract"
+                          ? { dataHelp: "dx-nav-doc-extract-batches", tourNav: "/doc-extract" }
+                          : pathOnly === "/doc-extract/new"
+                            ? { dataHelp: "dx-nav-doc-extract-new", tourNav: "/doc-extract/new" }
+                            : pathOnly === "/doc-extract/templates"
+                              ? {
+                                  dataHelp: "dx-nav-doc-extract-templates",
+                                  tourNav: "/doc-extract/templates",
+                                }
+                              : null;
+                      const tourNavMeta = eApprovalNav ?? ticketingNav ?? docExtractNav;
                       return {
                         title,
                         href,

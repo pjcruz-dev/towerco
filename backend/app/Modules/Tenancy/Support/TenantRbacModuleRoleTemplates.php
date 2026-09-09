@@ -32,6 +32,7 @@ final class TenantRbacModuleRoleTemplates
             self::eApprovalRoles(),
             self::documentsRoles(),
             self::controlledDocumentsRoles(),
+            self::docExtractRoles(),
             self::sitesRoles(),
             self::aiAssistantRoles(),
             self::disciplineAddons(),
@@ -481,6 +482,30 @@ final class TenantRbacModuleRoleTemplates
                 'project_one:view',
                 'project_one:rollout:view',
                 'project_one:cme:manage',
+            ],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
+    private static function docExtractRoles(): array
+    {
+        return [
+            'doc_extract_viewer' => [
+                'dashboard:view',
+                'doc-extract:view',
+            ],
+            'doc_extract_operator' => [
+                'dashboard:view',
+                'doc-extract:view',
+                'doc-extract:run',
+                'doc-extract:export',
+            ],
+            'doc_extract_admin' => [
+                'dashboard:view',
+                'doc-extract:view',
+                'doc-extract:run',
+                'doc-extract:templates:manage',
+                'doc-extract:export',
             ],
         ];
     }

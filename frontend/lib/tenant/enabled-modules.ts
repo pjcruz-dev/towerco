@@ -17,6 +17,7 @@ export const TENANT_MODULE_LABELS: Record<string, string> = {
   documents: "Documents",
   document_register: "Document register",
   ai_assistant: "AI Assistant",
+  doc_extract: "DocExtract",
 };
 
 export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
@@ -26,6 +27,7 @@ export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
     "ISO master list of approved documents; start requests and revisions via E-Forms.",
   ai_assistant:
     "In-app help assistant for workflows, permissions, and how-to guidance.",
+  doc_extract: "Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.",
 };
 
 /** Optional modules superadmins can enable per tenant (must stay aligned with backend TOGGLEABLE_MODULES). */
@@ -44,6 +46,7 @@ export const TOGGLEABLE_WORKSPACE_MODULES = [
   "fiber_one",
   "asset_one",
   "ai_assistant",
+  "doc_extract",
 ] as const;
 
 type WorkspaceModulesCatalog = {
@@ -86,6 +89,7 @@ export const PLATFORM_TENANT_MODULE_BADGE_ORDER = [
   "tower_one",
   "fiber_one",
   "asset_one",
+  "doc_extract",
 ] as const;
 
 export function resolveEnabledModulesForUser(

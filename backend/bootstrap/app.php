@@ -182,6 +182,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:15')
             ->withoutOverlapping();
 
+        $schedule->command('doc-extract:prune')
+            ->dailyAt('03:25')
+            ->withoutOverlapping();
+
         $schedule->command('workspace:audit-prune')
             ->dailyAt('03:40')
             ->withoutOverlapping();
