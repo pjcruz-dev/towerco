@@ -146,6 +146,56 @@ services:
         condition: service_started
     mem_limit: ${TOWEROS_API_MEM_LIMIT:-512m}
 
+  # Always-on queue consumer (DocExtract scans, mail, notifications, etc.).
+  # Prefer this over `docker compose exec api queue:work` — survives API recreates.
+  queue-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "/var/www/html/docker/entrypoint.sh"]
+    command:
+      [
+        "php",
+        "artisan",
+        "queue:work",
+        "redis",
+        "--queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks",
+        "--sleep=3",
+        "--tries=3",
+        "--max-time=3600",
+      ]
+    container_name: toweros-queue-worker
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      TOWEROS_DOCKER: "1"
+      TOWEROS_DOCKER_AUTO_MIGRATE: "0"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-"*"}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      CENTRAL_DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-toweros}
+      DB_USERNAME: ${MYSQL_USER:-toweros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-toweros}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_CLIENT: predis
+      DOC_EXTRACT_URL: ${DOC_EXTRACT_URL:-http://doc-extract:8081}
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ./backend:/var/www/html
+      - toweros-backend-vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      doc-extract:
+        condition: service_started
+    mem_limit: ${TOWEROS_QUEUE_WORKER_MEM_LIMIT:-512m}
+
   web:
     profiles: ["web"]
     build:

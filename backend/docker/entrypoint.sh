@@ -126,6 +126,12 @@ done
 mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 chmod -R ug+rwx storage/framework storage/logs bootstrap/cache 2>/dev/null || true
 
+# Allow Compose overrides (e.g. queue-worker: command: php artisan queue:work ...)
+if [ "$#" -gt 0 ]; then
+  echo "[api] Exec override: $*"
+  exec "$@"
+fi
+
 echo "[api] Laravel API http://0.0.0.0:8000"
 
 WORKERS="${TOWEROS_API_WORKERS:-4}"

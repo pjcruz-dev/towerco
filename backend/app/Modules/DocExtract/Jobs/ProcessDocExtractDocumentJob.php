@@ -27,7 +27,9 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
         public readonly string $documentId,
     ) {
         parent::__construct();
-        $this->onQueue(config('toweros.queues.integrations', config('toweros.queues.default')));
+        // Use default queue so the EC2 systemd worker (queue:work redis) picks jobs up
+        // without requiring a separate toweros-integrations supervisor.
+        $this->onQueue(config('toweros.queues.default'));
     }
 
     public function handle(

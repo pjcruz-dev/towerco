@@ -67,9 +67,34 @@ docker compose --env-file .env.docker exec redis redis-cli ping
 
 ---
 
-### 2. Queue worker — systemd unit (always on)
+### 2. Queue worker — always on
 
-Laravel only *enqueues* jobs; a worker must *run* them (approval emails, exports, AI ingest, etc.).
+Laravel only *enqueues* jobs; a worker must *run* them (DocExtract OCR, approval emails, exports, etc.).
+
+**You do not run `queue:work` for each extraction.** Keep one long-running worker.
+
+**Preferred — Compose `queue-worker` service** (survives API recreates):
+
+```bash
+cd /opt/toweros
+docker compose --env-file .env.docker up -d queue-worker
+docker compose --env-file .env.docker ps queue-worker
+```
+
+After PHP deploys:
+
+```bash
+docker compose --env-file .env.docker up -d --build queue-worker
+docker compose --env-file .env.docker exec -T api php artisan queue:restart
+```
+
+If you use this service, disable the systemd unit so jobs are not double-consumed:
+
+```bash
+sudo systemctl disable --now toweros-worker
+```
+
+**Alternate — systemd** (`docker compose exec` into API; dies when API is recreated unless systemd restarts it):
 
 Create `/etc/systemd/system/toweros-worker.service`:
 
@@ -83,7 +108,7 @@ Requires=docker.service
 Restart=always
 RestartSec=5
 WorkingDirectory=/opt/toweros
-ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks --sleep=3 --tries=3 --max-time=3600
 ExecStop=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:restart
 
 [Install]
@@ -95,8 +120,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now toweros-worker
 sudo systemctl status toweros-worker
 ```
-
-After every deploy: `sudo systemctl restart toweros-worker` (or `queue:restart` inside the API container).
 
 ---
 
@@ -388,7 +411,7 @@ Requires=docker.service
 [Service]
 Restart=always
 WorkingDirectory=/opt/toweros
-ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks --sleep=3 --tries=3 --max-time=3600
 ExecStop=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:restart
 
 [Install]
@@ -479,7 +502,9 @@ docker compose --env-file .env.docker up -d api web
 docker compose --env-file .env.docker exec api php artisan toweros:migrate --force
 docker compose --env-file .env.docker exec api php artisan config:cache
 docker compose --env-file .env.docker exec api php artisan queue:restart
-sudo systemctl restart toweros-worker
+docker compose --env-file .env.docker up -d queue-worker
+# If still using systemd instead of Compose queue-worker:
+# sudo systemctl restart toweros-worker
 ```
 
 After every deploy that touches env/secrets, confirm MFA prerequisites:
