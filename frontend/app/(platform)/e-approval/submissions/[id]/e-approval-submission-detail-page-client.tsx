@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileDown,
   FileText,
@@ -125,6 +125,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
+  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
   const [rerouteUserId, setRerouteUserId] = useState("");
   const [rerouteReason, setRerouteReason] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
@@ -248,6 +249,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     onError: (e) => push({ level: "error", title: "Resubmit failed", message: getErrorMessage(e) }),
   });
 
+  const decideInFlightRef = useRef(false);
   const decideMutation = useMutation({
     mutationFn: ({
       approvalId,
@@ -274,9 +276,25 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       setApprovalSignature(null);
       setApprovalSignatureError(null);
       setSignatureConsentAccepted(false);
+      setHighlightSignatureConsents(false);
     },
     onError: (e) => push({ level: "error", title: "Decision failed", message: getErrorMessage(e) }),
+    onSettled: () => {
+      decideInFlightRef.current = false;
+    },
   });
+
+  const submitDecision = (payload: {
+    approvalId: string;
+    decision: "approved" | "rejected";
+    signature?: string | null;
+  }) => {
+    if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+      return;
+    }
+    decideInFlightRef.current = true;
+    decideMutation.mutate(payload);
+  };
 
   const canEditAndResubmit =
     Boolean(canCreate) &&
@@ -831,7 +849,13 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         value={approvalSignature}
                         onChange={setApprovalSignature}
                         consentAccepted={signatureConsentAccepted}
-                        onConsentChange={setSignatureConsentAccepted}
+                        onConsentChange={(accepted) => {
+                          setSignatureConsentAccepted(accepted);
+                          if (accepted) {
+                            setHighlightSignatureConsents(false);
+                          }
+                        }}
+                        highlightMissingConsents={highlightSignatureConsents}
                         disabled={decideMutation.isPending || revisionMutation.isPending}
                         error={approvalSignatureError}
                         onErrorChange={setApprovalSignatureError}
@@ -873,7 +897,27 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         <span data-help="ea-decide-approve" className="inline-flex">
                           <Button
                             size="sm"
+                            className={
+                              !signatureConsentAccepted &&
+                              !decideMutation.isPending &&
+                              !revisionMutation.isPending
+                                ? "opacity-50"
+                                : undefined
+                            }
                             onClick={() => {
+                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+                                return;
+                              }
+                              if (!signatureConsentAccepted) {
+                                setHighlightSignatureConsents(true);
+                                setApprovalSignatureError(
+                                  "Accept both electronic signature consents before approving.",
+                                );
+                                document
+                                  .querySelector('[data-help="ea-decide-signature-consent"]')
+                                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                return;
+                              }
                               const signatureError = validateApprovalSignature(approvalSignature);
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
@@ -881,20 +925,17 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               }
                               const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
                               if (consentError) {
+                                setHighlightSignatureConsents(true);
                                 setApprovalSignatureError(consentError);
                                 return;
                               }
-                              decideMutation.mutate({
+                              submitDecision({
                                 approvalId: pendingApproval.id,
                                 decision: "approved",
                                 signature: approvalSignature!.trim(),
                               });
                             }}
-                            disabled={
-                              decideMutation.isPending ||
-                              revisionMutation.isPending ||
-                              !signatureConsentAccepted
-                            }
+                            disabled={decideMutation.isPending || revisionMutation.isPending}
                           >
                             Approve
                           </Button>
@@ -904,7 +945,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             size="sm"
                             variant="destructive"
                             onClick={() =>
-                              decideMutation.mutate({ approvalId: pendingApproval.id, decision: "rejected" })
+                              submitDecision({ approvalId: pendingApproval.id, decision: "rejected" })
                             }
                             disabled={
                               decideMutation.isPending ||

@@ -1,6 +1,7 @@
 import { passkeysLiveTour } from "@/lib/help/passkeys-live-tour";
 import { mfaLiveTour, mfaLoginEnrollLiveTour } from "@/lib/help/mfa-live-tour";
 import { ticketingLiveTour } from "@/lib/help/ticketing-live-tour";
+import { docExtractLiveTour, DOC_EXTRACT_LIVE_TOUR_ID } from "@/lib/help/doc-extract-live-tour";
 
 export type LiveTourAudience =
   | "all"
@@ -421,6 +422,9 @@ export function tourById(id: string): LiveTourDefinition | null {
   }
   if (id === mfaLoginEnrollLiveTour.id) {
     return mfaLoginEnrollLiveTour;
+  }
+  if (id === DOC_EXTRACT_LIVE_TOUR_ID) {
+    return docExtractLiveTour;
   }
   return null;
 }
@@ -1021,7 +1025,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       query: { tab: "decide" },
       target: "ea-decide-signature-consent",
       title: "Signature consent",
-      body: "Accept both consent checkboxes. Approve stays disabled until consent is accepted.",
+      body: "Accept both consent checkboxes. If you click Approve while they are unchecked, the boxes highlight so you can finish consent first.",
       missingHint: "Open Decide → consent checkboxes under the signature pad.",
       audience: "approver",
     },
@@ -1045,7 +1049,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       query: { tab: "decide" },
       target: "ea-decide-actions",
       title: "Approve, Reject, Revision",
-      body: "Approve advances the workflow. Reject ends it. Request revision returns the request to the requestor. Remarks required for reject and revision.",
+      body: "Approve advances the workflow (consent required — unchecked boxes highlight if you click early). Reject ends it. Request revision returns the request to the requestor.",
       missingHint: "Scroll within Decide — the three action buttons sit under remarks.",
       audience: "approver",
     },

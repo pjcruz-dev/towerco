@@ -51,6 +51,10 @@ final class TenantRbacSystemRoles
         'e_approval_requestor',
         'e_approval_approver',
         'e_approval_admin',
+        // DocExtract tiers
+        'doc_extract_viewer',
+        'doc_extract_operator',
+        'doc_extract_admin',
         // Project-One discipline add-ons
         'saq_approver',
         'pmo_approver',

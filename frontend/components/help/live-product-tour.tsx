@@ -37,6 +37,10 @@ import {
   TICKETING_TOUR_GUIDE_PATH,
 } from "@/lib/help/ticketing-live-tour";
 import { TICKETING_TOUR_SAMPLE_DETAIL_PATH } from "@/lib/help/ticketing-tour-fixtures";
+import {
+  DOC_EXTRACT_LIVE_TOUR_ID,
+  isDocExtractTourId,
+} from "@/lib/help/doc-extract-live-tour";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/hooks/use-permission";
@@ -58,7 +62,12 @@ const PANEL_EST_HEIGHT = 220;
 const SIDEBAR_TRIGGER_HELP = "ea-sidebar-trigger";
 
 function isSidebarNavTarget(target: string): boolean {
-  return target.startsWith("ea-nav-") || target.startsWith("tk-nav-") || target === SIDEBAR_TRIGGER_HELP;
+  return (
+    target.startsWith("ea-nav-") ||
+    target.startsWith("tk-nav-") ||
+    target.startsWith("dx-nav-") ||
+    target === SIDEBAR_TRIGGER_HELP
+  );
 }
 
 function spotlightPadForTarget(target: string, rect: TargetRect): number {
@@ -191,6 +200,31 @@ function findTicketDetailPath(): string | null {
   return TICKETING_TOUR_SAMPLE_DETAIL_PATH;
 }
 
+function findDocExtractBatchPath(): string | null {
+  const anchors = document.querySelectorAll<HTMLAnchorElement>('a[href*="/doc-extract/batches/"]');
+  for (const anchor of anchors) {
+    try {
+      const url = new URL(anchor.getAttribute("href") ?? "", window.location.origin);
+      if (
+        !pathMatchesTourStep(url.pathname, {
+          id: "_",
+          path: "/doc-extract/batches/",
+          pathMatch: "prefix",
+          target: "_",
+          title: "",
+          body: "",
+        })
+      ) {
+        continue;
+      }
+      return url.pathname;
+    } catch {
+      // ignore bad hrefs
+    }
+  }
+  return null;
+}
+
 function resolveStepHref(
   step: LiveTourStep,
   tourId: string,
@@ -235,6 +269,13 @@ function resolveStepHref(
 
   if (step.pathMatch === "prefix" && step.path.startsWith("/ticketing/tickets/")) {
     const detail = findTicketDetailPath();
+    if (detail) {
+      return `${detail}?${params.toString()}`;
+    }
+  }
+
+  if (step.pathMatch === "prefix" && step.path.startsWith("/doc-extract/batches/")) {
+    const detail = findDocExtractBatchPath();
     if (detail) {
       return `${detail}?${params.toString()}`;
     }
@@ -502,6 +543,10 @@ export function LiveProductTour() {
       router.replace(TICKETING_TOUR_GUIDE_PATH);
       return;
     }
+    if (isDocExtractTourId(tourId)) {
+      router.replace("/help");
+      return;
+    }
     router.replace(
       isPasskeysTourId(tourId) || isMfaTourId(tourId) ? PASSKEYS_TOUR_HELP_PATH : E_APPROVAL_VISUAL_GUIDE_PATH,
     );
@@ -531,7 +576,11 @@ export function LiveProductTour() {
           ? pathname.startsWith("/ticketing")
             ? pathname
             : "/ticketing"
-          : eApprovalTourExitPath(pathname);
+          : tourId === DOC_EXTRACT_LIVE_TOUR_ID
+            ? pathname.startsWith("/doc-extract")
+              ? pathname
+              : "/doc-extract"
+            : eApprovalTourExitPath(pathname);
     const next = clearTourSearch(searchParams);
     const qs = next.toString();
     router.replace(qs ? `${nextPath}?${qs}` : nextPath);
@@ -788,6 +837,18 @@ export function LiveProductTour() {
           const detail = findTicketDetailPath();
           if (detail) {
             router.replace(resolveStepHref(step, tour.id, stepIndex, pathname, searchParams));
+            return;
+          }
+        }
+        if (step.pathMatch === "prefix" && step.path.startsWith("/doc-extract/batches/")) {
+          const detail = findDocExtractBatchPath();
+          if (detail) {
+            router.replace(resolveStepHref(step, tour.id, stepIndex, pathname, searchParams));
+            return;
+          }
+          // Land on Batches so Open links exist for the next auto-nav pass.
+          if (pathname !== "/doc-extract") {
+            router.replace(resolveStepHref(step, tour.id, stepIndex, "/doc-extract", searchParams));
             return;
           }
         }

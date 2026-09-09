@@ -27,6 +27,7 @@ final class TenantEnabledModulesResolver
         'documents',
         'document_register',
         'ai_assistant',
+        'doc_extract',
     ];
 
     /** @var array<string, string> */
@@ -47,6 +48,7 @@ final class TenantEnabledModulesResolver
         'documents' => 'Documents',
         'document_register' => 'Document register',
         'ai_assistant' => 'AI Assistant',
+        'doc_extract' => 'DocExtract',
     ];
 
     /** @var array<string, string> */
@@ -55,6 +57,7 @@ final class TenantEnabledModulesResolver
         'documents' => 'Expiring leases, permits, and contracts across sites.',
         'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Forms.',
         'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
+        'doc_extract' => 'Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.',
     ];
 
     /**
@@ -73,6 +76,7 @@ final class TenantEnabledModulesResolver
                 'documents',
                 'document_register',
                 'ai_assistant',
+                'doc_extract',
             ]);
         }
 

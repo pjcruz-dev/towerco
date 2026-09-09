@@ -22,12 +22,15 @@ import {
 } from "@/modules/e-approval/signature";
 import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL, signatureStorageConsentLabel } from "@/modules/e-approval/signature-consent";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
+import { cn } from "@/lib/utils";
 
 type Props = {
   value: string | null;
   onChange: (value: string | null) => void;
   consentAccepted: boolean;
   onConsentChange: (accepted: boolean) => void;
+  /** When true, draw attention to unchecked consent boxes (e.g. Approve clicked early). */
+  highlightMissingConsents?: boolean;
   disabled?: boolean;
   error?: string | null;
   onErrorChange?: (error: string | null) => void;
@@ -39,6 +42,7 @@ export function EApprovalApprovalSignatureField({
   onChange,
   consentAccepted,
   onConsentChange,
+  highlightMissingConsents = false,
   disabled,
   error,
   onErrorChange,
@@ -235,15 +239,27 @@ export function EApprovalApprovalSignatureField({
         </div>
       </Tabs>
 
-      <div data-help="ea-decide-signature-consent" className="space-y-3">
-        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+      <div
+        data-help="ea-decide-signature-consent"
+        className={cn(
+          "space-y-3 rounded-lg transition-colors",
+          highlightMissingConsents && !consentAccepted && "ring-2 ring-destructive/70 ring-offset-2 ring-offset-background",
+        )}
+      >
+        <label
+          className={cn(
+            "flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+            highlightMissingConsents && !legalConsent && "bg-destructive/10 ring-1 ring-destructive/40",
+          )}
+        >
           <Checkbox
-            className="mt-0.5"
+            className={cn("mt-0.5", highlightMissingConsents && !legalConsent && "border-destructive")}
             checked={legalConsent}
             onCheckedChange={(checked) => {
               syncConsents(checked === true, storageConsent);
             }}
             disabled={disabled}
+            aria-invalid={highlightMissingConsents && !legalConsent ? true : undefined}
             aria-describedby="ea-approval-signature-consent-hint"
           />
           <span>
@@ -253,14 +269,20 @@ export function EApprovalApprovalSignatureField({
             </span>
           </span>
         </label>
-        <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+        <label
+          className={cn(
+            "flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
+            highlightMissingConsents && !storageConsent && "bg-destructive/10 ring-1 ring-destructive/40",
+          )}
+        >
           <Checkbox
-            className="mt-0.5"
+            className={cn("mt-0.5", highlightMissingConsents && !storageConsent && "border-destructive")}
             checked={storageConsent}
             onCheckedChange={(checked) => {
               syncConsents(legalConsent, checked === true);
             }}
             disabled={disabled}
+            aria-invalid={highlightMissingConsents && !storageConsent ? true : undefined}
             aria-describedby="ea-approval-signature-storage-consent-hint"
           />
           <span>
@@ -273,6 +295,11 @@ export function EApprovalApprovalSignatureField({
             </span>
           </span>
         </label>
+        {highlightMissingConsents && !consentAccepted ? (
+          <p className="px-2 text-xs font-medium text-destructive" role="alert">
+            Check both consent boxes before approving.
+          </p>
+        ) : null}
       </div>
 
       {error && !uploadError ? <p className="text-xs text-destructive">{error}</p> : null}

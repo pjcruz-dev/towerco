@@ -54,6 +54,27 @@ class TenantRbacBaselineService
         }
 
         $this->syncRole($guard, 'tenant_admin', $enabled);
+
+        // Custom full-access role used by some tenants (e.g. staging admin); keep in sync
+        // with enabled modules without creating the role if it does not exist.
+        $this->syncExistingRole($guard, 'administrator', $enabled);
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    private function syncExistingRole(string $guard, string $name, array $permissions): void
+    {
+        $role = TenantRole::query()
+            ->where('name', $name)
+            ->where('guard_name', $guard)
+            ->first();
+
+        if ($role === null) {
+            return;
+        }
+
+        $role->syncPermissions($permissions);
     }
 
     /**
@@ -77,7 +98,7 @@ class TenantRbacBaselineService
             ->with('permissions:id,name')
             ->get()
             ->each(function (TenantRole $role) use ($enabled): void {
-                if ($role->name === 'tenant_admin') {
+                if (in_array($role->name, ['tenant_admin', 'administrator'], true)) {
                     return;
                 }
 

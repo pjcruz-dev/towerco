@@ -84,6 +84,22 @@ services:
       SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
     mem_limit: ${TOWEROS_SOKETI_MEM_LIMIT:-256m}
 
+  doc-extract:
+    build:
+      context: ./services/doc-extract
+      dockerfile: Dockerfile
+    container_name: toweros-doc-extract
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_DOC_EXTRACT_PORT:-8082}:8081"
+    mem_limit: ${TOWEROS_DOC_EXTRACT_MEM_LIMIT:-1g}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
   api:
     build:
       context: ./backend
@@ -115,6 +131,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_CLIENT: predis
+      DOC_EXTRACT_URL: ${DOC_EXTRACT_URL:-http://doc-extract:8081}
     volumes:
       - ./backend:/var/www/html
       - toweros-backend-vendor:/var/www/html/vendor
@@ -125,6 +142,8 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      doc-extract:
+        condition: service_started
     mem_limit: ${TOWEROS_API_MEM_LIMIT:-512m}
 
   web:

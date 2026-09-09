@@ -109,6 +109,12 @@ final class TenantRbacPermissionCatalog
             'ai_assistant:knowledge:manage',
             'ai_assistant:conversations:audit',
         ],
+        'doc_extract' => [
+            'doc-extract:view',
+            'doc-extract:run',
+            'doc-extract:templates:manage',
+            'doc-extract:export',
+        ],
     ];
 
     /** @var array<string, string> */
@@ -129,6 +135,7 @@ final class TenantRbacPermissionCatalog
         'documents' => 'Documents',
         'document_register' => 'Document register',
         'ai_assistant' => 'AI Assistant',
+        'doc_extract' => 'DocExtract',
     ];
 
     /**
