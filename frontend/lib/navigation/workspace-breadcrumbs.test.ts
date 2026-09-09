@@ -30,6 +30,16 @@ describe("resolveWorkspaceBreadcrumbs", () => {
     ]);
   });
 
+  it("maps doc-extract batch detail without linking to /doc-extract/batches", () => {
+    expect(
+      resolveWorkspaceBreadcrumbs("/doc-extract/batches/01a084e1-1d12-72a1-b080-f7b4849fed82"),
+    ).toEqual([
+      { label: "DocExtract", href: "/doc-extract" },
+      { label: "Batches", href: "/doc-extract" },
+      { label: "Detail" },
+    ]);
+  });
+
   it("maps team and access routes", () => {
     expect(resolveWorkspaceBreadcrumbs("/users")).toEqual([
       { label: "Team & Access", href: "/users" },

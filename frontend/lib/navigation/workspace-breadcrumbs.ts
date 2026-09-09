@@ -14,6 +14,7 @@ const MODULE_ROOTS: Record<string, { label: string; href: string }> = {
   "fiber-one": { label: "FIBER-ONE", href: "/fiber-one" },
   "asset-one": { label: "ASSET-ONE", href: "/asset-one" },
   "e-approval": { label: "E-Forms", href: "/e-approval" },
+  "doc-extract": { label: "DocExtract", href: "/doc-extract" },
   procurement: { label: "Procurement-One", href: "/procurement" },
   finance: { label: "Finance-One", href: FINANCE_ONE_HOME },
 };
@@ -58,6 +59,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   new: "New",
   create: "New form",
   batch: "Batch",
+  batches: "Batches",
+  "doc-extract": "DocExtract",
 };
 
 const NEW_SEGMENT_LABELS: Record<string, string> = {
@@ -151,6 +154,18 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
     }
 
     const crumbs: WorkspaceBreadcrumb[] = [{ label: moduleRoot.label, href: moduleRoot.href }];
+
+    // DocExtract list is /doc-extract (not /doc-extract/batches); skip the alias segment.
+    if (root === "doc-extract" && parts[1] === "batches") {
+      if (parts.length === 2) {
+        crumbs.push({ label: "Batches" });
+        return crumbs;
+      }
+      crumbs.push({ label: "Batches", href: "/doc-extract" });
+      pushPathSegments(parts, 2, crumbs);
+      return crumbs;
+    }
+
     pushPathSegments(parts, 1, crumbs);
     return crumbs;
   }
