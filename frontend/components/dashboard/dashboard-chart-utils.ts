@@ -5,6 +5,27 @@ export type DashboardChartDatum = {
   fill?: string;
 };
 
+/** Multi-series bag for line / stacked area / radar overlays. */
+export type DashboardMultiSeries = {
+  categories: string[];
+  series: Array<{
+    key: string;
+    label: string;
+    color: string;
+    values: number[];
+  }>;
+};
+
+/** Point for scatter / bubble charts. */
+export type DashboardScatterPoint = {
+  key: string;
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+  fill?: string;
+};
+
 /** Brand-first operational chart hues (amber/red only for risk). */
 export const DASHBOARD_CHART = {
   brand: "#2563EB",
@@ -16,13 +37,16 @@ export const DASHBOARD_CHART = {
   danger: "#DC2626",
 } as const;
 
-/** Default multi-series palette — cool tones only (no amber/red rotation). */
+/** Default multi-series palette — Vuexy-inspired cool operational hues. */
 export const DASHBOARD_CHART_COLORS = [
-  DASHBOARD_CHART.brand,
-  DASHBOARD_CHART.muted,
-  DASHBOARD_CHART.brandSoft,
-  DASHBOARD_CHART.sky,
-  "#94A3B8",
+  "#00BAD1", // teal
+  "#7367F0", // violet
+  "#28C76F", // green
+  "#FF9F43", // amber (accent sparingly)
+  "#EA5455", // soft red
+  "#2563EB", // brand blue
+  "#0EA5E9", // sky
+  "#64748B", // muted
 ] as const;
 
 const STATUS_FILLS: Record<string, string> = {

@@ -36,18 +36,23 @@ class EApprovalSubmissionExportController extends AbstractApiController
             'form_id' => ['sometimes', 'uuid'],
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date'],
-            'format' => ['sometimes', 'string', 'in:csv,xlsx'],
+            'format' => ['sometimes', 'string', 'in:csv,xlsx,html'],
             'columns' => ['sometimes', 'array'],
             'columns.*' => ['string', 'max:120'],
             'layout' => ['sometimes', 'string', 'in:submissions,line_items'],
             'grid_field' => ['sometimes', 'uuid'],
             'async' => ['sometimes', 'boolean'],
             'viewer_scope' => ['sometimes', 'string', 'in:mine,all'],
+            'subsidiary' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'ids' => ['sometimes', 'array', 'max:500'],
+            'ids.*' => ['uuid'],
         ]);
 
         $format = $validated['format'] ?? 'csv';
         $layout = $validated['layout'] ?? 'submissions';
-        $forceAsync = (bool) ($validated['async'] ?? false);
+        // Printable HTML is always async (open from Recent exports, then print).
+        $forceAsync = (bool) ($validated['async'] ?? false) || $format === 'html';
         $viewerScope = (string) ($validated['viewer_scope'] ?? 'all');
 
         // When a single form is selected, resolve it so its live custom fields are
@@ -55,6 +60,10 @@ class EApprovalSubmissionExportController extends AbstractApiController
         // keeps the all-forms export to base columns only.
         $form = isset($validated['form_id'])
             ? EApprovalForm::query()->find($validated['form_id'])
+            : null;
+
+        $ids = ! empty($validated['ids'])
+            ? array_values(array_unique(array_map('strval', $validated['ids'])))
             : null;
 
         $filters = array_filter([
@@ -65,6 +74,9 @@ class EApprovalSubmissionExportController extends AbstractApiController
             'to' => isset($validated['to']) ? (string) $validated['to'] : null,
             'search' => $query['search'] !== '' ? $query['search'] : null,
             'viewer_scope' => $viewerScope,
+            'subsidiary' => isset($validated['subsidiary']) ? trim((string) $validated['subsidiary']) : null,
+            'department' => isset($validated['department']) ? trim((string) $validated['department']) : null,
+            'ids' => $ids,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         $includeFields = $form !== null;
@@ -111,7 +123,9 @@ class EApprovalSubmissionExportController extends AbstractApiController
                 'history' => $reports->presentHistory($history),
                 'matched_rows' => $totalMatching,
                 'max_rows' => EApprovalSubmissionExportService::ASYNC_MAX_ROWS,
-                'message' => 'Export queued. Download from Recent exports when ready.',
+                'message' => $format === 'html'
+                    ? 'Printable HTML queued. Open Recent exports when ready, then open the file to print.'
+                    : 'Export queued. Download from Recent exports when ready.',
             ], 202);
         }
 

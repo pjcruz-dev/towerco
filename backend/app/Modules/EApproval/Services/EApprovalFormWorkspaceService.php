@@ -12,6 +12,7 @@ use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceAccessSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceDashboardSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
+use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantScopedCache;
@@ -168,33 +169,51 @@ final class EApprovalFormWorkspaceService
     }
 
     /**
+     * @param  array{
+     *   status?: string|null,
+     *   from?: string|null,
+     *   to?: string|null,
+     *   subsidiary?: string|null,
+     *   department?: string|null,
+     *   mine?: bool
+     * }  $filters
      * @return array<string, mixed>
      */
-    public function buildDashboard(string $slug, TenantUser $viewer): array
+    public function buildDashboard(string $slug, TenantUser $viewer, array $filters = []): array
     {
         // Resolve + authorize outside the cache so 404/403 are never cached.
         $context = $this->resolveWorkspaceContext($slug, $viewer);
 
+        $normalized = $this->normalizeDashboardFilters($filters);
         $tenantId = (string) (tenant('id') ?? 'unknown');
         $key = sprintf(
-            'e_approval:workspace_dashboard:%s:%s:%s',
+            'e_approval:workspace_dashboard:%s:%s:%s:%s',
             $tenantId,
             (string) $context['form']->id,
             (string) $viewer->id,
+            md5((string) json_encode($normalized)),
         );
 
         return TenantScopedCache::remember(
             $key,
             30,
-            fn (): array => $this->buildDashboardData($context, $viewer),
+            fn (): array => $this->buildDashboardData($context, $viewer, $normalized),
         );
     }
 
     /**
      * @param  array{form: EApprovalForm, workspace: array<string, mixed>, form_ids: list<string>}  $context
+     * @param  array{
+     *   status?: string|null,
+     *   from?: string|null,
+     *   to?: string|null,
+     *   subsidiary?: string|null,
+     *   department?: string|null,
+     *   mine?: bool
+     * }  $filters
      * @return array<string, mixed>
      */
-    private function buildDashboardData(array $context, TenantUser $viewer): array
+    private function buildDashboardData(array $context, TenantUser $viewer, array $filters = []): array
     {
         $form = $context['form'];
         $workspace = $context['workspace'];
@@ -202,12 +221,13 @@ final class EApprovalFormWorkspaceService
         $isMultiForm = count($formIds) > 1;
 
         $formId = (string) $form->id;
-        $canViewAll = $this->viewerCanSeeAllInWorkspace($viewer, $workspace);
+        $forceOwn = (bool) ($filters['mine'] ?? false);
+        $canViewAll = $this->viewerCanSeeAllInWorkspace($viewer, $workspace) && ! $forceOwn;
         $canSubmit = $viewer->can('e_approval:submissions:create');
         $canExport = $this->viewerCanExport($viewer, $workspace);
         $canManageForm = $viewer->can('e_approval:forms:manage');
 
-        $scopedQuery = $this->scopedSubmissionsQuery($formIds, $viewer, $canViewAll);
+        $scopedQuery = $this->scopedSubmissionsQuery($formIds, $viewer, $canViewAll, $filters);
 
         $pending = (clone $scopedQuery)
             ->where('status', EApprovalSubmissionStatus::PENDING)
@@ -229,12 +249,14 @@ final class EApprovalFormWorkspaceService
 
         $awaitingMyApproval = 0;
         if ($viewer->can('e_approval:approve')) {
-            $awaitingMyApproval = (int) DB::table('e_approval_request_approvals as a')
+            $awaitingQuery = DB::table('e_approval_request_approvals as a')
                 ->join('e_approval_submissions as s', 's.id', '=', 'a.submission_id')
                 ->whereIn('s.form_id', $formIds)
                 ->where('a.approver_id', $viewer->id)
-                ->where('a.status', EApprovalApprovalStatus::PENDING)
-                ->count();
+                ->where('a.status', EApprovalApprovalStatus::PENDING);
+
+            $awaitingQuery = $this->applyColumnFiltersToApprovalsJoin($awaitingQuery, $formIds, $filters);
+            $awaitingMyApproval = (int) $awaitingQuery->count();
         }
 
         $kpis = [
@@ -284,6 +306,7 @@ final class EApprovalFormWorkspaceService
             : '/e-approval/focus/'.$formId.'?controlled_mode=new';
 
         $statusBreakdown = $this->statusBreakdown(clone $scopedQuery);
+        $subsidiaryBreakdown = $this->subsidiaryBreakdown(clone $scopedQuery, $formIds);
         $recentActivity = $this->recentActivity(clone $scopedQuery);
         $recentAudit = $this->recentWorkspaceAudit($formIds);
 
@@ -310,8 +333,18 @@ final class EApprovalFormWorkspaceService
             'workspace' => $workspace,
             'dashboard' => $workspace['dashboard'],
             'available_columns' => EApprovalFormWorkspaceDashboardSupport::availableTableColumns($form),
+            'filter_options' => $this->workspaceFilterOptions($formIds),
+            'applied_filters' => [
+                'status' => $filters['status'] ?? null,
+                'from' => $filters['from'] ?? null,
+                'to' => $filters['to'] ?? null,
+                'subsidiary' => $filters['subsidiary'] ?? null,
+                'department' => $filters['department'] ?? null,
+                'mine' => (bool) ($filters['mine'] ?? false),
+            ],
             'kpis' => $kpis,
             'status_breakdown' => $statusBreakdown,
+            'subsidiary_breakdown' => $subsidiaryBreakdown,
             'recent_activity' => $recentActivity,
             'recent_audit' => $recentAudit,
             'viewer' => [
@@ -342,8 +375,16 @@ final class EApprovalFormWorkspaceService
 
     /**
      * @param  list<string>  $formIds
+     * @param  array{
+     *   status?: string|null,
+     *   from?: string|null,
+     *   to?: string|null,
+     *   subsidiary?: string|null,
+     *   department?: string|null,
+     *   mine?: bool
+     * }  $filters
      */
-    public function scopedSubmissionsQuery(array $formIds, TenantUser $viewer, bool $canViewAll): Builder
+    public function scopedSubmissionsQuery(array $formIds, TenantUser $viewer, bool $canViewAll, array $filters = []): Builder
     {
         $query = EApprovalSubmission::query()->whereIn('form_id', $formIds);
         if (! $canViewAll) {
@@ -352,6 +393,147 @@ final class EApprovalFormWorkspaceService
                     ->orWhereIn('id', EApprovalRequestApproval::query()
                         ->where('approver_id', $viewer->id)
                         ->select('submission_id'));
+            });
+        }
+
+        $status = isset($filters['status']) && is_string($filters['status']) ? trim($filters['status']) : '';
+        if ($status !== '' && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        if (isset($filters['from']) && is_string($filters['from']) && $filters['from'] !== '') {
+            $query->where('created_at', '>=', $filters['from']);
+        }
+
+        if (isset($filters['to']) && is_string($filters['to']) && $filters['to'] !== '') {
+            $query->where('created_at', '<=', $filters['to']);
+        }
+
+        EApprovalSubmissionFieldFilter::applyWorkspaceColumnFilters($query, $formIds, [
+            'subsidiary' => $filters['subsidiary'] ?? null,
+            'department' => $filters['department'] ?? null,
+        ]);
+
+        return $query;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array{
+     *   status: string|null,
+     *   from: string|null,
+     *   to: string|null,
+     *   subsidiary: string|null,
+     *   department: string|null,
+     *   mine: bool
+     * }
+     */
+    private function normalizeDashboardFilters(array $filters): array
+    {
+        $status = isset($filters['status']) ? trim((string) $filters['status']) : '';
+        $subsidiary = isset($filters['subsidiary']) ? trim((string) $filters['subsidiary']) : '';
+        $department = isset($filters['department']) ? trim((string) $filters['department']) : '';
+
+        return [
+            'status' => ($status !== '' && $status !== 'all') ? $status : null,
+            'from' => isset($filters['from']) && is_string($filters['from']) && $filters['from'] !== ''
+                ? $filters['from']
+                : null,
+            'to' => isset($filters['to']) && is_string($filters['to']) && $filters['to'] !== ''
+                ? $filters['to']
+                : null,
+            'subsidiary' => $subsidiary !== '' ? $subsidiary : null,
+            'department' => $department !== '' ? $department : null,
+            'mine' => (bool) ($filters['mine'] ?? false),
+        ];
+    }
+
+    /**
+     * @param  list<string>  $formIds
+     * @return array{subsidiaries: list<string>, departments: list<string>}
+     */
+    private function workspaceFilterOptions(array $formIds): array
+    {
+        $subsidiaries = app(EApprovalSubsidiaryLogoCatalogService::class)->codes();
+        $departments = TenantUser::query()
+            ->whereNotNull('department')
+            ->where('department', '!=', '')
+            ->distinct()
+            ->orderBy('department')
+            ->limit(100)
+            ->pluck('department')
+            ->map(static fn ($value): string => trim((string) $value))
+            ->filter(static fn (string $value): bool => $value !== '')
+            ->values()
+            ->all();
+
+        // Union form field choice values when present.
+        $choiceRows = DB::table('e_approval_form_fields')
+            ->whereIn('form_id', $formIds)
+            ->whereIn('name', ['subsidiary', 'department'])
+            ->get(['name', 'options']);
+
+        foreach ($choiceRows as $row) {
+            $options = is_string($row->options) ? json_decode($row->options, true) : $row->options;
+            if (! is_array($options)) {
+                continue;
+            }
+            $choices = $options['choices'] ?? [];
+            if (! is_array($choices)) {
+                continue;
+            }
+            foreach ($choices as $choice) {
+                if (! is_array($choice)) {
+                    continue;
+                }
+                $code = trim((string) ($choice['value'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                if ((string) $row->name === 'subsidiary' && ! in_array($code, $subsidiaries, true)) {
+                    $subsidiaries[] = $code;
+                }
+                if ((string) $row->name === 'department' && ! in_array($code, $departments, true)) {
+                    $departments[] = $code;
+                }
+            }
+        }
+
+        sort($subsidiaries);
+        sort($departments);
+
+        return [
+            'subsidiaries' => array_values($subsidiaries),
+            'departments' => array_values($departments),
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  list<string>  $formIds
+     * @param  array{subsidiary?: string|null, department?: string|null}  $filters
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function applyColumnFiltersToApprovalsJoin($query, array $formIds, array $filters)
+    {
+        foreach (['subsidiary' => $filters['subsidiary'] ?? null, 'department' => $filters['department'] ?? null] as $fieldName => $raw) {
+            $value = is_string($raw) ? trim($raw) : '';
+            if ($value === '') {
+                continue;
+            }
+            $candidates = array_values(array_unique([$value, mb_strtoupper($value), mb_strtolower($value)]));
+            $query->whereExists(function ($exists) use ($formIds, $fieldName, $candidates): void {
+                $exists->select(DB::raw(1))
+                    ->from('e_approval_form_values as fv')
+                    ->join('e_approval_form_fields as ff', 'ff.id', '=', 'fv.field_id')
+                    ->whereColumn('fv.submission_id', 's.id')
+                    ->whereIn('ff.form_id', $formIds)
+                    ->where('ff.name', $fieldName)
+                    ->where(function ($match) use ($candidates): void {
+                        foreach ($candidates as $candidate) {
+                            $match->orWhere('fv.value', $candidate);
+                        }
+                    });
             });
         }
 
@@ -386,6 +568,49 @@ final class EApprovalFormWorkspaceService
                 'status' => $status,
                 'label' => $label,
                 'count' => $count,
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * @param  list<string>  $formIds
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    private function subsidiaryBreakdown(Builder $scopedQuery, array $formIds): array
+    {
+        if ($formIds === []) {
+            return [];
+        }
+
+        $submissionIds = (clone $scopedQuery)->select('id');
+
+        $rows = DB::table('e_approval_form_values as fv')
+            ->join('e_approval_form_fields as ff', 'ff.id', '=', 'fv.field_id')
+            ->whereIn('ff.form_id', $formIds)
+            ->where('ff.name', 'subsidiary')
+            ->whereIn('fv.submission_id', $submissionIds)
+            ->whereNotNull('fv.value')
+            ->where('fv.value', '!=', '')
+            ->groupBy('fv.value')
+            ->orderByDesc(DB::raw('count(*)'))
+            ->limit(12)
+            ->get([
+                'fv.value',
+                DB::raw('count(*) as aggregate'),
+            ]);
+
+        $breakdown = [];
+        foreach ($rows as $row) {
+            $code = trim((string) ($row->value ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $breakdown[] = [
+                'key' => $code,
+                'label' => $code,
+                'count' => (int) ($row->aggregate ?? 0),
             ];
         }
 

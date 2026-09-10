@@ -11,6 +11,7 @@ import {
   DocExtractConsolidateStep,
 } from "@/components/doc-extract/doc-extract-consolidate-step";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { DocExtractHelpEntryActions } from "@/components/help/doc-extract-help-entry-actions";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -132,11 +133,12 @@ export function DocExtractNewBatchPageClient() {
     <PermissionGate requiredPermissions={[permissions.docExtractRun]}>
       <div className="w-full space-y-8" data-help="dx-new-workspace">
         <LiveProductTourHost />
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Button size="sm" variant="ghost" render={<Link href="/doc-extract" data-help="dx-back-batches" />}>
             <ArrowLeft className="size-4" />
             Batches
           </Button>
+          <DocExtractHelpEntryActions />
         </div>
 
         <div>

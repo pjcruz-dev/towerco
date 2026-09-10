@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
 
+import { PageLoadingShell } from "@/components/ui/page-skeletons";
 import { hasAnyPermission, hasPermission } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -44,11 +45,7 @@ export function PermissionGate({
   }, [allowed, fallbackPath, permissionsReady, router]);
 
   if (!permissionsReady) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
+    return <PageLoadingShell label="Loading workspace" />;
   }
 
   if (!allowed) {

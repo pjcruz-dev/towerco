@@ -1,23 +1,35 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
-import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
-import { DashboardLineChart } from "@/components/dashboard/dashboard-line-chart";
+import { DashboardKindWidget } from "@/components/dashboard/widgets/dashboard-kind-widget";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { FilterSelect } from "@/components/forms/filter-select";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import type { ReportsAnalyticsSectionId } from "@/lib/e-approval/reports-board-config";
 import {
   fetchEApprovalAnalytics,
+  fetchEApprovalFormsIndex,
+  fetchEApprovalMetadata,
   type EApprovalAnalyticsResponse,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { getCatalogEntry, type DashboardWidgetOptions } from "@/lib/ui/dashboard-widget-catalog";
+import {
+  emptyNormalizedData,
+  type DashboardNormalizedData,
+} from "@/lib/ui/dashboard-widget-data";
+import { normalizeEApprovalAnalytics } from "@/lib/ui/normalize-dashboard-data";
 
 function defaultRange(): { from: string; to: string } {
   const to = new Date();
@@ -29,245 +41,335 @@ function defaultRange(): { from: string; to: string } {
   };
 }
 
-function toChartData(
-  rows: Array<{ key: string; label: string; value: number }>,
-): Array<{ key: string; label: string; value: number }> {
-  return rows.map((row) => ({ key: row.key, label: row.label, value: row.value }));
+type AnalyticsBoardContextValue = {
+  data: EApprovalAnalyticsResponse | undefined;
+  normalizedData: DashboardNormalizedData;
+  isLoading: boolean;
+  isFetching: boolean;
+  error: unknown;
+};
+
+const AnalyticsBoardContext = createContext<AnalyticsBoardContextValue | null>(null);
+
+function useAnalyticsBoard(): AnalyticsBoardContextValue {
+  const ctx = useContext(AnalyticsBoardContext);
+  if (!ctx) {
+    throw new Error("Analytics widgets must be used within EApprovalAnalyticsBoardProvider");
+  }
+  return ctx;
 }
 
-export function EApprovalAnalyticsPanel() {
+export function useEApprovalAnalyticsBoard(): AnalyticsBoardContextValue {
+  return useAnalyticsBoard();
+}
+
+export function EApprovalAnalyticsBoardProvider({ children }: { children: ReactNode }) {
   const defaults = useMemo(() => defaultRange(), []);
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
-  const [applied, setApplied] = useState(defaults);
-
-  const query = useQuery({
-    queryKey: ["e-approval", "analytics", applied.from, applied.to],
-    queryFn: () => fetchEApprovalAnalytics({ from: applied.from, to: applied.to }),
+  const [formId, setFormId] = useState("");
+  const [subsidiary, setSubsidiary] = useState("");
+  const [department, setDepartment] = useState("");
+  const [applied, setApplied] = useState({
+    from: defaults.from,
+    to: defaults.to,
+    formId: "",
+    subsidiary: "",
+    department: "",
   });
 
-  const data = query.data;
+  const metadataQuery = useQuery({
+    queryKey: ["e-approval", "metadata"],
+    queryFn: fetchEApprovalMetadata,
+    staleTime: 60_000,
+  });
+  const formsQuery = useQuery({
+    queryKey: ["e-approval", "forms", "filter-options"],
+    queryFn: () => fetchEApprovalFormsIndex({ per_page: 100, status: "published", sort: "name:asc" }),
+    staleTime: 60_000,
+  });
+
+  const query = useQuery({
+    queryKey: [
+      "e-approval",
+      "analytics",
+      applied.from,
+      applied.to,
+      applied.formId,
+      applied.subsidiary,
+      applied.department,
+    ],
+    queryFn: () =>
+      fetchEApprovalAnalytics({
+        from: applied.from,
+        to: applied.to,
+        form_id: applied.formId || undefined,
+        subsidiary: applied.subsidiary || undefined,
+        department: applied.department || undefined,
+      }),
+  });
+
+  const value = useMemo<AnalyticsBoardContextValue>(
+    () => ({
+      data: query.data,
+      normalizedData: normalizeEApprovalAnalytics(query.data),
+      isLoading: query.isLoading,
+      isFetching: query.isFetching,
+      error: query.error,
+    }),
+    [query.data, query.error, query.isFetching, query.isLoading],
+  );
+
+  const subsidiaryOptions = metadataQuery.data?.subsidiaries ?? [];
+  const departmentOptions = metadataQuery.data?.departments ?? [];
+  const formOptions = formsQuery.data?.data ?? [];
+  const hasAdvancedFilters = Boolean(formId || subsidiary || department);
 
   return (
-    <div className="space-y-4">
-      <EApprovalSectionCard
-        title="Analytics"
-        description="Operational volume, cycle time, bottlenecks, and SLA aging for the selected period."
-        actions={
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <Label htmlFor="analytics-from" className="text-xs">
-                From
-              </Label>
-              <DatePicker
-                id="analytics-from"
-                value={from}
-                onChange={setFrom}
-                className="h-8 w-[140px]"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="analytics-to" className="text-xs">
-                To
-              </Label>
-              <DatePicker
-                id="analytics-to"
-                value={to}
-                onChange={setTo}
-                className="h-8 w-[140px]"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setApplied({ from, to })}
-              disabled={query.isFetching}
-            >
-              {query.isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
-              Apply
-            </Button>
-          </div>
+    <AnalyticsBoardContext.Provider value={value}>
+      <AnalyticsFiltersBridge
+        from={from}
+        to={to}
+        formId={formId}
+        subsidiary={subsidiary}
+        department={department}
+        setFrom={setFrom}
+        setTo={setTo}
+        setFormId={setFormId}
+        setSubsidiary={setSubsidiary}
+        setDepartment={setDepartment}
+        formOptions={formOptions}
+        subsidiaryOptions={subsidiaryOptions}
+        departmentOptions={departmentOptions}
+        hasAdvancedFilters={hasAdvancedFilters}
+        isFetching={query.isFetching}
+        onApply={() =>
+          setApplied({
+            from,
+            to,
+            formId,
+            subsidiary,
+            department,
+          })
         }
+        onClear={() => {
+          setFormId("");
+          setSubsidiary("");
+          setDepartment("");
+          setApplied((prev) => ({
+            ...prev,
+            formId: "",
+            subsidiary: "",
+            department: "",
+          }));
+        }}
       >
-        {query.isError ? (
-          <p className="text-sm text-destructive">{getErrorMessage(query.error)}</p>
-        ) : null}
-
-        {query.isLoading && !data ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner className="size-3.5" /> Loading analytics…
-          </div>
-        ) : null}
-
-        {data ? <AnalyticsBody data={data} /> : null}
-      </EApprovalSectionCard>
-    </div>
+        {children}
+      </AnalyticsFiltersBridge>
+    </AnalyticsBoardContext.Provider>
   );
 }
 
-function AnalyticsBody({ data }: { data: EApprovalAnalyticsResponse }) {
+type FilterBridgeProps = {
+  children: ReactNode;
+  from: string;
+  to: string;
+  formId: string;
+  subsidiary: string;
+  department: string;
+  setFrom: (value: string) => void;
+  setTo: (value: string) => void;
+  setFormId: (value: string) => void;
+  setSubsidiary: (value: string) => void;
+  setDepartment: (value: string) => void;
+  formOptions: Array<{ id: string; name: string }>;
+  subsidiaryOptions: string[];
+  departmentOptions: string[];
+  hasAdvancedFilters: boolean;
+  isFetching: boolean;
+  onApply: () => void;
+  onClear: () => void;
+};
+
+const FiltersUiContext = createContext<Omit<FilterBridgeProps, "children"> | null>(null);
+
+function AnalyticsFiltersBridge({ children, ...props }: FilterBridgeProps) {
+  return <FiltersUiContext.Provider value={props}>{children}</FiltersUiContext.Provider>;
+}
+
+type AnalyticsSectionChrome = {
+  title?: string;
+  description?: string | null;
+  compact?: boolean;
+};
+
+function resolveDescription(
+  description: string | null | undefined,
+  fallback: string,
+): string | undefined {
+  if (description === null) return undefined;
+  if (description !== undefined) return description;
+  return fallback;
+}
+
+function AnalyticsFiltersCard({ title, description, compact }: AnalyticsSectionChrome) {
+  const props = useContext(FiltersUiContext);
+  const { data, isLoading, error } = useAnalyticsBoard();
+  if (!props) return null;
+
   return (
-    <div className="space-y-4">
-      <KpiStrip
-        items={data.kpis.map((kpi) => ({
-          key: kpi.key,
-          label: kpi.label,
-          value: kpi.value,
-          change: kpi.change ?? undefined,
-          tone: (kpi.tone as "neutral" | "success" | "warning" | "danger") ?? "neutral",
-        }))}
-      />
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {data.kpis
-          .filter((kpi) => kpi.href)
-          .map((kpi) => (
-            <Link
-              key={`link-${kpi.key}`}
-              href={kpi.href!}
-              className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs font-medium text-foreground hover:border-primary/30 hover:bg-muted/40"
-            >
-              Drill into {kpi.label}
-            </Link>
-          ))}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DashboardLineChart
-          title="Submissions over time"
-          description={`${data.period.from} → ${data.period.to}`}
-          data={toChartData(data.submissions_over_time)}
-          emptyMessage="No submissions in this period."
-          height={220}
-        />
-        <div className="space-y-2">
-          <DashboardDonutChart
-            title="By status"
-            description="Submission status mix"
-            data={toChartData(data.by_status)}
-            emptyMessage="No status breakdown."
-            height={220}
-          />
-          {data.by_status.length > 0 ? (
-            <ul className="flex flex-wrap gap-2">
-              {data.by_status.map((row) =>
-                row.href ? (
-                  <li key={row.key}>
-                    <Link
-                      href={row.href}
-                      className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                    >
-                      {row.label} ({row.value})
-                    </Link>
-                  </li>
-                ) : null,
-              )}
-            </ul>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-2">
-          <DashboardBarChart
-            title="Top forms"
-            description="Highest volume in the selected period"
-            data={toChartData(data.top_forms)}
-            layout="horizontal"
-            emptyMessage="No form volume yet."
-            height={240}
-          />
-          {data.top_forms.length > 0 ? (
-            <ul className="flex flex-wrap gap-2">
-              {data.top_forms.slice(0, 5).map((row) =>
-                row.href ? (
-                  <li key={row.key}>
-                    <Link
-                      href={row.href}
-                      className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                    >
-                      {row.label} ({row.value})
-                    </Link>
-                  </li>
-                ) : null,
-              )}
-            </ul>
-          ) : null}
-        </div>
-        <DashboardBarChart
-          title="Approval aging"
-          description="Pending approvals by age vs SLA"
-          data={toChartData(data.aging)}
-          emptyMessage="No pending approvals."
-          height={240}
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DashboardBarChart
-          title="Bottleneck steps"
-          description="Pending count by workflow step"
-          data={data.bottlenecks.map((row) => ({
-            key: row.key,
-            label: `${row.label} (${row.avg_age_hours}h avg)`,
-            value: row.value,
-          }))}
-          layout="horizontal"
-          emptyMessage="No pending step bottlenecks."
-          height={220}
-        />
-        <DashboardBarChart
-          title="Approver load"
-          description="Open approvals by assignee"
-          data={toChartData(data.approver_load)}
-          layout="horizontal"
-          emptyMessage="No pending approver load."
-          height={220}
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <EApprovalSectionCard title="Cycle time" description="Average durations for the period.">
-          <ul className="space-y-2">
-            {data.cycle_times.map((row) => (
-              <li
-                key={row.key}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-              >
-                <span className="text-muted-foreground">{row.label}</span>
-                <span className="font-medium text-foreground">
-                  {row.value} <span className="text-xs font-normal text-muted-foreground">{row.unit}</span>
-                </span>
-              </li>
+    <EApprovalSectionCard
+      title={title?.trim() || "Analytics filters"}
+      description={resolveDescription(
+        description,
+        "Operational volume, cycle time, bottlenecks, and SLA aging for the selected period.",
+      )}
+      className={compact ? "shadow-none" : undefined}
+      bodyClassName={compact ? "p-3" : undefined}
+      actions={
+        <div className="flex flex-wrap items-end gap-2" data-help="ea-analytics-advanced-filters">
+          <FilterSelect
+            id="analytics-form-filter"
+            label="Form"
+            value={props.formId}
+            onChange={props.setFormId}
+            className="w-[12rem]"
+          >
+            <option value="">All forms</option>
+            {props.formOptions.map((form) => (
+              <option key={form.id} value={form.id}>
+                {form.name}
+              </option>
             ))}
-          </ul>
-        </EApprovalSectionCard>
-
-        <EApprovalSectionCard
-          title="Rejection reasons"
-          description="Top free-text remarks on rejected approvals."
-        >
-          {(data.rejection_reasons ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No rejection remarks in this period.</p>
-          ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {data.rejection_reasons.map((row) => (
-                <li key={row.key} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
-                  <span className="text-foreground">{row.label}</span>
-                  <span className="shrink-0 font-medium text-muted-foreground">{row.value}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </EApprovalSectionCard>
-      </div>
-
-      {(data.top_forms.length > 0 || data.submissions_over_time.length > 0) ? (
-        <p className="text-xs text-muted-foreground">
-          Chart drill-downs open the submissions list with matching filters. Point charts that link to
-          a specific day/form use the hrefs returned by the analytics API.
-        </p>
+          </FilterSelect>
+          <FilterSelect
+            id="analytics-subsidiary-filter"
+            label="Subsidiary"
+            value={props.subsidiary}
+            onChange={props.setSubsidiary}
+            className="w-[9.5rem]"
+          >
+            <option value="">All subsidiaries</option>
+            {props.subsidiaryOptions.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            id="analytics-department-filter"
+            label="Department"
+            value={props.department}
+            onChange={props.setDepartment}
+            className="w-[11rem]"
+          >
+            <option value="">All departments</option>
+            {props.departmentOptions.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </FilterSelect>
+          <div className="space-y-1">
+            <Label htmlFor="analytics-from" className="text-xs">
+              From
+            </Label>
+            <DatePicker id="analytics-from" value={props.from} onChange={props.setFrom} className="h-8 w-[140px]" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="analytics-to" className="text-xs">
+              To
+            </Label>
+            <DatePicker id="analytics-to" value={props.to} onChange={props.setTo} className="h-8 w-[140px]" />
+          </div>
+          <Button type="button" size="sm" onClick={props.onApply} disabled={props.isFetching}>
+            {props.isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
+            Apply
+          </Button>
+          {props.hasAdvancedFilters ? (
+            <Button type="button" size="sm" variant="ghost" onClick={props.onClear}>
+              Clear
+            </Button>
+          ) : null}
+        </div>
+      }
+    >
+      {error ? <p className="text-sm text-destructive">{getErrorMessage(error)}</p> : null}
+      {isLoading && !data ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="size-3.5" /> Loading analytics…
+        </div>
       ) : null}
-    </div>
+      {data ? (
+        <p className="text-xs text-muted-foreground">
+          Showing {data.period.from} → {data.period.to} ({data.period.days} days). Chart Layout & options can
+          switch data source, max items, and sort.
+        </p>
+      ) : !isLoading ? (
+        <p className="text-sm text-muted-foreground">Apply filters to load analytics.</p>
+      ) : null}
+    </EApprovalSectionCard>
+  );
+}
+
+/** Kind-based analytics widget — full Layout & options (data source / max / sort). */
+export function EApprovalAnalyticsKindSlot({
+  entryId,
+  title,
+  options,
+}: {
+  entryId: string;
+  title?: string;
+  options?: DashboardWidgetOptions;
+}) {
+  const { normalizedData, isLoading, data } = useAnalyticsBoard();
+  const entry = getCatalogEntry(entryId);
+  if (!entry) return null;
+  if (isLoading && !data) {
+    return (
+      <div className="flex min-h-[8rem] items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm text-muted-foreground shadow-sm">
+        <Spinner className="size-3.5" /> Loading {entry.label}…
+      </div>
+    );
+  }
+  return (
+    <DashboardKindWidget
+      entry={entry}
+      data={normalizedData.kpis.length || Object.keys(normalizedData.series).length ? normalizedData : emptyNormalizedData()}
+      title={title}
+      options={options}
+    />
+  );
+}
+
+export function EApprovalAnalyticsSection({
+  section,
+  title,
+  description,
+  compact,
+}: { section: ReportsAnalyticsSectionId } & AnalyticsSectionChrome) {
+  if (section === "filters") {
+    return <AnalyticsFiltersCard title={title} description={description} compact={compact} />;
+  }
+  return null;
+}
+
+/** @deprecated Prefer Reports Customize board. */
+export function EApprovalAnalyticsPanel() {
+  return (
+    <EApprovalAnalyticsBoardProvider>
+      <div className="space-y-4">
+        <EApprovalAnalyticsSection section="filters" />
+        <EApprovalAnalyticsKindSlot entryId="reports_analytics_kpis" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <EApprovalAnalyticsKindSlot entryId="reports_analytics_trend" />
+          <EApprovalAnalyticsKindSlot entryId="reports_analytics_status" />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <EApprovalAnalyticsKindSlot entryId="reports_analytics_top_forms" />
+          <EApprovalAnalyticsKindSlot entryId="reports_analytics_aging" />
+        </div>
+      </div>
+    </EApprovalAnalyticsBoardProvider>
   );
 }

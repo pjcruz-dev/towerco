@@ -60,7 +60,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
         id: "submissions-list",
         title: "Anatomy of the Submissions list",
         description:
-          "Track every request you own. Filter by status, search by document number, and switch gallery or table.",
+          "Track every request you own. Filter by status and advanced fields, scan Step Show, and switch gallery or table.",
         imageSrc: "/help/e-approval/02-submissions.png",
         imageAlt: "E-Forms submissions gallery",
         callouts: [
@@ -74,28 +74,28 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Status filters",
-            body: "Narrow to Needs revision, Pending, Approved, Rejected, or Cancelled.",
+            body: "Narrow to Needs revision, Pending, Approved, Rejected, or Cancelled. Use Mine / All users when available.",
             x: 22,
             y: 21,
           },
           {
             n: 3,
-            title: "Search submissions",
-            body: "Find by document number, form name, or requestor.",
+            title: "Search & advanced filters",
+            body: "Search by document number, form, or requestor. Filter by Form, Subsidiary, Department, and date range.",
             x: 28,
             y: 28,
           },
           {
             n: 4,
             title: "Gallery view",
-            body: "Card layout for scanning document number, status, and requestor.",
+            body: "Card layout with subsidiary and compact Step Show for scanning progress.",
             x: 50,
             y: 42,
           },
           {
             n: 5,
             title: "Table view",
-            body: "Dense rows for sorting and scanning many requests.",
+            body: "Dense rows with Subsidiary and Step Show for sorting many requests.",
             x: 91,
             y: 28,
           },
@@ -206,8 +206,8 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           },
           {
             n: 2,
-            title: "Summary strip",
-            body: "Form, requestor, workflow step, and submitted time.",
+            title: "Summary & Step Show",
+            body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, approved, skipped).",
             x: 50,
             y: 26,
           },

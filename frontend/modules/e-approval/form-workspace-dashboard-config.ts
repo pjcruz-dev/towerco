@@ -35,7 +35,7 @@ export type FormWorkspaceDashboardSettings = {
 
 export const WORKSPACE_WIDGET_LABELS: Record<WorkspaceWidgetType, string> = {
   kpis: "KPI strip",
-  status_chart: "Status breakdown",
+  status_chart: "Analytics charts",
   recent_activity: "Recent activity",
   audit_log: "Workspace audit log",
   submissions_table: "Submissions table",

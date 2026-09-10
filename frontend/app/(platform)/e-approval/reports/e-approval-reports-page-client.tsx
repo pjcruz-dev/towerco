@@ -2,18 +2,31 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Play, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { EApprovalAnalyticsPanel } from "@/components/e-approval/e-approval-analytics-panel";
+import {
+  EApprovalAnalyticsBoardProvider,
+  EApprovalAnalyticsKindSlot,
+  EApprovalAnalyticsSection,
+  useEApprovalAnalyticsBoard,
+} from "@/components/e-approval/e-approval-analytics-panel";
 import { EApprovalExportReportCard } from "@/components/e-approval/e-approval-export-report-card";
-import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
+import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
+import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-layout-handlers";
+import {
+  useDashboardCustomizeMode,
+  useDashboardLayoutPrefs,
+} from "@/hooks/use-dashboard-layout-prefs";
 import { usePermission } from "@/hooks/use-permission";
 import {
   deleteEApprovalReport,
@@ -25,9 +38,29 @@ import {
   type EApprovalReportDefinition,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import {
+  REPORTS_BOARD_LAYOUT_KEY,
+  mergeReportsEnabledIdsForTab,
+  mergeReportsOrderForTab,
+  reportsAddableCatalogEntries,
+  reportsBoardCatalogEntries,
+  reportsBoardDefaultEnabledIds,
+  reportsBoardWidgetsForUser,
+  reportsWidgetBelongsToGroup,
+  resolveReportsEnabledWidgetIds,
+  resolveReportsWidgetChrome,
+  type ReportsBoardGroup,
+} from "@/lib/e-approval/reports-board-config";
+import { buildDynamicBoardWidgets, bindableCatalogEntries } from "@/lib/ui/build-dynamic-board-widgets";
+import { emptyNormalizedData } from "@/lib/ui/dashboard-widget-data";
+import { applyPageEnhancements, eApprovalReportsEnhancements } from "@/lib/ui/page-enhancement-bags";
+import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
+import { E_APPROVAL_REPORTS_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
 import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
+
+type HubTab = ReportsBoardGroup;
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -46,8 +79,6 @@ function formatWhen(iso: string | null): string {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-type HubTab = "analytics" | "exports";
-
 export function EApprovalReportsPageClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -55,10 +86,12 @@ export function EApprovalReportsPageClient() {
   const canAudit = usePermission([permissions.eApprovalAuditView]);
   const canViewSubmissions = usePermission([permissions.eApprovalSubmissionsView]);
   const canAccess = canAudit || canViewSubmissions;
-  const [tab, setTab] = useState<HubTab>("exports");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [tab, setTab] = useState<HubTab>("exports");
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(REPORTS_BOARD_LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode();
 
   useEffect(() => {
     if (!permissionsReady) return;
@@ -68,7 +101,8 @@ export function EApprovalReportsPageClient() {
   }, [canAccess, permissionsReady, router]);
 
   useEffect(() => {
-    if (permissionsReady && canAudit) {
+    if (!permissionsReady) return;
+    if (canAudit) {
       setTab("analytics");
     }
   }, [canAudit, permissionsReady]);
@@ -79,16 +113,29 @@ export function EApprovalReportsPageClient() {
     }
   }, [canAudit, tab]);
 
+  // One-time prefs migration: expand legacy mono Analytics + drop unknown ids.
+  useEffect(() => {
+    const resolved = resolveReportsEnabledWidgetIds(layout.enabledWidgetIds, canAudit);
+    const needsWrite =
+      layout.enabledWidgetIds.includes("reports_analytics") ||
+      (layout.enabledWidgetIds.length > 0 &&
+        (resolved.length !== layout.enabledWidgetIds.length ||
+          resolved.some((id, index) => id !== layout.enabledWidgetIds[index])));
+    if (!needsWrite) return;
+    setLayout({ ...layout, enabledWidgetIds: resolved });
+  }, [canAudit, layout, setLayout]);
+
+
   const reportsQuery = useQuery({
     queryKey: ["e-approval", "reports"],
     queryFn: fetchEApprovalReports,
-    enabled: tab === "exports",
+    enabled: canAccess && tab === "exports",
   });
 
   const historyQuery = useQuery({
     queryKey: ["e-approval", "export-history"],
     queryFn: () => fetchEApprovalExportHistory(40),
-    enabled: tab === "exports",
+    enabled: canAccess && tab === "exports",
     refetchInterval: (query) => {
       const rows = query.state.data ?? [];
       const pending = rows.some((row) => row.status === "queued" || row.status === "processing");
@@ -185,59 +232,76 @@ export function EApprovalReportsPageClient() {
     },
   });
 
-  return (
-      <div className="space-y-6">
-        <EApprovalPageHeader
-          title="Reports"
-          description={
-            canAudit
-              ? "Analytics, exports, saved report definitions, and download history."
-              : "Export your own submissions. Attachment columns include download links."
-          }
-        />
+  const availableConfigs = useMemo(() => reportsBoardWidgetsForUser(canAudit), [canAudit]);
+  const defaultEnabledIds = useMemo(() => reportsBoardDefaultEnabledIds(canAudit), [canAudit]);
+  const effectiveEnabledIds = useMemo(
+    () => resolveReportsEnabledWidgetIds(layout.enabledWidgetIds, canAudit),
+    [canAudit, layout.enabledWidgetIds],
+  );
+  const tabEnabledIds = useMemo(
+    () => effectiveEnabledIds.filter((id) => reportsWidgetBelongsToGroup(id, tab)),
+    [effectiveEnabledIds, tab],
+  );
+  const tabDefaultEnabledIds = useMemo(
+    () => defaultEnabledIds.filter((id) => reportsWidgetBelongsToGroup(id, tab)),
+    [defaultEnabledIds, tab],
+  );
 
-        {!permissionsReady || !canAccess ? (
-          <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-            Loading…
-          </div>
-        ) : (
-          <>
-        <div className="inline-flex rounded-lg border border-border bg-card p-1">
-          {(
-            [
-              ...(canAudit ? [{ id: "analytics" as const, label: "Analytics" }] : []),
-              { id: "exports" as const, label: "Exports" },
-            ]
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                tab === item.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+  const layoutMeta = useMemo(
+    () =>
+      availableConfigs
+        .filter((widget) => widget.group === tab)
+        .map((widget) => ({ id: widget.id, label: widget.label })),
+    [availableConfigs, tab],
+  );
 
-        {tab === "analytics" && canAudit ? <EApprovalAnalyticsPanel /> : null}
+  const boardWidgets = useMemo((): DashboardWidgetDef[] => {
+    return availableConfigs.map((config) => {
+      const chrome = resolveReportsWidgetChrome(config.id, layout.widgetOptions[config.id]);
+      const options = layout.widgetOptions[config.id];
 
-        {tab === "exports" ? (
-          <>
-            {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
-            {actionNotice ? (
-              <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
-                {actionNotice}
-              </p>
-            ) : null}
+      if (config.kind !== "custom") {
+        return {
+          id: config.id,
+          label: chrome.title,
+          defaultSpan: config.defaultSpan,
+          render: () => (
+            <EApprovalAnalyticsKindSlot
+              entryId={config.id}
+              title={options?.title ?? chrome.title}
+              options={options}
+            />
+          ),
+        };
+      }
 
+      if (config.analyticsSection === "filters") {
+        return {
+          id: config.id,
+          label: chrome.title,
+          defaultSpan: config.defaultSpan,
+          render: () => (
+            <EApprovalAnalyticsSection
+              section="filters"
+              title={chrome.title}
+              description={chrome.description}
+              compact={chrome.compact}
+            />
+          ),
+        };
+      }
+
+      if (config.id === "reports_export_builder") {
+        return {
+          id: config.id,
+          label: chrome.title,
+          defaultSpan: config.defaultSpan,
+          render: () => (
             <EApprovalExportReportCard
               showSave
+              title={chrome.title}
+              description={chrome.description}
+              compact={chrome.compact}
               onSaved={() => {
                 void invalidateHub();
               }}
@@ -245,10 +309,26 @@ export function EApprovalReportsPageClient() {
                 void invalidateHub();
               }}
             />
+          ),
+        };
+      }
 
+      if (config.id === "reports_saved") {
+        return {
+          id: config.id,
+          label: chrome.title,
+          defaultSpan: config.defaultSpan,
+          render: () => (
             <EApprovalSectionCard
-              title="Saved reports"
-              description="Re-run a saved configuration or enable a daily/weekly schedule."
+              title={chrome.title}
+              description={
+                chrome.description === null
+                  ? undefined
+                  : (chrome.description ??
+                    "Re-run a saved configuration or enable a daily/weekly schedule.")
+              }
+              className={chrome.compact ? "shadow-none" : undefined}
+              bodyClassName={chrome.compact ? "p-3" : undefined}
             >
               {reportsQuery.isLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -332,100 +412,336 @@ export function EApprovalReportsPageClient() {
                 })}
               </ul>
             </EApprovalSectionCard>
+          ),
+        };
+      }
 
-            <EApprovalSectionCard
-              title="Recent exports"
-              description="Manual and scheduled export runs for your account."
-            >
-              {historyQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Spinner className="size-3.5" /> Loading history…
-                </div>
-              ) : null}
-              {historyQuery.isError ? (
-                <p className="text-sm text-destructive">{getErrorMessage(historyQuery.error)}</p>
-              ) : null}
-              {!historyQuery.isLoading && (historyQuery.data?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">No exports yet.</p>
-              ) : null}
+      return {
+        id: config.id,
+        label: chrome.title,
+        defaultSpan: config.defaultSpan,
+        render: () => (
+          <EApprovalSectionCard
+            title={chrome.title}
+            description={
+              chrome.description === null ? (
+                undefined
+              ) : (
+                (chrome.description ?? (
+                  <>
+                    Manual and scheduled export runs for your account. DocExtract / Ticketing queued files are
+                    under{" "}
+                    <Link href="/exports" className="font-medium text-foreground underline-offset-2 hover:underline">
+                      Settings → My exports
+                    </Link>
+                    .
+                  </>
+                ))
+              )
+            }
+            className={chrome.compact ? "shadow-none" : undefined}
+            bodyClassName={chrome.compact ? "p-3" : undefined}
+          >
+            {historyQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="size-3.5" /> Loading history…
+              </div>
+            ) : null}
+            {historyQuery.isError ? (
+              <p className="text-sm text-destructive">{getErrorMessage(historyQuery.error)}</p>
+            ) : null}
+            {!historyQuery.isLoading && (historyQuery.data?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">No exports yet.</p>
+            ) : null}
 
-              {(historyQuery.data?.length ?? 0) > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">When</th>
-                        <th className="px-3 py-2 font-medium">Name</th>
-                        <th className="px-3 py-2 font-medium">Status</th>
-                        <th className="px-3 py-2 font-medium">Format</th>
-                        <th className="px-3 py-2 font-medium">Rows</th>
-                        <th className="px-3 py-2 font-medium">Source</th>
-                        <th className="px-3 py-2 font-medium">Download</th>
+            {(historyQuery.data?.length ?? 0) > 0 ? (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-border bg-muted/30 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">When</th>
+                      <th className="px-3 py-2 font-medium">Name</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium">Format</th>
+                      <th className="px-3 py-2 font-medium">Rows</th>
+                      <th className="px-3 py-2 font-medium">Source</th>
+                      <th className="px-3 py-2 font-medium">Download</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(historyQuery.data ?? []).map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-3 py-2 text-muted-foreground">{formatWhen(row.created_at)}</td>
+                        <td className="px-3 py-2 font-medium text-foreground">
+                          {row.name ?? "Export"}
+                          {row.truncated ? (
+                            <span className="ml-2 text-xs font-normal text-amber-700 dark:text-amber-400">
+                              truncated
+                            </span>
+                          ) : null}
+                          {row.error_message ? (
+                            <p className="mt-0.5 text-xs font-normal text-destructive">{row.error_message}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 capitalize text-muted-foreground">{row.status}</td>
+                        <td className="px-3 py-2 uppercase text-muted-foreground">{row.format}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {row.exported_rows.toLocaleString()}
+                          {row.matched_rows > row.exported_rows
+                            ? ` / ${row.matched_rows.toLocaleString()}`
+                            : ""}
+                        </td>
+                        <td className="px-3 py-2 capitalize text-muted-foreground">{row.triggered_by}</td>
+                        <td className="px-3 py-2">
+                          {row.status === "completed" && row.download ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7"
+                              onClick={async () => {
+                                try {
+                                  await downloadEApprovalExportHistoryFile(row);
+                                } catch (err) {
+                                  setActionError(getErrorMessage(err));
+                                }
+                              }}
+                            >
+                              <Download className="mr-1 size-3.5" aria-hidden />
+                              File
+                            </Button>
+                          ) : row.status === "queued" || row.status === "processing" ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Spinner className="size-3" /> Preparing…
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {(historyQuery.data ?? []).map((row) => (
-                        <tr key={row.id}>
-                          <td className="px-3 py-2 text-muted-foreground">{formatWhen(row.created_at)}</td>
-                          <td className="px-3 py-2 font-medium text-foreground">
-                            {row.name ?? "Export"}
-                            {row.truncated ? (
-                              <span className="ml-2 text-xs font-normal text-amber-700 dark:text-amber-400">
-                                truncated
-                              </span>
-                            ) : null}
-                            {row.error_message ? (
-                              <p className="mt-0.5 text-xs font-normal text-destructive">{row.error_message}</p>
-                            ) : null}
-                          </td>
-                          <td className="px-3 py-2 capitalize text-muted-foreground">{row.status}</td>
-                          <td className="px-3 py-2 uppercase text-muted-foreground">{row.format}</td>
-                          <td className="px-3 py-2 text-muted-foreground">
-                            {row.exported_rows.toLocaleString()}
-                            {row.matched_rows > row.exported_rows
-                              ? ` / ${row.matched_rows.toLocaleString()}`
-                              : ""}
-                          </td>
-                          <td className="px-3 py-2 capitalize text-muted-foreground">{row.triggered_by}</td>
-                          <td className="px-3 py-2">
-                            {row.status === "completed" && row.download ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7"
-                                onClick={async () => {
-                                  try {
-                                    await downloadEApprovalExportHistoryFile(row);
-                                  } catch (err) {
-                                    setActionError(getErrorMessage(err));
-                                  }
-                                }}
-                              >
-                                <Download className="mr-1 size-3.5" aria-hidden />
-                                File
-                              </Button>
-                            ) : row.status === "queued" || row.status === "processing" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                <Spinner className="size-3" /> Preparing…
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </EApprovalSectionCard>
-          </>
-        ) : null}
-          </>
-        )}
-      </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </EApprovalSectionCard>
+        ),
+      };
+    });
+  }, [
+    availableConfigs,
+    deleteMutation,
+    historyQuery.data,
+    historyQuery.error,
+    historyQuery.isError,
+    historyQuery.isLoading,
+    layout.widgetOptions,
+    reportsQuery.data,
+    reportsQuery.error,
+    reportsQuery.isError,
+    reportsQuery.isLoading,
+    runMutation,
+    scheduleMutation.isPending,
+    schedulingId,
+  ]);
+
+  const titleOverrides = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    for (const [id, opt] of Object.entries(layout.widgetOptions)) {
+      map[id] = opt.title;
+    }
+    return map;
+  }, [layout.widgetOptions]);
+
+  const normalizedData = useMemo(
+    () => applyPageEnhancements(emptyNormalizedData(), eApprovalReportsEnhancements()),
+    [],
   );
+
+  const catalogBoardWidgets = useMemo(
+    () =>
+      buildDynamicBoardWidgets({
+        moduleId: "e-approval",
+        data: normalizedData,
+        slots: boardWidgets,
+        enabledIds: effectiveEnabledIds,
+        titleOverrides,
+        widgetOptions: layout.widgetOptions,
+      }),
+    [boardWidgets, effectiveEnabledIds, layout.widgetOptions, normalizedData, titleOverrides],
+  );
+
+  const bindableCatalog = useMemo(() => {
+    const reportEntries = reportsBoardCatalogEntries().filter((entry) =>
+      availableConfigs.some((config) => config.id === entry.id && config.group === tab),
+    );
+    const enhancements = bindableCatalogEntries("e-approval", boardWidgets, normalizedData).filter(
+      (entry) => entry.bindMode === "always" && reportsWidgetBelongsToGroup(entry.id, tab),
+    );
+    const seen = new Set(reportEntries.map((entry) => entry.id));
+    return [...reportEntries, ...enhancements.filter((entry) => !seen.has(entry.id))];
+  }, [availableConfigs, boardWidgets, normalizedData, tab]);
+
+  const addableCatalog = useMemo(() => {
+    const enabled = new Set(effectiveEnabledIds);
+    const reportsAddable = reportsAddableCatalogEntries(effectiveEnabledIds, canAudit, tab);
+    const enhancements = bindableCatalog.filter(
+      (entry) => entry.bindMode === "always" && !enabled.has(entry.id),
+    );
+    const seen = new Set(reportsAddable.map((entry) => entry.id));
+    return [...reportsAddable, ...enhancements.filter((entry) => !seen.has(entry.id))];
+  }, [bindableCatalog, canAudit, effectiveEnabledIds, tab]);
+
+  const applyLayoutFromTabUi = (next: typeof layout) => {
+    const previousOrder =
+      layout.widgetOrder.length > 0 ? layout.widgetOrder : effectiveEnabledIds;
+    const nextOrderSource =
+      next.widgetOrder.length > 0 ? next.widgetOrder : next.enabledWidgetIds;
+    setLayout({
+      ...next,
+      enabledWidgetIds: mergeReportsEnabledIdsForTab(
+        effectiveEnabledIds,
+        next.enabledWidgetIds,
+        tab,
+      ),
+      widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrderSource, tab),
+    });
+  };
+
+  const boardHandlers = useDashboardBoardLayoutHandlers(
+    { ...layout, enabledWidgetIds: effectiveEnabledIds },
+    applyLayoutFromTabUi,
+    defaultEnabledIds,
+  );
+
+  const tabAwareHandlers = {
+    ...boardHandlers,
+    onOrderChange: (nextOrder: string[]) => {
+      const previousOrder =
+        layout.widgetOrder.length > 0 ? layout.widgetOrder : effectiveEnabledIds;
+      setLayout({
+        ...layout,
+        enabledWidgetIds: effectiveEnabledIds,
+        widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrder, tab),
+      });
+    },
+  };
+
+  const boardShell = (data: ReturnType<typeof emptyNormalizedData>) => (
+    <DashboardWidgetBoard
+      widgets={catalogBoardWidgets}
+      order={layout.widgetOrder.length > 0 ? layout.widgetOrder : effectiveEnabledIds}
+      hiddenIds={layout.hiddenWidgetIds}
+      enabledIds={tabEnabledIds}
+      layoutPrefs={{
+        ...layout,
+        enabledWidgetIds: effectiveEnabledIds,
+      }}
+      editing={editing}
+      addableCatalog={addableCatalog}
+      data={data}
+      {...tabAwareHandlers}
+      onAddWidget={(entry, insertAt) => {
+        tabAwareHandlers.onAddWidget(entry, insertAt);
+        setEditing(true);
+      }}
+    />
+  );
+
+  return (
+    <div className="space-y-6">
+      <ConfigurableModulePageHeader
+        defaults={{
+          ...E_APPROVAL_REPORTS_PAGE_CHROME,
+          description: canAudit
+            ? E_APPROVAL_REPORTS_PAGE_CHROME.description
+            : "Export your own submissions. Use Customize to reorder or hide sections; Add widget reopens removed sections.",
+        }}
+        prefs={layout.pageChrome}
+        editing={editing}
+        onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+        renderActions={({ isVisible }) =>
+          isVisible("customize") ? (
+            <DashboardLayoutToolbar
+              widgets={layoutMeta}
+              catalogModule="e-approval"
+              layout={{ ...layout, enabledWidgetIds: effectiveEnabledIds }}
+              editing={editing}
+              onEditingChange={setEditing}
+              onChange={applyLayoutFromTabUi}
+              defaultEnabledIds={tabDefaultEnabledIds}
+              bindableCatalog={bindableCatalog}
+                  hasTenantDefault={Boolean(tenantDefault)}
+                  onPublishTenantDefault={publishTenantDefault}
+                  onResetToTenantDefault={resetToTenantDefault}
+              data={normalizedData}
+            />
+          ) : null
+        }
+      />
+
+      {!permissionsReady || !canAccess ? (
+        <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      ) : (
+        <>
+          <div className="inline-flex rounded-lg border border-border bg-card p-1">
+            {(
+              [
+                ...(canAudit ? [{ id: "analytics" as const, label: "Analytics" }] : []),
+                { id: "exports" as const, label: "Exports" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  tab === item.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+          {actionNotice ? (
+            <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
+              {actionNotice}
+            </p>
+          ) : null}
+
+          {canAudit && tab === "analytics" ? (
+            <EApprovalAnalyticsBoardProvider>
+              <ReportsAnalyticsBoard dataFallback={normalizedData}>{boardShell}</ReportsAnalyticsBoard>
+            </EApprovalAnalyticsBoardProvider>
+          ) : (
+            boardShell(normalizedData)
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReportsAnalyticsBoard({
+  children,
+  dataFallback,
+}: {
+  children: (data: ReturnType<typeof emptyNormalizedData>) => ReactNode;
+  dataFallback: ReturnType<typeof emptyNormalizedData>;
+}) {
+  const { normalizedData } = useEApprovalAnalyticsBoard();
+  const merged = applyPageEnhancements(
+    normalizedData.kpis.length ? normalizedData : dataFallback,
+    eApprovalReportsEnhancements(),
+  );
+  return <>{children(merged)}</>;
 }
 
 function ScheduleEditor({
@@ -528,15 +844,15 @@ function ScheduleEditor({
               dayOfWeek: Math.max(0, Math.min(6, Number(dayOfWeek) || 0)),
               recipients: recipients
                 .split(",")
-                .map((item) => item.trim())
+                .map((value) => value.trim())
                 .filter(Boolean),
             })
           }
         >
-          {busy ? <Spinner className="mr-1.5 size-3.5" /> : <Download className="mr-1.5 size-3.5" aria-hidden />}
+          {busy ? <Spinner className="mr-1.5 size-3.5" /> : null}
           Save schedule
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={busy}>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
           Cancel
         </Button>
       </div>

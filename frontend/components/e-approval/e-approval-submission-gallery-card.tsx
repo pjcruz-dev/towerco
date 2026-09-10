@@ -4,6 +4,10 @@ import Link from "next/link";
 import { FileStack, User } from "lucide-react";
 
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
+import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
 import type { EApprovalSubmissionListRow } from "@/modules/e-approval/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -48,6 +52,9 @@ export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpAct
                 {submission.document_no}
               </p>
               <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{submission.form_name ?? "Form"}</p>
+              {submission.subsidiary ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">{submission.subsidiary}</p>
+              ) : null}
             </div>
           </div>
           <span data-help={helpStatus ? "ea-submissions-status" : undefined}>
@@ -55,13 +62,25 @@ export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpAct
           </span>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <User className="h-3.5 w-3.5" aria-hidden />
-            {submission.requestor?.name ?? "Unknown requestor"}
-          </span>
-          <span>Step {submission.current_step}</span>
-          <span>Submitted {formatSubmittedAt(submission.created_at)}</span>
+        <div className="mt-4 space-y-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <User className="h-3.5 w-3.5" aria-hidden />
+              {submission.requestor?.name ?? "Unknown requestor"}
+            </span>
+            <span>Submitted {formatSubmittedAt(submission.created_at)}</span>
+          </div>
+          <div data-help={helpStatus ? "ea-submissions-step-show" : undefined}>
+            <EApprovalWorkflowStepShow
+              variant="compact"
+              steps={buildWorkflowStepShowItems({
+                currentStep: submission.current_step,
+                stepCount: submission.step_count,
+                status: submission.status,
+                workflowSteps: submission.workflow_steps,
+              })}
+            />
+          </div>
         </div>
       </Link>
 

@@ -51,6 +51,10 @@ export type DocExtractBatchListRow = {
   message?: string | null;
   template_id?: string | null;
   template_name?: string | null;
+  /** First distinct uploaded/source file name for the batch. */
+  primary_filename?: string | null;
+  /** Distinct source file count (UI shows " +++" when > 1). */
+  file_count?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };

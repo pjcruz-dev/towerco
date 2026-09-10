@@ -39,7 +39,11 @@ class EApprovalSubmissionIndexController extends AbstractApiController
         $validated = $request->validate([
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date'],
+            'subsidiary' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:128'],
         ]);
+        $subsidiary = trim((string) ($validated['subsidiary'] ?? ''));
+        $department = trim((string) ($validated['department'] ?? ''));
 
         if (! $canViewAll && $workspaceAll && $formId !== '') {
             $form = EApprovalForm::query()->find($formId);
@@ -62,6 +66,8 @@ class EApprovalSubmissionIndexController extends AbstractApiController
             null,
             null,
             $query['sort'],
+            $subsidiary !== '' ? $subsidiary : null,
+            $department !== '' ? $department : null,
         );
 
         return $this->okWithMeta(

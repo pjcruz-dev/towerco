@@ -94,6 +94,7 @@ use App\Modules\Documents\Http\Controllers\V1\DocumentUploadCapabilitiesShowCont
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchExportController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchFieldsUpdateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchIndexController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchListExportController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchRequeueController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchSaveTemplateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchShowController;
@@ -247,6 +248,14 @@ use App\Modules\Identity\Http\Controllers\V1\TenantAuthController;
 use App\Modules\Identity\Http\Controllers\V1\TenantEnvironmentHandoffRedeemController;
 use App\Modules\Identity\Http\Controllers\V1\TenantHealthController;
 use App\Modules\Identity\Http\Controllers\V1\TenantImpersonationStopController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceDestroyController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceShowController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceSharedDestroyController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceSharedIndexController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceSharedUpdateController;
+use App\Modules\Identity\Http\Controllers\V1\UserUiPreferenceUpdateController;
+use App\Modules\Identity\Http\Controllers\V1\ModuleListExportDownloadController;
+use App\Modules\Identity\Http\Controllers\V1\ModuleListExportIndexController;
 use App\Modules\Identity\Http\Controllers\V1\TenantSsoAzureStatusController;
 use App\Modules\Identity\Http\Controllers\V1\TenantSsoConfigController;
 use App\Modules\Identity\Http\Controllers\V1\TenantSsoController;
@@ -436,6 +445,7 @@ use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsTestEmailController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsTestWebhookController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsUpdateController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketExportController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketIndexController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingTicketStoreController;
@@ -498,6 +508,25 @@ Route::middleware(['throttle:procurement-public'])->prefix('public/procurement')
 
 Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa', 'auth.passkey'])->group(function () {
     Route::get('me', [TenantAuthController::class, 'me'])->name('api.tenant.v1.auth.me');
+    Route::get('me/ui-preferences/{key}', UserUiPreferenceShowController::class)
+        ->where('key', '(module-list|dashboard-layout)\.[A-Za-z0-9._-]+')
+        ->name('api.tenant.v1.me.ui_preferences.show');
+    Route::put('me/ui-preferences/{key}', UserUiPreferenceUpdateController::class)
+        ->where('key', '(module-list|dashboard-layout)\.[A-Za-z0-9._-]+')
+        ->name('api.tenant.v1.me.ui_preferences.update');
+    Route::delete('me/ui-preferences/{key}', UserUiPreferenceDestroyController::class)
+        ->where('key', '(module-list|dashboard-layout)\.[A-Za-z0-9._-]+')
+        ->name('api.tenant.v1.me.ui_preferences.destroy');
+    Route::put('me/ui-preferences/{key}/shared', UserUiPreferenceSharedUpdateController::class)
+        ->where('key', '(module-list|dashboard-layout)\.[A-Za-z0-9._-]+')
+        ->name('api.tenant.v1.me.ui_preferences.shared.update');
+    Route::delete('me/ui-preferences/{key}/shared', UserUiPreferenceSharedDestroyController::class)
+        ->where('key', '(module-list|dashboard-layout)\.[A-Za-z0-9._-]+')
+        ->name('api.tenant.v1.me.ui_preferences.shared.destroy');
+    Route::get('module-list-exports', ModuleListExportIndexController::class)
+        ->name('api.tenant.v1.module_list_exports.index');
+    Route::get('module-list-exports/{export}/download', ModuleListExportDownloadController::class)
+        ->name('api.tenant.v1.module_list_exports.download');
     Route::get('workspace/environments', TenantLinkedEnvironmentsController::class)
         ->name('api.tenant.v1.workspace.environments');
     Route::post('workspace/environments/handoff', TenantEnvironmentHandoffMintController::class)
@@ -588,6 +617,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::put('doc-extract/templates/{template}', DocExtractTemplateUpdateController::class)->name('api.tenant.v1.doc_extract.templates.update');
         Route::delete('doc-extract/templates/{template}', DocExtractTemplateDestroyController::class)->name('api.tenant.v1.doc_extract.templates.destroy');
         Route::get('doc-extract/batches', DocExtractBatchIndexController::class)->name('api.tenant.v1.doc_extract.batches.index');
+        Route::get('doc-extract/batches/export', DocExtractBatchListExportController::class)->name('api.tenant.v1.doc_extract.batches.export_list');
         Route::post('doc-extract/preview', DocExtractPreviewController::class)->name('api.tenant.v1.doc_extract.preview');
         Route::post('doc-extract/batches', DocExtractBatchStoreController::class)->name('api.tenant.v1.doc_extract.batches.store');
         Route::get('doc-extract/batches/{batch}', DocExtractBatchShowController::class)->name('api.tenant.v1.doc_extract.batches.show');
@@ -683,6 +713,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('ticketing/metadata', TicketingMetadataController::class)->name('api.tenant.v1.ticketing.metadata');
     Route::get('ticketing/assignable-users', TicketingAssignableUsersController::class)->name('api.tenant.v1.ticketing.assignable_users');
     Route::get('ticketing/tickets', TicketingTicketIndexController::class)->name('api.tenant.v1.ticketing.tickets.index');
+    Route::get('ticketing/tickets/export', TicketingTicketExportController::class)->name('api.tenant.v1.ticketing.tickets.export');
     Route::post('ticketing/tickets', TicketingTicketStoreController::class)->name('api.tenant.v1.ticketing.tickets.store');
     Route::get('ticketing/tickets/{ticket}', TicketingTicketShowController::class)->name('api.tenant.v1.ticketing.tickets.show');
     Route::patch('ticketing/tickets/{ticket}', TicketingTicketUpdateController::class)->name('api.tenant.v1.ticketing.tickets.update');
@@ -997,6 +1028,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::get('backups/{backup}/download', TenantBackupDownloadController::class)
             ->middleware('throttle:30,1')
             ->name('api.tenant.v1.admin.backups.download');
+        Route::get('shared-ui-layouts', UserUiPreferenceSharedIndexController::class)
+            ->name('api.tenant.v1.admin.shared_ui_layouts.index');
     });
 });
 

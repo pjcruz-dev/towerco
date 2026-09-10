@@ -20,6 +20,10 @@ import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-appro
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { EApprovalWaitingOnPanel } from "@/components/e-approval/e-approval-waiting-on-panel";
+import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
 import { EApprovalWorkflowPathDiagram } from "@/components/e-approval/e-approval-workflow-path-diagram";
 import { EApprovalTourSampleNotice } from "@/components/help/e-approval-tour-fixtures";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
@@ -40,6 +44,7 @@ import {
   eApprovalTourSampleApprovals,
   eApprovalTourSampleAttachments,
   eApprovalTourSampleComments,
+  eApprovalTourSampleListRows,
   eApprovalTourSampleRequestor,
   eApprovalTourSampleSubmittedAt,
   eApprovalTourSampleValues,
@@ -189,24 +194,33 @@ function TourSampleDetailInner() {
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Form</dt>
             <dd className="mt-0.5 font-medium">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</dd>
+            <p className="mt-1 text-xs text-muted-foreground">Form version at submit · v3</p>
           </div>
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Requestor</dt>
             <dd className="mt-0.5">{eApprovalTourSampleRequestor.name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-muted-foreground">Workflow step</dt>
-            <dd className="mt-0.5">Step 1</dd>
+            <dt className="text-xs font-medium text-muted-foreground">Subsidiary</dt>
+            <dd className="mt-0.5">{eApprovalTourSampleListRows[0]?.subsidiary ?? "ATC"}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Submitted</dt>
             <dd className="mt-0.5">{formatTourSampleTimestamp(eApprovalTourSampleSubmittedAt)}</dd>
           </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Form version at submit</dt>
-            <dd className="mt-0.5">v3</dd>
-          </div>
         </dl>
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Workflow step</p>
+          <EApprovalWorkflowStepShow
+            variant="full"
+            steps={buildWorkflowStepShowItems({
+              currentStep: eApprovalTourSampleListRows[0]?.current_step ?? 1,
+              stepCount: eApprovalTourSampleListRows[0]?.step_count ?? 3,
+              status: "pending",
+              workflowSteps: eApprovalTourSampleListRows[0]?.workflow_steps,
+            })}
+          />
+        </div>
         <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
           <Link
             href={`${E_APPROVAL_TOUR_SAMPLE_PRINT_PATH}?${buildTourSearchParams(

@@ -44,11 +44,22 @@ function saveBlob(blob: Blob, filename: string) {
 
 type Props = {
   showSave?: boolean;
+  title?: string;
+  /** undefined = default; null = hide */
+  description?: string | null;
+  compact?: boolean;
   onSaved?: () => void;
   onExported?: () => void;
 };
 
-export function EApprovalExportReportCard({ showSave = false, onSaved, onExported }: Props) {
+export function EApprovalExportReportCard({
+  showSave = false,
+  title,
+  description,
+  compact,
+  onSaved,
+  onExported,
+}: Props) {
   const [scope, setScope] = useState<Scope>("all");
   const [viewerScope, setViewerScope] = useState<ViewerScope>("all");
   const [formId, setFormId] = useState<string>("");
@@ -254,8 +265,15 @@ export function EApprovalExportReportCard({ showSave = false, onSaved, onExporte
 
   return (
     <EApprovalSectionCard
-      title="Export report"
-      description="Download submissions as CSV or Excel. Prefer Excel for clickable attachment links. Links open the app download page (works locally and in production with S3)."
+      title={title?.trim() || "Export report"}
+      description={
+        description === null
+          ? undefined
+          : (description ??
+            "Download submissions as CSV or Excel. Prefer Excel for clickable attachment links. Links open the app download page (works locally and in production with S3).")
+      }
+      className={compact ? "shadow-none" : undefined}
+      bodyClassName={compact ? "p-3" : undefined}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-1.5">

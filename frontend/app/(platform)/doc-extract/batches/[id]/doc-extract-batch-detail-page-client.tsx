@@ -16,6 +16,7 @@ import {
 
 import { DocExtractColumnsDefinitionEditor } from "@/components/doc-extract/doc-extract-columns-definition-editor";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { DocExtractHelpEntryActions } from "@/components/help/doc-extract-help-entry-actions";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
 import {
@@ -316,16 +317,19 @@ export function DocExtractBatchDetailPageClient() {
     <PermissionGate requiredPermissions={[permissions.docExtractView]}>
       <div className="w-full space-y-8" data-help="dx-batch-workspace">
         <LiveProductTourHost />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button size="sm" variant="ghost" render={<Link href="/doc-extract" />}>
-            <ArrowLeft className="size-4" />
-            Batches
-          </Button>
-          {canRun ? (
-            <Button size="sm" variant="outline" render={<Link href="/doc-extract/new" data-help="dx-new-extract" />}>
-              New extraction
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" variant="ghost" render={<Link href="/doc-extract" />}>
+              <ArrowLeft className="size-4" />
+              Batches
             </Button>
-          ) : null}
+            {canRun ? (
+              <Button size="sm" variant="outline" render={<Link href="/doc-extract/new" data-help="dx-new-extract" />}>
+                New extraction
+              </Button>
+            ) : null}
+          </div>
+          <DocExtractHelpEntryActions />
         </div>
 
         <div>

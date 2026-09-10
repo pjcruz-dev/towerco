@@ -4,19 +4,46 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { AwaitingMeHub } from "@/components/dashboard/awaiting-me-hub";
+import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
+import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { chartColorAt, kpiSeries } from "@/components/dashboard/dashboard-chart-utils";
+import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
+import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { ActionableWidgets } from "@/components/project-one/actionable-widgets";
 import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-layout-handlers";
+import {
+  useDashboardCustomizeMode,
+  useDashboardLayoutPrefs,
+} from "@/hooks/use-dashboard-layout-prefs";
 import { useWorkspaceDashboard } from "@/hooks/use-workspace-dashboard";
 import { emptyWorkspaceDashboard } from "@/lib/api/modules/workspace-dashboard-api";
+import {
+  bindableCatalogEntries,
+  buildDynamicBoardWidgets,
+} from "@/lib/ui/build-dynamic-board-widgets";
+import { applyPageEnhancements, workspaceDashboardEnhancements } from "@/lib/ui/page-enhancement-bags";
+import { normalizeWorkspaceDashboard } from "@/lib/ui/normalize-dashboard-data";
+import { WORKSPACE_DASHBOARD_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
+import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
 import { cn } from "@/lib/utils";
 import type { WorkspaceDashboardActivity } from "@/modules/workspace/types";
+
+const LAYOUT_KEY = "toweros.workspace.dashboard.layout";
+
+const DEFAULT_ENABLED_IDS = [
+  "kpis",
+  "awaiting_me",
+  "action_charts",
+  "action_queue",
+  "recent_activity",
+] as const;
 
 const moduleLabels: Record<string, string> = {
   e_approval: "E-Forms",
@@ -96,8 +123,17 @@ function RecentActivityPanel({ items }: { items: WorkspaceDashboardActivity[] })
 }
 
 export function TenantWorkspaceDashboard() {
-  const { data, isFetching, isError, refetch } = useWorkspaceDashboard();
+  const { data, isFetching, isError, isPlaceholderData, refetch } = useWorkspaceDashboard();
   const dashboard = data ?? emptyWorkspaceDashboard;
+  const showSkeleton = isFetching && isPlaceholderData;
+  const {
+    layout,
+    setLayout,
+    tenantDefault,
+    publishTenantDefault,
+    resetToTenantDefault,
+  } = useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode();
 
   const actionSeries = useMemo(
     () =>
@@ -125,64 +161,200 @@ export function TenantWorkspaceDashboard() {
     [dashboard.kpis],
   );
 
+  const layoutMeta = useMemo(
+    () => [
+      { id: "kpis", label: "KPI strip" },
+      { id: "awaiting_me", label: "Awaiting you" },
+      { id: "action_charts", label: "Action & attention charts" },
+      { id: "action_queue", label: "Action queue" },
+      { id: "recent_activity", label: "Recent activity" },
+    ],
+    [],
+  );
+
+  const defaultEnabledIds = useMemo(() => [...DEFAULT_ENABLED_IDS], []);
+
+  const boardWidgets = useMemo((): DashboardWidgetDef[] => {
+    return [
+      {
+        id: "kpis",
+        label: "KPI strip",
+        hideable: false,
+        removable: false,
+        defaultSpan: "full",
+        render: () => <KpiStrip items={dashboard.kpis} />,
+      },
+      {
+        id: "awaiting_me",
+        label: "Awaiting you",
+        hideable: false,
+        removable: false,
+        defaultSpan: "full",
+        render: () => (
+          <AwaitingMeHub
+            total={dashboard.awaiting_me?.total ?? 0}
+            items={dashboard.awaiting_me?.items ?? []}
+          />
+        ),
+      },
+      {
+        id: "action_charts",
+        label: "Action & attention charts",
+        defaultSpan: "full",
+        render: () => (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DashboardBarChart
+              title="Action queues"
+              description="Items in your operational queues"
+              data={actionSeries}
+              layout="horizontal"
+              emptyMessage="No queued actions right now."
+              height={200}
+            />
+            <DashboardDonutChart
+              title="Attention mix"
+              description="Notifications, approvals, tickets, and SLA risk"
+              data={attentionSeries}
+              emptyMessage="Nothing requiring attention."
+              height={200}
+            />
+          </div>
+        ),
+      },
+      {
+        id: "action_queue",
+        label: "Action queue",
+        defaultSpan: "half",
+        render: () => <ActionableWidgets items={dashboard.actions} />,
+      },
+      {
+        id: "recent_activity",
+        label: "Recent activity",
+        defaultSpan: "half",
+        render: () => <RecentActivityPanel items={dashboard.recent_activity} />,
+      },
+    ];
+  }, [actionSeries, attentionSeries, dashboard]);
+
+  const titleOverrides = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    for (const [id, opt] of Object.entries(layout.widgetOptions)) {
+      map[id] = opt.title;
+    }
+    return map;
+  }, [layout.widgetOptions]);
+
+  const normalizedData = useMemo(
+    () =>
+      applyPageEnhancements(
+        normalizeWorkspaceDashboard(dashboard),
+        workspaceDashboardEnhancements({
+          awaitingTotal: dashboard.awaiting_me?.total ?? 0,
+          quickLinks: dashboard.quick_links,
+        }),
+      ),
+    [dashboard],
+  );
+
+  const catalogBoardWidgets = useMemo(
+    () =>
+      buildDynamicBoardWidgets({
+        moduleId: "workspace",
+        data: normalizedData,
+        slots: boardWidgets,
+        enabledIds: layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : defaultEnabledIds,
+        titleOverrides,
+        widgetOptions: layout.widgetOptions,
+      }),
+    [
+      boardWidgets,
+      defaultEnabledIds,
+      layout.enabledWidgetIds,
+      layout.widgetOptions,
+      normalizedData,
+      titleOverrides,
+    ],
+  );
+
+  const bindableCatalog = useMemo(
+    () => bindableCatalogEntries("workspace", boardWidgets, normalizedData),
+    [boardWidgets, normalizedData],
+  );
+
+  const addableCatalog = useMemo(() => {
+    const enabled = new Set(
+      layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : defaultEnabledIds,
+    );
+    return bindableCatalog.filter((entry) => !enabled.has(entry.id));
+  }, [bindableCatalog, defaultEnabledIds, layout.enabledWidgetIds]);
+
+  const boardHandlers = useDashboardBoardLayoutHandlers(layout, setLayout, defaultEnabledIds);
+
   return (
     <div className="flex flex-col gap-6">
       <LiveProductTourHost />
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Work awaiting you across modules — gate approvals, e-approvals, tickets, and SLA risk.
-          </p>
-          {dashboard.quick_links.length > 0 ? (
-            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium">
-              {dashboard.quick_links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </p>
-          ) : null}
-        </div>
-        <Button size="sm" variant="outline" onClick={() => void refetch()} disabled={isFetching}>
-          {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
-          Refresh
-        </Button>
-      </header>
-
-      <KpiStrip items={dashboard.kpis} />
-
-      <AwaitingMeHub
-        total={dashboard.awaiting_me?.total ?? 0}
-        items={dashboard.awaiting_me?.items ?? []}
+      <ConfigurableModulePageHeader
+        defaults={WORKSPACE_DASHBOARD_PAGE_CHROME}
+        prefs={layout.pageChrome}
+        editing={editing}
+        onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+        renderActions={({ isVisible }) => (
+          <>
+            {isVisible("customize") ? (
+              <DashboardLayoutToolbar
+                widgets={layoutMeta}
+                catalogModule="workspace"
+                layout={layout}
+                editing={editing}
+                onEditingChange={setEditing}
+                onChange={setLayout}
+                defaultEnabledIds={defaultEnabledIds}
+                bindableCatalog={bindableCatalog}
+                hasTenantDefault={Boolean(tenantDefault)}
+                onPublishTenantDefault={publishTenantDefault}
+                onResetToTenantDefault={resetToTenantDefault}
+                data={normalizedData}
+              />
+            ) : null}
+            {isVisible("refresh") ? (
+              <Button size="sm" variant="outline" onClick={() => void refetch()} disabled={isFetching}>
+                {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
+                Refresh
+              </Button>
+            ) : null}
+          </>
+        )}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DashboardBarChart
-          title="Action queues"
-          description="Items in your operational queues"
-          data={actionSeries}
-          layout="horizontal"
-          emptyMessage="No queued actions right now."
-          height={200}
-        />
-        <DashboardDonutChart
-          title="Attention mix"
-          description="Notifications, approvals, tickets, and SLA risk"
-          data={attentionSeries}
-          emptyMessage="Nothing requiring attention."
-          height={200}
-        />
-      </div>
+      {dashboard.quick_links.length > 0 && !editing && !showSkeleton ? (
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium">
+          {dashboard.quick_links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </p>
+      ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ActionableWidgets items={dashboard.actions} />
-        <RecentActivityPanel items={dashboard.recent_activity} />
-      </div>
+      {showSkeleton ? (
+        <DashboardBoardSkeleton layout={layout} defaultEnabledIds={[...DEFAULT_ENABLED_IDS]} />
+      ) : (
+        <DashboardWidgetBoard
+          widgets={catalogBoardWidgets}
+          order={layout.widgetOrder}
+          hiddenIds={layout.hiddenWidgetIds}
+          enabledIds={layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : defaultEnabledIds}
+          layoutPrefs={layout}
+          editing={editing}
+          addableCatalog={addableCatalog}
+          data={normalizedData}
+          {...boardHandlers}
+        />
+      )}
 
       {isError ? (
         <Card className={cn("border-destructive/40 bg-destructive/5")}>

@@ -144,6 +144,7 @@ export type EApprovalSubmissionListRow = {
   document_no: string;
   status: string;
   current_step: number;
+  step_count?: number | null;
   returned_from_step?: number | null;
   force_full_restart?: boolean;
   approval_cycle?: number;
@@ -151,6 +152,16 @@ export type EApprovalSubmissionListRow = {
   last_revision_routing_reason?: string | null;
   form_id: string;
   form_name?: string;
+  subsidiary?: string | null;
+  department?: string | null;
+  workflow_steps?: Array<{
+    step_order: number;
+    label: string;
+    state: string;
+    status_label: string;
+    approver_name: string | null;
+    approver_names: string[];
+  }>;
   requestor: { id: string; name: string; email: string } | null;
   created_at: string | null;
   updated_at?: string | null;

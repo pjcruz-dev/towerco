@@ -8,83 +8,103 @@ use App\Models\TicketingTicket;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantScopedCache;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class TicketingDashboardService
 {
     public function __construct(
         private readonly TicketingCategoryCatalog $categories,
+        private readonly TicketingTicketService $tickets,
     ) {}
 
     /**
-     * @return array{
-     *   kpis: list<array{key: string, label: string, value: int|string, tone?: string}>,
-     *   recent_tickets: list<array<string, mixed>>,
-     *   by_category: list<array<string, mixed>>,
-     *   message: string
-     * }
+     * @param  array{
+     *   status?: string|null,
+     *   priority?: string|null,
+     *   category?: string|null,
+     *   department?: string|null,
+     *   mine?: bool,
+     *   assigned_me?: bool,
+     * }  $filters
+     * @return array<string, mixed>
      */
-    public function build(TenantUser $user): array
+    public function build(TenantUser $user, array $filters = []): array
     {
+        $normalized = $this->normalizeFilters($filters);
         $tenantId = (string) (tenant('id') ?? 'unknown');
+        $filterKey = $normalized === [] ? 'default' : sha1((string) json_encode($normalized));
 
         return TenantScopedCache::remember(
-            "ticketing:dashboard:{$tenantId}:{$user->id}",
+            "ticketing:dashboard:{$tenantId}:{$user->id}:{$filterKey}",
             30,
-            fn (): array => $this->buildUncached($user),
+            fn (): array => $this->buildUncached($user, $normalized),
         );
     }
 
     /**
-     * @return array{
-     *   kpis: list<array{key: string, label: string, value: int|string, tone?: string}>,
-     *   recent_tickets: list<array<string, mixed>>,
-     *   by_category: list<array<string, mixed>>,
-     *   message: string
-     * }
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
      */
-    private function buildUncached(TenantUser $user): array
+    private function normalizeFilters(array $filters): array
+    {
+        $out = [];
+        foreach (['status', 'priority', 'category', 'department'] as $key) {
+            $value = isset($filters[$key]) ? trim((string) $filters[$key]) : '';
+            if ($value !== '') {
+                $out[$key] = $value;
+            }
+        }
+        if (! empty($filters['mine'])) {
+            $out['mine'] = true;
+        }
+        if (! empty($filters['assigned_me'])) {
+            $out['assigned_me'] = true;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function buildUncached(TenantUser $user, array $filters): array
     {
         $canManage = $user->can('ticketing:tickets:manage');
         $userId = (string) $user->id;
+        $base = fn (): Builder => $this->tickets->filteredQuery($user, $filters);
 
-        $scope = static function ($query) use ($canManage, $userId) {
-            return $query->when(! $canManage, fn ($q) => $q->where(function ($inner) use ($userId): void {
-                $inner->where('requester_id', $userId)->orWhere('assignee_id', $userId);
-            }));
-        };
-
-        $openCount = $scope(TicketingTicket::query()
-            ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS]))
+        $openCount = (clone $base())
+            ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
             ->count();
 
-        $assignedToMe = TicketingTicket::query()
+        $assignedToMe = (clone $base())
             ->where('assignee_id', $userId)
             ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
             ->count();
 
-        $urgentCount = $scope(TicketingTicket::query()
+        $urgentCount = (clone $base())
             ->where('priority', TicketingTicket::PRIORITY_URGENT)
-            ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS]))
+            ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
             ->count();
 
-        $resolvedThisWeek = $scope(TicketingTicket::query()
+        $resolvedThisWeek = (clone $base())
             ->where('status', TicketingTicket::STATUS_RESOLVED)
-            ->where('resolved_at', '>=', now()->subDays(7)))
+            ->where('resolved_at', '>=', now()->subDays(7))
             ->count();
 
         $slaAtRisk = 0;
         if ($canManage) {
-            // Uses the denormalized sla_status column (maintained by the SLA runner) so this
-            // is a single indexed count instead of loading every active ticket into PHP.
-            $slaAtRisk = TicketingTicket::query()
+            $slaAtRisk = (clone $base())
                 ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
                 ->whereIn('sla_status', ['at_risk', 'breached'])
                 ->count();
         }
 
-        $recent = $scope(TicketingTicket::query()
-            ->with(['requester:id,name,email', 'assignee:id,name,email']))
+        $recent = (clone $base())
+            ->with(['requester:id,name,email', 'assignee:id,name,email'])
             ->orderByDesc('updated_at')
             ->limit(8)
             ->get()
@@ -93,56 +113,86 @@ final class TicketingDashboardService
 
         return [
             'kpis' => [
-                ['key' => 'open', 'label' => 'Open / in progress', 'value' => $openCount, 'tone' => 'neutral'],
-                ['key' => 'assigned_me', 'label' => 'Assigned to me', 'value' => $assignedToMe, 'tone' => 'warning'],
-                ['key' => 'urgent', 'label' => 'Urgent', 'value' => $urgentCount, 'tone' => 'danger'],
-                ...($canManage ? [['key' => 'sla_at_risk', 'label' => 'SLA at risk', 'value' => $slaAtRisk, 'tone' => 'warning']] : []),
-                ['key' => 'resolved_week', 'label' => 'Resolved (7d)', 'value' => $resolvedThisWeek, 'tone' => 'success'],
+                [
+                    'key' => 'open',
+                    'label' => 'Open / in progress',
+                    'value' => $openCount,
+                    'tone' => 'neutral',
+                    'href' => '/ticketing/tickets?status=open,in_progress',
+                ],
+                [
+                    'key' => 'assigned_me',
+                    'label' => 'Assigned to me',
+                    'value' => $assignedToMe,
+                    'tone' => 'warning',
+                    'href' => '/ticketing/tickets?assigned_me=1',
+                ],
+                [
+                    'key' => 'urgent',
+                    'label' => 'Urgent',
+                    'value' => $urgentCount,
+                    'tone' => 'danger',
+                    'href' => '/ticketing/tickets?priority=urgent&status=open,in_progress',
+                ],
+                ...($canManage ? [[
+                    'key' => 'sla_at_risk',
+                    'label' => 'SLA at risk',
+                    'value' => $slaAtRisk,
+                    'tone' => 'warning',
+                    'href' => '/ticketing/tickets?sla_status=at_risk,breached&status=open,in_progress',
+                ]] : []),
+                [
+                    'key' => 'resolved_week',
+                    'label' => 'Resolved (7d)',
+                    'value' => $resolvedThisWeek,
+                    'tone' => 'success',
+                    'href' => '/ticketing/tickets?status=resolved',
+                ],
             ],
             'recent_tickets' => $recent,
-            'by_category' => $this->categoryAnalytics($user, $canManage),
+            'by_category' => $this->categoryAnalytics($user, $filters),
+            'status_breakdown' => $this->statusBreakdown(clone $base()),
+            'priority_breakdown' => $this->priorityBreakdown(clone $base()),
+            'department_breakdown' => $this->departmentBreakdown(clone $base()),
+            'filter_options' => [
+                'departments' => $this->departmentOptions($user),
+            ],
+            'applied_filters' => [
+                'status' => $filters['status'] ?? null,
+                'priority' => $filters['priority'] ?? null,
+                'category' => $filters['category'] ?? null,
+                'department' => $filters['department'] ?? null,
+                'mine' => (bool) ($filters['mine'] ?? false),
+                'assigned_me' => (bool) ($filters['assigned_me'] ?? false),
+            ],
             'message' => 'Cross-module issue tracking — raise tickets from any INFRA SUITE module or manually.',
         ];
     }
 
     /**
-     * @return list<array{
-     *   category: string|null,
-     *   label: string,
-     *   open: int,
-     *   in_progress: int,
-     *   resolved_7d: int,
-     *   sla_at_risk: int,
-     *   avg_resolve_hours: float|null
-     * }>
+     * @param  array<string, mixed>  $filters
+     * @return list<array<string, mixed>>
      */
-    private function categoryAnalytics(TenantUser $user, bool $canManage): array
+    private function categoryAnalytics(TenantUser $user, array $filters): array
     {
-        $userId = (string) $user->id;
         $labelMap = [];
         foreach ($this->categories->resolveOptions() as $option) {
             $labelMap[$option['id']] = $option['label'];
         }
 
-        $scope = static function ($query) use ($canManage, $userId) {
-            return $query->when(! $canManage, fn ($q) => $q->where(function ($inner) use ($userId): void {
-                $inner->where('requester_id', $userId)->orWhere('assignee_id', $userId);
-            }));
-        };
+        $base = fn (): Builder => $this->tickets->filteredQuery($user, $filters);
 
-        // Active-ticket aggregates (open / in-progress / SLA at risk) grouped in SQL.
-        $activeRows = $scope(TicketingTicket::query())
+        $activeRows = (clone $base())
             ->whereIn('status', [TicketingTicket::STATUS_OPEN, TicketingTicket::STATUS_IN_PROGRESS])
             ->selectRaw('category, status, sla_status, COUNT(*) as total')
             ->groupBy('category', 'status', 'sla_status')
             ->get();
 
-        // Resolved-in-7d aggregates (count + avg resolve hours) grouped in SQL.
         $driver = DB::connection('tenant')->getDriverName();
         $avgHoursExpr = $driver === 'sqlite'
             ? '(julianday(resolved_at) - julianday(created_at)) * 24'
             : 'TIMESTAMPDIFF(MINUTE, created_at, resolved_at) / 60';
-        $resolvedRows = $scope(TicketingTicket::query())
+        $resolvedRows = (clone $base())
             ->where('status', TicketingTicket::STATUS_RESOLVED)
             ->where('resolved_at', '>=', now()->subDays(7))
             ->whereNotNull('created_at')
@@ -214,6 +264,91 @@ final class TicketingDashboardService
         });
 
         return $rows;
+    }
+
+    /**
+     * @return list<array{status: string, label: string, count: int}>
+     */
+    private function statusBreakdown(Builder $query): array
+    {
+        $rows = (clone $query)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->orderByDesc('total')
+            ->get();
+
+        return $rows->map(static fn ($row): array => [
+            'status' => (string) $row->status,
+            'label' => str_replace('_', ' ', ucfirst((string) $row->status)),
+            'count' => (int) $row->total,
+        ])->values()->all();
+    }
+
+    /**
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    private function priorityBreakdown(Builder $query): array
+    {
+        $rows = (clone $query)
+            ->selectRaw('priority, COUNT(*) as total')
+            ->groupBy('priority')
+            ->orderByDesc('total')
+            ->get();
+
+        return $rows->map(static fn ($row): array => [
+            'key' => (string) $row->priority,
+            'label' => ucfirst((string) $row->priority),
+            'count' => (int) $row->total,
+        ])->values()->all();
+    }
+
+    /**
+     * @return list<array{key: string, label: string, count: int}>
+     */
+    private function departmentBreakdown(Builder $query): array
+    {
+        if (! Schema::connection('tenant')->hasColumn('users', 'department')) {
+            return [];
+        }
+
+        $rows = (clone $query)
+            ->join('users as requesters', 'requesters.id', '=', 'ticketing_tickets.requester_id')
+            ->whereNotNull('requesters.department')
+            ->where('requesters.department', '!=', '')
+            ->selectRaw('requesters.department as department, COUNT(*) as total')
+            ->groupBy('requesters.department')
+            ->orderByDesc('total')
+            ->limit(12)
+            ->get();
+
+        return $rows->map(static fn ($row): array => [
+            'key' => (string) $row->department,
+            'label' => (string) $row->department,
+            'count' => (int) $row->total,
+        ])->values()->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function departmentOptions(TenantUser $user): array
+    {
+        if (! Schema::connection('tenant')->hasColumn('users', 'department')) {
+            return [];
+        }
+
+        return $this->tickets->filteredQuery($user, [])
+            ->join('users as requesters', 'requesters.id', '=', 'ticketing_tickets.requester_id')
+            ->whereNotNull('requesters.department')
+            ->where('requesters.department', '!=', '')
+            ->distinct()
+            ->orderBy('requesters.department')
+            ->pluck('requesters.department')
+            ->map(static fn ($value): string => trim((string) $value))
+            ->filter(static fn (string $value): bool => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

@@ -1,36 +1,32 @@
 import { KpiStripSkeleton } from "@/components/ui/page-skeletons";
+import { WidgetKpiTile } from "@/components/dashboard/widgets/widget-primitives";
+import { DashboardWidgetEmpty } from "@/components/dashboard/dashboard-widget";
 import type { ProjectOneKpi } from "@/modules/project-one/types";
+import { cn } from "@/lib/utils";
 
-type KpiStripItem = ProjectOneKpi | (Omit<ProjectOneKpi, "key" | "value"> & { id?: string; value: string | number });
+type KpiStripItem =
+  | (ProjectOneKpi & { href?: string | null })
+  | (Omit<ProjectOneKpi, "key" | "value"> & { id?: string; value: string | number; href?: string | null });
 
 function kpiKey(item: KpiStripItem): string {
-  if ("key" in item && item.key) {
-    return item.key;
-  }
-  if ("id" in item && item.id) {
-    return item.id;
-  }
+  if ("key" in item && item.key) return item.key;
+  if ("id" in item && item.id) return item.id;
   return item.label;
 }
-
-const toneClass: Record<NonNullable<ProjectOneKpi["tone"]>, string> = {
-  neutral: "text-muted-foreground",
-  success: "text-emerald-600 dark:text-emerald-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  danger: "text-red-600 dark:text-red-400",
-};
 
 export function KpiStrip({
   items,
   isLoading = false,
   skeletonCount = 4,
   dataHelp,
+  className,
 }: {
   items: KpiStripItem[];
   isLoading?: boolean;
   skeletonCount?: number;
   /** Stable hook for live Help tours (`[data-help="…"]`). */
   dataHelp?: string;
+  className?: string;
 }) {
   if (isLoading) {
     return <KpiStripSkeleton count={skeletonCount} />;
@@ -38,27 +34,35 @@ export function KpiStrip({
 
   if (items.length === 0) {
     return (
-      <section
-        data-help={dataHelp}
-        className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"
-      >
-        KPI data will appear here once the dashboard endpoint is connected.
+      <section data-help={dataHelp}>
+        <DashboardWidgetEmpty message="KPI data will appear here once metrics are available." />
       </section>
     );
   }
 
+  const cols =
+    items.length >= 5
+      ? "xl:grid-cols-5"
+      : items.length === 4
+        ? "xl:grid-cols-4"
+        : items.length === 3
+          ? "xl:grid-cols-3"
+          : "xl:grid-cols-2";
+
   return (
-    <section data-help={dataHelp} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section
+      data-help={dataHelp}
+      className={cn("grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2", cols, className)}
+    >
       {items.map((item) => (
-        <article key={kpiKey(item)} className="rounded-xl border bg-card p-4 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground">
-            {item.label}
-          </p>
-          <p className="mt-2 text-2xl font-semibold">{item.value}</p>
-          {item.change ? (
-            <p className={`mt-2 text-xs ${toneClass[item.tone ?? "neutral"]}`}>{item.change}</p>
-          ) : null}
-        </article>
+        <WidgetKpiTile
+          key={kpiKey(item)}
+          label={item.label}
+          value={item.value}
+          change={item.change}
+          tone={item.tone ?? "neutral"}
+          href={item.href}
+        />
       ))}
     </section>
   );

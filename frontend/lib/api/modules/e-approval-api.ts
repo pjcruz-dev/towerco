@@ -258,6 +258,8 @@ export async function fetchEApprovalSubmissionsIndex(params: {
   from?: string;
   to?: string;
   sort?: string;
+  subsidiary?: string;
+  department?: string;
 }): Promise<{ data: EApprovalSubmissionListRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalSubmissionListRow[]; meta: PaginatedMeta }>(
     "/e-approval/submissions",
@@ -283,10 +285,23 @@ export async function fetchEApprovalFormWorkspaces(): Promise<EApprovalFormWorks
 
 export async function fetchEApprovalFormWorkspaceDashboard(
   slug: string,
+  params: {
+    status?: string;
+    from?: string;
+    to?: string;
+    subsidiary?: string;
+    department?: string;
+    mine?: boolean;
+  } = {},
 ): Promise<EApprovalFormWorkspaceDashboard> {
   const response = await apiClient.get<{
     data: EApprovalFormWorkspaceDashboard;
-  }>(`/e-approval/workspaces/${encodeURIComponent(slug)}`);
+  }>(`/e-approval/workspaces/${encodeURIComponent(slug)}`, {
+    params: {
+      ...params,
+      mine: params.mine ? 1 : undefined,
+    },
+  });
   return response.data.data;
 }
 
@@ -305,6 +320,8 @@ export async function fetchEApprovalWorkspaceSubmissions(
     from?: string;
     to?: string;
     sort?: string;
+    subsidiary?: string;
+    department?: string;
   } = {},
 ): Promise<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }>(
@@ -726,12 +743,15 @@ export async function downloadEApprovalSubmissionsExport(
     from?: string;
     to?: string;
     search?: string;
-    format?: "csv" | "xlsx";
+    format?: "csv" | "xlsx" | "html";
     columns?: string[];
     layout?: "submissions" | "line_items";
     grid_field?: string;
     async?: boolean;
     viewer_scope?: "mine" | "all";
+    subsidiary?: string;
+    department?: string;
+    ids?: string[];
   } = {},
 ): Promise<EApprovalExportResult> {
   const statuses = (params.statuses ?? []).filter((value) => value && value !== "all");
@@ -750,6 +770,9 @@ export async function downloadEApprovalSubmissionsExport(
         grid_field: params.layout === "line_items" ? params.grid_field || undefined : undefined,
         async: params.async ? 1 : undefined,
         viewer_scope: params.viewer_scope === "mine" ? "mine" : params.viewer_scope === "all" ? "all" : undefined,
+        subsidiary: params.subsidiary || undefined,
+        department: params.department || undefined,
+        ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       },
       paramsSerializer: {
         indexes: null,
@@ -893,6 +916,7 @@ export type EApprovalAnalyticsSeriesRow = {
 
 export type EApprovalAnalyticsResponse = {
   period: { from: string; to: string; days: number };
+  filters?: { form_id: string | null; subsidiary: string | null; department: string | null };
   kpis: Array<{
     key: string;
     label: string;
@@ -920,6 +944,9 @@ export type EApprovalAnalyticsResponse = {
 export async function fetchEApprovalAnalytics(params: {
   from?: string;
   to?: string;
+  form_id?: string;
+  subsidiary?: string;
+  department?: string;
 } = {}): Promise<EApprovalAnalyticsResponse> {
   const response = await apiClient.get<{ data: EApprovalAnalyticsResponse }>(
     "/e-approval/reports/analytics",
@@ -937,17 +964,42 @@ export async function downloadEApprovalWorkspaceExport(
     to?: string;
     mine?: boolean;
     include_fields?: boolean;
+    subsidiary?: string;
+    department?: string;
+    format?: "csv" | "xlsx";
+    columns?: string[];
+    layout?: "submissions" | "line_items";
+    grid_field?: string;
+    async?: boolean;
+    ids?: string[];
   } = {},
-): Promise<Blob> {
-  const response = await apiClient.get<Blob>(`/e-approval/workspaces/${encodeURIComponent(slug)}/export`, {
-    params: {
-      ...params,
-      mine: params.mine ? "1" : undefined,
-      include_fields: params.include_fields === false ? "0" : undefined,
+): Promise<EApprovalExportResult> {
+  const response = await apiClient.get<Blob | { data: Record<string, unknown> }>(
+    `/e-approval/workspaces/${encodeURIComponent(slug)}/export`,
+    {
+      params: {
+        status: params.status || undefined,
+        search: params.search?.trim() || undefined,
+        from: params.from || undefined,
+        to: params.to || undefined,
+        mine: params.mine ? "1" : undefined,
+        include_fields: params.include_fields === false ? "0" : undefined,
+        subsidiary: params.subsidiary || undefined,
+        department: params.department || undefined,
+        format: params.format ?? "csv",
+        columns: params.columns && params.columns.length > 0 ? params.columns : undefined,
+        layout: params.layout && params.layout !== "submissions" ? params.layout : undefined,
+        grid_field: params.layout === "line_items" ? params.grid_field || undefined : undefined,
+        async: params.async ? 1 : undefined,
+        ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
+      },
+      paramsSerializer: { indexes: null },
+      responseType: "blob",
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
     },
-    responseType: "blob",
-  });
-  return response.data;
+  );
+
+  return parseExportResponse(response);
 }
 
 export async function downloadEApprovalFormExport(formId: string): Promise<Blob> {
@@ -984,6 +1036,7 @@ export async function fetchEApprovalSubmissionPrint(submissionId: string): Promi
 export type EApprovalMetadataResponse = {
   roles: string[];
   departments: string[];
+  subsidiaries?: string[];
   emails: string[];
   plan_features?: {
     plan_tier: string;

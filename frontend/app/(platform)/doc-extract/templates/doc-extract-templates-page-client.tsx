@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
+import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
+import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
+import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { DocExtractColumnsDefinitionEditor } from "@/components/doc-extract/doc-extract-columns-definition-editor";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
@@ -21,7 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
+import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-layout-handlers";
+import {
+  useDashboardCustomizeMode,
+  useDashboardLayoutPrefs,
+} from "@/hooks/use-dashboard-layout-prefs";
 import {
   createDocExtractTemplate,
   deleteDocExtractTemplate,
@@ -30,6 +38,14 @@ import {
 } from "@/lib/api/modules/doc-extract-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { permissions } from "@/lib/rbac/permissions";
+import {
+  bindableCatalogEntries,
+  buildDynamicBoardWidgets,
+} from "@/lib/ui/build-dynamic-board-widgets";
+import { emptyNormalizedData } from "@/lib/ui/dashboard-widget-data";
+import { applyPageEnhancements, docExtractTemplatesEnhancements } from "@/lib/ui/page-enhancement-bags";
+import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
+import { DOC_EXTRACT_TEMPLATES_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
 import { formatDocExtractFieldTypeShort, slugifyDocExtractKey } from "@/modules/doc-extract/field-types";
 import type {
   DocExtractField,
@@ -37,6 +53,8 @@ import type {
   DocExtractTemplateStatus,
 } from "@/modules/doc-extract/types";
 import { useNotificationStore } from "@/stores/notification-store";
+
+const LAYOUT_KEY = "toweros.doc-extract.templates.layout";
 
 function emptyField(): DocExtractField {
   return {
@@ -127,6 +145,8 @@ export function DocExtractTemplatesPageClient() {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
   const [editor, setEditor] = useState<EditorState>(initialEditor());
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode();
 
   const templatesQuery = useQuery({
     queryKey: ["doc-extract", "templates"],
@@ -138,6 +158,10 @@ export function DocExtractTemplatesPageClient() {
   };
 
   const templates = templatesQuery.data ?? [];
+  const normalizedData = useMemo(
+    () => applyPageEnhancements(emptyNormalizedData(), docExtractTemplatesEnhancements()),
+    [],
+  );
 
   const openCreate = () => {
     setEditor({
@@ -230,6 +254,171 @@ export function DocExtractTemplatesPageClient() {
     },
   });
 
+  const layoutMeta = useMemo(() => [{ id: "template_grid", label: "Template catalog" }], []);
+
+  const boardWidgets = useMemo((): DashboardWidgetDef[] => {
+    return [
+      {
+        id: "template_grid",
+        label: "Template catalog",
+        defaultSpan: "full",
+        hideable: false,
+        removable: false,
+        render: () => {
+          if (templatesQuery.isLoading) {
+            return (
+              <DashboardBoardSkeleton
+                layout={layout}
+                defaultEnabledIds={["template_grid"]}
+              />
+            );
+          }
+          if (templatesQuery.isError) {
+            return <p className="text-sm text-destructive">{getErrorMessage(templatesQuery.error)}</p>;
+          }
+          if (templates.length === 0) {
+            return (
+              <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+                <p className="text-sm font-medium text-foreground">No templates yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create one with custom columns, or save columns from an auto-detect batch.
+                </p>
+                <Button className="mt-4" size="sm" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Create template
+                </Button>
+              </div>
+            );
+          }
+          return (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {templates.map((template) => {
+                const status: DocExtractTemplateStatus =
+                  template.status === "published" ? "published" : "draft";
+                return (
+                  <div
+                    key={template.id}
+                    className="flex flex-col rounded-xl border border-border bg-card p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-base font-medium text-foreground">{template.name}</h2>
+                          <StatusBadge status={status} />
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {template.description?.trim() || "No description"}
+                        </p>
+                      </div>
+                      <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {template.fields.length} columns
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {template.fields.slice(0, 4).map((field) => (
+                        <TypeBadge key={field.key} type={field.type} />
+                      ))}
+                      {template.fields.length > 4 ? (
+                        <span className="text-[11px] text-muted-foreground">
+                          +{template.fields.length - 4}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-auto flex flex-wrap gap-3 border-t border-border pt-3">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
+                        onClick={() => openEdit(template)}
+                      >
+                        <Pencil className="size-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          statusMutation.mutate({
+                            id: template.id,
+                            status: status === "published" ? "draft" : "published",
+                          })
+                        }
+                      >
+                        {status === "published" ? "Unpublish" : "Publish"}
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Delete “${template.name}”?`)) {
+                            deleteMutation.mutate(template.id);
+                          }
+                        }}
+                      >
+                        <X className="size-3.5" />
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        },
+      },
+    ];
+  }, [
+    deleteMutation,
+    layout,
+    statusMutation,
+    templates,
+    templatesQuery.error,
+    templatesQuery.isError,
+    templatesQuery.isLoading,
+  ]);
+
+  const titleOverrides = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    for (const [id, opt] of Object.entries(layout.widgetOptions)) {
+      map[id] = opt.title;
+    }
+    return map;
+  }, [layout.widgetOptions]);
+
+  const catalogBoardWidgets = useMemo(
+    () =>
+      buildDynamicBoardWidgets({
+        moduleId: "doc-extract",
+        data: normalizedData,
+        slots: boardWidgets,
+        enabledIds: layout.enabledWidgetIds,
+        titleOverrides,
+        widgetOptions: layout.widgetOptions,
+      }),
+    [boardWidgets, layout.enabledWidgetIds, layout.widgetOptions, normalizedData, titleOverrides],
+  );
+
+  const bindableCatalog = useMemo(
+    () => bindableCatalogEntries("doc-extract", boardWidgets, normalizedData),
+    [boardWidgets, normalizedData],
+  );
+
+  const addableCatalog = useMemo(() => {
+    const enabled = new Set(
+      layout.enabledWidgetIds.length > 0
+        ? layout.enabledWidgetIds
+        : layoutMeta.map((widget) => widget.id),
+    );
+    return bindableCatalog.filter((entry) => !enabled.has(entry.id));
+  }, [bindableCatalog, layout.enabledWidgetIds, layoutMeta]);
+
+  const boardHandlers = useDashboardBoardLayoutHandlers(
+    layout,
+    setLayout,
+    layoutMeta.map((widget) => widget.id),
+  );
+
   return (
     <PermissionGate requiredPermissions={[permissions.docExtractTemplatesManage]}>
       <div className="w-full space-y-6">
@@ -240,110 +429,57 @@ export function DocExtractTemplatesPageClient() {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">Templates</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create reusable column definitions. Only <span className="font-medium text-foreground">published</span>{" "}
-              templates appear when extracting documents; drafts stay here until you publish.
-            </p>
-          </div>
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-4" />
-            Create template
-          </Button>
-        </div>
+        <ConfigurableModulePageHeader
+          defaults={DOC_EXTRACT_TEMPLATES_PAGE_CHROME}
+          prefs={layout.pageChrome}
+          editing={editing}
+          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          renderActions={({ isVisible }) => (
+            <>
+              {isVisible("customize") ? (
+                <DashboardLayoutToolbar
+                  widgets={layoutMeta}
+                  catalogModule="doc-extract"
+                  layout={layout}
+                  editing={editing}
+                  onEditingChange={setEditing}
+                  onChange={setLayout}
+                  bindableCatalog={bindableCatalog}
+                  hasTenantDefault={Boolean(tenantDefault)}
+                  onPublishTenantDefault={publishTenantDefault}
+                  onResetToTenantDefault={resetToTenantDefault}
+                  data={normalizedData}
+                />
+              ) : null}
+              {isVisible("new") ? (
+                <Button size="sm" onClick={openCreate}>
+                  <Plus className="size-4" />
+                  Create template
+                </Button>
+              ) : null}
+            </>
+          )}
+        />
 
-        {templatesQuery.isLoading ? (
-          <DashboardContentSkeleton />
-        ) : templatesQuery.isError ? (
-          <p className="text-sm text-destructive">{getErrorMessage(templatesQuery.error)}</p>
-        ) : templates.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
-            <p className="text-sm font-medium text-foreground">No templates yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Create one with custom columns, or save columns from an auto-detect batch.
-            </p>
-            <Button className="mt-4" size="sm" onClick={openCreate}>
-              <Plus className="size-4" />
-              Create template
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {templates.map((template) => {
-              const status: DocExtractTemplateStatus =
-                template.status === "published" ? "published" : "draft";
-              return (
-                <div
-                  key={template.id}
-                  className="flex flex-col rounded-xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-base font-medium text-foreground">{template.name}</h2>
-                        <StatusBadge status={status} />
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {template.description?.trim() || "No description"}
-                      </p>
-                    </div>
-                    <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {template.fields.length} columns
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {template.fields.slice(0, 4).map((field) => (
-                      <TypeBadge key={field.key} type={field.type} />
-                    ))}
-                    {template.fields.length > 4 ? (
-                      <span className="text-[11px] text-muted-foreground">
-                        +{template.fields.length - 4}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-auto flex flex-wrap gap-3 border-t border-border pt-3">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
-                      onClick={() => openEdit(template)}
-                    >
-                      <Pencil className="size-3.5" />
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
-                      disabled={statusMutation.isPending}
-                      onClick={() =>
-                        statusMutation.mutate({
-                          id: template.id,
-                          status: status === "published" ? "draft" : "published",
-                        })
-                      }
-                    >
-                      {status === "published" ? "Unpublish" : "Publish"}
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
-                      disabled={deleteMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Delete “${template.name}”?`)) {
-                          deleteMutation.mutate(template.id);
-                        }
-                      }}
-                    >
-                      <X className="size-3.5" />
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <DashboardWidgetBoard
+          widgets={catalogBoardWidgets}
+          order={layout.widgetOrder}
+          hiddenIds={layout.hiddenWidgetIds}
+          enabledIds={
+            layout.enabledWidgetIds.length > 0
+              ? layout.enabledWidgetIds
+              : layoutMeta.map((widget) => widget.id)
+          }
+          layoutPrefs={layout}
+          editing={editing}
+          addableCatalog={addableCatalog}
+          data={normalizedData}
+          {...boardHandlers}
+          onAddWidget={(entry, insertAt) => {
+            boardHandlers.onAddWidget(entry, insertAt);
+            setEditing(true);
+          }}
+        />
 
         <Dialog
           open={editor.open}

@@ -49,7 +49,7 @@ export const TICKETING_TOUR_CHAPTER_STARTS: TicketingTourChapterStart[] = [
   },
   {
     id: "track",
-    how: "Ticketing → Tickets → filters / queue",
+    how: "Ticketing → Tickets → filters / Scope / queue",
     audience: "all",
   },
   {
@@ -266,7 +266,15 @@ export const ticketingLiveTour: LiveTourDefinition = {
       target: "tk-tickets-filters",
       chapter: "track",
       title: "Search and filters",
-      body: "Find by title, ticket number, status, category, or limit to tickets you raised or that are assigned to you.",
+      body: "Search by title, ticket #, or requestor — or tokens like status:open, status:open|pending, status!=closed, priority=high, title~outage, created>=2026-01-01. Narrow with Status, Priority, SLA, Category, and Department when available. Large exports queue to Settings → My exports. Print all filtered is capped at 5000 — use Export for larger sets.",
+    },
+    {
+      id: "tickets-scope",
+      path: "/ticketing/tickets",
+      target: "tk-tickets-scope",
+      chapter: "track",
+      title: "Scope",
+      body: "Toggle My tickets (ones you raised) or Assigned to me. Clear filters resets search, selects, and scope.",
     },
     {
       id: "tickets-table",
@@ -274,7 +282,7 @@ export const ticketingLiveTour: LiveTourDefinition = {
       target: "tk-tickets-table",
       chapter: "track",
       title: "Ticket queue",
-      body: "The list shows status, priority, and last update. Open any row to work the ticket.",
+      body: "The list shows status, priority, SLA, and last update. Open any row to work the ticket.",
     },
     {
       id: "create-nav-ticketing",

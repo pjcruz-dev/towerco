@@ -23,6 +23,9 @@ final class DocExtractBatchIndexController extends AbstractApiController
         $result = $batches->paginate(
             (int) $request->query('page', 1),
             (int) $request->query('per_page', 20),
+            $request->query('status'),
+            $request->query('search'),
+            $request->query('sort'),
         );
 
         return $this->okWithMeta($result['data'], $result['meta']);

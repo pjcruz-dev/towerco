@@ -9,9 +9,17 @@ import type {
   TicketingUserRef,
 } from "@/modules/ticketing/types";
 import { apiClient } from "@/lib/api/client";
+import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
 
-export async function fetchTicketingDashboard(): Promise<TicketingDashboardResponse> {
-  const response = await apiClient.get<{ data: TicketingDashboardResponse }>("/ticketing/dashboard");
+export async function fetchTicketingDashboard(
+  params: Pick<
+    TicketingTicketListParams,
+    "status" | "priority" | "category" | "department" | "mine" | "assigned_me"
+  > = {},
+): Promise<TicketingDashboardResponse> {
+  const response = await apiClient.get<{ data: TicketingDashboardResponse }>("/ticketing/dashboard", {
+    params: cleanListParams(params),
+  });
   return response.data.data;
 }
 
@@ -32,16 +40,20 @@ export type TicketingTicketListParams = {
   status?: string;
   priority?: string;
   category?: string;
+  department?: string;
   source_module?: string;
   source_reference_id?: string;
   linked_module?: string;
   linked_id?: string;
   mine?: boolean;
   assigned_me?: boolean;
+  sla_status?: string;
   sort?: string;
 };
 
-function cleanListParams(params: TicketingTicketListParams): Record<string, string | number | boolean> {
+function cleanListParams(
+  params: TicketingTicketListParams & { format?: "csv" | "xlsx" | "html" },
+): Record<string, string | number | boolean> {
   const cleaned: Record<string, string | number | boolean> = {};
   if (params.page) cleaned.page = params.page;
   if (params.per_page) cleaned.per_page = params.per_page;
@@ -49,13 +61,16 @@ function cleanListParams(params: TicketingTicketListParams): Record<string, stri
   if (params.status) cleaned.status = params.status;
   if (params.priority) cleaned.priority = params.priority;
   if (params.category) cleaned.category = params.category;
+  if (params.department) cleaned.department = params.department;
   if (params.source_module) cleaned.source_module = params.source_module;
   if (params.source_reference_id) cleaned.source_reference_id = params.source_reference_id;
   if (params.linked_module) cleaned.linked_module = params.linked_module;
   if (params.linked_id) cleaned.linked_id = params.linked_id;
   if (params.mine) cleaned.mine = true;
   if (params.assigned_me) cleaned.assigned_me = true;
+  if (params.sla_status) cleaned.sla_status = params.sla_status;
   if (params.sort) cleaned.sort = params.sort;
+  if (params.format) cleaned.format = params.format;
   return cleaned;
 }
 
@@ -67,6 +82,28 @@ export async function fetchTicketingTickets(
     { params: cleanListParams(params) },
   );
   return response.data;
+}
+
+export async function downloadTicketingTicketsExport(
+  params: Omit<TicketingTicketListParams, "page" | "per_page" | "sort"> & {
+    format?: "csv" | "xlsx" | "html";
+    columns?: string[];
+    ids?: string[];
+    async?: boolean;
+  } = {},
+): Promise<ModuleListExportResult> {
+  const response = await apiClient.get<Blob | { data: Record<string, unknown> }>("/ticketing/tickets/export", {
+    params: {
+      ...cleanListParams(params),
+      columns: params.columns && params.columns.length > 0 ? params.columns : undefined,
+      ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
+      async: params.async ? 1 : undefined,
+    },
+    paramsSerializer: { indexes: null },
+    responseType: "blob",
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
+  });
+  return parseModuleListExportResponse(response);
 }
 
 export async function fetchTicketingTicket(ticketId: string): Promise<TicketingTicketDetail> {

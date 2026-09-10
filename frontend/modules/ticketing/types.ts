@@ -3,6 +3,7 @@ export type TicketingKpi = {
   label: string;
   value: number | string;
   tone?: "neutral" | "success" | "warning" | "danger";
+  href?: string | null;
 };
 
 export type TicketingUserRef = {
@@ -79,6 +80,20 @@ export type TicketingDashboardResponse = {
   kpis: TicketingKpi[];
   recent_tickets: TicketingTicketListRow[];
   by_category?: TicketingCategoryAnalyticsRow[];
+  status_breakdown?: Array<{ status: string; label: string; count: number }>;
+  priority_breakdown?: Array<{ key: string; label: string; count: number }>;
+  department_breakdown?: Array<{ key: string; label: string; count: number }>;
+  filter_options?: {
+    departments?: string[];
+  };
+  applied_filters?: {
+    status?: string | null;
+    priority?: string | null;
+    category?: string | null;
+    department?: string | null;
+    mine?: boolean;
+    assigned_me?: boolean;
+  };
   message: string;
 };
 

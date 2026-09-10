@@ -29,6 +29,7 @@ class TicketingTicketIndexController extends AbstractApiController
             'status' => $request->query('status'),
             'priority' => $request->query('priority'),
             'category' => $request->query('category'),
+            'department' => $request->query('department'),
             'assignee_id' => $request->query('assignee_id'),
             'source_module' => $request->query('source_module'),
             'source_reference_id' => $request->query('source_reference_id'),
@@ -36,6 +37,7 @@ class TicketingTicketIndexController extends AbstractApiController
             'linked_id' => $request->query('linked_id'),
             'mine' => $request->boolean('mine'),
             'assigned_me' => $request->boolean('assigned_me'),
+            'sla_status' => $request->query('sla_status'),
         ]);
 
         $data = collect($paginator->items())->map(

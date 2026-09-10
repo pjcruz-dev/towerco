@@ -30,6 +30,8 @@ class EApprovalFormWorkspaceSubmissionsController extends AbstractApiController
             'status' => ['sometimes', 'string', 'max:50'],
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date'],
+            'subsidiary' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
 
         $forceOwn = filter_var($request->query('mine', false), FILTER_VALIDATE_BOOLEAN);
@@ -49,6 +51,8 @@ class EApprovalFormWorkspaceSubmissionsController extends AbstractApiController
             isset($validated['from']) ? (string) $validated['from'] : null,
             isset($validated['to']) ? (string) $validated['to'] : null,
             $query['sort'],
+            isset($validated['subsidiary']) ? trim((string) $validated['subsidiary']) : null,
+            isset($validated['department']) ? trim((string) $validated['department']) : null,
         );
 
         return $this->okWithMeta($payload['data'], $payload['meta']);

@@ -13,6 +13,7 @@ final class EApprovalMetadataService
     public function __construct(
         private readonly EApprovalPlanFeaturesService $planFeatures,
         private readonly EApprovalFinanceProcurementPolicyService $procurementPolicy,
+        private readonly EApprovalSubsidiaryLogoCatalogService $subsidiaryCatalog,
     ) {}
 
     /**
@@ -52,6 +53,7 @@ final class EApprovalMetadataService
         return [
             'roles' => $roles,
             'departments' => $departments,
+            'subsidiaries' => $this->subsidiaryCatalog->codes(),
             'emails' => $emails,
             'plan_features' => $this->planFeatures->snapshot(),
             'finance_procurement_policy' => $this->procurementPolicy->snapshot(),

@@ -58,7 +58,7 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
         id: "tickets-queue",
         title: "Anatomy of the ticket queue",
         description:
-          "Search and filter the operational queue. Open any row to work the ticket.",
+          "Search and filter the operational queue (including Scope). Open any row to work the ticket.",
         imageSrc: "/help/ticketing/02-tickets.png",
         imageAlt: "Ticketing tickets list",
         callouts: [
@@ -72,19 +72,26 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Search and filters",
-            body: "Find by title, ticket number, status, category, or limit to tickets you raised or that are assigned to you.",
+            body: "Search by title, ticket #, or requestor. Narrow with Status, Priority, SLA, Category, and Department.",
             x: 45,
             y: 26,
           },
           {
             n: 3,
+            title: "Scope",
+            body: "Toggle My tickets (ones you raised) or Assigned to me.",
+            x: 72,
+            y: 26,
+          },
+          {
+            n: 4,
             title: "Ticket queue",
-            body: "Status, priority, requester, assignee, and last update. Open a ticket number to open detail.",
+            body: "Status, priority, SLA, requester, assignee, and last update. Open a ticket number to open detail.",
             x: 52,
             y: 45,
           },
           {
-            n: 4,
+            n: 5,
             title: "Sidebar — Tickets",
             body: "Open Tickets under Ticketing to reach this list anytime.",
             x: 9,

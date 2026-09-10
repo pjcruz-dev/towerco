@@ -5,6 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { ArrowRight, FileStack, FileText, Inbox, User } from "lucide-react";
 
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
+import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
 import { Button } from "@/components/ui/button";
 import {
   E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH,
@@ -112,8 +116,6 @@ export function EApprovalTourSubmissionFixtures() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {eApprovalTourSampleListRows.map((row, index) => {
           const href = `${E_APPROVAL_TOUR_SAMPLE_DETAIL_PATH}${qs}`;
-          const stepLabel =
-            row.current_step > 0 ? `Step ${row.current_step} · Approver ${row.current_step}` : "Draft";
           return (
             <article
               key={row.id}
@@ -133,18 +135,33 @@ export function EApprovalTourSubmissionFixtures() {
                       <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
                         {row.form_name ?? E_APPROVAL_TOUR_SAMPLE_FORM_NAME}
                       </p>
+                      {row.subsidiary ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">{row.subsidiary}</p>
+                      ) : null}
                     </div>
                   </div>
                   <span data-help={index === 0 ? "ea-submissions-status" : undefined}>
                     <EApprovalStatusBadge status={row.status} kind="submission" />
                   </span>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <User className="h-3.5 w-3.5" aria-hidden />
-                    {row.requestor?.name ?? eApprovalTourSampleRequestor.name}
-                  </span>
-                  <span>{stepLabel}</span>
+                <div className="mt-4 space-y-2">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <User className="h-3.5 w-3.5" aria-hidden />
+                      {row.requestor?.name ?? eApprovalTourSampleRequestor.name}
+                    </span>
+                  </div>
+                  <div data-help={index === 0 ? "ea-submissions-step-show" : undefined}>
+                    <EApprovalWorkflowStepShow
+                      variant="compact"
+                      steps={buildWorkflowStepShowItems({
+                        currentStep: row.current_step,
+                        stepCount: row.step_count,
+                        status: row.status,
+                        workflowSteps: row.workflow_steps,
+                      })}
+                    />
+                  </div>
                 </div>
               </Link>
               <div
@@ -183,6 +200,7 @@ export function EApprovalTourSubmissionTableFixtures() {
             <tr>
               <th className="px-3 py-2.5">Document</th>
               <th className="px-3 py-2.5">Form</th>
+              <th className="px-3 py-2.5">Subsidiary</th>
               <th className="px-3 py-2.5">Status</th>
               <th className="px-3 py-2.5">Requestor</th>
               <th className="px-3 py-2.5">Step</th>
@@ -203,6 +221,7 @@ export function EApprovalTourSubmissionTableFixtures() {
                 <td className="px-3 py-2.5 text-foreground">
                   {row.form_name ?? E_APPROVAL_TOUR_SAMPLE_FORM_NAME}
                 </td>
+                <td className="px-3 py-2.5 text-muted-foreground">{row.subsidiary ?? "—"}</td>
                 <td className="px-3 py-2.5">
                   <span data-help={index === 0 ? "ea-submissions-status" : undefined}>
                     <EApprovalStatusBadge status={row.status} kind="submission" />
@@ -211,7 +230,20 @@ export function EApprovalTourSubmissionTableFixtures() {
                 <td className="px-3 py-2.5 text-foreground">
                   {row.requestor?.name ?? eApprovalTourSampleRequestor.name}
                 </td>
-                <td className="px-3 py-2.5 text-muted-foreground">{row.current_step}</td>
+                <td className="px-3 py-2.5">
+                  <div data-help={index === 0 ? "ea-submissions-step-show" : undefined}>
+                    <EApprovalWorkflowStepShow
+                      variant="compact"
+                      steps={buildWorkflowStepShowItems({
+                        currentStep: row.current_step,
+                        stepCount: row.step_count,
+                        status: row.status,
+                        workflowSteps: row.workflow_steps,
+                      })}
+                      emptyLabel="—"
+                    />
+                  </div>
+                </td>
                 <td className="px-3 py-2.5">
                   <Link
                     href={openHref}

@@ -394,8 +394,10 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           "ticketing:settings:manage",
           "project_one:view",
           "ai_assistant:knowledge:manage",
-          // Personal module profile only — not Platform Overview.
+          // Personal module profile / exports — not Platform Overview.
           "e_approval:view",
+          "doc-extract:view",
+          "ticketing:view",
         ],
         permissionsMatch: "any",
         items: [
@@ -430,6 +432,13 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:view"],
+          },
+          {
+            title: "My exports",
+            href: "/exports",
+            section: "Workspace",
+            permissionsMatch: "any",
+            permissions: ["doc-extract:view", "ticketing:view", "e_approval:view"],
           },
           {
             title: "Module policies",

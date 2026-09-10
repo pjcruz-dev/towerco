@@ -9,6 +9,7 @@ import type {
   DocExtractTemplate,
 } from "@/modules/doc-extract/types";
 import { apiClient } from "@/lib/api/client";
+import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
 
 export async function fetchDocExtractTemplates(params?: {
   status?: "draft" | "published";
@@ -49,12 +50,41 @@ export async function deleteDocExtractTemplate(id: string): Promise<void> {
 export async function fetchDocExtractBatches(params?: {
   page?: number;
   per_page?: number;
+  status?: string;
+  search?: string;
+  sort?: string;
 }): Promise<{ data: DocExtractBatchListRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: DocExtractBatchListRow[]; meta: PaginatedMeta }>(
     "/doc-extract/batches",
     { params },
   );
   return { data: response.data.data, meta: response.data.meta };
+}
+
+export async function downloadDocExtractBatchesExport(params?: {
+  format?: "csv" | "xlsx" | "html";
+  status?: string;
+  search?: string;
+  sort?: string;
+  columns?: string[];
+  ids?: string[];
+  async?: boolean;
+}): Promise<ModuleListExportResult> {
+  const response = await apiClient.get<Blob | { data: Record<string, unknown> }>("/doc-extract/batches/export", {
+    params: {
+      format: params?.format ?? "csv",
+      status: params?.status && params.status !== "all" ? params.status : undefined,
+      search: params?.search?.trim() || undefined,
+      sort: params?.sort || undefined,
+      columns: params?.columns && params.columns.length > 0 ? params.columns : undefined,
+      ids: params?.ids && params.ids.length > 0 ? params.ids : undefined,
+      async: params?.async ? 1 : undefined,
+    },
+    paramsSerializer: { indexes: null },
+    responseType: "blob",
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
+  });
+  return parseModuleListExportResponse(response);
 }
 
 export async function fetchDocExtractBatch(id: string): Promise<DocExtractBatchDetail> {

@@ -10,7 +10,11 @@ import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchPublishedHelpGuides, type HelpGuideListRow } from "@/lib/api/modules/help-guides-api";
-import { dismissEApprovalTourPrompt, dismissTicketingTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
+import {
+  dismissDocExtractTourPrompt,
+  dismissEApprovalTourPrompt,
+  dismissTicketingTourPrompt,
+} from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
 import { docExtractTourStartHref } from "@/lib/help/doc-extract-live-tour";
 import { passkeysTourStartHref } from "@/lib/help/passkeys-live-tour";
@@ -214,6 +218,8 @@ function MfaTourGuideCard() {
 }
 
 function DocExtractTourGuideCard() {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const tenantId = useAuthStore((state) => state.activeTenantId);
   const canView = usePermission([permissions.docExtractView]);
 
   if (!canView) {
@@ -223,12 +229,13 @@ function DocExtractTourGuideCard() {
   return (
     <Link
       href={docExtractTourStartHref(0)}
+      onClick={() => dismissDocExtractTourPrompt(userId, tenantId)}
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">DocExtract product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Walk Upload files → customize fields → view results on the live screens. Open an existing batch for
+        Walk Upload → Consolidate → Customize → Results on the live screens. Open an existing batch for
         workspace steps, or extract first.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">

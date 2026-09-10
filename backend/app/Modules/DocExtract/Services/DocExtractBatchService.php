@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DocExtract\Services;
 
+use App\Core\Support\ModuleListSearchDsl;
 use App\Modules\DocExtract\Jobs\ProcessDocExtractDocumentJob;
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
@@ -12,6 +13,7 @@ use App\Modules\DocExtract\Support\DocExtractBatchStatus;
 use App\Modules\DocExtract\Support\DocExtractDocumentStatus;
 use App\Modules\DocExtract\Support\DocExtractTemplateStatus;
 use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -29,12 +31,69 @@ final class DocExtractBatchService
     /**
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
      */
-    public function paginate(int $page = 1, int $perPage = 20): array
-    {
-        $paginator = DocExtractBatch::query()
-            ->with('template:id,name')
-            ->orderByDesc('created_at')
-            ->paginate(max(1, min(100, $perPage)), ['*'], 'page', max(1, $page));
+    public function paginate(
+        int $page = 1,
+        int $perPage = 20,
+        ?string $status = null,
+        ?string $search = null,
+        ?string $sort = null,
+    ): array {
+        $base = DocExtractBatch::query();
+
+        if ($search !== null && trim($search) !== '') {
+            $this->applyBatchSearch($base, $search);
+        }
+
+        $statusCounts = [
+            'all' => (clone $base)->count(),
+            'processing' => (clone $base)->whereIn('status', [
+                DocExtractBatchStatus::PROCESSING,
+                DocExtractBatchStatus::PENDING,
+            ])->count(),
+            'ready' => (clone $base)->where('status', DocExtractBatchStatus::READY)->count(),
+            'failed' => (clone $base)->where('status', DocExtractBatchStatus::FAILED)->count(),
+        ];
+
+        $query = DocExtractBatch::query()->with([
+            'template:id,name',
+            'documents:id,batch_id,original_filename,scan_meta,stored_path,created_at',
+        ]);
+
+        if ($status !== null && $status !== '' && $status !== 'all') {
+            if ($status === 'processing') {
+                $query->whereIn('status', [
+                    DocExtractBatchStatus::PROCESSING,
+                    DocExtractBatchStatus::PENDING,
+                ]);
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        if ($search !== null && trim($search) !== '') {
+            $this->applyBatchSearch($query, $search);
+        }
+
+        [$sortField, $sortDir] = $this->parseListSort($sort);
+        if ($sortField === 'template_name') {
+            $query
+                ->leftJoin('doc_extract_templates', 'doc_extract_templates.id', '=', 'doc_extract_batches.template_id')
+                ->select('doc_extract_batches.*')
+                ->orderBy('doc_extract_templates.name', $sortDir)
+                ->orderByDesc('doc_extract_batches.created_at');
+        } elseif ($sortField === 'primary_filename') {
+            // Sort by earliest document filename on the batch (correlated subquery).
+            $query->orderByRaw(
+                '(select min(original_filename) from doc_extract_documents where doc_extract_documents.batch_id = doc_extract_batches.id) '.$sortDir
+            )->orderByDesc('created_at');
+        } else {
+            $query->orderBy($sortField, $sortDir);
+            if ($sortField !== 'created_at') {
+                $query->orderByDesc('created_at');
+            }
+        }
+
+        $paginator = $query->paginate(max(1, min(100, $perPage)), ['*'], 'page', max(1, $page));
 
         $rows = [];
         foreach ($paginator->items() as $batch) {
@@ -50,8 +109,234 @@ final class DocExtractBatchService
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
                 'last_page' => $paginator->lastPage(),
+                'status_counts' => $statusCounts,
             ],
         ];
+    }
+
+    /**
+     * @param  list<string>|null  $ids
+     */
+    public function countListRows(
+        ?string $status = null,
+        ?string $search = null,
+        ?array $ids = null,
+    ): int {
+        if ($ids !== null && $ids !== []) {
+            $ids = array_values(array_unique(array_slice(array_map('strval', $ids), 0, 500)));
+
+            return DocExtractBatch::query()->whereIn('id', $ids)->count();
+        }
+
+        $result = $this->paginate(1, 1, $status, $search, null);
+
+        return (int) ($result['meta']['total'] ?? 0);
+    }
+
+    /**
+     * @param  list<string>|null  $ids
+     * @return list<array<string, string>>
+     */
+    public function exportListRows(
+        ?string $status = null,
+        ?string $search = null,
+        ?string $sort = null,
+        int $limit = 5000,
+        ?array $ids = null,
+    ): array {
+        if ($ids !== null && $ids !== []) {
+            $ids = array_values(array_unique(array_slice(array_map('strval', $ids), 0, 500)));
+            $batches = DocExtractBatch::query()
+                ->with([
+                    'template:id,name',
+                    'documents:id,batch_id,original_filename,scan_meta,stored_path,created_at',
+                ])
+                ->whereIn('id', $ids)
+                ->orderByDesc('created_at')
+                ->limit(500)
+                ->get();
+
+            $rows = [];
+            foreach ($batches as $batch) {
+                /** @var DocExtractBatch $batch */
+                $this->reconcileStaleProcessingStatus($batch);
+                $row = $this->asListRow($batch);
+                $rows[] = [
+                    'id' => (string) ($row['id'] ?? ''),
+                    'created_at' => (string) ($row['created_at'] ?? ''),
+                    'primary_filename' => (string) ($row['primary_filename'] ?? ''),
+                    'file_count' => (string) ($row['file_count'] ?? '0'),
+                    'template_name' => (string) ($row['template_name'] ?? 'Auto-detect'),
+                    'mode' => (string) ($row['mode'] ?? ''),
+                    'status' => (string) ($row['status'] ?? ''),
+                    'document_count' => (string) ($row['document_count'] ?? '0'),
+                    'ready_count' => (string) ($row['ready_count'] ?? '0'),
+                    'failed_count' => (string) ($row['failed_count'] ?? '0'),
+                    'message' => (string) ($row['message'] ?? ''),
+                ];
+            }
+
+            return $rows;
+        }
+
+        $result = $this->paginate(1, max(1, min(5000, $limit)), $status, $search, $sort);
+        $rows = [];
+        foreach ($result['data'] as $row) {
+            $rows[] = [
+                'id' => (string) ($row['id'] ?? ''),
+                'created_at' => (string) ($row['created_at'] ?? ''),
+                'primary_filename' => (string) ($row['primary_filename'] ?? ''),
+                'file_count' => (string) ($row['file_count'] ?? '0'),
+                'template_name' => (string) ($row['template_name'] ?? 'Auto-detect'),
+                'mode' => (string) ($row['mode'] ?? ''),
+                'status' => (string) ($row['status'] ?? ''),
+                'document_count' => (string) ($row['document_count'] ?? '0'),
+                'ready_count' => (string) ($row['ready_count'] ?? '0'),
+                'failed_count' => (string) ($row['failed_count'] ?? '0'),
+                'message' => (string) ($row['message'] ?? ''),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function parseListSort(?string $sort): array
+    {
+        $allowed = ['created_at', 'status', 'template_name', 'document_count', 'updated_at', 'primary_filename'];
+        $field = 'created_at';
+        $dir = 'desc';
+        if ($sort !== null && str_contains($sort, ':')) {
+            [$rawField, $rawDir] = array_pad(explode(':', $sort, 2), 2, 'desc');
+            if (in_array($rawField, $allowed, true)) {
+                $field = $rawField;
+            }
+            if (in_array(strtolower((string) $rawDir), ['asc', 'desc'], true)) {
+                $dir = strtolower((string) $rawDir);
+            }
+        }
+
+        return [$field, $dir];
+    }
+
+    /**
+     * Apply list search across batch id, message, template name, and source filenames.
+     * Supports DSL tokens: status:ready, status!=failed, filename~invoice, template~PO.
+     */
+    private function applyBatchSearch(Builder $query, string $search): void
+    {
+        $parsed = ModuleListSearchDsl::parse($search);
+        $rebuildParts = [$parsed['residual']];
+
+        foreach ($parsed['clauses'] as $clause) {
+            if ($clause['key'] === 'status') {
+                $this->applyBatchStatusClause($query, $clause['op'], $clause['value']);
+                continue;
+            }
+
+            $rebuildParts[] = $clause['key'].match ($clause['op']) {
+                ModuleListSearchDsl::OP_NE => '!=',
+                ModuleListSearchDsl::OP_CONTAINS => '~',
+                default => ':',
+            }.(str_contains($clause['value'], ' ') ? '"'.$clause['value'].'"' : $clause['value']);
+        }
+
+        $withoutStatus = trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($rebuildParts))) ?? '');
+        if ($withoutStatus === '') {
+            return;
+        }
+
+        ModuleListSearchDsl::apply(
+            $query,
+            $withoutStatus,
+            [
+                'filename' => [
+                    'relation' => 'documents',
+                    'relation_column' => 'original_filename',
+                    'type' => 'string',
+                ],
+                'file' => [
+                    'relation' => 'documents',
+                    'relation_column' => 'original_filename',
+                    'type' => 'string',
+                ],
+                'template' => [
+                    'relation' => 'template',
+                    'relation_column' => 'name',
+                    'type' => 'string',
+                ],
+                'message' => [
+                    'column' => 'message',
+                    'type' => 'string',
+                ],
+                'created' => [
+                    'column' => 'created_at',
+                    'type' => 'exact',
+                ],
+                'created_at' => [
+                    'column' => 'created_at',
+                    'type' => 'exact',
+                ],
+            ],
+            static function (Builder $innerQuery, string $residual): void {
+                $term = '%'.mb_strtolower(trim($residual)).'%';
+                $innerQuery->where(function ($inner) use ($term): void {
+                    $inner
+                        ->whereRaw('LOWER(id) like ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(message, \'\')) like ?', [$term])
+                        ->orWhereHas('template', function ($template) use ($term): void {
+                            $template->whereRaw('LOWER(name) like ?', [$term]);
+                        })
+                        ->orWhereHas('documents', function ($documents) use ($term): void {
+                            $documents
+                                ->whereRaw('LOWER(original_filename) like ?', [$term])
+                                ->orWhereRaw('LOWER(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(scan_meta, \'$.source_filename\')), \'\')) like ?', [$term]);
+                        });
+                });
+            },
+        );
+    }
+
+    private function applyBatchStatusClause(Builder $query, string $op, string $value): void
+    {
+        $normalized = strtolower(trim($value));
+        if ($normalized === '' || $normalized === 'all') {
+            return;
+        }
+
+        $processingBucket = [
+            DocExtractBatchStatus::PENDING,
+            DocExtractBatchStatus::PROCESSING,
+        ];
+
+        if ($op === ModuleListSearchDsl::OP_NE) {
+            if ($normalized === 'processing' || $normalized === 'pending') {
+                $query->whereNotIn('status', $processingBucket);
+            } else {
+                $query->where(function (Builder $inner) use ($normalized): void {
+                    $inner->where('status', '!=', $normalized)->orWhereNull('status');
+                });
+            }
+
+            return;
+        }
+
+        if ($op === ModuleListSearchDsl::OP_CONTAINS) {
+            $like = '%'.addcslashes($normalized, '%_\\').'%';
+            $query->where('status', 'like', $like);
+
+            return;
+        }
+
+        if ($normalized === 'processing' || $normalized === 'pending') {
+            $query->whereIn('status', $processingBucket);
+
+            return;
+        }
+
+        $query->where('status', $normalized);
     }
 
     public function findOrFail(string $id): DocExtractBatch
@@ -882,6 +1167,7 @@ final class DocExtractBatchService
     public function asListRow(DocExtractBatch $batch): array
     {
         $mode = $batch->template_id ? 'template' : 'auto';
+        $fileSummary = $this->batchFileSummary($batch);
 
         return [
             'id' => (string) $batch->id,
@@ -893,9 +1179,54 @@ final class DocExtractBatchService
             'message' => $batch->message,
             'template_id' => $batch->template_id ? (string) $batch->template_id : null,
             'template_name' => $batch->template?->name ?? ($mode === 'auto' ? 'Auto-detect' : null),
+            'primary_filename' => $fileSummary['primary_filename'],
+            'file_count' => $fileSummary['file_count'],
             'created_at' => optional($batch->created_at)?->toIso8601String(),
             'updated_at' => optional($batch->updated_at)?->toIso8601String(),
         ];
+    }
+
+    /**
+     * First uploaded/source file name; when multiple distinct files, UI appends " +++".
+     *
+     * @return array{primary_filename: string|null, file_count: int}
+     */
+    private function batchFileSummary(DocExtractBatch $batch): array
+    {
+        if (! $batch->relationLoaded('documents')) {
+            $batch->load(['documents:id,batch_id,original_filename,scan_meta,stored_path,created_at']);
+        }
+
+        $seen = [];
+        $ordered = [];
+        foreach ($batch->documents->sortBy('created_at') as $document) {
+            /** @var DocExtractDocument $document */
+            $name = $this->documentSourceFilename($document);
+            $key = mb_strtolower($name);
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $ordered[] = $name;
+        }
+
+        return [
+            'primary_filename' => $ordered[0] ?? null,
+            'file_count' => count($ordered),
+        ];
+    }
+
+    private function documentSourceFilename(DocExtractDocument $document): string
+    {
+        $meta = is_array($document->scan_meta) ? $document->scan_meta : [];
+        if (isset($meta['source_filename']) && is_string($meta['source_filename']) && trim($meta['source_filename']) !== '') {
+            return trim($meta['source_filename']);
+        }
+
+        $name = trim((string) $document->original_filename);
+        $stripped = preg_replace('/ \((?:page|pages) .+\)\s*$/u', '', $name);
+
+        return is_string($stripped) && $stripped !== '' ? $stripped : $name;
     }
 
     /**

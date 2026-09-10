@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Ticketing\Services;
 
 use App\Core\Support\AllowlistedSort;
+use App\Core\Support\ModuleListSearchDsl;
 use App\Models\TicketingComment;
 use App\Models\TicketingLink;
 use App\Models\TicketingTicket;
@@ -14,6 +15,7 @@ use App\Modules\Ticketing\Support\TicketingSourceCatalog;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -48,6 +50,7 @@ final class TicketingTicketService
      *   status?: string|null,
      *   priority?: string|null,
      *   category?: string|null,
+     *   department?: string|null,
      *   assignee_id?: string|null,
      *   source_module?: string|null,
      *   source_reference_id?: string|null,
@@ -55,34 +58,124 @@ final class TicketingTicketService
      *   linked_id?: string|null,
      *   mine?: bool,
      *   assigned_me?: bool,
+     *   sla_status?: string|null,
      *   sort?: string|null
      * }  $query
      */
     public function paginate(TenantUser $viewer, array $query): LengthAwarePaginator
+    {
+        $builder = $this->filteredQuery($viewer, $query)
+            ->with(['requester:id,name,email', 'assignee:id,name,email']);
+
+        [$column, $direction] = AllowlistedSort::resolve(
+            (string) ($query['sort'] ?? 'updated_at:desc'),
+            self::SORTABLE,
+            'updated_at',
+            'desc',
+        );
+        $builder->orderBy($column, $direction);
+
+        return $builder->paginate(
+            max(1, min(100, (int) ($query['per_page'] ?? 20))),
+            ['*'],
+            'page',
+            max(1, (int) ($query['page'] ?? 1)),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return list<array<string, mixed>>
+     */
+    public function exportRows(TenantUser $viewer, array $query, int $limit = 5000): array
+    {
+        $limit = max(1, min(10000, $limit));
+
+        $requesterColumns = ['id', 'name', 'email'];
+        if (Schema::connection('tenant')->hasColumn('users', 'department')) {
+            $requesterColumns[] = 'department';
+        }
+
+        return $this->filteredQuery($viewer, $query)
+            ->with(['requester:'.implode(',', $requesterColumns), 'assignee:id,name,email'])
+            ->orderByDesc('updated_at')
+            ->limit($limit)
+            ->get()
+            ->map(function (TicketingTicket $ticket): array {
+                $row = $this->asListRow($ticket);
+                $department = is_string($ticket->requester?->department ?? null)
+                    ? trim((string) $ticket->requester->department)
+                    : '';
+
+                return [
+                    'ticket_number' => $row['ticket_number'],
+                    'title' => $row['title'],
+                    'status' => $row['status'],
+                    'priority' => $row['priority'],
+                    'category' => $row['category'] ?? '',
+                    'department' => $department,
+                    'requester' => $ticket->requester?->name ?? '',
+                    'assignee' => $ticket->assignee?->name ?? '',
+                    'source_module' => $row['source_module'],
+                    'created_at' => $row['created_at'] ?? '',
+                    'updated_at' => $row['updated_at'] ?? '',
+                    'sla_status' => $row['sla_status'] ?? '',
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    public function filteredQuery(TenantUser $viewer, array $query): Builder
     {
         $canManage = $viewer->can('ticketing:tickets:manage');
         $search = isset($query['search']) ? trim((string) $query['search']) : '';
         $status = isset($query['status']) ? trim((string) $query['status']) : '';
         $priority = isset($query['priority']) ? trim((string) $query['priority']) : '';
         $category = isset($query['category']) ? trim((string) $query['category']) : '';
+        $department = isset($query['department']) ? trim((string) $query['department']) : '';
         $assigneeId = isset($query['assignee_id']) ? trim((string) $query['assignee_id']) : '';
         $sourceModule = isset($query['source_module']) ? trim((string) $query['source_module']) : '';
         $sourceReferenceId = isset($query['source_reference_id']) ? trim((string) $query['source_reference_id']) : '';
         $linkedModule = isset($query['linked_module']) ? trim((string) $query['linked_module']) : '';
         $linkedId = isset($query['linked_id']) ? trim((string) $query['linked_id']) : '';
+        $slaStatus = isset($query['sla_status']) ? trim((string) $query['sla_status']) : '';
         $mine = (bool) ($query['mine'] ?? false);
         $assignedMe = (bool) ($query['assigned_me'] ?? false);
+        $ids = [];
+        if (! empty($query['ids']) && is_array($query['ids'])) {
+            $ids = array_values(array_unique(array_filter(
+                array_map(static fn ($id): string => trim((string) $id), $query['ids']),
+                static fn (string $id): bool => $id !== '',
+            )));
+            $ids = array_slice($ids, 0, 500);
+        }
 
-        $builder = TicketingTicket::query()
-            ->with(['requester:id,name,email', 'assignee:id,name,email'])
-            ->when($status !== '', fn ($q) => $q->where('status', $status))
+        $statuses = $this->csvFilterValues($status);
+        $slaStatuses = $this->csvFilterValues($slaStatus);
+
+        return TicketingTicket::query()
+            ->when($ids !== [], fn ($q) => $q->whereIn('id', $ids))
+            ->when(count($statuses) === 1, fn ($q) => $q->where('status', $statuses[0]))
+            ->when(count($statuses) > 1, fn ($q) => $q->whereIn('status', $statuses))
             ->when($priority !== '', fn ($q) => $q->where('priority', $priority))
             ->when($category !== '', fn ($q) => $q->where('category', $category))
+            ->when($department !== '', function ($q) use ($department): void {
+                if (! Schema::connection('tenant')->hasColumn('users', 'department')) {
+                    return;
+                }
+                $q->whereHas('requester', fn ($requester) => $requester->where('department', $department));
+            })
             ->when($assigneeId !== '', fn ($q) => $q->where('assignee_id', $assigneeId))
             ->when($assignedMe, fn ($q) => $q->where('assignee_id', $viewer->id)->whereIn('status', [
                 TicketingTicket::STATUS_OPEN,
                 TicketingTicket::STATUS_IN_PROGRESS,
             ]))
+            ->when(count($slaStatuses) === 1 && $this->ticketHasColumn('sla_status'), fn ($q) => $q->where('sla_status', $slaStatuses[0]))
+            ->when(count($slaStatuses) > 1 && $this->ticketHasColumn('sla_status'), fn ($q) => $q->whereIn('sla_status', $slaStatuses))
             ->when($sourceModule !== '', fn ($q) => $q->where('source_module', $sourceModule))
             ->when($sourceReferenceId !== '', fn ($q) => $q->where('source_reference_id', $sourceReferenceId))
             ->when($linkedId !== '', function ($q) use ($linkedId, $linkedModule): void {
@@ -101,27 +194,71 @@ final class TicketingTicketService
             ->when($mine, fn ($q) => $q->where('requester_id', $viewer->id))
             ->when(! $canManage && ! $mine && ! $assignedMe, fn ($q) => $q->where('requester_id', $viewer->id))
             ->when($search !== '', function ($q) use ($search): void {
-                $q->where(function ($inner) use ($search): void {
-                    $inner->where('title', 'like', '%'.$search.'%')
-                        ->orWhere('description', 'like', '%'.$search.'%')
-                        ->orWhere('ticket_number', 'like', '%'.ltrim($search, 'TKT-').'%');
-                });
+                ModuleListSearchDsl::apply(
+                    $q,
+                    $search,
+                    [
+                        'status' => ['column' => 'status', 'type' => 'exact'],
+                        'priority' => ['column' => 'priority', 'type' => 'exact'],
+                        'category' => ['column' => 'category', 'type' => 'exact'],
+                        'department' => [
+                            'relation' => 'requester',
+                            'relation_column' => 'department',
+                            'type' => 'exact',
+                        ],
+                        'sla_status' => ['column' => 'sla_status', 'type' => 'exact'],
+                        'source_module' => ['column' => 'source_module', 'type' => 'exact'],
+                        'title' => ['column' => 'title', 'type' => 'string'],
+                        'ticket' => ['column' => 'ticket_number', 'type' => 'string'],
+                        'ticket_number' => ['column' => 'ticket_number', 'type' => 'string'],
+                        'created' => ['column' => 'created_at', 'type' => 'exact'],
+                        'created_at' => ['column' => 'created_at', 'type' => 'exact'],
+                        'updated' => ['column' => 'updated_at', 'type' => 'exact'],
+                        'updated_at' => ['column' => 'updated_at', 'type' => 'exact'],
+                        'assignee' => [
+                            'relation' => 'assignee',
+                            'relation_column' => 'name',
+                            'type' => 'string',
+                        ],
+                        'requestor' => [
+                            'relation' => 'requester',
+                            'relation_column' => 'name',
+                            'type' => 'string',
+                        ],
+                        'requester' => [
+                            'relation' => 'requester',
+                            'relation_column' => 'name',
+                            'type' => 'string',
+                        ],
+                    ],
+                    static function (Builder $innerQuery, string $residual): void {
+                        $innerQuery->where(function (Builder $inner) use ($residual): void {
+                            $inner->where('title', 'like', '%'.$residual.'%')
+                                ->orWhere('description', 'like', '%'.$residual.'%')
+                                ->orWhere('ticket_number', 'like', '%'.ltrim($residual, 'TKT-').'%')
+                                ->orWhereHas('requester', function ($requester) use ($residual): void {
+                                    $requester->where('name', 'like', '%'.$residual.'%')
+                                        ->orWhere('email', 'like', '%'.$residual.'%');
+                                });
+                        });
+                    },
+                );
             });
+    }
 
-        [$column, $direction] = AllowlistedSort::resolve(
-            (string) ($query['sort'] ?? 'updated_at:desc'),
-            self::SORTABLE,
-            'updated_at',
-            'desc',
-        );
-        $builder->orderBy($column, $direction);
+    /**
+     * @return list<string>
+     */
+    private function csvFilterValues(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
 
-        return $builder->paginate(
-            max(1, min(100, (int) ($query['per_page'] ?? 20))),
-            ['*'],
-            'page',
-            max(1, (int) ($query['page'] ?? 1)),
-        );
+        return array_values(array_filter(array_map(
+            static fn (string $value): string => trim($value),
+            explode(',', $raw),
+        ), static fn (string $value): bool => $value !== ''));
     }
 
     /**

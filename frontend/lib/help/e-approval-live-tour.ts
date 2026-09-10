@@ -54,7 +54,7 @@ export const E_APPROVAL_TOUR_CHAPTER_STARTS: EApprovalTourChapterStart[] = [
   },
   {
     id: "track",
-    how: "E-Forms → Submissions → filters / gallery / table",
+    how: "E-Forms → Submissions → status / advanced filters / Step Show",
     audience: "requestor",
   },
   {
@@ -217,8 +217,10 @@ export function chapterForEApprovalStepId(stepId: string): LiveTourChapterId {
     stepId === "nav-e-approval-submissions" ||
     stepId === "submissions-filters" ||
     stepId === "submissions-search" ||
+    stepId === "submissions-advanced-filters" ||
     stepId === "submissions-view-gallery" ||
     stepId === "submissions-view-table" ||
+    stepId === "submissions-step-show" ||
     stepId === "submissions-status"
   ) {
     return "track";
@@ -499,21 +501,28 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       autoNavFrom: "ea-nav-e-approval-submissions",
       target: "ea-submissions-filters",
       title: "Status filters",
-      body: "Narrow the list to Needs revision, Pending, Approved, and more.",
+      body: "Narrow the list to Needs revision, Pending, Approved, and more. Use Mine / All users when you can view everyone’s requests.",
     },
     {
       id: "submissions-search",
       path: "/e-approval/submissions",
       target: "ea-submissions-search",
       title: "Search submissions",
-      body: "Find by document number, form name, or requestor.",
+      body: "Find by document number, form name, or requestor. Tokens: status:pending, status:pending|approved, status!=rejected, title~invoice, created>=2026-01-01, subsidiary:HQ, plus form field names on workspaces (vendor~acme). Large exports queue to Reports → Recent exports (also under Settings → My exports). On Reports, Customize splits Analytics — use + Add widget for optional charts.",
+    },
+    {
+      id: "submissions-advanced-filters",
+      path: "/e-approval/submissions",
+      target: "ea-submissions-advanced-filters",
+      title: "Advanced filters",
+      body: "Filter by Form, Subsidiary, Department, and submitted date range. Clear filters resets these without changing status chips.",
     },
     {
       id: "submissions-view-gallery",
       path: "/e-approval/submissions",
       target: "ea-submissions-gallery",
       title: "Gallery view",
-      body: "Card layout for scanning document number, status, and requestor at a glance. Use the toggle to switch layouts.",
+      body: "Card layout for scanning document number, status, subsidiary, and Step Show at a glance. Use the toggle to switch layouts.",
       listViewMode: "gallery",
       missingHint: "Gallery cards appear when the list has rows (or sample cards while the tour is active).",
     },
@@ -522,9 +531,18 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       path: "/e-approval/submissions",
       target: "ea-submissions-table",
       title: "Table view",
-      body: "Dense rows for sorting and scanning many requests. Switch back to Gallery anytime with the same toggle.",
+      body: "Dense rows with Subsidiary and Step Show for sorting and scanning many requests. Switch back to Gallery anytime with the same toggle.",
       listViewMode: "table",
       missingHint: "Table rows appear when the list has data. Continue if the list is empty.",
+    },
+    {
+      id: "submissions-step-show",
+      path: "/e-approval/submissions",
+      target: "ea-submissions-step-show",
+      title: "Step Show",
+      body: "Compact approval trail: which step is current, who is waiting, and hover for the full path (including skipped steps).",
+      listViewMode: "gallery",
+      missingHint: "Step Show appears on gallery cards and in the table Step column (or on sample cards while the tour is active).",
     },
     {
       id: "submissions-status",
@@ -655,8 +673,8 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       pathMatch: "prefix",
       entryPath: "/e-approval/submissions/tour-sample",
       target: "ea-detail-summary",
-      title: "Summary strip",
-      body: "Form, requestor, workflow step, and submitted time.",
+      title: "Summary & Step Show",
+      body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, approved, skipped).",
       missingHint: "Skipped until a submission detail page is available.",
     },
     {

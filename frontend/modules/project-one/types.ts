@@ -6,6 +6,8 @@ export type ProjectOneKpi = {
   value: string;
   change?: string;
   tone?: "neutral" | "success" | "warning" | "danger";
+  /** Optional deep link — KPI tiles become clickable when set. */
+  href?: string | null;
 };
 
 export type ProjectOneMapSite = {

@@ -38,6 +38,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   billing: "Billing",
   settings: "Settings",
   account: "Account",
+  exports: "My exports",
   security: "My security",
   admin: "Administration",
   kpi: "KPI & SLA",

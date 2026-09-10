@@ -20,6 +20,11 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import { EApprovalRelatedSubmissionsPanel } from "@/components/e-approval/e-approval-related-submissions-panel";
 import { EApprovalSubmissionSharePanel } from "@/components/e-approval/e-approval-submission-share-panel";
 import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+  workflowPreviewToStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
+import {
   countStampedApprovals,
   EApprovalSubmissionAttachmentsPanel,
 } from "@/components/e-approval/e-approval-submission-attachments-panel";
@@ -45,6 +50,7 @@ import {
   fetchEApprovalComments,
   fetchEApprovalSubmission,
   postEApprovalComment,
+  previewEApprovalSubmissionWorkflow,
   requestEApprovalRevision,
   rerouteEApprovalApproval,
   resubmitEApprovalSubmission,
@@ -135,6 +141,43 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
+
+  const workflowPreviewQuery = useQuery({
+    queryKey: ["e-approval", "submission", submissionId, "workflow-preview", data?.status ?? ""],
+    queryFn: () => previewEApprovalSubmissionWorkflow(submissionId),
+    enabled: Boolean(submissionId && data),
+    staleTime: 0,
+  });
+
+  const workflowStepItems = useMemo(() => {
+    const previewSteps = workflowPreviewQuery.data?.resolved_steps ?? [];
+    if (previewSteps.length > 0 || (workflowPreviewQuery.data?.skipped_steps?.length ?? 0) > 0) {
+      return workflowPreviewToStepShowItems(
+        previewSteps,
+        data?.status,
+        workflowPreviewQuery.data?.skipped_steps,
+      );
+    }
+    return buildWorkflowStepShowItems({
+      currentStep: data?.current_step ?? 0,
+      stepCount: data?.step_count,
+      status: data?.status,
+      workflowSteps: data?.workflow_steps,
+    });
+  }, [
+    data?.current_step,
+    data?.status,
+    data?.step_count,
+    data?.workflow_steps,
+    workflowPreviewQuery.data?.resolved_steps,
+    workflowPreviewQuery.data?.skipped_steps,
+  ]);
+
+  const subsidiaryLabel = useMemo(() => {
+    if (data?.subsidiary) return data.subsidiary;
+    const fromValues = data?.values?.find((row) => row.field_name === "subsidiary");
+    return fromValues?.display_value || fromValues?.value || null;
+  }, [data?.subsidiary, data?.values]);
 
   const usersQuery = useEApprovalAssignableUsers(canManage);
 
@@ -506,37 +549,42 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Form</dt>
                 <dd className="mt-0.5 font-medium">{data.form_name}</dd>
+                {data.form_schema_version_at_submit ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Form version at submit · v{data.form_schema_version_at_submit}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Requestor</dt>
                 <dd className="mt-0.5">{data.requestor?.name ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-xs font-medium text-muted-foreground">Workflow step</dt>
-                <dd className="mt-0.5">
-                  {data.status === "returned" || data.status === "rejected" || data.current_step < 1
-                    ? data.status === "returned"
-                      ? data.returned_from_step
-                        ? data.force_full_restart ||
-                          data.revision_config?.routing !== "resume_returning_step"
-                          ? `Awaiting resubmit · will restart from step 1`
-                          : `Awaiting resubmit · will resume at step ${data.returned_from_step}`
-                        : "Awaiting resubmit"
-                      : "—"
-                    : `Step ${data.current_step}`}
-                </dd>
+                <dt className="text-xs font-medium text-muted-foreground">Subsidiary</dt>
+                <dd className="mt-0.5">{subsidiaryLabel ?? "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Submitted</dt>
                 <dd className="mt-0.5">{formatTimestamp(data.created_at)}</dd>
               </div>
-              {data.form_schema_version_at_submit ? (
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Form version at submit</dt>
-                  <dd className="mt-0.5">v{data.form_schema_version_at_submit}</dd>
-                </div>
-              ) : null}
             </dl>
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Workflow step</p>
+              {data.status === "returned" || data.status === "rejected" || data.current_step < 1 ? (
+                <p className="text-sm text-muted-foreground">
+                  {data.status === "returned"
+                    ? data.returned_from_step
+                      ? data.force_full_restart ||
+                        data.revision_config?.routing !== "resume_returning_step"
+                        ? `Awaiting resubmit · will restart from step 1`
+                        : `Awaiting resubmit · will resume at step ${data.returned_from_step}`
+                      : "Awaiting resubmit"
+                    : "—"}
+                </p>
+              ) : (
+                <EApprovalWorkflowStepShow variant="full" steps={workflowStepItems} />
+              )}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
               <RaiseTicketButton
                 prefill={{

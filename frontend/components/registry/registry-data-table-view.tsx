@@ -5,6 +5,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnOrderState,
   type OnChangeFn,
   type Row,
   type RowSelectionState,
@@ -16,12 +17,18 @@ import { useCallback, useState } from "react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableViewOptions } from "@/components/ui/data-table-view-options";
+import { ModuleListLayoutMenu } from "@/components/registry/module-list-layout-menu";
 import { RegistryTableScroll } from "@/components/registry/registry-data-table";
 import {
   isVisibilityState,
   useLocalStorageJsonState,
 } from "@/hooks/use-local-storage-json-state";
+import { layoutsStorageKey } from "@/lib/ui/module-list-layouts";
 import { cn } from "@/lib/utils";
+
+function isColumnOrderState(value: unknown): value is ColumnOrderState {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
 
 type RegistryDataTableViewProps<TData> = {
   columns: ColumnDef<TData, unknown>[];
@@ -55,8 +62,18 @@ type RegistryDataTableViewProps<TData> = {
    * Convention: `toweros.table.columns.<module>.<page>`
    */
   columnVisibilityStorageKey?: string;
+  /** Persist column order alongside visibility (key + `.order`). */
+  enableColumnReorder?: boolean;
+  /** Named layouts menu (requires columnVisibilityStorageKey). */
+  enableNamedLayouts?: boolean;
   toolbarStart?: ReactNode;
-  toolbarEnd?: ReactNode;
+  /**
+   * Extra toolbar actions. Pass a render function to read live visible column ids
+   * (for export/print that must match the table, not only localStorage).
+   */
+  toolbarEnd?:
+    | ReactNode
+    | ((ctx: { visibleColumnIds: string[]; columnOrder: string[] }) => ReactNode);
   toolbarClassName?: string;
 };
 
@@ -90,6 +107,8 @@ export function RegistryDataTableView<TData>({
   columnVisibility: columnVisibilityProp,
   onColumnVisibilityChange,
   columnVisibilityStorageKey,
+  enableColumnReorder = true,
+  enableNamedLayouts = true,
   toolbarStart,
   toolbarEnd,
   toolbarClassName,
@@ -100,17 +119,26 @@ export function RegistryDataTableView<TData>({
     enableColumnVisibility && !isVisibilityControlled && columnVisibilityStorageKey
       ? columnVisibilityStorageKey
       : null;
+  const orderPersistKey =
+    enableColumnVisibility && enableColumnReorder && persistKey ? `${persistKey}.order` : null;
 
   const [storedVisibility, setStoredVisibility] = useLocalStorageJsonState<VisibilityState>(
     persistKey,
     {},
     isVisibilityState,
   );
+  const [storedOrder, setStoredOrder] = useLocalStorageJsonState<ColumnOrderState>(
+    orderPersistKey,
+    [],
+    isColumnOrderState,
+  );
   const [internalVisibility, setInternalVisibility] = useState<VisibilityState>({});
+  const [internalOrder, setInternalOrder] = useState<ColumnOrderState>([]);
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
 
   const columnVisibility =
     columnVisibilityProp ?? (persistKey ? storedVisibility : internalVisibility);
+  const columnOrder = orderPersistKey ? storedOrder : internalOrder;
 
   const handleVisibilityChange = useCallback<OnChangeFn<VisibilityState>>(
     (updater) => {
@@ -125,6 +153,17 @@ export function RegistryDataTableView<TData>({
       setInternalVisibility((prev) => (typeof updater === "function" ? updater(prev) : updater));
     },
     [onColumnVisibilityChange, persistKey, setStoredVisibility],
+  );
+
+  const handleColumnOrderChange = useCallback<OnChangeFn<ColumnOrderState>>(
+    (updater) => {
+      if (orderPersistKey) {
+        setStoredOrder((prev) => (typeof updater === "function" ? updater(prev) : updater));
+        return;
+      }
+      setInternalOrder((prev) => (typeof updater === "function" ? updater(prev) : updater));
+    },
+    [orderPersistKey, setStoredOrder],
   );
 
   const isSortingControlled = sortingProp !== undefined || onSortingChange !== undefined;
@@ -154,15 +193,23 @@ export function RegistryDataTableView<TData>({
     onSortingChange:
       isSortingControlled || !manualSorting ? handleSortingChange : undefined,
     onColumnVisibilityChange: enableColumnVisibility ? handleVisibilityChange : undefined,
+    onColumnOrderChange:
+      enableColumnVisibility && enableColumnReorder ? handleColumnOrderChange : undefined,
     manualSorting,
     state: {
       ...(rowSelection !== undefined ? { rowSelection } : {}),
       ...(sorting !== undefined ? { sorting } : {}),
       ...(enableColumnVisibility ? { columnVisibility } : {}),
+      ...(enableColumnVisibility && enableColumnReorder ? { columnOrder } : {}),
     },
   });
 
-  const showToolbar = Boolean(toolbarStart || toolbarEnd || enableColumnVisibility);
+  const visibleColumnIds = table.getVisibleLeafColumns().map((column) => column.id);
+  const resolvedToolbarEnd =
+    typeof toolbarEnd === "function"
+      ? toolbarEnd({ visibleColumnIds, columnOrder })
+      : toolbarEnd;
+  const showToolbar = Boolean(toolbarStart || resolvedToolbarEnd || enableColumnVisibility);
 
   return (
     <div>
@@ -170,8 +217,13 @@ export function RegistryDataTableView<TData>({
         <div className={cn("flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2", toolbarClassName)}>
           <div className="flex flex-wrap items-center gap-2">{toolbarStart}</div>
           <div className="flex flex-wrap items-center gap-2">
-            {toolbarEnd}
-            {enableColumnVisibility ? <DataTableViewOptions table={table} /> : null}
+            {resolvedToolbarEnd}
+            {enableColumnVisibility && persistKey && enableNamedLayouts ? (
+              <ModuleListLayoutMenu table={table} storageKey={layoutsStorageKey(persistKey)} />
+            ) : null}
+            {enableColumnVisibility ? (
+              <DataTableViewOptions table={table} enableReorder={enableColumnReorder} />
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -55,10 +55,10 @@ function TicketingTourSoftPromptInner() {
   }
 
   const description = canManage || canSettings
-    ? "Walks overview, the ticket queue, sample ticket detail, triage, and settings for your role. Sample UI is never saved."
+    ? "Walks overview, the ticket queue (filters & Scope), sample ticket detail, triage, and settings. Sample UI is never saved."
     : canCreate
-      ? "Walks overview, tickets, and creating a new issue. Sample UI appears during the tour and is never saved."
-      : "Walks overview and the ticket queue for your role. Sample UI appears during the tour and is never saved.";
+      ? "Walks overview, tickets (filters & Scope), and creating a new issue. Sample UI appears during the tour and is never saved."
+      : "Walks overview and the ticket queue (filters & Scope) for your role. Sample UI appears during the tour and is never saved.";
 
   return (
     <aside

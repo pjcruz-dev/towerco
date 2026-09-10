@@ -18,12 +18,16 @@ import { useAuthStore } from "@/stores/auth-store";
 type TicketingHelpEntryActionsProps = {
   className?: string;
   size?: "sm" | "default";
+  showHelp?: boolean;
+  showTour?: boolean;
 };
 
 /** Tour chapters + live tour — preferred help entry on Ticketing pages. */
 export function TicketingHelpEntryActions({
   className,
   size = "sm",
+  showHelp = true,
+  showTour = true,
 }: TicketingHelpEntryActionsProps) {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const tenantId = useAuthStore((state) => state.activeTenantId);
@@ -35,23 +39,29 @@ export function TicketingHelpEntryActions({
     [canCreate, canManage, canSettings],
   );
 
+  if (!showHelp && !showTour) return null;
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Link
-        href={TICKETING_TOUR_GUIDE_PATH}
-        className={cn(buttonVariants({ variant: "outline", size }))}
-      >
-        <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        Tour chapters
-      </Link>
-      <Link
-        href={liveTourHref}
-        className={cn(buttonVariants({ variant: "outline", size }))}
-        onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
-      >
-        <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        Start tour
-      </Link>
+      {showHelp ? (
+        <Link
+          href={TICKETING_TOUR_GUIDE_PATH}
+          className={cn(buttonVariants({ variant: "outline", size }))}
+        >
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+          Tour chapters
+        </Link>
+      ) : null}
+      {showTour ? (
+        <Link
+          href={liveTourHref}
+          className={cn(buttonVariants({ variant: "outline", size }))}
+          onClick={() => dismissTicketingTourPrompt(userId, tenantId)}
+        >
+          <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+          Start tour
+        </Link>
+      ) : null}
     </div>
   );
 }

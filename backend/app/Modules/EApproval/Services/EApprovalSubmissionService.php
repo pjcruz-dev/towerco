@@ -13,6 +13,8 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
+use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
+use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
@@ -67,9 +69,10 @@ final class EApprovalSubmissionService
         ?array $eagerFieldNames = null,
         ?array $formIds = null,
         ?string $sort = null,
+        ?string $subsidiary = null,
+        ?string $department = null,
     ): LengthAwarePaginator {
-        $query = EApprovalSubmission::query()
-            ->with(['form:id,name', 'requestor:id,name,email']);
+        $query = EApprovalSubmission::query();
 
         if ($formIds !== null && $formIds !== []) {
             $query->whereIn('form_id', $formIds);
@@ -91,9 +94,15 @@ final class EApprovalSubmissionService
         }
 
         if ($search !== '') {
-            $like = '%'.addcslashes($search, '%_\\').'%';
-            $query->where(static fn ($q) => $q->where('document_no', 'like', $like)
-                ->orWhereHas('form', static fn ($f) => $f->where('name', 'like', $like)));
+            $scopeFormIdsForSearch = $formIds !== null && $formIds !== []
+                ? $formIds
+                : (($formId !== null && $formId !== '') ? [$formId] : []);
+            EApprovalSubmissionSearchFields::applySearch(
+                $query,
+                $search,
+                $scopeFormIdsForSearch,
+                $eagerFieldNames,
+            );
         }
 
         if ($from !== null && $from !== '') {
@@ -104,11 +113,31 @@ final class EApprovalSubmissionService
             $query->where('created_at', '<=', $to);
         }
 
-        if ($eagerFieldNames !== null && $eagerFieldNames !== [] && $formId !== null) {
-            $query->with(['values' => static function ($relation) use ($eagerFieldNames): void {
-                $relation->whereHas('field', static fn ($field) => $field->whereIn('name', $eagerFieldNames));
-            }, 'values.field']);
-        }
+        $scopeFormIds = $formIds !== null && $formIds !== []
+            ? $formIds
+            : (($formId !== null && $formId !== '') ? [$formId] : []);
+        // Apply subsidiary/department even without a form scope (global submissions list).
+        EApprovalSubmissionFieldFilter::applyWorkspaceColumnFilters($query, $scopeFormIds, [
+            'subsidiary' => $subsidiary,
+            'department' => $department,
+        ]);
+
+        $query->with([
+            'form:id,name',
+            'form.workflowTemplate.steps:id,template_id,step_order',
+            'requestor:id,name,email',
+            'approvals.step:id,step_order',
+            'approvals.approver:id,name,email',
+            'values' => static function ($relation) use ($eagerFieldNames): void {
+                $names = ['subsidiary', 'department'];
+                if ($eagerFieldNames !== null && $eagerFieldNames !== []) {
+                    $names = array_values(array_unique([...$names, ...$eagerFieldNames]));
+                }
+                $relation
+                    ->whereHas('field', static fn ($field) => $field->whereIn('name', $names))
+                    ->with(['field:id,name']);
+            },
+        ]);
 
         [$column, $direction] = AllowlistedSort::resolve(
             (string) ($sort ?? 'created_at:desc'),
@@ -797,7 +826,7 @@ final class EApprovalSubmissionService
      */
     public function toDetailPayload(EApprovalSubmission $submission, ?TenantUser $viewer = null): array
     {
-        $submission->loadMissing(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver', 'attachments']);
+        $submission->loadMissing(['form.workflowTemplate.steps', 'requestor', 'values.field', 'approvals.step', 'approvals.approver', 'attachments']);
         $snapshotFields = $this->snapshotFieldsFromSubmission($submission);
         $viewerContext = $this->viewerContext($submission, $viewer);
 
