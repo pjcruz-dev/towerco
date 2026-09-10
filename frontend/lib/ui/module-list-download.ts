@@ -19,7 +19,9 @@ export type PrintTableColumn = {
 };
 
 /**
- * Open a clean print window for the current filtered list (not the live DataTable chrome).
+ * Print a clean list table without relying on pop-ups.
+ * Uses a hidden iframe so Chrome/Edge do not block print (window.open + noopener
+ * returns null even when a blank tab opens).
  */
 export function printModuleListTable(options: {
   title: string;
@@ -52,7 +54,10 @@ export function printModuleListTable(options: {
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; vertical-align: top; }
     th { background: #f8fafc; font-weight: 600; }
-    @media print { body { margin: 0; } }
+    @media print {
+      body { margin: 0; }
+      th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
   </style>
 </head>
 <body>
@@ -60,17 +65,44 @@ export function printModuleListTable(options: {
   ${subtitle ? `<p>${escape(subtitle)}</p>` : ""}
   <table>
     <thead><tr>${head}</tr></thead>
-    <tbody>${body || `<tr><td colspan="${columns.length}">No rows</td></tr>`}</tbody>
+    <tbody>${body || `<tr><td colspan="${Math.max(columns.length, 1)}">No rows</td></tr>`}</tbody>
   </table>
-  <script>window.onload = function () { window.focus(); window.print(); };</script>
 </body>
 </html>`;
 
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
-  if (!popup) {
-    throw new Error("Pop-up blocked. Allow pop-ups to print this list.");
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Print preview");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = win?.document ?? iframe.contentDocument;
+  if (!win || !doc) {
+    iframe.remove();
+    throw new Error("Unable to open print preview in this browser.");
   }
-  popup.document.open();
-  popup.document.write(html);
-  popup.document.close();
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => {
+    window.setTimeout(() => {
+      iframe.remove();
+    }, 1_000);
+  };
+
+  const triggerPrint = () => {
+    try {
+      win.focus();
+      win.print();
+    } finally {
+      cleanup();
+    }
+  };
+
+  // Allow layout/paint before invoking the print dialog.
+  window.setTimeout(triggerPrint, 50);
 }
