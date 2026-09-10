@@ -68,11 +68,29 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
                     : null;
                 $fields = $template !== null && is_array($template->fields) ? $template->fields : [];
 
+                $sourcePages = null;
+                if (is_array($document->scan_meta)) {
+                    if (isset($document->scan_meta['source_pages']) && is_array($document->scan_meta['source_pages'])) {
+                        $sourcePages = [];
+                        foreach ($document->scan_meta['source_pages'] as $page) {
+                            $value = (int) $page;
+                            if ($value >= 1) {
+                                $sourcePages[] = $value;
+                            }
+                        }
+                        $sourcePages = $sourcePages !== [] ? array_values(array_unique($sourcePages)) : null;
+                    } elseif (isset($document->scan_meta['source_page'])) {
+                        $value = (int) $document->scan_meta['source_page'];
+                        $sourcePages = $value >= 1 ? [$value] : null;
+                    }
+                }
+
                 $result = $scanClient->scan(
                     (string) $document->original_filename,
                     (string) ($document->mime_type ?? 'application/pdf'),
                     $bytes,
                     $fields,
+                    $sourcePages,
                 );
 
                 $pageTexts = [];
@@ -90,15 +108,16 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
                     ? $result['discovered_fields']
                     : [];
 
+                $existingMeta = is_array($document->scan_meta) ? $document->scan_meta : [];
                 $document->scan_engine = $result['engine'];
                 $document->extracted_text = $extractedText !== '' ? $extractedText : null;
-                $document->scan_meta = [
+                $document->scan_meta = array_merge($existingMeta, [
                     'warnings' => $result['warnings'],
                     'page_count' => count($result['pages']),
                     'mapper' => (string) ($result['mode'] ?? 'python'),
                     'mode' => (string) ($result['mode'] ?? ($fields !== [] ? 'template' : 'auto')),
                     'discovered_fields' => $discoveredFields,
-                ];
+                ]);
                 $document->field_values = is_array($mapped) ? $mapped : [];
                 $document->status = DocExtractDocumentStatus::READY;
                 $document->error_message = null;

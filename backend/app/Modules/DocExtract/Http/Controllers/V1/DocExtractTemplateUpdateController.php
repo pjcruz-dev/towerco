@@ -42,7 +42,7 @@ final class DocExtractTemplateUpdateController extends AbstractApiController
         ]);
 
         $model = $templates->findOrFail($template);
-        $updated = $templates->update($model, $data);
+        $updated = $templates->update($model, $data, $request->user());
 
         return $this->ok($templates->asRow($updated));
     }

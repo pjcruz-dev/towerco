@@ -190,6 +190,7 @@ export function WorkspaceAuditPageClient() {
               <option value="procurement_one">Procurement</option>
               <option value="project_one">Project-One</option>
               <option value="ticketing">Ticketing</option>
+              <option value="doc_extract">DocExtract</option>
               <option value="ai_assistant">AI Assistant</option>
             </Select>
           </div>

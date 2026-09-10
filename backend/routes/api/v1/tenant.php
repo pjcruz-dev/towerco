@@ -94,9 +94,11 @@ use App\Modules\Documents\Http\Controllers\V1\DocumentUploadCapabilitiesShowCont
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchExportController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchFieldsUpdateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchIndexController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchRequeueController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchSaveTemplateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchShowController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchStoreController;
+use App\Modules\DocExtract\Http\Controllers\V1\DocExtractPreviewController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractDocumentUpdateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateDestroyController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateIndexController;
@@ -586,8 +588,10 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::put('doc-extract/templates/{template}', DocExtractTemplateUpdateController::class)->name('api.tenant.v1.doc_extract.templates.update');
         Route::delete('doc-extract/templates/{template}', DocExtractTemplateDestroyController::class)->name('api.tenant.v1.doc_extract.templates.destroy');
         Route::get('doc-extract/batches', DocExtractBatchIndexController::class)->name('api.tenant.v1.doc_extract.batches.index');
+        Route::post('doc-extract/preview', DocExtractPreviewController::class)->name('api.tenant.v1.doc_extract.preview');
         Route::post('doc-extract/batches', DocExtractBatchStoreController::class)->name('api.tenant.v1.doc_extract.batches.store');
         Route::get('doc-extract/batches/{batch}', DocExtractBatchShowController::class)->name('api.tenant.v1.doc_extract.batches.show');
+        Route::post('doc-extract/batches/{batch}/requeue', DocExtractBatchRequeueController::class)->name('api.tenant.v1.doc_extract.batches.requeue');
         Route::post('doc-extract/batches/{batch}/save-template', DocExtractBatchSaveTemplateController::class)->name('api.tenant.v1.doc_extract.batches.save_template');
         Route::patch('doc-extract/batches/{batch}/fields', DocExtractBatchFieldsUpdateController::class)->name('api.tenant.v1.doc_extract.batches.fields');
         Route::get('doc-extract/batches/{batch}/export', DocExtractBatchExportController::class)->name('api.tenant.v1.doc_extract.batches.export');

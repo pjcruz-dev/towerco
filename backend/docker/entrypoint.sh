@@ -88,16 +88,30 @@ ensure_app_key() {
 
 ensure_app_key
 
+mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+chmod -R ug+rwx storage/framework storage/logs bootstrap/cache 2>/dev/null || true
+
+# Allow Compose overrides (e.g. queue-worker: command: php artisan queue:work ...)
+# IMPORTANT: do NOT config:clear/cache here — that shared bootstrap/cache/config.php is
+# required by the API's `php -S` child (Compose env is not inherited). Worker restarts
+# were wiping it and causing intermittent 500/CORS failures on the API.
+if [ "$#" -gt 0 ]; then
+  echo "[api] Exec override (skip shared config:cache): $*"
+  exec "$@"
+fi
+
 # Framework boot optimization. Cache config + events for faster per-request boot.
 # route:cache is intentionally skipped: the app has closure routes (web.php, tenant.php).
-# Set TOWEROS_API_OPTIMIZE=0 to keep hot-reload of config in active development.
+# IMPORTANT (Docker + `artisan serve`): the child `php -S` process does not inherit
+# Compose environment variables, so without config:cache it reads backend/.env
+# (DB_HOST=127.0.0.1) and MySQL connections fail inside the container.
 if [ "${TOWEROS_API_OPTIMIZE:-1}" = "1" ]; then
   echo "[api] Optimizing boot: config:cache + event:cache (set TOWEROS_API_OPTIMIZE=0 to disable)"
   php artisan config:clear --no-interaction 2>/dev/null || true
   php artisan config:cache --no-interaction 2>/dev/null || echo "[api] Warning: config:cache failed; using runtime config."
   php artisan event:cache --no-interaction 2>/dev/null || true
 else
-  php artisan config:clear --no-interaction 2>/dev/null || true
+  echo "[api] TOWEROS_API_OPTIMIZE=0 — skipping config:cache (Compose env may not reach php -S)"
 fi
 
 if [ "${TOWEROS_DOCKER_AUTO_MIGRATE:-1}" = "1" ]; then
@@ -123,15 +137,6 @@ for key in storage/oauth-private.key storage/oauth-public.key; do
   fi
 done
 
-mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
-chmod -R ug+rwx storage/framework storage/logs bootstrap/cache 2>/dev/null || true
-
-# Allow Compose overrides (e.g. queue-worker: command: php artisan queue:work ...)
-if [ "$#" -gt 0 ]; then
-  echo "[api] Exec override: $*"
-  exec "$@"
-fi
-
 echo "[api] Laravel API http://0.0.0.0:8000"
 
 WORKERS="${TOWEROS_API_WORKERS:-4}"
@@ -150,7 +155,7 @@ if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
     echo "server {"
     echo "    listen 8000;"
     echo "    server_name _;"
-    echo "    client_max_body_size 64m;"
+    echo "    client_max_body_size 128m;"
     # Docker publishes host→container via the bridge gateway (e.g. 172.18.0.1).
     # Trust that hop so X-Forwarded-For from the EC2 nginx keeps the real client IP.
     echo "    set_real_ip_from 10.0.0.0/8;"
@@ -183,4 +188,5 @@ if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
 fi
 
 echo "[api] Single-worker mode (set TOWEROS_API_WORKERS=4 for concurrent requests)"
-exec php artisan serve --host=0.0.0.0 --port=8000
+# --no-reload: avoid restart storms when queue-worker or editors touch bind-mounted files.
+exec php artisan serve --host=0.0.0.0 --port=8000 --no-reload

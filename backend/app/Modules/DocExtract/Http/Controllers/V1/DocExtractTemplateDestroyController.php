@@ -22,7 +22,7 @@ final class DocExtractTemplateDestroyController extends AbstractApiController
         $planFeatures->assertModuleEnabled();
 
         $model = $templates->findOrFail($template);
-        $templates->delete($model);
+        $templates->delete($model, $request->user());
 
         return $this->ok(['deleted' => true]);
     }

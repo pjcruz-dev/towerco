@@ -85,10 +85,11 @@ final class DocExtractFileStorageService
 
     private function assertAllowedSize(UploadedFile $file): void
     {
-        $maxKb = (int) config('doc_extract.max_file_size_kb', 20480);
+        $maxKb = (int) config('doc_extract.max_file_size_kb', 51200);
         if ($maxKb > 0 && $file->getSize() > $maxKb * 1024) {
+            $maxMb = max(1, (int) ceil($maxKb / 1024));
             throw ValidationException::withMessages([
-                'files' => [__('File exceeds maximum DocExtract upload size.')],
+                'files' => [__('File exceeds maximum DocExtract upload size (:max MB).', ['max' => $maxMb])],
             ]);
         }
     }

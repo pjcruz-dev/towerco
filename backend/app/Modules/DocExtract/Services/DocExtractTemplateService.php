@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 final class DocExtractTemplateService
 {
+    public function __construct(
+        private readonly DocExtractAuditLogger $audit,
+    ) {}
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -57,7 +61,7 @@ final class DocExtractTemplateService
             ? DocExtractTemplateStatus::normalize(is_string($data['status'] ?? null) ? $data['status'] : null)
             : DocExtractTemplateStatus::DRAFT;
 
-        return DocExtractTemplate::query()->create([
+        $template = DocExtractTemplate::query()->create([
             'id' => (string) Str::uuid(),
             'name' => trim((string) $data['name']),
             'description' => isset($data['description']) ? trim((string) $data['description']) : null,
@@ -65,13 +69,32 @@ final class DocExtractTemplateService
             'status' => $status,
             'created_by_id' => $actor->id,
         ]);
+
+        $this->audit->record(
+            action: 'template.created',
+            summary: __('DocExtract template ":name" created.', ['name' => $template->name]),
+            entityType: 'template',
+            entityId: (string) $template->id,
+            entityLabel: (string) $template->name,
+            actor: $actor,
+            changes: [
+                'status' => ['from' => null, 'to' => $template->status],
+                'field_count' => ['from' => null, 'to' => count($fields)],
+            ],
+        );
+
+        return $template;
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    public function update(DocExtractTemplate $template, array $data): DocExtractTemplate
+    public function update(DocExtractTemplate $template, array $data, ?TenantUser $actor = null): DocExtractTemplate
     {
+        $previousStatus = DocExtractTemplateStatus::normalize($template->status);
+        $previousName = (string) $template->name;
+        $previousFieldCount = is_array($template->fields) ? count($template->fields) : 0;
+
         if (array_key_exists('name', $data)) {
             $template->name = trim((string) $data['name']);
         }
@@ -90,13 +113,50 @@ final class DocExtractTemplateService
             );
         }
         $template->save();
+        $fresh = $template->fresh() ?? $template;
+        $nextStatus = DocExtractTemplateStatus::normalize($fresh->status);
 
-        return $template->fresh() ?? $template;
+        $action = 'template.updated';
+        if (array_key_exists('status', $data) && $previousStatus !== $nextStatus) {
+            $action = $nextStatus === DocExtractTemplateStatus::PUBLISHED
+                ? 'template.published'
+                : 'template.unpublished';
+        }
+
+        $this->audit->record(
+            action: $action,
+            summary: __('DocExtract template ":name" updated.', ['name' => $fresh->name]),
+            entityType: 'template',
+            entityId: (string) $fresh->id,
+            entityLabel: (string) $fresh->name,
+            actor: $actor,
+            changes: [
+                'name' => ['from' => $previousName, 'to' => (string) $fresh->name],
+                'status' => ['from' => $previousStatus, 'to' => $nextStatus],
+                'field_count' => [
+                    'from' => $previousFieldCount,
+                    'to' => is_array($fresh->fields) ? count($fresh->fields) : 0,
+                ],
+            ],
+        );
+
+        return $fresh;
     }
 
-    public function delete(DocExtractTemplate $template): void
+    public function delete(DocExtractTemplate $template, ?TenantUser $actor = null): void
     {
+        $id = (string) $template->id;
+        $name = (string) $template->name;
         $template->delete();
+
+        $this->audit->record(
+            action: 'template.deleted',
+            summary: __('DocExtract template ":name" deleted.', ['name' => $name]),
+            entityType: 'template',
+            entityId: $id,
+            entityLabel: $name,
+            actor: $actor,
+        );
     }
 
     /**

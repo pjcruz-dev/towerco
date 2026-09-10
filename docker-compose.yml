@@ -117,6 +117,9 @@ services:
     # (stale env_file values override .env until the container is recreated).
     environment:
       TOWEROS_DOCKER: "1"
+      # Must stay 1: `artisan serve` spawns `php -S` without Compose env; cached config
+      # bakes DB_HOST=mysql. Host-side `php artisan config:cache` will break Docker — avoid it.
+      TOWEROS_API_OPTIMIZE: ${TOWEROS_API_OPTIMIZE:-1}
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
       TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-1}
       # Survive config:cache. Quote "*" — bare * is special in YAML.
@@ -171,6 +174,8 @@ services:
       - 1.1.1.1
     environment:
       TOWEROS_DOCKER: "1"
+      # Worker inherits Compose env; never rewrite shared config cache used by API php -S.
+      TOWEROS_API_OPTIMIZE: "0"
       TOWEROS_DOCKER_AUTO_MIGRATE: "0"
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-"*"}
       DB_HOST: mysql

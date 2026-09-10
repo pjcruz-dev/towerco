@@ -34,10 +34,13 @@ final class DocExtractBatchFieldsUpdateController extends AbstractApiController
 
         $model = $batches->findOrFail($batch);
 
+        /** @var \App\Modules\Identity\Models\TenantUser $actor */
+        $actor = $request->user();
+
         if (isset($data['remove_key']) && is_string($data['remove_key']) && $data['remove_key'] !== '') {
-            $fields = $batches->removeField($model, $data['remove_key']);
+            $fields = $batches->removeField($model, $data['remove_key'], $actor);
         } else {
-            $fields = $batches->updateFieldSchema($model, $data['fields'] ?? []);
+            $fields = $batches->updateFieldSchema($model, $data['fields'] ?? [], $actor);
         }
 
         $fresh = $batches->findOrFail($batch);

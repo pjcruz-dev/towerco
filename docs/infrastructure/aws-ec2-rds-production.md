@@ -123,6 +123,62 @@ sudo systemctl status toweros-worker
 
 ---
 
+### 2b. DocExtract (OCR) — smooth production enablement
+
+DocExtract is isolated (own tables/routes/RBAC) but **shares Redis queues** with the rest of the app. Enable it with these steps so OCR does not stall HTTP or leave batches “Scanning” forever.
+
+**1. Env (API + worker)** — in `backend/.env` / `.env.docker` on the host:
+
+```env
+DOC_EXTRACT_URL=http://doc-extract:8081
+DOC_EXTRACT_TIMEOUT=120
+DOC_EXTRACT_MAX_FILES_PER_BATCH=25
+DOC_EXTRACT_MAX_PAGES_PER_FILE=50
+DOC_EXTRACT_QUEUE_CONNECTION=redis
+DOC_EXTRACT_RETENTION_DAYS=7
+QUEUE_CONNECTION=redis
+```
+
+**2. Start sidecar + worker** (same Compose project as API):
+
+```bash
+cd /opt/toweros
+docker compose --env-file .env.docker up -d --build doc-extract queue-worker
+docker compose --env-file .env.docker exec -T api php artisan config:cache
+docker compose --env-file .env.docker exec -T api php artisan queue:restart
+curl -fsS http://127.0.0.1:8082/health   # host-mapped sidecar port if published
+```
+
+**3. Migrations** (tenant DBs):
+
+```bash
+docker compose --env-file .env.docker exec -T api php artisan toweros:migrate --force
+```
+
+**4. One consumer only** — use Compose `queue-worker` **or** systemd `toweros-worker`, never both on the same queues.
+
+**5. If batches stick on Scanning** (Redis jobs lost after OOM/restart):
+
+- UI: DocExtract list → **Retry** on the stuck row  
+- CLI (all stuck docs for a tenant):
+
+```bash
+docker compose --env-file .env.docker exec -T api php artisan doc-extract:requeue-stuck --tenant=<TENANT_UUID>
+```
+
+**6. Smoke test after deploy**
+
+| Check | Expect |
+|-------|--------|
+| `GET` sidecar `/health` | `{"status":"ok"}` |
+| Small PDF extract (≤5 pages) | Batch → Ready; results rows fill |
+| Approval / notification job | Still delivered (shared queue healthy) |
+| Stuck Retry | Requeues pending docs; progress moves |
+
+**Capacity note:** OCR is CPU/RAM heavy. Keep batches ≤25 records / ≤50 pages per file on a `t3.large`. Raise EC2 RAM before raising limits.
+
+---
+
 ### 3. Scheduler — cron every minute
 
 Gate SLA, document expiry, rollout recalc, and other scheduled commands need:
@@ -228,11 +284,13 @@ MAIL_ENCRYPTION=tls
 ### Gap resolution checklist
 
 - [ ] `docker compose … up -d redis` + `redis-cli ping` → PONG  
-- [ ] `toweros-worker` systemd enabled and running  
+- [ ] Compose `queue-worker` **or** `toweros-worker` systemd enabled (not both)  
+- [ ] DocExtract: `doc-extract` healthy + `DOC_EXTRACT_URL` set + tenant migrations applied  
 - [ ] cron `schedule:run` every minute; log file writable  
 - [ ] HTTPS works (`curl -fsS https://app…/up`); HTTP redirects or blocked  
 - [ ] SES domain verified + out of sandbox (or M365 SMTP working)  
 - [ ] Trigger one approval / notification and confirm the email arrives  
+- [ ] Trigger one small DocExtract batch and confirm it reaches Ready  
 
 ---
 
@@ -488,6 +546,7 @@ Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
 | Provision | Create tenant; confirm `tenant*` DB on RDS |
 | Files | Upload to site binder / document register (S3) |
 | Queue | Trigger approval → email/notification delivered |
+| DocExtract | Sidecar health + small PDF batch → Ready |
 | MFA / SSO | Per-tenant Sign-in & security |
 
 ---
@@ -497,16 +556,16 @@ Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
 ```bash
 cd /opt/toweros
 git pull
-docker compose --env-file .env.docker build api web
-docker compose --env-file .env.docker up -d api web
+docker compose --env-file .env.docker build api web doc-extract queue-worker
+docker compose --env-file .env.docker up -d api web doc-extract queue-worker
 docker compose --env-file .env.docker exec api php artisan toweros:migrate --force
 docker compose --env-file .env.docker exec api php artisan config:cache
 docker compose --env-file .env.docker exec api php artisan queue:restart
-docker compose --env-file .env.docker up -d queue-worker
 # If still using systemd instead of Compose queue-worker:
 # sudo systemctl restart toweros-worker
 ```
 
+**Do not** run `php artisan config:cache` on the host against bind-mounted `bootstrap/cache` with host `DB_HOST=127.0.0.1` — bake cache **inside** the API container so Compose `DB_HOST=mysql` wins.
 After every deploy that touches env/secrets, confirm MFA prerequisites:
 
 ```bash

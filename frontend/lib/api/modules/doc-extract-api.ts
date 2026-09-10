@@ -2,8 +2,10 @@ import type { PaginatedMeta } from "@/lib/api/paginated";
 import type {
   DocExtractBatchDetail,
   DocExtractBatchListRow,
+  DocExtractConsolidateRecord,
   DocExtractDocument,
   DocExtractField,
+  DocExtractPreviewFile,
   DocExtractTemplate,
 } from "@/modules/doc-extract/types";
 import { apiClient } from "@/lib/api/client";
@@ -60,19 +62,78 @@ export async function fetchDocExtractBatch(id: string): Promise<DocExtractBatchD
   return response.data.data;
 }
 
+export async function requeueDocExtractBatch(
+  batchId: string,
+): Promise<DocExtractBatchListRow & { requeued: number }> {
+  const response = await apiClient.post<{ data: DocExtractBatchListRow & { requeued: number } }>(
+    `/doc-extract/batches/${batchId}/requeue`,
+  );
+  return response.data.data;
+}
+
+export async function previewDocExtractFiles(files: File[]): Promise<DocExtractPreviewFile[]> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append("files[]", file);
+  }
+  const response = await apiClient.post<{ data: { files: DocExtractPreviewFile[] } }>(
+    "/doc-extract/preview",
+    form,
+    { timeout: 180_000 },
+  );
+  const filesPayload = response.data?.data?.files;
+  if (!Array.isArray(filesPayload)) {
+    throw new Error("Preview response was incomplete. Try again.");
+  }
+  return filesPayload;
+}
+
 export async function createDocExtractBatch(input: {
   templateId?: string | null;
   files: File[];
-}): Promise<DocExtractBatchDetail> {
+  splitPages?: boolean;
+  records?: DocExtractConsolidateRecord[];
+  filePageCounts?: Record<number, number>;
+}): Promise<DocExtractBatchDetail | DocExtractBatchListRow> {
   const form = new FormData();
   if (input.templateId) {
     form.append("template_id", input.templateId);
   }
+  if (input.splitPages && !input.records?.length) {
+    form.append("split_pages", "1");
+  }
+  if (input.records?.length) {
+    form.append(
+      "records",
+      JSON.stringify(
+        input.records.map((record) => ({
+          file_index: record.fileIndex,
+          pages: record.pages,
+          label: record.label,
+        })),
+      ),
+    );
+  }
+  if (input.filePageCounts && Object.keys(input.filePageCounts).length > 0) {
+    form.append("file_page_counts", JSON.stringify(input.filePageCounts));
+  }
   for (const file of input.files) {
     form.append("files[]", file);
   }
-  const response = await apiClient.post<{ data: DocExtractBatchDetail }>("/doc-extract/batches", form);
-  return response.data.data;
+  // Large PDFs need a long upload window; OCR runs after the response.
+  // Do not set Content-Type manually — axios must include the multipart boundary.
+  const response = await apiClient.post<{ data: DocExtractBatchDetail | DocExtractBatchListRow }>(
+    "/doc-extract/batches",
+    form,
+    { timeout: 180_000 },
+  );
+  const batch = response.data?.data;
+  if (!batch || typeof batch !== "object" || !("id" in batch) || !batch.id) {
+    throw new Error(
+      "Upload finished but the API returned an incomplete response. Open Batches — the extraction may already be there and processing.",
+    );
+  }
+  return batch;
 }
 
 export async function saveDocExtractBatchAsTemplate(

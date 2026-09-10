@@ -8,13 +8,13 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
-  ChevronUp,
   Download,
   FileSpreadsheet,
   Pencil,
   X,
 } from "lucide-react";
 
+import { DocExtractColumnsDefinitionEditor } from "@/components/doc-extract/doc-extract-columns-definition-editor";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,6 @@ import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import {
   downloadDocExtractBatchExport,
   fetchDocExtractBatch,
-  removeDocExtractBatchField,
   saveDocExtractBatchAsTemplate,
   updateDocExtractBatchFields,
   updateDocExtractDocumentFields,
@@ -46,7 +45,6 @@ import { useNotificationStore } from "@/stores/notification-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import {
-  DOC_EXTRACT_FIELD_TYPES,
   docExtractHtmlInputType,
   docExtractInputMode,
   formatDocExtractFieldTypeShort,
@@ -117,9 +115,7 @@ export function DocExtractBatchDetailPageClient() {
   const [editingCell, setEditingCell] = useState<{ documentId: string; key: string } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [tableViewer, setTableViewer] = useState<TableViewerState | null>(null);
-  const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
-  const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
-  const [fieldDraft, setFieldDraft] = useState<DocExtractField | null>(null);
+  const [activeStep, setActiveStep] = useState<1 | 2 | 3 | 4>(3);
   const hydratedRef = useRef<Record<string, string>>({});
   const customizeFocusedRef = useRef(false);
 
@@ -158,10 +154,10 @@ export function DocExtractBatchDetailPageClient() {
   useEffect(() => {
     if (customizeFocusedRef.current) return;
     if (visibleFields.length > 0) {
-      setActiveStep(2);
+      setActiveStep(3);
       customizeFocusedRef.current = true;
     } else if ((documents?.length ?? 0) > 0) {
-      setActiveStep(1);
+      setActiveStep(2);
     }
   }, [visibleFields.length, documents?.length]);
 
@@ -175,8 +171,10 @@ export function DocExtractBatchDetailPageClient() {
       const next = { ...current };
 
       for (const document of nextDocuments) {
-        const hydrateToken = `${document.status}:${JSON.stringify(document.field_values ?? {})}`;
+        const hydrateToken = `${document.status}:${fieldsKey}:${JSON.stringify(document.field_values ?? {})}`;
         const existing = next[document.id];
+        const missingFieldKeys =
+          Boolean(existing) && nextFields.some((field) => !(field.key in (existing ?? {})));
 
         if (!existing) {
           next[document.id] = buildDraftRow(document, nextFields);
@@ -185,7 +183,7 @@ export function DocExtractBatchDetailPageClient() {
           continue;
         }
 
-        if (hydratedRef.current[document.id] !== hydrateToken) {
+        if (hydratedRef.current[document.id] !== hydrateToken || missingFieldKeys) {
           const row = { ...existing };
           let rowChanged = false;
           for (const field of nextFields) {
@@ -212,9 +210,16 @@ export function DocExtractBatchDetailPageClient() {
     });
   }, [documentsKey, fieldsKey, documents, fields]);
 
-  const scrollToStep = (step: 1 | 2 | 3) => {
+  const scrollToStep = (step: 1 | 2 | 3 | 4) => {
     setActiveStep(step);
-    const id = step === 1 ? "dx-step-files" : step === 2 ? "dx-step-customize" : "dx-step-results";
+    const id =
+      step === 1
+        ? "dx-step-upload"
+        : step === 2
+          ? "dx-step-consolidate"
+          : step === 3
+            ? "dx-step-customize"
+            : "dx-step-results";
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -262,25 +267,10 @@ export function DocExtractBatchDetailPageClient() {
     },
   });
 
-  const removeFieldMutation = useMutation({
-    mutationFn: (fieldKey: string) => removeDocExtractBatchField(batchId, fieldKey),
-    onSuccess: async () => {
-      notify({ level: "success", title: "Column removed" });
-      setEditingFieldIndex(null);
-      setFieldDraft(null);
-      await queryClient.invalidateQueries({ queryKey: ["doc-extract", "batch", batchId] });
-    },
-    onError: (error) => {
-      notify({ level: "error", title: "Could not remove column", message: getErrorMessage(error) });
-    },
-  });
-
   const schemaMutation = useMutation({
     mutationFn: (nextFields: DocExtractField[]) => updateDocExtractBatchFields(batchId, nextFields),
     onSuccess: async () => {
       notify({ level: "success", title: "Columns updated" });
-      setEditingFieldIndex(null);
-      setFieldDraft(null);
       await queryClient.invalidateQueries({ queryKey: ["doc-extract", "batch", batchId] });
     },
     onError: (error) => {
@@ -298,50 +288,11 @@ export function DocExtractBatchDetailPageClient() {
     return (documents ?? []).reduce((sum, document) => sum + (document.page_count ?? 0), 0);
   }, [documents]);
 
-  const startEditField = (index: number) => {
-    const field = visibleFields[index];
-    if (!field) return;
-    setEditingFieldIndex(index);
-    setFieldDraft({ ...field, description: field.description ?? "", columns: field.columns?.map((c) => ({ ...c })) });
-    setActiveStep(2);
-  };
-
-  const commitFieldEdit = () => {
-    if (editingFieldIndex === null || !fieldDraft) return;
-    const label = fieldDraft.label.trim();
-    if (!label) {
-      notify({ level: "error", title: "Column name required" });
-      return;
-    }
-    const next = visibleFields.map((field, index) =>
-      index === editingFieldIndex
-        ? {
-            ...fieldDraft,
-            label,
-            description: fieldDraft.description?.trim() || null,
-            hint: fieldDraft.hint?.trim() || null,
-          }
-        : field,
-    );
-    schemaMutation.mutate(next);
-  };
-
-  const moveField = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= visibleFields.length) return;
-    if (editingFieldIndex !== null) {
-      notify({ level: "error", title: "Save or cancel the open column first" });
-      return;
-    }
-    const next = [...visibleFields];
-    const [item] = next.splice(index, 1);
-    if (!item) return;
-    next.splice(target, 0, item);
-    schemaMutation.mutate(next);
-  };
-
   const openTableViewer = (document: DocExtractDocument, field: DocExtractField) => {
-    const raw = drafts[document.id]?.[field.key] ?? "";
+    const serverRaw = document.field_values?.[field.key];
+    const serverValue =
+      serverRaw == null ? "" : typeof serverRaw === "string" ? serverRaw : JSON.stringify(serverRaw);
+    const raw = drafts[document.id]?.[field.key] ?? serverValue;
     setTableViewer({
       open: true,
       documentId: document.id,
@@ -363,7 +314,7 @@ export function DocExtractBatchDetailPageClient() {
 
   return (
     <PermissionGate requiredPermissions={[permissions.docExtractView]}>
-      <div className="space-y-8" data-help="dx-batch-workspace">
+      <div className="w-full space-y-8" data-help="dx-batch-workspace">
         <LiveProductTourHost />
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="ghost" render={<Link href="/doc-extract" />}>
@@ -382,15 +333,16 @@ export function DocExtractBatchDetailPageClient() {
             Extraction workspace
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {batchQuery.data?.template_name ?? (isAuto ? "Auto-detect" : "Template")} · arrange columns in step 2,
-            then validate values in results
+            {batchQuery.data?.template_name ?? (isAuto ? "Auto-detect" : "Template")} · records were consolidated on
+            upload; arrange columns in step 3, then validate values in results
           </p>
           <ol className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
             {(
               [
-                { step: 1 as const, label: "1. Uploaded files" },
-                { step: 2 as const, label: "2. Customize fields" },
-                { step: 3 as const, label: "3. View results" },
+                { step: 1 as const, label: "1. Upload files" },
+                { step: 2 as const, label: "2. Consolidate" },
+                { step: 3 as const, label: "3. Customize fields" },
+                { step: 4 as const, label: "4. View results" },
               ] as const
             ).map((item) => (
               <li key={item.step}>
@@ -417,20 +369,26 @@ export function DocExtractBatchDetailPageClient() {
           <p className="text-sm text-destructive">{getErrorMessage(batchQuery.error)}</p>
         ) : (
           <>
-            {/* Section 1 — files */}
-            <section data-help="dx-files-section" className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm">
+            {/* Section 1 — upload summary */}
+            <section
+              id="dx-step-upload"
+              data-help="dx-files-section"
+              className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">1. Uploaded files</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Documents in this extraction batch.</p>
+                  <h2 className="text-xl font-semibold text-foreground">1. Upload files</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Source files for this batch. Page membership was set in Consolidate.
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
-                    {documents?.length ?? 0} files
+                    {documents?.length ?? 0} records
                   </span>
                   {pageCount > 0 ? (
                     <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
-                      {pageCount} pages
+                      {pageCount} pages scanned
                     </span>
                   ) : null}
                   {processing ? (
@@ -444,36 +402,63 @@ export function DocExtractBatchDetailPageClient() {
                   )}
                 </div>
               </div>
+            </section>
+
+            {/* Section 2 — consolidated records */}
+            <section
+              id="dx-step-consolidate"
+              data-help="dx-consolidate-section"
+              className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">2. Consolidate</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Final record layout used for extraction (one results row per record).
+                </p>
+              </div>
               <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-                {(documents ?? []).map((document) => (
-                  <li key={document.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">{document.original_filename}</p>
-                      <p className="text-xs capitalize text-muted-foreground">
-                        {document.status}
-                        {document.page_count ? ` · ${document.page_count} page${document.page_count === 1 ? "" : "s"}` : ""}
-                      </p>
-                    </div>
-                    {document.error_message ? (
-                      <p className="max-w-xs truncate text-xs text-destructive">{document.error_message}</p>
-                    ) : null}
-                  </li>
-                ))}
+                {(documents ?? []).map((document) => {
+                  const pages = document.source_pages?.length
+                    ? document.source_pages
+                    : document.source_page
+                      ? [document.source_page]
+                      : null;
+                  return (
+                    <li key={document.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{document.original_filename}</p>
+                        <p className="text-xs capitalize text-muted-foreground">
+                          {document.status}
+                          {pages
+                            ? ` · page${pages.length === 1 ? "" : "s"} ${pages.join(", ")}`
+                            : document.page_count
+                              ? ` · ${document.page_count} page${document.page_count === 1 ? "" : "s"}`
+                              : ""}
+                        </p>
+                      </div>
+                      {document.error_message ? (
+                        <p className="max-w-xs truncate text-xs text-destructive">{document.error_message}</p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
 
-            {/* Section 2 — customize */}
-            <section data-help="dx-customize-section" className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+            {/* Section 3 — customize */}
+            <section
+              id="dx-step-customize"
+              data-help="dx-customize-section"
+              className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">2. Customize data to extract</h2>
+                  <h2 className="text-xl font-semibold text-foreground">3. Customize data to extract</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {isAuto
-                      ? "Remove noisy columns from auto-detect recommendations, then save as a reusable template."
-                      : "Columns come from the selected template. Edit cell values in results below."}
+                    Edit column name, description, and type. Drag to reorder. Save as a reusable template when ready.
                   </p>
                 </div>
-                {canManageTemplates && isAuto && visibleFields.length > 0 ? (
+                {canManageTemplates && visibleFields.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-2" data-help="dx-save-template">
                     <Input
                       className="h-9 w-44"
@@ -498,49 +483,27 @@ export function DocExtractBatchDetailPageClient() {
                   {processing ? "Waiting for field recommendations…" : "No fields yet."}
                 </p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleFields.map((field) => (
-                    <div
-                      key={field.key}
-                      className="rounded-lg border border-border bg-background p-3"
-                      data-help="dx-field-card"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{field.label}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {field.type}
-                            {field.hint ? ` · hint: ${field.hint}` : ""}
-                          </p>
-                        </div>
-                        {isAuto && canRun ? (
-                          <button
-                            type="button"
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            title={`Remove ${field.label}`}
-                            disabled={removeFieldMutation.isPending}
-                            onClick={() => removeFieldMutation.mutate(field.key)}
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        ) : null}
-                      </div>
-                      {field.type === "table" && field.columns && field.columns.length > 0 ? (
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                          Table · {field.columns.map((column) => column.label).join(", ")}
-                        </p>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
+                <DocExtractColumnsDefinitionEditor
+                  fields={visibleFields}
+                  disabled={schemaMutation.isPending || processing}
+                  readOnly={!canCurate}
+                  onChange={(nextFields) => {
+                    if (!canCurate) return;
+                    schemaMutation.mutate(nextFields);
+                  }}
+                />
               )}
             </section>
 
             {/* Section 3 — results */}
-            <section data-help="dx-results-section" className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+            <section
+              id="dx-step-results"
+              data-help="dx-results-section"
+              className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">3. View results</h2>
+                  <h2 className="text-xl font-semibold text-foreground">4. View results</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Click a cell to edit · validate important values before export
                   </p>
@@ -609,7 +572,14 @@ export function DocExtractBatchDetailPageClient() {
                         )}
                       </td>
                       {visibleFields.map((field) => {
-                        const value = drafts[document.id]?.[field.key] ?? "";
+                        const serverRaw = document.field_values?.[field.key];
+                        const serverValue =
+                          serverRaw == null
+                            ? ""
+                            : typeof serverRaw === "string"
+                              ? serverRaw
+                              : JSON.stringify(serverRaw);
+                        const value = drafts[document.id]?.[field.key] ?? serverValue;
                         const isEditing =
                           editingCell?.documentId === document.id && editingCell.key === field.key;
 

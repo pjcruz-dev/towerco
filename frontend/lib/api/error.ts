@@ -86,6 +86,11 @@ export function getErrorMessage(error: unknown): string {
     }
 
     if (error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout")) {
+      const url = typeof error.config?.url === "string" ? error.config.url : "";
+      const method = (error.config?.method ?? "").toLowerCase();
+      if (url.includes("/doc-extract/batches") && method === "post") {
+        return "Upload timed out. Check Batches — the file may still have been accepted and is processing in the background.";
+      }
       if (process.env.NEXT_PUBLIC_APP_ENV === "local") {
         return "The API did not respond in time. If you just restarted Docker or saved a large form, wait a few seconds and try again. Confirm the API is running at http://localhost:8000.";
       }
@@ -93,6 +98,10 @@ export function getErrorMessage(error: unknown): string {
     }
 
     if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
+      const url = typeof error.config?.url === "string" ? error.config.url : "";
+      if (url.includes("/doc-extract/")) {
+        return "Could not reach the DocExtract API. Confirm Docker API is running on port 8000, then open Batches — your upload may already be saved.";
+      }
       return "Could not reach the API. Confirm the API is running, then check Submissions in case your request was already saved.";
     }
 

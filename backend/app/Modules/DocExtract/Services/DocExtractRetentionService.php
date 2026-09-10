@@ -27,8 +27,18 @@ final class DocExtractRetentionService
             ->chunkById(50, function ($documents) use (&$pruned): void {
                 foreach ($documents as $document) {
                     /** @var DocExtractDocument $document */
-                    if (is_string($document->stored_path) && $document->stored_path !== '') {
-                        $this->storage->delete($document->stored_path);
+                    $path = is_string($document->stored_path) ? $document->stored_path : '';
+                    if ($path !== '') {
+                        // Page-split documents share one stored file — delete only when
+                        // no other live document still references the path.
+                        $stillReferenced = DocExtractDocument::query()
+                            ->where('stored_path', $path)
+                            ->whereNull('purged_at')
+                            ->where('id', '!=', $document->id)
+                            ->exists();
+                        if (! $stillReferenced) {
+                            $this->storage->delete($path);
+                        }
                     }
                     $document->stored_path = null;
                     $document->purged_at = now();

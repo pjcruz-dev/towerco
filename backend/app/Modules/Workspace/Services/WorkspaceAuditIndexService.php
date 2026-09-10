@@ -330,6 +330,11 @@ final class WorkspaceAuditIndexService
                 'ticket' => '/ticketing/tickets/'.$entityId,
                 default => '/ticketing/tickets',
             },
+            'doc_extract' => match ($entityType) {
+                'template' => '/doc-extract/templates',
+                'batch' => '/doc-extract/batches/'.$entityId,
+                default => '/doc-extract',
+            },
             'team_access' => match ($entityType) {
                 'user' => '/users',
                 'role' => '/roles',

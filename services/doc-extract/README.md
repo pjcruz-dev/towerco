@@ -23,4 +23,7 @@ When the API runs on the host (not in Docker), use `DOC_EXTRACT_URL=http://127.0
 ## Endpoints
 
 - `GET /health`
-- `POST /v1/scan` multipart `file` (+ optional `mime_type`)
+- `POST /v1/page-count` multipart `file` (+ optional `mime_type`) → `{ "page_count": N }`
+- `POST /v1/preview` multipart `file` (+ optional `mime_type`) → page thumbnails for Consolidate (no OCR)
+- `POST /v1/scan` multipart `file` (+ optional `mime_type`, `fields_json`, `page`, `pages`) — `pages` is comma/range list (e.g. `1,2,5-7`)
+- `POST /v1/map` form `text` + `fields_json` — map OCR text onto fields without re-OCR

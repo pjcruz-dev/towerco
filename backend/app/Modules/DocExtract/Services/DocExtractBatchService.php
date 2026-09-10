@@ -13,6 +13,7 @@ use App\Modules\DocExtract\Support\DocExtractDocumentStatus;
 use App\Modules\DocExtract\Support\DocExtractTemplateStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +22,8 @@ final class DocExtractBatchService
     public function __construct(
         private readonly DocExtractFileStorageService $storage,
         private readonly DocExtractTemplateService $templates,
+        private readonly DocExtractAuditLogger $audit,
+        private readonly DocExtractScanClient $scanClient,
     ) {}
 
     /**
@@ -63,10 +66,21 @@ final class DocExtractBatchService
 
     /**
      * @param  list<UploadedFile>  $files
+     * @param  list<array{file_index?: mixed, pages?: mixed, label?: mixed}>|null  $records
+     *        When provided, each item becomes one extract document with exact page membership.
+     *        When null, falls back to one-document-per-file (or per-page if $splitPages).
+     * @param  array<int, int>  $filePageCounts  Optional page counts from Consolidate preview (file index → pages).
      */
-    public function create(?string $templateId, array $files, TenantUser $actor): DocExtractBatch
-    {
+    public function create(
+        ?string $templateId,
+        array $files,
+        TenantUser $actor,
+        bool $splitPages = false,
+        ?array $records = null,
+        array $filePageCounts = [],
+    ): DocExtractBatch {
         $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 25));
+        $maxPagesPerFile = max(1, (int) config('doc_extract.max_pages_per_file', 50));
         if ($files === []) {
             throw ValidationException::withMessages([
                 'files' => [__('Upload at least one PDF or image.')],
@@ -85,13 +99,38 @@ final class DocExtractBatchService
 
         $batchId = (string) Str::uuid();
 
+        /** @var list<array{meta: array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}, source_pages: list<int>|null, display_name: string}> $planned */
+        $planned = [];
+        /** @var array<string, true> $storedPaths */
+        $storedPaths = [];
+        try {
+            /** @var list<array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}> $fileMetas */
+            $fileMetas = [];
+            foreach ($files as $file) {
+                $meta = $this->storage->store($batchId, $file);
+                $storedPaths[(string) $meta['stored_path']] = true;
+                $fileMetas[] = $meta;
+            }
+
+            if ($records !== null) {
+                $planned = $this->planFromRecords($fileMetas, $records, $maxFiles, $maxPagesPerFile, $filePageCounts);
+            } else {
+                $planned = $this->planFromFiles($fileMetas, $splitPages, $maxFiles, $maxPagesPerFile);
+            }
+        } catch (\Throwable $exception) {
+            foreach (array_keys($storedPaths) as $path) {
+                $this->storage->delete($path);
+            }
+            throw $exception;
+        }
+
         $batch = DocExtractBatch::query()->create([
             'id' => $batchId,
             'template_id' => $template?->id,
             // Mark processing before dispatch: with QUEUE_CONNECTION=sync jobs finish
             // inside dispatch() and refresh counters to ready/failed; never overwrite after.
             'status' => DocExtractBatchStatus::PROCESSING,
-            'document_count' => count($files),
+            'document_count' => count($planned),
             'ready_count' => 0,
             'failed_count' => 0,
             'created_by_id' => $actor->id,
@@ -99,28 +138,393 @@ final class DocExtractBatchService
 
         $tenantId = (string) (tenant('id') ?? '');
 
-        foreach ($files as $file) {
-            $meta = $this->storage->store($batchId, $file);
+        foreach ($planned as $item) {
+            $meta = $item['meta'];
+            $sourcePages = $item['source_pages'];
+            $scanMeta = null;
+            if ($sourcePages !== null && $sourcePages !== []) {
+                $scanMeta = [
+                    'source_pages' => array_values($sourcePages),
+                    'source_page' => $sourcePages[0],
+                    'consolidated' => true,
+                    'source_filename' => $meta['original_filename'],
+                ];
+            }
+
             $document = DocExtractDocument::query()->create([
                 'id' => (string) Str::uuid(),
                 'batch_id' => $batch->id,
                 'template_id' => $template?->id,
-                'original_filename' => $meta['original_filename'],
+                'original_filename' => $item['display_name'],
                 'stored_path' => $meta['stored_path'],
                 'mime_type' => $meta['mime_type'],
                 'size_bytes' => $meta['size_bytes'],
                 'status' => DocExtractDocumentStatus::PENDING,
                 'field_values' => $template !== null ? $this->emptyFieldValues($template) : [],
+                'scan_meta' => $scanMeta,
             ]);
 
-            ProcessDocExtractDocumentJob::dispatch($tenantId, (string) $document->id);
+            // Push OCR to Redis (never sync) so create can return before scans run.
+            $queueConnection = (string) config('doc_extract.queue_connection', 'redis');
+            if ($queueConnection === '' || $queueConnection === 'sync') {
+                $queueConnection = 'redis';
+            }
+            ProcessDocExtractDocumentJob::dispatch($tenantId, (string) $document->id)
+                ->onConnection($queueConnection);
         }
 
-        // Re-derive status from document rows (handles sync queue race + partial failures).
+        // Documents are still pending here; mark batch processing without waiting for OCR.
         $batch->refresh();
         $this->refreshBatchCounters($batch);
 
-        return $this->findOrFail((string) $batch->id);
+        $this->audit->record(
+            action: 'batch.created',
+            summary: __('DocExtract batch created with :count document(s).', ['count' => count($planned)]),
+            entityType: 'batch',
+            entityId: (string) $batch->id,
+            entityLabel: $template?->name ?? 'Auto-detect',
+            actor: $actor,
+            changes: [
+                'document_count' => ['from' => null, 'to' => count($planned)],
+                'template_id' => ['from' => null, 'to' => $template?->id],
+                'mode' => ['from' => null, 'to' => $template !== null ? 'template' : 'auto'],
+                'split_pages' => ['from' => null, 'to' => $splitPages],
+                'consolidated' => ['from' => null, 'to' => $records !== null],
+            ],
+        );
+
+        // Avoid reloading all documents — list row is enough for the create response.
+        $batch->unsetRelation('documents');
+        $batch->loadMissing('template');
+
+        return $batch;
+    }
+
+    /**
+     * Build page thumbnails / counts for the Consolidate step (no OCR, no batch created).
+     *
+     * @param  list<UploadedFile>  $files
+     * @return list<array{index: int, filename: string, mime_type: string|null, size_bytes: int, page_count: int, pages: list<array{page: int, thumbnail: string|null, text_chars: int, likely_blank: bool}>}>
+     */
+    public function previewFiles(array $files): array
+    {
+        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 25));
+        $maxPagesPerFile = max(1, (int) config('doc_extract.max_pages_per_file', 50));
+        if ($files === []) {
+            throw ValidationException::withMessages([
+                'files' => [__('Upload at least one PDF or image.')],
+            ]);
+        }
+        if (count($files) > $maxFiles) {
+            throw ValidationException::withMessages([
+                'files' => [__('A batch may include at most :max files.', ['max' => $maxFiles])],
+            ]);
+        }
+
+        $out = [];
+        foreach (array_values($files) as $index => $file) {
+            /** @var UploadedFile $file */
+            $filename = (string) ($file->getClientOriginalName() ?: 'document');
+            $mime = (string) ($file->getMimeType() ?: 'application/octet-stream');
+            $bytes = (string) $file->getContent();
+            if ($bytes === '') {
+                throw ValidationException::withMessages([
+                    'files' => [__('Unable to read :name.', ['name' => $filename])],
+                ]);
+            }
+
+            try {
+                $preview = $this->scanClient->preview($filename, $mime, $bytes);
+            } catch (\Throwable $exception) {
+                throw ValidationException::withMessages([
+                    'files' => [__('Unable to preview :name. :detail', [
+                        'name' => $filename,
+                        'detail' => $exception->getMessage(),
+                    ])],
+                ]);
+            }
+
+            if ($preview['page_count'] > $maxPagesPerFile) {
+                throw ValidationException::withMessages([
+                    'files' => [__(
+                        ':name has :pages pages. Max pages per file is :max.',
+                        [
+                            'name' => $filename,
+                            'pages' => $preview['page_count'],
+                            'max' => $maxPagesPerFile,
+                        ],
+                    )],
+                ]);
+            }
+
+            $out[] = [
+                'index' => $index,
+                'filename' => $filename,
+                'mime_type' => $mime,
+                'size_bytes' => (int) $file->getSize(),
+                'page_count' => $preview['page_count'],
+                'pages' => $preview['pages'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}>  $fileMetas
+     * @param  list<array{file_index?: mixed, pages?: mixed, label?: mixed}>  $records
+     * @param  array<int, int>  $filePageCounts
+     * @return list<array{meta: array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}, source_pages: list<int>|null, display_name: string}>
+     */
+    private function planFromRecords(
+        array $fileMetas,
+        array $records,
+        int $maxFiles,
+        int $maxPagesPerFile,
+        array $filePageCounts = [],
+    ): array {
+        if ($records === []) {
+            throw ValidationException::withMessages([
+                'records' => [__('Add at least one record in Consolidate before extracting.')],
+            ]);
+        }
+        if (count($records) > $maxFiles) {
+            throw ValidationException::withMessages([
+                'records' => [__(
+                    'Consolidate produced :count records. Max per batch is :max.',
+                    ['count' => count($records), 'max' => $maxFiles],
+                )],
+            ]);
+        }
+
+        /** @var array<int, int> $pageCounts */
+        $pageCounts = [];
+        foreach ($fileMetas as $index => $meta) {
+            $mime = strtolower((string) ($meta['mime_type'] ?? ''));
+            $isPdf = $mime === 'application/pdf'
+                || str_ends_with(strtolower((string) $meta['original_filename']), '.pdf');
+            if (! $isPdf) {
+                $pageCounts[$index] = 1;
+                continue;
+            }
+
+            // Prefer Consolidate preview counts — avoids re-loading large PDFs into PHP memory.
+            if (isset($filePageCounts[$index]) && (int) $filePageCounts[$index] > 0) {
+                $pageCounts[$index] = (int) $filePageCounts[$index];
+            } else {
+                $bytes = $this->storage->readBytes((string) $meta['stored_path']);
+                try {
+                    $pageCounts[$index] = $this->scanClient->pageCount(
+                        (string) $meta['original_filename'],
+                        (string) ($meta['mime_type'] ?? 'application/pdf'),
+                        $bytes,
+                    );
+                } catch (\Throwable $exception) {
+                    unset($bytes);
+                    throw ValidationException::withMessages([
+                        'files' => [__('Unable to read page count for :name. :detail', [
+                            'name' => $meta['original_filename'],
+                            'detail' => $exception->getMessage(),
+                        ])],
+                    ]);
+                }
+                unset($bytes);
+            }
+
+            if ($pageCounts[$index] > $maxPagesPerFile) {
+                throw ValidationException::withMessages([
+                    'files' => [__(
+                        ':name has :pages pages. Max pages per file is :max.',
+                        [
+                            'name' => $meta['original_filename'],
+                            'pages' => $pageCounts[$index],
+                            'max' => $maxPagesPerFile,
+                        ],
+                    )],
+                ]);
+            }
+        }
+
+        /** @var array<string, true> $claimed */
+        $claimed = [];
+        $planned = [];
+
+        foreach ($records as $recordIndex => $record) {
+            if (! is_array($record)) {
+                throw ValidationException::withMessages([
+                    'records' => [__('Record :n is invalid.', ['n' => $recordIndex + 1])],
+                ]);
+            }
+            $fileIndex = (int) ($record['file_index'] ?? -1);
+            if (! isset($fileMetas[$fileIndex])) {
+                throw ValidationException::withMessages([
+                    'records' => [__('Record :n references an unknown file.', ['n' => $recordIndex + 1])],
+                ]);
+            }
+            $meta = $fileMetas[$fileIndex];
+            $maxPage = $pageCounts[$fileIndex] ?? 1;
+
+            $rawPages = $record['pages'] ?? [];
+            if (! is_array($rawPages) || $rawPages === []) {
+                throw ValidationException::withMessages([
+                    'records' => [__('Record :n must include at least one page.', ['n' => $recordIndex + 1])],
+                ]);
+            }
+
+            $pages = [];
+            foreach ($rawPages as $pageRaw) {
+                $page = (int) $pageRaw;
+                if ($page < 1 || $page > $maxPage) {
+                    throw ValidationException::withMessages([
+                        'records' => [__(
+                            'Record :n includes page :page, but :file only has :max page(s).',
+                            [
+                                'n' => $recordIndex + 1,
+                                'page' => $page,
+                                'file' => $meta['original_filename'],
+                                'max' => $maxPage,
+                            ],
+                        )],
+                    ]);
+                }
+                $claimKey = $fileIndex.':'.$page;
+                if (isset($claimed[$claimKey])) {
+                    throw ValidationException::withMessages([
+                        'records' => [__(
+                            'Page :page of :file is assigned to more than one record. Each page can belong to only one record.',
+                            ['page' => $page, 'file' => $meta['original_filename']],
+                        )],
+                    ]);
+                }
+                $claimed[$claimKey] = true;
+                $pages[$page] = $page;
+            }
+            $pageList = array_values($pages);
+            sort($pageList);
+
+            $label = trim((string) ($record['label'] ?? ''));
+            if ($label === '') {
+                $label = $this->defaultRecordLabel((string) $meta['original_filename'], $pageList);
+            }
+
+            $planned[] = [
+                'meta' => $meta,
+                'source_pages' => $pageList,
+                'display_name' => mb_substr($label, 0, 255),
+            ];
+        }
+
+        return $planned;
+    }
+
+    /**
+     * @param  list<array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}>  $fileMetas
+     * @return list<array{meta: array{original_filename: string, stored_path: string, mime_type: string, size_bytes: int}, source_pages: list<int>|null, display_name: string}>
+     */
+    private function planFromFiles(array $fileMetas, bool $splitPages, int $maxFiles, int $maxPagesPerFile): array
+    {
+        $planned = [];
+        foreach ($fileMetas as $meta) {
+            $mime = strtolower((string) ($meta['mime_type'] ?? ''));
+            $isPdf = $mime === 'application/pdf'
+                || str_ends_with(strtolower((string) $meta['original_filename']), '.pdf');
+
+            if ($splitPages && $isPdf) {
+                $bytes = $this->storage->readBytes((string) $meta['stored_path']);
+                try {
+                    $pageCount = $this->scanClient->pageCount(
+                        (string) $meta['original_filename'],
+                        (string) ($meta['mime_type'] ?? 'application/pdf'),
+                        $bytes,
+                    );
+                } catch (\Throwable $exception) {
+                    throw ValidationException::withMessages([
+                        'files' => [__('Unable to read page count for :name. :detail', [
+                            'name' => $meta['original_filename'],
+                            'detail' => $exception->getMessage(),
+                        ])],
+                    ]);
+                }
+
+                if ($pageCount > $maxPagesPerFile) {
+                    throw ValidationException::withMessages([
+                        'split_pages' => [__(
+                            ':name has :pages pages. Max pages per file when splitting is :max.',
+                            [
+                                'name' => $meta['original_filename'],
+                                'pages' => $pageCount,
+                                'max' => $maxPagesPerFile,
+                            ],
+                        )],
+                    ]);
+                }
+
+                for ($page = 1; $page <= $pageCount; $page++) {
+                    $planned[] = [
+                        'meta' => $meta,
+                        'source_pages' => [$page],
+                        'display_name' => $this->defaultRecordLabel((string) $meta['original_filename'], [$page]),
+                    ];
+                }
+            } else {
+                $planned[] = [
+                    'meta' => $meta,
+                    'source_pages' => null,
+                    'display_name' => (string) $meta['original_filename'],
+                ];
+            }
+        }
+
+        if (count($planned) > $maxFiles) {
+            throw ValidationException::withMessages([
+                'split_pages' => [__(
+                    'This upload would create :count records (after page split). Max per batch is :max. Reduce pages, upload fewer files, or turn off page split.',
+                    ['count' => count($planned), 'max' => $maxFiles],
+                )],
+            ]);
+        }
+
+        return $planned;
+    }
+
+    /**
+     * @param  list<int>  $pages
+     */
+    private function defaultRecordLabel(string $filename, array $pages): string
+    {
+        if ($pages === []) {
+            return $filename;
+        }
+        if (count($pages) === 1) {
+            return sprintf('%s (page %d)', $filename, $pages[0]);
+        }
+
+        return sprintf('%s (pages %s)', $filename, $this->formatPageRange($pages));
+    }
+
+    /**
+     * @param  list<int>  $pages
+     */
+    private function formatPageRange(array $pages): string
+    {
+        $sorted = array_values($pages);
+        sort($sorted);
+        $parts = [];
+        $start = $sorted[0];
+        $prev = $sorted[0];
+        for ($i = 1; $i < count($sorted); $i++) {
+            $current = $sorted[$i];
+            if ($current === $prev + 1) {
+                $prev = $current;
+                continue;
+            }
+            $parts[] = $start === $prev ? (string) $start : $start.'–'.$prev;
+            $start = $current;
+            $prev = $current;
+        }
+        $parts[] = $start === $prev ? (string) $start : $start.'–'.$prev;
+
+        return implode(', ', $parts);
     }
 
     /**
@@ -145,12 +549,12 @@ final class DocExtractBatchService
     }
 
     /**
-     * Replace the curated column list for an auto-detect batch (remove / reorder fields).
+     * Replace the curated column list for a batch (remove / reorder / edit fields).
      *
      * @param  list<array{key?: mixed, label?: mixed, type?: mixed, hint?: mixed}>  $fields
      * @return list<array{key: string, label: string, type: string, hint: string|null}>
      */
-    public function updateFieldSchema(DocExtractBatch $batch, array $fields): array
+    public function updateFieldSchema(DocExtractBatch $batch, array $fields, ?TenantUser $actor = null): array
     {
         $normalized = [];
         $seen = [];
@@ -196,8 +600,22 @@ final class DocExtractBatchService
             ]);
         }
 
+        $previousCount = count($this->effectiveFields($batch));
         $batch->field_schema = $normalized;
         $batch->save();
+        $batch->loadMissing('template');
+
+        $this->audit->record(
+            action: 'batch.fields_updated',
+            summary: __('DocExtract columns updated (:count).', ['count' => count($normalized)]),
+            entityType: 'batch',
+            entityId: (string) $batch->id,
+            entityLabel: $batch->template?->name ?? 'Auto-detect',
+            actor: $actor,
+            changes: [
+                'field_count' => ['from' => $previousCount, 'to' => count($normalized)],
+            ],
+        );
 
         return $normalized;
     }
@@ -207,7 +625,7 @@ final class DocExtractBatchService
      *
      * @return list<array{key: string, label: string, type: string, hint: string|null}>
      */
-    public function removeField(DocExtractBatch $batch, string $fieldKey): array
+    public function removeField(DocExtractBatch $batch, string $fieldKey, ?TenantUser $actor = null): array
     {
         $current = $this->effectiveFields($batch);
         $remaining = array_values(array_filter(
@@ -215,7 +633,7 @@ final class DocExtractBatchService
             static fn (array $field): bool => (string) $field['key'] !== $fieldKey,
         ));
 
-        return $this->updateFieldSchema($batch, $remaining);
+        return $this->updateFieldSchema($batch, $remaining, $actor);
     }
 
     /**
@@ -292,17 +710,145 @@ final class DocExtractBatchService
         $batch->failed_count = $failed;
         $batch->document_count = $batch->documents()->count();
 
+        $becameReady = false;
         if ($pending > 0) {
             $batch->status = DocExtractBatchStatus::PROCESSING;
         } elseif ($failed > 0 && $ready === 0) {
             $batch->status = DocExtractBatchStatus::FAILED;
             $batch->message = 'All documents failed to scan.';
         } else {
+            $becameReady = (string) $batch->status !== DocExtractBatchStatus::READY;
             $batch->status = DocExtractBatchStatus::READY;
             $batch->message = null;
         }
 
         $batch->save();
+
+        if ($becameReady) {
+            $this->reconcileAutoFieldValues($batch);
+        }
+    }
+
+    /**
+     * Re-dispatch OCR for documents left pending/scanning after queue loss (OOM, worker restart).
+     *
+     * @return array{requeued: int, batches: int}
+     */
+    public function requeueStuckDocuments(?string $batchId = null, string $tenantId = ''): array
+    {
+        $query = DocExtractDocument::query()
+            ->whereIn('status', [DocExtractDocumentStatus::PENDING, DocExtractDocumentStatus::SCANNING])
+            ->whereNull('purged_at')
+            ->whereNotNull('stored_path');
+
+        if ($batchId !== null && $batchId !== '') {
+            $query->where('batch_id', $batchId);
+        }
+
+        $documents = $query->orderBy('created_at')->get();
+        if ($documents->isEmpty()) {
+            return ['requeued' => 0, 'batches' => 0];
+        }
+
+        if ($tenantId === '') {
+            $tenantId = (string) (tenant('id') ?? '');
+        }
+
+        $queueConnection = (string) config('doc_extract.queue_connection', 'redis');
+        if ($queueConnection === '' || $queueConnection === 'sync') {
+            $queueConnection = 'redis';
+        }
+
+        $batchIds = [];
+        $requeued = 0;
+        foreach ($documents as $document) {
+            $document->status = DocExtractDocumentStatus::PENDING;
+            $document->error_message = null;
+            $document->save();
+
+            ProcessDocExtractDocumentJob::dispatch($tenantId, (string) $document->id)
+                ->onConnection($queueConnection);
+            $batchIds[(string) $document->batch_id] = true;
+            $requeued++;
+        }
+
+        foreach (array_keys($batchIds) as $id) {
+            $batch = DocExtractBatch::query()->find($id);
+            if ($batch !== null) {
+                $this->refreshBatchCounters($batch);
+            }
+        }
+
+        return ['requeued' => $requeued, 'batches' => count($batchIds)];
+    }
+
+    /**
+     * Auto mode discovers fields per document. After the batch is ready, remap each
+     * document's OCR text onto the union schema so shared columns fill across pages.
+     */
+    public function reconcileAutoFieldValues(DocExtractBatch $batch): void
+    {
+        $batch->loadMissing(['documents', 'template']);
+
+        if ($batch->template_id !== null) {
+            return;
+        }
+        if (is_array($batch->field_schema) && $batch->field_schema !== []) {
+            return;
+        }
+
+        $fields = $this->effectiveFields($batch);
+        if ($fields === []) {
+            return;
+        }
+
+        foreach ($batch->documents as $document) {
+            if ((string) $document->status !== DocExtractDocumentStatus::READY) {
+                continue;
+            }
+            $text = trim((string) ($document->extracted_text ?? ''));
+            if ($text === '') {
+                continue;
+            }
+
+            $meta = is_array($document->scan_meta) ? $document->scan_meta : [];
+            if (($meta['schema_reconciled'] ?? false) === true) {
+                continue;
+            }
+
+            try {
+                $mapped = $this->scanClient->mapText($text, $fields);
+            } catch (\Throwable $exception) {
+                Log::warning('DocExtract schema reconcile failed', [
+                    'document_id' => (string) $document->id,
+                    'message' => $exception->getMessage(),
+                ]);
+                continue;
+            }
+
+            $existing = is_array($document->field_values) ? $document->field_values : [];
+            $merged = $existing;
+            foreach ($fields as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+                $current = $merged[$key] ?? null;
+                $incoming = $mapped[$key] ?? null;
+                if (($current === null || $current === '') && $incoming !== null && $incoming !== '') {
+                    $merged[$key] = $incoming;
+                } elseif (! array_key_exists($key, $merged)) {
+                    $merged[$key] = $incoming;
+                }
+            }
+
+            $document->field_values = $merged;
+            $document->scan_meta = array_merge($meta, [
+                'schema_reconciled' => true,
+                'schema_field_count' => count($fields),
+            ]);
+            $document->save();
+        }
     }
 
     /**
@@ -358,6 +904,13 @@ final class DocExtractBatchService
     public function asDetail(DocExtractBatch $batch): array
     {
         $batch->loadMissing(['template', 'documents']);
+
+        // Heal older auto batches that finished before schema reconcile existed.
+        if ((string) $batch->status === DocExtractBatchStatus::READY) {
+            $this->reconcileAutoFieldValues($batch);
+            $batch->load('documents');
+        }
+
         $documents = $batch->documents
             ->sortBy('original_filename')
             ->values()
@@ -499,6 +1052,10 @@ final class DocExtractBatchService
             'scan_engine' => $document->scan_engine,
             'mode' => (string) ($meta['mode'] ?? ($document->template_id ? 'template' : 'auto')),
             'page_count' => isset($meta['page_count']) ? (int) $meta['page_count'] : null,
+            'source_page' => isset($meta['source_page']) ? (int) $meta['source_page'] : null,
+            'source_pages' => isset($meta['source_pages']) && is_array($meta['source_pages'])
+                ? array_values(array_map('intval', $meta['source_pages']))
+                : (isset($meta['source_page']) ? [(int) $meta['source_page']] : null),
             'field_values' => is_array($document->field_values) ? $document->field_values : [],
             'discovered_fields' => $discovered,
             'error_message' => $document->error_message,

@@ -68,6 +68,10 @@ export type DocExtractDocument = {
   page_count?: number | null;
   field_values: Record<string, string | null>;
   discovered_fields?: DocExtractField[];
+  /** 1-based page when this row was created via page split / consolidate. */
+  source_page?: number | null;
+  /** Exact pages included in this record after consolidate. */
+  source_pages?: number[] | null;
   error_message?: string | null;
   purged_at?: string | null;
   has_file: boolean;
@@ -79,4 +83,27 @@ export type DocExtractBatchDetail = DocExtractBatchListRow & {
   template: DocExtractTemplate | null;
   effective_fields?: DocExtractField[];
   documents: DocExtractDocument[];
+};
+
+export type DocExtractPreviewPage = {
+  page: number;
+  thumbnail: string | null;
+  text_chars: number;
+  likely_blank: boolean;
+};
+
+export type DocExtractPreviewFile = {
+  index: number;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number;
+  page_count: number;
+  pages: DocExtractPreviewPage[];
+};
+
+export type DocExtractConsolidateRecord = {
+  id: string;
+  fileIndex: number;
+  pages: number[];
+  label: string;
 };

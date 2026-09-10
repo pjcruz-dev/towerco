@@ -62,6 +62,16 @@ final class WorkspaceAuditActionLabel
             'ticket.resolved' => 'Ticket resolved',
             'ticket.reopened' => 'Ticket reopened',
 
+            'batch.created' => 'DocExtract batch created',
+            'batch.requeued' => 'DocExtract stuck scans requeued',
+            'batch.fields_updated' => 'DocExtract columns updated',
+            'batch.exported' => 'DocExtract export downloaded',
+            'template.created' => 'DocExtract template created',
+            'template.updated' => 'DocExtract template updated',
+            'template.published' => 'DocExtract template published',
+            'template.unpublished' => 'DocExtract template unpublished',
+            'template.deleted' => 'DocExtract template deleted',
+
             'rbac.role_created' => 'Role created',
             'rbac.role_permissions_updated' => 'Role permissions updated',
             'rbac.role_deleted' => 'Role deleted',
