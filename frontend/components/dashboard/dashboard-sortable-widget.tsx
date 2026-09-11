@@ -269,9 +269,12 @@ export function DashboardSortableWidget({
                   </button>
                 }
               />
-              <PopoverContent className="w-[22rem] p-2" align="start">
+              <PopoverContent className="w-[26rem] p-2" align="start">
                 <p className="mb-1 px-1 text-xs font-medium text-muted-foreground">
                   Insert before this widget
+                </p>
+                <p className="mb-2 px-1 text-[10px] leading-snug text-muted-foreground">
+                  Mini preview shows layout shape · blue line is when to use it
                 </p>
                 <DashboardAddWidgetPicker
                   entries={onInsertBefore.entries}
@@ -321,7 +324,10 @@ export function DashboardSortableWidget({
                   </button>
                 }
               />
-              <PopoverContent className="w-[18rem] p-3" align="end">
+              <PopoverContent
+                className="w-[min(32rem,calc(100vw-1.5rem))] max-h-[min(85vh,46rem)] overflow-y-auto p-3"
+                align="end"
+              >
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Layout & options</p>
                 {optionsPanel}
               </PopoverContent>
@@ -373,10 +379,12 @@ export function DashboardSortableWidget({
             </button>
           ) : null}
 
-          <div className="pointer-events-none absolute right-2.5 bottom-2.5 z-10 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-            {displaySpan}
-            {collapsed ? " · collapsed" : displayHeight ? ` · ${Math.round(displayHeight)}px` : ""}
-          </div>
+          {onSpanChange || onMinHeightChange ? (
+            <div className="pointer-events-none absolute right-2.5 bottom-2.5 z-10 rounded bg-background/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              {displaySpan}
+              {collapsed ? " · collapsed" : displayHeight ? ` · ${Math.round(displayHeight)}px` : ""}
+            </div>
+          ) : null}
         </>
       ) : null}
 

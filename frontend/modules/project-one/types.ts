@@ -3,7 +3,7 @@ import type { RolloutGateApprovalRequest } from "@/modules/rollout/types";
 export type ProjectOneKpi = {
   key: string;
   label: string;
-  value: string;
+  value: string | number;
   change?: string;
   tone?: "neutral" | "success" | "warning" | "danger";
   /** Optional deep link — KPI tiles become clickable when set. */

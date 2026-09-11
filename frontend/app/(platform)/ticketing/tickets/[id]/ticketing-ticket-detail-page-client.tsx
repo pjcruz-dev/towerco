@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Paperclip } from "lucide-react";
-
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
-import { formatFileSize, formatTicketingDate, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import { formatTicketingDate, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import {
+  AttachmentPreviewGallery,
+  formatAttachmentBytes,
+  type AttachmentGalleryItem,
+} from "@/components/attachments/attachment-preview-gallery";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { WorkspaceEntityActivityPanel } from "@/components/governance/workspace-entity-activity-panel";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -23,6 +23,7 @@ import {
   addTicketingComment,
   downloadTicketingAttachment,
   fetchTicketingAssignableUsers,
+  fetchTicketingAttachmentBlob,
   fetchTicketingMetadata,
   fetchTicketingTicket,
   updateTicketingTicket,
@@ -32,6 +33,10 @@ import { ticketingLinkHref } from "@/lib/ticketing/link-href";
 import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
+import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Paperclip } from "lucide-react";
 
 type Props = {
   ticketId: string;
@@ -72,6 +77,27 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
 
   const ticket = ticketQuery.data;
   const showSkeleton = ticketQuery.isLoading;
+
+  const attachmentItems = useMemo((): AttachmentGalleryItem[] => {
+    return (ticket?.attachments ?? []).map((attachment) => {
+      const sizeLabel = formatAttachmentBytes(attachment.size_bytes);
+      const uploadedAt = attachment.created_at ? formatTicketingDate(attachment.created_at) : null;
+      const subtitle = [sizeLabel, uploadedAt].filter(Boolean).join(" · ") || null;
+      return {
+        id: attachment.id,
+        fileName: attachment.file_name,
+        mimeType: attachment.mime_type,
+        sizeBytes: attachment.size_bytes,
+        title: attachment.file_name,
+        subtitle,
+      };
+    });
+  }, [ticket?.attachments]);
+
+  const fetchAttachmentBlob = useCallback(
+    (id: string) => fetchTicketingAttachmentBlob(id),
+    [],
+  );
 
   const updateMutation = useMutation({
     mutationFn: (payload: {
@@ -199,31 +225,18 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                     }}
                   />
                 </div>
-                <ul className="mt-3 space-y-2">
-                  {ticket.attachments.length === 0 ? (
-                    <li className="text-sm text-muted-foreground">No attachments.</li>
-                  ) : (
-                    ticket.attachments.map((attachment) => (
-                      <li
-                        key={attachment.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{attachment.file_name}</p>
-                          <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size_bytes)}</p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => downloadTicketingAttachment(attachment.id, attachment.file_name)}
-                        >
-                          <Download className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </li>
-                    ))
-                  )}
-                </ul>
+                <div className="mt-3">
+                  <AttachmentPreviewGallery
+                    title=""
+                    hint="Images show inline preview. PDF opens in a new tab."
+                    emptyMessage="No attachments."
+                    items={attachmentItems}
+                    fetchBlob={fetchAttachmentBlob}
+                    onDownload={async (item) => {
+                      await downloadTicketingAttachment(item.id, item.fileName);
+                    }}
+                  />
+                </div>
               </section>
 
               <section

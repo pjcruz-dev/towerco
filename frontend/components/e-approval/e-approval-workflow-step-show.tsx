@@ -142,7 +142,8 @@ type Props = {
 /**
  * Vuexy-inspired horizontal workflow step show for E-Forms submissions.
  * Compact: bar + "Step X of Y" + current approver; hover shows full trail.
- * Full: aligns with vertical path semantics (Approved / Pending / Skipped).
+ *   Colors: emerald = approved, amber = pending, muted = upcoming.
+ * Full: icon trail with the same Approved / Pending / Skipped semantics.
  */
 export function EApprovalWorkflowStepShow({
   steps,
@@ -179,7 +180,8 @@ export function EApprovalWorkflowStepShow({
                 className={cn(
                   "h-1.5 flex-1 rounded-full",
                   step.state === "completed" && "bg-emerald-500",
-                  step.state === "current" && "bg-primary",
+                  // Pending / in-progress — amber (not primary charcoal)
+                  step.state === "current" && "bg-amber-500",
                   step.state === "upcoming" && "bg-muted",
                   (step.state === "cancelled" || step.state === "skipped") && "bg-muted-foreground/25",
                 )}
@@ -241,7 +243,7 @@ export function EApprovalWorkflowStepShow({
               <span
                 className={cn(
                   "flex size-9 shrink-0 items-center justify-center rounded-lg shadow-sm",
-                  active && "bg-primary text-primary-foreground",
+                  active && "bg-amber-500 text-white",
                   done && !active && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
                   skipped && "border border-dashed border-border bg-muted/40 text-muted-foreground",
                   cancelled && "bg-muted text-muted-foreground/60",

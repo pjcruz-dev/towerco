@@ -116,10 +116,19 @@ export function normalizeDashboardLayoutPrefs(value: unknown): DashboardLayoutPr
 function normalizePageChrome(value: unknown): PageChromePrefs {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const row = value as Record<string, unknown>;
+  const placement = row.identityPlacement;
   return {
     title: typeof row.title === "string" ? row.title : undefined,
     description: typeof row.description === "string" ? row.description : undefined,
     hiddenActionIds: isStringArray(row.hiddenActionIds) ? row.hiddenActionIds : undefined,
+    actionOrder: isStringArray(row.actionOrder) ? row.actionOrder : undefined,
+    identityPlacement:
+      placement === "start" ||
+      placement === "end" ||
+      placement === "above" ||
+      placement === "below"
+        ? placement
+        : undefined,
   };
 }
 

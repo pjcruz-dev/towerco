@@ -9,6 +9,7 @@ import type {
   DocExtractTemplate,
 } from "@/modules/doc-extract/types";
 import { apiClient } from "@/lib/api/client";
+import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
 
 export async function fetchDocExtractTemplates(params?: {
@@ -80,7 +81,7 @@ export async function downloadDocExtractBatchesExport(params?: {
       ids: params?.ids && params.ids.length > 0 ? params.ids : undefined,
       async: params?.async ? 1 : undefined,
     },
-    paramsSerializer: { indexes: null },
+    paramsSerializer: moduleListExportParamsSerializer,
     responseType: "blob",
     validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
   });

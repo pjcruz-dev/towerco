@@ -14,15 +14,14 @@ import {
   buildWorkflowStepShowItems,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import {
-  EApprovalWorkspaceAnalyticsCharts,
-  type WorkspaceChartMode,
+  EApprovalWorkspaceStatusBreakdownChart,
+  EApprovalWorkspaceSubsidiaryChart,
 } from "@/components/e-approval/e-approval-workspace-analytics-charts";
 import { EApprovalWorkspaceAuditLog } from "@/components/e-approval/e-approval-workspace-audit-log";
 import { EApprovalWorkspaceRecentActivity } from "@/components/e-approval/e-approval-workspace-recent-activity";
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { FilterSelect } from "@/components/forms/filter-select";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { ModuleListToolbar } from "@/components/registry/module-list-toolbar";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
@@ -69,16 +68,18 @@ import {
   DEFAULT_WORKSPACE_DASHBOARD,
   WORKSPACE_WIDGET_LABELS,
   enabledWidgets,
+  expandWorkspaceDashboardWidgets,
   resolveSavedViewFilters,
   visibleTableColumns,
   type WorkspaceSavedView,
   type WorkspaceTableColumn,
   type WorkspaceWidgetType,
 } from "@/modules/e-approval/form-workspace-dashboard-config";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
 
 const SOFT_HIDEABLE_WIDGET_TYPES = new Set<WorkspaceWidgetType>([
   "kpis",
+  "chart_by_status",
+  "chart_by_subsidiary",
   "status_chart",
   "recent_activity",
   "audit_log",
@@ -91,7 +92,6 @@ type WorkspacePrefs = {
   subsidiary: string;
   department: string;
   statusFilter: string;
-  chartMode: WorkspaceChartMode;
   density: "comfortable" | "compact";
 } & DashboardLayoutPrefs;
 
@@ -113,13 +113,26 @@ const DEFAULT_PREFS: WorkspacePrefs = {
   subsidiary: "",
   department: "",
   statusFilter: "",
-  chartMode: "both",
   density: "comfortable",
   ...EMPTY_DASHBOARD_LAYOUT_PREFS,
   spans: {},
   widgetOptions: {},
   pageChrome: {},
 };
+
+function expandWorkspaceLayoutWidgetIds(ids: string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    if (id === "status_chart") {
+      for (const next of ["chart_by_status", "chart_by_subsidiary"] as const) {
+        if (!out.includes(next)) out.push(next);
+      }
+      continue;
+    }
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
 
 function isWorkspacePrefs(value: unknown): value is WorkspacePrefs {
   if (!value || typeof value !== "object") return false;
@@ -129,7 +142,6 @@ function isWorkspacePrefs(value: unknown): value is WorkspacePrefs {
     typeof row.subsidiary === "string" &&
     typeof row.department === "string" &&
     typeof row.statusFilter === "string" &&
-    (row.chartMode === "bars" || row.chartMode === "donut" || row.chartMode === "both") &&
     (row.density === "comfortable" || row.density === "compact")
   );
 }
@@ -182,9 +194,9 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const subsidiary = prefs.subsidiary;
   const department = prefs.department;
   const statusFilter = prefs.statusFilter;
-  const chartMode = prefs.chartMode;
   const density = prefs.density;
   const legacyLayout = useMemo(() => normalizeDashboardLayoutPrefs(prefs), [prefs]);
+  const expandedBundlesRef = useRef(false);
   const debouncedSearch = useDebouncedValue(search, 350, () => setPage(1));
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: DEFAULT_SORT,
@@ -210,9 +222,41 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
       Object.keys(legacyLayout.widgetOptions).length > 0 ||
       Object.keys(legacyLayout.pageChrome ?? {}).length > 0;
     if (empty && hasLegacy) {
-      setLayout(legacyLayout);
+      setLayout({
+        ...legacyLayout,
+        enabledWidgetIds: expandWorkspaceLayoutWidgetIds(legacyLayout.enabledWidgetIds),
+        widgetOrder: expandWorkspaceLayoutWidgetIds(legacyLayout.widgetOrder),
+      });
     }
   }, [legacyLayout, layout, serverReady, setLayout]);
+
+  useEffect(() => {
+    if (!serverReady || expandedBundlesRef.current) return;
+    const needsExpand =
+      layout.enabledWidgetIds.includes("status_chart") ||
+      layout.widgetOrder.includes("status_chart");
+    if (!needsExpand) {
+      expandedBundlesRef.current = true;
+      return;
+    }
+    expandedBundlesRef.current = true;
+    const enabled = expandWorkspaceLayoutWidgetIds(
+      layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : [],
+    );
+    const order = expandWorkspaceLayoutWidgetIds(
+      layout.widgetOrder.length > 0 ? layout.widgetOrder : enabled,
+    );
+    const spans = { ...layout.spans };
+    delete spans.status_chart;
+    if (!spans.chart_by_status) spans.chart_by_status = "half";
+    if (!spans.chart_by_subsidiary) spans.chart_by_subsidiary = "half";
+    setLayout({
+      ...layout,
+      enabledWidgetIds: enabled,
+      widgetOrder: order,
+      spans,
+    });
+  }, [layout, serverReady, setLayout]);
 
   const patchPrefs = (patch: Partial<WorkspacePrefs>) => {
     setPrefs((current: WorkspacePrefs) => ({ ...current, ...patch }));
@@ -296,8 +340,10 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   }, [dashboard?.is_multi_form, dashboardConfig.table_columns]);
   const adminEnabledWidgets = useMemo(
     () =>
-      enabledWidgets(
-        dashboardConfig.widgets?.length ? dashboardConfig.widgets : DEFAULT_WORKSPACE_DASHBOARD.widgets,
+      expandWorkspaceDashboardWidgets(
+        enabledWidgets(
+          dashboardConfig.widgets?.length ? dashboardConfig.widgets : DEFAULT_WORKSPACE_DASHBOARD.widgets,
+        ),
       ),
     [dashboardConfig.widgets],
   );
@@ -344,17 +390,6 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   });
 
   const title = dashboard ? workspaceDisplayTitle(dashboard.workspace, dashboard.form.name) : "Form workspace";
-  const kpis: ProjectOneKpi[] = useMemo(
-    () =>
-      (dashboard?.kpis ?? []).map((item) => ({
-        key: item.key,
-        label: item.label,
-        value: item.value,
-        change: item.change ?? undefined,
-        tone: item.tone === "default" ? "neutral" : item.tone,
-      })),
-    [dashboard?.kpis],
-  );
 
   const subsidiaryOptions = dashboard?.filter_options?.subsidiaries ?? [];
   const departmentOptions = dashboard?.filter_options?.departments ?? [];
@@ -452,63 +487,78 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const hasColumnFilters = Boolean(subsidiary || department || statusFilter || activeViewId !== "all");
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
-    return adminEnabledWidgets.map((widget) => {
+    return adminEnabledWidgets.flatMap((widget) => {
       const hideable = SOFT_HIDEABLE_WIDGET_TYPES.has(widget.type);
       const label = WORKSPACE_WIDGET_LABELS[widget.type];
 
+      // KPI strip binds via catalog kind (`kpi_metric_row`) so Layout & options kpiCards apply.
       if (widget.type === "kpis") {
-        return {
-          id: widget.id,
-          label,
-          hideable,
-          render: () => (dashboard ? <KpiStrip items={kpis} /> : null),
-        };
+        return [];
       }
-      if (widget.type === "status_chart") {
-        return {
-          id: widget.id,
-          label,
-          hideable,
-          render: () =>
-            dashboard ? (
-              <EApprovalWorkspaceAnalyticsCharts
-                statusItems={dashboard.status_breakdown}
-                subsidiaryItems={dashboard.subsidiary_breakdown ?? []}
-                mode={chartMode}
-                onModeChange={(mode) => patchPrefs({ chartMode: mode })}
-              />
-            ) : null,
-        };
+      if (widget.type === "chart_by_status" || widget.type === "status_chart") {
+        return [
+          {
+            id: widget.type === "status_chart" ? "chart_by_status" : widget.id,
+            label: WORKSPACE_WIDGET_LABELS.chart_by_status,
+            hideable,
+            defaultSpan: "half" as const,
+            render: () =>
+              dashboard ? (
+                <EApprovalWorkspaceStatusBreakdownChart statusItems={dashboard.status_breakdown} />
+              ) : null,
+          },
+        ];
+      }
+      if (widget.type === "chart_by_subsidiary") {
+        return [
+          {
+            id: widget.id,
+            label,
+            hideable,
+            defaultSpan: "half" as const,
+            render: () =>
+              dashboard ? (
+                <EApprovalWorkspaceSubsidiaryChart
+                  subsidiaryItems={dashboard.subsidiary_breakdown ?? []}
+                />
+              ) : null,
+          },
+        ];
       }
       if (widget.type === "recent_activity") {
-        return {
-          id: widget.id,
-          label,
-          hideable,
-          render: () =>
-            dashboard ? <EApprovalWorkspaceRecentActivity items={dashboard.recent_activity} /> : null,
-        };
+        return [
+          {
+            id: widget.id,
+            label,
+            hideable,
+            render: () =>
+              dashboard ? <EApprovalWorkspaceRecentActivity items={dashboard.recent_activity} /> : null,
+          },
+        ];
       }
       if (widget.type === "audit_log") {
-        return {
-          id: widget.id,
-          label,
-          hideable,
-          render: () => (dashboard ? <EApprovalWorkspaceAuditLog items={dashboard.recent_audit} /> : null),
-        };
+        return [
+          {
+            id: widget.id,
+            label,
+            hideable,
+            render: () => (dashboard ? <EApprovalWorkspaceAuditLog items={dashboard.recent_audit} /> : null),
+          },
+        ];
       }
 
-      return {
-        id: widget.id,
-        label,
-        hideable: false,
-        render: () => (
-          <EApprovalListShell
-            toolbar={
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {savedViews.map((view) => (
-                    <Button
+      return [
+        {
+          id: widget.id,
+          label,
+          hideable: false,
+          render: () => (
+            <EApprovalListShell
+              toolbar={
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {savedViews.map((view) => (
+                      <Button
                       key={view.id}
                       type="button"
                       size="sm"
@@ -634,12 +684,12 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
             />
           </EApprovalListShell>
         ),
-      };
+      },
+      ];
     });
   }, [
     activeViewId,
     adminEnabledWidgets,
-    chartMode,
     columns,
     dashboard,
     density,
@@ -647,7 +697,6 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
     departmentOptions,
     hasColumnFilters,
     isEmpty,
-    kpis,
     manualSorting,
     meta,
     onSortingChange,
@@ -671,17 +720,29 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
 
   const normalizedData = useMemo(() => normalizeEApprovalWorkspace(dashboard), [dashboard]);
 
+  const defaultEnabledIds = useMemo(
+    () => layoutMeta.map((widget) => widget.id),
+    [layoutMeta],
+  );
+
   const catalogBoardWidgets = useMemo(
     () =>
       buildDynamicBoardWidgets({
         moduleId: "e-approval-workspace",
         data: normalizedData,
         slots: boardWidgets,
-        enabledIds: layout.enabledWidgetIds,
+        enabledIds: layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : defaultEnabledIds,
         titleOverrides,
         widgetOptions: layout.widgetOptions,
       }),
-    [boardWidgets, layout.enabledWidgetIds, layout.widgetOptions, normalizedData, titleOverrides],
+    [
+      boardWidgets,
+      defaultEnabledIds,
+      layout.enabledWidgetIds,
+      layout.widgetOptions,
+      normalizedData,
+      titleOverrides,
+    ],
   );
 
   const bindableCatalog = useMemo(

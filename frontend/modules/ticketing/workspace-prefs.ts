@@ -42,13 +42,37 @@ export const DEFAULT_TICKETING_PREFS: TicketingWorkspacePrefs = {
 
 export const TICKETING_DASHBOARD_WIDGETS = [
   { id: "kpis", label: "KPI strip" },
-  { id: "queue_charts", label: "Queue & priority charts" },
-  { id: "category_analytics", label: "Category analytics" },
+  { id: "chart_ticket_queue", label: "Ticket queue" },
+  { id: "chart_by_priority", label: "By priority" },
+  { id: "chart_by_department", label: "Volume by department" },
+  { id: "chart_by_category", label: "Volume by category" },
+  { id: "table_category_analytics", label: "Category analytics" },
   { id: "quick_actions", label: "Quick actions" },
   { id: "recent_tickets", label: "Recent tickets" },
 ] as const;
 
 export type TicketingDashboardWidgetId = (typeof TICKETING_DASHBOARD_WIDGETS)[number]["id"];
+
+/** Expand legacy bundled Analytics / Category widgets into separate board ids. */
+export function expandTicketingDashboardWidgetIds(ids: string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    if (id === "queue_charts") {
+      for (const next of ["chart_ticket_queue", "chart_by_priority", "chart_by_department"] as const) {
+        if (!out.includes(next)) out.push(next);
+      }
+      continue;
+    }
+    if (id === "category_analytics") {
+      for (const next of ["chart_by_category", "table_category_analytics"] as const) {
+        if (!out.includes(next)) out.push(next);
+      }
+      continue;
+    }
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
 
 function isTicketingWorkspacePrefs(value: unknown): value is TicketingWorkspacePrefs {
   if (!value || typeof value !== "object") return false;

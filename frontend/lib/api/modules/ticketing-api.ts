@@ -9,6 +9,7 @@ import type {
   TicketingUserRef,
 } from "@/modules/ticketing/types";
 import { apiClient } from "@/lib/api/client";
+import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
 
 export async function fetchTicketingDashboard(
@@ -99,7 +100,7 @@ export async function downloadTicketingTicketsExport(
       ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       async: params.async ? 1 : undefined,
     },
-    paramsSerializer: { indexes: null },
+    paramsSerializer: moduleListExportParamsSerializer,
     responseType: "blob",
     validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
   });
@@ -195,11 +196,16 @@ export async function sendTicketingSettingsTestWebhook(
   return response.data.data;
 }
 
-export async function downloadTicketingAttachment(attachmentId: string, fileName: string): Promise<void> {
-  const response = await apiClient.get(`/ticketing/attachments/${attachmentId}`, {
+export async function fetchTicketingAttachmentBlob(attachmentId: string): Promise<Blob> {
+  const response = await apiClient.get<Blob>(`/ticketing/attachments/${attachmentId}`, {
     responseType: "blob",
   });
-  const url = window.URL.createObjectURL(response.data);
+  return response.data;
+}
+
+export async function downloadTicketingAttachment(attachmentId: string, fileName: string): Promise<void> {
+  const blob = await fetchTicketingAttachmentBlob(attachmentId);
+  const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = fileName;

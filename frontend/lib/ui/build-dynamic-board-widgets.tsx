@@ -15,6 +15,12 @@ import {
 import { catalogBaseId } from "@/lib/ui/dashboard-layout-presets";
 import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
 
+/** Tour anchors for primary KPI strips rendered via catalog kind (not page slots). */
+const MODULE_KPI_DATA_HELP: Partial<Record<DashboardModuleId, string>> = {
+  ticketing: "tk-overview-kpis",
+  "e-approval": "ea-overview-kpis",
+};
+
 export type DynamicBoardBuildInput = {
   moduleId: DashboardModuleId;
   /** Live normalized metrics for kind-based widgets */
@@ -49,6 +55,7 @@ function kindDef(
   title?: string,
   options?: import("@/lib/ui/dashboard-widget-catalog").DashboardWidgetOptions,
   instanceId?: string,
+  dataHelp?: string,
 ): DashboardWidgetDef {
   return {
     id: instanceId ?? entry.id,
@@ -56,6 +63,7 @@ function kindDef(
     hideable: entry.hideable !== false,
     removable: entry.removable !== false,
     defaultSpan: entry.defaultSpan,
+    dataHelp,
     render: () => (
       <DashboardKindWidget entry={entry} data={data} title={title} options={options} />
     ),
@@ -160,7 +168,11 @@ export function buildDynamicBoardWidgets({
 
     const entry = getCatalogEntry(id) ?? catalog.find((item) => item.id === baseId);
     if (entry && dataSatisfiesKind(entry.kind, data)) {
-      push(kindDef(entry, data, title, widgetOptions[id], id));
+      const help =
+        (entry.id === "kpis" || baseId === "kpis") && MODULE_KPI_DATA_HELP[moduleId]
+          ? MODULE_KPI_DATA_HELP[moduleId]
+          : undefined;
+      push(kindDef(entry, data, title, widgetOptions[id], id, help));
       continue;
     }
   }

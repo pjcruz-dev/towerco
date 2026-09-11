@@ -54,7 +54,8 @@ import {
   selectedIdsToRowSelection,
 } from "@/lib/ui/module-list-selection";
 import { mapVisibleExportColumns } from "@/lib/ui/module-list-visible-columns";
-import { DOC_EXTRACT_BATCHES_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
+import { DOC_EXTRACT_BATCHES_PAGE_CHROME, resolvePageChrome } from "@/lib/ui/page-chrome-config";
+import { syncHeroWithPageChrome } from "@/lib/ui/sync-hero-with-page-chrome";
 import type { DocExtractBatchListRow } from "@/modules/doc-extract/types";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -507,7 +508,11 @@ export function DocExtractBatchesPageClient() {
     return map;
   }, [layout.widgetOptions]);
 
-  const normalizedData = useMemo(() => normalizeDocExtractBatches(rows), [rows]);
+  const normalizedData = useMemo(() => {
+    const base = normalizeDocExtractBatches(rows);
+    const chrome = resolvePageChrome(DOC_EXTRACT_BATCHES_PAGE_CHROME, layout.pageChrome);
+    return syncHeroWithPageChrome(base, chrome);
+  }, [layout.pageChrome, rows]);
 
   const catalogBoardWidgets = useMemo(
     () =>
@@ -552,43 +557,37 @@ export function DocExtractBatchesPageClient() {
           prefs={layout.pageChrome}
           editing={editing}
           onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
-          renderActions={({ isVisible }) => (
-            <>
-              {isVisible("help") || isVisible("tour") ? (
-                <DocExtractHelpEntryActions
-                  showHelp={isVisible("help")}
-                  showTour={isVisible("tour")}
-                />
-              ) : null}
-              {isVisible("customize") ? (
-                <DashboardLayoutToolbar
-                  widgets={layoutMeta}
-                  catalogModule="doc-extract"
-                  layout={layout}
-                  editing={editing}
-                  onEditingChange={setEditing}
-                  onChange={setLayout}
-                  bindableCatalog={bindableCatalog}
-                  hasTenantDefault={Boolean(tenantDefault)}
-                  onPublishTenantDefault={publishTenantDefault}
-                  onResetToTenantDefault={resetToTenantDefault}
-                  data={normalizedData}
-                />
-              ) : null}
-              {isVisible("templates") && canManageTemplates ? (
-                <Button size="sm" variant="outline" render={<Link href="/doc-extract/templates" />}>
-                  <ScrollText className="size-4" />
-                  Templates
-                </Button>
-              ) : null}
-              {isVisible("new") && canRun ? (
-                <Button size="sm" data-help="dx-new-batch" render={<Link href="/doc-extract/new" />}>
-                  <Plus className="size-4" />
-                  New extraction
-                </Button>
-              ) : null}
-            </>
-          )}
+          actionsById={{
+            help: <DocExtractHelpEntryActions showHelp showTour={false} />,
+            tour: <DocExtractHelpEntryActions showHelp={false} showTour />,
+            customize: (
+              <DashboardLayoutToolbar
+                widgets={layoutMeta}
+                catalogModule="doc-extract"
+                layout={layout}
+                editing={editing}
+                onEditingChange={setEditing}
+                onChange={setLayout}
+                bindableCatalog={bindableCatalog}
+                hasTenantDefault={Boolean(tenantDefault)}
+                onPublishTenantDefault={publishTenantDefault}
+                onResetToTenantDefault={resetToTenantDefault}
+                data={normalizedData}
+              />
+            ),
+            templates: canManageTemplates ? (
+              <Button size="sm" variant="outline" render={<Link href="/doc-extract/templates" />}>
+                <ScrollText className="size-4" />
+                Templates
+              </Button>
+            ) : null,
+            new: canRun ? (
+              <Button size="sm" data-help="dx-new-batch" render={<Link href="/doc-extract/new" />}>
+                <Plus className="size-4" />
+                New extraction
+              </Button>
+            ) : null,
+          }}
         />
 
         <DocExtractTourSoftPrompt />

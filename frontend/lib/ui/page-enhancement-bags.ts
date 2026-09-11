@@ -20,6 +20,19 @@ export function exportsTeaser(
   };
 }
 
+/** Keep first occurrence when the same href appears more than once. */
+export function dedupeShortcutsByHref(items: DashboardShortcutItem[]): DashboardShortcutItem[] {
+  const seen = new Set<string>();
+  const out: DashboardShortcutItem[] = [];
+  for (const item of items) {
+    const href = item.href?.trim();
+    if (!href || seen.has(href)) continue;
+    seen.add(href);
+    out.push({ ...item, href });
+  }
+  return out;
+}
+
 /** DocExtract batches — attention from status counts. */
 export function docExtractBatchesEnhancements(input: {
   processing: number;
@@ -278,15 +291,16 @@ export function workspaceDashboardEnhancements(input?: {
       tone: "warning",
     });
   }
-  const shortcuts: DashboardShortcutItem[] = [
-    ...(input?.quickLinks ?? []).map((link) => ({
-      href: link.href,
-      label: link.label,
-    })),
+  const fromLinks: DashboardShortcutItem[] = (input?.quickLinks ?? []).map((link) => ({
+    href: link.href,
+    label: link.label,
+  }));
+  const defaults: DashboardShortcutItem[] = [
     { href: "/ticketing/tickets", label: "Tickets", description: "Issue queue" },
     { href: "/e-approval", label: "E-Forms", description: "Approvals inbox" },
     { href: MY_EXPORTS_HREF, label: "My exports", description: "Download history" },
   ];
+  const shortcuts = dedupeShortcutsByHref([...fromLinks, ...defaults]);
   return {
     attention,
     shortcuts,
@@ -303,7 +317,7 @@ export function applyPageEnhancements(
   return withPageEnhancements(data, {
     ...patch,
     // Prefer page patch when provided; keep existing normalize bags otherwise
-    shortcuts: patch.shortcuts ?? data.shortcuts,
+    shortcuts: dedupeShortcutsByHref(patch.shortcuts ?? data.shortcuts ?? []),
     attention: patch.attention ?? data.attention,
     exportsTeaser: patch.exportsTeaser ?? data.exportsTeaser,
     activity: patch.activity ?? data.activity,

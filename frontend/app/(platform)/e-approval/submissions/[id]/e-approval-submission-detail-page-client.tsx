@@ -582,7 +582,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     : "—"}
                 </p>
               ) : (
-                <EApprovalWorkflowStepShow variant="full" steps={workflowStepItems} />
+                <EApprovalWorkflowStepShow variant="compact" steps={workflowStepItems} />
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">

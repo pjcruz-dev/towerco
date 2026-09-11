@@ -5,6 +5,8 @@ export type EApprovalFormWorkspaceVisibility = "own" | "approver" | "workspace_a
 export type EApprovalFormWorkspaceWidgetType =
   | "kpis"
   | "status_chart"
+  | "chart_by_status"
+  | "chart_by_subsidiary"
   | "recent_activity"
   | "audit_log"
   | "submissions_table";

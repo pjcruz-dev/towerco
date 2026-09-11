@@ -1,18 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import {
-  FileDown,
-  FileText,
-  GitBranch,
-  ImageIcon,
-  MessageSquare,
-  Paperclip,
-  Zap,
-} from "lucide-react";
-
+  AttachmentPreviewGallery,
+  type AttachmentGalleryItem,
+} from "@/components/attachments/attachment-preview-gallery";
 import {
   EApprovalApprovalSignatureField,
 } from "@/components/e-approval/e-approval-approval-signature-field";
@@ -38,6 +29,16 @@ import {
   E_APPROVAL_TOUR_SAMPLE_PRINT_PATH,
   isEApprovalTourActive,
 } from "@/lib/help/e-approval-tour-fixtures";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  FileDown,
+  FileText,
+  GitBranch,
+  MessageSquare,
+  Zap,
+} from "lucide-react";
 import {
   E_APPROVAL_TOUR_SAMPLE_DOCUMENT_NO,
   E_APPROVAL_TOUR_SAMPLE_FORM_NAME,
@@ -81,46 +82,28 @@ function TourSampleDocumentApprovalFields() {
 }
 
 function TourSampleAttachmentsPanel() {
+  const items = useMemo((): AttachmentGalleryItem[] => {
+    return eApprovalTourSampleAttachments.map((file) => ({
+      id: file.id,
+      fileName: file.file_name,
+      title: file.file_name,
+      subtitle: "Supporting documents",
+    }));
+  }, []);
+
+  const noopFetchBlob = useCallback(async () => new Blob(), []);
+
   return (
     <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <h3 className="text-sm font-medium text-foreground">Attachments</h3>
-        <Badge variant="outline" className="h-5 min-w-5 px-1.5 text-[10px]">
-          {eApprovalTourSampleAttachments.length}
-        </Badge>
-      </div>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {eApprovalTourSampleAttachments.map((file) => {
-          const isImage = /\.(png|jpe?g|gif|webp)$/i.test(file.file_name);
-          return (
-            <li
-              key={file.id}
-              className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-                {isImage ? (
-                  <ImageIcon className="h-4 w-4" aria-hidden />
-                ) : (
-                  <FileText className="h-4 w-4" aria-hidden />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{file.file_name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {file.metadata?.caption ?? "Supporting documents"}
-                  {file.metadata?.captured_at
-                    ? ` · ${formatTourSampleTimestamp(file.metadata.captured_at)}`
-                    : null}
-                </p>
-                <Button type="button" size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" disabled>
-                  Open preview
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <AttachmentPreviewGallery
+        title="Attachments"
+        hint="Photos show geotag details when captured. PDF/image can open with approval footer."
+        items={items}
+        fetchBlob={noopFetchBlob}
+        onDownload={() => undefined}
+        openPreviewDisabled
+        openPreviewLabel="Open with approval footer"
+      />
     </div>
   );
 }
@@ -212,7 +195,7 @@ function TourSampleDetailInner() {
         <div className="mt-4 border-t border-border pt-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Workflow step</p>
           <EApprovalWorkflowStepShow
-            variant="full"
+            variant="compact"
             steps={buildWorkflowStepShowItems({
               currentStep: eApprovalTourSampleListRows[0]?.current_step ?? 1,
               stepCount: eApprovalTourSampleListRows[0]?.step_count ?? 3,

@@ -42,8 +42,11 @@ export function DashboardInsertBetween({ entries, onSelect, label = "Add widget"
             </Button>
           }
         />
-        <PopoverContent className="w-[22rem] p-2" align="center">
+        <PopoverContent className="w-[26rem] p-2" align="center">
           <p className="mb-1 px-1 text-xs font-medium text-muted-foreground">Insert widget here</p>
+          <p className="mb-2 px-1 text-[10px] leading-snug text-muted-foreground">
+            Mini preview shows layout shape · blue line is when to use it
+          </p>
           <DashboardAddWidgetPicker
             entries={entries}
             onSelect={(entry) => {

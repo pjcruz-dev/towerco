@@ -323,9 +323,9 @@ export function normalizeDocExtractBatches(rows: DocExtractBatchListRow[]): Dash
   }
   const kpis: ProjectOneKpi[] = [
     { key: "total", label: "Batches", value: rows.length, tone: "neutral" },
-    { key: "processing", label: "Scanning", value: processing, tone: processing ? "warning" : "neutral" },
+    { key: "processing", label: "Scanning", value: processing, tone: "warning" },
     { key: "ready", label: "Ready", value: ready, tone: "success" },
-    { key: "failed", label: "Failed", value: failed, tone: failed ? "danger" : "neutral" },
+    { key: "failed", label: "Failed", value: failed, tone: "danger" },
   ];
   const status = [
     { key: "processing", label: "Scanning", value: processing, fill: chartFillForKey("processing", 0) },

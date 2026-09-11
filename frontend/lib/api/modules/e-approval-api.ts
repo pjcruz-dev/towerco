@@ -32,6 +32,7 @@ import type {
 } from "@/modules/e-approval/form-workspace-types";
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
+import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 
 export async function fetchEApprovalAssignableUsers(): Promise<EApprovalAssignableUser[]> {
   const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users");
@@ -774,9 +775,7 @@ export async function downloadEApprovalSubmissionsExport(
         department: params.department || undefined,
         ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       },
-      paramsSerializer: {
-        indexes: null,
-      },
+      paramsSerializer: moduleListExportParamsSerializer,
       responseType: "blob",
       validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
     },
@@ -993,7 +992,7 @@ export async function downloadEApprovalWorkspaceExport(
         async: params.async ? 1 : undefined,
         ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       },
-      paramsSerializer: { indexes: null },
+      paramsSerializer: moduleListExportParamsSerializer,
       responseType: "blob",
       validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
     },

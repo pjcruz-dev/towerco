@@ -13,7 +13,6 @@ import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { ActionableWidgets } from "@/components/project-one/actionable-widgets";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -176,14 +175,6 @@ export function TenantWorkspaceDashboard() {
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
     return [
-      {
-        id: "kpis",
-        label: "KPI strip",
-        hideable: false,
-        removable: false,
-        defaultSpan: "full",
-        render: () => <KpiStrip items={dashboard.kpis} />,
-      },
       {
         id: "awaiting_me",
         label: "Awaiting you",

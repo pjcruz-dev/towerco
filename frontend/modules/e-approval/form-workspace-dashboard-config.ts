@@ -1,6 +1,13 @@
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
-export type WorkspaceWidgetType = "kpis" | "status_chart" | "recent_activity" | "audit_log" | "submissions_table";
+export type WorkspaceWidgetType =
+  | "kpis"
+  | "status_chart"
+  | "chart_by_status"
+  | "chart_by_subsidiary"
+  | "recent_activity"
+  | "audit_log"
+  | "submissions_table";
 
 export type WorkspaceDashboardWidget = {
   id: string;
@@ -36,6 +43,8 @@ export type FormWorkspaceDashboardSettings = {
 export const WORKSPACE_WIDGET_LABELS: Record<WorkspaceWidgetType, string> = {
   kpis: "KPI strip",
   status_chart: "Analytics charts",
+  chart_by_status: "Status breakdown",
+  chart_by_subsidiary: "By subsidiary",
   recent_activity: "Recent activity",
   audit_log: "Workspace audit log",
   submissions_table: "Submissions table",
@@ -56,10 +65,11 @@ const SKIP_FIELD_TYPES = new Set([
 export const DEFAULT_WORKSPACE_DASHBOARD: FormWorkspaceDashboardSettings = {
   widgets: [
     { id: "kpis", type: "kpis", enabled: true, order: 1 },
-    { id: "status_chart", type: "status_chart", enabled: true, order: 2 },
-    { id: "recent_activity", type: "recent_activity", enabled: true, order: 3 },
-    { id: "audit_log", type: "audit_log", enabled: false, order: 4 },
-    { id: "submissions_table", type: "submissions_table", enabled: true, order: 5 },
+    { id: "chart_by_status", type: "chart_by_status", enabled: true, order: 2 },
+    { id: "chart_by_subsidiary", type: "chart_by_subsidiary", enabled: true, order: 3 },
+    { id: "recent_activity", type: "recent_activity", enabled: true, order: 4 },
+    { id: "audit_log", type: "audit_log", enabled: false, order: 5 },
+    { id: "submissions_table", type: "submissions_table", enabled: true, order: 6 },
   ],
   table_columns: [
     { key: "document_no", label: "Document", kind: "system", visible: true, order: 1 },
@@ -75,6 +85,38 @@ export const DEFAULT_WORKSPACE_DASHBOARD: FormWorkspaceDashboardSettings = {
     { id: "this_month", label: "This month", period_days: 30, order: 5 },
   ],
 };
+
+/** Expand legacy Analytics bundle into separate Status / Subsidiary widgets. */
+export function expandWorkspaceDashboardWidgets(
+  widgets: WorkspaceDashboardWidget[],
+): WorkspaceDashboardWidget[] {
+  const out: WorkspaceDashboardWidget[] = [];
+  let order = 1;
+  for (const widget of widgets) {
+    if (widget.type === "status_chart" || widget.id === "status_chart") {
+      if (!out.some((row) => row.type === "chart_by_status")) {
+        out.push({
+          id: "chart_by_status",
+          type: "chart_by_status",
+          enabled: widget.enabled,
+          order: order++,
+        });
+      }
+      if (!out.some((row) => row.type === "chart_by_subsidiary")) {
+        out.push({
+          id: "chart_by_subsidiary",
+          type: "chart_by_subsidiary",
+          enabled: widget.enabled,
+          order: order++,
+        });
+      }
+      continue;
+    }
+    if (out.some((row) => row.id === widget.id || row.type === widget.type)) continue;
+    out.push({ ...widget, order: order++ });
+  }
+  return out;
+}
 
 function exportableFields(fields: EApprovalFormFieldInput[]): EApprovalFormFieldInput[] {
   return fields.filter((field) => field.name?.trim() && !SKIP_FIELD_TYPES.has(field.type));
@@ -147,7 +189,10 @@ function parseWidgets(value: unknown): WorkspaceDashboardWidget[] {
     })
     .filter((item): item is WorkspaceDashboardWidget => item !== null);
 
-  return widgets.length > 0 ? widgets.sort((a, b) => a.order - b.order) : DEFAULT_WORKSPACE_DASHBOARD.widgets;
+  const expanded = expandWorkspaceDashboardWidgets(
+    widgets.length > 0 ? widgets.sort((a, b) => a.order - b.order) : DEFAULT_WORKSPACE_DASHBOARD.widgets,
+  );
+  return expanded.length > 0 ? expanded : DEFAULT_WORKSPACE_DASHBOARD.widgets;
 }
 
 function parseTableColumns(

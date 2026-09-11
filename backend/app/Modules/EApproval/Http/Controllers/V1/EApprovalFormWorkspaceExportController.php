@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 
 use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Core\Support\ModuleListExportQuery;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Services\EApprovalFormWorkspaceService;
@@ -36,6 +37,8 @@ class EApprovalFormWorkspaceExportController extends AbstractApiController
         $workspace = $context['workspace'];
 
         abort_unless($workspaces->viewerCanExport($user, $workspace), 403);
+
+        ModuleListExportQuery::coerceArrayParams($request);
 
         $query = $this->validatedTenantListQuery($request);
         $validated = $request->validate([

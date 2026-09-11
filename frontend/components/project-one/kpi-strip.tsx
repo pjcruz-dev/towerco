@@ -1,6 +1,7 @@
 import { KpiStripSkeleton } from "@/components/ui/page-skeletons";
 import { WidgetKpiTile } from "@/components/dashboard/widgets/widget-primitives";
 import { DashboardWidgetEmpty } from "@/components/dashboard/dashboard-widget";
+import type { DashboardKpiCardOverride } from "@/lib/ui/dashboard-kpi-card-options";
 import type { ProjectOneKpi } from "@/modules/project-one/types";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ export function KpiStrip({
   skeletonCount = 4,
   dataHelp,
   className,
+  cardOptions,
 }: {
   items: KpiStripItem[];
   isLoading?: boolean;
@@ -27,6 +29,8 @@ export function KpiStrip({
   /** Stable hook for live Help tours (`[data-help="…"]`). */
   dataHelp?: string;
   className?: string;
+  /** Per-KPI presentation overrides from Layout & options. */
+  cardOptions?: Record<string, DashboardKpiCardOverride>;
 }) {
   if (isLoading) {
     return <KpiStripSkeleton count={skeletonCount} />;
@@ -40,30 +44,55 @@ export function KpiStrip({
     );
   }
 
+  const visible = items.filter((item) => {
+    const key = kpiKey(item);
+    return !cardOptions?.[key]?.hidden;
+  });
+
+  if (visible.length === 0) {
+    return (
+      <section data-help={dataHelp}>
+        <DashboardWidgetEmpty message="All KPI cards are hidden. Re-enable them in Layout & options." />
+      </section>
+    );
+  }
+
   const cols =
-    items.length >= 5
+    visible.length >= 5
       ? "xl:grid-cols-5"
-      : items.length === 4
+      : visible.length === 4
         ? "xl:grid-cols-4"
-        : items.length === 3
+        : visible.length === 3
           ? "xl:grid-cols-3"
           : "xl:grid-cols-2";
 
   return (
     <section
       data-help={dataHelp}
-      className={cn("grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2", cols, className)}
+      className={cn("grid min-w-0 grid-cols-1 items-start gap-3 sm:grid-cols-2", cols, className)}
     >
-      {items.map((item) => (
-        <WidgetKpiTile
-          key={kpiKey(item)}
-          label={item.label}
-          value={item.value}
-          change={item.change}
-          tone={item.tone ?? "neutral"}
-          href={item.href}
-        />
-      ))}
+      {visible.map((item, index) => {
+        const key = kpiKey(item);
+        const override = cardOptions?.[key];
+        return (
+          <WidgetKpiTile
+            key={key}
+            metricKey={key}
+            index={index}
+            label={override?.label?.trim() || item.label}
+            value={item.value}
+            change={item.change}
+            tone={override?.tone ?? item.tone ?? "neutral"}
+            href={item.href}
+            accent={override?.accent ?? "auto"}
+            icon={override?.icon ?? "auto"}
+            showSpark={override?.showSpark ?? true}
+            sparkStyle={override?.sparkStyle ?? "auto"}
+            layout={override?.layout ?? "auto"}
+            tinted={override?.tinted ?? false}
+          />
+        );
+      })}
     </section>
   );
 }

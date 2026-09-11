@@ -28,9 +28,21 @@ export function KpiStripSkeleton({ count = 4, className }: { count?: number; cla
           key={`kpi-skeleton-${index}`}
           className="rounded-xl border border-border bg-card p-4 shadow-sm"
         >
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="mt-3 h-8 w-16" />
-          <Skeleton className="mt-2 h-3 w-28" />
+          <div className="flex items-start justify-between gap-2">
+            <Skeleton className="size-9 rounded-lg" />
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+          <Skeleton className="mt-3 h-4 w-24" />
+          <Skeleton className="mt-2 h-8 w-16" />
+          <div className="mt-3 flex h-9 items-end gap-1">
+            {Array.from({ length: 8 }).map((__, bar) => (
+              <Skeleton
+                key={`kpi-spark-${index}-${bar}`}
+                className="min-w-0 flex-1 rounded-full"
+                style={{ height: `${28 + ((bar * 11) % 48)}%` }}
+              />
+            ))}
+          </div>
         </article>
       ))}
     </section>

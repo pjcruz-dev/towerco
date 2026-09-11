@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DocExtract\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Core\Support\ModuleListExportQuery;
 use App\Modules\DocExtract\Services\DocExtractBatchService;
 use App\Modules\DocExtract\Services\DocExtractPlanFeaturesService;
 use App\Modules\Identity\Models\ModuleListExport;
@@ -24,6 +25,8 @@ final class DocExtractBatchListExportController extends AbstractApiController
     ): Response|JsonResponse {
         abort_unless($request->user()?->can('doc-extract:view'), 403);
         $planFeatures->assertModuleEnabled();
+
+        ModuleListExportQuery::coerceArrayParams($request);
 
         $validated = $request->validate([
             'format' => ['sometimes', 'string', 'in:csv,xlsx,html'],

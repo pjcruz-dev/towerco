@@ -62,18 +62,23 @@ export type DashboardWidgetOptions = {
    * Functional per-widget settings:
    * - dataSource: which live series/bag to chart/list
    * - kpiKey: which KPI for single/gauge cards
+   * - kpiCards: JSON map of per-KPI presentation overrides (color/icon/spark/label)
    * - limit: max rows in lists
    * - compact: denser list/chart padding
    * - showDescription: show catalog description under title
+   * - showCta: welcome banner primary button
    * - minHeight: reserved via settings from resize
    * - tipTitle / tipBody: page tip card copy
    */
   settings?: {
     dataSource?: string;
     kpiKey?: string;
+    /** JSON string: Record<kpiKey, DashboardKpiCardOverride> */
+    kpiCards?: string;
     limit?: number;
     compact?: boolean;
     showDescription?: boolean;
+    showCta?: boolean;
     minHeight?: number;
     tipTitle?: string;
     tipBody?: string;
@@ -86,6 +91,8 @@ export type DashboardCatalogEntry = {
   kind: DashboardWidgetKind;
   label: string;
   description: string;
+  /** Operator-facing “best for / use when” line in the Add widget picker. */
+  purpose?: string;
   category: DashboardWidgetCategory;
   /** Haze reference surface this pattern came from */
   hazeSource: "overview" | "analytics" | "crm" | "saas" | "shared";
@@ -117,11 +124,14 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     id: "hero_banner",
     kind: "hero_banner",
     label: "Welcome banner",
-    description: "Full-width greeting with primary CTA.",
+    description: "Optional greeting card. Title follows page chrome; CTA is off by default.",
+    purpose: "Best for: orientation only — keep New / Refresh on the header instead.",
     category: "summary",
     hazeSource: "overview",
     defaultSpan: "full",
     allowedSpans: ["full", "half"],
+    /** CTA off by default — primary actions live on the page header. */
+    defaultSettings: { showCta: false, showDescription: true },
     modules: ["e-approval", "ticketing", "doc-extract"],
   },
   {
@@ -500,13 +510,24 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     modules: ["e-approval", "ticketing", "doc-extract"],
   },
   {
-    id: "queues",
+    id: "queue_awaiting",
     kind: "list_progress",
-    label: "Approval queues",
-    description: "Awaiting approval + needs attention panels.",
+    label: "Needs my approval",
+    description: "Oldest pending items assigned to you.",
     category: "operations",
     hazeSource: "shared",
-    defaultSpan: "full",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half"],
+    modules: ["e-approval"],
+  },
+  {
+    id: "queue_attention",
+    kind: "list_progress",
+    label: "Needs my attention",
+    description: "Returned and draft submissions you own.",
+    category: "operations",
+    hazeSource: "shared",
+    defaultSpan: "half",
     allowedSpans: ["full", "half"],
     modules: ["e-approval"],
   },
@@ -522,10 +543,54 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     modules: ["ticketing"],
   },
   {
-    id: "category_analytics",
-    kind: "bar_list",
+    id: "chart_by_category",
+    kind: "chart_bar",
+    label: "Volume by category",
+    description: "Open, in progress, and resolved volume by ticket category.",
+    category: "charts",
+    hazeSource: "shared",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    modules: ["ticketing"],
+  },
+  {
+    id: "table_category_analytics",
+    kind: "table",
     label: "Category analytics",
-    description: "Volume and SLA by ticket category.",
+    description: "Active queue and recent resolutions by category.",
+    category: "operations",
+    hazeSource: "shared",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    modules: ["ticketing"],
+  },
+  {
+    id: "chart_ticket_queue",
+    kind: "chart_bar",
+    label: "Ticket queue",
+    description: "Open, assigned, urgent, and resolved this week.",
+    category: "charts",
+    hazeSource: "shared",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    modules: ["ticketing"],
+  },
+  {
+    id: "chart_by_priority",
+    kind: "chart_donut",
+    label: "By priority",
+    description: "Priority mix for filtered tickets.",
+    category: "charts",
+    hazeSource: "shared",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    modules: ["ticketing"],
+  },
+  {
+    id: "chart_by_department",
+    kind: "chart_bar",
+    label: "Volume by department",
+    description: "Requester department mix for the current filters.",
     category: "charts",
     hazeSource: "shared",
     defaultSpan: "full",
@@ -553,16 +618,28 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     hazeSource: "shared",
     defaultSpan: "full",
     allowedSpans: ["full", "half", "third"],
+    defaultSettings: { dataSource: "secondaryKpis" },
     modules: ["e-approval"],
   },
   {
-    id: "status_chart",
-    kind: "chart_donut",
-    label: "Status & subsidiary charts",
-    description: "Status mix and subsidiary volume for a form workspace.",
+    id: "chart_by_status",
+    kind: "chart_bar",
+    label: "Status breakdown",
+    description: "Submission counts by workflow status.",
     category: "charts",
     hazeSource: "shared",
-    defaultSpan: "full",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    modules: ["e-approval-workspace"],
+  },
+  {
+    id: "chart_by_subsidiary",
+    kind: "chart_bar",
+    label: "By subsidiary",
+    description: "Submission volume keyed from the subsidiary field.",
+    category: "charts",
+    hazeSource: "shared",
+    defaultSpan: "half",
     allowedSpans: ["full", "half", "third"],
     modules: ["e-approval-workspace"],
   },
@@ -613,17 +690,6 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     removable: false,
     hideable: false,
     modules: ["doc-extract"],
-  },
-  {
-    id: "queue_charts",
-    kind: "chart_bar",
-    label: "Queue & priority charts",
-    description: "Ticket volume by queue and priority.",
-    category: "charts",
-    hazeSource: "shared",
-    defaultSpan: "full",
-    allowedSpans: ["full", "half", "third"],
-    modules: ["ticketing"],
   },
   {
     id: "quick_actions",
@@ -694,7 +760,8 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     id: "page_shortcuts",
     kind: "shortcuts",
     label: "Shortcuts strip",
-    description: "Quick links (New, Approvals, Reports, Help). Fill via page data.",
+    description: "Quick links (New, Approvals, Reports, Help).",
+    purpose: "Best for: faster navigation without using the sidebar.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "full",
@@ -707,7 +774,8 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     id: "page_kpi_strip",
     kind: "kpi_metric_row",
     label: "Pinned KPI strip",
-    description: "3–5 live metrics above the list when the page provides KPIs.",
+    description: "3–5 live metrics when the page provides KPIs.",
+    purpose: "Best for: at-a-glance health above the main list or board.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "full",
@@ -721,6 +789,7 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     kind: "page_attention",
     label: "Attention banner",
     description: "Overdue, failed, awaiting-me, SLA at-risk, or returned items.",
+    purpose: "Best for: surfacing work that needs action now.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "full",
@@ -734,6 +803,7 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     kind: "list_activity",
     label: "Recent activity",
     description: "Latest approvals, ticket updates, or extract events.",
+    purpose: "Best for: a compact feed of what changed recently.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "half",
@@ -748,6 +818,7 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     kind: "page_tip",
     label: "Page tip / note",
     description: "Tenant-editable tip under Layout & options (no code deploy).",
+    purpose: "Best for: onboarding notes or SOPs for operators on this page.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "full",
@@ -765,6 +836,7 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     kind: "page_exports",
     label: "My exports teaser",
     description: "Link to Reports / My exports with optional pending count.",
+    purpose: "Best for: reminding people where downloads and async jobs live.",
     category: "enhancements",
     hazeSource: "shared",
     defaultSpan: "half",
@@ -793,6 +865,47 @@ export const DASHBOARD_PICKER_GROUP_LABELS: Record<DashboardPickerGroup, string>
   charts: "Charts",
   other: "More",
 };
+
+export const DASHBOARD_PICKER_GROUP_HINTS: Record<DashboardPickerGroup, string> = {
+  sections: "Core blocks already wired to this page’s data.",
+  enhancements: "Optional strips and tips you can place anywhere.",
+  charts: "Visual breakdowns from live metrics.",
+  other: "Additional catalog widgets for this module.",
+};
+
+/** Operator “best for” line in the Add widget picker. */
+export function catalogEntryPurpose(entry: DashboardCatalogEntry): string {
+  if (entry.purpose?.trim()) return entry.purpose.trim();
+  switch (entry.kind) {
+    case "hero_banner":
+      return "Best for: optional orientation under the page title.";
+    case "kpi_metric_row":
+    case "kpi_hero_chart":
+    case "kpi_single":
+    case "kpi_sparkline":
+    case "kpi_gauge":
+      return "Best for: scanning key metrics quickly.";
+    case "shortcuts":
+      return "Best for: one-click jumps into common workflows.";
+    case "page_attention":
+    case "alerts":
+      return "Best for: highlighting work that needs action.";
+    case "list_activity":
+      return "Best for: a recent-change feed.";
+    case "page_tip":
+      return "Best for: tenant-editable guidance on this page.";
+    case "page_exports":
+      return "Best for: linking to downloads and async jobs.";
+    case "table":
+    case "filters":
+      return "Best for: the main operational list on this page.";
+    default:
+      if (entry.kind.startsWith("chart_")) {
+        return "Best for: comparing volume or mix visually.";
+      }
+      return entry.description;
+  }
+}
 
 export function resolvePickerGroup(entry: DashboardCatalogEntry): DashboardPickerGroup {
   if (entry.pickerGroup) return entry.pickerGroup;

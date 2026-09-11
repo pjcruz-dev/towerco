@@ -17,9 +17,8 @@ import {
   type DashboardLayoutPresetId,
 } from "@/lib/ui/dashboard-layout-presets";
 import type { DashboardLayoutPrefs, DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
-import { hasAnyPermission, permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
+import { useDashboardBoardCapabilities } from "@/hooks/use-dashboard-board-capabilities";
 
 type Props = {
   widgets: Array<Pick<DashboardWidgetDef, "id" | "label" | "hideable" | "removable">>;
@@ -39,9 +38,9 @@ type Props = {
 };
 
 /**
- * Header control to enter dashboard Customize mode.
- * While editing: apply Ops / Manager / Auditor packs or density presets.
- * Presets apply only on explicit click — never on page load.
+ * Header control to enter dashboard Customize / Rearrange mode.
+ * - Tenant/user managers: full Customize (presets, add/remove, Layout & options).
+ * - Everyone else: Rearrange only (personal DnD order).
  */
 export function DashboardLayoutToolbar({
   widgets,
@@ -60,17 +59,8 @@ export function DashboardLayoutToolbar({
 }: Props) {
   const [presetOpen, setPresetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
-  const canPublish = hasAnyPermission(
-    user
-      ? {
-          ...user,
-          permissions: effectivePermissions(),
-        }
-      : null,
-    [permissions.tenantManage, permissions.userManage],
-  );
+  const { canCustomizeBoard } = useDashboardBoardCapabilities();
+  const canPublish = canCustomizeBoard;
 
   if (widgets.length === 0) return null;
 
@@ -105,7 +95,7 @@ export function DashboardLayoutToolbar({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      {editing ? (
+      {editing && canCustomizeBoard ? (
         <Popover open={presetOpen} onOpenChange={setPresetOpen}>
           <PopoverTrigger
             render={
@@ -218,6 +208,21 @@ export function DashboardLayoutToolbar({
         </Popover>
       ) : null}
 
+      {editing && !canCustomizeBoard && onResetToTenantDefault ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy || !hasTenantDefault}
+          onClick={() => {
+            setBusy(true);
+            void onResetToTenantDefault().finally(() => setBusy(false));
+          }}
+        >
+          Reset order
+        </Button>
+      ) : null}
+
       <Button
         type="button"
         size="sm"
@@ -226,7 +231,7 @@ export function DashboardLayoutToolbar({
         onClick={() => onEditingChange(!editing)}
       >
         {editing ? <Check className="size-3.5" aria-hidden /> : <Pencil className="size-3.5" aria-hidden />}
-        {editing ? "Done" : "Customize"}
+        {editing ? "Done" : canCustomizeBoard ? "Customize" : "Rearrange"}
       </Button>
     </div>
   );

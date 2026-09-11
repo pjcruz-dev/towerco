@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, Suspense } from "react";
+import { useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -23,7 +23,6 @@ import { EApprovalTourCompleteAnchor, EApprovalTourOverviewQueueFixtures } from 
 import { EApprovalTourSoftPrompt } from "@/components/help/e-approval-tour-soft-prompt";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -42,13 +41,24 @@ import {
   buildDynamicBoardWidgets,
 } from "@/lib/ui/build-dynamic-board-widgets";
 import { normalizeEApprovalDashboard } from "@/lib/ui/normalize-dashboard-data";
-import { E_APPROVAL_DASHBOARD_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
-import { cn } from "@/lib/utils";
+import { E_APPROVAL_DASHBOARD_PAGE_CHROME, resolvePageChrome } from "@/lib/ui/page-chrome-config";
+import { syncHeroWithPageChrome } from "@/lib/ui/sync-hero-with-page-chrome";
 import { formatEApprovalStatusLabel } from "@/modules/e-approval/status-display";
-import type {
-  EApprovalDashboardKpi,
-  EApprovalDashboardQueueItem,
-} from "@/modules/e-approval/types";
+import type { EApprovalDashboardQueueItem } from "@/modules/e-approval/types";
+
+function expandEApprovalDashboardWidgetIds(ids: string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    if (id === "queues") {
+      for (const next of ["queue_awaiting", "queue_attention"] as const) {
+        if (!out.includes(next)) out.push(next);
+      }
+      continue;
+    }
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
+}
 
 function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -56,22 +66,6 @@ function formatWhen(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime())
     ? iso
     : d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
-}
-
-function OverviewKpiStrip({ items }: { items: EApprovalDashboardKpi[] }) {
-  return (
-    <KpiStrip
-      dataHelp="ea-overview-kpis"
-      items={items.map((item) => ({
-        key: item.key,
-        label: item.label,
-        value: item.value,
-        change: item.change,
-        tone: item.tone ?? "neutral",
-        href: item.href,
-      }))}
-    />
-  );
 }
 
 function QueueList({
@@ -137,7 +131,7 @@ export function EApprovalDashboardPageClient() {
         <div className="space-y-6">
           <DashboardBoardSkeleton
             layout={EMPTY_DASHBOARD_LAYOUT_PREFS}
-            defaultEnabledIds={["kpis", "queues", "shortcuts"]}
+            defaultEnabledIds={["kpis", "queue_awaiting", "queue_attention", "shortcuts"]}
           />
         </div>
       }
@@ -154,8 +148,39 @@ function EApprovalDashboardPageInner() {
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canManageForms = usePermission([permissions.eApprovalFormsManage]);
   const canAudit = usePermission([permissions.eApprovalAuditView]);
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs("toweros.e-approval.dashboard.layout");
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, serverReady } =
+    useDashboardLayoutPrefs("toweros.e-approval.dashboard.layout");
   const { editing, setEditing } = useDashboardCustomizeMode();
+  const expandedBundlesRef = useRef(false);
+
+  useEffect(() => {
+    if (!serverReady || expandedBundlesRef.current) return;
+    const needsExpand =
+      layout.enabledWidgetIds.includes("queues") || layout.widgetOrder.includes("queues");
+    if (!needsExpand) {
+      expandedBundlesRef.current = true;
+      return;
+    }
+    expandedBundlesRef.current = true;
+    const enabled = expandEApprovalDashboardWidgetIds(
+      layout.enabledWidgetIds.length > 0
+        ? layout.enabledWidgetIds
+        : ["kpis", "queue_awaiting", "queue_attention", "shortcuts"],
+    );
+    const order = expandEApprovalDashboardWidgetIds(
+      layout.widgetOrder.length > 0 ? layout.widgetOrder : enabled,
+    );
+    const spans = { ...layout.spans };
+    delete spans.queues;
+    if (!spans.queue_awaiting) spans.queue_awaiting = "half";
+    if (!spans.queue_attention) spans.queue_attention = "half";
+    setLayout({
+      ...layout,
+      enabledWidgetIds: enabled,
+      widgetOrder: order,
+      spans,
+    });
+  }, [layout, serverReady, setLayout]);
 
   const capabilities = data?.capabilities;
   const showApproveQueue = capabilities?.can_approve ?? canApprove;
@@ -205,11 +230,12 @@ function EApprovalDashboardPageInner() {
   const layoutMeta = useMemo(() => {
     const items = [
       { id: "kpis", label: "Status KPIs" },
-      { id: "queues", label: "Approval queues" },
+      { id: "queue_awaiting", label: "Needs my approval" },
+      { id: "queue_attention", label: "Needs my attention" },
       { id: "shortcuts", label: "Shortcuts" },
     ];
     if (financeKpis.length > 0) {
-      items.splice(2, 0, { id: "finance", label: "Finance & procurement" });
+      items.splice(3, 0, { id: "finance", label: "Finance & procurement" });
     }
     return items;
   }, [financeKpis.length]);
@@ -217,88 +243,68 @@ function EApprovalDashboardPageInner() {
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
     const widgets: DashboardWidgetDef[] = [
       {
-        id: "kpis",
-        label: "Status KPIs",
-        dataHelp: "ea-overview-kpis",
-        defaultSpan: "full",
-        render: () => <OverviewKpiStrip items={data?.kpis ?? []} />,
-      },
-      {
-        id: "queues",
-        label: "Approval queues",
-        defaultSpan: "full",
-        render: () => (
-          <div className={cn("grid gap-4", showApproveQueue ? "lg:grid-cols-2" : "lg:grid-cols-1")}>
-            {showApproveQueue ? (
-              <EApprovalSectionCard
-                dataHelp="ea-overview-awaiting"
-                title="Needs my approval"
-                description="Oldest pending items assigned to you."
-                actions={
-                  <Link
-                    href="/e-approval/approvals?awaiting_me=1"
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    View all
-                  </Link>
-                }
-              >
-                <QueueList
-                  items={awaitingQueue}
-                  emptyMessage="Nothing waiting on you right now. New items show up when someone submits work to you."
-                  metaLabel="requestor"
-                  tourFixture="awaiting"
-                />
-              </EApprovalSectionCard>
-            ) : (
-              <div
-                data-help="ea-overview-awaiting"
-                className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-sm text-muted-foreground"
-              >
-                Approver inbox appears here when your role can approve requests.
-              </div>
-            )}
-
+        id: "queue_awaiting",
+        label: "Needs my approval",
+        defaultSpan: "half",
+        render: () =>
+          showApproveQueue ? (
             <EApprovalSectionCard
-              dataHelp="ea-overview-attention"
-              title="Needs my attention"
-              description="Returned and draft submissions you own."
+              dataHelp="ea-overview-awaiting"
+              title="Needs my approval"
+              description="Oldest pending items assigned to you."
               actions={
                 <Link
-                  href="/e-approval/submissions?mine=1"
+                  href="/e-approval/approvals?awaiting_me=1"
                   className="text-xs font-medium text-primary hover:underline"
                 >
-                  View mine
+                  View all
                 </Link>
               }
             >
               <QueueList
-                items={attentionQueue}
-                emptyMessage="No drafts or returns yet. Items you own that need work will list here."
-                metaLabel="updated"
-                tourFixture="attention"
+                items={awaitingQueue}
+                emptyMessage="Nothing waiting on you right now. New items show up when someone submits work to you."
+                metaLabel="requestor"
+                tourFixture="awaiting"
               />
             </EApprovalSectionCard>
-          </div>
+          ) : (
+            <div
+              data-help="ea-overview-awaiting"
+              className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-sm text-muted-foreground"
+            >
+              Approver inbox appears here when your role can approve requests.
+            </div>
+          ),
+      },
+      {
+        id: "queue_attention",
+        label: "Needs my attention",
+        defaultSpan: "half",
+        render: () => (
+          <EApprovalSectionCard
+            dataHelp="ea-overview-attention"
+            title="Needs my attention"
+            description="Returned and draft submissions you own."
+            actions={
+              <Link
+                href="/e-approval/submissions?mine=1"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                View mine
+              </Link>
+            }
+          >
+            <QueueList
+              items={attentionQueue}
+              emptyMessage="No drafts or returns yet. Items you own that need work will list here."
+              metaLabel="updated"
+              tourFixture="attention"
+            />
+          </EApprovalSectionCard>
         ),
       },
     ];
-
-    if (financeKpis.length > 0) {
-      widgets.push({
-        id: "finance",
-        label: "Finance & procurement",
-        defaultSpan: "full",
-        render: () => (
-          <EApprovalSectionCard
-            title="Finance & procurement"
-            description="Open cash advances and PR follow-ups."
-          >
-            <OverviewKpiStrip items={financeKpis} />
-          </EApprovalSectionCard>
-        ),
-      });
-    }
 
     widgets.push({
       id: "shortcuts",
@@ -344,8 +350,6 @@ function EApprovalDashboardPageInner() {
   }, [
     attentionQueue,
     awaitingQueue,
-    data?.kpis,
-    financeKpis,
     shortcuts,
     showApproveQueue,
     showReports,
@@ -359,7 +363,11 @@ function EApprovalDashboardPageInner() {
     return map;
   }, [layout.widgetOptions]);
 
-  const normalizedData = useMemo(() => normalizeEApprovalDashboard(data), [data]);
+  const normalizedData = useMemo(() => {
+    const base = normalizeEApprovalDashboard(data);
+    const chrome = resolvePageChrome(E_APPROVAL_DASHBOARD_PAGE_CHROME, layout.pageChrome);
+    return syncHeroWithPageChrome(base, chrome);
+  }, [data, layout.pageChrome]);
 
   const catalogBoardWidgets = useMemo(
     () =>
@@ -367,11 +375,14 @@ function EApprovalDashboardPageInner() {
         moduleId: "e-approval",
         data: normalizedData,
         slots: boardWidgets,
-        enabledIds: layout.enabledWidgetIds,
+        enabledIds:
+          layout.enabledWidgetIds.length > 0
+            ? layout.enabledWidgetIds
+            : layoutMeta.map((widget) => widget.id),
         titleOverrides,
         widgetOptions: layout.widgetOptions,
       }),
-    [boardWidgets, layout.enabledWidgetIds, layout.widgetOptions, normalizedData, titleOverrides],
+    [boardWidgets, layout.enabledWidgetIds, layout.widgetOptions, layoutMeta, normalizedData, titleOverrides],
   );
 
   const bindableCatalog = useMemo(
@@ -406,15 +417,11 @@ function EApprovalDashboardPageInner() {
           prefs={layout.pageChrome}
           editing={editing}
           onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
-          renderActions={({ isVisible }) => (
-            <div data-help="ea-overview-quick-actions" className="flex flex-wrap items-center gap-2">
-              {isVisible("help") || isVisible("tour") ? (
-                <EApprovalHelpEntryActions
-                  showHelp={isVisible("help")}
-                  showTour={isVisible("tour")}
-                />
-              ) : null}
-              {isVisible("customize") ? (
+          actionsById={{
+            help: <EApprovalHelpEntryActions showHelp showTour={false} />,
+            tour: <EApprovalHelpEntryActions showHelp={false} showTour />,
+            customize: (
+              <div data-help="ea-overview-quick-actions">
                 <DashboardLayoutToolbar
                   widgets={layoutMeta}
                   catalogModule="e-approval"
@@ -428,27 +435,27 @@ function EApprovalDashboardPageInner() {
                   onResetToTenantDefault={resetToTenantDefault}
                   data={normalizedData}
                 />
-              ) : null}
-              {isVisible("refresh") ? (
-                <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
-                  {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
-                  Refresh
-                </Button>
-              ) : null}
-              {isVisible("approvals") && showApproveQueue ? (
-                <Button size="sm" variant="outline" render={<Link href="/e-approval/approvals?awaiting_me=1" />}>
-                  <ClipboardCheck className="mr-1.5 size-3.5" aria-hidden />
-                  Approvals
-                </Button>
-              ) : null}
-              {isVisible("new") && showCreate ? (
-                <Button size="sm" render={<Link href="/e-approval/submissions/new" />}>
-                  <FilePlus2 className="mr-1.5 size-3.5" aria-hidden />
-                  New submission
-                </Button>
-              ) : null}
-            </div>
-          )}
+              </div>
+            ),
+            refresh: (
+              <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
+                Refresh
+              </Button>
+            ),
+            approvals: showApproveQueue ? (
+              <Button size="sm" variant="outline" render={<Link href="/e-approval/approvals?awaiting_me=1" />}>
+                <ClipboardCheck className="mr-1.5 size-3.5" aria-hidden />
+                Approvals
+              </Button>
+            ) : null,
+            new: showCreate ? (
+              <Button size="sm" render={<Link href="/e-approval/submissions/new" />}>
+                <FilePlus2 className="mr-1.5 size-3.5" aria-hidden />
+                New submission
+              </Button>
+            ) : null,
+          }}
         />
 
         <EApprovalTourSoftPrompt />

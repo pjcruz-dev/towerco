@@ -32,6 +32,7 @@ import type {
   DashboardCatalogEntry,
   DashboardWidgetOptions,
 } from "@/lib/ui/dashboard-widget-catalog";
+import { parseKpiCardOverrides } from "@/lib/ui/dashboard-kpi-card-options";
 import {
   activityFromDataSource,
   bubbleFromData,
@@ -109,19 +110,29 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
     case "hero_banner": {
       const hero = data.hero;
       if (!hero) break;
+      const showDescription = settings.showDescription !== false;
+      const showCta = settings.showCta === true;
       return (
         <WidgetHeroBanner
-          title={hero.title}
-          description={hero.description}
+          title={heading !== entry.label ? heading : hero.title}
+          description={showDescription ? hero.description : undefined}
           ctaHref={hero.ctaHref}
           ctaLabel={hero.ctaLabel}
+          showCta={showCta}
+          compact={dense}
         />
       );
     }
     case "kpi_metric_row":
     case "kpi_hero_chart": {
       const useSecondary = source === "secondaryKpis" && (data.secondaryKpis?.length ?? 0) > 0;
-      return <KpiStrip items={useSecondary ? (data.secondaryKpis ?? []) : data.kpis} />;
+      const cardOptions = parseKpiCardOverrides(options?.settings?.kpiCards);
+      return (
+        <KpiStrip
+          items={useSecondary ? (data.secondaryKpis ?? []) : data.kpis}
+          cardOptions={cardOptions}
+        />
+      );
     }
     case "kpi_single": {
       const kpiKey = options?.settings?.kpiKey ? String(options.settings.kpiKey) : undefined;

@@ -105,13 +105,15 @@ export const CATALOG_SLOT_ALIASES: Record<
   "e-approval": {
     kpi_metric_row: "kpis",
     saas_metric_quad: "kpis",
-    list_progress: "queues",
+    list_progress: "queue_awaiting",
   },
   "e-approval-workspace": {
     kpi_metric_row: "kpis",
     saas_metric_quad: "kpis",
     table: "submissions_table",
     filters: "submissions_table",
+    chart_bar: "chart_by_status",
+    chart_donut: "chart_by_status",
   },
   "doc-extract": {
     kpi_metric_row: "kpis",

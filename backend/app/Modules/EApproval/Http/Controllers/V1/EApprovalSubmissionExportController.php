@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 
 use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Core\Support\ModuleListExportQuery;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Services\EApprovalReportService;
@@ -27,6 +28,8 @@ class EApprovalSubmissionExportController extends AbstractApiController
     ): Response|JsonResponse {
         $user = $request->user();
         abort_unless($user !== null && EApprovalExportViewerScope::userCanExport($user), 403);
+
+        ModuleListExportQuery::coerceArrayParams($request, ['ids', 'columns', 'statuses']);
 
         $query = $this->validatedTenantListQuery($request);
         $validated = $request->validate([

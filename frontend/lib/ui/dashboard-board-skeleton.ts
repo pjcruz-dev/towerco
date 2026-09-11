@@ -79,8 +79,7 @@ function kindHintFor(
   if (
     kind?.startsWith("chart_") ||
     base === "action_charts" ||
-    base === "queue_charts" ||
-    base === "category_analytics"
+    base.startsWith("chart_")
   ) {
     return "chart";
   }
@@ -93,7 +92,10 @@ function kindHintFor(
     base === "recent_activity" ||
     base === "page_activity" ||
     base === "action_queue" ||
-    base === "recent_tickets"
+    base === "recent_tickets" ||
+    base === "queue_awaiting" ||
+    base === "queue_attention" ||
+    base === "table_category_analytics"
   ) {
     return "list";
   }

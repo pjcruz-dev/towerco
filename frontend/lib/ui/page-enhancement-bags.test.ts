@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyPageEnhancements,
+  dedupeShortcutsByHref,
   docExtractBatchesEnhancements,
   eApprovalSubmissionsEnhancements,
   ticketingListEnhancements,
+  workspaceDashboardEnhancements,
 } from "@/lib/ui/page-enhancement-bags";
 import { emptyNormalizedData } from "@/lib/ui/dashboard-widget-data";
 
@@ -25,5 +27,20 @@ describe("page-enhancement-bags", () => {
   it("builds submissions returned attention", () => {
     const bag = eApprovalSubmissionsEnhancements({ returnedCount: 4 });
     expect(bag.attention?.[0]?.title).toContain("4");
+  });
+
+  it("dedupes workspace shortcuts when quick links overlap defaults", () => {
+    const bag = workspaceDashboardEnhancements({
+      quickLinks: [
+        { href: "/e-approval", label: "Approvals" },
+        { href: "/e-approval", label: "Duplicate" },
+      ],
+    });
+    const hrefs = (bag.shortcuts ?? []).map((item) => item.href);
+    expect(hrefs.filter((href) => href === "/e-approval")).toHaveLength(1);
+    expect(hrefs).toContain("/ticketing/tickets");
+    expect(dedupeShortcutsByHref([{ href: "/a", label: "A" }, { href: "/a", label: "B" }])).toEqual([
+      { href: "/a", label: "A" },
+    ]);
   });
 });

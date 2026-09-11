@@ -6,6 +6,7 @@ namespace App\Modules\Ticketing\Http\Controllers\V1;
 
 use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Core\Support\ModuleListExportQuery;
 use App\Modules\Identity\Models\ModuleListExport;
 use App\Modules\Identity\Services\ModuleListExportService;
 use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
@@ -27,6 +28,8 @@ class TicketingTicketExportController extends AbstractApiController
     ): Response|JsonResponse {
         abort_unless($request->user()?->can('ticketing:view'), 403);
         $planFeatures->assertModuleEnabled();
+
+        ModuleListExportQuery::coerceArrayParams($request);
 
         $validated = $request->validate([
             'format' => ['sometimes', 'string', 'in:csv,xlsx,html'],

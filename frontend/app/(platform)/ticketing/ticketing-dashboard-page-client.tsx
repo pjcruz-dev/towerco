@@ -23,7 +23,6 @@ import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entry-actions";
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { formatTicketingDate } from "@/components/ticketing/ticketing-utils";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,12 +45,12 @@ import {
   buildDynamicBoardWidgets,
 } from "@/lib/ui/build-dynamic-board-widgets";
 import { normalizeTicketingDashboard } from "@/lib/ui/normalize-dashboard-data";
-import { TICKETING_DASHBOARD_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
-import { withTicketingKpiHrefs } from "@/lib/ticketing/kpi-deep-links";
+import { resolvePageChrome, TICKETING_DASHBOARD_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
+import { syncHeroWithPageChrome } from "@/lib/ui/sync-hero-with-page-chrome";
 import { cn } from "@/lib/utils";
 import {
+  expandTicketingDashboardWidgetIds,
   TICKETING_DASHBOARD_WIDGETS,
-  type TicketingChartMode,
   useTicketingWorkspacePrefs,
 } from "@/modules/ticketing/workspace-prefs";
 
@@ -72,13 +71,6 @@ const NAV_TILES = [
     icon: LifeBuoy,
   },
 ] as const;
-
-const CHART_MODES: Array<{ id: TicketingChartMode; label: string }> = [
-  { id: "bars", label: "Bars" },
-  { id: "donut", label: "Donut" },
-  { id: "both", label: "Both" },
-];
-
 export function TicketingDashboardPageClient() {
   const searchParams = useSearchParams();
   const tourActive = isTicketingTourActive(searchParams);
@@ -92,8 +84,9 @@ export function TicketingDashboardPageClient() {
     serverReady,
   } = useDashboardLayoutPrefs(DASHBOARD_LAYOUT_KEY);
   const { editing, setEditing } = useDashboardCustomizeMode();
-  const { status, category, priority, department, mineOnly, assignedMe, chartMode } = prefs;
+  const { status, category, priority, department, mineOnly, assignedMe } = prefs;
   const seededLayoutRef = useRef(false);
+  const expandedBundlesRef = useRef(false);
 
   useEffect(() => {
     if (!serverReady || seededLayoutRef.current) return;
@@ -111,9 +104,48 @@ export function TicketingDashboardPageClient() {
       Object.keys(legacy.widgetOptions).length > 0 ||
       Object.keys(legacy.pageChrome ?? {}).length > 0;
     if (empty && hasLegacy) {
-      setLayout(legacy);
+      setLayout({
+        ...legacy,
+        enabledWidgetIds: expandTicketingDashboardWidgetIds(legacy.enabledWidgetIds),
+        widgetOrder: expandTicketingDashboardWidgetIds(legacy.widgetOrder),
+      });
     }
   }, [legacyLayout, layout, serverReady, setLayout]);
+
+  // One-time: split legacy Analytics / Category bundles into separate widgets.
+  useEffect(() => {
+    if (!serverReady || expandedBundlesRef.current) return;
+    const needsExpand =
+      layout.enabledWidgetIds.includes("queue_charts") ||
+      layout.enabledWidgetIds.includes("category_analytics") ||
+      layout.widgetOrder.includes("queue_charts") ||
+      layout.widgetOrder.includes("category_analytics");
+    if (!needsExpand) {
+      expandedBundlesRef.current = true;
+      return;
+    }
+    expandedBundlesRef.current = true;
+    const enabled = expandTicketingDashboardWidgetIds(
+      layout.enabledWidgetIds.length > 0 ? layout.enabledWidgetIds : TICKETING_DASHBOARD_DEFAULT_IDS,
+    );
+    const order = expandTicketingDashboardWidgetIds(
+      layout.widgetOrder.length > 0 ? layout.widgetOrder : enabled,
+    );
+    const spans = { ...layout.spans };
+    delete spans.queue_charts;
+    delete spans.category_analytics;
+    if (!spans.chart_ticket_queue) spans.chart_ticket_queue = "half";
+    if (!spans.chart_by_priority) spans.chart_by_priority = "half";
+    if (!spans.chart_by_department) spans.chart_by_department = "full";
+    if (!spans.chart_by_category) spans.chart_by_category = "half";
+    if (!spans.table_category_analytics) spans.table_category_analytics = "half";
+    setLayout({
+      ...layout,
+      enabledWidgetIds: enabled,
+      widgetOrder: order,
+      spans,
+    });
+  }, [layout, serverReady, setLayout]);
 
   const { data, isFetching, isError, error, isPlaceholderData, refetch } = useTicketingDashboard({
     status: status || undefined,
@@ -207,9 +239,6 @@ export function TicketingDashboardPageClient() {
     [data?.department_breakdown],
   );
 
-  const showBars = chartMode === "bars" || chartMode === "both";
-  const showDonut = chartMode === "donut" || chartMode === "both";
-
   const layoutMeta = useMemo(
     () => TICKETING_DASHBOARD_WIDGETS.map((widget) => ({ id: widget.id, label: widget.label })),
     [],
@@ -218,132 +247,109 @@ export function TicketingDashboardPageClient() {
   const boundWidgets = useMemo((): DashboardWidgetDef[] => {
     return [
       {
-        id: "kpis",
-        label: "KPI strip",
-        dataHelp: "tk-overview-kpis",
-        defaultSpan: "full",
+        id: "chart_ticket_queue",
+        label: "Ticket queue",
+        defaultSpan: "half",
         render: () => (
-          <KpiStrip
-            items={withTicketingKpiHrefs(data?.kpis ?? [])}
-            dataHelp="tk-overview-kpis"
+          <DashboardBarChart
+            title="Ticket queue"
+            description="Open, assigned, urgent, and resolved this week"
+            data={queueSeries}
+            layout="horizontal"
+            emptyMessage="No ticket KPIs to chart."
+            height={200}
           />
         ),
       },
       {
-        id: "queue_charts",
-        label: "Queue & priority charts",
-        defaultSpan: "full",
+        id: "chart_by_priority",
+        label: "By priority",
+        defaultSpan: "half",
         render: () => (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-base font-medium text-foreground">Analytics</p>
-                <p className="text-xs text-muted-foreground">Queue mix for the current filters.</p>
-              </div>
-              <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
-                {CHART_MODES.map((item) => (
-                  <Button
-                    key={item.id}
-                    type="button"
-                    size="sm"
-                    variant={chartMode === item.id ? "secondary" : "ghost"}
-                    className="h-7 px-2 text-xs"
-                    onClick={() => patchPrefs({ chartMode: item.id })}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className={cn("grid gap-4", showBars && showDonut ? "lg:grid-cols-2" : "grid-cols-1")}>
-              {showBars ? (
-                <DashboardBarChart
-                  title="Ticket queue"
-                  description="Open, assigned, urgent, and resolved this week"
-                  data={queueSeries}
-                  layout="horizontal"
-                  emptyMessage="No ticket KPIs to chart."
-                  height={200}
-                />
-              ) : null}
-              {showDonut ? (
-                <DashboardDonutChart
-                  title="By priority"
-                  description="Priority mix for filtered tickets"
-                  data={prioritySeries}
-                  emptyMessage="No priority data to chart."
-                  height={200}
-                />
-              ) : null}
-            </div>
-            {departmentSeries.length > 0 ? (
-              <DashboardBarChart
-                title="Volume by department"
-                description="Requester department mix for the current filters"
-                data={departmentSeries}
-                layout="horizontal"
-                emptyMessage="No department volume yet."
-                height={220}
-              />
-            ) : null}
-          </div>
+          <DashboardDonutChart
+            title="By priority"
+            description="Priority mix for filtered tickets"
+            data={prioritySeries}
+            emptyMessage="No priority data to chart."
+            height={200}
+          />
         ),
       },
       {
-        id: "category_analytics",
-        label: "Category analytics",
+        id: "chart_by_department",
+        label: "Volume by department",
         defaultSpan: "full",
         render: () => (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DashboardBarChart
-              title="Volume by category"
-              description="Open, in progress, and resolved (7d) across categories"
-              data={categorySeries}
-              layout="horizontal"
-              emptyMessage="No category volume yet."
-              height={240}
-            />
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-              <div className="border-b border-border px-4 py-3">
-                <h2 className="text-sm font-medium text-foreground">Category analytics</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Active queue and recent resolutions by category
-                </p>
-              </div>
-              {(data?.by_category ?? []).length === 0 ? (
-                <p className="px-4 py-8 text-center text-xs text-muted-foreground">No category data yet.</p>
-              ) : (
-                <div className="max-h-[240px] overflow-auto">
-                  <table className="w-full text-left text-[13px]">
-                    <thead className="sticky top-0 border-b border-border bg-muted/80 text-xs font-medium text-muted-foreground">
-                      <tr>
-                        <th className="px-4 py-2">Category</th>
-                        <th className="px-3 py-2 text-right">Open</th>
-                        <th className="px-3 py-2 text-right">SLA risk</th>
-                        <th className="px-4 py-2 text-right">Avg resolve</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data?.by_category ?? []).map((row) => (
-                        <tr
-                          key={row.category ?? "uncategorized"}
-                          className="border-b border-border last:border-0"
-                        >
-                          <td className="px-4 py-2 text-foreground">{row.label}</td>
-                          <td className="px-3 py-2 text-right text-muted-foreground">
-                            {row.open + row.in_progress}
-                          </td>
-                          <td className="px-3 py-2 text-right text-muted-foreground">{row.sla_at_risk}</td>
-                          <td className="px-4 py-2 text-right text-muted-foreground">
-                            {row.avg_resolve_hours == null ? "—" : `${row.avg_resolve_hours}h`}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          <DashboardBarChart
+            title="Volume by department"
+            description="Requester department mix for the current filters"
+            data={departmentSeries}
+            layout="horizontal"
+            emptyMessage="No department volume yet."
+            height={220}
+          />
+        ),
+      },
+      {
+        id: "chart_by_category",
+        label: "Volume by category",
+        defaultSpan: "half",
+        render: () => (
+          <DashboardBarChart
+            title="Volume by category"
+            description="Open, in progress, and resolved (7d) across categories"
+            data={categorySeries}
+            layout="horizontal"
+            emptyMessage="No category volume yet."
+            height={240}
+          />
+        ),
+      },
+      {
+        id: "table_category_analytics",
+        label: "Category analytics",
+        defaultSpan: "half",
+        render: () => (
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-medium text-foreground">Category analytics</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Active queue and recent resolutions by category
+              </p>
             </div>
+            {(data?.by_category ?? []).length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-muted-foreground">No category data yet.</p>
+            ) : (
+              <div className="max-h-[240px] overflow-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead className="sticky top-0 border-b border-border bg-muted/80 text-xs font-medium text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2">Category</th>
+                      <th className="px-3 py-2 text-right">Open</th>
+                      <th className="px-3 py-2 text-right">SLA risk</th>
+                      <th className="px-4 py-2 text-right">Avg resolve</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.by_category ?? []).map((row) => (
+                      <tr
+                        key={row.category ?? "uncategorized"}
+                        className="border-b border-border last:border-0"
+                      >
+                        <td className="px-4 py-2 text-foreground">{row.label}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">
+                          {row.open + row.in_progress}
+                        </td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">{row.sla_at_risk}</td>
+                        <td className="px-4 py-2 text-right text-muted-foreground">
+                          {row.avg_resolve_hours == null ? "—" : `${row.avg_resolve_hours}h`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ),
       },
@@ -448,16 +454,11 @@ export function TicketingDashboardPageClient() {
     ];
   }, [
     categorySeries,
-    chartMode,
     data?.by_category,
-    data?.kpis,
     data?.recent_tickets,
     departmentSeries,
-    patchPrefs,
     prioritySeries,
     queueSeries,
-    showBars,
-    showDonut,
     tourActive,
   ]);
 
@@ -469,7 +470,11 @@ export function TicketingDashboardPageClient() {
     return map;
   }, [layout.widgetOptions]);
 
-  const normalizedData = useMemo(() => normalizeTicketingDashboard(data), [data]);
+  const normalizedData = useMemo(() => {
+    const base = normalizeTicketingDashboard(data);
+    const chrome = resolvePageChrome(TICKETING_DASHBOARD_PAGE_CHROME, layout.pageChrome);
+    return syncHeroWithPageChrome(base, chrome);
+  }, [data, layout.pageChrome]);
 
   const boardWidgets = useMemo(
     () =>
@@ -477,7 +482,10 @@ export function TicketingDashboardPageClient() {
         moduleId: "ticketing",
         data: normalizedData,
         slots: boundWidgets,
-        enabledIds: layout.enabledWidgetIds,
+        enabledIds:
+          layout.enabledWidgetIds.length > 0
+            ? layout.enabledWidgetIds
+            : TICKETING_DASHBOARD_DEFAULT_IDS,
         titleOverrides,
         widgetOptions: layout.widgetOptions,
       }),
@@ -517,43 +525,37 @@ export function TicketingDashboardPageClient() {
           prefs={layout.pageChrome}
           editing={editing}
           onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
-          renderActions={({ isVisible }) => (
-            <>
-              {isVisible("help") || isVisible("tour") ? (
-                <TicketingHelpEntryActions
-                  showHelp={isVisible("help")}
-                  showTour={isVisible("tour")}
-                />
-              ) : null}
-              {isVisible("customize") ? (
-                <DashboardLayoutToolbar
-                  widgets={layoutMeta}
-                  catalogModule="ticketing"
-                  layout={layout}
-                  editing={editing}
-                  onEditingChange={setEditing}
-                  onChange={setLayout}
-                  bindableCatalog={bindableCatalog}
-                  hasTenantDefault={Boolean(tenantDefault)}
-                  onPublishTenantDefault={publishTenantDefault}
-                  onResetToTenantDefault={resetToTenantDefault}
-                  data={normalizedData}
-                />
-              ) : null}
-              {isVisible("refresh") ? (
-                <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
-                  {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
-                  Refresh
-                </Button>
-              ) : null}
-              {isVisible("new") ? (
-                <Button size="sm" render={<Link href="/ticketing/tickets/new" />}>
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden />
-                  New ticket
-                </Button>
-              ) : null}
-            </>
-          )}
+          actionsById={{
+            help: <TicketingHelpEntryActions showHelp showTour={false} />,
+            tour: <TicketingHelpEntryActions showHelp={false} showTour />,
+            customize: (
+              <DashboardLayoutToolbar
+                widgets={layoutMeta}
+                catalogModule="ticketing"
+                layout={layout}
+                editing={editing}
+                onEditingChange={setEditing}
+                onChange={setLayout}
+                bindableCatalog={bindableCatalog}
+                hasTenantDefault={Boolean(tenantDefault)}
+                onPublishTenantDefault={publishTenantDefault}
+                onResetToTenantDefault={resetToTenantDefault}
+                data={normalizedData}
+              />
+            ),
+            refresh: (
+              <Button size="sm" variant="outline" type="button" onClick={() => refetch()} disabled={isFetching}>
+                {isFetching ? <Spinner className="mr-1.5 size-3.5" /> : null}
+                Refresh
+              </Button>
+            ),
+            new: (
+              <Button size="sm" render={<Link href="/ticketing/tickets/new" />}>
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+                New ticket
+              </Button>
+            ),
+          }}
         />
 
         <TicketingTourSoftPrompt />
