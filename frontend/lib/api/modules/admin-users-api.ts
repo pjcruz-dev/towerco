@@ -33,16 +33,53 @@ export type AdminUserRow = {
   mfa_enrolled: boolean;
   mfa_required: boolean;
   job_title?: string | null;
+  /** Own Entra department (may be blank). */
   department?: string | null;
-  manager?: { id: string; name: string; email: string } | null;
+  /** Display value: own dept, else manager dept, else Entra manager snapshot. */
+  department_display?: string | null;
+  /** True when department_display comes from the manager, not the user. */
+  department_inherited?: boolean;
+  manager?: { id: string; name: string; email: string; department?: string | null } | null;
   entra_manager_name?: string | null;
   entra_manager_email?: string | null;
+  entra_manager_department?: string | null;
   direct_report_count?: number;
   entra_org_synced_at?: string | null;
   entra_licensed?: boolean | null;
   entra_license_label?: string | null;
   entra_license_names?: string[];
 };
+
+/** Prefer API department_display; fall back for older payloads. */
+export function resolveAdminUserDepartmentDisplay(user: AdminUserRow): {
+  label: string | null;
+  inherited: boolean;
+} {
+  const display = user.department_display?.trim() || null;
+  if (display) {
+    return {
+      label: display,
+      inherited: Boolean(user.department_inherited),
+    };
+  }
+
+  const own = user.department?.trim() || null;
+  if (own) {
+    return { label: own, inherited: false };
+  }
+
+  const fromManager = user.manager?.department?.trim() || null;
+  if (fromManager) {
+    return { label: fromManager, inherited: true };
+  }
+
+  const fromEntraManager = user.entra_manager_department?.trim() || null;
+  if (fromEntraManager) {
+    return { label: fromEntraManager, inherited: true };
+  }
+
+  return { label: null, inherited: false };
+}
 
 export type AdminUserCreatePayload = {
   name: string;

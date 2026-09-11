@@ -579,7 +579,7 @@ export function DashboardWidgetOptionsPanel({
         Collapse body (title bar only)
       </label>
 
-      <div className="flex flex-wrap gap-2 pt-1">
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         {onDuplicate ? (
           <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onDuplicate}>
             Duplicate
@@ -589,11 +589,11 @@ export function DashboardWidgetOptionsPanel({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
-            className="h-7 text-xs text-destructive"
+            variant="outline"
+            className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={onRemove}
           >
-            Remove from dashboard
+            Remove widget
           </Button>
         ) : null}
       </div>

@@ -100,6 +100,48 @@ final class TenantUserIndexTest extends TestCase
         $this->assertSame(2, $response->json('data.total'));
     }
 
+    public function test_user_index_falls_back_department_display_to_manager(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $manager = TenantUser::query()->create([
+            'name' => 'Dept Manager',
+            'email' => 'dept.manager@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Supply Chain Management',
+        ]);
+        $manager->assignRole('viewer');
+
+        $report = TenantUser::query()->create([
+            'name' => 'Dept Report',
+            'email' => 'dept.report@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $manager->id,
+        ]);
+        $report->assignRole('viewer');
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=dept.report@towerone.test');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', (string) $report->id)
+            ->assertJsonPath('data.0.department', null)
+            ->assertJsonPath('data.0.department_display', 'Supply Chain Management')
+            ->assertJsonPath('data.0.department_inherited', true)
+            ->assertJsonPath('data.0.manager.department', 'Supply Chain Management');
+    }
+
     private function createTenantUser(string $email, string $name): TenantUser
     {
         tenancy()->initialize($this->testTenant);

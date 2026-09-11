@@ -44,12 +44,23 @@ describe("dashboard-layout-mutations", () => {
   it("does not remove catalog widgets marked non-removable", () => {
     const layout = {
       ...EMPTY_DASHBOARD_LAYOUT_PREFS,
+      enabledWidgetIds: ["filters", "template_grid"],
+      widgetOrder: ["filters", "template_grid"],
+    };
+    const next = removeWidgetFromLayout(layout, "template_grid", ["filters", "template_grid"]);
+    expect(next).toEqual(layout);
+    expect(next.enabledWidgetIds).toEqual(["filters", "template_grid"]);
+  });
+
+  it("removes the data table widget when requested", () => {
+    const layout = {
+      ...EMPTY_DASHBOARD_LAYOUT_PREFS,
       enabledWidgetIds: ["filters", "table"],
       widgetOrder: ["filters", "table"],
     };
     const next = removeWidgetFromLayout(layout, "table", ["filters", "table"]);
-    expect(next).toEqual(layout);
-    expect(next.enabledWidgetIds).toEqual(["filters", "table"]);
+    expect(next.enabledWidgetIds).toEqual(["filters"]);
+    expect(next.widgetOrder).toEqual(["filters"]);
   });
 
   it("inserts widget at a specific index", () => {

@@ -27,6 +27,8 @@ class TenantUserIndexService
 
     private ?bool $departmentColumn = null;
 
+    private ?bool $managerDepartmentColumn = null;
+
     public function __construct(
         private readonly TenantUserImpersonationService $impersonationService,
         private readonly TenantUserSecuritySummaryService $securitySummary,
@@ -48,7 +50,11 @@ class TenantUserIndexService
             'permissions:id,name',
         ];
         if ($this->hasOrgColumns()) {
-            $eager[] = 'manager:id,name,email';
+            $managerColumns = ['id', 'name', 'email'];
+            if ($this->hasDepartmentColumn()) {
+                $managerColumns[] = 'department';
+            }
+            $eager[] = 'manager:'.implode(',', $managerColumns);
         }
 
         $query = TenantUser::query()->with($eager);
@@ -133,9 +139,57 @@ class TenantUserIndexService
         return $this->departmentColumn ??= Schema::connection('tenant')->hasColumn('users', 'department');
     }
 
+    private function hasManagerDepartmentColumn(): bool
+    {
+        return $this->managerDepartmentColumn ??= Schema::connection('tenant')->hasColumn('users', 'entra_manager_department');
+    }
+
     private function hasLicenseColumns(): bool
     {
         return $this->licenseColumns ??= Schema::connection('tenant')->hasColumn('users', 'entra_licensed');
+    }
+
+    /**
+     * Display-only department: own Entra dept, else linked manager dept, else Entra manager snapshot.
+     *
+     * @return array{department: ?string, department_display: ?string, department_inherited: bool, entra_manager_department: ?string, manager_department: ?string}
+     */
+    private function resolveDepartmentFields(TenantUser $user): array
+    {
+        if (! $this->hasDepartmentColumn()) {
+            return [
+                'department' => null,
+                'department_display' => null,
+                'department_inherited' => false,
+                'entra_manager_department' => null,
+                'manager_department' => null,
+            ];
+        }
+
+        $own = is_string($user->department) ? trim($user->department) : '';
+        $own = $own !== '' ? $own : null;
+
+        $managerDepartment = null;
+        if ($user->relationLoaded('manager') && $user->manager !== null) {
+            $raw = is_string($user->manager->department) ? trim($user->manager->department) : '';
+            $managerDepartment = $raw !== '' ? $raw : null;
+        }
+
+        $entraManagerDepartment = null;
+        if ($this->hasManagerDepartmentColumn()) {
+            $raw = is_string($user->entra_manager_department) ? trim($user->entra_manager_department) : '';
+            $entraManagerDepartment = $raw !== '' ? $raw : null;
+        }
+
+        $display = $own ?? $managerDepartment ?? $entraManagerDepartment;
+
+        return [
+            'department' => $own,
+            'department_display' => $display,
+            'department_inherited' => $own === null && $display !== null,
+            'entra_manager_department' => $entraManagerDepartment,
+            'manager_department' => $managerDepartment,
+        ];
     }
 
     /**
@@ -179,6 +233,8 @@ class TenantUserIndexService
                     'mfa_required' => false,
                 ];
 
+                $department = $this->resolveDepartmentFields($user);
+
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -195,11 +251,15 @@ class TenantUserIndexService
                     'mfa_enrolled' => $security['mfa_enrolled'],
                     'mfa_required' => $security['mfa_required'],
                     'job_title' => $this->hasOrgColumns() ? $user->job_title : null,
-                    'department' => $this->hasDepartmentColumn() ? $user->department : null,
+                    'department' => $department['department'],
+                    'department_display' => $department['department_display'],
+                    'department_inherited' => $department['department_inherited'],
+                    'entra_manager_department' => $department['entra_manager_department'],
                     'manager' => $this->hasOrgColumns() && $user->manager !== null ? [
                         'id' => (string) $user->manager->id,
                         'name' => (string) $user->manager->name,
                         'email' => (string) $user->manager->email,
+                        'department' => $department['manager_department'],
                     ] : null,
                     'entra_manager_name' => $this->hasOrgColumns() ? $user->entra_manager_name : null,
                     'entra_manager_email' => $this->hasOrgColumns() ? $user->entra_manager_email : null,

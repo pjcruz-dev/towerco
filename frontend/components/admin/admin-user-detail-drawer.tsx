@@ -18,6 +18,7 @@ import {
 import type { AdminUserRow } from "@/lib/api/modules/admin-users-api";
 import {
   fetchAdminUserActivity,
+  resolveAdminUserDepartmentDisplay,
   revokeAdminUserPasskeys,
   revokeAdminUserSessions,
 } from "@/lib/api/modules/admin-users-api";
@@ -184,7 +185,19 @@ export function AdminUserDetailDrawer({
                 <DetailField label="Created">{formatTimestamp(user.created_at)}</DetailField>
                 <DetailField label="Deactivated">{formatTimestamp(user.deactivated_at)}</DetailField>
                 <DetailField label="Job title">{user.job_title?.trim() || "—"}</DetailField>
-                <DetailField label="Department">{user.department?.trim() || "—"}</DetailField>
+                <DetailField label="Department">
+                  {(() => {
+                    const { label, inherited } = resolveAdminUserDepartmentDisplay(user);
+                    if (!label) return "—";
+                    if (!inherited) return label;
+                    return (
+                      <span title="No department in Microsoft Entra — showing manager’s department">
+                        {label}
+                        <span className="block text-xs text-muted-foreground">Via manager</span>
+                      </span>
+                    );
+                  })()}
+                </DetailField>
                 <DetailField label="Microsoft 365 license">
                   {licenseChip ? (
                     <span>
