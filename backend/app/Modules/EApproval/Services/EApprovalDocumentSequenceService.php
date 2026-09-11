@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\AdminOne\Services\TenantUserDepartmentDisplay;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Support\EApprovalDepartmentDocCode;
 use App\Modules\Identity\Models\TenantUser;
@@ -11,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 
 final class EApprovalDocumentSequenceService
 {
+    public function __construct(
+        private readonly TenantUserDepartmentDisplay $departmentDisplay,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $values
      */
@@ -95,7 +100,7 @@ final class EApprovalDocumentSequenceService
     }
 
     /**
-     * Prefer the form field value; fall back to the submitter's synced Entra / profile department.
+     * Prefer the form field value; else submitter display department (own or inherited up the manager chain).
      *
      * @param  array<string, mixed>  $values
      */
@@ -110,7 +115,10 @@ final class EApprovalDocumentSequenceService
             return '';
         }
 
-        return trim((string) ($submitter->department ?? ''));
+        $this->departmentDisplay->warm(collect([$submitter]));
+        $resolved = $this->departmentDisplay->resolve($submitter);
+
+        return (string) ($resolved['department_display'] ?? '');
     }
 
     /**

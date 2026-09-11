@@ -60,4 +60,66 @@ final class EApprovalDocumentSequenceSubsidiaryTest extends TestCase
 
         tenancy()->end();
     }
+
+    public function test_template_department_inherits_from_manager_chain_when_form_blank(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $lead = \App\Modules\Identity\Models\TenantUser::query()->create([
+            'name' => 'Doc Lead',
+            'email' => 'doc.lead@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Project Implementation',
+        ]);
+        $lead->assignRole('viewer');
+
+        $mid = \App\Modules\Identity\Models\TenantUser::query()->create([
+            'name' => 'Doc Mid',
+            'email' => 'doc.mid@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $lead->id,
+        ]);
+        $mid->assignRole('viewer');
+
+        $submitter = \App\Modules\Identity\Models\TenantUser::query()->create([
+            'name' => 'Doc Submitter',
+            'email' => 'doc.submitter@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $mid->id,
+        ]);
+        $submitter->assignRole('viewer');
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Document approval',
+            'category' => 'qms',
+            'status' => 'published',
+            'schema_version' => 1,
+            'owner_code' => 'ATC',
+            'doc_type_code' => 'P',
+            'doc_no_custom_enabled' => true,
+            'doc_no_template' => '{ownerCode}-{docTypeCode}-{department}-{seq:3}',
+        ]);
+
+        $service = app(EApprovalDocumentSequenceService::class);
+        $number = $service->nextDocumentNumber($form, [
+            'subsidiary' => 'ATC',
+        ], $submitter);
+
+        // Project Implementation → PI via EApprovalDepartmentDocCode.
+        $this->assertSame('ATC-P-PI-001', $number);
+
+        tenancy()->end();
+    }
 }
