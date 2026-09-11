@@ -411,7 +411,11 @@ export type AdminOrgChartPerson = {
   name: string;
   email: string;
   job_title: string | null;
+  /** Display department (own or inherited up the manager chain). */
   department?: string | null;
+  /** Own Entra department when API provides it separately. */
+  department_own?: string | null;
+  department_inherited?: boolean;
   manager_id: string | null;
   manager_name: string | null;
   manager_email?: string | null;

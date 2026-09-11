@@ -241,6 +241,65 @@ describe("org chart filters", () => {
     expect(filtered.byId.has("c")).toBe(false);
   });
 
+  it("inherits blank departments from ancestors in the manager chain", () => {
+    const people = [
+      {
+        id: "demetrio",
+        name: "Demetrio Pilar",
+        email: "dpilar@example.com",
+        job_title: "Director",
+        department: "Project Implementation",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 1,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "christopher",
+        name: "Christopher Emmanuel Agorto",
+        email: "ccagorto@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "demetrio",
+        manager_name: null,
+        direct_report_count: 2,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "arvin",
+        name: "Arvin John Gervacio",
+        email: "afgervacio@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "christopher",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+      {
+        id: "jerry",
+        name: "Jerry Balino",
+        email: "jdbalino@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "christopher",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+    ];
+
+    const index = buildOrgChartIndex(people);
+    expect(index.byId.get("christopher")?.department).toBe("Project Implementation");
+    expect(index.byId.get("arvin")?.department).toBe("Project Implementation");
+    expect(index.byId.get("jerry")?.department).toBe("Project Implementation");
+    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(false);
+  });
+
   it("keeps descendants of department matches even when they have no department", () => {
     const people = [
       {
@@ -306,7 +365,9 @@ describe("org chart filters", () => {
     ];
 
     const index = buildOrgChartIndex(people);
-    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(true);
+    // Jerico inherits Terrence's department for display; filter still keeps the team under Terrence.
+    expect(index.byId.get("jerico")?.department).toBe("Technology and Quality Governance");
+    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(false);
 
     const filtered = filterOrgChartIndex(index, {
       department: "Technology and Quality Governance",
@@ -323,9 +384,7 @@ describe("org chart filters", () => {
       department: ORG_CHART_NO_DEPARTMENT,
       license: "",
     });
-    expect(unassigned.byId.has("jerico")).toBe(true);
-    expect(unassigned.byId.has("terrence")).toBe(true);
-    expect(unassigned.byId.has("denver")).toBe(false);
+    expect(unassigned.byId.size).toBe(0);
   });
 
   it("searches role names in people search", () => {

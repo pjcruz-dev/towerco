@@ -142,6 +142,67 @@ final class TenantUserIndexTest extends TestCase
             ->assertJsonPath('data.0.manager.department', 'Supply Chain Management');
     }
 
+    public function test_user_index_inherits_department_from_grandmanager(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $lead = TenantUser::query()->create([
+            'name' => 'Chain Lead',
+            'email' => 'chain.lead@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Project Implementation',
+        ]);
+        $lead->assignRole('viewer');
+
+        $mid = TenantUser::query()->create([
+            'name' => 'Chain Mid',
+            'email' => 'chain.mid@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $lead->id,
+        ]);
+        $mid->assignRole('viewer');
+
+        $leaf = TenantUser::query()->create([
+            'name' => 'Chain Leaf',
+            'email' => 'chain.leaf@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $mid->id,
+        ]);
+        $leaf->assignRole('viewer');
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=chain.leaf@towerone.test');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', (string) $leaf->id)
+            ->assertJsonPath('data.0.department', null)
+            ->assertJsonPath('data.0.department_display', 'Project Implementation')
+            ->assertJsonPath('data.0.department_inherited', true);
+
+        $dept = rawurlencode('Project Implementation');
+        $filtered = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/admin/users?department={$dept}&per_page=50");
+        $filtered->assertOk();
+        $ids = collect($filtered->json('data'))->pluck('id')->all();
+        $this->assertContains((string) $leaf->id, $ids);
+        $this->assertContains((string) $mid->id, $ids);
+        $this->assertContains((string) $lead->id, $ids);
+    }
+
     public function test_user_index_no_department_filter_excludes_inherited_display(): void
     {
         tenancy()->initialize($this->testTenant);

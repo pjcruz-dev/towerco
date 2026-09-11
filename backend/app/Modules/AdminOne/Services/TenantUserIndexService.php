@@ -33,6 +33,7 @@ class TenantUserIndexService
         private readonly TenantUserImpersonationService $impersonationService,
         private readonly TenantUserSecuritySummaryService $securitySummary,
         private readonly TenantUserIndexQueryFilters $queryFilters,
+        private readonly TenantUserDepartmentDisplay $departmentDisplay,
     ) {}
 
     public function paginate(
@@ -68,7 +69,10 @@ class TenantUserIndexService
 
         $this->applyListConstraints($query, $search, $filters, $sort);
 
-        return $query->paginate($perPage, ['*'], 'page', $page);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+        $this->departmentDisplay->warm($paginator->getCollection());
+
+        return $paginator;
     }
 
     /**
@@ -179,46 +183,13 @@ class TenantUserIndexService
     }
 
     /**
-     * Display-only department: own Entra dept, else linked manager dept, else Entra manager snapshot.
+     * Display-only department: own Entra dept, else nearest manager up the chain, else Entra snapshot.
      *
      * @return array{department: ?string, department_display: ?string, department_inherited: bool, entra_manager_department: ?string, manager_department: ?string}
      */
     private function resolveDepartmentFields(TenantUser $user): array
     {
-        if (! $this->hasDepartmentColumn()) {
-            return [
-                'department' => null,
-                'department_display' => null,
-                'department_inherited' => false,
-                'entra_manager_department' => null,
-                'manager_department' => null,
-            ];
-        }
-
-        $own = is_string($user->department) ? trim($user->department) : '';
-        $own = $own !== '' ? $own : null;
-
-        $managerDepartment = null;
-        if ($user->relationLoaded('manager') && $user->manager !== null) {
-            $raw = is_string($user->manager->department) ? trim($user->manager->department) : '';
-            $managerDepartment = $raw !== '' ? $raw : null;
-        }
-
-        $entraManagerDepartment = null;
-        if ($this->hasManagerDepartmentColumn()) {
-            $raw = is_string($user->entra_manager_department) ? trim($user->entra_manager_department) : '';
-            $entraManagerDepartment = $raw !== '' ? $raw : null;
-        }
-
-        $display = $own ?? $managerDepartment ?? $entraManagerDepartment;
-
-        return [
-            'department' => $own,
-            'department_display' => $display,
-            'department_inherited' => $own === null && $display !== null,
-            'entra_manager_department' => $entraManagerDepartment,
-            'manager_department' => $managerDepartment,
-        ];
+        return $this->departmentDisplay->resolve($user);
     }
 
     /**
@@ -326,74 +297,8 @@ class TenantUserIndexService
         $departments = [];
         $hasUnassignedDepartment = false;
         if ($this->hasDepartmentColumn()) {
-            $departments = collect(
-                TenantUser::query()
-                    ->whereNotNull('department')
-                    ->where('department', '!=', '')
-                    ->distinct()
-                    ->pluck('department')
-                    ->all()
-            );
-
-            if ($this->hasOrgColumns()) {
-                $managerIds = TenantUser::query()
-                    ->whereNotNull('manager_id')
-                    ->distinct()
-                    ->pluck('manager_id');
-                if ($managerIds->isNotEmpty()) {
-                    $departments = $departments->merge(
-                        TenantUser::query()
-                            ->whereIn('id', $managerIds)
-                            ->whereNotNull('department')
-                            ->where('department', '!=', '')
-                            ->distinct()
-                            ->pluck('department')
-                            ->all()
-                    );
-                }
-            }
-
-            if ($this->hasManagerDepartmentColumn()) {
-                $departments = $departments->merge(
-                    TenantUser::query()
-                        ->whereNotNull('entra_manager_department')
-                        ->where('entra_manager_department', '!=', '')
-                        ->distinct()
-                        ->pluck('entra_manager_department')
-                        ->all()
-                );
-            }
-
-            $departments = $departments
-                ->map(static fn ($value): string => trim((string) $value))
-                ->filter(static fn (string $value): bool => $value !== '')
-                ->unique()
-                ->sort()
-                ->values()
-                ->all();
-
-            $hasUnassignedDepartment = TenantUser::query()
-                ->where(function ($q): void {
-                    $q->whereNull('department')
-                        ->orWhere('department', '')
-                        ->orWhereRaw("TRIM(department) = ''");
-                })
-                ->when($this->hasOrgColumns(), function ($q): void {
-                    $q->where(function ($inner): void {
-                        $inner->whereNull('manager_id')
-                            ->orWhereDoesntHave('manager', static function ($manager): void {
-                                $manager->whereNotNull('department')
-                                    ->where('department', '!=', '');
-                            });
-                    });
-                })
-                ->when($this->hasManagerDepartmentColumn(), function ($q): void {
-                    $q->where(function ($inner): void {
-                        $inner->whereNull('entra_manager_department')
-                            ->orWhere('entra_manager_department', '');
-                    });
-                })
-                ->exists();
+            $departments = $this->departmentDisplay->distinctDisplayDepartments();
+            $hasUnassignedDepartment = $this->departmentDisplay->hasUnassignedDisplayDepartment();
         }
 
         $managers = [];

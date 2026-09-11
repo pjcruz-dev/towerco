@@ -191,7 +191,7 @@ export function AdminUserDetailDrawer({
                     if (!label) return "—";
                     if (!inherited) return label;
                     return (
-                      <span title="No department in Microsoft Entra — showing manager’s department">
+                      <span title="No department in Microsoft Entra — showing nearest manager’s department up the reporting line">
                         {label}
                         <span className="block text-xs text-muted-foreground">Via manager</span>
                       </span>

@@ -126,7 +126,32 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
     }
   }
 
-  return { byId, reports, nodes: sortNodes([...byId.values()]) };
+  const index: OrgChartIndex = { byId, reports, nodes: sortNodes([...byId.values()]) };
+  inheritDepartmentsFromAncestors(index);
+  return index;
+}
+
+/** Fill blank departments from the nearest ancestor with a department (manager chain). */
+export function inheritDepartmentsFromAncestors(index: OrgChartIndex): void {
+  for (const node of index.nodes) {
+    if ((node.department ?? "").trim()) {
+      continue;
+    }
+    const seen = new Set<string>([node.id]);
+    let current = resolveManager(index, node);
+    while (current) {
+      if (seen.has(current.id)) {
+        break;
+      }
+      seen.add(current.id);
+      const dept = current.department?.trim() ?? "";
+      if (dept) {
+        node.department = dept;
+        break;
+      }
+      current = resolveManager(index, current);
+    }
+  }
 }
 
 export function resolveManager(index: OrgChartIndex, person: OrgChartNode | undefined): OrgChartNode | null {

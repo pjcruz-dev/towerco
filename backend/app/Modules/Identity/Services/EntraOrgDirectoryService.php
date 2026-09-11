@@ -293,15 +293,38 @@ final class EntraOrgDirectoryService
 
         $ids = $users->pluck('id')->map(static fn ($id): string => (string) $id)->all();
         $departmentsById = [];
+        $managerIdById = [];
         if ($this->hasDepartmentColumn()) {
-            $departmentsById = $users
-                ->mapWithKeys(static function (TenantUser $user): array {
-                    $dept = is_string($user->department) ? trim($user->department) : '';
-
-                    return [(string) $user->id => $dept !== '' ? $dept : null];
-                })
-                ->all();
+            foreach ($users as $user) {
+                $id = (string) $user->id;
+                $dept = is_string($user->department) ? trim($user->department) : '';
+                $departmentsById[$id] = $dept !== '' ? $dept : null;
+                $managerIdById[$id] = $user->manager_id !== null ? (string) $user->manager_id : null;
+            }
         }
+
+        $resolveDisplayDepartment = function (string $userId, ?string $entraManagerDepartment) use ($departmentsById, $managerIdById): ?string {
+            $seen = [];
+            $current = $userId;
+            for ($depth = 0; $depth < 20; $depth++) {
+                if (isset($seen[$current])) {
+                    break;
+                }
+                $seen[$current] = true;
+                $dept = $departmentsById[$current] ?? null;
+                if (is_string($dept) && trim($dept) !== '') {
+                    return trim($dept);
+                }
+                $managerId = $managerIdById[$current] ?? null;
+                if ($managerId === null || $managerId === '') {
+                    break;
+                }
+                $current = $managerId;
+            }
+            $fallback = is_string($entraManagerDepartment) ? trim($entraManagerDepartment) : '';
+
+            return $fallback !== '' ? $fallback : null;
+        };
 
         $reportQuery = TenantUser::query()
             ->where('is_active', true)
@@ -322,7 +345,7 @@ final class EntraOrgDirectoryService
             $syncedAt = Carbon::parse($latestSync)->toIso8601String();
         }
 
-        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts, $departmentsById): array {
+        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts, $departmentsById, $resolveDisplayDepartment): array {
             $managerId = $user->manager_id !== null ? (string) $user->manager_id : null;
             $managerInTenant = $managerId !== null && in_array($managerId, $ids, true);
             $showExternalManager = $this->externalManagerVisible($user, $managerInTenant);
@@ -334,12 +357,24 @@ final class EntraOrgDirectoryService
                 $managerDepartment = $this->clip($user->entra_manager_department, 180);
             }
 
+            $ownDepartment = $this->hasDepartmentColumn()
+                ? (is_string($user->department) && trim($user->department) !== '' ? trim($user->department) : null)
+                : null;
+            $entraManagerDepartment = $this->hasManagerDepartmentColumn()
+                ? $this->clip($user->entra_manager_department, 180)
+                : null;
+            $displayDepartment = $this->hasDepartmentColumn()
+                ? $resolveDisplayDepartment((string) $user->id, $entraManagerDepartment)
+                : null;
+
             return [
                 'id' => (string) $user->id,
                 'name' => (string) $user->name,
                 'email' => (string) $user->email,
                 'job_title' => $user->job_title,
-                'department' => $this->hasDepartmentColumn() ? $user->department : null,
+                'department' => $displayDepartment,
+                'department_own' => $ownDepartment,
+                'department_inherited' => $ownDepartment === null && $displayDepartment !== null,
                 'manager_id' => $managerInTenant ? $managerId : null,
                 'manager_name' => $showExternalManager
                     ? ($user->entra_manager_name ?: $user->entra_manager_email)
