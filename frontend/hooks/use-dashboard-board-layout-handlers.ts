@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import type { DashboardLayoutUpdater } from "@/hooks/use-dashboard-layout-prefs";
 import type {
   DashboardCatalogEntry,
   DashboardWidgetSpan,
@@ -18,75 +19,82 @@ import {
 } from "@/lib/ui/dashboard-layout-mutations";
 import type { DashboardLayoutPrefs } from "@/lib/ui/dashboard-widget-registry";
 
+/**
+ * Board mutation handlers. Always apply against the latest layout via functional
+ * setLayout — Card appearance / options fire many rapid patches that would otherwise
+ * clobber each other through a stale `layout` closure.
+ */
 export function useDashboardBoardLayoutHandlers(
-  layout: DashboardLayoutPrefs,
-  setLayout: (next: DashboardLayoutPrefs) => void,
+  _layout: DashboardLayoutPrefs,
+  setLayout: (next: DashboardLayoutUpdater) => void,
   defaultEnabledIds: string[],
 ) {
   return useMemo(
     () => ({
       onOrderChange: (nextOrder: string[]) => {
-        setLayout({ ...layout, widgetOrder: nextOrder });
+        setLayout((current) => ({ ...current, widgetOrder: nextOrder }));
       },
       onSpanChange: (widgetId: string, span: DashboardWidgetSpan) => {
-        setLayout(applyWidgetSpan(layout, widgetId, span));
+        setLayout((current) => applyWidgetSpan(current, widgetId, span));
       },
       onMinHeightChange: (widgetId: string, minHeightPx: number | null) => {
-        setLayout(applyWidgetMinHeight(layout, widgetId, minHeightPx));
+        setLayout((current) => applyWidgetMinHeight(current, widgetId, minHeightPx));
       },
       onRemove: (widgetId: string) => {
-        setLayout(removeWidgetFromLayout(layout, widgetId, defaultEnabledIds));
+        setLayout((current) => removeWidgetFromLayout(current, widgetId, defaultEnabledIds));
       },
       onDuplicate: (widgetId: string) => {
-        const currentOrder =
-          layout.widgetOrder.length > 0
-            ? layout.widgetOrder
-            : layout.enabledWidgetIds.length > 0
-              ? layout.enabledWidgetIds
-              : defaultEnabledIds;
-        setLayout(duplicateWidgetInLayout(layout, widgetId, currentOrder, defaultEnabledIds));
+        setLayout((current) => {
+          const currentOrder =
+            current.widgetOrder.length > 0
+              ? current.widgetOrder
+              : current.enabledWidgetIds.length > 0
+                ? current.enabledWidgetIds
+                : defaultEnabledIds;
+          return duplicateWidgetInLayout(current, widgetId, currentOrder, defaultEnabledIds);
+        });
       },
       onAddWidget: (entry: DashboardCatalogEntry, insertAt: number) => {
-        const currentOrder =
-          layout.widgetOrder.length > 0
-            ? layout.widgetOrder
-            : layout.enabledWidgetIds.length > 0
-              ? layout.enabledWidgetIds
-              : defaultEnabledIds;
-        setLayout(
-          insertWidgetIntoLayout(
-            layout,
+        setLayout((current) => {
+          const currentOrder =
+            current.widgetOrder.length > 0
+              ? current.widgetOrder
+              : current.enabledWidgetIds.length > 0
+                ? current.enabledWidgetIds
+                : defaultEnabledIds;
+          return insertWidgetIntoLayout(
+            current,
             entry.id,
             entry.defaultSpan,
             insertAt,
             currentOrder,
             defaultEnabledIds,
-          ),
-        );
+          );
+        });
       },
       onTitleChange: (widgetId: string, title: string) => {
-        setLayout({
-          ...layout,
+        setLayout((current) => ({
+          ...current,
           widgetOptions: {
-            ...layout.widgetOptions,
-            [widgetId]: { ...layout.widgetOptions[widgetId], title },
+            ...current.widgetOptions,
+            [widgetId]: { ...current.widgetOptions[widgetId], title },
           },
-        });
+        }));
       },
       onSettingsChange: (
         widgetId: string,
         patch: Record<string, string | number | boolean | undefined>,
       ) => {
-        setLayout(applyWidgetSettings(layout, widgetId, patch));
+        setLayout((current) => applyWidgetSettings(current, widgetId, patch));
       },
       onApplyPreset: (
         preset: DashboardLayoutPresetId,
         orderedIds: string[],
         options?: { defaultEnabledIds?: string[]; availableIds?: string[] },
       ) => {
-        setLayout(applyLayoutPreset(layout, preset, orderedIds, options));
+        setLayout((current) => applyLayoutPreset(current, preset, orderedIds, options));
       },
     }),
-    [defaultEnabledIds, layout, setLayout],
+    [defaultEnabledIds, setLayout],
   );
 }

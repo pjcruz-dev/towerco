@@ -104,13 +104,37 @@ export function resolveEffectiveDashboardLayout(input: {
   tenantDefault: DashboardLayoutPrefs | null;
   local: DashboardLayoutPrefs;
 }): { layout: DashboardLayoutPrefs; source: "personal" | "tenant" | "local" } {
+  const local = normalizeDashboardLayoutPrefs(input.local);
+  const localHasOptions = Object.keys(local.widgetOptions).length > 0;
+
   if (input.personal) {
-    return { layout: input.personal, source: "personal" };
+    const personal = normalizeDashboardLayoutPrefs(input.personal);
+    // If the browser already has Card appearance / options that the last personal
+    // snapshot is missing (failed/debounced save), keep the richer local options.
+    if (localHasOptions) {
+      const personalOptionKeys = Object.keys(personal.widgetOptions);
+      const localOnly = Object.keys(local.widgetOptions).some((id) => {
+        const localSettings = local.widgetOptions[id]?.settings ?? {};
+        const personalSettings = personal.widgetOptions[id]?.settings ?? {};
+        return Object.keys(localSettings).some((key) => personalSettings[key] !== localSettings[key]);
+      });
+      if (localOnly || personalOptionKeys.length === 0) {
+        return {
+          layout: {
+            ...personal,
+            widgetOptions: { ...personal.widgetOptions, ...local.widgetOptions },
+            spans: { ...personal.spans, ...local.spans },
+            pageChrome: { ...(personal.pageChrome ?? {}), ...(local.pageChrome ?? {}) },
+          },
+          source: "personal",
+        };
+      }
+    }
+    return { layout: personal, source: "personal" };
   }
   if (input.tenantDefault) {
     return { layout: input.tenantDefault, source: "tenant" };
   }
-  const local = normalizeDashboardLayoutPrefs(input.local);
   const empty =
     local.enabledWidgetIds.length === 0 &&
     local.widgetOrder.length === 0 &&

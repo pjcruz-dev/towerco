@@ -123,7 +123,10 @@ export function EApprovalReportsPageClient() {
         (resolved.length !== layout.enabledWidgetIds.length ||
           resolved.some((id, index) => id !== layout.enabledWidgetIds[index])));
     if (!needsWrite) return;
-    setLayout({ ...layout, enabledWidgetIds: resolved });
+    setLayout((current) => ({
+      ...current,
+      enabledWidgetIds: resolveReportsEnabledWidgetIds(current.enabledWidgetIds, canAudit),
+    }));
   }, [canAudit, layout, setLayout]);
 
 
@@ -660,7 +663,7 @@ export function EApprovalReportsPageClient() {
         }}
         prefs={layout.pageChrome}
         editing={editing}
-        onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+        onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
         renderActions={({ isVisible }) =>
           isVisible("customize") ? (
             <DashboardLayoutToolbar

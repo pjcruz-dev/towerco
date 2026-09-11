@@ -162,23 +162,25 @@ function EApprovalDashboardPageInner() {
       return;
     }
     expandedBundlesRef.current = true;
-    const enabled = expandEApprovalDashboardWidgetIds(
-      layout.enabledWidgetIds.length > 0
-        ? layout.enabledWidgetIds
-        : ["kpis", "queue_awaiting", "queue_attention", "shortcuts"],
-    );
-    const order = expandEApprovalDashboardWidgetIds(
-      layout.widgetOrder.length > 0 ? layout.widgetOrder : enabled,
-    );
-    const spans = { ...layout.spans };
-    delete spans.queues;
-    if (!spans.queue_awaiting) spans.queue_awaiting = "half";
-    if (!spans.queue_attention) spans.queue_attention = "half";
-    setLayout({
-      ...layout,
-      enabledWidgetIds: enabled,
-      widgetOrder: order,
-      spans,
+    setLayout((current) => {
+      const enabled = expandEApprovalDashboardWidgetIds(
+        current.enabledWidgetIds.length > 0
+          ? current.enabledWidgetIds
+          : ["kpis", "queue_awaiting", "queue_attention", "shortcuts"],
+      );
+      const order = expandEApprovalDashboardWidgetIds(
+        current.widgetOrder.length > 0 ? current.widgetOrder : enabled,
+      );
+      const spans = { ...current.spans };
+      delete spans.queues;
+      if (!spans.queue_awaiting) spans.queue_awaiting = "half";
+      if (!spans.queue_attention) spans.queue_attention = "half";
+      return {
+        ...current,
+        enabledWidgetIds: enabled,
+        widgetOrder: order,
+        spans,
+      };
     });
   }, [layout, serverReady, setLayout]);
 
@@ -416,7 +418,7 @@ function EApprovalDashboardPageInner() {
           }}
           prefs={layout.pageChrome}
           editing={editing}
-          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
           actionsById={{
             help: <EApprovalHelpEntryActions showHelp showTour={false} />,
             tour: <EApprovalHelpEntryActions showHelp={false} showTour />,

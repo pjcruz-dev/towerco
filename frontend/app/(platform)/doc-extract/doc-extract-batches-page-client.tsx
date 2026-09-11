@@ -555,7 +555,7 @@ export function DocExtractBatchesPageClient() {
           defaults={DOC_EXTRACT_BATCHES_PAGE_CHROME}
           prefs={layout.pageChrome}
           editing={editing}
-          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
           actionsById={{
             help: <DocExtractHelpEntryActions showHelp showTour={false} />,
             tour: <DocExtractHelpEntryActions showHelp={false} showTour />,

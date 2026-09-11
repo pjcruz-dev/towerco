@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyLayoutPreset,
   applyWidgetMinHeight,
+  applyWidgetSettings,
   applyWidgetSpan,
   duplicateWidgetInLayout,
   insertWidgetIntoLayout,
@@ -26,6 +27,17 @@ describe("dashboard-layout-mutations", () => {
 
     const withHeight = applyWidgetMinHeight(withSpan, "kpis", 240);
     expect(withHeight.widgetOptions.kpis?.settings?.minHeight).toBe(240);
+  });
+
+  it("keeps sequential Card appearance settings when applied from the latest layout", () => {
+    const first = applyWidgetSettings(EMPTY_DASHBOARD_LAYOUT_PREFS, "kpis", {
+      kpiCards: '{"awaiting":{"accent":"sky"}}',
+    });
+    const second = applyWidgetSettings(first, "kpis", {
+      kpiCards: '{"awaiting":{"accent":"sky","sparkStyle":"gauge"}}',
+    });
+    expect(second.widgetOptions.kpis?.settings?.kpiCards).toContain("gauge");
+    expect(second.widgetOptions.kpis?.settings?.kpiCards).toContain("sky");
   });
 
   it("removes widget from enabled order and options", () => {

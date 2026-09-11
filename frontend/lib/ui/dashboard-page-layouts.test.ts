@@ -51,4 +51,31 @@ describe("dashboard-page-layouts", () => {
     expect(resolved.source).toBe("local");
     expect(resolved.layout.enabledWidgetIds).toEqual(["table"]);
   });
+
+  it("merges fresher local widget options onto personal when Card appearance differs", () => {
+    const personal = {
+      ...EMPTY_DASHBOARD_LAYOUT_PREFS,
+      enabledWidgetIds: ["kpis"],
+      widgetOptions: {
+        kpis: { title: "Status KPIs" },
+      },
+    };
+    const local = {
+      ...EMPTY_DASHBOARD_LAYOUT_PREFS,
+      enabledWidgetIds: ["kpis"],
+      widgetOptions: {
+        kpis: {
+          title: "Status KPIs",
+          settings: { kpiCards: '{"awaiting":{"accent":"emerald"}}' },
+        },
+      },
+    };
+    const resolved = resolveEffectiveDashboardLayout({
+      personal,
+      tenantDefault: null,
+      local,
+    });
+    expect(resolved.source).toBe("personal");
+    expect(resolved.layout.widgetOptions.kpis?.settings?.kpiCards).toContain("emerald");
+  });
 });

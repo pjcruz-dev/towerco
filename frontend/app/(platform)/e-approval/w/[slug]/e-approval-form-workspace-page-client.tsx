@@ -790,7 +790,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
           }}
           prefs={layout.pageChrome}
           editing={editing}
-          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
           renderActions={({ isVisible }) => (
             <>
               {isVisible("customize") ? (

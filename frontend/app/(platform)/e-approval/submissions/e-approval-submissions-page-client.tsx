@@ -705,7 +705,7 @@ export function EApprovalSubmissionsPageClient() {
           defaults={E_APPROVAL_SUBMISSIONS_PAGE_CHROME}
           prefs={layout.pageChrome}
           editing={editing}
-          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
           renderActions={({ isVisible }) => (
             <>
               {isVisible("help") || isVisible("tour") ? (

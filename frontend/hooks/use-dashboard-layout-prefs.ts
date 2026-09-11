@@ -17,6 +17,10 @@ import {
   type DashboardLayoutPrefs,
 } from "@/lib/ui/dashboard-widget-registry";
 
+export type DashboardLayoutUpdater =
+  | DashboardLayoutPrefs
+  | ((prev: DashboardLayoutPrefs) => DashboardLayoutPrefs);
+
 /**
  * Persist dashboard widget order, visibility, catalog selection, spans, and options.
  * Local cache + personal server override; optional tenant-shared default (Phase 4).
@@ -37,8 +41,11 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
   prefsRef.current = prefs;
   const storageKeyRef = useRef(storageKey);
   storageKeyRef.current = storageKey;
+  /** User edited before/while server bundle loaded — do not clobber Card appearance etc. */
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
+    dirtyRef.current = false;
     if (storageKey === null) {
       setServerReady(true);
       return;
@@ -50,6 +57,14 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
     void loadDashboardLayoutBundle(storageKey).then((bundle) => {
       if (cancelled) return;
       setTenantDefault(bundle.tenantDefault);
+
+      if (dirtyRef.current) {
+        setHasPersonalOverride(true);
+        followingTenantRef.current = false;
+        setServerReady(true);
+        return;
+      }
+
       const resolved = resolveEffectiveDashboardLayout({
         personal: bundle.personal,
         tenantDefault: bundle.tenantDefault,
@@ -58,6 +73,7 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
       setHasPersonalOverride(resolved.source === "personal");
       followingTenantRef.current = resolved.source === "tenant";
       if (resolved.source === "personal" || resolved.source === "tenant") {
+        prefsRef.current = resolved.layout;
         setPrefs(resolved.layout);
       }
       setServerReady(true);
@@ -102,56 +118,63 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
     };
   }, []);
 
+  const commitLayout = useCallback(
+    (next: DashboardLayoutPrefs, options?: { personalOverride?: boolean }) => {
+      const normalized = normalizeDashboardLayoutPrefs(next);
+      dirtyRef.current = true;
+      followingTenantRef.current = false;
+      if (options?.personalOverride !== false) {
+        setHasPersonalOverride(true);
+      }
+      prefsRef.current = normalized;
+      setPrefs(normalized);
+      schedulePersonalPersist(normalized);
+      return normalized;
+    },
+    [schedulePersonalPersist, setPrefs],
+  );
+
   const layout = normalizeDashboardLayoutPrefs(prefs);
 
   const patchLayout = useCallback(
     (patch: Partial<DashboardLayoutPrefs>) => {
-      setPrefs((current) => {
-        const base = normalizeDashboardLayoutPrefs(current);
-        const next = {
-          widgetOrder: patch.widgetOrder ?? base.widgetOrder,
-          hiddenWidgetIds: patch.hiddenWidgetIds ?? base.hiddenWidgetIds,
-          enabledWidgetIds: patch.enabledWidgetIds ?? base.enabledWidgetIds,
-          spans: patch.spans ?? base.spans,
-          widgetOptions: patch.widgetOptions ?? base.widgetOptions,
-          pageChrome: patch.pageChrome ?? base.pageChrome,
-        };
-        followingTenantRef.current = false;
-        setHasPersonalOverride(true);
-        schedulePersonalPersist(next);
-        return next;
+      const base = normalizeDashboardLayoutPrefs(prefsRef.current);
+      commitLayout({
+        widgetOrder: patch.widgetOrder ?? base.widgetOrder,
+        hiddenWidgetIds: patch.hiddenWidgetIds ?? base.hiddenWidgetIds,
+        enabledWidgetIds: patch.enabledWidgetIds ?? base.enabledWidgetIds,
+        spans: patch.spans ?? base.spans,
+        widgetOptions: patch.widgetOptions ?? base.widgetOptions,
+        pageChrome: patch.pageChrome ?? base.pageChrome,
       });
     },
-    [schedulePersonalPersist, setPrefs],
+    [commitLayout],
   );
 
   const setLayout = useCallback(
-    (next: DashboardLayoutPrefs) => {
-      const normalized = normalizeDashboardLayoutPrefs(next);
-      followingTenantRef.current = false;
-      setHasPersonalOverride(true);
-      setPrefs(normalized);
-      schedulePersonalPersist(normalized);
+    (next: DashboardLayoutUpdater) => {
+      const prev = normalizeDashboardLayoutPrefs(prefsRef.current);
+      const resolved = typeof next === "function" ? next(prev) : next;
+      commitLayout(resolved);
     },
-    [schedulePersonalPersist, setPrefs],
+    [commitLayout],
   );
 
   const resetLayout = useCallback(() => {
-    const empty = { ...EMPTY_DASHBOARD_LAYOUT_PREFS, spans: {}, widgetOptions: {}, pageChrome: {} };
-    followingTenantRef.current = false;
-    setHasPersonalOverride(true);
-    setPrefs(empty);
-    schedulePersonalPersist(empty);
-  }, [schedulePersonalPersist, setPrefs]);
+    commitLayout({ ...EMPTY_DASHBOARD_LAYOUT_PREFS, spans: {}, widgetOptions: {}, pageChrome: {} });
+  }, [commitLayout]);
 
   const publishTenantDefault = useCallback(async () => {
     if (storageKey === null) return null;
-    const published = await publishTenantDashboardLayout(storageKey, layout);
+    const published = await publishTenantDashboardLayout(
+      storageKey,
+      normalizeDashboardLayoutPrefs(prefsRef.current),
+    );
     if (published) {
       setTenantDefault(published);
     }
     return published;
-  }, [layout, storageKey]);
+  }, [storageKey]);
 
   const resetToTenantDefault = useCallback(async () => {
     if (storageKey === null) return;
@@ -161,12 +184,17 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
     }
     await clearPersonalDashboardLayout(storageKey);
     setHasPersonalOverride(false);
+    dirtyRef.current = false;
     if (tenantDefault) {
       followingTenantRef.current = true;
-      setPrefs(normalizeDashboardLayoutPrefs(tenantDefault));
+      const normalized = normalizeDashboardLayoutPrefs(tenantDefault);
+      prefsRef.current = normalized;
+      setPrefs(normalized);
     } else {
       followingTenantRef.current = false;
-      setPrefs({ ...EMPTY_DASHBOARD_LAYOUT_PREFS, spans: {}, widgetOptions: {}, pageChrome: {} });
+      const empty = { ...EMPTY_DASHBOARD_LAYOUT_PREFS, spans: {}, widgetOptions: {}, pageChrome: {} };
+      prefsRef.current = empty;
+      setPrefs(empty);
     }
   }, [setPrefs, storageKey, tenantDefault]);
 

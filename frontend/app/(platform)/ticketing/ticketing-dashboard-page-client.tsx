@@ -525,7 +525,7 @@ export function TicketingDashboardPageClient() {
           }}
           prefs={layout.pageChrome}
           editing={editing}
-          onChromeChange={(pageChrome) => setLayout({ ...layout, pageChrome })}
+          onChromeChange={(pageChrome) => setLayout((current) => ({ ...current, pageChrome }))}
           actionsById={{
             help: <TicketingHelpEntryActions showHelp showTour={false} />,
             tour: <TicketingHelpEntryActions showHelp={false} showTour />,
