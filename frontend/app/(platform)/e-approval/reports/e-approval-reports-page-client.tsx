@@ -26,6 +26,7 @@ import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-lay
 import {
   useDashboardCustomizeMode,
   useDashboardLayoutPrefs,
+  type DashboardLayoutUpdater,
 } from "@/hooks/use-dashboard-layout-prefs";
 import { usePermission } from "@/hooks/use-permission";
 import {
@@ -596,19 +597,22 @@ export function EApprovalReportsPageClient() {
     return [...reportsAddable, ...enhancements.filter((entry) => !seen.has(entry.id))];
   }, [bindableCatalog, canAudit, effectiveEnabledIds, tab]);
 
-  const applyLayoutFromTabUi = (next: typeof layout) => {
-    const previousOrder =
-      layout.widgetOrder.length > 0 ? layout.widgetOrder : effectiveEnabledIds;
-    const nextOrderSource =
-      next.widgetOrder.length > 0 ? next.widgetOrder : next.enabledWidgetIds;
-    setLayout({
-      ...next,
-      enabledWidgetIds: mergeReportsEnabledIdsForTab(
-        effectiveEnabledIds,
-        next.enabledWidgetIds,
-        tab,
-      ),
-      widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrderSource, tab),
+  const applyLayoutFromTabUi = (next: DashboardLayoutUpdater) => {
+    setLayout((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      const previousOrder =
+        current.widgetOrder.length > 0 ? current.widgetOrder : effectiveEnabledIds;
+      const nextOrderSource =
+        resolved.widgetOrder.length > 0 ? resolved.widgetOrder : resolved.enabledWidgetIds;
+      return {
+        ...resolved,
+        enabledWidgetIds: mergeReportsEnabledIdsForTab(
+          effectiveEnabledIds,
+          resolved.enabledWidgetIds,
+          tab,
+        ),
+        widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrderSource, tab),
+      };
     });
   };
 
@@ -621,12 +625,14 @@ export function EApprovalReportsPageClient() {
   const tabAwareHandlers = {
     ...boardHandlers,
     onOrderChange: (nextOrder: string[]) => {
-      const previousOrder =
-        layout.widgetOrder.length > 0 ? layout.widgetOrder : effectiveEnabledIds;
-      setLayout({
-        ...layout,
-        enabledWidgetIds: effectiveEnabledIds,
-        widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrder, tab),
+      setLayout((current) => {
+        const previousOrder =
+          current.widgetOrder.length > 0 ? current.widgetOrder : effectiveEnabledIds;
+        return {
+          ...current,
+          enabledWidgetIds: effectiveEnabledIds,
+          widgetOrder: mergeReportsOrderForTab(previousOrder, nextOrder, tab),
+        };
       });
     },
   };
@@ -742,7 +748,7 @@ function ReportsAnalyticsBoard({
 }) {
   const { normalizedData } = useEApprovalAnalyticsBoard();
   const merged = applyPageEnhancements(
-    normalizedData.kpis.length ? normalizedData : dataFallback,
+    (normalizedData.kpis?.length ?? 0) > 0 ? normalizedData : dataFallback,
     eApprovalReportsEnhancements(),
   );
   return <>{children(merged)}</>;

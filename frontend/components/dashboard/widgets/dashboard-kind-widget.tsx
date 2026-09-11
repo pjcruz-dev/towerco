@@ -129,7 +129,7 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
       const cardOptions = parseKpiCardOverrides(options?.settings?.kpiCards);
       return (
         <KpiStrip
-          items={useSecondary ? (data.secondaryKpis ?? []) : data.kpis}
+          items={useSecondary ? (data.secondaryKpis ?? []) : (data.kpis ?? [])}
           cardOptions={cardOptions}
         />
       );

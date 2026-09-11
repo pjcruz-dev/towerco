@@ -26,7 +26,7 @@ type Props = {
   layout: DashboardLayoutPrefs;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
-  onChange: (next: DashboardLayoutPrefs) => void;
+  onChange: (next: DashboardLayoutPrefs | ((prev: DashboardLayoutPrefs) => DashboardLayoutPrefs)) => void;
   /** Page-native default section ids (reset target). */
   defaultEnabledIds?: string[];
   bindableCatalog?: DashboardCatalogEntry[];

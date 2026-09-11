@@ -23,7 +23,7 @@ export function KpiStrip({
   className,
   cardOptions,
 }: {
-  items: KpiStripItem[];
+  items?: KpiStripItem[] | null;
   isLoading?: boolean;
   skeletonCount?: number;
   /** Stable hook for live Help tours (`[data-help="…"]`). */
@@ -36,7 +36,7 @@ export function KpiStrip({
     return <KpiStripSkeleton count={skeletonCount} />;
   }
 
-  if (items.length === 0) {
+  if (!items?.length) {
     return (
       <section data-help={dataHelp}>
         <DashboardWidgetEmpty message="KPI data will appear here once metrics are available." />
