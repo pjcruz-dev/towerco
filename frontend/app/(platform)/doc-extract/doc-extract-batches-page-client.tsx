@@ -93,8 +93,9 @@ export function DocExtractBatchesPageClient() {
   const [requeueBatchId, setRequeueBatchId] = useState<string | null>(null);
   const [downloadBatchId, setDownloadBatchId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const { editing, setEditing } = useDashboardCustomizeMode();
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs("toweros.doc-extract.dashboard.layout");
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs("toweros.doc-extract.dashboard.layout");
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const debouncedSearch = useDebouncedValue(search, 350, () => setPage(1));
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: "created_at:desc",

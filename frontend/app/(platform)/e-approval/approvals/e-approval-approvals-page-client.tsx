@@ -58,8 +58,9 @@ export function EApprovalApprovalsPageClient() {
   const [page, setPage] = useState(1);
   const [awaitingMe, setAwaitingMe] = useState(true);
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: DEFAULT_SORT,
     sortableColumnIds: ["document", "status"],

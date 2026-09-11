@@ -82,8 +82,9 @@ export function TicketingDashboardPageClient() {
     publishTenantDefault,
     resetToTenantDefault,
     serverReady,
+    flushPersonalPersist,
   } = useDashboardLayoutPrefs(DASHBOARD_LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const { status, category, priority, department, mineOnly, assignedMe } = prefs;
   const seededLayoutRef = useRef(false);
   const expandedBundlesRef = useRef(false);

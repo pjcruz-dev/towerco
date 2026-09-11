@@ -37,6 +37,7 @@ import { formatLastActive } from "@/lib/admin/user-display";
 import { getErrorMessage } from "@/lib/api/error";
 import { filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
 import {
+  ADMIN_USERS_FILTER_NONE,
   ADMIN_USERS_IMPORT_TEMPLATE_CSV,
   bulkAssignRolesAdminUsers,
   bulkRemoveRolesAdminUsers,
@@ -118,21 +119,32 @@ export function UsersPageClient() {
   const [lastActiveFilter, setLastActiveFilter] = useState<AdminUserLastActiveFilter>("all");
   const [mfaFilter, setMfaFilter] = useState<AdminUserMfaFilter>("all");
   const [roleFilter, setRoleFilter] = useState(initialRole === "all" ? "all" : initialRole);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [managerFilter, setManagerFilter] = useState("all");
+  const [licenseFilter, setLicenseFilter] = useState("all");
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: "name:asc",
     sortableColumnIds: ["name", "email"],
   });
   const { setPage, debouncedSearch, query } = useAdminUsersIndex(
     search,
-    statusFilter,
-    lastActiveFilter,
-    mfaFilter,
-    roleFilter === "all" ? "" : roleFilter,
+    {
+      status: statusFilter,
+      lastActive: lastActiveFilter,
+      mfa: mfaFilter,
+      role: roleFilter === "all" ? "" : roleFilter,
+      department: departmentFilter,
+      managerId: managerFilter,
+      license: licenseFilter,
+    },
     sort,
   );
   const { data, isFetching, isLoading, isError } = query;
   const rows = data?.data ?? [];
   const meta = data?.meta;
+  const filterOptions = meta?.filter_options;
+  const advancedFiltersActive =
+    departmentFilter !== "all" || managerFilter !== "all" || licenseFilter !== "all";
 
   const [exporting, setExporting] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -195,7 +207,16 @@ export function UsersPageClient() {
   useEffect(() => {
     setRowSelection({});
     setSelectAllMatching(false);
-  }, [debouncedSearch, statusFilter, lastActiveFilter, mfaFilter, roleFilter]);
+  }, [
+    debouncedSearch,
+    statusFilter,
+    lastActiveFilter,
+    mfaFilter,
+    roleFilter,
+    departmentFilter,
+    managerFilter,
+    licenseFilter,
+  ]);
 
   const invalidateUsers = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
@@ -275,6 +296,9 @@ export function UsersPageClient() {
         last_active: lastActiveFilter,
         mfa: mfaFilter,
         role: roleFilter === "all" ? undefined : roleFilter,
+        department: departmentFilter === "all" ? undefined : departmentFilter,
+        manager_id: managerFilter === "all" ? undefined : managerFilter,
+        license: licenseFilter === "all" ? undefined : licenseFilter,
         sort,
       });
       const next: RowSelectionState = {};
@@ -589,13 +613,13 @@ export function UsersPageClient() {
           <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="users-search">
-                Filter
+                Search
               </label>
               <Input
                 id="users-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Name or email"
+                placeholder="Name, email, department, or title"
                 className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
               />
             </div>
@@ -665,6 +689,85 @@ export function UsersPageClient() {
                 </option>
               ))}
             </FilterSelect>
+            <FilterSelect
+              id="users-department"
+              label="Department"
+              value={departmentFilter}
+              onChange={(value) => {
+                setDepartmentFilter(value);
+                setPage(1);
+              }}
+              touchFriendly
+              className="w-full min-w-[12rem] sm:w-auto"
+            >
+              <option value="all">Any department</option>
+              {filterOptions?.has_unassigned_department ? (
+                <option value={ADMIN_USERS_FILTER_NONE}>No department</option>
+              ) : null}
+              {(filterOptions?.departments ?? []).map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              id="users-manager"
+              label="Reports to"
+              value={managerFilter}
+              onChange={(value) => {
+                setManagerFilter(value);
+                setPage(1);
+              }}
+              touchFriendly
+              className="w-full min-w-[12rem] sm:w-auto"
+            >
+              <option value="all">Any manager</option>
+              {filterOptions?.has_unassigned_manager ? (
+                <option value={ADMIN_USERS_FILTER_NONE}>No manager</option>
+              ) : null}
+              {(filterOptions?.managers ?? []).map((manager) => (
+                <option key={manager.id} value={manager.id}>
+                  {manager.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <FilterSelect
+              id="users-license"
+              label="License"
+              value={licenseFilter}
+              onChange={(value) => {
+                setLicenseFilter(value);
+                setPage(1);
+              }}
+              touchFriendly
+              className="w-full min-w-[12rem] sm:w-auto"
+            >
+              <option value="all">Any license</option>
+              {filterOptions?.has_unassigned_license ? (
+                <option value={ADMIN_USERS_FILTER_NONE}>No license</option>
+              ) : null}
+              {(filterOptions?.licenses ?? []).map((license) => (
+                <option key={license} value={license}>
+                  {license}
+                </option>
+              ))}
+            </FilterSelect>
+            {advancedFiltersActive ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 self-end text-xs"
+                onClick={() => {
+                  setDepartmentFilter("all");
+                  setManagerFilter("all");
+                  setLicenseFilter("all");
+                  setPage(1);
+                }}
+              >
+                Clear org filters
+              </Button>
+            ) : null}
           </div>
 
           {selectedCount > 0 ? (

@@ -90,8 +90,9 @@ export function EApprovalReportsPageClient() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [tab, setTab] = useState<HubTab>("exports");
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(REPORTS_BOARD_LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs(REPORTS_BOARD_LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
 
   useEffect(() => {
     if (!permissionsReady) return;

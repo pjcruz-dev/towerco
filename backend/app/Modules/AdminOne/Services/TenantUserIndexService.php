@@ -114,9 +114,38 @@ class TenantUserIndexService
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
-            $query->where(static function ($q) use ($like): void {
+            $hasDepartment = $this->hasDepartmentColumn();
+            $hasOrg = $this->hasOrgColumns();
+            $hasEntraManagerDept = $this->hasManagerDepartmentColumn();
+            $hasJobTitle = Schema::connection('tenant')->hasColumn('users', 'job_title');
+
+            $query->where(function ($q) use ($like, $hasDepartment, $hasOrg, $hasEntraManagerDept, $hasJobTitle): void {
                 $q->where('name', 'like', $like)
                     ->orWhere('email', 'like', $like);
+
+                if ($hasJobTitle) {
+                    $q->orWhere('job_title', 'like', $like);
+                }
+
+                if ($hasDepartment) {
+                    $q->orWhere('department', 'like', $like);
+                }
+
+                if ($hasOrg) {
+                    $q->orWhereHas('manager', static function ($manager) use ($like, $hasDepartment): void {
+                        $manager->where(static function ($inner) use ($like, $hasDepartment): void {
+                            $inner->where('name', 'like', $like);
+                            if ($hasDepartment) {
+                                $inner->orWhere('department', 'like', $like);
+                            }
+                        });
+                    });
+                }
+
+                if ($hasEntraManagerDept) {
+                    $q->orWhere('entra_manager_department', 'like', $like)
+                        ->orWhere('entra_manager_name', 'like', $like);
+                }
             });
         }
 
@@ -275,7 +304,156 @@ class TenantUserIndexService
                 'per_page' => $paginator->perPage(),
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),
+                'filter_options' => $this->filterOptions(),
             ],
+        ];
+    }
+
+    /**
+     * Distinct values for Users list advanced filters.
+     *
+     * @return array{
+     *   departments: list<string>,
+     *   has_unassigned_department: bool,
+     *   managers: list<array{id: string, name: string, email: string}>,
+     *   has_unassigned_manager: bool,
+     *   licenses: list<string>,
+     *   has_unassigned_license: bool
+     * }
+     */
+    public function filterOptions(): array
+    {
+        $departments = [];
+        $hasUnassignedDepartment = false;
+        if ($this->hasDepartmentColumn()) {
+            $departments = collect(
+                TenantUser::query()
+                    ->whereNotNull('department')
+                    ->where('department', '!=', '')
+                    ->distinct()
+                    ->pluck('department')
+                    ->all()
+            );
+
+            if ($this->hasOrgColumns()) {
+                $managerIds = TenantUser::query()
+                    ->whereNotNull('manager_id')
+                    ->distinct()
+                    ->pluck('manager_id');
+                if ($managerIds->isNotEmpty()) {
+                    $departments = $departments->merge(
+                        TenantUser::query()
+                            ->whereIn('id', $managerIds)
+                            ->whereNotNull('department')
+                            ->where('department', '!=', '')
+                            ->distinct()
+                            ->pluck('department')
+                            ->all()
+                    );
+                }
+            }
+
+            if ($this->hasManagerDepartmentColumn()) {
+                $departments = $departments->merge(
+                    TenantUser::query()
+                        ->whereNotNull('entra_manager_department')
+                        ->where('entra_manager_department', '!=', '')
+                        ->distinct()
+                        ->pluck('entra_manager_department')
+                        ->all()
+                );
+            }
+
+            $departments = $departments
+                ->map(static fn ($value): string => trim((string) $value))
+                ->filter(static fn (string $value): bool => $value !== '')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+
+            $hasUnassignedDepartment = TenantUser::query()
+                ->where(function ($q): void {
+                    $q->whereNull('department')
+                        ->orWhere('department', '')
+                        ->orWhereRaw("TRIM(department) = ''");
+                })
+                ->when($this->hasOrgColumns(), function ($q): void {
+                    $q->where(function ($inner): void {
+                        $inner->whereNull('manager_id')
+                            ->orWhereDoesntHave('manager', static function ($manager): void {
+                                $manager->whereNotNull('department')
+                                    ->where('department', '!=', '');
+                            });
+                    });
+                })
+                ->when($this->hasManagerDepartmentColumn(), function ($q): void {
+                    $q->where(function ($inner): void {
+                        $inner->whereNull('entra_manager_department')
+                            ->orWhere('entra_manager_department', '');
+                    });
+                })
+                ->exists();
+        }
+
+        $managers = [];
+        $hasUnassignedManager = false;
+        if ($this->hasOrgColumns()) {
+            $managerIds = TenantUser::query()
+                ->whereNotNull('manager_id')
+                ->distinct()
+                ->pluck('manager_id')
+                ->map(static fn ($id): string => (string) $id)
+                ->all();
+
+            if ($managerIds !== []) {
+                $managers = TenantUser::query()
+                    ->whereIn('id', $managerIds)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'email'])
+                    ->map(static fn (TenantUser $user): array => [
+                        'id' => (string) $user->id,
+                        'name' => (string) $user->name,
+                        'email' => (string) $user->email,
+                    ])
+                    ->values()
+                    ->all();
+            }
+
+            $hasUnassignedManager = TenantUser::query()->whereNull('manager_id')->exists();
+        }
+
+        $licenses = [];
+        $hasUnassignedLicense = false;
+        if ($this->hasLicenseColumns()) {
+            $licenses = TenantUser::query()
+                ->whereNotNull('entra_license_label')
+                ->where('entra_license_label', '!=', '')
+                ->distinct()
+                ->orderBy('entra_license_label')
+                ->pluck('entra_license_label')
+                ->map(static fn ($value): string => trim((string) $value))
+                ->filter(static fn (string $value): bool => $value !== '')
+                ->unique()
+                ->values()
+                ->all();
+
+            $hasUnassignedLicense = TenantUser::query()
+                ->where(static function ($q): void {
+                    $q->whereNull('entra_license_label')
+                        ->orWhere('entra_license_label', '')
+                        ->orWhere('entra_licensed', false);
+                })
+                ->exists();
+        }
+
+        return [
+            'departments' => $departments,
+            'has_unassigned_department' => $hasUnassignedDepartment,
+            'managers' => $managers,
+            'has_unassigned_manager' => $hasUnassignedManager,
+            'licenses' => $licenses,
+            'has_unassigned_license' => $hasUnassignedLicense,
         ];
     }
 }

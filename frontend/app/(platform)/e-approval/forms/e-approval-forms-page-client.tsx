@@ -53,8 +53,9 @@ export function EApprovalFormsPageClient() {
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const debouncedSearch = useDebouncedValue(search, 350, () => setPage(1));
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: DEFAULT_SORT,

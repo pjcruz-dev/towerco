@@ -78,8 +78,9 @@ export function TicketingTicketsPageClient() {
   const push = useNotificationStore((s) => s.push);
   const { prefs, patchPrefs } = useTicketingWorkspacePrefs();
   const { status, category, priority, department, mineOnly, assignedMe, slaStatus, density } = prefs;
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());

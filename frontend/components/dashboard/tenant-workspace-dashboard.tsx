@@ -131,8 +131,9 @@ export function TenantWorkspaceDashboard() {
     tenantDefault,
     publishTenantDefault,
     resetToTenantDefault,
+    flushPersonalPersist,
   } = useDashboardLayoutPrefs(LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
 
   const actionSeries = useMemo(
     () =>

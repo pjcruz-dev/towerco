@@ -7,34 +7,18 @@ namespace App\Modules\AdminOne\Services;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-
-final class TenantUserIndexFilters
-{
-    public function __construct(
-        public readonly ?string $status = null,
-        public readonly ?string $lastActive = null,
-        public readonly ?string $mfa = null,
-        public readonly ?string $role = null,
-    ) {}
-
-    public static function fromRequest(array $validated): self
-    {
-        $status = isset($validated['status']) ? (string) $validated['status'] : null;
-        $lastActive = isset($validated['last_active']) ? (string) $validated['last_active'] : null;
-        $mfa = isset($validated['mfa']) ? (string) $validated['mfa'] : null;
-        $role = isset($validated['role']) ? trim((string) $validated['role']) : null;
-
-        return new self(
-            status: $status === 'all' ? null : $status,
-            lastActive: $lastActive === 'all' ? null : $lastActive,
-            mfa: $mfa === 'all' ? null : $mfa,
-            role: $role === '' || $role === 'all' ? null : $role,
-        );
-    }
-}
+use Illuminate\Support\Facades\Schema;
 
 final class TenantUserIndexQueryFilters
 {
+    private ?bool $departmentColumn = null;
+
+    private ?bool $orgColumns = null;
+
+    private ?bool $licenseColumns = null;
+
+    private ?bool $managerDepartmentColumn = null;
+
     /**
      * @param  Builder<TenantUser>  $query
      */
@@ -44,6 +28,9 @@ final class TenantUserIndexQueryFilters
         $this->applyLastActiveFilter($query, $filters->lastActive);
         $this->applyMfaFilter($query, $filters->mfa);
         $this->applyRoleFilter($query, $filters->role);
+        $this->applyDepartmentFilter($query, $filters->department);
+        $this->applyManagerFilter($query, $filters->managerId);
+        $this->applyLicenseFilter($query, $filters->license);
     }
 
     /**
@@ -140,5 +127,144 @@ final class TenantUserIndexQueryFilters
         $query->whereHas('roles', static function ($sub) use ($role): void {
             $sub->where('name', $role);
         });
+    }
+
+    /**
+     * Match the Users table Department column (own Entra dept, else manager, else Entra snapshot).
+     *
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyDepartmentFilter(Builder $query, ?string $department): void
+    {
+        if ($department === null || $department === '' || ! $this->hasDepartmentColumn()) {
+            return;
+        }
+
+        $hasOrg = $this->hasOrgColumns();
+        $hasEntraManagerDept = $this->hasManagerDepartmentColumn();
+
+        if ($department === TenantUserIndexFilters::NONE) {
+            $query->where(function (Builder $sub) use ($hasOrg, $hasEntraManagerDept): void {
+                $this->whereOwnDepartmentBlank($sub);
+                if ($hasOrg) {
+                    $sub->where(function (Builder $inner): void {
+                        $inner->whereNull('manager_id')
+                            ->orWhereDoesntHave('manager', static function (Builder $manager): void {
+                                $manager->whereNotNull('department')
+                                    ->where('department', '!=', '');
+                            });
+                    });
+                }
+                if ($hasEntraManagerDept) {
+                    $sub->where(function (Builder $inner): void {
+                        $inner->whereNull('entra_manager_department')
+                            ->orWhere('entra_manager_department', '');
+                    });
+                }
+            });
+
+            return;
+        }
+
+        $query->where(function (Builder $sub) use ($department, $hasOrg, $hasEntraManagerDept): void {
+            $sub->where('department', $department);
+
+            if ($hasOrg) {
+                $sub->orWhere(function (Builder $inner) use ($department): void {
+                    $this->whereOwnDepartmentBlank($inner);
+                    $inner->whereHas('manager', static function (Builder $manager) use ($department): void {
+                        $manager->where('department', $department);
+                    });
+                });
+            }
+
+            if ($hasEntraManagerDept) {
+                $sub->orWhere(function (Builder $inner) use ($department, $hasOrg): void {
+                    $this->whereOwnDepartmentBlank($inner);
+                    if ($hasOrg) {
+                        $inner->where(function (Builder $mgr): void {
+                            $mgr->whereNull('manager_id')
+                                ->orWhereDoesntHave('manager', static function (Builder $manager): void {
+                                    $manager->whereNotNull('department')
+                                        ->where('department', '!=', '');
+                                });
+                        });
+                    }
+                    $inner->where('entra_manager_department', $department);
+                });
+            }
+        });
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function whereOwnDepartmentBlank(Builder $query): void
+    {
+        $query->where(static function (Builder $sub): void {
+            $sub->whereNull('department')
+                ->orWhere('department', '')
+                ->orWhereRaw("TRIM(department) = ''");
+        });
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyManagerFilter(Builder $query, ?string $managerId): void
+    {
+        if ($managerId === null || $managerId === '' || ! $this->hasOrgColumns()) {
+            return;
+        }
+
+        if ($managerId === TenantUserIndexFilters::NONE) {
+            $query->whereNull('manager_id');
+
+            return;
+        }
+
+        $query->where('manager_id', $managerId);
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyLicenseFilter(Builder $query, ?string $license): void
+    {
+        if ($license === null || $license === '' || ! $this->hasLicenseColumns()) {
+            return;
+        }
+
+        if ($license === TenantUserIndexFilters::NONE) {
+            $query->where(static function ($sub): void {
+                $sub->whereNull('entra_license_label')
+                    ->orWhere('entra_license_label', '')
+                    ->orWhere('entra_licensed', false);
+            });
+
+            return;
+        }
+
+        $query->where('entra_license_label', $license);
+    }
+
+    private function hasDepartmentColumn(): bool
+    {
+        return $this->departmentColumn ??= Schema::connection('tenant')->hasColumn('users', 'department');
+    }
+
+    private function hasOrgColumns(): bool
+    {
+        return $this->orgColumns ??= Schema::connection('tenant')->hasColumn('users', 'manager_id');
+    }
+
+    private function hasLicenseColumns(): bool
+    {
+        return $this->licenseColumns ??= Schema::connection('tenant')->hasColumn('users', 'entra_licensed');
+    }
+
+    private function hasManagerDepartmentColumn(): bool
+    {
+        return $this->managerDepartmentColumn ??= Schema::connection('tenant')->hasColumn('users', 'entra_manager_department');
     }
 }

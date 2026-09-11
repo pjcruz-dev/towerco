@@ -145,8 +145,9 @@ export function DocExtractTemplatesPageClient() {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
   const [editor, setEditor] = useState<EditorState>(initialEditor());
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault } = useDashboardLayoutPrefs(LAYOUT_KEY);
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
+    useDashboardLayoutPrefs(LAYOUT_KEY);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
 
   const templatesQuery = useQuery({
     queryKey: ["doc-extract", "templates"],

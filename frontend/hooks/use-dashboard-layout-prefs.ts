@@ -35,6 +35,8 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const storageKeyRef = useRef(storageKey);
+  storageKeyRef.current = storageKey;
 
   useEffect(() => {
     if (storageKey === null) {
@@ -66,11 +68,22 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
     };
   }, [setPrefs, storageKey]);
 
+  const flushPersonalPersist = useCallback(async () => {
+    const key = storageKeyRef.current;
+    if (key === null) return;
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    await persistPersonalDashboardLayout(key, normalizeDashboardLayoutPrefs(prefsRef.current));
+  }, []);
+
   const schedulePersonalPersist = useCallback(
     (next: DashboardLayoutPrefs) => {
       if (storageKey === null) return;
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
       persistTimerRef.current = setTimeout(() => {
+        persistTimerRef.current = null;
         void persistPersonalDashboardLayout(storageKey, next);
       }, 450);
     },
@@ -79,7 +92,13 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
 
   useEffect(() => {
     return () => {
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      const key = storageKeyRef.current;
+      if (!key) return;
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+        void persistPersonalDashboardLayout(key, normalizeDashboardLayoutPrefs(prefsRef.current));
+      }
     };
   }, []);
 
@@ -165,13 +184,34 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
     patchLayout,
     setLayout,
     resetLayout,
+    flushPersonalPersist,
     publishTenantDefault,
     resetToTenantDefault,
   };
 }
 
-/** Local Customize-mode toggle (not persisted). */
-export function useDashboardCustomizeMode(initial = false) {
-  const [editing, setEditing] = useState(initial);
-  return { editing, setEditing, toggleEditing: () => setEditing((v) => !v) };
+/** Local Customize-mode toggle (not persisted). Flushes personal layout when Done. */
+export function useDashboardCustomizeMode(options?: {
+  initial?: boolean;
+  onExitEdit?: () => void | Promise<void>;
+}) {
+  const [editing, setEditingState] = useState(options?.initial ?? false);
+  const onExitEditRef = useRef(options?.onExitEdit);
+  onExitEditRef.current = options?.onExitEdit;
+
+  const setEditing = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    setEditingState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      if (prev && !next) {
+        void onExitEditRef.current?.();
+      }
+      return next;
+    });
+  }, []);
+
+  return {
+    editing,
+    setEditing,
+    toggleEditing: () => setEditing((v) => !v),
+  };
 }

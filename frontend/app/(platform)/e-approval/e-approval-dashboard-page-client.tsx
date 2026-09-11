@@ -148,9 +148,9 @@ function EApprovalDashboardPageInner() {
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canManageForms = usePermission([permissions.eApprovalFormsManage]);
   const canAudit = usePermission([permissions.eApprovalAuditView]);
-  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, serverReady } =
+  const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, serverReady, flushPersonalPersist } =
     useDashboardLayoutPrefs("toweros.e-approval.dashboard.layout");
-  const { editing, setEditing } = useDashboardCustomizeMode();
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const expandedBundlesRef = useRef(false);
 
   useEffect(() => {

@@ -171,7 +171,6 @@ function renderColumnValue(row: EApprovalWorkspaceSubmissionRow, column: Workspa
 export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const push = useNotificationStore((s) => s.push);
   const canApprove = usePermission([permissions.eApprovalApprove]);
-  const { editing, setEditing } = useDashboardCustomizeMode();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [exportLayout, setExportLayout] = useState<"submissions" | "line_items">("submissions");
@@ -188,7 +187,9 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
     publishTenantDefault,
     resetToTenantDefault,
     serverReady,
+    flushPersonalPersist,
   } = useDashboardLayoutPrefs(`toweros.e-approval.workspace.layout.${slug}`);
+  const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const seededLayoutRef = useRef(false);
   const activeViewId = prefs.activeViewId;
   const subsidiary = prefs.subsidiary;

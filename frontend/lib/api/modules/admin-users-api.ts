@@ -145,7 +145,26 @@ export type AdminUserListFilterParams = {
   last_active?: AdminUserLastActiveFilter;
   mfa?: AdminUserMfaFilter;
   role?: string;
+  department?: string;
+  manager_id?: string;
+  license?: string;
   sort?: string;
+};
+
+/** Sentinel for “No department / No manager / No license” filters (matches displayed values). */
+export const ADMIN_USERS_FILTER_NONE = "__none__";
+
+export type AdminUserFilterOptions = {
+  departments: string[];
+  has_unassigned_department: boolean;
+  managers: Array<{ id: string; name: string; email: string }>;
+  has_unassigned_manager: boolean;
+  licenses: string[];
+  has_unassigned_license: boolean;
+};
+
+export type AdminUsersIndexMeta = PaginatedMeta & {
+  filter_options?: AdminUserFilterOptions;
 };
 
 const BULK_USER_IDS_CHUNK = 500;
@@ -160,6 +179,9 @@ function listFilterParams(params: AdminUserListFilterParams) {
     last_active: params.last_active && params.last_active !== "all" ? params.last_active : undefined,
     mfa: params.mfa && params.mfa !== "all" ? params.mfa : undefined,
     role: params.role && params.role !== "all" ? params.role : undefined,
+    department: params.department && params.department !== "all" ? params.department : undefined,
+    manager_id: params.manager_id && params.manager_id !== "all" ? params.manager_id : undefined,
+    license: params.license && params.license !== "all" ? params.license : undefined,
     sort: params.sort,
   };
 }
@@ -198,9 +220,12 @@ export async function fetchAdminUsersIndex(params: {
   last_active?: AdminUserLastActiveFilter;
   mfa?: AdminUserMfaFilter;
   role?: string;
+  department?: string;
+  manager_id?: string;
+  license?: string;
   sort?: string;
-}): Promise<PaginatedEnvelope<AdminUserRow>> {
-  const response = await apiClient.get<{ data: AdminUserRow[]; meta: PaginatedMeta }>("/admin/users", {
+}): Promise<PaginatedEnvelope<AdminUserRow> & { meta: AdminUsersIndexMeta }> {
+  const response = await apiClient.get<{ data: AdminUserRow[]; meta: AdminUsersIndexMeta }>("/admin/users", {
     params: {
       page: params.page,
       per_page: params.per_page,
