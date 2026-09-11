@@ -325,8 +325,6 @@ export function DocExtractBatchesPageClient() {
       {
         id: "batch_list",
         label: "Extracted batches",
-        hideable: false,
-        removable: false,
         render: () => (
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm" data-help="dx-list-toolkit">
             <RegistryDataTableView

@@ -685,8 +685,6 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     hazeSource: "shared",
     defaultSpan: "full",
     allowedSpans: ["full", "half"],
-    removable: false,
-    hideable: false,
     modules: ["doc-extract"],
   },
   {
