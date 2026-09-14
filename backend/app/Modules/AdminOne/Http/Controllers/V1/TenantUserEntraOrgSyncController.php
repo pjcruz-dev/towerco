@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\AdminOne\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\Identity\Jobs\SyncEntraOrgDirectoryJob;
 use App\Modules\Identity\Services\EntraOrgDirectoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,15 +15,38 @@ final class TenantUserEntraOrgSyncController extends AbstractApiController
 {
     public function __invoke(Request $request, EntraOrgDirectoryService $org): JsonResponse
     {
-        abort_unless($request->user()?->can('user:manage'), 403);
+        abort_unless(
+            $request->user()?->can('organization:manage')
+            || $request->user()?->can('user:manage'),
+            403,
+        );
 
-        set_time_limit(180);
-        ignore_user_abort(true);
+        $tenantId = (string) (tenant('id') ?? '');
+        if ($tenantId === '') {
+            return $this->ok([
+                'ok' => false,
+                'code' => 'sync_failed',
+                'message' => 'Tenant context is missing for organization sync.',
+                'scanned' => 0,
+                'updated' => 0,
+                'managers_linked' => 0,
+                'skipped_unlicensed' => 0,
+            ]);
+        }
+
+        $preflight = $org->preflightSyncOrFailure();
+        if ($preflight !== null) {
+            return $this->ok($preflight);
+        }
 
         try {
-            return $this->ok($org->syncDirectoryFromApp());
+            // Queue only — never run Graph sync in the HTTP request or afterResponse.
+            // afterResponse still occupies PHP-FPM until terminate finishes, so host nginx
+            // (default proxy_read_timeout ~60s) returns 504 while sync continues.
+            // Requires QUEUE_CONNECTION=redis (or database) and toweros-worker / queue:work.
+            SyncEntraOrgDirectoryJob::dispatch($tenantId, true);
         } catch (\Throwable $exception) {
-            Log::error('Entra org sync failed', [
+            Log::error('Entra org sync could not be dispatched', [
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
@@ -30,12 +54,22 @@ final class TenantUserEntraOrgSyncController extends AbstractApiController
             return $this->ok([
                 'ok' => false,
                 'code' => 'sync_failed',
-                'message' => 'Organization sync failed: '.$exception->getMessage(),
+                'message' => 'Organization sync failed to start: '.$exception->getMessage(),
                 'scanned' => 0,
                 'updated' => 0,
                 'managers_linked' => 0,
                 'skipped_unlicensed' => 0,
             ]);
         }
+
+        return $this->ok([
+            'ok' => true,
+            'code' => 'started',
+            'message' => 'Organization sync started in the background. Refresh this page in about a minute — manager, title, department, and license changes from Microsoft will appear when it finishes.',
+            'scanned' => 0,
+            'updated' => 0,
+            'managers_linked' => 0,
+            'skipped_unlicensed' => 0,
+        ]);
     }
 }

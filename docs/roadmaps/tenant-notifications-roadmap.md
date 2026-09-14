@@ -1,6 +1,6 @@
 # Tenant notification center — roadmap
 
-Unified in-app notifications across tenant modules (E-Approval, PROJECT-ONE gate approvals, future modules).
+Unified in-app notifications across tenant modules (E-Forms, PROJECT-ONE gate approvals, future modules).
 
 ## Phase A — Rich payloads + bell UI ✅
 
@@ -30,7 +30,7 @@ Unified in-app notifications across tenant modules (E-Approval, PROJECT-ONE gate
 |-------------|--------|
 | `tenant_notifications` table + backfill | Done |
 | `GET /notifications` with module filter | Done |
-| E-Approval + PROJECT-ONE gate in-app events | Done |
+| E-Forms + PROJECT-ONE gate in-app events | Done |
 | Unified bell + `/notifications` page | Done |
 
 ## Phase E — Realtime refresh ✅
@@ -68,4 +68,4 @@ php artisan test --filter=TenantNotificationBroadcastTest
 php artisan tenants:migrate --force
 ```
 
-Create a gate approval or E-Approval action in one browser tab; the bell unread count in another tab should update within a second when Echo is enabled.
+Create a gate approval or E-Forms action in one browser tab; the bell unread count in another tab should update within a second when Echo is enabled.

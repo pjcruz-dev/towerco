@@ -13,26 +13,54 @@ final class TenantEnabledModulesResolver
 
     /** @var list<string> */
     public const TOGGLEABLE_MODULES = [
-        'e_approval',
         'dynamic_entities',
+        'project_one',
+        'e_approval',
+        'sites',
+        'gis',
+        'tower_one',
+        'fiber_one',
+        'asset_one',
         'ticketing',
+        'procurement_one',
+        'finance_one',
+        'billings',
+        'documents',
+        'document_register',
         'ai_assistant',
+        'doc_extract',
     ];
 
     /** @var array<string, string> */
     public const MODULE_LABELS = [
         'core' => 'Dashboard',
         'team_access' => 'Team & Access',
-        'e_approval' => 'E-Approval',
+        'project_one' => 'Project-One',
+        'e_approval' => 'E-Forms',
         'dynamic_entities' => 'Dynamic Entities',
+        'gis' => 'GIS',
+        'sites' => 'Sites',
+        'tower_one' => 'Tower-One',
+        'fiber_one' => 'Fiber-One',
+        'asset_one' => 'Asset-One',
         'ticketing' => 'Ticketing',
+        'procurement_one' => 'Procurement-One',
+        'finance_one' => 'Finance-One',
+        'billings' => 'Billings',
+        'documents' => 'Documents',
+        'document_register' => 'Document register',
         'ai_assistant' => 'AI Assistant',
+        'doc_extract' => 'DocExtract',
     ];
 
     /** @var array<string, string> */
     public const MODULE_DESCRIPTIONS = [
-        'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
         'dynamic_entities' => 'Dynamic entity packs for ATC PM, Procurement, Finance, and Ticketing (Manage Fields + records).',
+        'billings' => 'Tenant subscription, usage, and self-serve plan billing (/billing).',
+        'documents' => 'Expiring leases, permits, and contracts across sites.',
+        'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Forms.',
+        'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
+        'doc_extract' => 'Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.',
     ];
 
     /**
@@ -43,9 +71,16 @@ final class TenantEnabledModulesResolver
         $configured = config('toweros.tenant_modules.enabled');
         if (! is_array($configured) || $configured === []) {
             return $this->normalizeSelection([
+                'project_one',
+                'dynamic_entities',
                 'e_approval',
                 'ticketing',
-                'dynamic_entities',
+                'procurement_one',
+                'sites',
+                'documents',
+                'document_register',
+                'ai_assistant',
+                'doc_extract',
             ]);
         }
 

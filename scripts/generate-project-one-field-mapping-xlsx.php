@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Generates Project One manual tracker → TowerOS field mapping workbook.
+ * Generates Project One manual tracker → INFRA SUITE field mapping workbook.
  *
  * Usage: php scripts/generate-project-one-field-mapping-xlsx.php
  */
@@ -13,7 +13,7 @@ require __DIR__.'/../backend/vendor/autoload.php';
 use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
 
 $mappingRows = [
-    ['#', 'Manual Field', 'Category', 'Map Status', 'TowerOS Module', 'Table / Entity', 'System Field', 'How to Get Value in System', 'Gap / Action'],
+    ['#', 'Manual Field', 'Category', 'Map Status', 'INFRA SUITE Module', 'Table / Entity', 'System Field', 'How to Get Value in System', 'Gap / Action'],
     [1, 'TCO SITE ID', 'Site ID', 'Mapped', 'Rollout', 'rollout_programs', 'tco_site_id', 'Auto-generated on rollout create; shown in rollout detail & export', ''],
     [2, 'MNO Anchor Site ID', 'Site ID', 'Missing', '', '', '', 'Not stored today', 'Add mno_anchor_site_id on rollout or site external refs'],
     [3, 'MNO Anchor', 'Site ID', 'Mapped', 'Rollout', 'rollout_programs', 'mno', 'Values: globe, smart, dito', 'Map display names to enum'],
@@ -80,7 +80,7 @@ $gapSummaryRows = [
     ['P2', 'Split milestone dates', 'TSSR Submitted, Risk Build, Energization Tempo, RFTI Signed Tempo', 'Add dedicated date columns or extend milestone cycle with sub-checkpoints', 'Rollout Playbook'],
     ['P2', 'Permit applied vs secured', 'Locational, Building (partial today)', 'Extend permit tracker with applied_date + secured_date per type', 'Rollout'],
     ['P3', 'Engineering profile', 'Solution, Wind Speed', 'Add on site/tower engineering metadata', 'TowerOne / Sites'],
-    ['', 'Architecture note', 'All coloc columns', 'Manual = flat columns; TowerOS = child rollouts via parent_rollout_id', 'Rollout'],
+    ['', 'Architecture note', 'All coloc columns', 'Manual = flat columns; INFRA SUITE = child rollouts via parent_rollout_id', 'Rollout'],
     ['', 'Terminology', 'RFTI / RFT', 'System uses actual_rfi_date (RFI = Ready for Integration)', 'Rollout'],
 ];
 
@@ -156,7 +156,7 @@ $scorecardRows = [
     ['Missing', 15, 'No system field today'],
     ['Total manual fields', 53, 'From manual site tracker screenshot'],
     ['', '', ''],
-    ['Generated', date('Y-m-d H:i:s T'), 'TowerOS Project One field mapping', ''],
+    ['Generated', date('Y-m-d H:i:s T'), 'INFRA SUITE Project One field mapping', ''],
     ['Source', 'Manual site tracker (Excel) vs Project One + Rollout module', '', ''],
 ];
 

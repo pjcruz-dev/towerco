@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { buildOrgChartIndex, orgChartRoots, personInitials, pickDefaultFocus, resolveManager } from "./org-chart";
+import {
+  buildOrgChartIndex,
+  collectOrgFilterOptions,
+  filterOrgChartIndex,
+  filterOrgPeople,
+  ORG_CHART_NO_DEPARTMENT,
+  orgChartRoots,
+  personInitials,
+  pickDefaultFocus,
+  resolveManager,
+} from "./org-chart";
 
 const people = [
   {
@@ -35,7 +45,7 @@ const people = [
 ];
 
 describe("buildOrgChartIndex", () => {
-  it("nests TowerOS reports and external Entra managers", () => {
+  it("nests INFRA SUITE reports and external Entra managers", () => {
     const index = buildOrgChartIndex(people);
     expect(index.reports.get("alvin")?.map((person) => person.id)).toEqual(["terrence"]);
     const external = [...index.byId.values()].find((node) => node.external);
@@ -50,7 +60,7 @@ describe("buildOrgChartIndex", () => {
     expect(pickDefaultFocus(index, null)).toBe("alvin");
   });
 
-  it("shows an Entra-only manager above a person with no TowerOS manager_id", () => {
+  it("shows an Entra-only manager above a person with no INFRA SUITE manager_id", () => {
     const index = buildOrgChartIndex([
       {
         id: "peter",
@@ -173,5 +183,212 @@ describe("buildOrgChartIndex", () => {
   it("builds initials from first and last name", () => {
     expect(personInitials("Peter Joseph Cruz")).toBe("PC");
     expect(personInitials("Admin")).toBe("AD");
+  });
+});
+
+describe("org chart filters", () => {
+  const filterPeople = [
+    {
+      id: "a",
+      name: "Ada",
+      email: "ada@example.com",
+      job_title: "Lead",
+      department: "Engineering",
+      manager_id: null,
+      manager_name: null,
+      direct_report_count: 1,
+      license_label: "Business Premium",
+      roles: ["tenant_admin"],
+    },
+    {
+      id: "b",
+      name: "Ben",
+      email: "ben@example.com",
+      job_title: "Engineer",
+      department: "Engineering",
+      manager_id: "a",
+      manager_name: null,
+      direct_report_count: 0,
+      license_label: "Business Standard",
+      roles: ["viewer"],
+    },
+    {
+      id: "c",
+      name: "Cara",
+      email: "cara@example.com",
+      job_title: "Analyst",
+      department: "Finance",
+      manager_id: null,
+      manager_name: null,
+      direct_report_count: 0,
+      license_label: "Business Premium",
+      roles: ["viewer"],
+    },
+  ];
+
+  it("collects filter options and keeps ancestors when filtering", () => {
+    const index = buildOrgChartIndex(filterPeople);
+    const options = collectOrgFilterOptions(index.nodes);
+    expect(options.departments).toEqual(["Engineering", "Finance"]);
+    expect(options.hasUnassignedDepartment).toBe(false);
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Engineering",
+      license: "",
+    });
+    expect(filtered.byId.has("a")).toBe(true);
+    expect(filtered.byId.has("b")).toBe(true);
+    expect(filtered.byId.has("c")).toBe(false);
+  });
+
+  it("inherits blank departments from ancestors in the manager chain", () => {
+    const people = [
+      {
+        id: "demetrio",
+        name: "Demetrio Pilar",
+        email: "dpilar@example.com",
+        job_title: "Director",
+        department: "Project Implementation",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 1,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "christopher",
+        name: "Christopher Emmanuel Agorto",
+        email: "ccagorto@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "demetrio",
+        manager_name: null,
+        direct_report_count: 2,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "arvin",
+        name: "Arvin John Gervacio",
+        email: "afgervacio@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "christopher",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+      {
+        id: "jerry",
+        name: "Jerry Balino",
+        email: "jdbalino@example.com",
+        job_title: null,
+        department: null,
+        manager_id: "christopher",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+    ];
+
+    const index = buildOrgChartIndex(people);
+    expect(index.byId.get("christopher")?.department).toBe("Project Implementation");
+    expect(index.byId.get("arvin")?.department).toBe("Project Implementation");
+    expect(index.byId.get("jerry")?.department).toBe("Project Implementation");
+    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(false);
+  });
+
+  it("keeps descendants of department matches even when they have no department", () => {
+    const people = [
+      {
+        id: "terrence",
+        name: "Terrence Galang",
+        email: "terrence@example.com",
+        job_title: "Lead",
+        department: "Technology and Quality Governance",
+        manager_id: "alvin",
+        manager_name: null,
+        direct_report_count: 2,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "alvin",
+        name: "Alvin Tolentino",
+        email: "alvin@example.com",
+        job_title: "Director",
+        department: "Executive Office",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 1,
+        license_label: "Business Standard",
+        roles: [],
+      },
+      {
+        id: "denver",
+        name: "Denver Arquiza",
+        email: "denver@example.com",
+        job_title: "Engineer",
+        department: "Technology and Quality Governance",
+        manager_id: "terrence",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "jerico",
+        name: "Jerico Fortuna",
+        email: "jerico@example.com",
+        job_title: "ISO Officer",
+        department: null,
+        manager_id: "terrence",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard +1",
+        roles: [],
+      },
+      {
+        id: "outsider",
+        name: "Other Team",
+        email: "other@example.com",
+        job_title: "Analyst",
+        department: "Finance",
+        manager_id: "alvin",
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Standard",
+        roles: [],
+      },
+    ];
+
+    const index = buildOrgChartIndex(people);
+    // Jerico inherits Terrence's department for display; filter still keeps the team under Terrence.
+    expect(index.byId.get("jerico")?.department).toBe("Technology and Quality Governance");
+    expect(collectOrgFilterOptions(index.nodes).hasUnassignedDepartment).toBe(false);
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Technology and Quality Governance",
+      license: "",
+    });
+    expect(filtered.byId.has("alvin")).toBe(true);
+    expect(filtered.byId.has("terrence")).toBe(true);
+    expect(filtered.byId.has("denver")).toBe(true);
+    expect(filtered.byId.has("jerico")).toBe(true);
+    expect(filtered.byId.has("outsider")).toBe(false);
+    expect(filtered.reports.get("terrence")?.map((n) => n.id).sort()).toEqual(["denver", "jerico"]);
+
+    const unassigned = filterOrgChartIndex(index, {
+      department: ORG_CHART_NO_DEPARTMENT,
+      license: "",
+    });
+    expect(unassigned.byId.size).toBe(0);
+  });
+
+  it("searches role names in people search", () => {
+    const index = buildOrgChartIndex(filterPeople);
+    expect(filterOrgPeople(index.nodes, "tenant_admin").map((n) => n.id)).toEqual(["a"]);
   });
 });

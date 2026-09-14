@@ -100,6 +100,246 @@ final class TenantUserIndexTest extends TestCase
         $this->assertSame(2, $response->json('data.total'));
     }
 
+    public function test_user_index_falls_back_department_display_to_manager(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $manager = TenantUser::query()->create([
+            'name' => 'Dept Manager',
+            'email' => 'dept.manager@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Supply Chain Management',
+        ]);
+        $manager->assignRole('viewer');
+
+        $report = TenantUser::query()->create([
+            'name' => 'Dept Report',
+            'email' => 'dept.report@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $manager->id,
+        ]);
+        $report->assignRole('viewer');
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=dept.report@towerone.test');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', (string) $report->id)
+            ->assertJsonPath('data.0.department', null)
+            ->assertJsonPath('data.0.department_display', 'Supply Chain Management')
+            ->assertJsonPath('data.0.department_inherited', true)
+            ->assertJsonPath('data.0.manager.department', 'Supply Chain Management');
+    }
+
+    public function test_user_index_inherits_department_from_grandmanager(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $lead = TenantUser::query()->create([
+            'name' => 'Chain Lead',
+            'email' => 'chain.lead@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Project Implementation',
+        ]);
+        $lead->assignRole('viewer');
+
+        $mid = TenantUser::query()->create([
+            'name' => 'Chain Mid',
+            'email' => 'chain.mid@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $lead->id,
+        ]);
+        $mid->assignRole('viewer');
+
+        $leaf = TenantUser::query()->create([
+            'name' => 'Chain Leaf',
+            'email' => 'chain.leaf@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $mid->id,
+        ]);
+        $leaf->assignRole('viewer');
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=chain.leaf@towerone.test');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', (string) $leaf->id)
+            ->assertJsonPath('data.0.department', null)
+            ->assertJsonPath('data.0.department_display', 'Project Implementation')
+            ->assertJsonPath('data.0.department_inherited', true);
+
+        $dept = rawurlencode('Project Implementation');
+        $filtered = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/admin/users?department={$dept}&per_page=50");
+        $filtered->assertOk();
+        $ids = collect($filtered->json('data'))->pluck('id')->all();
+        $this->assertContains((string) $leaf->id, $ids);
+        $this->assertContains((string) $mid->id, $ids);
+        $this->assertContains((string) $lead->id, $ids);
+    }
+
+    public function test_user_index_no_department_filter_excludes_inherited_display(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $manager = TenantUser::query()->create([
+            'name' => 'Filter Manager',
+            'email' => 'filter.manager@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Operations and Maintenance',
+        ]);
+        $manager->assignRole('viewer');
+
+        $inherited = TenantUser::query()->create([
+            'name' => 'Inherited Dept User',
+            'email' => 'filter.inherited@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $manager->id,
+        ]);
+        $inherited->assignRole('viewer');
+
+        $blank = TenantUser::query()->create([
+            'name' => 'Blank Dept User',
+            'email' => 'filter.blank@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => null,
+        ]);
+        $blank->assignRole('viewer');
+        tenancy()->end();
+
+        $none = rawurlencode('__none__');
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/admin/users?department={$none}&per_page=50");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains((string) $blank->id, $ids);
+        $this->assertNotContains((string) $inherited->id, $ids);
+        $this->assertNotContains((string) $manager->id, $ids);
+    }
+
+    public function test_user_index_department_filter_includes_inherited_display(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org department columns not present in test tenant schema.');
+        }
+
+        $manager = TenantUser::query()->create([
+            'name' => 'Named Manager',
+            'email' => 'named.manager@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Finance and Accounting',
+        ]);
+        $manager->assignRole('viewer');
+
+        $inherited = TenantUser::query()->create([
+            'name' => 'Named Inherited',
+            'email' => 'named.inherited@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'manager_id' => $manager->id,
+        ]);
+        $inherited->assignRole('viewer');
+        tenancy()->end();
+
+        $dept = rawurlencode('Finance and Accounting');
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/admin/users?department={$dept}&per_page=50");
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains((string) $manager->id, $ids);
+        $this->assertContains((string) $inherited->id, $ids);
+    }
+
+    public function test_user_index_search_matches_department_and_job_title(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'job_title')) {
+            tenancy()->end();
+            $this->markTestSkipped('Org columns not present in test tenant schema.');
+        }
+
+        $byDept = TenantUser::query()->create([
+            'name' => 'Search By Dept',
+            'email' => 'search.dept@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'UniqueDeptZebra',
+            'job_title' => 'Analyst',
+        ]);
+        $byDept->assignRole('viewer');
+
+        $byTitle = TenantUser::query()->create([
+            'name' => 'Search By Title',
+            'email' => 'search.title@towerone.test',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+            'job_title' => 'UniqueTitleQuokka',
+        ]);
+        $byTitle->assignRole('viewer');
+        tenancy()->end();
+
+        $deptResponse = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=UniqueDeptZebra');
+        $deptResponse->assertOk()
+            ->assertJsonPath('data.0.id', (string) $byDept->id);
+
+        $titleResponse = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/users?search=UniqueTitleQuokka');
+        $titleResponse->assertOk()
+            ->assertJsonPath('data.0.id', (string) $byTitle->id);
+    }
+
     private function createTenantUser(string $email, string $name): TenantUser
     {
         tenancy()->initialize($this->testTenant);

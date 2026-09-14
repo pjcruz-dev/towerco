@@ -1,5 +1,5 @@
 ---
-title: Create an E-Approval request
+title: Create an E-Forms request
 slug: e-approval-create-request
 module: e_approval
 audience: tenant_user
@@ -14,21 +14,21 @@ related_routes:
 last_reviewed: 2026-07-17
 ---
 
-# Create an E-Approval request
+# Create an E-Forms request
 
-Use E-Approval to submit forms for review (cash advances, procurement-related forms, and other tenant workflows).
+Use E-Forms to submit forms for review (cash advances, procurement-related forms, and other tenant workflows).
 
 For **Document Approval / ISO Document Control** submissions specifically, follow **Submit a Document Approval request** instead of this general guide.
 
 ## Prerequisites
 
-- E-Approval module is enabled.
+- E-Forms module is enabled.
 - You have `e_approval:submissions:create` (and usually `e_approval:view`).
 - The form you need is published.
 
 ## Steps
 
-1. Open **E-Approval**.
+1. Open **E-Forms**.
 2. Choose **New submission** / **Submissions → New**.
 3. Select the published form you need.
 4. Complete required fields. Attach files if the form allows attachments.
@@ -41,7 +41,7 @@ A submission is created with a document number and moves into the configured app
 
 ## Track your submission
 
-1. Open **E-Approval → Submissions**.
+1. Open **E-Forms → Submissions**.
 2. Locate your request by document number or status.
 3. Open it to review progress, comments, and attachments.
 
@@ -54,9 +54,9 @@ A submission is created with a document number and moves into the configured app
 
 ## Related workflows
 
-- Form not listed in E-Approval
-- Track an E-Approval submission
+- Form not listed in E-Forms
+- Track an E-Forms submission
 - Submit a Document Approval request
-- Approve an E-Approval request (approvers only)
+- Approve an E-Forms request (approvers only)
 - Document register
 - Notifications

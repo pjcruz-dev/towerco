@@ -31,7 +31,7 @@ export function SidebarBrand({ variant, className, compact = false }: Props) {
 
   const title = useMemo(() => {
     if (variant === "platform") {
-      return "TowerOS";
+      return "INFRA SUITE";
     }
     return organizationLabel;
   }, [organizationLabel, variant]);

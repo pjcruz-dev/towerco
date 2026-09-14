@@ -53,7 +53,7 @@ final class TenantAppUrlResolverTest extends TestCase
 
         $this->assertSame('ATC', $resolver->mailBrandLabel());
         $this->assertSame('[ATC]', $resolver->subjectPrefix());
-        $this->assertStringNotContainsString('TowerOS', $resolver->subjectPrefix());
+        $this->assertStringNotContainsString('INFRA SUITE', $resolver->subjectPrefix());
 
         tenancy()->end();
     }

@@ -2,9 +2,9 @@
 alwaysApply: true
 ---
 
-# TowerOS UI/UX Theme Rules
+# INFRA SUITE UI/UX Theme Rules
 
-TowerOS is an enterprise telecom SaaS platform.
+INFRA SUITE is an enterprise telecom SaaS platform.
 
 The design style must prioritize:
 - simplicity
@@ -139,7 +139,7 @@ Typography must be:
 - enterprise-grade
 - **low visual weight** (operational calm): default to `font-normal`/`font-medium` for data; reserve `font-semibold` for page titles and primary actions only
 
-**Board / investor materials:** Keep module names, grouping (Infrastructure vs Governance), and hierarchy aligned with `docs/Rules/TowerOS_Board_Presentation.pdf`.
+**Board / investor materials:** Keep module names, grouping (Infrastructure vs Governance), and hierarchy aligned with `docs/Rules/INFRA SUITE_Board_Presentation.pdf`.
 
 ---
 

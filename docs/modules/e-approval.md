@@ -1,10 +1,10 @@
 # E-APPROVAL module
 
-TowerOS tenant module for digital forms, multi-step approvals, and audit — ported from the former standalone formbuilder into the modular monolith (one deployment, all tenants).
+INFRA SUITE tenant module for digital forms, multi-step approvals, and audit — ported from the former standalone formbuilder into the modular monolith (one deployment, all tenants).
 
 **End users (requestors / approvers):** [e-approval-end-user-guide.md](./e-approval-end-user-guide.md) — step-by-step from login through submit, approve, and resubmit.
 
-**Auth:** TowerOS tenant users + Microsoft Entra only (no standalone formbuilder login).  
+**Auth:** INFRA SUITE tenant users + Microsoft Entra only (no standalone formbuilder login).  
 **Users:** Administration → Users + Spatie roles (`e_approval_admin`, `e_approval_approver`, `e_approval_requestor`).  
 **Mail:** Laravel notifications via `TOWEROS_NOTIFICATIONS_MAIL_MAILER` (Microsoft 365 SMTP or AWS SES). See [e-approval-email.md](./e-approval-email.md). No legacy formbuilder Graph sidecar.
 
@@ -71,7 +71,7 @@ npm run dev:fresh
 
 ## P1 (shipped)
 
-**Goal:** Requestors and approvers run end-to-end workflows inside TowerOS.
+**Goal:** Requestors and approvers run end-to-end workflows inside INFRA SUITE.
 
 ### Backend APIs
 
@@ -138,7 +138,7 @@ Configure on form `metadata_json.documentControlGate` with `afterStepOrder` and 
 
 ### Revision / resubmit routing
 
-Default behavior after a requestor revises and resubmits is **restart from step 1** (same as historical TowerOS behavior).
+Default behavior after a requestor revises and resubmits is **restart from step 1** (same as historical INFRA SUITE behavior).
 
 Per-form opt-in via `metadata_json.revision`:
 
@@ -237,7 +237,7 @@ Publish checklist also warns on: near-miss If/Else thresholds, all-conditional w
 
 - Standalone formbuilder removed from this repo (historical only)
 - Root `docker-compose.yml` has no formbuilder service
-- `docs/guides/local-development-docker-guide.md` documents TowerOS-only local stack
+- `docs/guides/local-development-docker-guide.md` documents INFRA SUITE-only local stack
 - Per-tenant data cutover: `php artisan e-approval:import-legacy --tenant=<uuid>` (mapping script still manual)
 
 ---
@@ -269,11 +269,11 @@ php artisan e-approval:import-legacy --tenant=<uuid>
 php artisan e-approval:import-legacy --tenant=<uuid> --only=forms,submissions
 ```
 
-Maps legacy `users` → TowerOS `users` by **email**, preserves form/submission UUIDs where possible, imports master data, settings, and `users.delegated_to` → `e_approval_delegations`.
+Maps legacy `users` → INFRA SUITE `users` by **email**, preserves form/submission UUIDs where possible, imports master data, settings, and `users.delegated_to` → `e_approval_delegations`.
 
 ### Manager approver (Entra ID)
 
-Workflow steps with `type: manager` resolve the requestor's direct manager via Microsoft Graph using the same per-tenant app registration as **Administration → Tenant settings → Microsoft Entra ID**. Auto-provision managers under **E-Approval → Settings → Workflow & Entra**.
+Workflow steps with `type: manager` resolve the requestor's direct manager via Microsoft Graph using the same per-tenant app registration as **Administration → Tenant settings → Microsoft Entra ID**. Auto-provision managers under **E-Forms → Settings → Workflow & Entra**.
 
 ### Visual form builder
 
@@ -296,7 +296,7 @@ True goto / free-form jump edges remain deferred (engine is linear).
 | Priority | Item |
 |----------|------|
 | Medium | Visual template builder (tenant templates use JSON admin at `/e-approval/forms/templates` today) |
-| Medium | Central **platform** E-Approval analytics (tenant-level stats exist on `/e-approval/forms`) |
+| Medium | Central **platform** E-Forms analytics (tenant-level stats exist on `/e-approval/forms`) |
 | Low | True goto / free-form jump edges (engine rewrite) |
 | Low | Advanced formulas / calculated fields UI |
 | Low | Richer revision diff (field-level compare beyond snapshot summary) |
@@ -315,16 +315,16 @@ True goto / free-form jump edges remain deferred (engine is linear).
 
 Use this checklist when implementing P1–P3:
 
-| Area | Legacy routes | TowerOS target |
+| Area | Legacy routes | INFRA SUITE target |
 |------|---------------|----------------|
-| Auth | `auth/login-local`, `register-local`, `logout`, `me`, `url` | **Drop** — TowerOS auth |
+| Auth | `auth/login-local`, `register-local`, `logout`, `me`, `url` | **Drop** — INFRA SUITE auth |
 | Users | `users/*`, `admin/create-user`, `import-users`, `export-users` | **Drop** — Admin → Users |
 | Forms | `forms`, `forms/[id]`, `validate`, `import`, `export`, `logo` | `e-approval/forms/*` |
 | Submissions | `submissions`, `[id]`, `comments`, `cancel`, `revision`, `resubmit`, `dcf-resubmit`, `manual-follow-up`, `export` | `e-approval/submissions/*` |
 | Approvals | `approvals/[id]` | `e-approval/approvals/*` |
 | Notifications | `notifications`, `unread-count`, `mark-all-read`, `[id]/read` | `e-approval/notifications/*` |
 | Audit | `audit` | `e-approval/audit` |
-| Settings | `settings`, `settings/public`, `test-email` | `e-approval/settings` + `POST .../settings/test-email` (TowerOS mail) |
+| Settings | `settings`, `settings/public`, `test-email` | `e-approval/settings` + `POST .../settings/test-email` (INFRA SUITE mail) |
 | Master data | `admin/master-data-*`, `master-data/[key]` | `e-approval/master-data/*` |
 | PDF | `pdf-layout/[formId]` | `e-approval/pdf-layout/*` |
 | Admin | `impersonate`, `stats`, `reroute`, rate-limit | **Drop** or platform-only |

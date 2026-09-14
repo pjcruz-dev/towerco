@@ -18,6 +18,7 @@ import {
   deactivateAdminUser,
   deleteAdminUser,
   reactivateAdminUser,
+  resolveAdminUserDepartmentDisplay,
   type AdminUserRow,
 } from "@/lib/api/modules/admin-users-api";
 import { useNotificationStore } from "@/stores/notification-store";
@@ -191,11 +192,21 @@ export function createUsersTableColumns(options: {
       id: "department",
       header: "Department",
       cell: ({ row }) => {
-        const department = row.original.department?.trim();
-        if (!department) {
+        const { label, inherited } = resolveAdminUserDepartmentDisplay(row.original);
+        if (!label) {
           return <span className="text-sm text-muted-foreground">—</span>;
         }
-        return <span className="text-sm text-foreground">{department}</span>;
+        if (inherited) {
+          return (
+            <span
+              className="text-sm text-muted-foreground"
+              title="No department in Microsoft Entra — showing manager’s department"
+            >
+              {label}
+            </span>
+          );
+        }
+        return <span className="text-sm text-foreground">{label}</span>;
       },
     },
     {

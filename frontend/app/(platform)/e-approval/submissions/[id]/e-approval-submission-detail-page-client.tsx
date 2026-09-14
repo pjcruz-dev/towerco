@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileDown,
   FileText,
@@ -19,6 +19,11 @@ import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { EApprovalRelatedSubmissionsPanel } from "@/components/e-approval/e-approval-related-submissions-panel";
 import { EApprovalSubmissionSharePanel } from "@/components/e-approval/e-approval-submission-share-panel";
+import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+  workflowPreviewToStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
 import {
   countStampedApprovals,
   EApprovalSubmissionAttachmentsPanel,
@@ -45,6 +50,7 @@ import {
   fetchEApprovalComments,
   fetchEApprovalSubmission,
   postEApprovalComment,
+  previewEApprovalSubmissionWorkflow,
   requestEApprovalRevision,
   rerouteEApprovalApproval,
   resubmitEApprovalSubmission,
@@ -125,6 +131,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
+  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
   const [rerouteUserId, setRerouteUserId] = useState("");
   const [rerouteReason, setRerouteReason] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
@@ -134,6 +141,43 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
+
+  const workflowPreviewQuery = useQuery({
+    queryKey: ["e-approval", "submission", submissionId, "workflow-preview", data?.status ?? ""],
+    queryFn: () => previewEApprovalSubmissionWorkflow(submissionId),
+    enabled: Boolean(submissionId && data),
+    staleTime: 0,
+  });
+
+  const workflowStepItems = useMemo(() => {
+    const previewSteps = workflowPreviewQuery.data?.resolved_steps ?? [];
+    if (previewSteps.length > 0 || (workflowPreviewQuery.data?.skipped_steps?.length ?? 0) > 0) {
+      return workflowPreviewToStepShowItems(
+        previewSteps,
+        data?.status,
+        workflowPreviewQuery.data?.skipped_steps,
+      );
+    }
+    return buildWorkflowStepShowItems({
+      currentStep: data?.current_step ?? 0,
+      stepCount: data?.step_count,
+      status: data?.status,
+      workflowSteps: data?.workflow_steps,
+    });
+  }, [
+    data?.current_step,
+    data?.status,
+    data?.step_count,
+    data?.workflow_steps,
+    workflowPreviewQuery.data?.resolved_steps,
+    workflowPreviewQuery.data?.skipped_steps,
+  ]);
+
+  const subsidiaryLabel = useMemo(() => {
+    if (data?.subsidiary) return data.subsidiary;
+    const fromValues = data?.values?.find((row) => row.field_name === "subsidiary");
+    return fromValues?.display_value || fromValues?.value || null;
+  }, [data?.subsidiary, data?.values]);
 
   const usersQuery = useEApprovalAssignableUsers(canManage);
 
@@ -248,6 +292,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     onError: (e) => push({ level: "error", title: "Resubmit failed", message: getErrorMessage(e) }),
   });
 
+  const decideInFlightRef = useRef(false);
   const decideMutation = useMutation({
     mutationFn: ({
       approvalId,
@@ -274,9 +319,25 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       setApprovalSignature(null);
       setApprovalSignatureError(null);
       setSignatureConsentAccepted(false);
+      setHighlightSignatureConsents(false);
     },
     onError: (e) => push({ level: "error", title: "Decision failed", message: getErrorMessage(e) }),
+    onSettled: () => {
+      decideInFlightRef.current = false;
+    },
   });
+
+  const submitDecision = (payload: {
+    approvalId: string;
+    decision: "approved" | "rejected";
+    signature?: string | null;
+  }) => {
+    if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+      return;
+    }
+    decideInFlightRef.current = true;
+    decideMutation.mutate(payload);
+  };
 
   const canEditAndResubmit =
     Boolean(canCreate) &&
@@ -488,37 +549,42 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Form</dt>
                 <dd className="mt-0.5 font-medium">{data.form_name}</dd>
+                {data.form_schema_version_at_submit ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Form version at submit · v{data.form_schema_version_at_submit}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Requestor</dt>
                 <dd className="mt-0.5">{data.requestor?.name ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-xs font-medium text-muted-foreground">Workflow step</dt>
-                <dd className="mt-0.5">
-                  {data.status === "returned" || data.status === "rejected" || data.current_step < 1
-                    ? data.status === "returned"
-                      ? data.returned_from_step
-                        ? data.force_full_restart ||
-                          data.revision_config?.routing !== "resume_returning_step"
-                          ? `Awaiting resubmit · will restart from step 1`
-                          : `Awaiting resubmit · will resume at step ${data.returned_from_step}`
-                        : "Awaiting resubmit"
-                      : "—"
-                    : `Step ${data.current_step}`}
-                </dd>
+                <dt className="text-xs font-medium text-muted-foreground">Subsidiary</dt>
+                <dd className="mt-0.5">{subsidiaryLabel ?? "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Submitted</dt>
                 <dd className="mt-0.5">{formatTimestamp(data.created_at)}</dd>
               </div>
-              {data.form_schema_version_at_submit ? (
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Form version at submit</dt>
-                  <dd className="mt-0.5">v{data.form_schema_version_at_submit}</dd>
-                </div>
-              ) : null}
             </dl>
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Workflow step</p>
+              {data.status === "returned" || data.status === "rejected" || data.current_step < 1 ? (
+                <p className="text-sm text-muted-foreground">
+                  {data.status === "returned"
+                    ? data.returned_from_step
+                      ? data.force_full_restart ||
+                        data.revision_config?.routing !== "resume_returning_step"
+                        ? `Awaiting resubmit · will restart from step 1`
+                        : `Awaiting resubmit · will resume at step ${data.returned_from_step}`
+                      : "Awaiting resubmit"
+                    : "—"}
+                </p>
+              ) : (
+                <EApprovalWorkflowStepShow variant="compact" steps={workflowStepItems} />
+              )}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
               <RaiseTicketButton
                 prefill={{
@@ -831,7 +897,13 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         value={approvalSignature}
                         onChange={setApprovalSignature}
                         consentAccepted={signatureConsentAccepted}
-                        onConsentChange={setSignatureConsentAccepted}
+                        onConsentChange={(accepted) => {
+                          setSignatureConsentAccepted(accepted);
+                          if (accepted) {
+                            setHighlightSignatureConsents(false);
+                          }
+                        }}
+                        highlightMissingConsents={highlightSignatureConsents}
                         disabled={decideMutation.isPending || revisionMutation.isPending}
                         error={approvalSignatureError}
                         onErrorChange={setApprovalSignatureError}
@@ -873,7 +945,27 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         <span data-help="ea-decide-approve" className="inline-flex">
                           <Button
                             size="sm"
+                            className={
+                              !signatureConsentAccepted &&
+                              !decideMutation.isPending &&
+                              !revisionMutation.isPending
+                                ? "opacity-50"
+                                : undefined
+                            }
                             onClick={() => {
+                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+                                return;
+                              }
+                              if (!signatureConsentAccepted) {
+                                setHighlightSignatureConsents(true);
+                                setApprovalSignatureError(
+                                  "Accept both electronic signature consents before approving.",
+                                );
+                                document
+                                  .querySelector('[data-help="ea-decide-signature-consent"]')
+                                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                return;
+                              }
                               const signatureError = validateApprovalSignature(approvalSignature);
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
@@ -881,20 +973,17 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               }
                               const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
                               if (consentError) {
+                                setHighlightSignatureConsents(true);
                                 setApprovalSignatureError(consentError);
                                 return;
                               }
-                              decideMutation.mutate({
+                              submitDecision({
                                 approvalId: pendingApproval.id,
                                 decision: "approved",
                                 signature: approvalSignature!.trim(),
                               });
                             }}
-                            disabled={
-                              decideMutation.isPending ||
-                              revisionMutation.isPending ||
-                              !signatureConsentAccepted
-                            }
+                            disabled={decideMutation.isPending || revisionMutation.isPending}
                           >
                             Approve
                           </Button>
@@ -904,7 +993,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             size="sm"
                             variant="destructive"
                             onClick={() =>
-                              decideMutation.mutate({ approvalId: pendingApproval.id, decision: "rejected" })
+                              submitDecision({ approvalId: pendingApproval.id, decision: "rejected" })
                             }
                             disabled={
                               decideMutation.isPending ||

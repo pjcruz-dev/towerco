@@ -1,11 +1,11 @@
-# E-Approval — external (public) form links
+# E-Forms — external (public) form links
 
-Option B: vendors, lessors, and partners can submit published forms **without** a TowerOS login.
+Option B: vendors, lessors, and partners can submit published forms **without** a INFRA SUITE login.
 
 ## Admin workflow
 
 1. Publish the form (workflow must use **fixed approvers** — `user` or `approver` field types; **manager** steps are blocked for public links).
-2. Open **E-Approval → Forms → {form} → Setup → External sharing**.
+2. Open **E-Forms → Forms → {form} → Setup → External sharing**.
 3. Choose an **internal sponsor** (tenant user who receives notifications and acts as requestor for workflow routing).
 4. **Create public link** — URL can be re-copied anytime via **Copy URL** (encrypted at rest).
 5. Optional: set expiry, max submissions, or link password.
@@ -15,7 +15,7 @@ Option B: vendors, lessors, and partners can submit published forms **without** 
 
 Users with `e_approval:submissions:create` (no form-edit permission required) can copy the newest active share link from:
 
-**E-Approval → Submissions → New submission → Copy external link**
+**E-Forms → Submissions → New submission → Copy external link**
 
 (Only shown when the form has an active re-copyable public link.)
 
@@ -86,7 +86,7 @@ Published form index rows include `has_shareable_public_link` for the New submis
 
 ### Closed-loop (opt-in)
 
-Tenant **E-Approval → Settings** toggles (all default off):
+Tenant **E-Forms → Settings** toggles (all default off):
 
 | Setting key | Effect |
 |-------------|--------|
@@ -144,7 +144,7 @@ That page calls the API above with `X-Tenant-Domain` and starts the file downloa
 - Resubmit token TTL: `E_APPROVAL_PUBLIC_RESUBMIT_TOKEN_MINUTES` (default 7 days).
 - Package download TTL: `E_APPROVAL_EXTERNAL_PACKAGE_DOWNLOAD_TOKEN_MINUTES` (default 7 days).
 - Audit action: `public_submission_created`.
-- External users cannot browse submission status in TowerOS; they use emailed revise / download links only.
+- External users cannot browse submission status in INFRA SUITE; they use emailed revise / download links only.
 
 ## Apply schema
 

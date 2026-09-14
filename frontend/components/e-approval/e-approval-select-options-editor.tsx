@@ -190,7 +190,7 @@ export function EApprovalSelectOptionsEditor({ field, onChange, disabled }: Prop
             <p className="text-xs text-muted-foreground">
               No master data sets yet.{" "}
               <Link href="/e-approval/master-data" className="text-primary underline-offset-2 hover:underline">
-                Create sets under E-Approval → Master data
+                Create sets under E-Forms → Master data
               </Link>
               .
             </p>

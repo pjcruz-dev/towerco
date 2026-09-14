@@ -87,7 +87,7 @@ final class ScaffoldTssrSteps345Command extends Command
     protected $signature = 'e-approval:scaffold-tssr-steps-3-5
         {--tenant= : Tenant UUID}
         {--domain= : Tenant domain hostname}
-        {--form= : E-Approval form UUID (defaults to name match TSSR)}
+        {--form= : E-Forms form UUID (defaults to name match TSSR)}
         {--force : Replace existing Step 3–5 fields if present}
         {--dry-run : Preview without writing}
     ';

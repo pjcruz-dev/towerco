@@ -27,7 +27,7 @@ final class AssistantEvalSuiteTest extends TestCase
     public static function intentCases(): array
     {
         return [
-            ['How do I create an E-Approval request?', 'submit'],
+            ['How do I create an E-Forms request?', 'submit'],
             ['How to submit a request using Document Approval?', 'submit'],
             ['Where do I track my Document Approval submission?', 'track'],
             ['What if my submission was returned for revision?', 'returned'],
@@ -114,7 +114,7 @@ final class AssistantEvalSuiteTest extends TestCase
         ));
 
         $this->assertTrue($result->insufficientContext);
-        $this->assertStringContainsString('TowerOS workspace assistant', $result->answer);
+        $this->assertStringContainsString('INFRA SUITE workspace assistant', $result->answer);
     }
 
     public function test_relevance_gate_keeps_in_scope_howto(): void
@@ -122,13 +122,13 @@ final class AssistantEvalSuiteTest extends TestCase
         $gate = new AssistantRelevanceGate;
         $chunk = $this->chunk(
             'e-approval-create-request',
-            'Create an E-Approval request',
+            'Create an E-Forms request',
             'e_approval',
             0.25,
-            "# Create an E-Approval request\n\nSubmit forms for review.",
+            "# Create an E-Forms request\n\nSubmit forms for review.",
         );
 
-        $this->assertTrue($gate->isRelevant($chunk, 'How do I create an E-Approval request?'));
+        $this->assertTrue($gate->isRelevant($chunk, 'How do I create an E-Forms request?'));
     }
 
     private function chunk(

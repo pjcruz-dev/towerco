@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import { OrgPersonCard } from "@/components/admin/admin-org-person-card";
-import { resolveManager, type OrgChartIndex } from "@/lib/admin/org-chart";
+import { resolveManager, type OrgChartIndex, type OrgChartNode } from "@/lib/admin/org-chart";
 
 function Connector() {
   return (
@@ -18,11 +18,15 @@ export function AdminOrgChartView({
   focusedId,
   onFocus,
   organizationLabel,
+  onManageRoles,
+  showRoles = false,
 }: {
   index: OrgChartIndex;
   focusedId: string;
   onFocus: (id: string) => void;
   organizationLabel: string;
+  onManageRoles?: (person: OrgChartNode) => void;
+  showRoles?: boolean;
 }) {
   const focused = index.byId.get(focusedId);
   const manager = useMemo(() => resolveManager(index, focused), [focused, index]);
@@ -38,7 +42,13 @@ export function AdminOrgChartView({
       {manager ? (
         <>
           <p className="mb-1 text-[11px] font-medium text-muted-foreground">Reports to</p>
-          <OrgPersonCard person={manager} emphasis="manager" onSelect={onFocus} />
+          <OrgPersonCard
+            person={manager}
+            emphasis="manager"
+            showRoles={showRoles}
+            onSelect={onFocus}
+            onManageRoles={onManageRoles}
+          />
           <Connector />
         </>
       ) : focused.external ? (
@@ -47,7 +57,13 @@ export function AdminOrgChartView({
         </p>
       ) : null}
 
-      <OrgPersonCard person={focused} emphasis="focus" onSelect={onFocus} />
+      <OrgPersonCard
+        person={focused}
+        emphasis="focus"
+        showRoles={showRoles}
+        onSelect={onFocus}
+        onManageRoles={onManageRoles}
+      />
 
       {reports.length > 0 ? (
         <>
@@ -57,7 +73,13 @@ export function AdminOrgChartView({
           </p>
           <div className="grid w-full max-w-4xl grid-cols-1 justify-items-center gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {reports.map((person) => (
-              <OrgPersonCard key={person.id} person={person} onSelect={onFocus} />
+              <OrgPersonCard
+                key={person.id}
+                person={person}
+                showRoles={showRoles}
+                onSelect={onFocus}
+                onManageRoles={onManageRoles}
+              />
             ))}
           </div>
         </>

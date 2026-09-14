@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantScopedCache;
@@ -18,6 +19,13 @@ use Illuminate\Support\Facades\DB;
 
 final class EApprovalAnalyticsService
 {
+    /** @var array{form_id: ?string, subsidiary: ?string, department: ?string} */
+    private array $activeFilters = [
+        'form_id' => null,
+        'subsidiary' => null,
+        'department' => null,
+    ];
+
     public function __construct(
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalSlaClock $slaClock,
@@ -26,6 +34,7 @@ final class EApprovalAnalyticsService
     /**
      * @return array{
      *     period: array{from: string, to: string, days: int},
+     *     filters: array{form_id: string|null, subsidiary: string|null, department: string|null},
      *     kpis: list<array{key: string, label: string, value: string, change: string|null, tone: string, href: string|null}>,
      *     submissions_over_time: list<array{key: string, label: string, value: int, href: string}>,
      *     by_status: list<array{key: string, label: string, value: int, href: string}>,
@@ -37,10 +46,29 @@ final class EApprovalAnalyticsService
      *     rejection_reasons: list<array{key: string, label: string, value: int}>
      * }
      */
-    public function build(?string $from = null, ?string $to = null): array
-    {
+    public function build(
+        ?string $from = null,
+        ?string $to = null,
+        ?string $formId = null,
+        ?string $subsidiary = null,
+        ?string $department = null,
+    ): array {
+        $this->activeFilters = [
+            'form_id' => $this->nullableTrim($formId),
+            'subsidiary' => $this->nullableTrim($subsidiary),
+            'department' => $this->nullableTrim($department),
+        ];
+
         $tenantId = (string) (tenant('id') ?? 'unknown');
-        $key = sprintf('e_approval:analytics:%s:%s:%s', $tenantId, $from ?? 'def', $to ?? 'def');
+        $key = sprintf(
+            'e_approval:analytics:%s:%s:%s:%s:%s:%s',
+            $tenantId,
+            $from ?? 'def',
+            $to ?? 'def',
+            $this->activeFilters['form_id'] ?? 'all',
+            $this->activeFilters['subsidiary'] ?? 'all',
+            $this->activeFilters['department'] ?? 'all',
+        );
 
         return TenantScopedCache::remember($key, 60, fn (): array => $this->buildUncached($from, $to));
     }
@@ -48,6 +76,7 @@ final class EApprovalAnalyticsService
     /**
      * @return array{
      *     period: array{from: string, to: string, days: int},
+     *     filters: array{form_id: string|null, subsidiary: string|null, department: string|null},
      *     kpis: list<array{key: string, label: string, value: string, change: string|null, tone: string, href: string|null}>,
      *     submissions_over_time: list<array{key: string, label: string, value: int, href: string}>,
      *     by_status: list<array{key: string, label: string, value: int, href: string}>,
@@ -88,22 +117,22 @@ final class EApprovalAnalyticsService
         $aging = $this->agingBuckets($reminderMinutes, $escalationMinutes);
         $rejections = $this->rejectionReasons($fromDate, $toDate);
 
-        $submitted = (int) EApprovalSubmission::query()
+        $submitted = (int) $this->submissionsQuery()
             ->whereBetween('created_at', [$fromDate, $toDate])
             ->count();
-        $approved = (int) EApprovalSubmission::query()
+        $approved = (int) $this->submissionsQuery()
             ->where('status', EApprovalSubmissionStatus::APPROVED)
             ->whereBetween('updated_at', [$fromDate, $toDate])
             ->count();
-        $pendingApprovals = (int) EApprovalRequestApproval::query()
+        $pendingApprovals = (int) $this->approvalsQuery()
             ->where('status', 'pending')
             ->count();
         $reminderCutoff = $this->slaClock->thresholdBefore(now(), $reminderMinutes);
-        $staleApprovals = (int) EApprovalRequestApproval::query()
+        $staleApprovals = (int) $this->approvalsQuery()
             ->where('status', 'pending')
             ->where('created_at', '<=', $reminderCutoff)
             ->count();
-        $escalated = (int) EApprovalRequestApproval::query()
+        $escalated = (int) $this->approvalsQuery()
             ->where('status', 'pending')
             ->whereNotNull('escalated_at')
             ->count();
@@ -118,6 +147,7 @@ final class EApprovalAnalyticsService
                 'to' => $toStr,
                 'days' => $days,
             ],
+            'filters' => $this->activeFilters,
             'kpis' => [
                 [
                     'key' => 'submissions_period',
@@ -125,7 +155,7 @@ final class EApprovalAnalyticsService
                     'value' => (string) $submitted,
                     'change' => $days.' day window',
                     'tone' => 'neutral',
-                    'href' => '/e-approval/submissions?from='.$fromStr.'&to='.$toStr,
+                    'href' => $this->submissionsHref(['from' => $fromStr, 'to' => $toStr]),
                 ],
                 [
                     'key' => 'approved_period',
@@ -133,7 +163,11 @@ final class EApprovalAnalyticsService
                     'value' => (string) $approved,
                     'change' => 'Updated in window',
                     'tone' => 'success',
-                    'href' => '/e-approval/submissions?status=approved&from='.$fromStr.'&to='.$toStr,
+                    'href' => $this->submissionsHref([
+                        'status' => 'approved',
+                        'from' => $fromStr,
+                        'to' => $toStr,
+                    ]),
                 ],
                 [
                     'key' => 'pending_approvals',
@@ -165,7 +199,11 @@ final class EApprovalAnalyticsService
                     'value' => $cycle[0]['value'] ?? '—',
                     'change' => $cycle[0]['unit'] ?? 'hours',
                     'tone' => 'neutral',
-                    'href' => '/e-approval/submissions?status=approved&from='.$fromStr.'&to='.$toStr,
+                    'href' => $this->submissionsHref([
+                        'status' => 'approved',
+                        'from' => $fromStr,
+                        'to' => $toStr,
+                    ]),
                 ],
             ],
             'submissions_over_time' => $volume,
@@ -177,6 +215,85 @@ final class EApprovalAnalyticsService
             'aging' => $aging,
             'rejection_reasons' => $rejections,
         ];
+    }
+
+    /**
+     * @return Builder<\App\Modules\EApproval\Models\EApprovalSubmission>
+     */
+    private function submissionsQuery(): Builder
+    {
+        $query = EApprovalSubmission::query();
+        $this->applySubmissionFilters($query);
+
+        return $query;
+    }
+
+    /**
+     * @return Builder<\App\Modules\EApproval\Models\EApprovalRequestApproval>
+     */
+    private function approvalsQuery(): Builder
+    {
+        $query = EApprovalRequestApproval::query();
+        if ($this->hasActiveFilters()) {
+            $query->whereHas('submission', function (Builder $submission): void {
+                $this->applySubmissionFilters($submission);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  Builder<\App\Modules\EApproval\Models\EApprovalSubmission>  $query
+     */
+    private function applySubmissionFilters(Builder $query): void
+    {
+        if ($this->activeFilters['form_id'] !== null) {
+            $query->where('form_id', $this->activeFilters['form_id']);
+        }
+
+        $formIds = $this->activeFilters['form_id'] !== null
+            ? [$this->activeFilters['form_id']]
+            : [];
+
+        EApprovalSubmissionFieldFilter::applyWorkspaceColumnFilters($query, $formIds, [
+            'subsidiary' => $this->activeFilters['subsidiary'],
+            'department' => $this->activeFilters['department'],
+        ]);
+    }
+
+    private function hasActiveFilters(): bool
+    {
+        return $this->activeFilters['form_id'] !== null
+            || $this->activeFilters['subsidiary'] !== null
+            || $this->activeFilters['department'] !== null;
+    }
+
+    /**
+     * @param  array<string, string|null>  $extra
+     */
+    private function submissionsHref(array $extra = []): string
+    {
+        $params = array_filter([
+            ...$extra,
+            'form_id' => $this->activeFilters['form_id'],
+            'subsidiary' => $this->activeFilters['subsidiary'],
+            'department' => $this->activeFilters['department'],
+        ], static fn ($value): bool => $value !== null && $value !== '');
+
+        $query = http_build_query($params);
+
+        return '/e-approval/submissions'.($query !== '' ? '?'.$query : '');
+    }
+
+    private function nullableTrim(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     /**
@@ -194,7 +311,7 @@ final class EApprovalAnalyticsService
                 $weekEnd = $cursor->endOfWeek();
                 $rangeStart = $cursor->greaterThan($from) ? $cursor : $from;
                 $rangeEnd = $weekEnd->lessThan($to) ? $weekEnd : $to;
-                $count = EApprovalSubmission::query()
+                $count = $this->submissionsQuery()
                     ->whereBetween('created_at', [$rangeStart, $rangeEnd])
                     ->count();
                 $key = $cursor->toDateString();
@@ -202,7 +319,10 @@ final class EApprovalAnalyticsService
                     'key' => $key,
                     'label' => $cursor->format('M j'),
                     'value' => $count,
-                    'href' => '/e-approval/submissions?from='.$rangeStart->toDateString().'&to='.$rangeEnd->toDateString(),
+                    'href' => $this->submissionsHref([
+                        'from' => $rangeStart->toDateString(),
+                        'to' => $rangeEnd->toDateString(),
+                    ]),
                 ];
                 $cursor = $cursor->addWeek()->startOfWeek();
             }
@@ -210,12 +330,11 @@ final class EApprovalAnalyticsService
             return $series;
         }
 
-        // One grouped query instead of one COUNT per day.
-        $counts = EApprovalSubmission::query()
+        $countsQuery = $this->submissionsQuery()
             ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
-            ->groupBy('day_key')
-            ->pluck('total', 'day_key');
+            ->groupBy('day_key');
+        $counts = $countsQuery->pluck('total', 'day_key');
 
         for ($i = 0; $i < $days; $i++) {
             $day = $from->addDays($i)->startOfDay();
@@ -227,7 +346,7 @@ final class EApprovalAnalyticsService
                 'key' => $dateKey,
                 'label' => $day->format('M j'),
                 'value' => (int) ($counts[$dateKey] ?? 0),
-                'href' => '/e-approval/submissions?from='.$dateKey.'&to='.$dateKey,
+                'href' => $this->submissionsHref(['from' => $dateKey, 'to' => $dateKey]),
             ];
         }
 
@@ -239,7 +358,7 @@ final class EApprovalAnalyticsService
      */
     private function byStatus(CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $counts = EApprovalSubmission::query()
+        $counts = $this->submissionsQuery()
             ->selectRaw('status, COUNT(*) as total')
             ->whereBetween('created_at', [$from, $to])
             ->groupBy('status')
@@ -265,7 +384,11 @@ final class EApprovalAnalyticsService
                 'key' => $status,
                 'label' => ucfirst(str_replace('_', ' ', $status)),
                 'value' => $value,
-                'href' => '/e-approval/submissions?status='.$status.'&from='.$from->toDateString().'&to='.$to->toDateString(),
+                'href' => $this->submissionsHref([
+                    'status' => $status,
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                ]),
             ];
         }
 
@@ -277,7 +400,11 @@ final class EApprovalAnalyticsService
                 'key' => (string) $status,
                 'label' => ucfirst(str_replace('_', ' ', (string) $status)),
                 'value' => (int) $total,
-                'href' => '/e-approval/submissions?status='.$status.'&from='.$from->toDateString().'&to='.$to->toDateString(),
+                'href' => $this->submissionsHref([
+                    'status' => (string) $status,
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                ]),
             ];
         }
 
@@ -289,9 +416,8 @@ final class EApprovalAnalyticsService
      */
     private function topForms(CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $top = DB::connection('tenant')
-            ->table('e_approval_submissions')
-            ->select('form_id', DB::raw('COUNT(*) as submission_count'))
+        $top = $this->submissionsQuery()
+            ->selectRaw('form_id, COUNT(*) as submission_count')
             ->whereBetween('created_at', [$from, $to])
             ->groupBy('form_id')
             ->orderByDesc('submission_count')
@@ -302,14 +428,18 @@ final class EApprovalAnalyticsService
             ->whereIn('id', $top->pluck('form_id')->filter()->all())
             ->pluck('name', 'id');
 
-        return $top->map(static function ($row) use ($names, $from, $to): array {
+        return $top->map(function ($row) use ($names, $from, $to): array {
             $formId = (string) $row->form_id;
 
             return [
                 'key' => $formId,
                 'label' => (string) ($names[$formId] ?? 'Unknown form'),
                 'value' => (int) $row->submission_count,
-                'href' => '/e-approval/submissions?form_id='.$formId.'&from='.$from->toDateString().'&to='.$to->toDateString(),
+                'href' => $this->submissionsHref([
+                    'form_id' => $formId,
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                ]),
             ];
         })->values()->all();
     }
@@ -322,7 +452,7 @@ final class EApprovalAnalyticsService
         $driver = DB::connection('tenant')->getDriverName();
 
         $submissionAvg = $this->avgHours(
-            EApprovalSubmission::query()
+            $this->submissionsQuery()
                 ->where('status', EApprovalSubmissionStatus::APPROVED)
                 ->whereBetween('updated_at', [$from, $to])
                 ->whereNotNull('created_at')
@@ -333,7 +463,7 @@ final class EApprovalAnalyticsService
         );
 
         $stepAvg = $this->avgHours(
-            EApprovalRequestApproval::query()
+            $this->approvalsQuery()
                 ->where('status', 'approved')
                 ->whereNotNull('acted_at')
                 ->whereBetween('acted_at', [$from, $to]),
@@ -397,10 +527,16 @@ final class EApprovalAnalyticsService
             ? '(julianday(\'now\') - julianday(a.created_at)) * 24'
             : 'TIMESTAMPDIFF(HOUR, a.created_at, NOW())';
 
-        $rows = DB::connection('tenant')
+        $query = DB::connection('tenant')
             ->table('e_approval_request_approvals as a')
             ->leftJoin('e_approval_workflow_steps as s', 's.id', '=', 'a.step_id')
-            ->where('a.status', 'pending')
+            ->where('a.status', 'pending');
+
+        if ($this->hasActiveFilters()) {
+            $query->whereIn('a.submission_id', $this->submissionsQuery()->select('id'));
+        }
+
+        $rows = $query
             ->selectRaw("COALESCE(s.step_order, 0) as step_order, COUNT(*) as pending_count, AVG({$ageExpr}) as avg_age_hours")
             ->groupBy(DB::raw('COALESCE(s.step_order, 0)'))
             ->orderByDesc('pending_count')
@@ -425,10 +561,16 @@ final class EApprovalAnalyticsService
      */
     private function approverLoad(): array
     {
-        $rows = DB::connection('tenant')
+        $query = DB::connection('tenant')
             ->table('e_approval_request_approvals')
+            ->where('status', 'pending');
+
+        if ($this->hasActiveFilters()) {
+            $query->whereIn('submission_id', $this->submissionsQuery()->select('id'));
+        }
+
+        $rows = $query
             ->select('approver_id', DB::raw('COUNT(*) as pending_count'))
-            ->where('status', 'pending')
             ->groupBy('approver_id')
             ->orderByDesc('pending_count')
             ->limit(8)
@@ -465,7 +607,6 @@ final class EApprovalAnalyticsService
         $reminderCutoff = $this->slaClock->thresholdBefore($now, $reminderMinutes);
         $workingLabel = $this->slaClock->usesWorkingDays() ? ' wd' : '';
 
-        // Mutually exclusive pending-approval age buckets (SLA threshold from settings).
         $exclusive = $reminderMinutes <= 3 * 24 * 60
             ? [
                 [
@@ -514,12 +655,11 @@ final class EApprovalAnalyticsService
                 ],
             ];
 
-        // Keep escalation threshold available for KPI; aging chart stays exclusive.
         unset($escalationMinutes);
 
         $result = [];
         foreach ($exclusive as $bucket) {
-            $q = EApprovalRequestApproval::query()->where('status', 'pending');
+            $q = $this->approvalsQuery()->where('status', 'pending');
             if ($bucket['gte'] !== null) {
                 $q->where('created_at', '>=', $bucket['gte']);
             }
@@ -542,7 +682,7 @@ final class EApprovalAnalyticsService
      */
     private function rejectionReasons(CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $rows = EApprovalRequestApproval::query()
+        $rows = $this->approvalsQuery()
             ->selectRaw('remarks, COUNT(*) as total')
             ->where('status', 'rejected')
             ->whereNotNull('remarks')

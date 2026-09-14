@@ -6,6 +6,8 @@ namespace App\Modules\Notifications\Services;
 
 use App\Modules\Notifications\Events\TenantNotificationCreated;
 use App\Modules\Notifications\Models\TenantNotification;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 final class TenantNotificationBroadcaster
 {
@@ -20,13 +22,23 @@ final class TenantNotificationBroadcaster
             return;
         }
 
-        event(new TenantNotificationCreated(
-            tenantId: $tenantId,
-            userId: (string) $notification->user_id,
-            notificationId: (string) $notification->id,
-            module: (string) $notification->module,
-            category: (string) $notification->category,
-        ));
+        try {
+            event(new TenantNotificationCreated(
+                tenantId: $tenantId,
+                userId: (string) $notification->user_id,
+                notificationId: (string) $notification->id,
+                module: (string) $notification->module,
+                category: (string) $notification->category,
+            ));
+        } catch (Throwable $exception) {
+            // Never fail business actions (submit/approve) because realtime delivery is down.
+            Log::warning('Tenant notification broadcast failed', [
+                'notification_id' => (string) $notification->id,
+                'user_id' => (string) $notification->user_id,
+                'module' => (string) $notification->module,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function shouldBroadcast(): bool

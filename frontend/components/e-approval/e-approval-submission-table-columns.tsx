@@ -5,6 +5,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
+import {
   createActionsColumn,
   createLinkColumn,
   createTextColumn,
@@ -19,6 +23,7 @@ export const eApprovalSubmissionTableColumns: ColumnDef<EApprovalSubmissionListR
     enableSorting: true,
   }),
   createTextColumn("form_name", "Form", (row) => row.form_name ?? "—"),
+  createTextColumn("subsidiary", "Subsidiary", (row) => row.subsidiary ?? "—"),
   createTextColumn(
     "status",
     "Status",
@@ -26,10 +31,23 @@ export const eApprovalSubmissionTableColumns: ColumnDef<EApprovalSubmissionListR
     { enableSorting: true },
   ),
   createTextColumn("requestor", "Requestor", (row) => row.requestor?.name ?? "—"),
-  createTextColumn("current_step", "Step", (row) => row.current_step, {
-    className: "text-muted-foreground",
-    enableSorting: true,
-  }),
+  createTextColumn(
+    "current_step",
+    "Step",
+    (row) => (
+      <EApprovalWorkflowStepShow
+        variant="compact"
+        steps={buildWorkflowStepShowItems({
+          currentStep: row.current_step,
+          stepCount: row.step_count,
+          status: row.status,
+          workflowSteps: row.workflow_steps,
+        })}
+        emptyLabel="—"
+      />
+    ),
+    { enableSorting: true },
+  ),
   createActionsColumn("Open", (row) => (
     <Link
       className="text-sm font-medium text-primary hover:underline"

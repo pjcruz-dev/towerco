@@ -14,7 +14,9 @@ class RoleIndexController extends AbstractApiController
     public function __invoke(Request $request, RoleCatalogService $service): JsonResponse
     {
         abort_unless(
-            $request->user()?->can('role:manage') || $request->user()?->can('user:manage'),
+            $request->user()?->can('role:manage')
+            || $request->user()?->can('user:manage')
+            || $request->user()?->can('organization:manage'),
             403,
         );
 

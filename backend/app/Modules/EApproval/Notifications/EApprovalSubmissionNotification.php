@@ -75,7 +75,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'approval_no_longer_needed' => "{$prefix} Approval no longer needed — {$documentNo}",
                 'approval_rerouted' => "{$prefix} Approval reassigned — {$documentNo}",
                 'workflow_steps_skipped' => "{$prefix} Workflow path update — {$documentNo}",
-                default => "{$prefix} E-Approval update — {$documentNo}",
+                default => "{$prefix} E-Forms update — {$documentNo}",
             };
 
             $actionPath = EApprovalNotificationCategory::hrefFor(
@@ -91,7 +91,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
                 ->from((string) config('mail.from.address'), $brand)
                 ->subject($subject)
-                ->greeting("{$brand} — ".__('E-Approval'))
+                ->greeting("{$brand} — ".__('E-Forms'))
                 ->line(__('Document: **:document**', ['document' => $documentNo]))
                 ->line(__('Form: :form', ['form' => $formName]));
 

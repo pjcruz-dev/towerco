@@ -3,55 +3,71 @@ import type { AuthUser } from "@/types/auth";
 export const TENANT_MODULE_LABELS: Record<string, string> = {
   core: "Dashboard",
   team_access: "Team & Access",
-  e_approval: "E-Approval",
+  project_one: "Project-One",
+  e_approval: "E-Forms",
   dynamic_entities: "Dynamic Entities",
+  gis: "GIS",
+  sites: "Sites",
+  tower_one: "Tower-One",
+  fiber_one: "Fiber-One",
+  asset_one: "Asset-One",
   ticketing: "Ticketing",
+  procurement_one: "Procurement-One",
+  finance_one: "Finance-One",
+  billings: "Billings",
+  documents: "Documents",
+  document_register: "Document register",
   ai_assistant: "AI Assistant",
+  doc_extract: "DocExtract",
 };
 
-/** Historical audit rows may still carry retired module keys — display only. */
-const LEGACY_AUDIT_MODULE_LABELS: Record<string, string> = {
-  documents: "Documents (legacy)",
-  procurement_one: "Procurement (legacy)",
-  project_one: "Project-One (legacy)",
-};
-
-/**
- * Module filter options for Workspace Audit — aligned with current workspace modules
- * (not retired Documents / Procurement-One / Project-One product surfaces).
- */
 export const WORKSPACE_AUDIT_MODULE_FILTERS = [
   { value: "e_approval", label: TENANT_MODULE_LABELS.e_approval },
+  { value: "documents", label: TENANT_MODULE_LABELS.documents ?? "Documents" },
   { value: "team_access", label: TENANT_MODULE_LABELS.team_access },
+  { value: "procurement_one", label: TENANT_MODULE_LABELS.procurement_one ?? "Procurement" },
+  { value: "project_one", label: TENANT_MODULE_LABELS.project_one ?? "Project-One" },
   { value: "ticketing", label: TENANT_MODULE_LABELS.ticketing },
-  { value: "dynamic_entities", label: TENANT_MODULE_LABELS.dynamic_entities },
+  { value: "dynamic_entities", label: TENANT_MODULE_LABELS.dynamic_entities ?? "Dynamic Entities" },
+  { value: "doc_extract", label: TENANT_MODULE_LABELS.doc_extract },
   { value: "ai_assistant", label: TENANT_MODULE_LABELS.ai_assistant },
   { value: "core", label: TENANT_MODULE_LABELS.core },
 ] as const;
 
 export function workspaceAuditModuleLabel(module: string): string {
-  return (
-    TENANT_MODULE_LABELS[module] ??
-    LEGACY_AUDIT_MODULE_LABELS[module] ??
-    module.replace(/_/g, " ")
-  );
+  return TENANT_MODULE_LABELS[module] ?? module.replace(/_/g, " ");
 }
 
 export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
-  ai_assistant:
-    "In-app help assistant for workflows, permissions, and how-to guidance. Opt-in — not included with Dynamic Entities alone.",
   dynamic_entities:
     "Dynamic entity packs (PM, Procurement, Finance, Ticketing) with Manage Fields.",
-  e_approval: "Forms, submissions, and approval workflows.",
-  ticketing: "Service desk tickets and queues.",
+  billings: "Tenant subscription, usage, and self-serve plan billing (/billing).",
+  documents: "Expiring leases, permits, and contracts across sites.",
+  document_register:
+    "ISO master list of approved documents; start requests and revisions via E-Forms.",
+  ai_assistant:
+    "In-app help assistant for workflows, permissions, and how-to guidance.",
+  doc_extract: "Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.",
 };
 
-/** Optional modules superadmins can enable per tenant (aligned with backend TOGGLEABLE_MODULES). */
+/** Optional modules superadmins can enable per tenant (must stay aligned with backend TOGGLEABLE_MODULES). */
 export const TOGGLEABLE_WORKSPACE_MODULES = [
+  "project_one",
+  "dynamic_entities",
   "e_approval",
   "ticketing",
-  "dynamic_entities",
+  "procurement_one",
+  "finance_one",
+  "billings",
+  "sites",
+  "documents",
+  "document_register",
+  "gis",
+  "tower_one",
+  "fiber_one",
+  "asset_one",
   "ai_assistant",
+  "doc_extract",
 ] as const;
 
 type WorkspaceModulesCatalog = {
@@ -82,9 +98,20 @@ export function resolveToggleableWorkspaceModules(
 /** Toggleable workspace modules shown as badges on the platform tenant directory. */
 export const PLATFORM_TENANT_MODULE_BADGE_ORDER = [
   "e_approval",
-  "ticketing",
   "dynamic_entities",
-  "ai_assistant",
+  "project_one",
+  "ticketing",
+  "procurement_one",
+  "finance_one",
+  "billings",
+  "documents",
+  "document_register",
+  "sites",
+  "gis",
+  "tower_one",
+  "fiber_one",
+  "asset_one",
+  "doc_extract",
 ] as const;
 
 export function resolveEnabledModulesForUser(
@@ -121,7 +148,10 @@ export function isTenantModuleEnabled(
 export function notificationsModuleEnabled(enabledModules: string[]): boolean {
   return (
     enabledModules.includes("e_approval")
+    || enabledModules.includes("project_one")
     || enabledModules.includes("ticketing")
     || enabledModules.includes("dynamic_entities")
+    || enabledModules.includes("procurement_one")
+    || enabledModules.includes("finance_one")
   );
 }

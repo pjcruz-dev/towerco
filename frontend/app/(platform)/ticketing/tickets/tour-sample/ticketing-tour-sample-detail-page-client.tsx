@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
+import {
+  AttachmentPreviewGallery,
+  formatAttachmentBytes,
+  type AttachmentGalleryItem,
+} from "@/components/attachments/attachment-preview-gallery";
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
-import { formatFileSize, formatTicketingDate } from "@/components/ticketing/ticketing-utils";
+import { formatTicketingDate } from "@/components/ticketing/ticketing-utils";
 import {
   TicketingTourSampleNotice,
 } from "@/components/help/ticketing-tour-fixtures";
@@ -28,11 +33,41 @@ import {
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 
+/** Lightweight placeholder thumb for tour-only attachment cards (no API fetch). */
+const TOUR_SAMPLE_PREVIEW_URL =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+      <rect width="640" height="480" fill="#e2e8f0"/>
+      <rect x="48" y="48" width="544" height="384" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+      <text x="320" y="230" text-anchor="middle" fill="#64748b" font-family="system-ui,sans-serif" font-size="28">VPN error screenshot</text>
+      <text x="320" y="270" text-anchor="middle" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="18">Tour sample preview</text>
+    </svg>`,
+  );
+
 function TicketingTourSampleDetailInner() {
   const searchParams = useSearchParams();
   const tourActive = isTicketingTourActive(searchParams);
   const canManage = usePermission([permissions.ticketingTicketsManage]);
   const ticket = ticketingTourSampleDetail;
+
+  const attachmentItems = useMemo((): AttachmentGalleryItem[] => {
+    return ticket.attachments.map((attachment) => {
+      const sizeLabel = formatAttachmentBytes(attachment.size_bytes);
+      const uploadedAt = attachment.created_at ? formatTicketingDate(attachment.created_at) : null;
+      return {
+        id: attachment.id,
+        fileName: attachment.file_name,
+        mimeType: attachment.mime_type,
+        sizeBytes: attachment.size_bytes,
+        title: attachment.file_name,
+        subtitle: [sizeLabel, uploadedAt].filter(Boolean).join(" · ") || null,
+        previewUrl: TOUR_SAMPLE_PREVIEW_URL,
+      };
+    });
+  }, [ticket.attachments]);
+
+  const noopFetchBlob = useCallback(async () => new Blob(), []);
 
   if (!tourActive) {
     return (
@@ -103,22 +138,16 @@ function TicketingTourSampleDetailInner() {
                   Upload
                 </span>
               </div>
-              <ul className="mt-3 space-y-2">
-                {ticket.attachments.map((attachment) => (
-                  <li
-                    key={attachment.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">{attachment.file_name}</p>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size_bytes)}</p>
-                    </div>
-                    <Button type="button" size="sm" variant="ghost" disabled>
-                      <Download className="h-4 w-4" aria-hidden />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-3">
+                <AttachmentPreviewGallery
+                  title=""
+                  hint="Images show inline preview. PDF opens in a new tab."
+                  items={attachmentItems}
+                  fetchBlob={noopFetchBlob}
+                  onDownload={() => undefined}
+                  openPreviewDisabled
+                />
+              </div>
             </section>
 
             <section

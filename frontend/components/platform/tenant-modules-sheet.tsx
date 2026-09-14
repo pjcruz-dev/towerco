@@ -186,11 +186,13 @@ export function TenantModulesSheet({ open, onOpenChange, tenant, isPending, onSa
 
           {!usePlatformDefault &&
           !selected.has("e_approval") &&
-          !selected.has("dynamic_entities") &&
-          !selected.has("ticketing") ? (
+          !selected.has("project_one") &&
+          !selected.has("procurement_one") &&
+          !selected.has("documents") &&
+          !selected.has("document_register") ? (
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Enable at least Dynamic Entities, E-Approval, or Ticketing so users have an operational
-              workspace module.
+              Enable at least E-Forms, Project-One, Procurement-One, Documents, or Document register so
+              users have an operational workspace module.
             </p>
           ) : null}
         </div>

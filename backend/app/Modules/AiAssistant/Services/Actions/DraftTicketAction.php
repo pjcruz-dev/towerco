@@ -65,7 +65,7 @@ final class DraftTicketAction implements AssistantActionInterface
             'description' => $description !== '' ? $description : null,
             'category' => $category,
             'source_module' => TicketingSourceCatalog::MODULE_AI_ASSISTANT,
-            'source_label' => 'Ask TowerOS',
+            'source_label' => 'Ask INFRA SUITE',
         ];
 
         return new ActionProposalDraft(
@@ -97,7 +97,7 @@ final class DraftTicketAction implements AssistantActionInterface
             'description' => $payload['description'] ?? null,
             'category' => $payload['category'] ?? null,
             'source_module' => $payload['source_module'] ?? TicketingSourceCatalog::MODULE_AI_ASSISTANT,
-            'source_label' => $payload['source_label'] ?? 'Ask TowerOS',
+            'source_label' => $payload['source_label'] ?? 'Ask INFRA SUITE',
         ]);
 
         $detail = $this->tickets->asDetail($ticket, $viewer);
@@ -137,7 +137,7 @@ final class DraftTicketAction implements AssistantActionInterface
     {
         $q = trim($question);
         if ($q === $title) {
-            return 'Created via Ask TowerOS confirmation.';
+            return 'Created via Ask INFRA SUITE confirmation.';
         }
 
         return $q;

@@ -60,7 +60,7 @@ final class AssistantProviderQuotaTest extends TestCase
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/assistant/ask', [
-                'question' => 'How do I create an E-Approval request?',
+                'question' => 'How do I create an E-Forms request?',
             ])
             ->assertOk();
 
@@ -104,7 +104,7 @@ final class AssistantProviderQuotaTest extends TestCase
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/assistant/ask', [
-                'question' => 'How do I create an E-Approval request?',
+                'question' => 'How do I create an E-Forms request?',
             ])
             ->assertOk();
 

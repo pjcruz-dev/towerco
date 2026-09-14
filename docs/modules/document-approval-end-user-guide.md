@@ -2,7 +2,7 @@
 
 A friendly walkthrough for everyday users: sign in, add your signature, submit a Document Approval, track it, check files, and approve / reject / ask for changes.
 
-For the **general E-Approval** walkthrough (any form, not only Document Approval), see [e-approval-end-user-guide.md](./e-approval-end-user-guide.md).
+For the **general E-Forms** walkthrough (any form, not only Document Approval), see [e-approval-end-user-guide.md](./e-approval-end-user-guide.md).
 
 ---
 
@@ -20,9 +20,9 @@ For the **general E-Approval** walkthrough (any form, not only Document Approval
 
 You need:
 
-- Your **TowerOS login** (email + password, or Microsoft sign-in)
+- Your **INFRA SUITE login** (email + password, or Microsoft sign-in)
 - The **website address** for your company workspace (ask your admin if unsure)
-- For Document Approval: permission to use **E-Approval**
+- For Document Approval: permission to use **E-Forms**
 
 **Example login pages**
 
@@ -42,7 +42,7 @@ Always use your **company / tenant** login page — not the platform admin conso
 3. If you see a **security code (MFA)** screen, open your authenticator app and enter the 6-digit code.
 4. You should land on the **Dashboard**.
 
-**Tip:** On the left sidebar, look for **E-Approval**. That is where Document Approval lives.
+**Tip:** On the left sidebar, look for **E-Forms**. That is where Document Approval lives.
 
 ### Sample accounts (training / demo only)
 
@@ -70,8 +70,8 @@ You can save a signature once, then reuse it when you approve requests.
 ### Save your signature (recommended)
 
 1. Sign in.
-2. Open **E-Approval → My E-Approval profile**  
-   (sidebar: **E-Approval** → **My E-Approval profile**).
+2. Open **E-Forms → My E-Forms profile**  
+   (sidebar: **E-Forms** → **My E-Forms profile**).
 3. Find the **Signature** section.
 4. Choose one method:
 
@@ -88,11 +88,11 @@ You can save a signature once, then reuse it when you approve requests.
 
 - Use a dark signature on a light background for uploads.
 - You can change your signature later on the same page.
-- The next time you approve, TowerOS can load this signature automatically.
+- The next time you approve, INFRA SUITE can load this signature automatically.
 
 ### Sign when you approve a request
 
-1. Open the request from **E-Approval → Approvals** (or from **Notifications**).
+1. Open the request from **E-Forms → Approvals** (or from **Notifications**).
 2. Scroll to **Your decision**.
 3. Under **Your signature**:
    - If your profile signature loaded, review it.
@@ -117,13 +117,13 @@ Some Document Approval forms include a **Signature** field.
 ### Checklist before you start
 
 - [ ] You are signed in  
-- [ ] You can open **E-Approval**  
+- [ ] You can open **E-Forms**  
 - [ ] The Document Approval / Document Control form is available (published)  
 - [ ] You have the file(s) ready to attach  
 
 ### Steps
 
-1. Click **E-Approval** in the left menu.
+1. Click **E-Forms** in the left menu.
 2. Open **Submissions**.
 3. Click **New** (or **New submission**).
 4. Choose the **Document Approval / Document Control / ISO Document Control** form.  
@@ -149,7 +149,7 @@ Some Document Approval forms include a **Signature** field.
 
 ## Part 4 — View your requests
 
-1. Go to **E-Approval → Submissions**.
+1. Go to **E-Forms → Submissions**.
 2. Find your request by document number, title, or status.
 3. Click it to open.
 4. On the detail page you can see:
@@ -189,7 +189,7 @@ If a file will not open, ask the requestor to upload it again and resubmit.
 ### Open work waiting for you
 
 1. Sign in as an approver.
-2. Go to **E-Approval → Approvals**.
+2. Go to **E-Forms → Approvals**.
 3. Use **Awaiting me** if you see that filter.
 4. Or open the item from **Notifications** / Dashboard **Awaiting you**.
 
@@ -231,7 +231,7 @@ After you decide, the status updates and the requestor is notified.
 
 ## Part 7 — If your request was returned (requestor)
 
-1. Open **E-Approval → Submissions**.
+1. Open **E-Forms → Submissions**.
 2. Open the request marked **Returned** / needs revision.
 3. Read the **revision remarks** carefully.
 4. Fix the answers and/or replace attachments.
@@ -247,10 +247,10 @@ If the request was **Rejected**, you usually cannot reopen it — start a **new*
 | I want to… | Go here |
 |------------|---------|
 | Sign in | Your tenant `/login` page |
-| Save my signature | **E-Approval → My E-Approval profile** |
-| Submit Document Approval | **E-Approval → Submissions → New** |
-| See my requests | **E-Approval → Submissions** |
-| Approve / reject / revise | **E-Approval → Approvals** |
+| Save my signature | **E-Forms → My E-Forms profile** |
+| Submit Document Approval | **E-Forms → Submissions → New** |
+| See my requests | **E-Forms → Submissions** |
+| Approve / reject / revise | **E-Forms → Approvals** |
 | See alerts | **Notifications** |
 
 ---
@@ -259,10 +259,10 @@ If the request was **Rejected**, you usually cannot reopen it — start a **new*
 
 1. **Requestor** signs in → (optional) saves signature → submits Document Approval → notes document number.  
 2. **Requestor** opens **Submissions** and checks attachments.  
-3. **Approver** signs in → saves signature on **My E-Approval profile** → opens **Approvals** → reviews files → **Approves** (or Reject / Request revision).  
+3. **Approver** signs in → saves signature on **My E-Forms profile** → opens **Approvals** → reviews files → **Approves** (or Reject / Request revision).  
 4. If revision: **Requestor** fixes and **Resubmits**; **Approver** decides again.
 
 ---
 
-*TowerOS · Document Approval — simple end-user guide*  
+*INFRA SUITE · Document Approval — simple end-user guide*  
 *File: `docs/modules/document-approval-end-user-guide.md`*

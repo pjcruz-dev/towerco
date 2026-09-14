@@ -17,6 +17,7 @@ import {
 } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardResponsiveChart } from "@/components/dashboard/dashboard-responsive-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export type DashboardBarChartProps = {
   title: string;
@@ -53,16 +54,18 @@ export function DashboardBarChartImpl({
   const usesPerBarFill = chartData.some((row) => Boolean(row.fill));
 
   return (
-    <Card className={className ?? "shadow-sm"}>
-      <CardHeader className="border-b pb-3">
-        <CardTitle className="text-base font-medium">{title}</CardTitle>
+    <Card className={cn("flex h-full flex-col overflow-hidden rounded-xl border-border shadow-sm", className)}>
+      <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 py-3">
+        <CardTitle className="text-sm font-medium text-foreground">{title}</CardTitle>
         {description ? (
-          <p className="text-xs font-normal text-muted-foreground">{description}</p>
+          <p className="text-[11px] font-normal leading-snug text-muted-foreground">{description}</p>
         ) : null}
       </CardHeader>
-      <CardContent className="pt-4">
+      <CardContent className="flex flex-1 flex-col p-4 pt-4">
         {!hasData ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+          <p className="flex flex-1 items-center justify-center py-8 text-center text-xs text-muted-foreground">
+            {emptyMessage}
+          </p>
         ) : (
           <DashboardResponsiveChart height={height}>
             <BarChart

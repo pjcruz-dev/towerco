@@ -93,7 +93,7 @@ export function EApprovalApprovalPoliciesPageClient() {
           description={
             <>
               <Link href="/e-approval/settings" className="text-primary hover:underline">
-                E-Approval settings
+                E-Forms settings
               </Link>
               <span className="mx-1 text-muted-foreground">/</span>
               One tenant DOA matrix drives PR/PO approval chains at submit time. Forms with use_approval_policy enabled compile workflow steps from these rules.

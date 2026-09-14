@@ -31,8 +31,8 @@ final class EApprovalSettingsTestWebhookService
         TeamsWebhookHttpPoster::postOrThrow(
             $url,
             TeamsWebhookCardFactory::build(
-                title: __('TowerOS E-Approval test'),
-                bodyText: __('This is a test message from the E-Approval module webhook integration.'),
+                title: __('INFRA SUITE E-Forms test'),
+                bodyText: __('This is a test message from the E-Forms module webhook integration.'),
             ),
             $timeout,
         );

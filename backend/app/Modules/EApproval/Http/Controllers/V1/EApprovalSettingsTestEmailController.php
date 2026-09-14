@@ -22,7 +22,7 @@ class EApprovalSettingsTestEmailController extends AbstractApiController
         $result = $service->sendToUser($user);
 
         return $this->ok([
-            'message' => __('Test email sent. Check your inbox (and spam) for the TowerOS E-Approval test message.'),
+            'message' => __('Test email sent. Check your inbox (and spam) for the INFRA SUITE E-Forms test message.'),
             'sent_to' => $result['sent_to'],
             'mailer' => $result['mailer'],
         ]);

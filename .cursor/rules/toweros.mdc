@@ -2,9 +2,9 @@
 alwaysApply: true
 ---
 
-# TowerOS Global Rules
+# INFRA SUITE Global Rules
 
-TowerOS is an enterprise-grade multi-tenant telecom SaaS platform.
+INFRA SUITE is an enterprise-grade multi-tenant telecom SaaS platform.
 
 Architecture:
 - Backend: Laravel 13

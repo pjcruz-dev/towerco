@@ -29,7 +29,7 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Select the Document Control form.
 3. Complete fields and submit.
 
@@ -42,9 +42,9 @@ MD,
 
         $approve = $this->chunk(
             'e-approval-approve-request',
-            'Approve an E-Approval request',
+            'Approve an E-Forms request',
             <<<'MD'
-# Approve an E-Approval request
+# Approve an E-Forms request
 
 This guide is for approvers only.
 
@@ -67,7 +67,7 @@ MD,
         ));
 
         $this->assertStringContainsString('Submit a Document Approval request', $result->answer);
-        $this->assertStringContainsString('E-Approval → New submission', $result->answer);
+        $this->assertStringContainsString('E-Forms → New submission', $result->answer);
         $this->assertStringContainsString('Document Control', $result->answer);
         $this->assertStringNotContainsString('### 1.', $result->answer);
         $this->assertStringNotContainsString('Sources:', $result->answer);
@@ -86,13 +86,13 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Select the Document Control form.
 3. Submit when ready.
 
 ## Track your submission
 
-1. Open **E-Approval → Submissions**.
+1. Open **E-Forms → Submissions**.
 2. Find your request by document number or status.
 3. Open the submission to review progress.
 
@@ -105,15 +105,15 @@ MD,
 
         $create = $this->chunk(
             'e-approval-create-request',
-            'Create an E-Approval request',
+            'Create an E-Forms request',
             <<<'MD'
-# Create an E-Approval request
+# Create an E-Forms request
 
-General E-Approval create flow.
+General E-Forms create flow.
 
 ## Steps
 
-1. Open E-Approval.
+1. Open E-Forms.
 2. New submission.
 MD,
             0.5,
@@ -133,7 +133,7 @@ MD,
         ));
 
         $this->assertStringContainsString('Track your Document Approval submission', $result->answer);
-        $this->assertStringContainsString('E-Approval → Submissions', $result->answer);
+        $this->assertStringContainsString('E-Forms → Submissions', $result->answer);
         $this->assertStringNotContainsString('New submission', $result->answer);
         $this->assertStringNotContainsString('Also useful:', $result->answer);
         $this->assertStringNotContainsString('Prerequisites', $result->answer);
@@ -151,7 +151,7 @@ Use this for Document Approval / ISO Document Control submissions.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Select the Document Control form.
 MD,
             0.5,
@@ -159,22 +159,22 @@ MD,
 
         $create = $this->chunk(
             'e-approval-create-request',
-            'Create an E-Approval request',
+            'Create an E-Forms request',
             <<<'MD'
-# Create an E-Approval request
+# Create an E-Forms request
 
-Use E-Approval to submit forms for review (cash advances, procurement-related forms, and other tenant workflows).
+Use E-Forms to submit forms for review (cash advances, procurement-related forms, and other tenant workflows).
 
 ## Steps
 
-1. Open **E-Approval**.
+1. Open **E-Forms**.
 2. Choose **New submission**.
 3. Select the published form you need.
 MD,
             0.45,
         );
 
-        $question = 'How do I create an E-Approval request?';
+        $question = 'How do I create an E-Forms request?';
         $ranked = (new AssistantChunkRanker)->rank([$submitDoc, $create], $question);
         $this->assertSame('e-approval-create-request', $ranked[0]->slug);
 
@@ -186,14 +186,14 @@ MD,
         ));
 
         // Primary answer is the general create guide, cleanly shaped (no fragment/heading noise).
-        $this->assertStringContainsString('Create an E-Approval request', $result->answer);
+        $this->assertStringContainsString('Create an E-Forms request', $result->answer);
         $this->assertStringContainsString('published form', $result->answer);
-        $this->assertStringNotContainsString('# Create an E-Approval request', $result->answer);
+        $this->assertStringNotContainsString('# Create an E-Forms request', $result->answer);
         $this->assertStringNotContainsString('Related workflows', $result->answer);
         // The title must not be duplicated back-to-back in the body.
         $this->assertSame(
             1,
-            substr_count($result->answer, 'Create an E-Approval request'),
+            substr_count($result->answer, 'Create an E-Forms request'),
         );
     }
 
@@ -201,8 +201,8 @@ MD,
     {
         $chunkA = $this->chunk(
             'getting-started',
-            'Getting started with TowerOS',
-            "# Getting started with TowerOS\n\nWelcome.\n\n## Steps\n\n1. Open the dashboard.",
+            'Getting started with INFRA SUITE',
+            "# Getting started with INFRA SUITE\n\nWelcome.\n\n## Steps\n\n1. Open the dashboard.",
             0.6,
         );
         $chunkB = new RetrievedKnowledgeChunk(
@@ -213,7 +213,7 @@ MD,
             score: 0.55,
             scope: 'global',
             moduleKey: null,
-            title: 'Getting started with TowerOS',
+            title: 'Getting started with INFRA SUITE',
             slug: 'getting-started',
             version: 1,
             permissions: [],
@@ -244,7 +244,7 @@ MD,
 
         $this->assertStringContainsString('I could not check the live system data', $result->answer);
         $this->assertStringContainsString('Missing permission: e_approval:submissions:view', $result->answer);
-        $this->assertStringNotContainsString('Create an E-Approval request', $result->answer);
+        $this->assertStringNotContainsString('Create an E-Forms request', $result->answer);
     }
 
     public function test_returned_for_revision_answers_resubmit_flow_not_full_submit_guide(): void
@@ -259,7 +259,7 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Submit when ready.
 
 ## Common errors
@@ -301,7 +301,7 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Select the Document Control form.
 3. Submit when ready.
 
@@ -315,11 +315,11 @@ MD,
 
         $create = $this->chunk(
             'e-approval-create-request',
-            'Create an E-Approval request',
+            'Create an E-Forms request',
             <<<'MD'
-# Create an E-Approval request
+# Create an E-Forms request
 
-General E-Approval create flow.
+General E-Forms create flow.
 
 ## Common errors
 
@@ -349,17 +349,17 @@ MD,
     public function test_crlf_prompt_still_extracts_create_question_not_returned_flow(): void
     {
         $createBody = <<<'MD'
-# Create an E-Approval request
+# Create an E-Forms request
 
-Use E-Approval to submit forms for review.
+Use E-Forms to submit forms for review.
 
 ## Prerequisites
 
-- E-Approval module is enabled.
+- E-Forms module is enabled.
 
 ## Steps
 
-1. Open **E-Approval**.
+1. Open **E-Forms**.
 2. Choose **New submission** / **Submissions → New**.
 3. Select the published form you need.
 4. Complete required fields.
@@ -372,14 +372,14 @@ MD;
 
         $create = $this->chunk(
             'e-approval-create-request',
-            'Create an E-Approval request',
+            'Create an E-Forms request',
             $createBody,
             0.5,
         );
 
         // Windows/CRLF heredoc style — previously caused extractQuestion to swallow
         // CONTEXT and mis-detect intent as "returned".
-        $user = "USER_QUESTION:\r\nHow do I create an E-Approval request?\r\n\r\nBEGIN_LIVE_SYSTEM_DATA\r\n(no live)\r\nEND_LIVE_SYSTEM_DATA\r\n\r\nBEGIN_UNTRUSTED_CONTEXT\r\n{$createBody}\r\nEND_UNTRUSTED_CONTEXT";
+        $user = "USER_QUESTION:\r\nHow do I create an E-Forms request?\r\n\r\nBEGIN_LIVE_SYSTEM_DATA\r\n(no live)\r\nEND_LIVE_SYSTEM_DATA\r\n\r\nBEGIN_UNTRUSTED_CONTEXT\r\n{$createBody}\r\nEND_UNTRUSTED_CONTEXT";
 
         $provider = new LocalGroundedLlmProvider;
         $result = $provider->complete(new LlmPrompt(
@@ -388,10 +388,10 @@ MD;
             chunks: [$create],
         ));
 
-        $this->assertStringContainsString('Create an E-Approval request', $result->answer);
+        $this->assertStringContainsString('Create an E-Forms request', $result->answer);
         $this->assertStringContainsString('New submission', $result->answer);
         $this->assertStringNotContainsString('If your submission was returned for revision', $result->answer);
-        $this->assertSame('submit', (new AssistantChunkRanker)->detectIntent('How do I create an E-Approval request?'));
+        $this->assertSame('submit', (new AssistantChunkRanker)->detectIntent('How do I create an E-Forms request?'));
     }
 
     public function test_off_topic_question_returns_out_of_scope_not_nearest_doc(): void
@@ -406,7 +406,7 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 MD,
             0.4,
         );
@@ -419,7 +419,7 @@ MD,
         ));
 
         $this->assertTrue($result->insufficientContext);
-        $this->assertStringContainsString('TowerOS workspace assistant', $result->answer);
+        $this->assertStringContainsString('INFRA SUITE workspace assistant', $result->answer);
         $this->assertStringNotContainsString('Submit a Document Approval request', $result->answer);
     }
 
@@ -435,7 +435,7 @@ Use this when you need to submit a Document Approval request.
 
 ## Steps
 
-1. Open **E-Approval → New submission**.
+1. Open **E-Forms → New submission**.
 2. Select the Document Control form.
 MD,
             0.4,
@@ -460,7 +460,7 @@ MD,
             <<<'MD'
 # Document register (controlled documents)
 
-The document register is the ISO-style master list of controlled documents. Use it to find the approved revision. To **submit** a new controlled document or revision for approval, use **Submit a Document Approval request** (E-Approval Document Control form).
+The document register is the ISO-style master list of controlled documents. Use it to find the approved revision. To **submit** a new controlled document or revision for approval, use **Submit a Document Approval request** (E-Forms Document Control form).
 
 ## Prerequisites
 
@@ -473,7 +473,7 @@ The document register is the ISO-style master list of controlled documents. Use 
 1. Open **Document register**.
 2. Search by document code or title.
 3. Open a controlled document to see status, current revision, and department.
-4. If you need a new document or revision, start **E-Approval → New submission** and choose the Document Control / ISO form.
+4. If you need a new document or revision, start **E-Forms → New submission** and choose the Document Control / ISO form.
 5. Download or stream the published revision only when your role allows it.
 
 ## Expected result
@@ -491,7 +491,7 @@ MD,
             chunks: [$register],
         ));
 
-        $this->assertStringContainsString('E-Approval → New submission', $result->answer);
+        $this->assertStringContainsString('E-Forms → New submission', $result->answer);
         $this->assertStringContainsString('Document Control / ISO form', $result->answer);
         $this->assertStringContainsString('Download or stream the published revision', $result->answer);
         $this->assertStringNotContainsString('New sub…', $result->answer);

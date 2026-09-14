@@ -33,16 +33,53 @@ export type AdminUserRow = {
   mfa_enrolled: boolean;
   mfa_required: boolean;
   job_title?: string | null;
+  /** Own Entra department (may be blank). */
   department?: string | null;
-  manager?: { id: string; name: string; email: string } | null;
+  /** Display value: own dept, else manager dept, else Entra manager snapshot. */
+  department_display?: string | null;
+  /** True when department_display comes from the manager, not the user. */
+  department_inherited?: boolean;
+  manager?: { id: string; name: string; email: string; department?: string | null } | null;
   entra_manager_name?: string | null;
   entra_manager_email?: string | null;
+  entra_manager_department?: string | null;
   direct_report_count?: number;
   entra_org_synced_at?: string | null;
   entra_licensed?: boolean | null;
   entra_license_label?: string | null;
   entra_license_names?: string[];
 };
+
+/** Prefer API department_display; fall back for older payloads. */
+export function resolveAdminUserDepartmentDisplay(user: AdminUserRow): {
+  label: string | null;
+  inherited: boolean;
+} {
+  const display = user.department_display?.trim() || null;
+  if (display) {
+    return {
+      label: display,
+      inherited: Boolean(user.department_inherited),
+    };
+  }
+
+  const own = user.department?.trim() || null;
+  if (own) {
+    return { label: own, inherited: false };
+  }
+
+  const fromManager = user.manager?.department?.trim() || null;
+  if (fromManager) {
+    return { label: fromManager, inherited: true };
+  }
+
+  const fromEntraManager = user.entra_manager_department?.trim() || null;
+  if (fromEntraManager) {
+    return { label: fromEntraManager, inherited: true };
+  }
+
+  return { label: null, inherited: false };
+}
 
 export type AdminUserCreatePayload = {
   name: string;
@@ -108,7 +145,26 @@ export type AdminUserListFilterParams = {
   last_active?: AdminUserLastActiveFilter;
   mfa?: AdminUserMfaFilter;
   role?: string;
+  department?: string;
+  manager_id?: string;
+  license?: string;
   sort?: string;
+};
+
+/** Sentinel for “No department / No manager / No license” filters (matches displayed values). */
+export const ADMIN_USERS_FILTER_NONE = "__none__";
+
+export type AdminUserFilterOptions = {
+  departments: string[];
+  has_unassigned_department: boolean;
+  managers: Array<{ id: string; name: string; email: string }>;
+  has_unassigned_manager: boolean;
+  licenses: string[];
+  has_unassigned_license: boolean;
+};
+
+export type AdminUsersIndexMeta = PaginatedMeta & {
+  filter_options?: AdminUserFilterOptions;
 };
 
 const BULK_USER_IDS_CHUNK = 500;
@@ -123,6 +179,9 @@ function listFilterParams(params: AdminUserListFilterParams) {
     last_active: params.last_active && params.last_active !== "all" ? params.last_active : undefined,
     mfa: params.mfa && params.mfa !== "all" ? params.mfa : undefined,
     role: params.role && params.role !== "all" ? params.role : undefined,
+    department: params.department && params.department !== "all" ? params.department : undefined,
+    manager_id: params.manager_id && params.manager_id !== "all" ? params.manager_id : undefined,
+    license: params.license && params.license !== "all" ? params.license : undefined,
     sort: params.sort,
   };
 }
@@ -161,9 +220,12 @@ export async function fetchAdminUsersIndex(params: {
   last_active?: AdminUserLastActiveFilter;
   mfa?: AdminUserMfaFilter;
   role?: string;
+  department?: string;
+  manager_id?: string;
+  license?: string;
   sort?: string;
-}): Promise<PaginatedEnvelope<AdminUserRow>> {
-  const response = await apiClient.get<{ data: AdminUserRow[]; meta: PaginatedMeta }>("/admin/users", {
+}): Promise<PaginatedEnvelope<AdminUserRow> & { meta: AdminUsersIndexMeta }> {
+  const response = await apiClient.get<{ data: AdminUserRow[]; meta: AdminUsersIndexMeta }>("/admin/users", {
     params: {
       page: params.page,
       per_page: params.per_page,
@@ -349,7 +411,11 @@ export type AdminOrgChartPerson = {
   name: string;
   email: string;
   job_title: string | null;
+  /** Display department (own or inherited up the manager chain). */
   department?: string | null;
+  /** Own Entra department when API provides it separately. */
+  department_own?: string | null;
+  department_inherited?: boolean;
   manager_id: string | null;
   manager_name: string | null;
   manager_email?: string | null;
@@ -360,6 +426,8 @@ export type AdminOrgChartPerson = {
   direct_report_count: number;
   license_label?: string | null;
   license_names?: string[];
+  roles?: string[];
+  photo_url?: string | null;
 };
 
 export type AdminOrgChartResponse = {
@@ -386,7 +454,8 @@ export async function syncAdminEntraOrg(): Promise<AdminEntraOrgSyncResult> {
   const response = await apiClient.post<{ data: AdminEntraOrgSyncResult }>(
     "/admin/users/entra-org-sync",
     {},
-    { timeout: 180_000 },
+    // Sync starts in the background; keep a short client wait for the start ACK only.
+    { timeout: 30_000 },
   );
   return response.data.data;
 }

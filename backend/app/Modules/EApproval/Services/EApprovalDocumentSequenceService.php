@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\AdminOne\Services\TenantUserDepartmentDisplay;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalDepartmentDocCode;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
 
 final class EApprovalDocumentSequenceService
 {
+    public function __construct(
+        private readonly TenantUserDepartmentDisplay $departmentDisplay,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $values
      */
@@ -77,17 +83,24 @@ final class EApprovalDocumentSequenceService
             'ownercode', 'owner_code' => (string) ($form->owner_code ?: 'GEN'),
             'doctypecode', 'doc_type_code' => (string) ($form->doc_type_code ?: 'F'),
             'department' => $this->resolveDepartment($values, $submitter),
+            'subsidiary' => $this->resolveSubsidiary($values),
             'documenttype', 'document_type' => (string) ($values['document_type'] ?? ''),
             default => (string) ($values[$token] ?? $values[$normalized] ?? ''),
         };
 
-        $sanitized = strtoupper(preg_replace('/[^A-Z0-9]/', '', $raw) ?? '');
+        if ($normalized === 'department') {
+            $code = EApprovalDepartmentDocCode::fromLabel($raw);
+
+            return $code !== '' ? $code : 'X';
+        }
+
+        $sanitized = preg_replace('/[^A-Z0-9]/', '', strtoupper($raw)) ?? '';
 
         return $sanitized !== '' ? $sanitized : 'X';
     }
 
     /**
-     * Prefer the form field value; fall back to the submitter's synced Entra / profile department.
+     * Prefer the form field value; else submitter display department (own or inherited up the manager chain).
      *
      * @param  array<string, mixed>  $values
      */
@@ -102,7 +115,34 @@ final class EApprovalDocumentSequenceService
             return '';
         }
 
-        return trim((string) ($submitter->department ?? ''));
+        $this->departmentDisplay->warm(collect([$submitter]));
+        $resolved = $this->departmentDisplay->resolve($submitter);
+
+        return (string) ($resolved['department_display'] ?? '');
+    }
+
+    /**
+     * Resolve subsidiary code from the submission (field name: subsidiary).
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveSubsidiary(array $values): string
+    {
+        $fromForm = trim((string) ($values['subsidiary'] ?? ''));
+        if ($fromForm !== '') {
+            return $fromForm;
+        }
+
+        foreach ($values as $key => $value) {
+            if (strcasecmp((string) $key, 'subsidiary') === 0) {
+                $candidate = trim((string) $value);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**

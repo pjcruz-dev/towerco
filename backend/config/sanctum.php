@@ -13,7 +13,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Requests from the following domains / hosts will receive stateful API
-    | authentication cookies. TowerOS merges tenant hostnames from the central
+    | authentication cookies. INFRA SUITE merges tenant hostnames from the central
     | database at runtime (see SanctumStatefulDomainResolver). Use
     | SANCTUM_STATEFUL_DOMAINS only for optional extras (platform console, etc.).
     |

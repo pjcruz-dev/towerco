@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
+import { LayoutDashboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
@@ -15,10 +17,31 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
+import { useQuery } from "@tanstack/react-query";
+
+import {
+  fetchGateApprovalsAwaitingMeCount,
+  GATE_APPROVALS_AWAITING_ME_COUNT_QUERY_KEY,
+} from "@/lib/api/modules/rollout-api";
+import {
+  EAPPROVAL_FORM_WORKSPACES_QUERY_KEY,
+  fetchEApprovalFormWorkspaces,
+} from "@/lib/api/modules/e-approval-api";
+import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
+import { useProcurementPlanFeatures } from "@/hooks/use-procurement-plan-features";
 import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
+import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
+import { workspaceNavGroups } from "@/lib/navigation/workspace-nav-config";
+import {
+  isTenantModuleEnabled,
+  notificationsModuleEnabled,
+  resolveEnabledModulesForUser,
+} from "@/lib/tenant/enabled-modules";
+import { hasPermission, permissions } from "@/lib/rbac/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 
 type SubNav = SidebarSubNavItem & { permissions: string[]; section?: string };
 
@@ -65,7 +88,7 @@ function SidebarNavLink({
         isActive={active}
         className={navButtonClass}
       >
-        <Icon className="size-4" />
+        <Icon className="h-4 w-4" />
         <span>{title}</span>
         {badge !== undefined && badge > 0 ? (
           <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar-primary-foreground group-data-[collapsible=icon]:hidden">
@@ -79,8 +102,128 @@ function SidebarNavLink({
 
 export function AppSidebar() {
   const searchParams = useSearchParams();
-  const tourActive = isEApprovalTourActive(searchParams) || isTicketingTourActive(searchParams);
-  const { groups: groupsWithBadges, notificationUnread } = useWorkspaceNavGroups();
+  const tourActive =
+    isEApprovalTourActive(searchParams) ||
+    isTicketingTourActive(searchParams) ||
+    isDocExtractTourActive(searchParams);
+  const user = useAuthStore((state) => state.user);
+  const activeTenantId = useAuthStore((state) => state.activeTenantId);
+  const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
+
+  const scopedUser = useMemo(() => {
+    if (!user || !activeTenantId) {
+      return user;
+    }
+    return { ...user, permissions: effectivePermissions() };
+  }, [activeTenantId, effectivePermissions, user]);
+
+  const enabledModules = useMemo(
+    () => resolveEnabledModulesForUser(user, activeTenantId),
+    [activeTenantId, user],
+  );
+  const procurementModuleEnabled = isTenantModuleEnabled(enabledModules, "procurement_one");
+  const procurementPlanQuery = useProcurementPlanFeatures({ enabled: procurementModuleEnabled });
+  const procurementPlanFeatures = procurementModuleEnabled ? procurementPlanQuery.data : null;
+
+  const groups = useMemo(() => {
+    const can = (perms: string[]) => hasPermission(scopedUser, perms);
+    return workspaceNavGroups
+      .map((group) => ({
+        group: group.group,
+        items: filterTop(
+          filterByTenantModules(group.items, enabledModules),
+          can,
+          enabledModules,
+          procurementPlanFeatures,
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [enabledModules, procurementPlanFeatures, scopedUser]);
+
+  const canViewNotifications = useMemo(
+    () =>
+      notificationsModuleEnabled(enabledModules) &&
+      (hasPermission(scopedUser, [permissions.eApprovalView]) ||
+        hasPermission(scopedUser, [permissions.rolloutView]) ||
+        hasPermission(scopedUser, [permissions.rolloutGateApprove])),
+    [enabledModules, scopedUser],
+  );
+  const unreadQuery = useTenantNotificationUnreadCount(canViewNotifications);
+  const notificationUnread = unreadQuery.data ?? 0;
+
+  const canViewGateApprovals = useMemo(
+    () =>
+      hasPermission(scopedUser, [permissions.rolloutView]) ||
+      hasPermission(scopedUser, [permissions.rolloutGateApprove]),
+    [scopedUser],
+  );
+  const gateAwaitingQuery = useQuery({
+    queryKey: [...GATE_APPROVALS_AWAITING_ME_COUNT_QUERY_KEY],
+    queryFn: fetchGateApprovalsAwaitingMeCount,
+    enabled: canViewGateApprovals,
+    staleTime: 30_000,
+    // No background polling: rollout Echo events invalidate the "project-one/gate-approvals"
+    // prefix (this key included) and we still refetch on window focus.
+    refetchOnWindowFocus: true,
+  });
+  const gateApprovalsAwaitingMe = gateAwaitingQuery.data ?? 0;
+
+  const canViewEApproval = useMemo(
+    () => hasPermission(scopedUser, [permissions.eApprovalView]),
+    [scopedUser],
+  );
+  const workspacesQuery = useQuery({
+    queryKey: [...EAPPROVAL_FORM_WORKSPACES_QUERY_KEY],
+    queryFn: fetchEApprovalFormWorkspaces,
+    enabled: canViewEApproval,
+    staleTime: 60_000,
+  });
+
+  const groupsWithBadges = useMemo(() => {
+    const workspaceTopLevelItems: Array<{
+      title: string;
+      href: string;
+      icon: LucideIcon;
+    }> =
+      workspacesQuery.data?.map((workspace) => ({
+        title: workspace.title,
+        href: `/e-approval/w/${workspace.slug}`,
+        icon: LayoutDashboard,
+      })) ?? [];
+
+    return groups.map((group) => {
+      let items = group.items.map((item) => {
+        if (!item.items) {
+          return item;
+        }
+
+        if (item.title !== "Project-One" || gateApprovalsAwaitingMe <= 0) {
+          return item;
+        }
+
+        return {
+          ...item,
+          items: item.items.map((sub) =>
+            sub.href.startsWith("/project-one/gate-approvals")
+              ? { ...sub, badge: gateApprovalsAwaitingMe }
+              : sub,
+          ),
+        };
+      });
+
+      if (group.group === "Operations" && workspaceTopLevelItems.length > 0) {
+        const eApprovalIndex = items.findIndex((item) => item.title === "E-Forms");
+        const insertAt = eApprovalIndex >= 0 ? eApprovalIndex : items.length;
+        items = [
+          ...items.slice(0, insertAt),
+          ...workspaceTopLevelItems,
+          ...items.slice(insertAt),
+        ];
+      }
+
+      return { ...group, items };
+    });
+  }, [gateApprovalsAwaitingMe, groups, workspacesQuery.data]);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">
@@ -90,31 +233,34 @@ export function AppSidebar() {
       <SidebarContent className="scrollbar-hide gap-1 px-2 py-2">
         {groupsWithBadges.map((group) => (
           <div key={group.group} className="mt-2 first:mt-0">
-            <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
+            <div className="px-3 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
               {group.group}
             </div>
             <SidebarMenu>
               {group.items.map((item) =>
                 item.items ? (
                   <SidebarNavGroup
-                    key={`${item.module ?? "nav"}:${item.title}`}
+                    key={item.title}
                     title={item.title}
                     icon={item.icon}
                     href={resolveNavGroupHomeHref(item.items as SubNav[])}
                     dataHelp={
                       item.title === "Settings"
                         ? "ea-nav-settings"
-                        : item.title === "E-Approval"
+                        : item.title === "E-Forms"
                           ? "ea-nav-e-approval"
                           : item.title === "Ticketing"
                             ? "tk-nav-ticketing"
-                            : undefined
+                            : item.title === "DocExtract"
+                              ? "dx-nav-doc-extract"
+                              : undefined
                     }
                     forceOpen={
                       tourActive &&
                       (item.title === "Settings" ||
-                        item.title === "E-Approval" ||
-                        item.title === "Ticketing")
+                        item.title === "E-Forms" ||
+                        item.title === "Ticketing" ||
+                        item.title === "DocExtract")
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {
                       const pathOnly = href.split("?")[0] ?? href;
@@ -156,7 +302,18 @@ export function AppSidebar() {
                                     tourNav: "/ticketing/settings",
                                   }
                                 : null;
-                      const tourNavMeta = eApprovalNav ?? ticketingNav;
+                      const docExtractNav =
+                        pathOnly === "/doc-extract"
+                          ? { dataHelp: "dx-nav-doc-extract-batches", tourNav: "/doc-extract" }
+                          : pathOnly === "/doc-extract/new"
+                            ? { dataHelp: "dx-nav-doc-extract-new", tourNav: "/doc-extract/new" }
+                            : pathOnly === "/doc-extract/templates"
+                              ? {
+                                  dataHelp: "dx-nav-doc-extract-templates",
+                                  tourNav: "/doc-extract/templates",
+                                }
+                              : null;
+                      const tourNavMeta = eApprovalNav ?? ticketingNav ?? docExtractNav;
                       return {
                         title,
                         href,
@@ -168,17 +325,16 @@ export function AppSidebar() {
                       };
                     })}
                     buttonClassName={navButtonClass}
-                  />
-                ) : item.href ? (
+                  />                ) : (
                   <SidebarNavLink
-                    key={`${item.module ?? "nav"}:${item.title}:${item.href}`}
+                    key={item.title}
                     title={item.title}
-                    href={item.href}
+                    href={item.href!}
                     exact={item.exact}
                     icon={item.icon}
                     badge={item.title === "Notifications" ? notificationUnread : undefined}
                   />
-                ) : null,
+                ),
               )}
             </SidebarMenu>
           </div>

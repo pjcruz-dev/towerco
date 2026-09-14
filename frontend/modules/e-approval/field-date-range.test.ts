@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dateRangeHasValue,
   dateRangeIsComplete,
+  formatDateRangeDisplay,
   parseDateRangeValue,
   serializeDateRangeValue,
   validateDateRangeValue,
@@ -25,6 +26,14 @@ describe("date range field helpers", () => {
       from: "2026-01-01",
       to: "2026-01-05",
     });
+  });
+
+  it("formats ranges for display", () => {
+    expect(formatDateRangeDisplay('{"from":"2026-09-22","to":"2026-10-20"}')).toBe(
+      "2026-09-22 – 2026-10-20",
+    );
+    expect(formatDateRangeDisplay("")).toBe("—");
+    expect(formatDateRangeDisplay('{"from":"2026-09-22","to":""}')).toBe("2026-09-22 – —");
   });
 
   it("validates completeness and order", () => {

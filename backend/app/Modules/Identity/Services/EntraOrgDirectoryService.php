@@ -17,6 +17,7 @@ final class EntraOrgDirectoryService
     public function __construct(
         private readonly AzureGraphService $delegatedGraph,
         private readonly EntraGraphAppService $appGraph,
+        private readonly EntraUserAvatarService $avatars,
     ) {}
 
     public function syncFromDelegatedToken(TenantUser $user, string $accessToken): void
@@ -54,11 +55,10 @@ final class EntraOrgDirectoryService
 
         $user->entra_org_synced_at = now();
         $user->save();
-        $this->propagateDepartmentsFromManagers();
     }
 
     /**
-     * Match TowerOS users to Entra and copy manager / job title / department.
+     * Match INFRA SUITE users to Entra and copy manager / job title / department.
      *
      * @return array{
      *     ok: bool,
@@ -70,7 +70,7 @@ final class EntraOrgDirectoryService
      *     skipped_unlicensed: int
      * }
      */
-    public function syncDirectoryFromApp(int $limit = 200): array
+    public function syncDirectoryFromApp(int $limit = 200, bool $syncPhotos = true): array
     {
         if (! $this->hasOrgColumns()) {
             return $this->syncFailure(
@@ -117,6 +117,8 @@ final class EntraOrgDirectoryService
         }
         $users = TenantUser::query()
             ->where('is_active', true)
+            ->orderByRaw('entra_org_synced_at IS NOT NULL')
+            ->orderBy('entra_org_synced_at')
             ->orderBy('name')
             ->limit(max(1, min(500, $limit)))
             ->get();
@@ -146,6 +148,13 @@ final class EntraOrgDirectoryService
                 $this->applyProfile($user, $found->person, $skuMap);
                 $hadManager = $user->manager_id;
                 $this->applyManager($user, $found->manager, $skuMap, $token);
+                if (
+                    $syncPhotos
+                    && $found->person->entraId !== ''
+                    && $this->shouldRefreshAvatar($user)
+                ) {
+                    $this->avatars->syncPhotoFromGraph($user, $token, $found->person->entraId);
+                }
                 $user->entra_org_synced_at = now();
                 $user->save();
                 $updated++;
@@ -164,16 +173,11 @@ final class EntraOrgDirectoryService
             }
         }
 
-        $inherited = $this->propagateDepartmentsFromManagers();
-
         $message = $updated === 0
             ? 'No '.$this->workspaceLabel().' users matched Microsoft Entra mailboxes.'
             : "Updated {$updated} user".($updated === 1 ? '' : 's').' from Microsoft Entra.';
         if ($skippedUnlicensed > 0) {
             $message .= ' Hidden '.$skippedUnlicensed.' unlicensed account'.($skippedUnlicensed === 1 ? '' : 's').' from the organization chart.';
-        }
-        if ($inherited > 0) {
-            $message .= ' Inherited department for '.$inherited.' report'.($inherited === 1 ? '' : 's').' from their manager.';
         }
 
         return [
@@ -188,6 +192,74 @@ final class EntraOrgDirectoryService
     }
 
     /**
+     * Fast checks used before queueing a long-running sync (avoids 504 on gateway).
+     *
+     * @return array{
+     *     ok: bool,
+     *     message: string,
+     *     code: string,
+     *     scanned: int,
+     *     updated: int,
+     *     managers_linked: int,
+     *     skipped_unlicensed: int
+     * }|null Null means preflight passed and sync may start.
+     */
+    public function preflightSyncOrFailure(): ?array
+    {
+        if (! $this->hasOrgColumns()) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_GRAPH_ERROR,
+                'Organization fields are not migrated on this tenant database yet.',
+            );
+        }
+
+        if (! $this->appGraph->isConfigured()) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_NOT_CONFIGURED,
+                'Microsoft Entra is not configured for this organization. Add the app client ID and secret under Administration → Sign-in & security.',
+            );
+        }
+
+        $directory = $this->appGraph->directoryIdentifier();
+        if ($directory === '' || $directory === 'common' || $directory === 'organizations' || $directory === 'consumers') {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_DIRECTORY_COMMON,
+                'Set Directory ID to your Entra tenant GUID (not “common”). Client-credential Graph calls require the directory ID.',
+            );
+        }
+
+        try {
+            $token = $this->appGraph->getAppAccessToken();
+        } catch (\Throwable $exception) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_TOKEN_FAILED,
+                'Could not reach Microsoft login to get an app token. '.$exception->getMessage(),
+            );
+        }
+        if ($token === null) {
+            return $this->syncFailure(
+                EntraManagerLookupResult::CODE_TOKEN_FAILED,
+                $this->appGraph->tokenFailureMessage()
+                    ?? 'Could not get an app token from Microsoft. Check the client secret and Directory ID.',
+            );
+        }
+
+        return null;
+    }
+
+    private function shouldRefreshAvatar(TenantUser $user): bool
+    {
+        if (! $this->avatars->hasAvatarColumns()) {
+            return false;
+        }
+
+        $path = is_string($user->avatar_path ?? null) ? trim((string) $user->avatar_path) : '';
+
+        // Always refresh missing photos; skip existing ones on bulk sync to avoid gateway timeouts.
+        return $path === '';
+    }
+
+    /**
      * @return array{synced_at: string|null, people: list<array<string, mixed>>}
      */
     public function orgChart(): array
@@ -198,6 +270,7 @@ final class EntraOrgDirectoryService
 
         $query = TenantUser::query()
             ->where('is_active', true)
+            ->with('roles')
             ->orderBy('name');
         $this->constrainLicensedOrgUsers($query);
 
@@ -215,19 +288,43 @@ final class EntraOrgDirectoryService
             ...($this->hasLicenseColumns() ? ['entra_license_label', 'entra_license_names'] : []),
             ...($this->hasManagerLicenseColumns() ? ['entra_manager_licensed', 'entra_manager_license_label'] : []),
             ...($this->hasManagerParentColumn() ? ['entra_manager_parent_id'] : []),
+            ...($this->avatars->hasAvatarColumns() ? ['avatar_path'] : []),
         ]);
 
         $ids = $users->pluck('id')->map(static fn ($id): string => (string) $id)->all();
         $departmentsById = [];
+        $managerIdById = [];
         if ($this->hasDepartmentColumn()) {
-            $departmentsById = $users
-                ->mapWithKeys(static function (TenantUser $user): array {
-                    $dept = is_string($user->department) ? trim($user->department) : '';
-
-                    return [(string) $user->id => $dept !== '' ? $dept : null];
-                })
-                ->all();
+            foreach ($users as $user) {
+                $id = (string) $user->id;
+                $dept = is_string($user->department) ? trim($user->department) : '';
+                $departmentsById[$id] = $dept !== '' ? $dept : null;
+                $managerIdById[$id] = $user->manager_id !== null ? (string) $user->manager_id : null;
+            }
         }
+
+        $resolveDisplayDepartment = function (string $userId, ?string $entraManagerDepartment) use ($departmentsById, $managerIdById): ?string {
+            $seen = [];
+            $current = $userId;
+            for ($depth = 0; $depth < 20; $depth++) {
+                if (isset($seen[$current])) {
+                    break;
+                }
+                $seen[$current] = true;
+                $dept = $departmentsById[$current] ?? null;
+                if (is_string($dept) && trim($dept) !== '') {
+                    return trim($dept);
+                }
+                $managerId = $managerIdById[$current] ?? null;
+                if ($managerId === null || $managerId === '') {
+                    break;
+                }
+                $current = $managerId;
+            }
+            $fallback = is_string($entraManagerDepartment) ? trim($entraManagerDepartment) : '';
+
+            return $fallback !== '' ? $fallback : null;
+        };
 
         $reportQuery = TenantUser::query()
             ->where('is_active', true)
@@ -248,7 +345,7 @@ final class EntraOrgDirectoryService
             $syncedAt = Carbon::parse($latestSync)->toIso8601String();
         }
 
-        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts, $departmentsById): array {
+        $people = $users->map(function (TenantUser $user) use ($ids, $reportCounts, $departmentsById, $resolveDisplayDepartment): array {
             $managerId = $user->manager_id !== null ? (string) $user->manager_id : null;
             $managerInTenant = $managerId !== null && in_array($managerId, $ids, true);
             $showExternalManager = $this->externalManagerVisible($user, $managerInTenant);
@@ -260,12 +357,24 @@ final class EntraOrgDirectoryService
                 $managerDepartment = $this->clip($user->entra_manager_department, 180);
             }
 
+            $ownDepartment = $this->hasDepartmentColumn()
+                ? (is_string($user->department) && trim($user->department) !== '' ? trim($user->department) : null)
+                : null;
+            $entraManagerDepartment = $this->hasManagerDepartmentColumn()
+                ? $this->clip($user->entra_manager_department, 180)
+                : null;
+            $displayDepartment = $this->hasDepartmentColumn()
+                ? $resolveDisplayDepartment((string) $user->id, $entraManagerDepartment)
+                : null;
+
             return [
                 'id' => (string) $user->id,
                 'name' => (string) $user->name,
                 'email' => (string) $user->email,
                 'job_title' => $user->job_title,
-                'department' => $this->hasDepartmentColumn() ? $user->department : null,
+                'department' => $displayDepartment,
+                'department_own' => $ownDepartment,
+                'department_inherited' => $ownDepartment === null && $displayDepartment !== null,
                 'manager_id' => $managerInTenant ? $managerId : null,
                 'manager_name' => $showExternalManager
                     ? ($user->entra_manager_name ?: $user->entra_manager_email)
@@ -280,6 +389,8 @@ final class EntraOrgDirectoryService
                 'direct_report_count' => (int) ($reportCounts[(string) $user->id] ?? 0),
                 'license_label' => $this->hasLicenseColumns() ? $user->entra_license_label : null,
                 'license_names' => $this->hasLicenseColumns() ? $this->licenseNames($user) : [],
+                'roles' => $user->getRoleNames()->values()->all(),
+                'photo_url' => $this->avatars->presentAvatarUrl($user),
             ];
         })->values()->all();
 
@@ -300,8 +411,11 @@ final class EntraOrgDirectoryService
         if ($person->jobTitle !== null) {
             $user->job_title = $this->clip($person->jobTitle, 180);
         }
-        if ($person->department !== null && $this->hasDepartmentColumn()) {
-            $user->department = $this->clip($person->department, 180);
+        // Entra department is source of truth: empty/null clears a prior value (e.g. stale QMS).
+        if ($this->hasDepartmentColumn()) {
+            $user->department = $person->department !== null
+                ? $this->clip($person->department, 180)
+                : null;
         }
         if (trim((string) $user->name) === '' || $user->name === $user->email) {
             $user->name = $this->clip($person->displayName, 255) ?? $person->email;
@@ -352,7 +466,6 @@ final class EntraOrgDirectoryService
         if ($managerUser === null || (string) $managerUser->id === (string) $user->id) {
             $user->manager_id = null;
             $this->linkEntraOnlyManagerParent($user, $manager, $token);
-            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -361,7 +474,6 @@ final class EntraOrgDirectoryService
 
         if ($this->wouldCreateCycle((string) $user->id, (string) $managerUser->id)) {
             $user->manager_id = null;
-            $this->inheritDepartmentIfEmpty($user, $manager, null);
 
             return;
         }
@@ -378,106 +490,6 @@ final class EntraOrgDirectoryService
                 ]);
             }
         }
-
-        $this->inheritDepartmentIfEmpty($user, $manager, $managerUser);
-    }
-
-    /**
-     * When Entra has no department on the report, copy the manager's department
-     * so operators do not need every employee populated in Active Directory.
-     */
-    private function inheritDepartmentIfEmpty(
-        TenantUser $user,
-        ?EntraDirectoryPerson $manager,
-        ?TenantUser $managerUser,
-    ): void {
-        if (! $this->hasDepartmentColumn()) {
-            return;
-        }
-        if ($this->clip($user->department, 180) !== null) {
-            return;
-        }
-
-        $fromGraph = $manager !== null ? $this->clip($manager->department, 180) : null;
-        if ($fromGraph !== null) {
-            $user->department = $fromGraph;
-
-            return;
-        }
-
-        if ($managerUser !== null) {
-            $fromManagerUser = $this->clip($managerUser->department, 180);
-            if ($fromManagerUser !== null) {
-                $user->department = $fromManagerUser;
-            }
-        }
-    }
-
-    /**
-     * Fill empty departments from TowerOS manager chain (handles sync order + depth).
-     *
-     * @return int Number of users updated
-     */
-    private function propagateDepartmentsFromManagers(): int
-    {
-        if (! $this->hasDepartmentColumn()) {
-            return 0;
-        }
-
-        $total = 0;
-        for ($pass = 0; $pass < 8; $pass++) {
-            $changed = 0;
-            $reports = TenantUser::query()
-                ->where('is_active', true)
-                ->whereNotNull('manager_id')
-                ->where(static function ($query): void {
-                    $query->whereNull('department')->orWhere('department', '');
-                })
-                ->get(['id', 'manager_id', 'department']);
-
-            foreach ($reports as $report) {
-                $managerDept = TenantUser::query()
-                    ->where('id', $report->manager_id)
-                    ->value('department');
-                $clipped = $this->clip(is_string($managerDept) ? $managerDept : null, 180);
-                if ($clipped === null) {
-                    continue;
-                }
-                $report->department = $clipped;
-                $report->save();
-                $changed++;
-            }
-
-            // Entra-only managers: use stored Graph manager department.
-            if ($this->hasManagerDepartmentColumn()) {
-                $externalReports = TenantUser::query()
-                    ->where('is_active', true)
-                    ->whereNull('manager_id')
-                    ->whereNotNull('entra_manager_department')
-                    ->where('entra_manager_department', '!=', '')
-                    ->where(static function ($query): void {
-                        $query->whereNull('department')->orWhere('department', '');
-                    })
-                    ->get(['id', 'department', 'entra_manager_department']);
-
-                foreach ($externalReports as $report) {
-                    $clipped = $this->clip($report->entra_manager_department, 180);
-                    if ($clipped === null) {
-                        continue;
-                    }
-                    $report->department = $clipped;
-                    $report->save();
-                    $changed++;
-                }
-            }
-
-            $total += $changed;
-            if ($changed === 0) {
-                break;
-            }
-        }
-
-        return $total;
     }
 
     private function storeManagerDepartment(TenantUser $user, EntraDirectoryPerson $manager): void

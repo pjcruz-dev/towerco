@@ -8,7 +8,7 @@ cd /d "%~dp0\.."
 
 echo.
 
-echo TowerOS DEV FRESH RESET
+echo INFRA SUITE DEV FRESH RESET
 
 echo ======================
 
@@ -22,7 +22,7 @@ echo   - Published playbooks v1 + v2
 
 echo   - Policy bundles: towerco-default + towerco-full-gate-approval
 
-echo   - Helper center operational acronyms (TowerOS defaults)
+echo   - Helper center operational acronyms (INFRA SUITE defaults)
 
 echo   - Passport personal access client
 

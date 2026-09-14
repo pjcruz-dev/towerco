@@ -1,4 +1,4 @@
-# Local-only HTTP timing for TowerOS API (no auth required endpoints).
+# Local-only HTTP timing for INFRA SUITE API (no auth required endpoints).
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/profile-local-benchmark.ps1
 # Optional: -ApiBase http://127.0.0.1:8000 -WebBase http://127.0.0.1:80 -Runs 5
 
@@ -42,7 +42,7 @@ function Measure-Url {
     }
 }
 
-Write-Host "TowerOS local benchmark (median of $Runs runs)" -ForegroundColor Cyan
+Write-Host "INFRA SUITE local benchmark (median of $Runs runs)" -ForegroundColor Cyan
 Write-Host "API: $ApiBase"
 Write-Host "Web: $WebBase"
 Write-Host ""

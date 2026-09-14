@@ -1,5 +1,5 @@
 ---
-title: Track an E-Approval submission
+title: Track an E-Forms submission
 slug: e-approval-track-submission
 module: e_approval
 audience: tenant_user
@@ -13,18 +13,18 @@ related_routes:
 last_reviewed: 2026-07-20
 ---
 
-# Track an E-Approval submission
+# Track an E-Forms submission
 
 Use this when you already submitted a request and want to check status, comments, or progress.
 
 ## Prerequisites
 
-- E-Approval module is enabled.
+- E-Forms module is enabled.
 - You have `e_approval:submissions:view`.
 
 ## Steps
 
-1. Open **E-Approval → Submissions**.
+1. Open **E-Forms → Submissions**.
 2. Find your request by document number, form name, or status (draft, pending, approved, returned).
 3. Open the submission to review workflow progress, approver comments, and attachments.
 4. Optional — check **Notifications** for approval updates on requests you submitted.
@@ -40,6 +40,6 @@ You can see the current status and next step for your submission without startin
 
 ## Related workflows
 
-- Create an E-Approval request
+- Create an E-Forms request
 - Submit a Document Approval request
-- Form not listed in E-Approval
+- Form not listed in E-Forms

@@ -1,4 +1,4 @@
-# TowerOS scenario test runner (Windows PowerShell)
+# INFRA SUITE scenario test runner (Windows PowerShell)
 #
 # Usage:
 #   .\scripts\test.ps1                    # smoke (fast sanity)
@@ -27,7 +27,7 @@ $Scenarios = [ordered]@{
     smoke           = @{ Label = "Smoke (AdminOne + Http + Workspace)"; Testsuite = "Smoke" }
     team-access     = @{ Label = "Team & Access / IAM"; Testsuite = "TeamAccess" }
     admin           = @{ Label = "Team & Access (alias)"; Testsuite = "TeamAccess" }
-    e-approval      = @{ Label = "E-Approval"; Testsuite = "EApproval" }
+    e-approval      = @{ Label = "E-Forms"; Testsuite = "EApproval" }
     rollout         = @{ Label = "Rollout / Project-One gates"; Testsuite = "Rollout" }
     procurement     = @{ Label = "Procurement-One"; Testsuite = "ProcurementOne" }
     documents       = @{ Label = "Documents"; Testsuite = "Documents" }

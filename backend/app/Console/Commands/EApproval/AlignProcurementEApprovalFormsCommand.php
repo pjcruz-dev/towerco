@@ -35,7 +35,7 @@ final class AlignProcurementEApprovalFormsCommand extends Command
         {--domain= : Tenant domain hostname}
         {--all : Run for every tenant}
         {--dry-run : Preview changes without writing}
-        {--form= : Optional E-Approval form UUID}
+        {--form= : Optional E-Forms form UUID}
     ';
 
     protected $description = 'Remove obsolete PR/PO form fields (header links, per-submit approvers) and prefer Workflow tab steps.';
@@ -76,7 +76,7 @@ final class AlignProcurementEApprovalFormsCommand extends Command
 
         $this->info($dryRun
             ? 'Dry run complete. Re-run without --dry-run to apply changes.'
-            : 'Procurement form alignment complete. Publish forms from E-Approval if they were draft.');
+            : 'Procurement form alignment complete. Publish forms from E-Forms if they were draft.');
 
         return self::SUCCESS;
     }

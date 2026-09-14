@@ -463,17 +463,6 @@ function LoginPageContent() {
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           This organization requires <span className="font-medium text-foreground">Sign in with Microsoft</span>.
           After your first sign-in, you can add a fingerprint under My security → Passkeys for next time.
-          Password sign-in is only for designated break-glass administrator accounts.
-        </p>
-      ) : null}
-
-      {showBreakGlassLogin && passwordLoginRestricted ? (
-        <p className="mt-4 text-xs text-muted-foreground">
-          Break-glass sign-in: use the bootstrap administrator account (for example{" "}
-          <span className="font-mono text-foreground">
-            admin@{tenantDomain ?? browserHostname ?? "your-org.localhost"}
-          </span>
-          ). Other accounts must use Microsoft.
         </p>
       ) : null}
 
@@ -517,7 +506,7 @@ function LoginPageContent() {
             disabled={microsoftRedirecting}
             onClick={() => setShowBreakGlassLogin(true)}
           >
-            Break-glass administrator sign-in
+            Use password instead
           </Button>
         </div>
       ) : (

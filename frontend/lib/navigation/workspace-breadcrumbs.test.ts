@@ -25,8 +25,18 @@ describe("resolveWorkspaceBreadcrumbs", () => {
 
   it("maps e-approval routes", () => {
     expect(resolveWorkspaceBreadcrumbs("/e-approval/approvals")).toEqual([
-      { label: "E-Approval", href: "/e-approval" },
+      { label: "E-Forms", href: "/e-approval" },
       { label: "Approvals" },
+    ]);
+  });
+
+  it("maps doc-extract batch detail without linking to /doc-extract/batches", () => {
+    expect(
+      resolveWorkspaceBreadcrumbs("/doc-extract/batches/01a084e1-1d12-72a1-b080-f7b4849fed82"),
+    ).toEqual([
+      { label: "DocExtract", href: "/doc-extract" },
+      { label: "Batches", href: "/doc-extract" },
+      { label: "Detail" },
     ]);
   });
 

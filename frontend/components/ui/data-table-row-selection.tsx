@@ -13,21 +13,21 @@ export function createRowSelectionColumn<TData>(): ColumnDef<TData, unknown> {
     id: "select",
     enableSorting: false,
     enableHiding: false,
-    header: ({ table }: { table: Table<TData> }) => (
-      <Checkbox
-        className="size-4"
-        aria-label="Select all rows on this page"
-        checked={
-          table.getIsAllPageRowsSelected()
-            ? true
-            : table.getIsSomePageRowsSelected()
-              ? "indeterminate"
-              : false
-        }
-        onCheckedChange={(v) => table.toggleAllPageRowsSelected(v === true)}
-        disabled={!table.getRowModel().rows.some((row) => row.getCanSelect())}
-      />
-    ),
+    header: ({ table }: { table: Table<TData> }) => {
+      const all = table.getIsAllPageRowsSelected();
+      const some = table.getIsSomePageRowsSelected();
+      return (
+        <Checkbox
+          className="size-4"
+          aria-label="Select all rows on this page"
+          checked={all}
+          // Base UI exposes indeterminate via data attribute / aria; mirror users-table pattern.
+          data-indeterminate={some && !all ? "" : undefined}
+          onCheckedChange={(v) => table.toggleAllPageRowsSelected(v === true)}
+          disabled={!table.getRowModel().rows.some((row) => row.getCanSelect())}
+        />
+      );
+    },
     cell: ({ row }: { row: Row<TData> }) => (
       <Checkbox
         className="size-4"

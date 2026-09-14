@@ -1,4 +1,4 @@
-# TowerOS hardening — Phase 4
+# INFRA SUITE hardening — Phase 4
 
 **Status:** Phase 4 complete (runbooks + workflow safeguards; apply AWS settings when infra exists)  
 **Scope:** Make releases safer: ECS circuit breaker, pre-migrate DB snapshots, emergency rollback workflow, on-call drill.  
@@ -154,7 +154,7 @@ Wire CloudWatch alarms when AWS infra is live (Phase 3 enablement).
 ## What Phase 4 does **not** do
 
 - Does not provision Terraform / VPC (still a separate infra deliverable)  
-- Does not put a Deploy button inside TowerOS UI  
+- Does not put a Deploy button inside INFRA SUITE UI  
 - Does not auto-restore databases without human break-glass  
 
 ---

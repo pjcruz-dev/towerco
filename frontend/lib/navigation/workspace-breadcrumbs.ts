@@ -1,22 +1,45 @@
+import {
+  FINANCE_ONE_HOME,
+  FINANCE_ONE_PROCUREMENT_SEGMENTS,
+} from "@/lib/navigation/finance-one-routes";
+
 export type WorkspaceBreadcrumb = {
   label: string;
   href?: string;
 };
 
 const MODULE_ROOTS: Record<string, { label: string; href: string }> = {
-  "e-approval": { label: "E-Approval", href: "/e-approval" },
+  "project-one": { label: "Project-One", href: "/project-one" },
+  "tower-one": { label: "TOWER-ONE", href: "/tower-one" },
+  "fiber-one": { label: "FIBER-ONE", href: "/fiber-one" },
+  "asset-one": { label: "ASSET-ONE", href: "/asset-one" },
+  "e-approval": { label: "E-Forms", href: "/e-approval" },
+  "doc-extract": { label: "DocExtract", href: "/doc-extract" },
   "dynamic-entities": { label: "Dynamic Entities", href: "/dynamic-entities" },
-  ticketing: { label: "Ticketing", href: "/ticketing" },
+  procurement: { label: "Procurement-One", href: "/procurement" },
+  finance: { label: "Finance-One", href: FINANCE_ONE_HOME },
 };
 
 const SEGMENT_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   notifications: "Notifications",
+  sites: "Sites",
+  rollouts: "Rollouts",
+  "rollout-playbook": "Playbook",
+  "public-holidays": "Holidays",
+  "gate-approvals": "Gate approvals",
+  projects: "Projects",
+  approvals: "Approvals",
+  towers: "Towers",
+  routes: "Fiber routes",
+  assets: "Assets",
+  gis: "GIS",
   users: "Users",
   roles: "Roles & permissions",
   billing: "Billing",
   settings: "Settings",
   account: "Account",
+  exports: "My exports",
   security: "My security",
   admin: "Administration",
   kpi: "KPI & SLA",
@@ -26,12 +49,20 @@ const SEGMENT_LABELS: Record<string, string> = {
   audit: "Audit log",
   "approval-policies": "Approval policies",
   profile: "My profile",
-  reports: "Reports",
+  procurement: "Procurement-One",
+  finance: "Finance-One",
+  budget: "Budget & encumbrance",
+  "ap-invoices": "AP invoices",
+  payments: "Payment tracking",
+  contracts: "Vendor contracts",
+  reports: "Reports & exports",
   request: "New request",
   "master-data": "Master data",
   new: "New",
   create: "New form",
-  tickets: "Tickets",
+  batch: "Batch",
+  batches: "Batches",
+  "doc-extract": "DocExtract",
   fields: "Manage Fields",
   "field-groups": "Field Groups",
   "executive-dashboard": "Executive Dashboard",
@@ -39,16 +70,17 @@ const SEGMENT_LABELS: Record<string, string> = {
 };
 
 const NEW_SEGMENT_LABELS: Record<string, string> = {
+  "project-one/approvals/new": "New approval",
   "e-approval/submissions/new": "New request",
-  "ticketing/tickets/new": "New ticket",
+  "project-one/rollouts/batch/new": "New batch",
+  "project-one/projects/new": "New project",
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function formatSegment(segment: string): string {
   return segment
-    .split(/[-_]/)
-    .filter(Boolean)
+    .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
@@ -86,7 +118,7 @@ function pushPathSegments(parts: string[], startIndex: number, crumbs: Workspace
 
 /**
  * Resolves sidebar-aligned breadcrumbs: Module / Feature / Current.
- * Returns an empty array on shallow top-level pages (e.g. /dashboard).
+ * Returns an empty array on shallow top-level pages (e.g. /dashboard, /project-one).
  */
 export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcrumb[] {
   const normalizedPath = normalizePathname(pathname);
@@ -99,12 +131,47 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
   const root = parts[0]!;
   const moduleRoot = MODULE_ROOTS[root];
 
+  if (
+    root === "procurement" &&
+    parts[1] &&
+    FINANCE_ONE_PROCUREMENT_SEGMENTS.has(parts[1])
+  ) {
+    if (parts.length === 2) {
+      return [];
+    }
+
+    const crumbs: WorkspaceBreadcrumb[] = [{ label: "Finance-One", href: FINANCE_ONE_HOME }];
+    for (let index = 1; index < parts.length; index += 1) {
+      const segment = parts[index]!;
+      const isLast = index === parts.length - 1;
+      const pathPrefix = parts.slice(0, index + 1).join("/");
+      const label = labelForSegment(segment, pathPrefix, isLast);
+      const financePath = `/finance/${parts.slice(1, index + 1).join("/")}`;
+
+      crumbs.push({ label, href: isLast ? undefined : financePath });
+    }
+
+    return crumbs;
+  }
+
   if (moduleRoot) {
     if (parts.length === 1) {
       return [];
     }
 
     const crumbs: WorkspaceBreadcrumb[] = [{ label: moduleRoot.label, href: moduleRoot.href }];
+
+    // DocExtract list is /doc-extract (not /doc-extract/batches); skip the alias segment.
+    if (root === "doc-extract" && parts[1] === "batches") {
+      if (parts.length === 2) {
+        crumbs.push({ label: "Batches" });
+        return crumbs;
+      }
+      crumbs.push({ label: "Batches", href: "/doc-extract" });
+      pushPathSegments(parts, 2, crumbs);
+      return crumbs;
+    }
+
     pushPathSegments(parts, 1, crumbs);
     return crumbs;
   }
@@ -149,7 +216,7 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
     return crumbs;
   }
 
-  const shallowRoots = new Set(["dashboard", "notifications", "billing"]);
+  const shallowRoots = new Set(["dashboard", "notifications", "sites", "gis", "billing"]);
   if (parts.length === 1 && shallowRoots.has(root)) {
     return [];
   }

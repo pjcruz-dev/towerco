@@ -32,7 +32,7 @@ export function RequestFocusShell({
           )}
         >
           <div className="min-w-0">
-            <p className="text-xs font-medium text-muted-foreground">E-Approval</p>
+            <p className="text-xs font-medium text-muted-foreground">E-Forms</p>
             <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1">

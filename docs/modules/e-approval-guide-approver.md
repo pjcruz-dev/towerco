@@ -19,7 +19,7 @@ You need:
 
 - Access to your **company workspace**  
 - Your login (email + password, or **Sign in with Microsoft**)  
-- Permission to **approve** in E-Approval  
+- Permission to **approve** in E-Forms  
 - A saved **electronic signature** (before you can approve)
 
 Ask IT or your admin for your workspace login address if you are unsure.
@@ -32,7 +32,7 @@ Ask IT or your admin for your workspace login address if you are unsure.
 
 Approving **requires** a signature. Do this before your first approval.
 
-1. In the left sidebar, open **E-Approval → My E-Approval profile**.  
+1. In the left sidebar, open **E-Forms → My E-Forms profile**.  
 2. Open **My signature**.  
 3. Choose one method:
 
@@ -51,7 +51,7 @@ You can change your signature later on the same page.
 
 ## Step 2 — Open work waiting for you
 
-1. Go to **E-Approval → Approvals**.  
+1. Go to **E-Forms → Approvals**.  
 2. Use the **Awaiting me** filter (this is your inbox).  
 3. Or open an item from:
    - Header **Notifications** (bell)  
@@ -141,8 +141,8 @@ Email may also arrive when a new request is waiting for you (if enabled by your 
 
 ## Quick checklist
 
-- [ ] Save signature on **My E-Approval profile**  
-- [ ] Open **E-Approval → Approvals** (**Awaiting me**)  
+- [ ] Save signature on **My E-Forms profile**  
+- [ ] Open **E-Forms → Approvals** (**Awaiting me**)  
 - [ ] Open the request → review **Request** + attachments  
 - [ ] Check **Approvals** (workflow / waiting on you)  
 - [ ] **Decide** → **Approve** (or Reject / Request revision)  

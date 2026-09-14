@@ -323,7 +323,7 @@ export function PlatformAppMenuPageClient() {
             </a>
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Point DNS <span className="font-mono">appmenu</span> at the TowerOS web service and include
+            Point DNS <span className="font-mono">appmenu</span> at the INFRA SUITE web service and include
             that hostname on the TLS certificate (same as app/staging). Keep CORS covering that origin.
           </p>
         </div>

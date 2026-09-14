@@ -1,6 +1,6 @@
-# E-Approval — End-user guide
+# E-Forms — End-user guide
 
-A step-by-step guide for everyday users of TowerOS **E-Approval**: how to sign in, submit a request, track it, approve or reject it, and fix a request that was sent back.
+A step-by-step guide for everyday users of INFRA SUITE **E-Forms**: how to sign in, submit a request, track it, approve or reject it, and fix a request that was sent back.
 
 This guide is for **normal users** (requestors and approvers). It does **not** cover form building, workflows setup, or admin settings.
 
@@ -20,14 +20,14 @@ This guide is for **normal users** (requestors and approvers). It does **not** c
 |---------|------------------|
 | **Requestor** — I fill forms and send requests | Parts 1–6, then Parts 8–9 if needed |
 | **Approver** — I decide on requests | Parts 1–2, then Parts 5–7 |
-| **External / vendor** (no TowerOS login) | Part 10 |
+| **External / vendor** (no INFRA SUITE login) | Part 10 |
 | **Both** | Read the whole guide once |
 
 ---
 
-## What is E-Approval?
+## What is E-Forms?
 
-E-Approval is where your company files digital requests (forms), sends them through an approval chain, and keeps a record of decisions.
+E-Forms is where your company files digital requests (forms), sends them through an approval chain, and keeps a record of decisions.
 
 Typical uses include:
 
@@ -36,7 +36,7 @@ Typical uses include:
 - Document / ISO control forms  
 - Site or operations forms your admin published  
 
-You always work inside your **company workspace** in TowerOS (except public/external forms — see Part 10).
+You always work inside your **company workspace** in INFRA SUITE (except public/external forms — see Part 10).
 
 ---
 
@@ -44,9 +44,9 @@ You always work inside your **company workspace** in TowerOS (except public/exte
 
 You need:
 
-1. Your **TowerOS account** (email + password, Microsoft sign-in, or **passkey** if your company enabled it)  
+1. Your **INFRA SUITE account** (email + password, Microsoft sign-in, or **passkey** if your company enabled it)  
 2. The **website address** for your company (ask your admin if unsure)  
-3. Permission to use **E-Approval** (your admin assigns this)
+3. Permission to use **E-Forms** (your admin assigns this)
 
 **Login page examples**
 
@@ -67,17 +67,17 @@ Always use your **company / tenant** login page — not the platform admin conso
 3. If you see a **security code (MFA)** screen, open your authenticator app and enter the 6-digit code.  
 4. You should land on the **Dashboard**.
 
-**Tip:** On the left sidebar, look for **E-Approval** (under **Operations**). That is the module you will use.
+**Tip:** On the left sidebar, look for **E-Forms** (under **Operations**). That is the module you will use.
 
 **Note:** Passkeys and MFA are for **signing in** only. Approving a request still uses your **electronic signature** (Part 2 and Part 7) — not a passkey.
 
 ---
 
-## Part 2 — Find E-Approval and set your profile
+## Part 2 — Find E-Forms and set your profile
 
 ### Open the module
 
-1. In the left sidebar, click **E-Approval**.  
+1. In the left sidebar, click **E-Forms**.  
 2. You will see pages such as:
 
 | Menu item | What it is for |
@@ -85,7 +85,7 @@ Always use your **company / tenant** login page — not the platform admin conso
 | **Overview** | Summary of work waiting for you and shortcuts |
 | **Submissions** | Your requests (and drafts) |
 | **Approvals** | Requests waiting for your decision (approvers) |
-| **My E-Approval profile** | Your signature and out-of-office settings |
+| **My E-Forms profile** | Your signature and out-of-office settings |
 
 Some items appear only if your role allows them (for example, **Approvals** is for approvers).
 
@@ -93,7 +93,7 @@ Your company may also show **form workspaces** as separate items in the sidebar 
 
 ### Overview at a glance
 
-On **E-Approval → Overview** you may see:
+On **E-Forms → Overview** you may see:
 
 - **Needs my approval** → jump to your inbox (**View all**)  
 - **Needs my attention** → returned or draft items you own (**View mine**)  
@@ -113,8 +113,8 @@ You can save a signature once and reuse it when you approve.
 
 **How to save it**
 
-1. Go to **E-Approval → My E-Approval profile**  
-   (also under **Administration → Settings → My E-Approval profile**).  
+1. Go to **E-Forms → My E-Forms profile**  
+   (also under **Administration → Settings → My E-Forms profile**).  
 2. Open **My signature**.  
 3. Choose one method:
 
@@ -135,7 +135,7 @@ You can save a signature once and reuse it when you approve.
 
 ### Out-of-office delegation (approvers, if enabled)
 
-If your admin turned on delegation, you will see **Out-of-office delegation** on **My E-Approval profile**.
+If your admin turned on delegation, you will see **Out-of-office delegation** on **My E-Forms profile**.
 
 **How to set it**
 
@@ -147,13 +147,13 @@ If your admin turned on delegation, you will see **Out-of-office delegation** on
 
 While a delegation is active, that person can act on approvals that were waiting on you. When you return, click **Revoke** on that row.
 
-If you see a message that delegation is disabled for your organization, ask an admin to enable it under E-Approval settings.
+If you see a message that delegation is disabled for your organization, ask an admin to enable it under E-Forms settings.
 
 ---
 
 ## Part 3 — Form workspaces (if your company uses them)
 
-Some published forms get their own **workspace** in the left sidebar (under **Operations**, next to E-Approval — not nested inside it).
+Some published forms get their own **workspace** in the left sidebar (under **Operations**, next to E-Forms — not nested inside it).
 
 **Examples:** Document Control, ISO Approval, or other named workspaces your admin configured.
 
@@ -167,7 +167,7 @@ Some published forms get their own **workspace** in the left sidebar (under **Op
 6. Approvers can use **My approvals** to jump to the approval inbox.  
 7. **Export CSV** appears only if you have export/audit permission.
 
-Workspaces are a faster way to live inside one form family. Everything still opens the same submission detail pages as the rest of E-Approval.
+Workspaces are a faster way to live inside one form family. Everything still opens the same submission detail pages as the rest of E-Forms.
 
 ---
 
@@ -176,13 +176,13 @@ Workspaces are a faster way to live inside one form family. Everything still ope
 ### Checklist
 
 - [ ] You are signed in  
-- [ ] You can open **E-Approval** (or a form workspace)  
+- [ ] You can open **E-Forms** (or a form workspace)  
 - [ ] You know which form to use (or you can find it in the list)  
 - [ ] Files / photos are ready if the form needs them  
 
 ### Steps
 
-1. Open **E-Approval → Submissions**.  
+1. Open **E-Forms → Submissions**.  
 2. Click **New submission**.  
    - Or from **Overview**, click **New submission**.  
    - Or from a **form workspace**, click **New request**.  
@@ -212,7 +212,7 @@ Workspaces are a faster way to live inside one form family. Everything still ope
 
 ### Resume a draft
 
-1. Go to **E-Approval → Submissions**.  
+1. Go to **E-Forms → Submissions**.  
 2. Find the item with status **Draft** (or open it from **Overview → Needs my attention**).  
 3. Click **Continue editing**.  
 4. Finish the form → **Submit request**.
@@ -231,7 +231,7 @@ Workspaces are a faster way to live inside one form family. Everything still ope
 
 ## Part 5 — Track your requests
 
-1. Go to **E-Approval → Submissions** (or open the matching **form workspace**).  
+1. Go to **E-Forms → Submissions** (or open the matching **form workspace**).  
 2. Use search or status chips: **All**, **Needs revision**, **Pending**, **Approved**, **Rejected**, **Cancelled**.  
 3. Switch **Table** / **Gallery** if you like.  
 4. Click a request (**Open submission**) to open it.  
@@ -305,7 +305,7 @@ Use comments for questions and notes. For official **Approve / Reject / Request 
 ### Open work waiting for you
 
 1. Sign in.  
-2. Go to **E-Approval → Approvals**.  
+2. Go to **E-Forms → Approvals**.  
 3. Use the **Awaiting me** filter (default for the inbox). Switch to **All** to browse more broadly.  
 4. Or open the item from **Notifications**, **Overview → Needs my approval**, or a workspace **My approvals** button.  
 5. Switch **Table** / **Gallery** if you prefer.
@@ -389,7 +389,7 @@ If you are not the document-control user, wait or ask your document-control team
 
 When status is **Needs revision**:
 
-1. Open **E-Approval → Submissions**.  
+1. Open **E-Forms → Submissions**.  
 2. Open the request (or use **Overview → Needs my attention**).  
 3. Read the **revision remarks** carefully (banner and **Activity**).  
 4. Note any banner such as **Awaiting resubmit · will resume at step N** or **will restart from step 1** — that tells you where the chain continues after you resubmit.  
@@ -419,11 +419,11 @@ You usually **cannot** reopen a rejected request. Start a **new** submission if 
 
 ## Part 10 — Public / external forms (vendors & partners)
 
-Some forms can be filled **without** a TowerOS login.
+Some forms can be filled **without** a INFRA SUITE login.
 
 ### Share a link (internal user)
 
-1. Go to **E-Approval → Submissions → New submission**.  
+1. Go to **E-Forms → Submissions → New submission**.  
 2. Find a form with an **External link** badge.  
 3. Click **Copy external link** and send it to the vendor/partner.  
 4. If the form requires a password, your admin will share that separately.
@@ -477,13 +477,13 @@ Email footers usually include the **submission link**. Help text depends on whet
 | I want to… | Go here |
 |------------|---------|
 | Sign in | Your company `/login` page |
-| See overview | **E-Approval → Overview** |
-| Save signature / OOO | **E-Approval → My E-Approval profile** |
+| See overview | **E-Forms → Overview** |
+| Save signature / OOO | **E-Forms → My E-Forms profile** |
 | Work in one form family | Sidebar **form workspace** (if configured) |
-| Start a request | **E-Approval → Submissions → New submission** (or workspace **New request**) |
+| Start a request | **E-Forms → Submissions → New submission** (or workspace **New request**) |
 | Quieter compose screen | Form card → **Open focused view** |
-| See my requests / drafts | **E-Approval → Submissions** |
-| Approve / reject / revise | **E-Approval → Approvals** (Awaiting me) |
+| See my requests / drafts | **E-Forms → Submissions** |
+| Approve / reject / revise | **E-Forms → Approvals** (Awaiting me) |
 | Document control fields | Open submission → **Decide → Document control** |
 | Raise an IT ticket | Open submission → **Raise ticket** (if Ticketing is on) |
 | Share vendor form | Form card → **Copy external link** |
@@ -498,7 +498,7 @@ Use this with two people (or two accounts): one requestor, one approver.
 
 1. **Requestor** signs in → (optional) saves signature → **Submissions → New submission → Start request** → fills form → **Submit request** → notes document number.  
 2. **Requestor** opens **Submissions** and confirms status **Pending**.  
-3. **Approver** signs in → saves signature + consent on **My E-Approval profile** → opens **Approvals** → reviews form, **Workflow path**, and files → **Approve** (or **Reject** / **Request revision**).  
+3. **Approver** signs in → saves signature + consent on **My E-Forms profile** → opens **Approvals** → reviews form, **Workflow path**, and files → **Approve** (or **Reject** / **Request revision**).  
 4. If revision: **Requestor** opens the returned item → **Edit and resubmit** → fixes → **Resubmit request** → **Approver** decides again.  
 5. If the form uses document control: complete **Decide → Document control → Submit document control**.  
 6. Final status should be **Approved** (or **Rejected** / **Cancelled**).
@@ -507,7 +507,7 @@ Use this with two people (or two accounts): one requestor, one approver.
 
 ## FAQ
 
-**I do not see E-Approval in the menu.**  
+**I do not see E-Forms in the menu.**  
 Ask your admin to enable the module and give you the right role (requestor, approver, or both).
 
 **I see Submissions but not Approvals.**  
@@ -528,7 +528,7 @@ Ticketing must be enabled for your company, and you need permission to create ti
 **Why doesn’t the email offer “create an IT support ticket”?**  
 Your company may have Ticketing turned off. Use the submission link in the email and contact IT another way.
 
-**Vendors / partners without TowerOS login**  
+**Vendors / partners without INFRA SUITE login**  
 Use **Copy external link** / Part 10. Returned external requests use a revise link your company provides.
 
 **Do I need a passkey to approve?**  
@@ -544,12 +544,12 @@ No. Passkeys are for login only. Approving still needs **Your signature** and co
 | [Approver guide](./e-approval-guide-approver.md) | Approvers who decide on requests |
 | [User guides index](./e-approval-user-guides.md) | Start here (role picker) |
 | [Document Approval — simple user guide](./document-approval-end-user-guide.md) | Same flow, focused on Document Approval forms |
-| [E-Approval module overview](./e-approval.md) | Product / technical overview (admins) |
-| [E-Approval go-live checklist](./e-approval-go-live-checklist.md) | Admins preparing a tenant |
+| [E-Forms module overview](./e-approval.md) | Product / technical overview (admins) |
+| [E-Forms go-live checklist](./e-approval-go-live-checklist.md) | Admins preparing a tenant |
 | [External (public) forms](./e-approval-external-forms.md) | Admins sharing vendor links |
 | [Form workspaces](./e-approval-form-workspace.md) | Workspace setup / UX notes |
 
 ---
 
-*TowerOS · E-Approval — end-user guide*  
+*INFRA SUITE · E-Forms — end-user guide*  
 *File: `docs/modules/e-approval-end-user-guide.md`*

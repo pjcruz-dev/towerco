@@ -551,14 +551,23 @@ final class EApprovalSubmissionParentLinkService
 
     /**
      * Prefill child fields from a linked parent submission when values are empty.
+     * Cash-advance linked amount/document fields always sync from the parent.
      *
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
      */
     public function enrichValues(EApprovalSubmission $parent, EApprovalForm $childForm, array $values): array
     {
+        $forceOverwrite = [
+            'cash_advance_document_no',
+            'cash_advance_amount',
+            'purchase_requisition_document_no',
+        ];
+
         foreach ($this->buildParentPrefillValues($parent, $childForm) as $field => $proposed) {
-            if ($this->isEmptyChildValue($values[$field] ?? null)) {
+            $shouldOverwrite = in_array($field, $forceOverwrite, true)
+                || $this->isEmptyChildValue($values[$field] ?? null);
+            if ($shouldOverwrite) {
                 $values[$field] = $proposed;
             }
         }
@@ -578,6 +587,18 @@ final class EApprovalSubmissionParentLinkService
             $prefill['cash_advance_document_no'] = trim((string) $parent->document_no);
         }
 
+        if ($this->childHasField($childForm, 'cash_advance_amount')) {
+            $raw = $parentValues['requested_amount'] ?? null;
+            if (! $this->isEmptyChildValue($raw)) {
+                $amount = is_numeric(str_replace(',', '', trim((string) $raw)))
+                    ? (float) str_replace(',', '', trim((string) $raw))
+                    : null;
+                if ($amount !== null) {
+                    $prefill['cash_advance_amount'] = number_format($amount, 2, '.', '');
+                }
+            }
+        }
+
         if ($this->childHasField($childForm, 'liquidation_date')) {
             $prefill['liquidation_date'] = now()->toDateString();
         }
@@ -586,6 +607,7 @@ final class EApprovalSubmissionParentLinkService
             'purpose' => 'notes',
             'department' => 'department',
             'currency' => 'currency',
+            'subsidiary' => 'subsidiary',
         ] as $parentField => $childField) {
             if (! $this->childHasField($childForm, $childField)) {
                 continue;

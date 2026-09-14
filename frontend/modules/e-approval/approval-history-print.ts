@@ -17,6 +17,8 @@ export function shouldShowApprovalHistory(template: EApprovalPrintTemplate | nul
   return template?.footer?.showApprovalHistory !== false;
 }
 
+export { shouldAppendPrintAttachments } from "@/lib/e-approval/e-approval-print-template-render";
+
 /** Shared approval + requestor signature slots for browser print and pdf-lib footer. */
 export function buildApprovalHistorySlots(
   data: EApprovalPrintPayload,

@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { CreditCard, Users } from "lucide-react";
 
 import { BillingEstimateCard } from "@/components/billing/billing-estimate-card";
+import { ProcurementEntitlementsCard } from "@/components/billing/procurement-entitlements-card";
 import { TenantBillingMetricCard } from "@/components/billing/tenant-billing-metric-card";
 import { PlanTierComparisonTable } from "@/components/billing/plan-tier-comparison-table";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -23,6 +24,7 @@ import {
 } from "@/lib/api/modules/admin-billing-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { permissions } from "@/lib/rbac/permissions";
+import type { ProcurementPlanFeatures } from "@/modules/procurement-one/types";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -112,14 +114,18 @@ export function BillingPageClient() {
   const selfServe = payments?.operational === true;
   const currency = snapshot?.currency ?? snapshot?.plan_catalog?.currency ?? "USD";
   const estimate = snapshot?.billing_estimate ?? snapshot?.overage ?? null;
+  const procurementEntitlements = (
+    snapshot?.plan_features.procurement_one ??
+    snapshot?.entitlements?.procurement_one
+  ) as ProcurementPlanFeatures | undefined;
 
   const seatUtilization =
     snapshot && snapshot.seat_limit > 0
       ? Math.round((snapshot.seat_used / snapshot.seat_limit) * 100)
       : 0;
-  const towerUsed = snapshot?.tower_licenses?.used ?? snapshot?.rfi_units?.used ?? 0;
-  const towerLimit = snapshot?.tower_licenses?.limit ?? snapshot?.rfi_units?.limit ?? 0;
-  const towerUtilization = towerLimit > 0 ? Math.round((towerUsed / towerLimit) * 100) : 0;
+  const rfiUsed = snapshot?.rfi_units?.used ?? 0;
+  const rfiLimit = snapshot?.rfi_units?.limit ?? 0;
+  const rfiUtilization = rfiLimit > 0 ? Math.round((rfiUsed / rfiLimit) * 100) : 0;
 
   return (
     <PermissionGate requiredPermissions={[permissions.billingView]}>
@@ -128,7 +134,7 @@ export function BillingPageClient() {
           title="Billing & subscription"
           description={
             <>
-              Plan tier, seats, and tower licenses for your organization. Seat limits and plan changes
+              Plan tier, seats, and RFI capacity for your organization. Seat limits and plan changes
               are managed in the{" "}
               <strong className="font-medium text-foreground">Platform console</strong> (Tenants →
               Billing &amp; plan).
@@ -248,16 +254,20 @@ export function BillingPageClient() {
                 tone={utilizationTone(seatUtilization)}
               />
               <TenantBillingMetricCard
-                label="Tower licenses"
+                label="RFI units"
                 value={
                   <>
-                    {towerUsed}{" "}
-                    <span className="text-base font-normal text-muted-foreground">/ {towerLimit}</span>
+                    {rfiUsed}{" "}
+                    <span className="text-base font-normal text-muted-foreground">/ {rfiLimit}</span>
                   </>
                 }
-                hint={`${snapshot.tower_licenses?.available ?? snapshot.rfi_units?.available ?? 0} available · each active tower site uses one`}
-                utilizationPercent={towerUtilization}
-                tone={utilizationTone(towerUtilization)}
+                hint={
+                  snapshot.rfi_units?.metering_active
+                    ? `${snapshot.rfi_units.available} remaining after go-live`
+                    : "Metering not active yet"
+                }
+                utilizationPercent={snapshot.rfi_units?.metering_active ? rfiUtilization : undefined}
+                tone={utilizationTone(rfiUtilization)}
               />
             </div>
 
@@ -274,11 +284,15 @@ export function BillingPageClient() {
             <div className="grid gap-4 lg:grid-cols-2">
               {estimate ? <BillingEstimateCard estimate={estimate} /> : null}
 
+              {procurementEntitlements ? (
+                <ProcurementEntitlementsCard features={procurementEntitlements} />
+              ) : null}
+
               {!snapshot.plan_features.file_uploads ? (
                 <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm">
                   <p className="font-medium text-foreground">Upgrade for file uploads</p>
                   <p className="mt-1 text-muted-foreground">
-                    E-Approval file fields require <strong className="font-medium">Professional</strong>{" "}
+                    E-Forms file fields require <strong className="font-medium">Professional</strong>{" "}
                     or <strong className="font-medium">Enterprise</strong>.
                     {selfServe ? " Use checkout below or contact support." : " Contact support to change your plan."}
                   </p>
@@ -298,13 +312,13 @@ export function BillingPageClient() {
             ) : usageQuery.data ? (
               <EApprovalSectionCard
                 title="Usage (last 30 days)"
-                description="Operational activity across E-Approval and workspace seats."
+                description="Operational activity across E-Forms, PROJECT-ONE, and Procurement-One."
                 bodyClassName="p-0"
               >
-                <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-3 sm:divide-x divide-border">
+                <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4 sm:divide-x divide-border">
                   {[
                     {
-                      label: "E-Approval forms",
+                      label: "E-Forms forms",
                       value: usageQuery.data.modules.e_approval.forms_published,
                       sub: `${usageQuery.data.modules.e_approval.forms_total} total`,
                     },
@@ -312,6 +326,11 @@ export function BillingPageClient() {
                       label: "Submissions",
                       value: usageQuery.data.modules.e_approval.submissions_last_30d,
                       sub: `${usageQuery.data.modules.e_approval.submissions_total} all time`,
+                    },
+                    {
+                      label: "Rollouts",
+                      value: usageQuery.data.modules.project_one.rollouts_last_30d,
+                      sub: `${usageQuery.data.modules.project_one.rollouts_total} total`,
                     },
                     {
                       label: "Active users",
@@ -386,7 +405,7 @@ export function BillingPageClient() {
               {snapshot.support_email}
             </a>
           ) : (
-            "your TowerOS account team"
+            "your INFRA SUITE account team"
           )}
           . Platform operators update billing under{" "}
           <Link href="/platform" className="font-medium text-primary underline-offset-2 hover:underline">

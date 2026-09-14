@@ -18,7 +18,7 @@ function getServerHostname(): string {
   return "";
 }
 
-export function useOrganizationLabel(fallback = "TowerOS"): string {
+export function useOrganizationLabel(fallback = "INFRA SUITE"): string {
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const brandingLabel = useTenantBrandingStore((state) => state.branding?.organization_label);

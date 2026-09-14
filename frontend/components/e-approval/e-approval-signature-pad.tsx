@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { isSignatureDataUrl } from "@/modules/e-approval/field-type-options";
 import {
+  canvasToSignatureDataUrl,
   fileToSignatureDataUrl,
   SIGNATURE_UPLOAD_ACCEPT,
   type SignatureInputMode,
@@ -68,7 +69,7 @@ export function EApprovalSignaturePad({
       return;
     }
 
-    onChange(canvas.toDataURL("image/png"));
+    onChange(canvasToSignatureDataUrl(canvas));
   }, [onChange]);
 
   const resizeCanvas = useCallback(() => {

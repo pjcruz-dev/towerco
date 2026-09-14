@@ -12,7 +12,7 @@ Related: [e-approval-email.md](./e-approval-email.md) (platform mail transport)
 
 1. **Procurement → Settings** — ensure `vendor_portal_enabled` is on in the RFQ scoring policy (default: **on**).
 2. Vendors need **email** in registry `contact_json` (`email`, `contact_email`, or `primary_email`).
-3. Platform mail configured (`TOWEROS_NOTIFICATIONS_MAIL_MAILER=smtp` or `ses`) — same as E-Approval.
+3. Platform mail configured (`TOWEROS_NOTIFICATIONS_MAIL_MAILER=smtp` or `ses`) — same as E-Forms.
 
 Email templates live under procurement **vendor email templates**:
 

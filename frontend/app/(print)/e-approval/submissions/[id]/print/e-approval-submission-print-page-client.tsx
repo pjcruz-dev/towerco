@@ -1,13 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 
-import { EApprovalSubmissionPrintView } from "@/components/e-approval/e-approval-submission-print-view";
 import { EApprovalGenericFormPrintView } from "@/components/e-approval/e-approval-generic-form-print-view";
 import { Button } from "@/components/ui/button";
 import { openEApprovalAttachmentPdfPreview } from "@/lib/e-approval/e-approval-attachment-pdf";
+import {
+  hasCustomPrintDocumentDesign,
+  shouldAppendPrintAttachments,
+} from "@/lib/e-approval/e-approval-print-template-render";
 import { fetchEApprovalSubmissionPrint } from "@/lib/api/modules/e-approval-api";
 import { resolvePrintTemplateEntry } from "@/modules/e-approval/print-template-registry";
 import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
@@ -23,7 +26,6 @@ function hasAnyAttachment(payload: EApprovalPrintPayload): boolean {
 }
 
 export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
-  const autoOpenedRef = useRef(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
@@ -32,6 +34,9 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
     queryFn: () => fetchEApprovalSubmissionPrint(submissionId),
     retry: 1,
   });
+
+  // Append documents: available on demand; not embedded on the print page body.
+  const appendEnabled = shouldAppendPrintAttachments(data?.template);
 
   const openMergedPdf = useCallback(async (payload: EApprovalPrintPayload) => {
     setIsGeneratingPdf(true);
@@ -42,7 +47,7 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
       const code = e instanceof Error ? e.message : "";
       if (code === "NO_PRINTABLE_ATTACHMENTS" || code === "EMPTY_PDF") {
         setPdfError(
-          "No PDF or image attachments to merge. Office files (Word/Excel) must be downloaded — use the attachment section below.",
+          "No PDF or image attachments to merge. Office files (Word/Excel) must be downloaded from the submission.",
         );
       } else {
         setPdfError("Could not generate PDF with approval history.");
@@ -52,13 +57,6 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!data || autoOpenedRef.current) return;
-    if (!hasPrintableAttachment(data)) return;
-    autoOpenedRef.current = true;
-    void openMergedPdf(data);
-  }, [data, openMergedPdf]);
-
   const handlePrint = useCallback(() => {
     if (typeof window !== "undefined") {
       window.print();
@@ -66,9 +64,12 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
   }, []);
 
   const structuredEntry = data ? resolvePrintTemplateEntry(data) : null;
-  const StructuredPrintView = structuredEntry?.PrintView ?? EApprovalGenericFormPrintView;
-  const canMergePdf = Boolean(data && hasPrintableAttachment(data));
-  const showAttachmentPages = Boolean(data && hasAnyAttachment(data));
+  const useCustomDocumentDesign = Boolean(data && hasCustomPrintDocumentDesign(data.template));
+  const StructuredPrintView =
+    useCustomDocumentDesign || !structuredEntry
+      ? EApprovalGenericFormPrintView
+      : structuredEntry.PrintView;
+  const canMergePdf = Boolean(data && appendEnabled && hasPrintableAttachment(data));
 
   return (
     <>
@@ -76,19 +77,18 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
         <Link href={`/e-approval/submissions/${submissionId}`} className="text-sm text-primary hover:underline">
           ← Back to submission
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
             Refresh
           </Button>
+          <Button type="button" size="sm" variant="outline" onClick={handlePrint} disabled={!data}>
+            Print / Save as PDF
+          </Button>
           {data && canMergePdf ? (
             <Button type="button" size="sm" onClick={() => void openMergedPdf(data)} disabled={isGeneratingPdf}>
-              {isGeneratingPdf ? "Generating…" : "Open PDF preview"}
+              {isGeneratingPdf ? "Generating…" : "Open appended PDF"}
             </Button>
-          ) : (
-            <Button type="button" size="sm" onClick={handlePrint} disabled={!data}>
-              Print / Save as PDF
-            </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -105,24 +105,24 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
           {pdfError}
         </p>
       ) : null}
-      {data && !canMergePdf && hasAnyAttachment(data) ? (
+      {data && appendEnabled && !canMergePdf && hasAnyAttachment(data) ? (
         <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 print:hidden">
           This submission has Office attachments (e.g. Word). They cannot open in the browser PDF viewer — download
-          them from the attachment section below.
+          them from the submission.
+        </p>
+      ) : null}
+      {data && !appendEnabled && hasAnyAttachment(data) ? (
+        <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-center text-sm text-slate-600 print:hidden">
+          Attachment merge is turned off for this form&apos;s print layout.
         </p>
       ) : null}
       {data && canMergePdf && !pdfError ? (
         <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-center text-sm text-slate-600 print:hidden">
-          PDF with approval history on every page opens in a new tab. Use <strong>Open PDF preview</strong> to open it
-          again, or browser print for the structured document below.
+          Print shows the form only. Use <strong>Open appended PDF</strong> when you need attachments with approval
+          stamps.
         </p>
       ) : null}
-      {data ? <StructuredPrintView data={data} showApprovalFooter={!canMergePdf} /> : null}
-      {showAttachmentPages ? (
-        <div className="print:break-before-page">
-          <EApprovalSubmissionPrintView data={data!} showApprovalHistory />
-        </div>
-      ) : null}
+      {data ? <StructuredPrintView data={data} showApprovalFooter /> : null}
     </>
   );
 }

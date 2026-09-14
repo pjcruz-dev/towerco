@@ -222,7 +222,7 @@ final class PlatformMfaService
     /**
      * @return array{secret: string, otpauth_uri: string}
      */
-    public function startEnrollment(User $user, string $issuer = 'TowerOS Central'): array
+    public function startEnrollment(User $user, string $issuer = 'INFRA SUITE Central'): array
     {
         $secret = $this->totpService->generateSecret();
         $factorId = (string) Str::uuid();

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sync dnsmasq wildcard zones from TowerOS central `domains` table.
+# Sync dnsmasq wildcard zones from INFRA SUITE central `domains` table.
 #
 # When Platform creates tenants/environments under a new brand root
 # (e.g. alliance.lan alongside toweros.lan), this script adds:
@@ -13,7 +13,7 @@
 #   sudo -E ./scripts/sync-toweros-dnsmasq-brands.sh
 #
 # Cron (every 5 minutes as root):
-#   */5 * * * * TOWEROS_DNS_IP=192.168.90.24 /home/it-server-ubuntu/apps/TowerOS/scripts/sync-toweros-dnsmasq-brands.sh >>/var/log/toweros-dnsmasq-sync.log 2>&1
+#   */5 * * * * TOWEROS_DNS_IP=192.168.90.24 /home/it-server-ubuntu/apps/INFRA SUITE/scripts/sync-toweros-dnsmasq-brands.sh >>/var/log/toweros-dnsmasq-sync.log 2>&1
 #
 # Dry run (no write / no reload):
 #   TOWEROS_DNS_IP=192.168.90.24 ./scripts/sync-toweros-dnsmasq-brands.sh --dry-run

@@ -179,11 +179,13 @@ export function validatePurchaseOrderAmountAgainstOpenBalance(
 export function applyParentPrefillValues(
   currentValues: Record<string, string>,
   prefillValues: Record<string, string | null | undefined> | undefined,
+  options?: { overwriteKeys?: string[] },
 ): Record<string, string> {
   if (!prefillValues) {
     return currentValues;
   }
 
+  const overwrite = new Set(options?.overwriteKeys ?? []);
   const next = { ...currentValues };
 
   for (const [fieldName, rawValue] of Object.entries(prefillValues)) {
@@ -191,10 +193,42 @@ export function applyParentPrefillValues(
       continue;
     }
 
-    if ((next[fieldName] ?? "").trim() === "") {
+    if (overwrite.has(fieldName) || (next[fieldName] ?? "").trim() === "") {
       next[fieldName] = String(rawValue);
     }
   }
 
+  return next;
+}
+
+/** Apply / clear Cash Advance parent selection on a liquidation form. */
+export function applyCashAdvanceParentSelection(
+  currentValues: Record<string, string>,
+  item: {
+    document_no: string;
+    requested_amount: number;
+    prefill_values?: Record<string, string>;
+  } | null,
+): Record<string, string> {
+  if (!item) {
+    return {
+      ...currentValues,
+      cash_advance_document_no: "",
+      cash_advance_amount: "",
+    };
+  }
+
+  const amount = formatComputedFieldAmount(item.requested_amount);
+  const next = applyParentPrefillValues(
+    currentValues,
+    {
+      ...item.prefill_values,
+      cash_advance_document_no: item.document_no,
+      cash_advance_amount: amount,
+    },
+    { overwriteKeys: ["cash_advance_document_no", "cash_advance_amount"] },
+  );
+  next.cash_advance_document_no = item.document_no;
+  next.cash_advance_amount = amount;
   return next;
 }

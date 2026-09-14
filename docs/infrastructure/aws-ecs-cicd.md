@@ -1,4 +1,4 @@
-# TowerOS — AWS ECS, Aurora, CI/CD (scale path)
+# INFRA SUITE — AWS ECS, Aurora, CI/CD (scale path)
 
 **Current production baseline** is EC2 + RDS MySQL — see [`aws-ec2-rds-production.md`](./aws-ec2-rds-production.md).
 

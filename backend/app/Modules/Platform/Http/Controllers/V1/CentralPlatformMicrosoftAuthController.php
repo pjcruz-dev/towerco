@@ -77,7 +77,7 @@ final class CentralPlatformMicrosoftAuthController
             $user->save();
         }
 
-        $session = $auth->beginAuthenticatedSession($user, 'TowerOS Platform Console (Microsoft)');
+        $session = $auth->beginAuthenticatedSession($user, 'INFRA SUITE Platform Console (Microsoft)');
 
         $handoff = base64_encode(json_encode($session, JSON_THROW_ON_ERROR));
 

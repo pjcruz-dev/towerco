@@ -1,9 +1,10 @@
-/** Per-user, per-tenant dismissal of the E-Approval live-tour soft prompt. */
+/** Per-user, per-tenant dismissal of the E-Forms live-tour soft prompt. */
 
 const STORAGE_PREFIX = "toweros.help.liveTourPrompt.dismissed";
 
 export const E_APPROVAL_LIVE_TOUR_ID = "e-approval";
 export const TICKETING_LIVE_TOUR_ID = "ticketing";
+export const DOC_EXTRACT_LIVE_TOUR_ID = "doc-extract";
 
 function storageKey(tourId: string, userId: string, tenantId: string | null): string {
   const tenant = tenantId && tenantId.length > 0 ? tenantId : "none";
@@ -66,5 +67,19 @@ export function hasDismissedTicketingTourPrompt(
   tenantId: string | null | undefined,
 ): boolean {
   return hasDismissedLiveTourPrompt(TICKETING_LIVE_TOUR_ID, userId, tenantId);
+}
+
+export function dismissDocExtractTourPrompt(
+  userId: string | null | undefined,
+  tenantId: string | null | undefined,
+): void {
+  dismissLiveTourPrompt(DOC_EXTRACT_LIVE_TOUR_ID, userId, tenantId);
+}
+
+export function hasDismissedDocExtractTourPrompt(
+  userId: string | null | undefined,
+  tenantId: string | null | undefined,
+): boolean {
+  return hasDismissedLiveTourPrompt(DOC_EXTRACT_LIVE_TOUR_ID, userId, tenantId);
 }
 

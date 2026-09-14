@@ -40,5 +40,5 @@ You reach the intended page or record in one or two keystrokes instead of huntin
 
 ## Related workflows
 
-- Getting started with TowerOS
+- Getting started with INFRA SUITE
 - Permissions and why a page may be missing

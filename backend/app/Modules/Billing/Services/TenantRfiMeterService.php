@@ -82,7 +82,7 @@ final class TenantRfiMeterService
             throw ValidationException::withMessages([
                 'actual_rfi_date' => [
                     __(
-                        'RFI billing is active but this tenant has no included RFI units. Ask TowerOS to adjust the plan or grandfather units.',
+                        'RFI billing is active but this tenant has no included RFI units. Ask INFRA SUITE to adjust the plan or grandfather units.',
                     ),
                 ],
             ]);
@@ -93,7 +93,7 @@ final class TenantRfiMeterService
             throw ValidationException::withMessages([
                 'actual_rfi_date' => [
                     __(
-                        'RFI unit limit reached (:used / :limit). Tower inventory can still be updated — contact TowerOS to add capacity or grandfather units.',
+                        'RFI unit limit reached (:used / :limit). Tower inventory can still be updated — contact INFRA SUITE to add capacity or grandfather units.',
                         ['used' => $used, 'limit' => $limit],
                     ),
                 ],

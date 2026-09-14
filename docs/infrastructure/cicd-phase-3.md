@@ -1,4 +1,4 @@
-# TowerOS CI/CD — Phase 3
+# INFRA SUITE CI/CD — Phase 3
 
 **Status:** Phase 3 workflows delivered (gated until AWS is configured)  
 **Scope:** Automate Staging deploy on `main` and Production promote on git tags `v*` (same image digests, no rebuild).  
@@ -121,7 +121,7 @@ App secrets (DB, `APP_KEY`, etc.) stay in **AWS Secrets Manager**, not GitHub.
 - Workflows are **gated** so open PRs / unconfigured repos do not fail CD.
 - Missing migrate subnets → migrate step warns and skips (run manually).
 - Missing `:sha` image on Production promote → fails with clear error (Staging first).
-- No in-app TowerOS “Deploy” button — promote is GitHub Environment approval + tag.
+- No in-app INFRA SUITE “Deploy” button — promote is GitHub Environment approval + tag.
 
 ---
 

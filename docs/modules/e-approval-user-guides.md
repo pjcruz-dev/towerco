@@ -1,4 +1,4 @@
-# E-Approval — End-user guides (start here)
+# E-Forms — End-user guides (start here)
 
 Choose the guide that matches your role. Both start with **login** and use simple step-by-step instructions.
 
@@ -6,9 +6,9 @@ Choose the guide that matches your role. Both start with **login** and use simpl
 
 After deploy + seed:
 
-1. Open **E-Approval → Help** (or `/help`)
+1. Open **E-Forms → Help** (or `/help`)
 2. Or click **Help** on Submissions / Approvals
-3. Admins edit anytime: **E-Approval → Settings → User guides**
+3. Admins edit anytime: **E-Forms → Settings → User guides**
 
 | I am a… | Open this guide |
 |---------|-----------------|
@@ -30,4 +30,4 @@ After deploy + seed:
 
 ---
 
-*TowerOS · E-Approval user documentation index*
+*INFRA SUITE · E-Forms user documentation index*

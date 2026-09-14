@@ -16,12 +16,16 @@ type EApprovalHelpEntryActionsProps = {
   className?: string;
   /** Smaller outline buttons for page headers. */
   size?: "sm" | "default";
+  showHelp?: boolean;
+  showTour?: boolean;
 };
 
 /** Visual guide + live tour — preferred help entry (not written role guides). */
 export function EApprovalHelpEntryActions({
   className,
   size = "sm",
+  showHelp = true,
+  showTour = true,
 }: EApprovalHelpEntryActionsProps) {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const tenantId = useAuthStore((state) => state.activeTenantId);
@@ -32,23 +36,29 @@ export function EApprovalHelpEntryActions({
     [canApprove, canCreate],
   );
 
+  if (!showHelp && !showTour) return null;
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      <Link
-        href="/help/e-approval/visual"
-        className={cn(buttonVariants({ variant: "outline", size }))}
-      >
-        <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        Tour guide
-      </Link>
-      <Link
-        href={liveTourHref}
-        className={cn(buttonVariants({ variant: "outline", size }))}
-        onClick={() => dismissEApprovalTourPrompt(userId, tenantId)}
-      >
-        <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-        Start tour
-      </Link>
+      {showHelp ? (
+        <Link
+          href="/help/e-approval/visual"
+          className={cn(buttonVariants({ variant: "outline", size }))}
+        >
+          <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+          Tour guide
+        </Link>
+      ) : null}
+      {showTour ? (
+        <Link
+          href={liveTourHref}
+          className={cn(buttonVariants({ variant: "outline", size }))}
+          onClick={() => dismissEApprovalTourPrompt(userId, tenantId)}
+        >
+          <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+          Start tour
+        </Link>
+      ) : null}
     </div>
   );
 }

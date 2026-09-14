@@ -219,6 +219,20 @@ apiClient.interceptors.response.use(
       _tenantDomainRetry?: boolean;
     };
 
+    // Blob downloads (CSV/XLSX) still get JSON error bodies on 4xx/5xx —
+    // parse so toasts show validation messages instead of opaque axios text.
+    if (error.response?.data instanceof Blob) {
+      const contentType = String(error.response.headers?.["content-type"] ?? "");
+      if (contentType.includes("application/json") || status === 422 || status === 403) {
+        try {
+          const text = await error.response.data.text();
+          error.response.data = JSON.parse(text);
+        } catch {
+          // keep Blob when body is not JSON
+        }
+      }
+    }
+
     const errorData =
       typeof error.response?.data === "object" && error.response?.data !== null
         ? (error.response.data as { message?: string; code?: string })

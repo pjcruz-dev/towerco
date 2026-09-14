@@ -24,7 +24,7 @@ final class MicrosoftGraphTransportTest extends TestCase
         Config::set('cache.default', 'array');
         Config::set('mail.default', 'microsoft-graph');
         Config::set('mail.from.address', 'noreply@alliancetowers.com');
-        Config::set('mail.from.name', 'TowerOS');
+        Config::set('mail.from.name', 'INFRA SUITE');
         Config::set('mail.mailers.microsoft-graph', [
             'transport' => 'microsoft-graph',
             'save_to_sent_items' => false,
@@ -51,7 +51,7 @@ final class MicrosoftGraphTransportTest extends TestCase
 
         Mail::mailer('microsoft-graph')->html('<p>Hello</p>', function ($message): void {
             $message->to('prcruz@alliancetowers.com', 'PJ')
-                ->subject('TowerOS Graph mail test');
+                ->subject('INFRA SUITE Graph mail test');
         });
 
         Http::assertSent(function (Request $request): bool {
@@ -71,7 +71,7 @@ final class MicrosoftGraphTransportTest extends TestCase
             $data = $request->data();
 
             return str_contains($request->url(), rawurlencode('noreply@alliancetowers.com'))
-                && ($data['message']['subject'] ?? null) === 'TowerOS Graph mail test'
+                && ($data['message']['subject'] ?? null) === 'INFRA SUITE Graph mail test'
                 && ($data['message']['body']['contentType'] ?? null) === 'HTML'
                 && str_contains((string) ($data['message']['body']['content'] ?? ''), 'Hello')
                 && ($data['message']['toRecipients'][0]['emailAddress']['address'] ?? null) === 'prcruz@alliancetowers.com'

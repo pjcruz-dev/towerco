@@ -1,8 +1,8 @@
-# TowerOS tenant environments — Phase 2
+# INFRA SUITE tenant environments — Phase 2
 
 **Status:** Phase 2 complete (product already supports this; this doc is the operator checklist)  
 **Scope:** Ensure each customer org has isolated **staging** + **production** tenant workspaces.  
-**Does not change:** Ticketing, Project-One, E-Approval, or other module business logic.
+**Does not change:** Ticketing, Project-One, E-Forms, or other module business logic.
 
 Related: [`tenant-domain-slugs.md`](./tenant-domain-slugs.md) · [`release-runbook.md`](./release-runbook.md)
 
@@ -10,7 +10,7 @@ Related: [`tenant-domain-slugs.md`](./tenant-domain-slugs.md) · [`release-runbo
 
 ## What Phase 2 means
 
-TowerOS is **multi-tenant** and **multi-environment**:
+INFRA SUITE is **multi-tenant** and **multi-environment**:
 
 | Axis | Meaning |
 |------|---------|

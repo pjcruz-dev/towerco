@@ -20,6 +20,13 @@ class TicketingDashboardController extends AbstractApiController
         abort_unless($request->user()?->can('ticketing:view'), 403);
         $planFeatures->assertModuleEnabled();
 
-        return $this->ok($service->build($request->user()));
+        return $this->ok($service->build($request->user(), [
+            'status' => $request->query('status'),
+            'priority' => $request->query('priority'),
+            'category' => $request->query('category'),
+            'department' => $request->query('department'),
+            'mine' => $request->boolean('mine'),
+            'assigned_me' => $request->boolean('assigned_me'),
+        ]));
     }
 }

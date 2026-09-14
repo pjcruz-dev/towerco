@@ -53,7 +53,7 @@ final class ScaffoldTssrStep2PhotosCommand extends Command
     protected $signature = 'e-approval:scaffold-tssr-step-2-photos
         {--tenant= : Tenant UUID}
         {--domain= : Tenant domain hostname}
-        {--form= : E-Approval form UUID (defaults to name match TSSR)}
+        {--form= : E-Forms form UUID (defaults to name match TSSR)}
         {--force : Replace existing Step 2 photo / site-options fields if present}
         {--dry-run : Preview without writing}
     ';

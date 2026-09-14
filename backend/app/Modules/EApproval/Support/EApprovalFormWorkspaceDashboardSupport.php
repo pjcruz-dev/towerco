@@ -11,7 +11,15 @@ use Illuminate\Support\Collection;
 final class EApprovalFormWorkspaceDashboardSupport
 {
     /** @var list<string> */
-    public const WIDGET_TYPES = ['kpis', 'status_chart', 'recent_activity', 'audit_log', 'submissions_table'];
+    public const WIDGET_TYPES = [
+        'kpis',
+        'status_chart',
+        'chart_by_status',
+        'chart_by_subsidiary',
+        'recent_activity',
+        'audit_log',
+        'submissions_table',
+    ];
 
     /** @var list<string> */
     public const SYSTEM_COLUMN_KEYS = ['document_no', 'status', 'requestor', 'current_step', 'created_at'];
@@ -39,10 +47,11 @@ final class EApprovalFormWorkspaceDashboardSupport
         return [
             'widgets' => [
                 ['id' => 'kpis', 'type' => 'kpis', 'enabled' => true, 'order' => 1],
-                ['id' => 'status_chart', 'type' => 'status_chart', 'enabled' => true, 'order' => 2],
-                ['id' => 'recent_activity', 'type' => 'recent_activity', 'enabled' => true, 'order' => 3],
-                ['id' => 'audit_log', 'type' => 'audit_log', 'enabled' => false, 'order' => 4],
-                ['id' => 'submissions_table', 'type' => 'submissions_table', 'enabled' => true, 'order' => 5],
+                ['id' => 'chart_by_status', 'type' => 'chart_by_status', 'enabled' => true, 'order' => 2],
+                ['id' => 'chart_by_subsidiary', 'type' => 'chart_by_subsidiary', 'enabled' => true, 'order' => 3],
+                ['id' => 'recent_activity', 'type' => 'recent_activity', 'enabled' => true, 'order' => 4],
+                ['id' => 'audit_log', 'type' => 'audit_log', 'enabled' => false, 'order' => 5],
+                ['id' => 'submissions_table', 'type' => 'submissions_table', 'enabled' => true, 'order' => 6],
             ],
             'table_columns' => self::defaultTableColumns($form),
             'saved_views' => [
@@ -189,11 +198,30 @@ final class EApprovalFormWorkspaceDashboardSupport
             if (! in_array($type, self::WIDGET_TYPES, true)) {
                 continue;
             }
+            $enabled = ($widget['enabled'] ?? true) !== false;
+            $order = max(1, (int) ($widget['order'] ?? $index + 1));
+
+            if ($type === 'status_chart') {
+                $normalized[] = [
+                    'id' => 'chart_by_status',
+                    'type' => 'chart_by_status',
+                    'enabled' => $enabled,
+                    'order' => $order,
+                ];
+                $normalized[] = [
+                    'id' => 'chart_by_subsidiary',
+                    'type' => 'chart_by_subsidiary',
+                    'enabled' => $enabled,
+                    'order' => $order + 1,
+                ];
+                continue;
+            }
+
             $normalized[] = [
                 'id' => trim((string) ($widget['id'] ?? $type)) ?: $type,
                 'type' => $type,
-                'enabled' => ($widget['enabled'] ?? true) !== false,
-                'order' => max(1, (int) ($widget['order'] ?? $index + 1)),
+                'enabled' => $enabled,
+                'order' => $order,
             ];
         }
 
@@ -201,9 +229,26 @@ final class EApprovalFormWorkspaceDashboardSupport
             return $defaults;
         }
 
-        usort($normalized, static fn (array $a, array $b): int => ($a['order'] <=> $b['order']));
+        $deduped = [];
+        $seen = [];
+        foreach ($normalized as $row) {
+            $key = (string) $row['type'];
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $deduped[] = $row;
+        }
 
-        return $normalized;
+        usort($deduped, static fn (array $a, array $b): int => ($a['order'] <=> $b['order']));
+
+        $order = 1;
+        foreach ($deduped as &$row) {
+            $row['order'] = $order++;
+        }
+        unset($row);
+
+        return $deduped;
     }
 
     /**

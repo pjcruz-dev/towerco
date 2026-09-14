@@ -16,7 +16,7 @@ last_reviewed: 2026-07-17
 
 # Ticketing basics
 
-Ticketing tracks operational work requests, issues, and follow-ups across TowerOS modules.
+Ticketing tracks operational work requests, issues, and follow-ups across INFRA SUITE modules.
 
 ## Prerequisites
 

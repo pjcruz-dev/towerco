@@ -1,13 +1,13 @@
 # Documents — Phase 2
 
-Extends [Phase 1](documents-phase1.md) with E-Approval integration, workspace search, binder template admin (read-only), rollout link UI, and gate checklist.
+Extends [Phase 1](documents-phase1.md) with E-Forms integration, workspace search, binder template admin (read-only), rollout link UI, and gate checklist.
 
 ## Delivered in Phase 2
 
 | Feature | Backend | Frontend |
 |---------|---------|----------|
 | Workspace search | `DocumentSearchService` → `GET /workspace/search` documents group | Deep links to site binder (`/sites/{id}`) |
-| E-Approval request | `POST /documents/files/{document}/request-approval` | Request approval on file row + form picker |
+| E-Forms request | `POST /documents/files/{document}/request-approval` | Request approval on file row + form picker |
 | Approval sync | `e_approval_submission_id`, `approval_status` on `documents` | Approval column + link to submission |
 | Rollout link | Existing `PATCH /sites/{site}/documents/workspace` | Rollout dropdown in site binder header |
 | Gate checklist | `GET /sites/{site}/documents/gate-checklist` | Badge row for required folders |
@@ -21,9 +21,9 @@ Extends [Phase 1](documents-phase1.md) with E-Approval integration, workspace se
 | POST | `/documents/files/{document}/request-approval` | `documents:upload` + `e_approval:submissions:create` |
 | GET | `/sites/{site}/documents/gate-checklist` | `documents:view` |
 
-## E-Approval field auto-map
+## E-Forms field auto-map
 
-When requesting approval, TowerOS pre-fills form values when field **names** match:
+When requesting approval, INFRA SUITE pre-fills form values when field **names** match:
 
 `document_title`, `title`, `document_id`, `toweros_document_id`, `site_code`, `site`, `folder`, `notes`, etc.
 

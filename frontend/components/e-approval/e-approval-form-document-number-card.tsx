@@ -80,7 +80,7 @@ export function EApprovalFormDocumentNumberCard({
   return (
     <EApprovalSectionCard
       title="Document number"
-      description="How submission document codes are generated for this form (e.g. ATC-QMS-P-001)."
+      description="How submission document codes are generated for this form (e.g. ATC-FINANCE-F-001)."
     >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -171,6 +171,7 @@ export function EApprovalFormDocumentNumberCard({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
+              <strong>Subsidiary</strong> uses the form&apos;s Subsidiary field (ATC, ADIC, or any code you configure).{" "}
               <strong>Department</strong> uses the form field when present; otherwise the submitter&apos;s department
               from Microsoft Entra / Organization sync.
             </p>
@@ -203,8 +204,9 @@ export function EApprovalFormDocumentNumberCard({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Tip for ISO: tick <strong>Department</strong>, a document-type form field, and <strong>Sequence</strong>.
-            Start the template with <code className="rounded bg-muted px-1">ATC</code> if you want that prefix.
+            Tip: tick <strong>Subsidiary</strong>, <strong>Department</strong>, and <strong>Sequence</strong> so each
+            company gets its own numbering series (e.g.{" "}
+            <code className="rounded bg-muted px-1">{"{subsidiary}-{department}-{docTypeCode}-{seq:3}"}</code>).
           </p>
         </div>
       ) : null}

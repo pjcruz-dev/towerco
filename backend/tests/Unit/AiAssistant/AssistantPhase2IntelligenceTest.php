@@ -69,19 +69,19 @@ final class AssistantPhase2IntelligenceTest extends TestCase
             chunkId: '1',
             sourceId: 'e-approval-create-request',
             vectorId: 'v1',
-            content: 'Create an E-Approval request',
+            content: 'Create an E-Forms request',
             score: 0.2,
             scope: 'global',
             moduleKey: 'e_approval',
-            title: 'Create an E-Approval request',
+            title: 'Create an E-Forms request',
             slug: 'e-approval-create-request',
             version: 1,
             permissions: [],
             relatedRoutes: [],
-            sourceBody: "# Create an E-Approval request\n\nSubmit forms for review.",
+            sourceBody: "# Create an E-Forms request\n\nSubmit forms for review.",
         );
 
-        $kept = $gate->filter([$chunk], 'How do I create an E-Approval request?');
+        $kept = $gate->filter([$chunk], 'How do I create an E-Forms request?');
         $this->assertCount(1, $kept);
     }
 

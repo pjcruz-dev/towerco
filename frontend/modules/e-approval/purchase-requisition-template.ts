@@ -59,7 +59,7 @@ export function buildPurchaseRequisitionPrintTemplate(): Record<string, unknown>
       showApprovalHistory: true,
       showRequestorSignature: true,
       showPageNumbers: true,
-      text: "Generated from TowerOS E-Approval",
+      text: "Generated from INFRA SUITE E-Forms",
     },
     blocks: {
       requestor_row: ["requisition_title"],

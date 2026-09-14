@@ -104,14 +104,14 @@ final class TenantWorkspaceDashboardService
             if ($awaitingMyApproval > 0) {
                 $kpis[] = [
                     'key' => 'ea_awaiting_my_approval',
-                    'label' => 'E-Approval · awaiting you',
+                    'label' => 'E-Forms · awaiting you',
                     'value' => (string) $awaitingMyApproval,
                     'change' => 'Assigned approval steps',
                     'tone' => 'danger',
                 ];
                 $actions[] = [
                     'id' => 'ws-ea-awaiting',
-                    'label' => 'E-Approval awaiting you',
+                    'label' => 'E-Forms awaiting you',
                     'count' => $awaitingMyApproval,
                     'href' => '/e-approval/approvals?awaiting_me=1',
                     'priority' => 'high',
@@ -121,7 +121,7 @@ final class TenantWorkspaceDashboardService
             if ($staleApprovals > 0) {
                 $kpis[] = [
                     'key' => 'ea_stale_approvals',
-                    'label' => 'E-Approval · stale steps',
+                    'label' => 'E-Forms · stale steps',
                     'value' => (string) $staleApprovals,
                     'change' => '>'.self::STALE_APPROVAL_DAYS.' days pending',
                     'tone' => 'danger',
@@ -131,7 +131,7 @@ final class TenantWorkspaceDashboardService
             if ($openSubmissions > 0 && $awaitingMyApproval === 0) {
                 $kpis[] = [
                     'key' => 'ea_open_submissions',
-                    'label' => 'E-Approval · open submissions',
+                    'label' => 'E-Forms · open submissions',
                     'value' => (string) $openSubmissions,
                     'change' => 'In workflow',
                     'tone' => 'warning',
@@ -282,7 +282,7 @@ final class TenantWorkspaceDashboardService
                     'module' => 'e_approval',
                     'label' => $submission?->document_no
                         ? 'Approve '.$submission->document_no
-                        : 'E-Approval step awaiting you',
+                        : 'E-Forms step awaiting you',
                     'detail' => $submission?->form?->name,
                     'href' => $submission
                         ? '/e-approval/submissions/'.$submission->id
@@ -360,7 +360,7 @@ final class TenantWorkspaceDashboardService
             $links[] = ['label' => 'PROJECT-ONE', 'href' => '/project-one'];
         }
         if ($user->can('e_approval:view')) {
-            $links[] = ['label' => 'E-Approval', 'href' => '/e-approval'];
+            $links[] = ['label' => 'E-Forms', 'href' => '/e-approval'];
         }
         if ($user->can('ticketing:view')) {
             $links[] = ['label' => 'Ticketing', 'href' => '/ticketing'];
@@ -401,7 +401,7 @@ final class TenantWorkspaceDashboardService
     }
 
     /**
-     * User-scoped E-Approval workflow activity (submissions + approval steps).
+     * User-scoped E-Forms workflow activity (submissions + approval steps).
      *
      * @return list<array<string, mixed>>
      */

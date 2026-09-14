@@ -14,7 +14,7 @@ final class EApprovalExportsPruneCommand extends Command
                             {--domain= : Limit to a single tenant domain}
                             {--tenants=* : Limit to specific tenant IDs}';
 
-    protected $description = 'Delete expired E-Approval async export files from tenant storage';
+    protected $description = 'Delete expired E-Forms async export files from tenant storage';
 
     public function handle(EApprovalReportService $reports): int
     {

@@ -4,13 +4,13 @@ import {
   TENANT_MODULE_LABELS,
 } from "@/lib/tenant/enabled-modules";
 
-export function tenantHasDynamicEntities(row: PlatformTenantRow): boolean {
-  return (row.effective_enabled_modules ?? []).includes("dynamic_entities");
+export function tenantHasProjectOne(row: PlatformTenantRow): boolean {
+  return (row.effective_enabled_modules ?? []).includes("project_one");
 }
 
 export function tenantIsEApprovalOnly(row: PlatformTenantRow): boolean {
   const modules = row.effective_enabled_modules ?? [];
-  return modules.includes("e_approval") && !modules.includes("dynamic_entities");
+  return modules.includes("e_approval") && !modules.includes("project_one");
 }
 
 export function formatTenantModuleBadges(row: PlatformTenantRow): string[] {
@@ -39,10 +39,15 @@ export function formatModulesLabel(row: PlatformTenantRow): string {
 }
 
 const MODULE_BADGE_CLASSES: Record<string, string> = {
-  "E-Approval": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  "E-Forms": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  "Project-One": "bg-sky-500/10 text-sky-700 dark:text-sky-300",
   Ticketing: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-  "Dynamic Entities": "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  "AI Assistant": "bg-fuchsia-500/10 text-fuchsia-800 dark:text-fuchsia-300",
+  "Procurement-One": "bg-teal-500/10 text-teal-800 dark:text-teal-300",
+  Sites: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  GIS: "bg-cyan-500/10 text-cyan-800 dark:text-cyan-300",
+  "Tower-One": "bg-stone-500/10 text-stone-700 dark:text-stone-300",
+  "Fiber-One": "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+  "Asset-One": "bg-orange-500/10 text-orange-800 dark:text-orange-300",
   Core: "bg-muted text-muted-foreground",
 };
 
@@ -102,9 +107,9 @@ export function exportTenantsCsv(rows: PlatformTenantRow[]): void {
 export function moduleFilterLabel(value: string): string {
   switch (value) {
     case "e_approval_only":
-      return "E-Approval only";
-    case "dynamic_entities":
-      return "Includes Dynamic Entities";
+      return "E-Forms only";
+    case "project_one":
+      return "Includes Project-One";
     case "ticketing":
       return "Includes Ticketing";
     default:

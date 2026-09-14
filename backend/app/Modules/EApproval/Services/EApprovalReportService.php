@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Core\Support\ModuleListPrintableHtml;
 use App\Modules\EApproval\Jobs\GenerateEApprovalExportJob;
 use App\Modules\EApproval\Models\EApprovalExportHistory;
 use App\Modules\EApproval\Models\EApprovalForm;
@@ -705,17 +706,23 @@ final class EApprovalReportService
             ? EApprovalForm::query()->find($formId)
             : null;
 
-        $includeFields = $form !== null;
+        $includeFields = array_key_exists('include_fields', $filters)
+            ? (bool) $filters['include_fields']
+            : ($form !== null);
         $viewerScope = isset($filters['viewer_scope']) ? (string) $filters['viewer_scope'] : 'all';
-        $scope = $this->buildExportScope($form, $includeFields, $viewer, $viewerScope);
+        $scope = $this->buildExportScope($form, $includeFields, $viewer, $viewerScope, $filters);
 
         $queryFilters = array_filter([
             'status' => $filters['status'] ?? null,
             'statuses' => $filters['statuses'] ?? null,
             'form_id' => $formId,
+            'form_ids' => $filters['form_ids'] ?? null,
             'from' => $filters['from'] ?? null,
             'to' => $filters['to'] ?? null,
             'search' => $filters['search'] ?? null,
+            'subsidiary' => $filters['subsidiary'] ?? null,
+            'department' => $filters['department'] ?? null,
+            'ids' => $filters['ids'] ?? null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         $matched = $this->export->countMatching($queryFilters, $scope);
@@ -750,6 +757,27 @@ final class EApprovalReportService
             }
             $path = (new SimpleXlsxWriter())->writeSheets($sheets);
             $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } elseif ($format === 'html') {
+            $headers = $layout === 'line_items' && $form !== null && $gridField !== null
+                ? $this->export->lineItemHeaders($form, $gridField)
+                : $this->export->headers($form, $includeFields, $columns);
+            $rowIter = $layout === 'line_items' && $form !== null && $gridField !== null
+                ? $this->export->lineItemRows($queryFilters, $scope, $form, $gridField, $limit)
+                : $this->export->rows($queryFilters, $scope, $columns, $limit);
+            $path = tempnam(sys_get_temp_dir(), 'eapproval-html-');
+            if ($path === false) {
+                throw new \RuntimeException('Unable to allocate a temporary HTML file.');
+            }
+            $htmlPath = $path.'.html';
+            rename($path, $htmlPath);
+            $path = $htmlPath;
+            file_put_contents($path, ModuleListPrintableHtml::render(
+                $nameHint !== '' ? $nameHint : 'E-Forms export',
+                $headers,
+                $rowIter,
+                $matched,
+            ));
+            $contentType = 'text/html; charset=UTF-8';
         } else {
             $path = tempnam(sys_get_temp_dir(), 'eapproval-csv-');
             if ($path === false) {
@@ -786,6 +814,7 @@ final class EApprovalReportService
     }
 
     /**
+     * @param  array<string, mixed>  $filters
      * @return array{viewer?: TenantUser, can_view_all?: bool, created_only?: bool, form?: EApprovalForm|null, include_fields?: bool}|null
      */
     private function buildExportScope(
@@ -793,6 +822,7 @@ final class EApprovalReportService
         bool $includeFields,
         ?TenantUser $viewer,
         string $viewerScope,
+        array $filters = [],
     ): ?array {
         if ($viewer === null) {
             return $form !== null
@@ -801,6 +831,13 @@ final class EApprovalReportService
         }
 
         $viewerBits = EApprovalExportViewerScope::forUser($viewer, $viewerScope);
+
+        // Workspace / explicit exports may pin visibility independently of audit role.
+        if (array_key_exists('workspace_can_view_all', $filters)) {
+            $viewerBits['can_view_all'] = (bool) $filters['workspace_can_view_all'];
+        } elseif (array_key_exists('can_view_all', $filters)) {
+            $viewerBits['can_view_all'] = (bool) $filters['can_view_all'];
+        }
 
         return array_merge($viewerBits, [
             'form' => $form,
@@ -897,15 +934,19 @@ final class EApprovalReportService
             ? EApprovalForm::query()->find($formId)
             : null;
         $viewerScope = isset($filters['viewer_scope']) ? (string) $filters['viewer_scope'] : 'all';
-        $scope = $this->buildExportScope($form, $form !== null, $viewer, $viewerScope);
+        $scope = $this->buildExportScope($form, $form !== null, $viewer, $viewerScope, $filters);
 
         $queryFilters = array_filter([
             'status' => $filters['status'] ?? null,
             'statuses' => $filters['statuses'] ?? null,
             'form_id' => $formId,
+            'form_ids' => $filters['form_ids'] ?? null,
             'from' => $filters['from'] ?? null,
             'to' => $filters['to'] ?? null,
             'search' => $filters['search'] ?? null,
+            'subsidiary' => $filters['subsidiary'] ?? null,
+            'department' => $filters['department'] ?? null,
+            'ids' => $filters['ids'] ?? null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         return $this->export->countMatching($queryFilters, $scope);
@@ -939,8 +980,9 @@ final class EApprovalReportService
             return [];
         }
 
-        return array_filter([
+        $normalized = array_filter([
             'form_id' => $filters['form_id'] ?? null,
+            'form_ids' => $filters['form_ids'] ?? null,
             'status' => $filters['status'] ?? null,
             'statuses' => $filters['statuses'] ?? null,
             'from' => $filters['from'] ?? null,
@@ -948,7 +990,23 @@ final class EApprovalReportService
             'search' => $filters['search'] ?? null,
             'scope' => $filters['scope'] ?? null,
             'viewer_scope' => $filters['viewer_scope'] ?? null,
+            'subsidiary' => $filters['subsidiary'] ?? null,
+            'department' => $filters['department'] ?? null,
+            'ids' => $filters['ids'] ?? null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
+
+        // Booleans must survive even when false (workspace ACL / field inclusion).
+        if (array_key_exists('workspace_can_view_all', $filters)) {
+            $normalized['workspace_can_view_all'] = (bool) $filters['workspace_can_view_all'];
+        }
+        if (array_key_exists('can_view_all', $filters)) {
+            $normalized['can_view_all'] = (bool) $filters['can_view_all'];
+        }
+        if (array_key_exists('include_fields', $filters)) {
+            $normalized['include_fields'] = (bool) $filters['include_fields'];
+        }
+
+        return $normalized;
     }
 
     /**

@@ -1,4 +1,4 @@
-# TowerOS production — Amazon EC2 + RDS MySQL
+# INFRA SUITE production — Amazon EC2 + RDS MySQL
 
 **Status:** Confirmed production baseline (AWS 1-year subscription).  
 **Scale path later:** [ECS Fargate + Aurora](./aws-ecs-cicd.md).
@@ -9,7 +9,7 @@ Copy secrets from [`backend/.env.production.example`](../../backend/.env.product
 
 ## Confirmed AWS resources
 
-| Resource | Spec | TowerOS use |
+| Resource | Spec | INFRA SUITE use |
 |----------|------|-------------|
 | **Amazon EC2** | `t3.large` — 2 vCPU, 8 GB RAM, 50 GB root | Docker: API + Next.js web + Redis + queue worker (+ optional Soketi) |
 | **Amazon EBS** | 100 GB General Purpose SSD (`gp3`) | Docker images, logs, build/temp |
@@ -38,7 +38,7 @@ All five fit on your existing **EC2 t3.large** without buying ElastiCache or an 
 
 ### 1. Redis — run Compose Redis on the EC2
 
-TowerOS already ships a `redis` service in `docker-compose.yml`. On production, start it with the API (do **not** expose Redis to the internet).
+INFRA SUITE already ships a `redis` service in `docker-compose.yml`. On production, start it with the API (do **not** expose Redis to the internet).
 
 ```bash
 cd /opt/toweros
@@ -67,15 +67,40 @@ docker compose --env-file .env.docker exec redis redis-cli ping
 
 ---
 
-### 2. Queue worker — systemd unit (always on)
+### 2. Queue worker — always on
 
-Laravel only *enqueues* jobs; a worker must *run* them (approval emails, exports, AI ingest, etc.).
+Laravel only *enqueues* jobs; a worker must *run* them (DocExtract OCR, approval emails, exports, etc.).
+
+**You do not run `queue:work` for each extraction.** Keep one long-running worker.
+
+**Preferred — Compose `queue-worker` service** (survives API recreates):
+
+```bash
+cd /opt/toweros
+docker compose --env-file .env.docker up -d queue-worker
+docker compose --env-file .env.docker ps queue-worker
+```
+
+After PHP deploys:
+
+```bash
+docker compose --env-file .env.docker up -d --build queue-worker
+docker compose --env-file .env.docker exec -T api php artisan queue:restart
+```
+
+If you use this service, disable the systemd unit so jobs are not double-consumed:
+
+```bash
+sudo systemctl disable --now toweros-worker
+```
+
+**Alternate — systemd** (`docker compose exec` into API; dies when API is recreated unless systemd restarts it):
 
 Create `/etc/systemd/system/toweros-worker.service`:
 
 ```ini
 [Unit]
-Description=TowerOS queue worker
+Description=INFRA SUITE queue worker
 After=docker.service
 Requires=docker.service
 
@@ -83,7 +108,7 @@ Requires=docker.service
 Restart=always
 RestartSec=5
 WorkingDirectory=/opt/toweros
-ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks --sleep=3 --tries=3 --max-time=3600
 ExecStop=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:restart
 
 [Install]
@@ -96,7 +121,61 @@ sudo systemctl enable --now toweros-worker
 sudo systemctl status toweros-worker
 ```
 
-After every deploy: `sudo systemctl restart toweros-worker` (or `queue:restart` inside the API container).
+---
+
+### 2b. DocExtract (OCR) — smooth production enablement
+
+DocExtract is isolated (own tables/routes/RBAC) but **shares Redis queues** with the rest of the app. Enable it with these steps so OCR does not stall HTTP or leave batches “Scanning” forever.
+
+**1. Env (API + worker)** — in `backend/.env` / `.env.docker` on the host:
+
+```env
+DOC_EXTRACT_URL=http://doc-extract:8081
+DOC_EXTRACT_TIMEOUT=120
+DOC_EXTRACT_MAX_FILES_PER_BATCH=25
+DOC_EXTRACT_MAX_PAGES_PER_FILE=50
+DOC_EXTRACT_QUEUE_CONNECTION=redis
+DOC_EXTRACT_RETENTION_DAYS=7
+QUEUE_CONNECTION=redis
+```
+
+**2. Start sidecar + worker** (same Compose project as API):
+
+```bash
+cd /opt/toweros
+docker compose --env-file .env.docker up -d --build doc-extract queue-worker
+docker compose --env-file .env.docker exec -T api php artisan config:cache
+docker compose --env-file .env.docker exec -T api php artisan queue:restart
+curl -fsS http://127.0.0.1:8082/health   # host-mapped sidecar port if published
+```
+
+**3. Migrations** (tenant DBs):
+
+```bash
+docker compose --env-file .env.docker exec -T api php artisan toweros:migrate --force
+```
+
+**4. One consumer only** — use Compose `queue-worker` **or** systemd `toweros-worker`, never both on the same queues.
+
+**5. If batches stick on Scanning** (Redis jobs lost after OOM/restart):
+
+- UI: DocExtract list → **Retry** on the stuck row  
+- CLI (all stuck docs for a tenant):
+
+```bash
+docker compose --env-file .env.docker exec -T api php artisan doc-extract:requeue-stuck --tenant=<TENANT_UUID>
+```
+
+**6. Smoke test after deploy**
+
+| Check | Expect |
+|-------|--------|
+| `GET` sidecar `/health` | `{"status":"ok"}` |
+| Small PDF extract (≤5 pages) | Batch → Ready; results rows fill |
+| Approval / notification job | Still delivered (shared queue healthy) |
+| Stuck Retry | Requeues pending docs; progress moves |
+
+**Capacity note:** OCR is CPU/RAM heavy. Keep batches ≤25 records / ≤50 pages per file on a `t3.large`. Raise EC2 RAM before raising limits.
 
 ---
 
@@ -154,7 +233,7 @@ Set `APP_URL` / frontend URLs to `https://…` and force HTTPS at the proxy (`X-
 
 ### 5. SES — Amazon Simple Email Service
 
-TowerOS already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend). Prefer an **EC2 instance role** over access keys.
+INFRA SUITE already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend). Prefer an **EC2 instance role** over access keys.
 
 1. **SES console** (same region as the app, e.g. `ap-southeast-1`):
    - Verify domain `yourdomain.com` (DKIM via Route 53).
@@ -176,7 +255,7 @@ TowerOS already supports `MAIL_MAILER=ses` (`aws/aws-sdk-php` is in the backend)
 MAIL_MAILER=ses
 TOWEROS_NOTIFICATIONS_MAIL_MAILER=ses
 MAIL_FROM_ADDRESS=noreply@yourdomain.com
-MAIL_FROM_NAME=TowerOS
+MAIL_FROM_NAME=INFRA SUITE
 AWS_DEFAULT_REGION=ap-southeast-1
 # Leave AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY empty when using the instance role
 ```
@@ -185,7 +264,7 @@ AWS_DEFAULT_REGION=ap-southeast-1
 
 ```bash
 docker compose --env-file .env.docker exec api php artisan tinker
->>> Mail::raw('TowerOS SES OK', fn ($m) => $m->to('you@yourdomain.com')->subject('SES test'));
+>>> Mail::raw('INFRA SUITE SES OK', fn ($m) => $m->to('you@yourdomain.com')->subject('SES test'));
 ```
 
 **Alternative:** Microsoft 365 SMTP if the customer already uses it:
@@ -205,11 +284,13 @@ MAIL_ENCRYPTION=tls
 ### Gap resolution checklist
 
 - [ ] `docker compose … up -d redis` + `redis-cli ping` → PONG  
-- [ ] `toweros-worker` systemd enabled and running  
+- [ ] Compose `queue-worker` **or** `toweros-worker` systemd enabled (not both)  
+- [ ] DocExtract: `doc-extract` healthy + `DOC_EXTRACT_URL` set + tenant migrations applied  
 - [ ] cron `schedule:run` every minute; log file writable  
 - [ ] HTTPS works (`curl -fsS https://app…/up`); HTTP redirects or blocked  
 - [ ] SES domain verified + out of sandbox (or M365 SMTP working)  
 - [ ] Trigger one approval / notification and confirm the email arrives  
+- [ ] Trigger one small DocExtract batch and confirm it reaches Ready  
 
 ---
 
@@ -381,14 +462,14 @@ docker compose --env-file .env.docker exec api php artisan config:cache
 
 ```ini
 [Unit]
-Description=TowerOS queue worker
+Description=INFRA SUITE queue worker
 After=docker.service
 Requires=docker.service
 
 [Service]
 Restart=always
 WorkingDirectory=/opt/toweros
-ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+ExecStart=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:work redis --queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks --sleep=3 --tries=3 --max-time=3600
 ExecStop=/usr/bin/docker compose --env-file .env.docker exec -T api php artisan queue:restart
 
 [Install]
@@ -465,6 +546,7 @@ Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
 | Provision | Create tenant; confirm `tenant*` DB on RDS |
 | Files | Upload to site binder / document register (S3) |
 | Queue | Trigger approval → email/notification delivered |
+| DocExtract | Sidecar health + small PDF batch → Ready |
 | MFA / SSO | Per-tenant Sign-in & security |
 
 ---
@@ -474,14 +556,16 @@ Point Route 53 `A`/`CNAME` to ALB or Elastic IP.
 ```bash
 cd /opt/toweros
 git pull
-docker compose --env-file .env.docker build api web
-docker compose --env-file .env.docker up -d api web
+docker compose --env-file .env.docker build api web doc-extract queue-worker
+docker compose --env-file .env.docker up -d api web doc-extract queue-worker
 docker compose --env-file .env.docker exec api php artisan toweros:migrate --force
 docker compose --env-file .env.docker exec api php artisan config:cache
 docker compose --env-file .env.docker exec api php artisan queue:restart
-sudo systemctl restart toweros-worker
+# If still using systemd instead of Compose queue-worker:
+# sudo systemctl restart toweros-worker
 ```
 
+**Do not** run `php artisan config:cache` on the host against bind-mounted `bootstrap/cache` with host `DB_HOST=127.0.0.1` — bake cache **inside** the API container so Compose `DB_HOST=mysql` wins.
 After every deploy that touches env/secrets, confirm MFA prerequisites:
 
 ```bash

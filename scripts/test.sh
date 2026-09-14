@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TowerOS scenario test runner (macOS / Linux / Git Bash)
+# INFRA SUITE scenario test runner (macOS / Linux / Git Bash)
 #
 # Usage:
 #   ./scripts/test.sh
@@ -79,7 +79,7 @@ Available backend scenarios:
   smoke            Smoke (AdminOne + Http + Workspace)
   team-access      Team & Access / IAM
   admin            Team & Access (alias)
-  e-approval       E-Approval
+  e-approval       E-Forms
   rollout          Rollout / Project-One gates
   procurement      Procurement-One
   documents        Documents

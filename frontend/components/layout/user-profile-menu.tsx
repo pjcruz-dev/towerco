@@ -445,7 +445,7 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
         },
         {
           href: "/e-approval/profile",
-          label: "E-Approval profile",
+          label: "E-Forms profile",
           icon: UserCircle,
           visible: hasPermission(scopedUser, [permissions.eApprovalView]),
         },

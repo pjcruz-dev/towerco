@@ -203,7 +203,7 @@ final class EApprovalFieldOptionsParser
         }
 
         $typeRaw = strtolower(trim((string) ($entry['type'] ?? 'text')));
-        $allowed = ['text', 'number', 'currency', 'date', 'select'];
+        $allowed = ['text', 'textarea', 'number', 'currency', 'date', 'select', 'email', 'phone', 'boolean'];
         $type = in_array($typeRaw, $allowed, true) ? $typeRaw : 'text';
         $column['type'] = $type;
 

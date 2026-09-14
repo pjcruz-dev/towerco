@@ -1,6 +1,6 @@
 # Billing — Phase 1 (operational, no Stripe)
 
-Phase 1 provides **manual plan and seat management** for TowerOS operators and a **read-only billing view** for tenant administrators. There is no payment processor integration.
+Phase 1 provides **manual plan and seat management** for INFRA SUITE operators and a **read-only billing view** for tenant administrators. There is no payment processor integration.
 
 ## Shipped
 
@@ -21,9 +21,9 @@ Phase 1 provides **manual plan and seat management** for TowerOS operators and a
 | API | `GET /api/v1/admin/billing` (`tenant:manage`) |
 | UI | **Administration → Billing** (`/billing`) |
 | Seat enforcement | Creating users, CSV import, and reactivate blocked when active users ≥ `seat_limit` |
-| E-Approval gating | File fields require `professional` or `enterprise` (unchanged; driven by `plan_tier`) |
+| E-Forms gating | File fields require `professional` or `enterprise` (unchanged; driven by `plan_tier`) |
 
-### Plan tiers (E-Approval)
+### Plan tiers (E-Forms)
 
 | Tier | File fields | Max file fields |
 |------|-------------|-----------------|

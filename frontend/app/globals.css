@@ -58,7 +58,7 @@
 }
 
 :root {
-  /* TowerOS light: operational slate neutrals (#F8FAFC / #FFFFFF / #E2E8F0) — no blue cast on surfaces */
+  /* INFRA SUITE light: operational slate neutrals (#F8FAFC / #FFFFFF / #E2E8F0) — no blue cast on surfaces */
   --background: #f8fafc;
   --foreground: #0f172a;
   --card: #ffffff;

@@ -1,18 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import {
-  FileDown,
-  FileText,
-  GitBranch,
-  ImageIcon,
-  MessageSquare,
-  Paperclip,
-  Zap,
-} from "lucide-react";
-
+  AttachmentPreviewGallery,
+  type AttachmentGalleryItem,
+} from "@/components/attachments/attachment-preview-gallery";
 import {
   EApprovalApprovalSignatureField,
 } from "@/components/e-approval/e-approval-approval-signature-field";
@@ -20,6 +11,10 @@ import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-appro
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { EApprovalWaitingOnPanel } from "@/components/e-approval/e-approval-waiting-on-panel";
+import {
+  EApprovalWorkflowStepShow,
+  buildWorkflowStepShowItems,
+} from "@/components/e-approval/e-approval-workflow-step-show";
 import { EApprovalWorkflowPathDiagram } from "@/components/e-approval/e-approval-workflow-path-diagram";
 import { EApprovalTourSampleNotice } from "@/components/help/e-approval-tour-fixtures";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
@@ -34,12 +29,23 @@ import {
   E_APPROVAL_TOUR_SAMPLE_PRINT_PATH,
   isEApprovalTourActive,
 } from "@/lib/help/e-approval-tour-fixtures";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  FileDown,
+  FileText,
+  GitBranch,
+  MessageSquare,
+  Zap,
+} from "lucide-react";
 import {
   E_APPROVAL_TOUR_SAMPLE_DOCUMENT_NO,
   E_APPROVAL_TOUR_SAMPLE_FORM_NAME,
   eApprovalTourSampleApprovals,
   eApprovalTourSampleAttachments,
   eApprovalTourSampleComments,
+  eApprovalTourSampleListRows,
   eApprovalTourSampleRequestor,
   eApprovalTourSampleSubmittedAt,
   eApprovalTourSampleValues,
@@ -76,46 +82,28 @@ function TourSampleDocumentApprovalFields() {
 }
 
 function TourSampleAttachmentsPanel() {
+  const items = useMemo((): AttachmentGalleryItem[] => {
+    return eApprovalTourSampleAttachments.map((file) => ({
+      id: file.id,
+      fileName: file.file_name,
+      title: file.file_name,
+      subtitle: "Supporting documents",
+    }));
+  }, []);
+
+  const noopFetchBlob = useCallback(async () => new Blob(), []);
+
   return (
     <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Paperclip className="h-4 w-4 text-muted-foreground" aria-hidden />
-        <h3 className="text-sm font-medium text-foreground">Attachments</h3>
-        <Badge variant="outline" className="h-5 min-w-5 px-1.5 text-[10px]">
-          {eApprovalTourSampleAttachments.length}
-        </Badge>
-      </div>
-      <ul className="grid gap-2 sm:grid-cols-2">
-        {eApprovalTourSampleAttachments.map((file) => {
-          const isImage = /\.(png|jpe?g|gif|webp)$/i.test(file.file_name);
-          return (
-            <li
-              key={file.id}
-              className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-                {isImage ? (
-                  <ImageIcon className="h-4 w-4" aria-hidden />
-                ) : (
-                  <FileText className="h-4 w-4" aria-hidden />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{file.file_name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {file.metadata?.caption ?? "Supporting documents"}
-                  {file.metadata?.captured_at
-                    ? ` · ${formatTourSampleTimestamp(file.metadata.captured_at)}`
-                    : null}
-                </p>
-                <Button type="button" size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" disabled>
-                  Open preview
-                </Button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <AttachmentPreviewGallery
+        title="Attachments"
+        hint="Photos show geotag details when captured. PDF/image can open with approval footer."
+        items={items}
+        fetchBlob={noopFetchBlob}
+        onDownload={() => undefined}
+        openPreviewDisabled
+        openPreviewLabel="Open with approval footer"
+      />
     </div>
   );
 }
@@ -132,6 +120,7 @@ function TourSampleDetailInner() {
 
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
+  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [decisionRemarks, setDecisionRemarks] = useState("");
 
@@ -188,24 +177,33 @@ function TourSampleDetailInner() {
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Form</dt>
             <dd className="mt-0.5 font-medium">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</dd>
+            <p className="mt-1 text-xs text-muted-foreground">Form version at submit · v3</p>
           </div>
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Requestor</dt>
             <dd className="mt-0.5">{eApprovalTourSampleRequestor.name}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium text-muted-foreground">Workflow step</dt>
-            <dd className="mt-0.5">Step 1</dd>
+            <dt className="text-xs font-medium text-muted-foreground">Subsidiary</dt>
+            <dd className="mt-0.5">{eApprovalTourSampleListRows[0]?.subsidiary ?? "ATC"}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Submitted</dt>
             <dd className="mt-0.5">{formatTourSampleTimestamp(eApprovalTourSampleSubmittedAt)}</dd>
           </div>
-          <div>
-            <dt className="text-xs font-medium text-muted-foreground">Form version at submit</dt>
-            <dd className="mt-0.5">v3</dd>
-          </div>
         </dl>
+        <div className="mt-4 border-t border-border pt-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Workflow step</p>
+          <EApprovalWorkflowStepShow
+            variant="compact"
+            steps={buildWorkflowStepShowItems({
+              currentStep: eApprovalTourSampleListRows[0]?.current_step ?? 1,
+              stepCount: eApprovalTourSampleListRows[0]?.step_count ?? 3,
+              status: "pending",
+              workflowSteps: eApprovalTourSampleListRows[0]?.workflow_steps,
+            })}
+          />
+        </div>
         <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
           <Link
             href={`${E_APPROVAL_TOUR_SAMPLE_PRINT_PATH}?${buildTourSearchParams(
@@ -362,7 +360,13 @@ function TourSampleDetailInner() {
                   value={approvalSignature}
                   onChange={setApprovalSignature}
                   consentAccepted={signatureConsentAccepted}
-                  onConsentChange={setSignatureConsentAccepted}
+                  onConsentChange={(accepted) => {
+                    setSignatureConsentAccepted(accepted);
+                    if (accepted) {
+                      setHighlightSignatureConsents(false);
+                    }
+                  }}
+                  highlightMissingConsents={highlightSignatureConsents}
                   disabled={false}
                   error={approvalSignatureError}
                   onErrorChange={setApprovalSignatureError}
@@ -384,7 +388,24 @@ function TourSampleDetailInner() {
                   className="mt-2 flex flex-wrap gap-2 border-t border-border pt-4"
                 >
                   <span data-help="ea-decide-approve" className="inline-flex">
-                    <Button type="button" size="sm" disabled>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={!signatureConsentAccepted ? "opacity-50" : undefined}
+                      onClick={() => {
+                        if (!signatureConsentAccepted) {
+                          setHighlightSignatureConsents(true);
+                          setApprovalSignatureError(
+                            "Accept both electronic signature consents before approving.",
+                          );
+                          document
+                            .querySelector('[data-help="ea-decide-signature-consent"]')
+                            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          return;
+                        }
+                        setApprovalSignatureError("Sample only — Approve does not save.");
+                      }}
+                    >
                       Approve
                     </Button>
                   </span>

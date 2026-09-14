@@ -142,7 +142,7 @@ final class TenantSeatLimitService
             throw ValidationException::withMessages([
                 'roles' => [
                     __(
-                        'Paid seat limit reached (:used / :limit). Deactivate a user, keep a viewer-only role, or ask TowerOS to increase your seat limit.',
+                        'Paid seat limit reached (:used / :limit). Deactivate a user, keep a viewer-only role, or ask INFRA SUITE to increase your seat limit.',
                         ['used' => $this->activeSeatCount(), 'limit' => $this->seatLimit()],
                     ),
                 ],
@@ -166,7 +166,7 @@ final class TenantSeatLimitService
             throw ValidationException::withMessages([
                 'email' => [
                     __(
-                        'Paid seat limit reached (:used / :limit). Deactivate a user or ask TowerOS to increase your seat limit before adding accounts.',
+                        'Paid seat limit reached (:used / :limit). Deactivate a user or ask INFRA SUITE to increase your seat limit before adding accounts.',
                         ['used' => $this->activeSeatCount(), 'limit' => $this->seatLimit()],
                     ),
                 ],

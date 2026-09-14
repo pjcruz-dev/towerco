@@ -279,7 +279,7 @@ final class EntraOrgDirectoryServiceTest extends TestCase
         tenancy()->end();
     }
 
-    public function test_app_sync_inherits_department_from_manager_when_report_has_none(): void
+    public function test_app_sync_keeps_empty_department_when_entra_has_none(): void
     {
         tenancy()->initialize($this->testTenant);
 
@@ -294,6 +294,7 @@ final class EntraOrgDirectoryServiceTest extends TestCase
             'email' => 'terrence@example.com',
             'password' => 'password',
             'is_active' => true,
+            'department' => 'QMS',
         ]);
 
         $alvin = new EntraDirectoryPerson(
@@ -335,7 +336,7 @@ final class EntraOrgDirectoryServiceTest extends TestCase
         $manager->refresh();
         $this->assertSame((string) $manager->id, (string) $report->manager_id);
         $this->assertSame('Technology and Quality', $manager->department);
-        $this->assertSame('Technology and Quality', $report->department);
+        $this->assertNull($report->department);
         $this->assertSame('Technology and Quality', $report->entra_manager_department);
 
         tenancy()->end();

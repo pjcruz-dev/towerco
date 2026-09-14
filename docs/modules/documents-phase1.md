@@ -10,7 +10,7 @@ Site-scoped binder storage with AWS S3 (signed URLs in staging/prod), activity a
 | Entry | Sites → Documents tab; `/documents` expiring home |
 | Lessors | Repeatable per site (`Add lessor`) |
 | Engineering | Fixed subfolders: Drawings, BOQ, Structural, As-built, Other |
-| Approval | Phase 2 (E-Approval); Phase 1 status: draft / final / superseded |
+| Approval | Phase 2 (E-Forms); Phase 1 status: draft / final / superseded |
 | Template editors | Tenant admin + PMO (`documents:template:manage`) |
 | S3 | One bucket, `{tenant_id}/documents/{site_id}/{document_id}/v{n}/` |
 | Upload | API → S3; download via signed URL (60 min default) |
@@ -66,7 +66,7 @@ eSite Folder (Engineering)
 
 See [documents-phase2.md](documents-phase2.md).
 
-- E-Approval `Request approval`
+- E-Forms `Request approval`
 - Binder template admin UI (read-only platform default)
 - Workspace search documents group
 - Gate checklist API + site binder UI

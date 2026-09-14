@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "External form — TowerOS",
+  title: "External form — INFRA SUITE",
   description: "Submit a request without signing in.",
 };
 

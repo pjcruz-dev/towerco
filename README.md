@@ -1,8 +1,8 @@
-# TowerOS
+# INFRA SUITE
 
 Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular monolith: **Laravel API** + **Next.js** tenant workspace + **platform superadmin console**.
 
-**Board reference:** [`docs/Rules/TowerOS_Board_Presentation.pdf`](docs/Rules/TowerOS_Board_Presentation.pdf) — module names, phases, and roadmap.
+**Board reference:** [`docs/Rules/INFRA SUITE_Board_Presentation.pdf`](docs/Rules/INFRA SUITE_Board_Presentation.pdf) — module names, phases, and roadmap.
 
 ---
 
@@ -55,18 +55,18 @@ Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular mon
 | **FIBER-ONE** | Fiber routes | `/fiber-one` |
 | **ASSET-ONE** | Asset registry | `/asset-one` |
 | **GIS** | Operational map | `/gis` |
-| **E-Approval** | Forms, submissions, approvals | `/e-approval` |
+| **E-Forms** | Forms, submissions, approvals | `/e-approval` |
 
 Roadmap modules (TASK-ONE, VENDOR-ONE, etc.) are in the board deck; not all are in the tenant shell yet.
 
-**Deep dives:** [PROJECT-ONE](docs/roadmaps/project-one-roadmap.md) · [E-Approval](docs/modules/e-approval.md) · [E-Approval form builder](docs/modules/e-approval-form-builder.md) · [E-Approval go-live](docs/modules/e-approval-go-live-checklist.md)
+**Deep dives:** [PROJECT-ONE](docs/roadmaps/project-one-roadmap.md) · [E-Forms](docs/modules/e-approval.md) · [E-Forms form builder](docs/modules/e-approval-form-builder.md) · [E-Forms go-live](docs/modules/e-approval-go-live-checklist.md)
 
 ---
 
 ## Repository layout
 
 ```text
-TowerOS/
+INFRA SUITE/
 ├── backend/              Laravel API (central + tenant routes)
 ├── frontend/             Next.js tenant app + platform console
 ├── docs/                 All non-prod docs: phases, Rules, guides, rollout
@@ -116,8 +116,8 @@ Estimated time: **~15 minutes** first run (image build + MySQL init).
 ### Step 1 — Clone and open the repo
 
 ```bash
-git clone <your-repo-url> TowerOS
-cd TowerOS
+git clone <your-repo-url> INFRA SUITE
+cd INFRA SUITE
 ```
 
 ### Step 2 — Create environment files
@@ -290,7 +290,7 @@ SSO and tenant settings live in **central** DB table `tenant_sso_configs`, not i
 
 | Console | URL | Auth | Who |
 |---------|-----|------|-----|
-| **Platform (superadmin)** | `/platform` | Passport | TowerOS operators — provision tenants |
+| **Platform (superadmin)** | `/platform` | Passport | INFRA SUITE operators — provision tenants |
 | **Tenant workspace** | `https://app.{customer}/` or `*.localhost` | Sanctum (+ optional MFA) | Customer org users |
 
 Tenant users do **not** use the platform console for daily work.
@@ -331,7 +331,7 @@ Configured **per tenant** (not on the platform console).
 
 1. **Microsoft Entra ID → App registrations → New registration**  
 2. **Supported account types:** single org (typical)  
-3. **Authentication → Web redirect URI** — must match TowerOS exactly, e.g. local:
+3. **Authentication → Web redirect URI** — must match INFRA SUITE exactly, e.g. local:
 
    ```text
    http://localhost:8000/api/v1/auth/sso/azure/callback
@@ -344,14 +344,14 @@ Configured **per tenant** (not on the platform console).
 Note from app **Overview**:
 
 - **Application (client) ID**  
-- **Directory (tenant) ID** — use this in TowerOS (not `common` for single-tenant apps)
+- **Directory (tenant) ID** — use this in INFRA SUITE (not `common` for single-tenant apps)
 
-### B. TowerOS tenant admin
+### B. INFRA SUITE tenant admin
 
 1. Sign in at **http://atc.localhost/login** (tenant admin)  
 2. **Administration → Settings → Sign-in & security** → http://atc.localhost/admin/settings  
 3. Enable Microsoft sign-in; paste Client ID, **Directory (tenant) ID**, and **client secret Value**  
-4. **Entra group → role mapping:** use `{}` when empty (not `[]`) to skip Entra role sync — assign roles only in **Team & Access**. When you map a group, roles are **merged** on each Microsoft sign-in (they do not remove roles already assigned in TowerOS), e.g.:
+4. **Entra group → role mapping:** use `{}` when empty (not `[]`) to skip Entra role sync — assign roles only in **Team & Access**. When you map a group, roles are **merged** on each Microsoft sign-in (they do not remove roles already assigned in INFRA SUITE), e.g.:
 
    ```json
    {
@@ -359,7 +359,7 @@ Note from app **Overview**:
    }
    ```
 
-   A user in that group gets `viewer` from Entra plus any roles you set in Team & Access (e.g. `e_approval_requestor`). No matching group → existing TowerOS roles are unchanged.
+   A user in that group gets `viewer` from Entra plus any roles you set in Team & Access (e.g. `e_approval_requestor`). No matching group → existing INFRA SUITE roles are unchanged.
 
 5. **Save sign-in settings** → **Validate Microsoft app**  
 6. Ensure the user exists in **Team & Access** (or enable auto-provision). **Bulk CSV import** (`email`, `name`, `role`) matches users case-insensitively — Microsoft sign-in reuses the same account (no duplicate). See [docs/modules/tenant-user-bulk-import.md](docs/modules/tenant-user-bulk-import.md).  
@@ -373,7 +373,7 @@ Use your real API host, e.g.:
 https://api.customer.com/api/v1/auth/sso/azure/callback
 ```
 
-Same host routing model as local; update Azure and TowerOS together.
+Same host routing model as local; update Azure and INFRA SUITE together.
 
 ---
 
@@ -391,14 +391,14 @@ After login on a tenant host (e.g. `atc.localhost`):
 | FIBER-ONE | `/fiber-one` |
 | ASSET-ONE | `/asset-one` |
 | GIS | `/gis` |
-| E-Approval | `/e-approval` (forms, submissions, approvals, audit, settings) |
+| E-Forms | `/e-approval` (forms, submissions, approvals, audit, settings) |
 | Team & Access | `/users` |
 | Sign-in & security | `/admin/settings` |
 | KPI & SLA (admin JSON) | `/admin/settings/kpi` |
 | Sessions | `/settings/sessions` |
 | MFA | `/settings/security/mfa` |
 
-**E-Approval** runs inside this Next.js app only. Standalone formbuilder is decommissioned (historical only; not in this repo or deploy).
+**E-Forms** runs inside this Next.js app only. Standalone formbuilder is decommissioned (historical only; not in this repo or deploy).
 
 ---
 
@@ -447,9 +447,9 @@ New tenants from the platform UI run tenant migrations automatically during prov
 
 ---
 
-### Is TowerOS ready for production?
+### Is INFRA SUITE ready for production?
 
-**Application:** Yes for the modules you have been testing (Project-One, Sites, Documents, Document register, E-Approval, Ticketing). Priority automated tests pass; run your staging manual checklist before cutover.
+**Application:** Yes for the modules you have been testing (Project-One, Sites, Documents, Document register, E-Forms, Ticketing). Priority automated tests pass; run your staging manual checklist before cutover.
 
 **Operations:** Production is ready when **you** complete the checklist below — not only when code is merged.
 
@@ -473,7 +473,7 @@ New tenants from the platform UI run tenant migrations automatically during prov
 
 ### A. Confirmed AWS production stack
 
-| Resource | Spec | TowerOS use |
+| Resource | Spec | INFRA SUITE use |
 |----------|------|-------------|
 | **EC2 t3.large** | 2 vCPU, 8 GB, 50 GB root | Docker: API + Next.js + Redis + queue worker |
 | **EBS gp3** | 100 GB | Images, logs, temp |
@@ -582,10 +582,10 @@ Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastr
 | [`docs/infrastructure/tenant-domain-slugs.md`](docs/infrastructure/tenant-domain-slugs.md) | Hostnames per environment |
 | [`docs/architecture/tenant-isolation-mysql.md`](docs/architecture/tenant-isolation-mysql.md) | Multi-tenant MySQL |
 | [`docs/README.md`](docs/README.md) | Docs home (phases, Rules, archives) — not deployed to AWS |
-| [`docs/Rules/TowerOS_Board_Presentation.pdf`](docs/Rules/TowerOS_Board_Presentation.pdf) | Board / investor module map |
+| [`docs/Rules/INFRA SUITE_Board_Presentation.pdf`](docs/Rules/INFRA SUITE_Board_Presentation.pdf) | Board / investor module map |
 | [`docs/design-system/DESIGN_SYSTEM.md`](docs/design-system/DESIGN_SYSTEM.md) | Full UI design system |
 | [`docs/design-system/toweros-design-system.md`](docs/design-system/toweros-design-system.md) | Token / component summary |
-| [`docs/modules/e-approval.md`](docs/modules/e-approval.md) | E-Approval module |
+| [`docs/modules/e-approval.md`](docs/modules/e-approval.md) | E-Forms module |
 | [`docs/roadmaps/project-one-roadmap.md`](docs/roadmaps/project-one-roadmap.md) | PROJECT-ONE / rollouts |
 | [`.cursor/rules/toweros.mdc`](.cursor/rules/toweros.mdc) | Coding standards |
 | [`.cursor/rules/uiux-theme.mdc`](.cursor/rules/uiux-theme.mdc) | UI/UX rules |
@@ -619,4 +619,4 @@ Prefer full Docker (`npm run dev`) for the least setup; prefer host mode for the
 
 ## License & support
 
-Proprietary — Alliance / TowerOS. For internal setup questions, use this README and `docs/guides/local-development-docker-guide.md` first, then check API logs: `npm run dev:logs:api`.
+Proprietary — Alliance / INFRA SUITE. For internal setup questions, use this README and `docs/guides/local-development-docker-guide.md` first, then check API logs: `npm run dev:logs:api`.

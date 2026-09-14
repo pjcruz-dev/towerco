@@ -1,16 +1,16 @@
-# E-Approval — legacy API parity (P4 sign-off)
+# E-Forms — legacy API parity (P4 sign-off)
 
-Standalone formbuilder is **decommissioned**. TowerOS E-Approval is the only supported surface for forms, submissions, and approvals.
+Standalone formbuilder is **decommissioned**. INFRA SUITE E-Forms is the only supported surface for forms, submissions, and approvals.
 
-**Sign-off criteria:** All production workflows use TowerOS routes below. Intentional gaps are documented and accepted.
+**Sign-off criteria:** All production workflows use INFRA SUITE routes below. Intentional gaps are documented and accepted.
 
 ---
 
 ## Parity matrix
 
-| Legacy area | Legacy routes | TowerOS | Status |
+| Legacy area | Legacy routes | INFRA SUITE | Status |
 |-------------|---------------|---------|--------|
-| Auth | `auth/login-local`, `register-local`, `logout`, `me` | TowerOS Sanctum + Entra | **Dropped** (by design) |
+| Auth | `auth/login-local`, `register-local`, `logout`, `me` | INFRA SUITE Sanctum + Entra | **Dropped** (by design) |
 | Users | `users/*`, `admin/create-user`, import/export | Administration → Users | **Dropped** |
 | Forms CRUD | `forms`, `forms/[id]` | `GET/POST/PUT/DELETE /e-approval/forms` | **Shipped** |
 | Form validate | `forms/validate` | `POST /e-approval/forms/validate` | **Shipped** |
@@ -28,7 +28,7 @@ Standalone formbuilder is **decommissioned**. TowerOS E-Approval is the only sup
 | Notifications | `notifications/*` | `GET /e-approval/notifications/*` | **Shipped** |
 | Audit | `audit` | `GET /e-approval/audit` | **Shipped** |
 | Settings | `settings`, `settings/public` | `GET/PUT /e-approval/settings`, `settings/public` | **Shipped** (P3) |
-| Test email | `test-email` | TowerOS mail / tenant admin | **Dropped** — use platform mail config |
+| Test email | `test-email` | INFRA SUITE mail / tenant admin | **Dropped** — use platform mail config |
 | Master data admin | `admin/master-data-*` | `/e-approval/master-data-sets/*` | **Shipped** (P3) |
 | Master data runtime | `master-data/[key]` | `GET /e-approval/master-data/{key}` | **Shipped** (P3) |
 | PDF layout | `pdf-layout/[formId]` | `GET|PUT|DELETE /e-approval/pdf-layout/{formId}` | **Shipped** |

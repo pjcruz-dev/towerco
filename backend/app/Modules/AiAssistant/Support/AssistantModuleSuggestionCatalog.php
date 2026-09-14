@@ -16,8 +16,8 @@ final class AssistantModuleSuggestionCatalog
     {
         return match ($moduleKey) {
             'e_approval' => [
-                'How do I create an E-Approval request?',
-                'Where do I track my E-Approval submission?',
+                'How do I create an E-Forms request?',
+                'Where do I track my E-Forms submission?',
                 'What if my form is not listed?',
             ],
             'ticketing' => [
@@ -37,13 +37,13 @@ final class AssistantModuleSuggestionCatalog
             ],
             'sites' => [
                 'How do I find a site by site code?',
-                'What is linked to a site in TowerOS?',
-                'How do I get started in TowerOS?',
+                'What is linked to a site in INFRA SUITE?',
+                'How do I get started in INFRA SUITE?',
             ],
             'project_one' => [
                 'How do I find a rollout?',
                 'How do gate approvals work?',
-                'How do I get started in TowerOS?',
+                'How do I get started in INFRA SUITE?',
             ],
             'procurement_one' => [
                 'How does the purchase order workflow work?',
@@ -56,9 +56,9 @@ final class AssistantModuleSuggestionCatalog
                 'Why can’t I see a page or module?',
             ],
             default => [
-                'How do I get started in TowerOS?',
+                'How do I get started in INFRA SUITE?',
                 'Why can’t I see a page or module?',
-                'How do I create an E-Approval request?',
+                'How do I create an E-Forms request?',
             ],
         };
     }

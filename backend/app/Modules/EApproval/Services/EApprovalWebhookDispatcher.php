@@ -55,7 +55,7 @@ final class EApprovalWebhookDispatcher
         }
 
         $payload = TeamsWebhookCardFactory::build(
-            title: __('External E-Approval submission'),
+            title: __('External E-Forms submission'),
             bodyText: __('A public form was submitted and is awaiting review.'),
             facts: $facts,
             accentColor: 'Accent',

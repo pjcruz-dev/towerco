@@ -37,7 +37,7 @@ final class HelpPackDiscoveryService
     }
 
     /**
-     * Every module key TowerOS knows about (required + toggleable).
+     * Every module key INFRA SUITE knows about (required + toggleable).
      *
      * @return list<string>
      */

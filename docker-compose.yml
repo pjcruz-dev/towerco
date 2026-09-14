@@ -1,4 +1,4 @@
-# TowerOS local/production stack only (API + web + MySQL + Redis + Soketi).
+# INFRA SUITE local/production stack only (API + web + MySQL + Redis + Soketi).
 name: toweros
 
 services:
@@ -84,6 +84,22 @@ services:
       SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: "true"
     mem_limit: ${TOWEROS_SOKETI_MEM_LIMIT:-256m}
 
+  doc-extract:
+    build:
+      context: ./services/doc-extract
+      dockerfile: Dockerfile
+    container_name: toweros-doc-extract
+    restart: unless-stopped
+    ports:
+      - "${TOWEROS_DOC_EXTRACT_PORT:-8082}:8081"
+    mem_limit: ${TOWEROS_DOC_EXTRACT_MEM_LIMIT:-1g}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
   api:
     build:
       context: ./backend
@@ -101,6 +117,9 @@ services:
     # (stale env_file values override .env until the container is recreated).
     environment:
       TOWEROS_DOCKER: "1"
+      # Must stay 1: `artisan serve` spawns `php -S` without Compose env; cached config
+      # bakes DB_HOST=mysql. Host-side `php artisan config:cache` will break Docker — avoid it.
+      TOWEROS_API_OPTIMIZE: ${TOWEROS_API_OPTIMIZE:-1}
       TOWEROS_DOCKER_AUTO_MIGRATE: ${TOWEROS_DOCKER_AUTO_MIGRATE:-1}
       TOWEROS_API_WORKERS: ${TOWEROS_API_WORKERS:-4}
       # Survive config:cache. Quote "*" — bare * is special in YAML.
@@ -115,6 +134,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_CLIENT: predis
+      DOC_EXTRACT_URL: ${DOC_EXTRACT_URL:-http://doc-extract:8081}
     volumes:
       - ./backend:/var/www/html
       - toweros-backend-vendor:/var/www/html/vendor
@@ -125,7 +145,61 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      doc-extract:
+        condition: service_started
     mem_limit: ${TOWEROS_API_MEM_LIMIT:-1536m}
+
+  # Always-on queue consumer (DocExtract scans, mail, notifications, etc.).
+  # Prefer this over `docker compose exec api queue:work` — survives API recreates.
+  queue-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "/var/www/html/docker/entrypoint.sh"]
+    command:
+      [
+        "php",
+        "artisan",
+        "queue:work",
+        "redis",
+        "--queue=toweros-default,toweros-integrations,toweros-notifications,toweros-tenant,toweros-webhooks",
+        "--sleep=3",
+        "--tries=3",
+        "--max-time=3600",
+      ]
+    container_name: toweros-queue-worker
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    environment:
+      TOWEROS_DOCKER: "1"
+      # Worker inherits Compose env; never rewrite shared config cache used by API php -S.
+      TOWEROS_API_OPTIMIZE: "0"
+      TOWEROS_DOCKER_AUTO_MIGRATE: "0"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-"*"}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      CENTRAL_DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-toweros}
+      DB_USERNAME: ${MYSQL_USER:-toweros}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-toweros}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_CLIENT: predis
+      DOC_EXTRACT_URL: ${DOC_EXTRACT_URL:-http://doc-extract:8081}
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ./backend:/var/www/html
+      - toweros-backend-vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      doc-extract:
+        condition: service_started
+    mem_limit: ${TOWEROS_QUEUE_WORKER_MEM_LIMIT:-512m}
 
   web:
     profiles: ["web"]

@@ -7,34 +7,18 @@ namespace App\Modules\AdminOne\Services;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-
-final class TenantUserIndexFilters
-{
-    public function __construct(
-        public readonly ?string $status = null,
-        public readonly ?string $lastActive = null,
-        public readonly ?string $mfa = null,
-        public readonly ?string $role = null,
-    ) {}
-
-    public static function fromRequest(array $validated): self
-    {
-        $status = isset($validated['status']) ? (string) $validated['status'] : null;
-        $lastActive = isset($validated['last_active']) ? (string) $validated['last_active'] : null;
-        $mfa = isset($validated['mfa']) ? (string) $validated['mfa'] : null;
-        $role = isset($validated['role']) ? trim((string) $validated['role']) : null;
-
-        return new self(
-            status: $status === 'all' ? null : $status,
-            lastActive: $lastActive === 'all' ? null : $lastActive,
-            mfa: $mfa === 'all' ? null : $mfa,
-            role: $role === '' || $role === 'all' ? null : $role,
-        );
-    }
-}
+use Illuminate\Support\Facades\Schema;
 
 final class TenantUserIndexQueryFilters
 {
+    private ?bool $orgColumns = null;
+
+    private ?bool $licenseColumns = null;
+
+    public function __construct(
+        private readonly TenantUserDepartmentDisplay $departmentDisplay,
+    ) {}
+
     /**
      * @param  Builder<TenantUser>  $query
      */
@@ -44,6 +28,9 @@ final class TenantUserIndexQueryFilters
         $this->applyLastActiveFilter($query, $filters->lastActive);
         $this->applyMfaFilter($query, $filters->mfa);
         $this->applyRoleFilter($query, $filters->role);
+        $this->departmentDisplay->applyFilter($query, $filters->department);
+        $this->applyManagerFilter($query, $filters->managerId);
+        $this->applyLicenseFilter($query, $filters->license);
     }
 
     /**
@@ -140,5 +127,55 @@ final class TenantUserIndexQueryFilters
         $query->whereHas('roles', static function ($sub) use ($role): void {
             $sub->where('name', $role);
         });
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyManagerFilter(Builder $query, ?string $managerId): void
+    {
+        if ($managerId === null || $managerId === '' || ! $this->hasOrgColumns()) {
+            return;
+        }
+
+        if ($managerId === TenantUserIndexFilters::NONE) {
+            $query->whereNull('manager_id');
+
+            return;
+        }
+
+        $query->where('manager_id', $managerId);
+    }
+
+    /**
+     * @param  Builder<TenantUser>  $query
+     */
+    private function applyLicenseFilter(Builder $query, ?string $license): void
+    {
+        if ($license === null || $license === '' || ! $this->hasLicenseColumns()) {
+            return;
+        }
+
+        if ($license === TenantUserIndexFilters::NONE) {
+            $query->where(static function ($sub): void {
+                $sub->whereNull('entra_license_label')
+                    ->orWhere('entra_license_label', '')
+                    ->orWhere('entra_licensed', false);
+            });
+
+            return;
+        }
+
+        $query->where('entra_license_label', $license);
+    }
+
+    private function hasOrgColumns(): bool
+    {
+        return $this->orgColumns ??= Schema::connection('tenant')->hasColumn('users', 'manager_id');
+    }
+
+    private function hasLicenseColumns(): bool
+    {
+        return $this->licenseColumns ??= Schema::connection('tenant')->hasColumn('users', 'entra_licensed');
     }
 }

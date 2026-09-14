@@ -9,7 +9,7 @@ use App\Models\Tenant;
 use Illuminate\Console\Command;
 
 /**
- * Update central tenants.plan_tier (E-Approval file uploads require professional or enterprise).
+ * Update central tenants.plan_tier (E-Forms file uploads require professional or enterprise).
  */
 final class SetTenantPlanTier extends Command
 {
@@ -22,7 +22,7 @@ final class SetTenantPlanTier extends Command
         {--all : Apply to every tenant in central DB}
     ';
 
-    protected $description = 'Set billing plan tier on one or all tenants (enables E-Approval file fields on professional+).';
+    protected $description = 'Set billing plan tier on one or all tenants (enables E-Forms file fields on professional+).';
 
     public function handle(): int
     {

@@ -9,7 +9,7 @@
 
 ## Context
 
-Operators asked whether tenants can sign in with **fingerprint**. TowerOS today supports:
+Operators asked whether tenants can sign in with **fingerprint**. INFRA SUITE today supports:
 
 - Email + password
 - Microsoft Entra ID SSO (when enabled)
@@ -22,7 +22,7 @@ There is no WebAuthn / passkey / biometric login path yet. Device biometrics mus
 ### 1. Technology: passkeys (WebAuthn), not raw fingerprint APIs
 
 - Use platform authenticators (Windows Hello, Touch ID, Face ID, Android biometrics) via **WebAuthn**.
-- TowerOS stores **public credentials** only (credential id, public key, sign count, label). Fingerprint templates never leave the device / OS.
+- INFRA SUITE stores **public credentials** only (credential id, public key, sign count, label). Fingerprint templates never leave the device / OS.
 
 ### 2. Audience and rollout posture
 
@@ -45,14 +45,14 @@ Phase 4 may allow “passkey satisfies MFA”; that is **out of scope** for Phas
 
 1. User must **sign in first** (password or Microsoft) to create a session.
 2. User enrolls a passkey under Security / profile settings while authenticated.
-3. TowerOS binds `credential → user_id` in the **tenant** database.
+3. INFRA SUITE binds `credential → user_id` in the **tenant** database.
 4. Later logins: “Sign in with passkey” verifies the assertion and opens a normal tenant session.
 
 Fingerprint alone never invents an account; it only unlocks a credential already linked to a user.
 
 ### 5. Multi-device and multi-tenant
 
-- **New laptop:** user signs in with password/SSO, then enrolls a new passkey on that device (unless the OS syncs passkeys — browser/OS dependent; not TowerOS-managed).
+- **New laptop:** user signs in with password/SSO, then enrolls a new passkey on that device (unless the OS syncs passkeys — browser/OS dependent; not INFRA SUITE-managed).
 - **RP ID / origin:** Relying Party ID must match the **tenant hostname** (e.g. `atc.example.com`). Credentials are not portable across tenant domains.
 - No cross-tenant credential reuse.
 

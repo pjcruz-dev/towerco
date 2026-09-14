@@ -17,7 +17,7 @@ final class SeedEApprovalHelpGuidesCommand extends Command
         {--force : Overwrite guides even if admins edited them}
     ';
 
-    protected $description = 'Seed editable E-Approval requestor and approver user guides for tenant(s).';
+    protected $description = 'Seed editable E-Forms requestor and approver user guides for tenant(s).';
 
     public function handle(HelpGuideService $service): int
     {
@@ -122,14 +122,14 @@ final class SeedEApprovalHelpGuidesCommand extends Command
             [
                 'slug' => 'e-approval-for-requestors',
                 'role' => HelpGuide::ROLE_REQUESTOR,
-                'title' => 'E-Approval for requestors',
+                'title' => 'E-Forms for requestors',
                 'body' => (string) file_get_contents($requestorPath),
                 'sort_order' => 10,
             ],
             [
                 'slug' => 'e-approval-for-approvers',
                 'role' => HelpGuide::ROLE_APPROVER,
-                'title' => 'E-Approval for approvers',
+                'title' => 'E-Forms for approvers',
                 'body' => (string) file_get_contents($approverPath),
                 'sort_order' => 20,
             ],

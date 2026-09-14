@@ -3,19 +3,29 @@ import {
   Building2,
   CircleHelp,
   ClipboardCheck,
-  LifeBuoy,
+  CreditCard,
+  FileScan,
+  FileText,
   Landmark,
   LayoutDashboard,
+  LifeBuoy,
+  Map,
+  MapPin,
   Package,
   PiggyBank,
   PlusCircle,
-  Settings,
   ScrollText,
+  Settings,
   Shapes,
+  ShoppingCart,
   Users,
   Waypoints,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+import type { ProcurementPlanFeatureKey } from "@/lib/procurement/procurement-plan-features";
+import { financeOneRoutes } from "@/lib/navigation/finance-one-routes";
 
 export type WorkspaceSubNavItem = {
   title: string;
@@ -26,6 +36,7 @@ export type WorkspaceSubNavItem = {
   permissionsMatch?: "all" | "any";
   badge?: number;
   module?: string;
+  procurementPlanFeature?: ProcurementPlanFeatureKey;
 };
 
 export type WorkspaceTopNavItem = {
@@ -69,6 +80,87 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         href: "/dashboard",
         permissions: ["dashboard:view"],
         module: "core",
+      },
+      {
+        title: "Sites",
+        icon: MapPin,
+        href: "/sites",
+        permissions: ["sites:view"],
+        module: "sites",
+      },
+      {
+        title: "Documents",
+        icon: FileText,
+        module: "documents",
+        permissions: ["documents:view", "documents:template:manage"],
+        items: [
+          {
+            title: "Site binders",
+            href: "/documents",
+            exact: true,
+            permissions: ["documents:view"],
+          },
+          {
+            title: "Binder template",
+            href: "/documents/settings",
+            permissions: ["documents:template:manage"],
+          },
+        ],
+      },
+      {
+        title: "Document register",
+        icon: ClipboardCheck,
+        href: "/documents/controlled",
+        module: "document_register",
+        permissions: ["documents:controlled:view"],
+      },
+      {
+        title: "Project-One",
+        icon: Building2,
+        module: "project_one",
+        permissions: ["project_one:view"],
+        items: [
+          { title: "Overview", href: "/project-one", exact: true, section: "Operate", permissions: ["project_one:view"] },
+          { title: "Rollouts", href: "/project-one/rollouts", section: "Operate", permissions: ["project_one:rollout:view"] },
+          { title: "Projects", href: "/project-one/projects", section: "Operate", permissions: ["project_one:view"] },
+          { title: "Approvals", href: "/project-one/approvals", section: "Decide", permissions: ["project_one:view"] },
+          {
+            title: "Gate approvals",
+            href: "/project-one/gate-approvals?awaiting_me=1",
+            section: "Decide",
+            permissions: ["project_one:rollout:view"],
+          },
+        ],
+      },
+      {
+        title: "TOWER-ONE",
+        icon: Landmark,
+        module: "tower_one",
+        permissions: ["tower_one:view"],
+        items: [
+          { title: "Overview", href: "/tower-one", exact: true, permissions: ["tower_one:view"] },
+          { title: "Towers", href: "/tower-one/towers", permissions: ["tower_one:view"] },
+        ],
+      },
+      {
+        title: "FIBER-ONE",
+        icon: Waypoints,
+        module: "fiber_one",
+        permissions: ["fiber_one:view"],
+        items: [
+          { title: "Overview", href: "/fiber-one", exact: true, permissions: ["fiber_one:view"] },
+          { title: "Routes", href: "/fiber-one/routes", permissions: ["fiber_one:view"] },
+        ],
+      },
+      {
+        title: "ASSET-ONE",
+        icon: Package,
+        module: "asset_one",
+        permissions: ["asset_one:view"],
+        items: [
+          { title: "Overview", href: "/asset-one", exact: true, permissions: ["asset_one:view"] },
+          { title: "Assets", href: "/asset-one/assets", permissions: ["asset_one:view"] },
+        ],
       },
       {
         title: "Sites",
@@ -533,6 +625,33 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         ],
       },
       {
+        title: "DocExtract",
+        icon: FileScan,
+        module: "doc_extract",
+        permissions: ["doc-extract:view", "doc-extract:run", "doc-extract:templates:manage"],
+        items: [
+          {
+            title: "Batches",
+            href: "/doc-extract",
+            exact: true,
+            section: "Operate",
+            permissions: ["doc-extract:view"],
+          },
+          {
+            title: "New extraction",
+            href: "/doc-extract/new",
+            section: "Operate",
+            permissions: ["doc-extract:run"],
+          },
+          {
+            title: "Templates",
+            href: "/doc-extract/templates",
+            section: "Setup",
+            permissions: ["doc-extract:templates:manage"],
+          },
+        ],
+      },
+      {
         title: "Ticketing",
         icon: LifeBuoy,
         module: "ticketing",
@@ -549,7 +668,116 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         ],
       },
       {
-        title: "E-Approval",
+        title: "Procurement-One",
+        icon: ShoppingCart,
+        module: "procurement_one",
+        permissions: [
+          "procurement_one:view",
+          "procurement_one:documents:create",
+          "procurement_one:documents:manage",
+          "procurement_one:settings:manage",
+          "procurement_one:vendors:view",
+          "procurement_one:vendors:manage",
+        ],
+        items: [
+          {
+            title: "Overview",
+            href: "/procurement",
+            exact: true,
+            section: "Operate",
+            permissions: ["procurement_one:view"],
+          },
+          {
+            title: "Purchase requisitions",
+            href: "/procurement/prs",
+            section: "Operate",
+            permissions: ["procurement_one:view"],
+          },
+          {
+            title: "Purchase orders",
+            href: "/procurement/pos",
+            section: "Operate",
+            permissions: ["procurement_one:view"],
+          },
+          {
+            title: "Goods receipts",
+            href: "/procurement/grns",
+            section: "Operate",
+            permissions: ["procurement_one:view"],
+            procurementPlanFeature: "goods_receipt",
+          },
+          {
+            title: "Inventory",
+            href: "/procurement/inventory",
+            section: "Operate",
+            permissions: ["procurement_one:inventory:view"],
+            procurementPlanFeature: "inventory",
+          },
+          {
+            title: "RFQ & sourcing",
+            href: "/procurement/rfqs",
+            section: "Operate",
+            permissions: ["procurement_one:view"],
+            procurementPlanFeature: "rfq_sourcing",
+          },
+          {
+            title: "Vendors",
+            href: "/procurement/vendors",
+            section: "Operate",
+            permissions: ["procurement_one:vendors:view"],
+          },
+        ],
+      },
+      {
+        title: "Finance-One",
+        icon: PiggyBank,
+        module: "finance_one",
+        permissions: [
+          "finance_one:view",
+          "finance_one:documents:manage",
+          "finance_one:budget:manage",
+          "finance_one:payments:manage",
+        ],
+        items: [
+          {
+            title: "Overview",
+            href: financeOneRoutes.home,
+            exact: true,
+            permissions: ["finance_one:view"],
+          },
+          {
+            title: "Budget & encumbrance",
+            href: financeOneRoutes.budget,
+            permissions: ["finance_one:view"],
+          },
+          {
+            title: "AP invoices",
+            href: financeOneRoutes.apInvoices,
+            permissions: ["finance_one:view"],
+            procurementPlanFeature: "ap_invoices",
+          },
+          {
+            title: "Payment tracking",
+            href: financeOneRoutes.payments,
+            permissions: ["finance_one:view"],
+            procurementPlanFeature: "payment_tracking",
+          },
+          {
+            title: "Vendor contracts",
+            href: financeOneRoutes.contracts,
+            permissions: ["finance_one:view"],
+            procurementPlanFeature: "vendor_contracts",
+          },
+          {
+            title: "Reports & exports",
+            href: financeOneRoutes.reports,
+            permissions: ["finance_one:reports:view"],
+            procurementPlanFeature: "reporting_exports",
+          },
+        ],
+      },
+      {
+        title: "E-Forms",
         icon: ClipboardCheck,
         module: "e_approval",
         permissions: [
@@ -570,10 +798,17 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         ],
       },
       {
-        title: "Help Center",
+        title: "GIS",
+        icon: Map,
+        href: "/gis",
+        permissions: ["gis:view"],
+        module: "gis",
+      },
+      {
+        title: "Help",
         icon: CircleHelp,
         href: "/help",
-        permissions: ["dashboard:view", "e_approval:view", "ticketing:view", "dynamic_entities:view"],
+        permissions: ["e_approval:view"],
         permissionsMatch: "any",
       },
     ],
@@ -585,33 +820,32 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         title: "Team & Access",
         icon: Users,
         module: "team_access",
-        permissions: ["user:manage", "role:manage"],
+        permissions: ["user:manage", "role:manage", "organization:view", "organization:manage"],
+        permissionsMatch: "any",
         items: [
-          { title: "Users", href: "/users", section: "People", permissions: ["user:manage"] },
-          { title: "Organization", href: "/users/org", section: "People", permissions: ["user:manage"] },
-          { title: "Roles & Permissions", href: "/users/roles", section: "Access", permissions: ["role:manage"] },
+          { title: "Users", href: "/users", permissions: ["user:manage"] },
+          {
+            title: "Organization",
+            href: "/users/org",
+            permissions: ["organization:view", "organization:manage", "user:manage"],
+            permissionsMatch: "any",
+          },
+          { title: "Roles & permissions", href: "/users/roles", permissions: ["role:manage"] },
         ],
       },
       {
-        title: "Governance",
+        title: "Audit trail",
         icon: ScrollText,
+        href: "/governance/audit",
+        permissions: ["workspace:audit:view"],
         module: "core",
-        permissions: ["workspace:audit:view", "tenant:manage", "billing:view"],
-        permissionsMatch: "any",
-        items: [
-          {
-            title: "Audit trail",
-            href: "/governance/audit",
-            section: "Compliance",
-            permissions: ["workspace:audit:view"],
-          },
-          {
-            title: "Billing",
-            href: "/billing",
-            section: "Commercial",
-            permissions: ["billing:view"],
-          },
-        ],
+      },
+      {
+        title: "Billing",
+        icon: CreditCard,
+        href: "/billing",
+        permissions: ["billing:view"],
+        module: "billings",
       },
       {
         title: "Settings",
@@ -620,9 +854,14 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         permissions: [
           "tenant:manage",
           "e_approval:settings:manage",
+          "procurement_one:settings:manage",
           "ticketing:settings:manage",
-          // Personal module profile only — not Platform Overview.
+          "project_one:view",
+          "ai_assistant:knowledge:manage",
+          // Personal module profile / exports — not Platform Overview.
           "e_approval:view",
+          "doc-extract:view",
+          "ticketing:view",
         ],
         permissionsMatch: "any",
         items: [
@@ -635,39 +874,63 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: [
               "tenant:manage",
               "e_approval:settings:manage",
+              "procurement_one:settings:manage",
               "ticketing:settings:manage",
+              "project_one:view",
+              "ai_assistant:knowledge:manage",
             ],
           },
           { title: "Sign-in & security", href: "/admin/settings", section: "Platform", permissions: ["tenant:manage"] },
           { title: "Backups", href: "/admin/backups", section: "Platform", permissions: ["tenant:manage"] },
           { title: "KPI & SLA", href: "/admin/settings/kpi", section: "Platform", permissions: ["tenant:manage"] },
           {
-            title: "My E-Approval profile",
+            title: "Assistant knowledge",
+            href: "/settings/ai-assistant/knowledge",
+            section: "AI Assistant",
+            module: "ai_assistant",
+            permissions: ["ai_assistant:knowledge:manage"],
+          },
+          {
+            title: "My E-Forms profile",
             href: "/e-approval/profile",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:view"],
           },
           {
+            title: "My exports",
+            href: "/exports",
+            section: "Workspace",
+            permissionsMatch: "any",
+            permissions: ["doc-extract:view", "ticketing:view", "e_approval:view"],
+          },
+          {
             title: "Module policies",
             href: "/e-approval/settings",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
           },
           {
             title: "Approval policies",
             href: "/e-approval/approval-policies",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
           },
           {
             title: "Master data",
             href: "/e-approval/master-data",
-            section: "E-Approval",
+            section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
+          },
+          {
+            title: "Procurement settings",
+            href: "/procurement/settings",
+            section: "Procurement-One",
+            module: "procurement_one",
+            permissions: ["procurement_one:settings:manage"],
           },
           {
             title: "Ticketing settings",
@@ -675,6 +938,27 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             section: "Ticketing",
             module: "ticketing",
             permissions: ["ticketing:settings:manage"],
+          },
+          {
+            title: "Rollout playbook",
+            href: "/project-one/rollout-playbook",
+            section: "Project-One",
+            module: "project_one",
+            permissions: ["project_one:view"],
+          },
+          {
+            title: "Public holidays",
+            href: "/project-one/public-holidays",
+            section: "Project-One",
+            module: "project_one",
+            permissions: ["project_one:view"],
+          },
+          {
+            title: "Geography lookups",
+            href: "/project-one/geography",
+            section: "Project-One",
+            module: "project_one",
+            permissions: ["project_one:view"],
           },
         ],
       },
@@ -685,8 +969,18 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
 /** High-intent shortcuts surfaced in the command palette "Do" group. */
 export const workspaceQuickActions: WorkspaceQuickAction[] = [
   {
+    id: "documents-expiring",
+    title: "Documents expiring soon",
+    description: "Review leases, permits, and contracts across sites",
+    href: "/documents",
+    icon: FileText,
+    module: "documents",
+    permissions: ["documents:view"],
+    keywords: ["binder", "lease", "expiry", "contract", "document"],
+  },
+  {
     id: "ea-new-request",
-    title: "New E-Approval request",
+    title: "New E-Forms request",
     description: "Choose a published form and start a submission",
     href: "/e-approval/submissions/new",
     icon: PlusCircle,
@@ -696,7 +990,7 @@ export const workspaceQuickActions: WorkspaceQuickAction[] = [
   },
   {
     id: "ea-my-approvals",
-    title: "My E-Approval inbox",
+    title: "My E-Forms inbox",
     description: "Open submissions awaiting your decision",
     href: "/e-approval/approvals?awaiting_me=1",
     icon: ClipboardCheck,
@@ -713,5 +1007,15 @@ export const workspaceQuickActions: WorkspaceQuickAction[] = [
     module: "ticketing",
     permissions: ["ticketing:tickets:create"],
     keywords: ["support", "issue", "helpdesk"],
+  },
+  {
+    id: "project-one-gates",
+    title: "My gate approvals",
+    description: "Review rollout gates assigned to you",
+    href: "/project-one/gate-approvals?awaiting_me=1",
+    icon: Zap,
+    module: "project_one",
+    permissions: ["project_one:rollout:view"],
+    keywords: ["rollout", "gate", "project"],
   },
 ];

@@ -59,7 +59,7 @@ final class TowerosMigrateCommand extends Command
             }
         }
 
-        $this->info('TowerOS migrations complete.');
+        $this->info('INFRA SUITE migrations complete.');
 
         return self::SUCCESS;
     }

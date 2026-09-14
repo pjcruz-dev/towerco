@@ -31,7 +31,7 @@ final class EApprovalPrintTest extends TestCase
         $this->bootInMemoryTenantApi();
     }
 
-    public function test_print_data_respects_saved_layout_visibility(): void
+    public function test_print_data_includes_all_form_fields_for_document_design(): void
     {
         tenancy()->initialize($this->testTenant);
 
@@ -97,9 +97,11 @@ final class EApprovalPrintTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('data.document_no', 'TEST-00001')
-            ->assertJsonCount(1, 'data.fields')
-            ->assertJsonPath('data.fields.0.key', 'visible_field')
-            ->assertJsonPath('data.fields.0.value', 'show me');
+            ->assertJsonCount(2, 'data.fields');
+
+        $keys = collect($response->json('data.fields'))->pluck('key')->all();
+        $this->assertContains('visible_field', $keys);
+        $this->assertContains('hidden_field', $keys);
     }
 
     public function test_purchase_requisition_print_includes_all_fields_and_labeled_grid_rows(): void
@@ -245,5 +247,58 @@ final class EApprovalPrintTest extends TestCase
                 ],
             ])
             ->assertStatus(422);
+    }
+
+    public function test_pdf_layout_persists_document_design_and_append_attachments(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'CRF Print Design',
+            'status' => 'published',
+        ]);
+        EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'text',
+            'name' => 'subsidiary',
+            'label' => 'Subsidiary',
+        ]);
+        $formId = (string) $form->id;
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->putJson("/api/v1/e-approval/pdf-layout/{$formId}", [
+                'layout' => [
+                    ['key' => 'subsidiary', 'label' => 'Subsidiary', 'visible' => true, 'fieldType' => 'text'],
+                ],
+                'template' => [
+                    'layout_kind' => 'generic',
+                    'page' => ['size' => 'A4', 'marginMm' => 12],
+                    'header' => ['title' => 'CRF Request'],
+                    'footer' => [
+                        'showApprovalHistory' => true,
+                        'showRequestorSignature' => true,
+                        'appendAttachments' => true,
+                        'showPageNumbers' => true,
+                    ],
+                    'template_html' => '<p>{{system.document_no}} — {{field.subsidiary}}</p>',
+                    'template_css' => '.eapproval-printable { color: #0f172a; }',
+                    'orientation' => 'portrait',
+                ],
+            ])
+            ->assertOk();
+
+        $show = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/pdf-layout/{$formId}")
+            ->assertOk();
+
+        $show->assertJsonPath('data.template.template_html', '<p>{{system.document_no}} — {{field.subsidiary}}</p>')
+            ->assertJsonPath('data.template.template_css', '.eapproval-printable { color: #0f172a; }')
+            ->assertJsonPath('data.template.footer.appendAttachments', true)
+            ->assertJsonPath('data.template.footer.showRequestorSignature', true);
     }
 }

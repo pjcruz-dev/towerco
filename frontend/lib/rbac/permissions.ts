@@ -4,16 +4,8 @@ export const permissions = {
   dashboardView: "dashboard:view",
   workspaceAuditView: "workspace:audit:view",
   workspaceEnvironmentsSwitch: "workspace:environments:switch",
-  sidebarManage: "sidebar:manage",
-  notificationsManage: "notifications:manage",
-  printablesManage: "printables:manage",
-  apiKeysManage: "api_keys:manage",
-  systemManage: "system:manage",
-  htmlReportsManage: "html_reports:manage",
-  workflowsManage: "workflows:manage",
-  emailTemplatesManage: "email_templates:manage",
-  automationManage: "automation:manage",
-  searchIndexManage: "search_index:manage",
+  gisView: "gis:view",
+  sitesView: "sites:view",
   tenantManage: "tenant:manage",
   billingView: "billing:view",
   billingManage: "billing:manage",
@@ -24,6 +16,22 @@ export const permissions = {
   dynamicEntitiesRecordsManage: "dynamic_entities:records:manage",
   dynamicEntitiesFieldsManage: "dynamic_entities:fields:manage",
   dynamicEntitiesEntitiesManage: "dynamic_entities:entities:manage",
+  organizationView: "organization:view",
+  organizationManage: "organization:manage",
+  projectOneView: "project_one:view",
+  projectOneManage: "project_one:manage",
+  rolloutView: "project_one:rollout:view",
+  rolloutManage: "project_one:rollout:manage",
+  rolloutGateApprove: "project_one:rollout:gate:approve",
+  saqManage: "project_one:saq:manage",
+  cmeManage: "project_one:cme:manage",
+  financeView: "project_one:finance:view",
+  financeEdit: "project_one:finance:edit",
+  financeViewDiscipline: "project_one:finance:view_discipline",
+  playbookConfigure: "project_one:playbook:configure",
+  towerOneView: "tower_one:view",
+  fiberOneView: "fiber_one:view",
+  assetOneView: "asset_one:view",
   eApprovalView: "e_approval:view",
   eApprovalFormsManage: "e_approval:forms:manage",
   eApprovalSubmissionsCreate: "e_approval:submissions:create",
@@ -35,11 +43,40 @@ export const permissions = {
   ticketingTicketsCreate: "ticketing:tickets:create",
   ticketingTicketsManage: "ticketing:tickets:manage",
   ticketingSettingsManage: "ticketing:settings:manage",
+  docExtractView: "doc-extract:view",
+  docExtractRun: "doc-extract:run",
+  docExtractTemplatesManage: "doc-extract:templates:manage",
+  docExtractExport: "doc-extract:export",
+  procurementOneView: "procurement_one:view",
+  procurementOneDocumentsCreate: "procurement_one:documents:create",
+  procurementOneDocumentsManage: "procurement_one:documents:manage",
+  procurementOneSettingsManage: "procurement_one:settings:manage",
+  procurementOneVendorsView: "procurement_one:vendors:view",
+  procurementOneVendorsManage: "procurement_one:vendors:manage",
+  procurementOneInventoryView: "procurement_one:inventory:view",
+  procurementOneInventoryManage: "procurement_one:inventory:manage",
+  financeOneView: "finance_one:view",
+  financeOneDocumentsCreate: "finance_one:documents:create",
+  financeOneDocumentsManage: "finance_one:documents:manage",
+  financeOneBudgetManage: "finance_one:budget:manage",
+  financeOneContractsManage: "finance_one:contracts:manage",
+  financeOnePaymentsManage: "finance_one:payments:manage",
+  financeOneReportsView: "finance_one:reports:view",
+  financeOneSettingsManage: "finance_one:settings:manage",
+  assetOneAssetsManage: "asset_one:assets:manage",
+  documentsView: "documents:view",
+  documentsUpload: "documents:upload",
+  documentsManage: "documents:manage",
+  documentsTemplateManage: "documents:template:manage",
+  documentsControlledView: "documents:controlled:view",
+  documentsControlledCreate: "documents:controlled:create",
+  documentsControlledApprove: "documents:controlled:approve",
+  documentsControlledManage: "documents:controlled:manage",
+  documentsControlledImport: "documents:controlled:import",
   aiAssistantUse: "ai_assistant:use",
   aiAssistantToolsUse: "ai_assistant:tools:use",
   aiAssistantActionsExecute: "ai_assistant:actions:execute",
   aiAssistantKnowledgeManage: "ai_assistant:knowledge:manage",
-  aiAssistantPromptsManage: "ai_assistant:prompts:manage",
   aiAssistantConversationsAudit: "ai_assistant:conversations:audit",
 } as const;
 
@@ -51,6 +88,19 @@ export function hasPermission(
   if (requiredPermissions.length === 0) return true;
 
   return requiredPermissions.every((permission) =>
+    user.permissions.includes(permission),
+  );
+}
+
+/** True when the user holds at least one of the listed permissions. */
+export function hasAnyPermission(
+  user: AuthUser | null,
+  requiredPermissions: string[] = [],
+): boolean {
+  if (!user) return false;
+  if (requiredPermissions.length === 0) return true;
+
+  return requiredPermissions.some((permission) =>
     user.permissions.includes(permission),
   );
 }

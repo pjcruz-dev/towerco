@@ -20,7 +20,7 @@ final class GetEApprovalSubmissionByDocumentNoTool implements AssistantToolInter
 
     public function description(): string
     {
-        return 'Look up an E-Approval submission by document number (e.g. GEN-F-00042).';
+        return 'Look up an E-Forms submission by document number (e.g. GEN-F-00042).';
     }
 
     public function requiredModule(): ?string
@@ -81,7 +81,7 @@ final class GetEApprovalSubmissionByDocumentNoTool implements AssistantToolInter
                 tool: $this->name(),
                 ok: true,
                 data: ['submission' => null, 'candidates' => []],
-                summary: sprintf('No E-Approval submission found for document number "%s" (or you do not have access).', $documentNo),
+                summary: sprintf('No E-Forms submission found for document number "%s" (or you do not have access).', $documentNo),
                 moduleKey: 'e_approval',
                 relatedRoutes: ['/e-approval/submissions'],
                 rowCount: 0,

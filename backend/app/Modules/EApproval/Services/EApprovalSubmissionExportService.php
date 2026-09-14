@@ -10,6 +10,8 @@ use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
+use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Generator;
@@ -55,6 +57,8 @@ final class EApprovalSubmissionExportService
         'document_no' => 'Document No',
         'form_id' => 'Form ID',
         'form_name' => 'Form',
+        'subsidiary' => 'Subsidiary',
+        'department' => 'Department',
         'requestor_id' => 'Requestor ID',
         'requestor_name' => 'Requestor',
         'requestor_email' => 'Requestor Email',
@@ -184,10 +188,7 @@ final class EApprovalSubmissionExportService
         $needsAttachments = $this->selectionNeedsAttachments($orderedKeys);
 
         $query = $this->buildQuery($filters, $scope, true, $limit);
-        $with = [];
-        if ($exportFields->isNotEmpty()) {
-            $with[] = 'values.field';
-        }
+        $with = ['values.field'];
         if ($needsApprovals) {
             $with[] = 'approvals.approver:id,name,email';
             $with[] = 'approvals.step:id,step_order';
@@ -195,9 +196,7 @@ final class EApprovalSubmissionExportService
         if ($needsAttachments) {
             $with[] = 'attachments';
         }
-        if ($with !== []) {
-            $query->with($with);
-        }
+        $query->with($with);
 
         foreach ($query->lazy($limit) as $submission) {
             $keyed = $this->submissionRowMap(
@@ -354,6 +353,7 @@ final class EApprovalSubmissionExportService
     private function resolveColumns(?EApprovalForm $form, bool $includeFields, ?array $selectedKeys): array
     {
         $columns = $this->columns($form, $includeFields);
+        $selectedKeys = $this->normalizeSelectedKeys($form, $selectedKeys);
 
         if ($selectedKeys === null || $selectedKeys === []) {
             return $columns;
@@ -367,6 +367,71 @@ final class EApprovalSubmissionExportService
 
         // Never emit an empty file: fall back to all columns when the selection matched nothing.
         return $filtered !== [] ? $filtered : $columns;
+    }
+
+    /**
+     * Map UI / workspace column ids onto export keys (requestor → requestor_name, field:name → field:id).
+     *
+     * @param  list<string>|null  $selectedKeys
+     * @return list<string>|null
+     */
+    private function normalizeSelectedKeys(?EApprovalForm $form, ?array $selectedKeys): ?array
+    {
+        if ($selectedKeys === null || $selectedKeys === []) {
+            return $selectedKeys;
+        }
+
+        $aliases = [
+            'requestor' => 'requestor_name',
+            'requester' => 'requestor_name',
+        ];
+
+        /** @var array<string, string> $nameToId */
+        $nameToId = [];
+        if ($form !== null) {
+            foreach ($this->exportableFields($form) as $field) {
+                $nameToId[(string) $field->name] = (string) $field->id;
+            }
+        }
+
+        $out = [];
+        foreach ($selectedKeys as $key) {
+            $key = (string) $key;
+            if (isset($aliases[$key])) {
+                $out[] = $aliases[$key];
+
+                continue;
+            }
+
+            if (str_starts_with($key, 'field:')) {
+                $rest = substr($key, 6);
+                if (! str_contains($rest, ':') && isset($nameToId[$rest])) {
+                    $out[] = 'field:'.$nameToId[$rest];
+
+                    continue;
+                }
+            }
+
+            $out[] = $key;
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    private function namedFieldValue(EApprovalSubmission $submission, string $fieldName): string
+    {
+        if (! $submission->relationLoaded('values')) {
+            return '';
+        }
+
+        foreach ($submission->values as $value) {
+            $name = $value->relationLoaded('field') ? $value->field?->name : null;
+            if ($name === $fieldName) {
+                return trim((string) ($value->value ?? ''));
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -411,12 +476,56 @@ final class EApprovalSubmissionExportService
         }
 
         if (! empty($filters['search'])) {
-            $like = '%'.addcslashes((string) $filters['search'], '%_\\').'%';
-            $query->where(static function (Builder $q) use ($like): void {
-                $q->where('document_no', 'like', $like)
-                    ->orWhereHas('form', static fn ($f) => $f->where('name', 'like', $like))
-                    ->orWhereHas('requestor', static fn ($u) => $u->where('name', 'like', $like)->orWhere('email', 'like', $like));
-            });
+            $scopeFormIdsForSearch = [];
+            if (! empty($filters['form_ids']) && is_array($filters['form_ids'])) {
+                $scopeFormIdsForSearch = array_values(array_map('strval', $filters['form_ids']));
+            } elseif (! empty($filters['form_id'])) {
+                $scopeFormIdsForSearch = [(string) $filters['form_id']];
+            }
+
+            $extraFieldNames = null;
+            if (! empty($filters['field_names']) && is_array($filters['field_names'])) {
+                $extraFieldNames = array_values(array_map('strval', $filters['field_names']));
+            } elseif (isset($scope['form']) && $scope['form'] instanceof EApprovalForm) {
+                $extraFieldNames = EApprovalFormField::query()
+                    ->where('form_id', $scope['form']->id)
+                    ->orderBy('sort_order')
+                    ->limit(80)
+                    ->pluck('name')
+                    ->map(static fn ($name): string => (string) $name)
+                    ->all();
+            }
+
+            EApprovalSubmissionSearchFields::applySearch(
+                $query,
+                (string) $filters['search'],
+                $scopeFormIdsForSearch,
+                $extraFieldNames,
+            );
+        }
+
+        if (! empty($filters['ids']) && is_array($filters['ids'])) {
+            $ids = array_values(array_unique(array_filter(
+                array_map(static fn ($id): string => trim((string) $id), $filters['ids']),
+                static fn (string $id): bool => $id !== '',
+            )));
+            $ids = array_slice($ids, 0, 500);
+            if ($ids !== []) {
+                $query->whereIn('id', $ids);
+            }
+        }
+
+        $scopeFormIds = [];
+        if (! empty($filters['form_ids']) && is_array($filters['form_ids'])) {
+            $scopeFormIds = array_values(array_map('strval', $filters['form_ids']));
+        } elseif (! empty($filters['form_id'])) {
+            $scopeFormIds = [(string) $filters['form_id']];
+        }
+        if ($scopeFormIds !== []) {
+            EApprovalSubmissionFieldFilter::applyWorkspaceColumnFilters($query, $scopeFormIds, [
+                'subsidiary' => isset($filters['subsidiary']) ? (string) $filters['subsidiary'] : null,
+                'department' => isset($filters['department']) ? (string) $filters['department'] : null,
+            ]);
         }
 
         if ($scope !== null && isset($scope['viewer']) && ($scope['can_view_all'] ?? true) !== true) {
@@ -480,6 +589,8 @@ final class EApprovalSubmissionExportService
             'document_no' => (string) $submission->document_no,
             'form_id' => (string) $submission->form_id,
             'form_name' => (string) ($submission->form?->name ?? ''),
+            'subsidiary' => $this->namedFieldValue($submission, 'subsidiary'),
+            'department' => $this->namedFieldValue($submission, 'department'),
             'requestor_id' => (string) $submission->requestor_id,
             'requestor_name' => (string) ($submission->requestor?->name ?? ''),
             'requestor_email' => (string) ($submission->requestor?->email ?? ''),

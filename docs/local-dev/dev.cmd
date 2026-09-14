@@ -19,7 +19,7 @@ if not "%~1"=="" (
   exit /b 1
 )
 
-echo TowerOS — Podman/Docker dev stack ^(no web container^)
+echo INFRA SUITE — Podman/Docker dev stack ^(no web container^)
 echo   API         http://localhost:8000
 echo   phpMyAdmin  http://localhost:8080  ^(COMPOSE_PROFILES=tools^)
 echo   MySQL       127.0.0.1:3307

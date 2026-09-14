@@ -13,7 +13,7 @@ use Stancl\Tenancy\Database\Models\Domain;
 /**
  * Builds Sanctum "stateful" SPA domains from central tenant records.
  *
- * TowerOS registers tenant hostnames in the database when environments are provisioned.
+ * INFRA SUITE registers tenant hostnames in the database when environments are provisioned.
  * Sanctum validates Origin/Referer against this list for cookie/CSRF SPA auth.
  */
 final class SanctumStatefulDomainResolver

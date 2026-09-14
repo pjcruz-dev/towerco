@@ -5,6 +5,8 @@ export type EApprovalFormWorkspaceVisibility = "own" | "approver" | "workspace_a
 export type EApprovalFormWorkspaceWidgetType =
   | "kpis"
   | "status_chart"
+  | "chart_by_status"
+  | "chart_by_subsidiary"
   | "recent_activity"
   | "audit_log"
   | "submissions_table";
@@ -85,6 +87,18 @@ export type EApprovalFormWorkspaceDashboard = {
     kind: "system" | "field";
     field_name?: string;
   }>;
+  filter_options?: {
+    subsidiaries: string[];
+    departments: string[];
+  };
+  applied_filters?: {
+    status?: string | null;
+    from?: string | null;
+    to?: string | null;
+    subsidiary?: string | null;
+    department?: string | null;
+    mine?: boolean;
+  };
   kpis: Array<{
     key: string;
     label: string;
@@ -94,6 +108,11 @@ export type EApprovalFormWorkspaceDashboard = {
   }>;
   status_breakdown: Array<{
     status: string;
+    label: string;
+    count: number;
+  }>;
+  subsidiary_breakdown?: Array<{
+    key: string;
     label: string;
     count: number;
   }>;

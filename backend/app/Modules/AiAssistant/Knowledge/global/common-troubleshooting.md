@@ -30,7 +30,7 @@ Quick checks for frequent workspace issues. This guide is for end users—not pl
 2. **Page or module missing**
    - See “Permissions and why a page may be missing”.
 3. **No notifications**
-   - Confirm you have permission for the related module (E-Approval, rollouts, etc.).
+   - Confirm you have permission for the related module (E-Forms, rollouts, etc.).
    - Refresh the page; check Notification center filters.
 4. **Upload or save failed**
    - Retry once; check required fields and file size/type.
@@ -53,5 +53,5 @@ Most issues resolve after correcting URL, permissions, MFA, or form validation. 
 ## Related workflows
 
 - Permissions and why a page may be missing
-- Getting started with TowerOS
+- Getting started with INFRA SUITE
 - Command palette and navigation

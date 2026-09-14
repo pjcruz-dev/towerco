@@ -1,69 +1,98 @@
 import { KpiStripSkeleton } from "@/components/ui/page-skeletons";
+import { WidgetKpiTile } from "@/components/dashboard/widgets/widget-primitives";
+import { DashboardWidgetEmpty } from "@/components/dashboard/dashboard-widget";
+import type { DashboardKpiCardOverride } from "@/lib/ui/dashboard-kpi-card-options";
+import type { ProjectOneKpi } from "@/modules/project-one/types";
+import { cn } from "@/lib/utils";
 
-export type DashboardKpiItem = {
-  key?: string;
-  id?: string;
-  label: string;
-  value: string | number;
-  change?: string;
-  tone?: "neutral" | "success" | "warning" | "danger";
-};
+type KpiStripItem =
+  | (ProjectOneKpi & { href?: string | null })
+  | (Omit<ProjectOneKpi, "key" | "value"> & { id?: string; value: string | number; href?: string | null });
 
-function kpiKey(item: DashboardKpiItem): string {
-  if (item.key) {
-    return item.key;
-  }
-  if (item.id) {
-    return item.id;
-  }
+function kpiKey(item: KpiStripItem): string {
+  if ("key" in item && item.key) return item.key;
+  if ("id" in item && item.id) return item.id;
   return item.label;
 }
-
-const toneClass: Record<NonNullable<DashboardKpiItem["tone"]>, string> = {
-  neutral: "text-muted-foreground",
-  success: "text-emerald-600 dark:text-emerald-400",
-  warning: "text-amber-600 dark:text-amber-400",
-  danger: "text-red-600 dark:text-red-400",
-};
 
 export function KpiStrip({
   items,
   isLoading = false,
   skeletonCount = 4,
   dataHelp,
+  className,
+  cardOptions,
 }: {
-  items: DashboardKpiItem[];
+  items?: KpiStripItem[] | null;
   isLoading?: boolean;
   skeletonCount?: number;
   /** Stable hook for live Help tours (`[data-help="…"]`). */
   dataHelp?: string;
+  className?: string;
+  /** Per-KPI presentation overrides from Layout & options. */
+  cardOptions?: Record<string, DashboardKpiCardOverride>;
 }) {
   if (isLoading) {
     return <KpiStripSkeleton count={skeletonCount} />;
   }
 
-  if (items.length === 0) {
+  if (!items?.length) {
     return (
-      <section
-        data-help={dataHelp}
-        className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground"
-      >
-        KPI data will appear here once the dashboard endpoint is connected.
+      <section data-help={dataHelp}>
+        <DashboardWidgetEmpty message="KPI data will appear here once metrics are available." />
       </section>
     );
   }
 
+  const visible = items.filter((item) => {
+    const key = kpiKey(item);
+    return !cardOptions?.[key]?.hidden;
+  });
+
+  if (visible.length === 0) {
+    return (
+      <section data-help={dataHelp}>
+        <DashboardWidgetEmpty message="All KPI cards are hidden. Re-enable them in Layout & options." />
+      </section>
+    );
+  }
+
+  const cols =
+    visible.length >= 5
+      ? "xl:grid-cols-5"
+      : visible.length === 4
+        ? "xl:grid-cols-4"
+        : visible.length === 3
+          ? "xl:grid-cols-3"
+          : "xl:grid-cols-2";
+
   return (
-    <section data-help={dataHelp} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {items.map((item) => (
-        <article key={kpiKey(item)} className="rounded-xl border bg-card p-4 shadow-sm">
-          <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-          <p className="mt-2 text-2xl font-semibold">{item.value}</p>
-          {item.change ? (
-            <p className={`mt-2 text-xs ${toneClass[item.tone ?? "neutral"]}`}>{item.change}</p>
-          ) : null}
-        </article>
-      ))}
+    <section
+      data-help={dataHelp}
+      className={cn("grid min-w-0 grid-cols-1 items-start gap-3 sm:grid-cols-2", cols, className)}
+    >
+      {visible.map((item, index) => {
+        const key = kpiKey(item);
+        const override = cardOptions?.[key];
+        return (
+          <WidgetKpiTile
+            key={key}
+            metricKey={key}
+            index={index}
+            label={override?.label?.trim() || item.label}
+            value={item.value}
+            change={item.change}
+            tone={override?.tone ?? item.tone ?? "neutral"}
+            href={item.href}
+            accent={override?.accent ?? "auto"}
+            icon={override?.icon ?? "auto"}
+            showSpark={override?.showSpark ?? true}
+            sparkStyle={override?.sparkStyle ?? "auto"}
+            layout={override?.layout ?? "auto"}
+            tinted={override?.tinted ?? false}
+          />
+        );
+      })}
     </section>
   );
 }

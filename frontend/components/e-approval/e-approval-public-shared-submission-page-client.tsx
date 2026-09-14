@@ -48,7 +48,7 @@ export function EApprovalPublicSharedSubmissionPageClient({ shareToken }: Props)
       <div className="space-y-6">
         <header className="space-y-2 border-b border-border pb-4">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {data.brand_label} · Shared E-Approval
+            {data.brand_label} · Shared E-Forms
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold text-foreground">{data.document_no}</h1>

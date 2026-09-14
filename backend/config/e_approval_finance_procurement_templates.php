@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Built-in E-Approval form templates — finance & procurement.
+ * Built-in E-Forms form templates — finance & procurement.
  *
  * Field names align with open-parent APIs when parent_submission_id is set:
  * - CA: `requested_amount` / child `total_reimbursement` (EApprovalCashAdvanceService)
@@ -21,6 +21,39 @@ $steppedCompose = [
     'validate_on_next' => true,
     'allow_back' => true,
     'include_review_step' => true,
+];
+
+/** ATC Expense lines of Liquidation (CA settlement). */
+$liquidationExpenseLinesColumns = [
+    ['label' => 'Date', 'type' => 'date'],
+    ['label' => 'OR No', 'type' => 'text'],
+    ['label' => 'Supplier/Payee', 'type' => 'text'],
+    ['label' => 'Description', 'type' => 'textarea'],
+    ['label' => 'Project Site No.', 'type' => 'text'],
+    ['label' => 'Transportation - Land', 'type' => 'currency'],
+    ['label' => 'Transportation - Sea', 'type' => 'currency'],
+    ['label' => 'Transportation - Air', 'type' => 'currency'],
+    ['label' => 'Gasoline', 'type' => 'currency'],
+    ['label' => 'Lodging', 'type' => 'currency'],
+    ['label' => 'Per Diem', 'type' => 'currency'],
+    ['label' => 'VAT', 'type' => 'currency'],
+    ['label' => 'Total', 'type' => 'currency'],
+];
+
+/** ATC Expense lines of Reimbursement (out-of-pocket travel). */
+$reimbursementExpenseLinesColumns = [
+    ['label' => 'Date', 'type' => 'date'],
+    ['label' => 'OR No', 'type' => 'text'],
+    ['label' => 'Supplier/Payee', 'type' => 'text'],
+    ['label' => 'Description', 'type' => 'textarea'],
+    ['label' => 'Project Site No.', 'type' => 'text'],
+    ['label' => 'Landfare', 'type' => 'currency'],
+    ['label' => 'Airfare', 'type' => 'currency'],
+    ['label' => 'Gasoline', 'type' => 'currency'],
+    ['label' => 'Toll Fee', 'type' => 'currency'],
+    ['label' => 'Per Diem', 'type' => 'currency'],
+    ['label' => 'VAT', 'type' => 'currency'],
+    ['label' => 'Total', 'type' => 'currency'],
 ];
 
 $amountWorkflow = static function (string $amountField) use ($amountThreshold): array {
@@ -83,6 +116,37 @@ $approverFields = static function (int $startOrder) use ($amountThreshold): arra
     ];
 };
 
+/**
+ * Subsidiary selector — drives {{system.subsidiary_logo}} on print.
+ * Choices sync from Print tab subsidiary codes (defaults ATC / ADIC).
+ *
+ * @param  array{width?: string, row_id?: string, slot?: int}|null  $layout
+ * @return array<string, mixed>
+ */
+$subsidiaryField = static function (int $stepOrder, ?array $layout = null): array {
+    $options = [
+        'choices' => [
+            ['value' => 'ATC', 'label' => 'ATC'],
+            ['value' => 'ADIC', 'label' => 'ADIC'],
+        ],
+    ];
+    if ($layout !== null) {
+        $options['layout'] = $layout;
+    }
+
+    return [
+        'type' => 'select',
+        'name' => 'subsidiary',
+        'label' => 'Subsidiary',
+        'step_order' => $stepOrder,
+        'validation' => [
+            'required' => true,
+            'help_text' => 'Chooses the letterhead logo for this subsidiary when printing.',
+        ],
+        'options' => $options,
+    ];
+};
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -116,6 +180,7 @@ return [
             'form_family' => 'cash_advance',
             'related_template_ids' => ['liquidation', 'reimbursement'],
             'compose' => $steppedCompose,
+            'print_dynamic_form_body' => true,
         ],
         'fields' => [
             [
@@ -124,19 +189,20 @@ return [
                 'label' => 'Cash advance request',
                 'step_order' => 1,
             ],
+            $subsidiaryField(2, ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 0]),
             [
                 'type' => 'date',
                 'name' => 'needed_by',
                 'label' => 'Funds needed by',
-                'step_order' => 2,
+                'step_order' => 3,
                 'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_dates', 'slot' => 0]],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 1]],
             ],
             [
                 'type' => 'select',
                 'name' => 'department',
                 'label' => 'Department',
-                'step_order' => 3,
+                'step_order' => 4,
                 'validation' => ['required' => true],
                 'options' => [
                     'choices' => [
@@ -145,14 +211,14 @@ return [
                         ['value' => 'engineering', 'label' => 'Engineering'],
                         ['value' => 'hr', 'label' => 'Human resources'],
                     ],
-                    'layout' => ['width' => 'half', 'row_id' => 'ca_dates', 'slot' => 1],
+                    'layout' => ['width' => 'half', 'row_id' => 'ca_dates', 'slot' => 0],
                 ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'requested_amount',
                 'label' => 'Requested amount',
-                'step_order' => 4,
+                'step_order' => 5,
                 'validation' => ['required' => true],
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_amount', 'slot' => 0]],
             ],
@@ -160,7 +226,7 @@ return [
                 'type' => 'select',
                 'name' => 'currency',
                 'label' => 'Currency',
-                'step_order' => 5,
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => [
                     'choices' => [
@@ -174,30 +240,30 @@ return [
                 'type' => 'textarea',
                 'name' => 'purpose',
                 'label' => 'Purpose / activity',
-                'step_order' => 6,
+                'step_order' => 7,
                 'validation' => ['required' => true, 'placeholder' => 'Describe why the advance is needed'],
             ],
             [
                 'type' => 'text',
                 'name' => 'location',
                 'label' => 'Location / site',
-                'step_order' => 7,
+                'step_order' => 8,
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_place', 'slot' => 0]],
             ],
             [
                 'type' => 'date_range',
                 'name' => 'activity_dates',
                 'label' => 'Activity / travel period',
-                'step_order' => 8,
+                'step_order' => 9,
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_place', 'slot' => 1]],
             ],
             [
                 'type' => 'file',
                 'name' => 'supporting_documents',
                 'label' => 'Supporting documents',
-                'step_order' => 9,
+                'step_order' => 10,
             ],
-            ...$approverFields(10),
+            ...$approverFields(11),
         ],
         'steps' => $amountWorkflow('requested_amount'),
     ],
@@ -213,6 +279,9 @@ return [
             'requires_parent_submission' => true,
             'related_template_ids' => ['cash_advance'],
             'compose' => $steppedCompose,
+            // Print uses live field/grid definitions via {{system.form_body}} — column edits apply automatically.
+            'print_dynamic_form_body' => true,
+            'print_default_orientation' => 'landscape',
         ],
         'fields' => [
             [
@@ -235,57 +304,95 @@ return [
                     'read_only' => true,
                 ],
             ],
+            $subsidiaryField(3, ['width' => 'half', 'row_id' => 'lq_meta', 'slot' => 0]),
             [
                 'type' => 'date',
                 'name' => 'liquidation_date',
                 'label' => 'Liquidation date',
-                'step_order' => 3,
+                'step_order' => 4,
                 'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_meta', 'slot' => 1]],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'area',
+                'label' => 'Area',
+                'step_order' => 5,
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'lq_area', 'slot' => 0]],
             ],
             [
                 'type' => 'grid',
                 'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 4,
+                'label' => 'Expense lines of Liquidation',
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Category', 'type' => 'text'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
-                    ],
+                    'columns' => $liquidationExpenseLinesColumns,
                 ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total liquidation amount',
-                'step_order' => 5,
-                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'step_order' => 7,
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'System total from expense lines (used for approval thresholds; shown as TOTAL EXPENSES on the grid).',
+                ],
                 'options' => [
                     'read_only' => true,
                     'computed_from' => [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
-                        'column' => 'Amount',
+                        'column' => 'Total',
                     ],
+                ],
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'cash_advance_amount',
+                'label' => 'Cash advance',
+                'step_order' => 8,
+                'validation' => [
+                    'help_text' => 'Filled from the linked cash advance when available.',
+                ],
+                'options' => [
+                    'read_only' => true,
+                    'layout' => ['width' => 'half', 'row_id' => 'lq_balance', 'slot' => 0],
+                ],
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'cash_overage_shortage',
+                'label' => 'Cash overage (shortage)',
+                'step_order' => 9,
+                'validation' => [
+                    'help_text' => 'Cash advance − total expenses (positive = overage, negative = shortage).',
+                ],
+                'options' => [
+                    'read_only' => true,
+                    'computed_from' => [
+                        'operation' => 'subtract_fields',
+                        'left_field' => 'cash_advance_amount',
+                        'right_field' => 'total_reimbursement',
+                    ],
+                    'layout' => ['width' => 'half', 'row_id' => 'lq_balance', 'slot' => 1],
                 ],
             ],
             [
                 'type' => 'file',
                 'name' => 'receipts',
                 'label' => 'Receipts',
-                'step_order' => 6,
+                'step_order' => 10,
                 'validation' => ['required' => true],
             ],
             [
                 'type' => 'textarea',
                 'name' => 'notes',
                 'label' => 'Notes',
-                'step_order' => 7,
+                'step_order' => 11,
             ],
-            ...$approverFields(8),
+            ...$approverFields(12),
         ],
         'steps' => $amountWorkflow('total_reimbursement'),
     ],
@@ -298,6 +405,8 @@ return [
         'metadata_json' => [
             'form_family' => 'reimbursement',
             'compose' => $steppedCompose,
+            'print_dynamic_form_body' => true,
+            'print_default_orientation' => 'landscape',
         ],
         'fields' => [
             [
@@ -306,14 +415,7 @@ return [
                 'label' => 'Reimbursement request',
                 'step_order' => 1,
             ],
-            [
-                'type' => 'date',
-                'name' => 'expense_period_end',
-                'label' => 'Expense period end',
-                'step_order' => 2,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_dates', 'slot' => 0]],
-            ],
+            $subsidiaryField(2, ['width' => 'half', 'row_id' => 're_org', 'slot' => 0]),
             [
                 'type' => 'select',
                 'name' => 'department',
@@ -326,36 +428,50 @@ return [
                         ['value' => 'finance', 'label' => 'Finance'],
                         ['value' => 'engineering', 'label' => 'Engineering'],
                     ],
-                    'layout' => ['width' => 'half', 'row_id' => 're_dates', 'slot' => 1],
+                    'layout' => ['width' => 'half', 'row_id' => 're_org', 'slot' => 1],
                 ],
+            ],
+            [
+                'type' => 'date_range',
+                'name' => 'travel_period',
+                'label' => 'From / To',
+                'step_order' => 4,
+                'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_travel', 'slot' => 0]],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'place',
+                'label' => 'Place',
+                'step_order' => 5,
+                'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 're_travel', 'slot' => 1]],
             ],
             [
                 'type' => 'grid',
                 'name' => 'expense_lines',
-                'label' => 'Expense lines',
-                'step_order' => 4,
+                'label' => 'Expense lines of Reimbursement',
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => [
-                    'columns' => [
-                        ['label' => 'Date', 'type' => 'date'],
-                        ['label' => 'Category', 'type' => 'text'],
-                        ['label' => 'Description', 'type' => 'text'],
-                        ['label' => 'Amount', 'type' => 'currency'],
-                    ],
+                    'columns' => $reimbursementExpenseLinesColumns,
                 ],
             ],
             [
                 'type' => 'currency',
                 'name' => 'total_reimbursement',
                 'label' => 'Total reimbursement amount',
-                'step_order' => 5,
-                'validation' => ['required' => true, 'help_text' => 'Auto-calculated from expense lines.'],
+                'step_order' => 7,
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'System total from expense lines (used for approval thresholds; shown as TOTAL EXPENSES on the grid).',
+                ],
                 'options' => [
                     'read_only' => true,
                     'computed_from' => [
                         'operation' => 'sum_grid_column',
                         'source_field' => 'expense_lines',
-                        'column' => 'Amount',
+                        'column' => 'Total',
                     ],
                 ],
             ],
@@ -363,17 +479,17 @@ return [
                 'type' => 'textarea',
                 'name' => 'purpose',
                 'label' => 'Purpose / summary',
-                'step_order' => 6,
+                'step_order' => 8,
                 'validation' => ['required' => true],
             ],
             [
                 'type' => 'file',
                 'name' => 'receipts',
                 'label' => 'Receipts',
-                'step_order' => 7,
+                'step_order' => 9,
                 'validation' => ['required' => true],
             ],
-            ...$approverFields(8),
+            ...$approverFields(10),
         ],
         'steps' => $amountWorkflow('total_reimbursement'),
     ],
@@ -386,116 +502,137 @@ return [
         'metadata_json' => [
             'form_family' => 'request_for_payment',
             'compose' => [
-                'mode' => 'stepped',
+                'mode' => 'single_page',
                 'step_source' => 'sections',
-                'show_progress' => true,
-                'validate_on_next' => true,
+                'show_progress' => false,
+                'validate_on_next' => false,
                 'allow_back' => true,
-                'include_review_step' => true,
+                'include_review_step' => false,
             ],
             'revision' => [
                 'routing' => 'resume_returning_step',
-                'material_fields' => ['payment_amount', 'payee'],
+                'material_fields' => ['payment_amount', 'payee', 'cost_application'],
                 'approver_can_force_full_restart' => false,
             ],
         ],
         'fields' => [
             [
                 'type' => 'section',
-                'name' => 'section_payee',
-                'label' => 'Payee & payment details',
+                'name' => 'section_company',
+                'label' => 'Company',
                 'step_order' => 1,
+            ],
+            $subsidiaryField(2, ['width' => 'half', 'row_id' => 'rfp_org', 'slot' => 0]),
+            [
+                'type' => 'select',
+                'name' => 'department',
+                'label' => 'Department',
+                'step_order' => 3,
+                'validation' => ['required' => true],
+                'options' => [
+                    'choices' => [
+                        ['value' => 'operations', 'label' => 'Operations'],
+                        ['value' => 'finance', 'label' => 'Finance'],
+                        ['value' => 'engineering', 'label' => 'Engineering'],
+                        ['value' => 'hr', 'label' => 'Human resources'],
+                    ],
+                    'layout' => ['width' => 'half', 'row_id' => 'rfp_org', 'slot' => 1],
+                ],
+            ],
+            [
+                'type' => 'section',
+                'name' => 'section_payee',
+                'label' => 'Payee',
+                'step_order' => 4,
             ],
             [
                 'type' => 'text',
                 'name' => 'payee',
                 'label' => 'Payee',
-                'step_order' => 2,
-                'validation' => ['required' => true],
+                'step_order' => 5,
+                'validation' => [
+                    'required' => true,
+                    'placeholder' => 'Vendor or payee legal name',
+                ],
             ],
             [
                 'type' => 'text',
                 'name' => 'vat_registration_no',
                 'label' => 'TIN / VAT registration no.',
-                'step_order' => 3,
+                'step_order' => 6,
                 'validation' => ['required' => true],
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_tax', 'slot' => 0]],
-            ],
-            [
-                'type' => 'currency',
-                'name' => 'payment_amount',
-                'label' => 'Payment amount',
-                'step_order' => 4,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_tax', 'slot' => 1]],
             ],
             [
                 'type' => 'text',
                 'name' => 'contact_person',
                 'label' => 'Contact person',
-                'step_order' => 5,
+                'step_order' => 7,
                 'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_contact', 'slot' => 0]],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_tax', 'slot' => 1]],
             ],
             [
                 'type' => 'phone',
                 'name' => 'tel_no',
                 'label' => 'Tel no.',
-                'step_order' => 6,
+                'step_order' => 8,
                 'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_contact', 'slot' => 1]],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_contact', 'slot' => 0]],
+            ],
+            [
+                'type' => 'section',
+                'name' => 'section_payment',
+                'label' => 'Payment details',
+                'step_order' => 9,
+            ],
+            [
+                'type' => 'currency',
+                'name' => 'payment_amount',
+                'label' => 'Payment amount',
+                'step_order' => 10,
+                'validation' => ['required' => true],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_amount', 'slot' => 0]],
             ],
             [
                 'type' => 'select',
                 'name' => 'currency',
                 'label' => 'Currency',
-                'step_order' => 7,
+                'step_order' => 11,
                 'validation' => ['required' => true],
                 'options' => [
                     'choices' => [
                         ['value' => 'PHP', 'label' => 'PHP'],
                         ['value' => 'USD', 'label' => 'USD'],
                     ],
-                    'layout' => ['width' => 'half', 'row_id' => 'rfp_currency', 'slot' => 0],
+                    'layout' => ['width' => 'half', 'row_id' => 'rfp_amount', 'slot' => 1],
                 ],
             ],
             [
                 'type' => 'text',
                 'name' => 'non_po',
                 'label' => 'PO no. / Non-PO reference',
-                'step_order' => 8,
+                'step_order' => 12,
                 'validation' => [
                     'required' => true,
                     'help_text' => 'Enter the PO number, or Non-PO with a short reason.',
+                    'placeholder' => 'e.g. PO-2026-0142 or Non-PO — emergency repair',
                 ],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_currency', 'slot' => 1]],
             ],
             [
                 'type' => 'textarea',
                 'name' => 'payment_purpose',
-                'label' => 'Payment purpose',
-                'step_order' => 9,
-                'validation' => ['required' => true, 'placeholder' => 'Describe what this payment covers'],
-            ],
-            [
-                'type' => 'text',
-                'name' => 'passenger',
-                'label' => 'Passenger (if travel)',
-                'step_order' => 10,
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_travel', 'slot' => 0]],
-            ],
-            [
-                'type' => 'text',
-                'name' => 'location',
-                'label' => 'Location / site',
-                'step_order' => 11,
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_travel', 'slot' => 1]],
+                'label' => 'Payment for',
+                'step_order' => 13,
+                'validation' => [
+                    'required' => true,
+                    'placeholder' => 'Describe what this payment covers',
+                ],
             ],
             [
                 'type' => 'date_range',
                 'name' => 'service_period',
                 'label' => 'Service / travel period',
-                'step_order' => 12,
+                'step_order' => 14,
                 'validation' => ['required' => true],
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_dates', 'slot' => 0]],
             ],
@@ -503,52 +640,49 @@ return [
                 'type' => 'instruction',
                 'name' => 'payment_terms_note',
                 'label' => 'Payment terms',
-                'step_order' => 13,
-                'options' => [
-                    'body' => 'Note: 100% full payment — upon submission of Service Invoice.',
-                ],
-            ],
-            [
-                'type' => 'file',
-                'name' => 'service_invoice',
-                'label' => 'Service invoice',
-                'step_order' => 14,
-                'validation' => [
-                    'required' => true,
-                    'help_text' => 'Attach the service invoice required for payment release.',
-                    'maxFiles' => 5,
-                    'allowedFileTypes' => ['pdf', 'image'],
-                ],
-            ],
-            [
-                'type' => 'file',
-                'name' => 'supporting_documents',
-                'label' => 'Supporting documents',
                 'step_order' => 15,
+                'options' => [
+                    'body' => '100% full payment upon submission of service invoice.',
+                    'layout' => ['width' => 'half', 'row_id' => 'rfp_dates', 'slot' => 1],
+                ],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'passenger',
+                'label' => 'Passenger (if travel)',
+                'step_order' => 16,
                 'validation' => [
                     'required' => false,
-                    'maxFiles' => 10,
-                    'allowedFileTypes' => ['pdf', 'image'],
+                    'help_text' => 'Optional — fill only for travel-related payments.',
                 ],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_travel', 'slot' => 0]],
+            ],
+            [
+                'type' => 'text',
+                'name' => 'location',
+                'label' => 'Location / site',
+                'step_order' => 17,
+                'validation' => ['required' => false],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_travel', 'slot' => 1]],
             ],
             [
                 'type' => 'section',
-                'name' => 'section_bank_cost',
-                'label' => 'Bank & cost charge',
-                'step_order' => 16,
+                'name' => 'section_bank',
+                'label' => 'Bank details',
+                'step_order' => 18,
             ],
             [
                 'type' => 'text',
                 'name' => 'bank_name',
                 'label' => 'Name of bank',
-                'step_order' => 17,
+                'step_order' => 19,
                 'validation' => ['required' => true],
             ],
             [
                 'type' => 'text',
                 'name' => 'bank_account_name',
                 'label' => 'Bank account name',
-                'step_order' => 18,
+                'step_order' => 20,
                 'validation' => ['required' => true],
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_bank', 'slot' => 0]],
             ],
@@ -556,15 +690,30 @@ return [
                 'type' => 'text',
                 'name' => 'bank_account_no',
                 'label' => 'Bank account no.',
-                'step_order' => 19,
+                'step_order' => 21,
                 'validation' => ['required' => true],
                 'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_bank', 'slot' => 1]],
+            ],
+            [
+                'type' => 'section',
+                'name' => 'section_cost',
+                'label' => 'Cost application',
+                'step_order' => 22,
+            ],
+            [
+                'type' => 'instruction',
+                'name' => 'cost_application_note',
+                'label' => 'How to charge',
+                'step_order' => 23,
+                'options' => [
+                    'body' => 'Select one or more cost lines and enter Project Site No, Ref No, and/or OR No. as applicable.',
+                ],
             ],
             [
                 'type' => 'checklist_matrix',
                 'name' => 'cost_application',
                 'label' => 'Cost application',
-                'step_order' => 20,
+                'step_order' => 24,
                 'validation' => ['required' => true],
                 'options' => [
                     'row_select_label' => 'Cost Application',
@@ -574,10 +723,10 @@ return [
                         ['value' => 'saq_soil_testing', 'label' => 'SAQ-Soil Testing'],
                         ['value' => 'cme_materials', 'label' => 'CME-Materials'],
                         ['value' => 'cme_labor', 'label' => 'CME-Labor'],
-                        ['value' => 'logistics', 'label' => 'Logistics'],
+                        ['value' => 'logistics', 'label' => 'CME-Delivery & Handling'],
                         ['value' => 'various_department', 'label' => 'Various Department'],
                         ['value' => 'finance_and_accounting', 'label' => 'Finance and Accounting'],
-                        ['value' => 'others', 'label' => 'Others'],
+                        ['value' => 'others', 'label' => 'Others, pls specify'],
                     ],
                     'columns' => [
                         ['value' => 'project_site_no', 'label' => 'Project Site No', 'type' => 'text'],
@@ -587,10 +736,41 @@ return [
                 ],
             ],
             [
+                'type' => 'section',
+                'name' => 'section_attachments',
+                'label' => 'Attachments & approval',
+                'step_order' => 25,
+            ],
+            [
+                'type' => 'file',
+                'name' => 'service_invoice',
+                'label' => 'Service invoice',
+                'step_order' => 26,
+                'validation' => [
+                    'required' => true,
+                    'help_text' => 'Required for payment release.',
+                    'maxFiles' => 5,
+                    'allowedFileTypes' => ['pdf', 'image'],
+                ],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_files', 'slot' => 0]],
+            ],
+            [
+                'type' => 'file',
+                'name' => 'supporting_documents',
+                'label' => 'Supporting documents',
+                'step_order' => 27,
+                'validation' => [
+                    'required' => false,
+                    'maxFiles' => 10,
+                    'allowedFileTypes' => ['pdf', 'image'],
+                ],
+                'options' => ['layout' => ['width' => 'half', 'row_id' => 'rfp_files', 'slot' => 1]],
+            ],
+            [
                 'type' => 'approver',
                 'name' => 'finance_approver',
                 'label' => 'Finance approver',
-                'step_order' => 21,
+                'step_order' => 28,
                 'validation' => ['required' => true],
             ],
         ],

@@ -26,6 +26,9 @@ class TenantUserIndexController extends AbstractApiController
             'last_active' => ['sometimes', 'string', 'in:all,7d,30d,90d,never'],
             'mfa' => ['sometimes', 'string', 'in:all,enrolled,not_enrolled'],
             'role' => ['sometimes', 'string', 'max:64'],
+            'department' => ['sometimes', 'string', 'max:180'],
+            'manager_id' => ['sometimes', 'string', 'max:64'],
+            'license' => ['sometimes', 'string', 'max:180'],
         ]));
 
         $paginator = $service->paginate($query['page'], $query['per_page'], $query['search'], $filters, $query['sort']);

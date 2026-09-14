@@ -37,7 +37,7 @@ export function HelpGuideDrawer({ open, onOpenChange, slug, title }: HelpGuideDr
         <SheetHeader>
           <SheetTitle>{query.data?.title ?? title ?? "User guide"}</SheetTitle>
           <SheetDescription>
-            Step-by-step help for E-Approval.{" "}
+            Step-by-step help for E-Forms.{" "}
             <Link href={`/help/${slug}`} className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-400">
               Open full page
             </Link>

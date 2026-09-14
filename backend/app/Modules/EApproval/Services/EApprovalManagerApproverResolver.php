@@ -19,7 +19,7 @@ final class EApprovalManagerApproverResolver
     ) {}
 
     /**
-     * Resolve TowerOS user id for the requestor's Entra manager.
+     * Resolve INFRA SUITE user id for the requestor's Entra manager.
      */
     public function resolveForSubmission(EApprovalSubmission $submission): ?string
     {

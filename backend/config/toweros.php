@@ -220,7 +220,7 @@ return [
         'default_disable_password_when_sso' => env('TOWEROS_TENANT_DEFAULT_DISABLE_PASSWORD_WHEN_SSO', true),
         /**
          * Roles assigned on first Microsoft SSO auto-provision (comma-separated).
-         * Default: E-Approval requestor + Ticketing contributor (dashboard, submissions, tickets).
+         * Default: E-Forms requestor + Ticketing contributor (dashboard, submissions, tickets).
          * Legacy TENANT_SSO_DEFAULT_ROLE (single role) is used when TENANT_SSO_DEFAULT_ROLES is unset.
          */
         'default_sso_roles' => (static function (): array {
@@ -244,7 +244,7 @@ return [
 
     'tenant_provisioning' => [
         /**
-         * Central tenants.plan_tier for new orgs (gates E-Approval file fields: professional+).
+         * Central tenants.plan_tier for new orgs (gates E-Forms file fields: professional+).
          * Local default is professional so form imports with attachments work without billing setup.
          */
         'default_plan_tier' => env(
@@ -362,7 +362,7 @@ return [
     ],
 
     /**
-     * Module notification email (E-Approval, Project One gate approvals, etc.).
+     * Module notification email (E-Forms, Project One gate approvals, etc.).
      * Use smtp for Microsoft 365 (smtp.office365.com), ses for AWS, log for local dev.
      * Not the legacy formbuilder Graph sidecar — platform Laravel mail only.
      */
@@ -381,20 +381,18 @@ return [
 
     /**
      * Tenant modules enabled for RBAC provisioning and the Team & Access role editor.
-     * Keys: core, team_access, e_approval, ticketing, dynamic_entities, ai_assistant (opt-in)
-     * Billings is no longer a toggleable workspace module (subscription UI uses Team & Access permissions).
-     * Project-One, Procurement-One, Finance-One, Documents, and Sites were removed in favor of Dynamic Entities.
+     * Keys: main production modules plus dynamic_entities; ai_assistant is opt-in.
+     * Billings remains in the catalog for subscription UI entitlements.
      */
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            // AI Assistant is opt-in (not bundled with Dynamic Entities).
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,e_approval,ticketing,dynamic_entities')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,billings,sites,documents,document_register,ai_assistant,doc_extract,dynamic_entities')),
         ))),
     ],
 
     /**
-     * E-Approval module (forms, workflows, legacy import).
+     * E-Forms module (forms, workflows, legacy import).
      */
     'e_approval' => [
         'legacy_connection' => env('LEGACY_FORMBUILDER_DB_CONNECTION', 'legacy_formbuilder'),

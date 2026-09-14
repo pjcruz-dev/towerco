@@ -3,6 +3,43 @@ export type SignatureInputMode = "draw" | "type" | "upload";
 export const SIGNATURE_UPLOAD_ACCEPT = "image/png,image/jpeg,image/webp";
 export const SIGNATURE_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 export const SIGNATURE_UPLOAD_MAX_WIDTH = 900;
+/** Cap stored data-URL length so approve/profile saves stay well under API + DB limits. */
+export const SIGNATURE_DATA_URL_SOFT_MAX = 180_000;
+
+/**
+ * Export a canvas signature as a compact PNG/JPEG data URL.
+ * Retina pads can otherwise produce multi-hundred-KB PNGs that fail approve.
+ */
+export function canvasToSignatureDataUrl(source: HTMLCanvasElement): string {
+  const maxWidth = SIGNATURE_UPLOAD_MAX_WIDTH;
+  const scale = source.width > maxWidth ? maxWidth / source.width : 1;
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return source.toDataURL("image/png");
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(source, 0, 0, width, height);
+
+  const jpeg = canvas.toDataURL("image/jpeg", 0.82);
+  if (jpeg.length <= SIGNATURE_DATA_URL_SOFT_MAX) {
+    return jpeg;
+  }
+
+  const tighter = canvas.toDataURL("image/jpeg", 0.65);
+  if (tighter.length <= SIGNATURE_DATA_URL_SOFT_MAX) {
+    return tighter;
+  }
+
+  return canvas.toDataURL("image/png");
+}
 
 export function hasSignatureValue(value: string | null | undefined): boolean {
   return Boolean(value?.trim());
@@ -88,6 +125,11 @@ export async function fileToSignatureDataUrl(file: File): Promise<string> {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, targetWidth, targetHeight);
   ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+  const jpeg = canvas.toDataURL("image/jpeg", 0.85);
+  if (jpeg.length <= SIGNATURE_DATA_URL_SOFT_MAX) {
+    return jpeg;
+  }
 
   return canvas.toDataURL("image/png");
 }

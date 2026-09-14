@@ -18,11 +18,21 @@ class EApprovalAnalyticsShowController extends AbstractApiController
         $validated = $request->validate([
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date'],
+            'form_id' => ['sometimes', 'nullable', 'uuid'],
+            'subsidiary' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'department' => ['sometimes', 'nullable', 'string', 'max:128'],
         ]);
+
+        $formId = trim((string) ($validated['form_id'] ?? ''));
+        $subsidiary = trim((string) ($validated['subsidiary'] ?? ''));
+        $department = trim((string) ($validated['department'] ?? ''));
 
         return $this->ok($analytics->build(
             isset($validated['from']) ? (string) $validated['from'] : null,
             isset($validated['to']) ? (string) $validated['to'] : null,
+            $formId !== '' ? $formId : null,
+            $subsidiary !== '' ? $subsidiary : null,
+            $department !== '' ? $department : null,
         ));
     }
 }

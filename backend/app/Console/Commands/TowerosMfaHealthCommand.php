@@ -63,7 +63,7 @@ final class TowerosMfaHealthCommand extends Command
             return $payload['ok'] ? self::SUCCESS : self::FAILURE;
         }
 
-        $this->info('TowerOS MFA health');
+        $this->info('INFRA SUITE MFA health');
         $this->line('  APP_KEY present: '.($keyPresent ? 'yes' : 'no'));
         $this->line('  APP_KEY valid shape: '.($keyLooksValid ? 'yes' : 'no'));
         $this->line('  APP_KEY fingerprint: '.($fingerprint ?? 'n/a').' (compare across deploys; must stay stable)');

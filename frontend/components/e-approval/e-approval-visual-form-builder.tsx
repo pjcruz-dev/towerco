@@ -1830,7 +1830,7 @@ export function EApprovalVisualFormBuilder({
             </section>
           </div>
 
-          <aside className="hidden h-[min(820px,calc(100vh-8rem))] w-full min-w-0 shrink-0 xl:block xl:w-64 2xl:w-72">
+          <aside className="hidden h-[min(820px,calc(100vh-8rem))] w-full min-w-0 shrink-0 xl:block xl:w-80 2xl:w-96">
             <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm">
               <h2 className="shrink-0 text-base font-medium">Field properties</h2>
               <div className="mt-3 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-1">

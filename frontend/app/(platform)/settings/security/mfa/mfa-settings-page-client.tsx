@@ -16,7 +16,7 @@ import { useNotificationStore } from "@/stores/notification-store";
 
 /** Non-enrollable preview for tours / empty state — secret is intentionally invalid for real TOTP. */
 function sampleMfaOtpauthUri(issuer: string): string {
-  const safe = encodeURIComponent(issuer || "TowerOS");
+  const safe = encodeURIComponent(issuer || "INFRA SUITE");
   return `otpauth://totp/${safe}:sample-preview?secret=SAMPLEONLYNOTREAL&issuer=${safe}`;
 }
 

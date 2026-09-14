@@ -32,6 +32,7 @@ import type {
 } from "@/modules/e-approval/form-workspace-types";
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
+import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 
 export async function fetchEApprovalAssignableUsers(): Promise<EApprovalAssignableUser[]> {
   const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users");
@@ -258,6 +259,8 @@ export async function fetchEApprovalSubmissionsIndex(params: {
   from?: string;
   to?: string;
   sort?: string;
+  subsidiary?: string;
+  department?: string;
 }): Promise<{ data: EApprovalSubmissionListRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalSubmissionListRow[]; meta: PaginatedMeta }>(
     "/e-approval/submissions",
@@ -283,10 +286,23 @@ export async function fetchEApprovalFormWorkspaces(): Promise<EApprovalFormWorks
 
 export async function fetchEApprovalFormWorkspaceDashboard(
   slug: string,
+  params: {
+    status?: string;
+    from?: string;
+    to?: string;
+    subsidiary?: string;
+    department?: string;
+    mine?: boolean;
+  } = {},
 ): Promise<EApprovalFormWorkspaceDashboard> {
   const response = await apiClient.get<{
     data: EApprovalFormWorkspaceDashboard;
-  }>(`/e-approval/workspaces/${encodeURIComponent(slug)}`);
+  }>(`/e-approval/workspaces/${encodeURIComponent(slug)}`, {
+    params: {
+      ...params,
+      mine: params.mine ? 1 : undefined,
+    },
+  });
   return response.data.data;
 }
 
@@ -305,6 +321,8 @@ export async function fetchEApprovalWorkspaceSubmissions(
     from?: string;
     to?: string;
     sort?: string;
+    subsidiary?: string;
+    department?: string;
   } = {},
 ): Promise<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }>(
@@ -726,12 +744,15 @@ export async function downloadEApprovalSubmissionsExport(
     from?: string;
     to?: string;
     search?: string;
-    format?: "csv" | "xlsx";
+    format?: "csv" | "xlsx" | "html";
     columns?: string[];
     layout?: "submissions" | "line_items";
     grid_field?: string;
     async?: boolean;
     viewer_scope?: "mine" | "all";
+    subsidiary?: string;
+    department?: string;
+    ids?: string[];
   } = {},
 ): Promise<EApprovalExportResult> {
   const statuses = (params.statuses ?? []).filter((value) => value && value !== "all");
@@ -750,10 +771,11 @@ export async function downloadEApprovalSubmissionsExport(
         grid_field: params.layout === "line_items" ? params.grid_field || undefined : undefined,
         async: params.async ? 1 : undefined,
         viewer_scope: params.viewer_scope === "mine" ? "mine" : params.viewer_scope === "all" ? "all" : undefined,
+        subsidiary: params.subsidiary || undefined,
+        department: params.department || undefined,
+        ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       },
-      paramsSerializer: {
-        indexes: null,
-      },
+      paramsSerializer: moduleListExportParamsSerializer,
       responseType: "blob",
       validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
     },
@@ -893,6 +915,7 @@ export type EApprovalAnalyticsSeriesRow = {
 
 export type EApprovalAnalyticsResponse = {
   period: { from: string; to: string; days: number };
+  filters?: { form_id: string | null; subsidiary: string | null; department: string | null };
   kpis: Array<{
     key: string;
     label: string;
@@ -920,6 +943,9 @@ export type EApprovalAnalyticsResponse = {
 export async function fetchEApprovalAnalytics(params: {
   from?: string;
   to?: string;
+  form_id?: string;
+  subsidiary?: string;
+  department?: string;
 } = {}): Promise<EApprovalAnalyticsResponse> {
   const response = await apiClient.get<{ data: EApprovalAnalyticsResponse }>(
     "/e-approval/reports/analytics",
@@ -937,17 +963,42 @@ export async function downloadEApprovalWorkspaceExport(
     to?: string;
     mine?: boolean;
     include_fields?: boolean;
+    subsidiary?: string;
+    department?: string;
+    format?: "csv" | "xlsx";
+    columns?: string[];
+    layout?: "submissions" | "line_items";
+    grid_field?: string;
+    async?: boolean;
+    ids?: string[];
   } = {},
-): Promise<Blob> {
-  const response = await apiClient.get<Blob>(`/e-approval/workspaces/${encodeURIComponent(slug)}/export`, {
-    params: {
-      ...params,
-      mine: params.mine ? "1" : undefined,
-      include_fields: params.include_fields === false ? "0" : undefined,
+): Promise<EApprovalExportResult> {
+  const response = await apiClient.get<Blob | { data: Record<string, unknown> }>(
+    `/e-approval/workspaces/${encodeURIComponent(slug)}/export`,
+    {
+      params: {
+        status: params.status || undefined,
+        search: params.search?.trim() || undefined,
+        from: params.from || undefined,
+        to: params.to || undefined,
+        mine: params.mine ? "1" : undefined,
+        include_fields: params.include_fields === false ? "0" : undefined,
+        subsidiary: params.subsidiary || undefined,
+        department: params.department || undefined,
+        format: params.format ?? "csv",
+        columns: params.columns && params.columns.length > 0 ? params.columns : undefined,
+        layout: params.layout && params.layout !== "submissions" ? params.layout : undefined,
+        grid_field: params.layout === "line_items" ? params.grid_field || undefined : undefined,
+        async: params.async ? 1 : undefined,
+        ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
+      },
+      paramsSerializer: moduleListExportParamsSerializer,
+      responseType: "blob",
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
     },
-    responseType: "blob",
-  });
-  return response.data;
+  );
+
+  return parseExportResponse(response);
 }
 
 export async function downloadEApprovalFormExport(formId: string): Promise<Blob> {
@@ -984,6 +1035,7 @@ export async function fetchEApprovalSubmissionPrint(submissionId: string): Promi
 export type EApprovalMetadataResponse = {
   roles: string[];
   departments: string[];
+  subsidiaries?: string[];
   emails: string[];
   plan_features?: {
     plan_tier: string;
@@ -1026,7 +1078,7 @@ export type EApprovalTestEmailResult = {
   mailer: string;
 };
 
-/** Sends a TowerOS test message to the current admin (Microsoft 365 SMTP / SES — not legacy mail). */
+/** Sends a INFRA SUITE test message to the current admin (Microsoft 365 SMTP / SES — not legacy mail). */
 export async function sendEApprovalSettingsTestEmail(): Promise<EApprovalTestEmailResult> {
   const response = await apiClient.post<{ data: EApprovalTestEmailResult }>(
     "/e-approval/settings/test-email",
@@ -1194,6 +1246,124 @@ export async function uploadEApprovalFormLogo(formId: string, file: File): Promi
     form,
     { headers: { "Content-Type": "multipart/form-data" } },
   );
+  return response.data.data;
+}
+
+export async function uploadEApprovalFormSubsidiaryLogo(
+  formId: string,
+  code: string,
+  file: File,
+): Promise<{
+  code: string;
+  logo_url: string;
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<{
+    data: {
+      code: string;
+      logo_url: string;
+      subsidiary_codes: string[];
+      subsidiary_logos: Record<string, string>;
+    };
+  }>(`/e-approval/forms/${formId}/subsidiary-logos/${encodeURIComponent(code)}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.data;
+}
+
+export async function fetchEApprovalTenantSubsidiaryLogos(): Promise<{
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const response = await apiClient.get<{
+    data: { subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>("/e-approval/subsidiary-logos");
+  return response.data.data;
+}
+
+export async function uploadEApprovalTenantSubsidiaryLogo(
+  code: string,
+  file: File,
+): Promise<{
+  code: string;
+  logo_url: string;
+  subsidiary_codes: string[];
+  subsidiary_logos: Record<string, string>;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<{
+    data: {
+      code: string;
+      logo_url: string;
+      subsidiary_codes: string[];
+      subsidiary_logos: Record<string, string>;
+    };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.data;
+}
+
+export async function clearEApprovalTenantSubsidiaryLogo(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`, {
+    params: { clear_only: 1 },
+  });
+  return response.data.data;
+}
+
+export async function removeEApprovalTenantSubsidiaryCode(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/subsidiary-logos/${encodeURIComponent(code)}`);
+  return response.data.data;
+}
+
+export async function registerEApprovalTenantSubsidiaryCode(
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.post<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>("/e-approval/subsidiary-codes", { code });
+  return response.data.data;
+}
+
+export async function deleteEApprovalFormSubsidiaryLogo(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-logos/${encodeURIComponent(code)}`);
+  return response.data.data;
+}
+
+export async function registerEApprovalFormSubsidiaryCode(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.post<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-codes`, { code });
+  return response.data.data;
+}
+
+export async function removeEApprovalFormSubsidiaryCode(
+  formId: string,
+  code: string,
+): Promise<{ code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> }> {
+  const response = await apiClient.delete<{
+    data: { code: string; subsidiary_codes: string[]; subsidiary_logos: Record<string, string> };
+  }>(`/e-approval/forms/${formId}/subsidiary-codes/${encodeURIComponent(code)}`);
   return response.data.data;
 }
 

@@ -7,7 +7,7 @@ Markdown articles for the tenant-user AI Assistant (how-to / workflows).
 - One `.md` file per article under this folder.
 - Required YAML-like frontmatter between `---` fences:
   - `title`, `slug`, `module`, `audience`, `permissions`, `status`, `version`, `related_routes`, `last_reviewed`
-- `module` must match TowerOS module keys (`core`, `sites`, `e_approval`, …).
+- `module` must match INFRA SUITE module keys (`core`, `sites`, `e_approval`, …).
 - `audience` should be `tenant_user` for this pack.
 - `status: published` is required for sync registration.
 - No platform-admin or engineering/architecture secrets.

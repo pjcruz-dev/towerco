@@ -748,7 +748,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
       <div className="space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-muted-foreground">E-Approval form</p>
+            <p className="text-xs font-medium text-muted-foreground">E-Forms form</p>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {isNew ? "New form" : name.trim() || "Untitled form"}
             </h1>
@@ -1157,7 +1157,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
                   <li>Requestors see their own submissions; approvers see assigned items.</li>
                   <li>Form admins with workspace visibility see all submissions for this form.</li>
                   <li>Field and workflow changes apply after you publish the form.</li>
-                  <li>Print layout and signatures use the existing Print layout tab.</li>
+                  <li>Print layout, document design, signatures, and attachment merge use the Print tab.</li>
                 </ul>
               </EApprovalSectionCard>
             </TabsContent>
@@ -1165,7 +1165,14 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
 
           {!isNew && formId ? (
             <TabsContent value="print" className="mt-0">
-              <EApprovalPrintLayoutEditor formId={formId} fields={fields} />
+              <EApprovalPrintLayoutEditor
+                formId={formId}
+                fields={fields}
+                formTitle={name}
+                formFamily={
+                  typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null
+                }
+              />
             </TabsContent>
           ) : null}
         </Tabs>

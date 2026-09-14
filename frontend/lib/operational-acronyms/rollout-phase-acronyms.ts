@@ -1,6 +1,6 @@
 /**
  * Maps rollout timeline / milestone phase_key values to platform glossary acronyms.
- * Aligned with TowerOS OperationalAcronymDefaults + RolloutPlaybook definitions.
+ * Aligned with INFRA SUITE OperationalAcronymDefaults + RolloutPlaybook definitions.
  */
 export const ROLLOUT_PHASE_ACRONYMS: Record<string, string> = {
   // Lifecycle / program

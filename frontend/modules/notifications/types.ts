@@ -18,7 +18,7 @@ export type TenantNotificationRow = {
   href: string | null;
   is_read: boolean;
   created_at: string | null;
-  /** Present on E-Approval notifications for backward compatibility. */
+  /** Present on E-Forms notifications for backward compatibility. */
   submission_id?: string | null;
   document_no?: string | null;
   form_name?: string | null;

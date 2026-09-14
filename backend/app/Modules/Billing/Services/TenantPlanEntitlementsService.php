@@ -185,7 +185,7 @@ final class TenantPlanEntitlementsService
     }
 
     /**
-     * E-Approval slice (backward compatible with legacy plan_features shape).
+     * E-Forms slice (backward compatible with legacy plan_features shape).
      *
      * @return array{plan_tier: string, file_uploads: bool, max_file_fields: int|null}
      */
@@ -275,6 +275,50 @@ final class TenantPlanEntitlementsService
             'enabled' => (bool) ($ticketing['enabled'] ?? false),
             'file_uploads' => (bool) ($ticketing['file_uploads'] ?? false),
             'max_attachments_per_ticket' => $maxAttachments,
+        ];
+    }
+
+    /**
+     * DocExtract slice for plan gating and UI.
+     *
+     * @return array{plan_tier: string, enabled: bool}
+     */
+    public function docExtractFeatures(?string $tenantId = null): array
+    {
+        if ($tenantId !== null) {
+            /** @var Tenant|null $central */
+            $central = Tenant::query()->find($tenantId);
+            if ($central instanceof Tenant) {
+                $tier = $this->normalizeTier($central->plan_tier);
+                $modules = $this->forTenant($central)['modules'];
+            } else {
+                $tier = 'starter';
+                $modules = $this->forTier($tier)['modules'];
+            }
+        } else {
+            $tenantKey = tenant()?->getTenantKey();
+            if ($tenantKey !== null) {
+                /** @var Tenant|null $central */
+                $central = Tenant::query()->find((string) $tenantKey);
+                if ($central instanceof Tenant) {
+                    $tier = $this->normalizeTier($central->plan_tier);
+                    $modules = $this->forTenant($central)['modules'];
+                } else {
+                    $tier = $this->resolvePlanTierForCurrentTenant();
+                    $modules = $this->forTier($tier)['modules'];
+                }
+            } else {
+                $tier = $this->resolvePlanTierForCurrentTenant();
+                $modules = $this->forTier($tier)['modules'];
+            }
+        }
+
+        /** @var array<string, mixed> $docExtract */
+        $docExtract = $modules['doc_extract'] ?? [];
+
+        return [
+            'plan_tier' => $tier,
+            'enabled' => (bool) ($docExtract['enabled'] ?? false),
         ];
     }
 

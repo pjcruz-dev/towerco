@@ -1,6 +1,6 @@
 # Tenant passkeys (fingerprint / Windows Hello) — roadmap
 
-Phased delivery of **WebAuthn passkeys** for tenant workspace sign-in. Device biometrics (fingerprint, Face ID, Windows Hello) unlock a passkey; TowerOS never stores fingerprint images.
+Phased delivery of **WebAuthn passkeys** for tenant workspace sign-in. Device biometrics (fingerprint, Face ID, Windows Hello) unlock a passkey; INFRA SUITE never stores fingerprint images.
 
 | Phase | Status | Doc |
 |-------|--------|-----|

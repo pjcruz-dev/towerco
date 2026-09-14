@@ -2,15 +2,21 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { BookOpen, Fingerprint, Play, ShieldCheck } from "lucide-react";
+import { BookOpen, FileScan, Fingerprint, Play, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchPublishedHelpGuides, type HelpGuideListRow } from "@/lib/api/modules/help-guides-api";
-import { dismissEApprovalTourPrompt, dismissTicketingTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
+import {
+  dismissDocExtractTourPrompt,
+  dismissEApprovalTourPrompt,
+  dismissTicketingTourPrompt,
+} from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
+import { docExtractTourStartHref } from "@/lib/help/doc-extract-live-tour";
 import { passkeysTourStartHref } from "@/lib/help/passkeys-live-tour";
 import { mfaTourStartHref } from "@/lib/help/mfa-live-tour";
 import { ticketingTourStartHref, TICKETING_TOUR_GUIDE_PATH } from "@/lib/help/ticketing-live-tour";
@@ -37,7 +43,7 @@ function groupGuidesByModule(guides: HelpGuideListRow[]): Array<{ moduleKey: str
   const map = new Map<string, HelpGuideListRow[]>();
 
   for (const guide of guides) {
-    // E-Approval / Ticketing use Visual guide + live tour instead of written role cards.
+    // E-Forms / Ticketing use Visual guide + live tour instead of written role cards.
     if (guide.module_key === "e_approval" || guide.module_key === "ticketing") {
       continue;
     }
@@ -62,7 +68,7 @@ function EApprovalVisualGuideCard() {
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
       <p className="text-xs font-medium text-muted-foreground">Guide</p>
-      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval tour guide</h3>
+      <h3 className="mt-2 text-base font-medium text-foreground">E-Forms tour guide</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Annotated screenshots plus jump-into-chapter starts — overview, submissions, compose, decide,
         cancel, and follow-up. Print-friendly for desk training.
@@ -92,7 +98,7 @@ function EApprovalTourGuideCard() {
       className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
     >
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
-      <h3 className="mt-2 text-base font-medium text-foreground">E-Approval product tour</h3>
+      <h3 className="mt-2 text-base font-medium text-foreground">E-Forms product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Walk the real screens with coach marks. Sample UI appears while the tour runs and is never
         saved — jump into chapters from the tour guide anytime.
@@ -211,6 +217,35 @@ function MfaTourGuideCard() {
   );
 }
 
+function DocExtractTourGuideCard() {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const tenantId = useAuthStore((state) => state.activeTenantId);
+  const canView = usePermission([permissions.docExtractView]);
+
+  if (!canView) {
+    return null;
+  }
+
+  return (
+    <Link
+      href={docExtractTourStartHref(0)}
+      onClick={() => dismissDocExtractTourPrompt(userId, tenantId)}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Interactive</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">DocExtract product tour</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Walk Upload → Consolidate → Customize → Results on the live screens. Open an existing batch for
+        workspace steps, or extract first.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <FileScan className="h-3.5 w-3.5" aria-hidden />
+        Start DocExtract tour →
+      </p>
+    </Link>
+  );
+}
+
 export function HelpPageClient() {
   const query = useQuery({
     queryKey: ["help", "guides"],
@@ -219,14 +254,23 @@ export function HelpPageClient() {
 
   const groups = groupGuidesByModule(query.data ?? []);
   const canViewTicketing = usePermission([permissions.ticketingView]);
+  const canViewDocExtract = usePermission([permissions.docExtractView]);
 
   return (
-    <PermissionGate requiredPermissions={[permissions.eApprovalView]}>
+    <PermissionGate
+      match="any"
+      requiredPermissions={[
+        permissions.eApprovalView,
+        permissions.ticketingView,
+        permissions.docExtractView,
+      ]}
+    >
       <div className="space-y-8">
+        <LiveProductTourHost />
         <header>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Help</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Product tours and guides for E-Approval, Ticketing, and account security.
+            Product tours and guides for E-Forms, Ticketing, DocExtract, and account security.
           </p>
         </header>
 
@@ -238,7 +282,7 @@ export function HelpPageClient() {
         ) : null}
 
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold text-foreground">E-Approval</h2>
+          <h2 className="text-xl font-semibold text-foreground">E-Forms</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <EApprovalVisualGuideCard />
             <EApprovalTourGuideCard />
@@ -254,6 +298,16 @@ export function HelpPageClient() {
             </div>
           </section>
         ) : null}
+
+        {canViewDocExtract ? (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-foreground">DocExtract</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DocExtractTourGuideCard />
+            </div>
+          </section>
+        ) : null}
+
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-foreground">Account &amp; security</h2>
           <div className="grid gap-4 sm:grid-cols-2">

@@ -1,6 +1,6 @@
 @echo off
 echo.
-echo TowerOS local development
+echo INFRA SUITE local development
 echo =========================
 echo.
 echo Preferred ^(cross-platform^)

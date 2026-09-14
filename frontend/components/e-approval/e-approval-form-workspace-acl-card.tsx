@@ -82,7 +82,7 @@ export function EApprovalFormWorkspaceAclCard({
             />
           )}
           <p className="text-xs text-muted-foreground">
-            Leave empty to allow any user with E-Approval view access. Coordinators and auditors always have access.
+            Leave empty to allow any user with E-Forms view access. Coordinators and auditors always have access.
           </p>
         </div>
 

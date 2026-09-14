@@ -1,4 +1,4 @@
-/** Per-user, per-tenant completed E-Approval live-tour chapters. */
+/** Per-user, per-tenant completed E-Forms live-tour chapters. */
 
 import type { LiveTourChapterId } from "@/lib/help/e-approval-live-tour";
 

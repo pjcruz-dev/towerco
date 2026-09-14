@@ -45,8 +45,8 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
                 latencyMs: $this->elapsedMs($started),
                 insufficientContext: false,
                 suggestedFollowups: [
-                    'What permissions do I need for E-Approval?',
-                    'Where do I see my E-Approval submissions?',
+                    'What permissions do I need for E-Forms?',
+                    'Where do I see my E-Forms submissions?',
                 ],
             );
         }
@@ -82,7 +82,7 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
                 latencyMs: $this->elapsedMs($started),
                 insufficientContext: true,
                 suggestedFollowups: [
-                    'How do I submit an E-Approval request?',
+                    'How do I submit an E-Forms request?',
                     'How do I find a controlled document?',
                     'Why can’t I see a page or module?',
                 ],
@@ -156,14 +156,14 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
 
         $parts[] = $isDocumentApproval
             ? 'Track your Document Approval submission'
-            : 'Track your E-Approval submission';
+            : 'Track your E-Forms submission';
         $parts[] = '';
 
         $track = $this->sectionBody($chunk->body(), 'Track your submission');
         if ($track !== '') {
             $parts[] = $track;
         } else {
-            $parts[] = '1. Open **E-Approval → Submissions**.';
+            $parts[] = '1. Open **E-Forms → Submissions**.';
             $parts[] = '2. Find your request by document number, form, or status.';
             $parts[] = '3. Open the submission to review workflow progress, comments, and attachments.';
             $parts[] = '4. Check **Notifications** for approval updates.';
@@ -183,7 +183,7 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
         $parts = [];
         $parts[] = 'If your submission was returned for revision';
         $parts[] = '';
-        $parts[] = '1. Open **E-Approval → Submissions**.';
+        $parts[] = '1. Open **E-Forms → Submissions**.';
         $parts[] = '2. Find the returned request by document number, form, or status.';
         $parts[] = '3. Open it and read the approver remarks / return reason.';
         $parts[] = '4. Update the answers or attachments that need changes.';
@@ -220,11 +220,11 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
         $parts[] = '';
         $parts[] = 'Usual causes:';
         $parts[] = '1. The form is **not published** for your tenant yet.';
-        $parts[] = '2. You are looking at the wrong form family (pick **Document Control** / **ISO Document Control**, not another E-Approval form).';
+        $parts[] = '2. You are looking at the wrong form family (pick **Document Control** / **ISO Document Control**, not another E-Forms form).';
         $parts[] = '3. You are missing access — you need `e_approval:submissions:create` (and usually `e_approval:view`).';
         $parts[] = '';
         $parts[] = 'What to do:';
-        $parts[] = '1. Open **E-Approval → New submission** and search/filter for Document Control / ISO.';
+        $parts[] = '1. Open **E-Forms → New submission** and search/filter for Document Control / ISO.';
         $parts[] = '2. If it still is not there, ask a tenant admin to **publish** the Document Control form and confirm your permissions.';
         $parts[] = '3. Do not start a different form for Document Approval — that creates the wrong workflow.';
 
@@ -409,21 +409,21 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
         $followups = [];
 
         if ($intent === 'submit') {
-            $followups[] = 'Where do I track my E-Approval submission?';
+            $followups[] = 'Where do I track my E-Forms submission?';
             $followups[] = 'What if my form is not listed?';
             $followups[] = 'What if my submission was returned for revision?';
         } elseif ($intent === 'form_missing') {
             $followups[] = 'How do I submit a Document Approval request?';
-            $followups[] = 'How do I create an E-Approval request?';
-            $followups[] = 'What permissions do I need for E-Approval?';
+            $followups[] = 'How do I create an E-Forms request?';
+            $followups[] = 'What permissions do I need for E-Forms?';
         } elseif ($intent === 'returned') {
-            $followups[] = 'Where do I track my E-Approval submission?';
+            $followups[] = 'Where do I track my E-Forms submission?';
             $followups[] = 'What if my Document Control form is not listed?';
-            $followups[] = 'How do I create an E-Approval request?';
+            $followups[] = 'How do I create an E-Forms request?';
         } elseif ($intent === 'track') {
             $followups[] = 'How do I submit a Document Approval request?';
             $followups[] = 'What if my submission was returned for revision?';
-            $followups[] = 'What permissions do I need for E-Approval?';
+            $followups[] = 'What permissions do I need for E-Forms?';
         } elseif ($intent === 'approve') {
             $followups[] = 'What if my approval inbox is empty?';
             $followups[] = 'How do I return a submission for revision?';
@@ -492,11 +492,11 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
 
     private function outOfScopeAnswer(): string
     {
-        return "I’m the TowerOS workspace assistant, so I can only help with how-to and "
-            ."process questions about your modules (E-Approval, Documents, Sites, Ticketing, "
+        return "I’m the INFRA SUITE workspace assistant, so I can only help with how-to and "
+            ."process questions about your modules (E-Forms, Documents, Sites, Ticketing, "
             ."Project-One, and similar), or look up your own live items like submissions and "
-            ."approvals.\n\nI can’t answer general questions outside TowerOS. Try asking, for "
-            ."example, how to submit an E-Approval request, where to track a submission, or why "
+            ."approvals.\n\nI can’t answer general questions outside INFRA SUITE. Try asking, for "
+            ."example, how to submit an E-Forms request, where to track a submission, or why "
             ."a page may be missing.";
     }
 

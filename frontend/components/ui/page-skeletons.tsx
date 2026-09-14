@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 export function PageHeaderSkeleton({ actionCount = 1 }: { actionCount?: number }) {
@@ -27,9 +28,21 @@ export function KpiStripSkeleton({ count = 4, className }: { count?: number; cla
           key={`kpi-skeleton-${index}`}
           className="rounded-xl border border-border bg-card p-4 shadow-sm"
         >
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="mt-3 h-8 w-16" />
-          <Skeleton className="mt-2 h-3 w-28" />
+          <div className="flex items-start justify-between gap-2">
+            <Skeleton className="size-9 rounded-lg" />
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+          <Skeleton className="mt-3 h-4 w-24" />
+          <Skeleton className="mt-2 h-8 w-16" />
+          <div className="mt-3 flex h-9 items-end gap-1">
+            {Array.from({ length: 8 }).map((__, bar) => (
+              <Skeleton
+                key={`kpi-spark-${index}-${bar}`}
+                className="min-w-0 flex-1 rounded-full"
+                style={{ height: `${28 + ((bar * 11) % 48)}%` }}
+              />
+            ))}
+          </div>
         </article>
       ))}
     </section>
@@ -148,6 +161,29 @@ export function DashboardContentSkeleton() {
   );
 }
 
+/** List pages: status chips + search + toolbar + table (DocExtract batches, etc.). */
+export function ModuleListPageSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={`list-tab-${index}`} className="h-8 w-24 rounded-md" />
+          ))}
+        </div>
+        <Skeleton className="h-9 w-full max-w-xs rounded-md" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-8 w-20 rounded-md" />
+        <Skeleton className="h-8 w-20 rounded-md" />
+        <Skeleton className="h-8 w-24 rounded-md" />
+        <Skeleton className="h-8 w-24 rounded-md" />
+      </div>
+      <TableBlockSkeleton rows={rows} />
+    </div>
+  );
+}
+
 export function PlatformBillingPageSkeleton() {
   return (
     <div className="flex flex-col gap-6">
@@ -193,12 +229,8 @@ export function PageLoadingShell({
       aria-live="polite"
       aria-busy="true"
     >
-      <div className="flex gap-1.5">
-        <Skeleton className="h-2 w-2 rounded-full" />
-        <Skeleton className="h-2 w-2 rounded-full" />
-        <Skeleton className="h-2 w-2 rounded-full" />
-      </div>
-      <span>{label}</span>
+      <Spinner className="size-6 text-muted-foreground/80" aria-label={label} />
+      <span className="text-xs font-medium tracking-wide">{label}</span>
     </div>
   );
 }

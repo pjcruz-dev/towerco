@@ -4,11 +4,11 @@
 |--------|--------|
 | Status | Accepted |
 | Stack | Laravel, MySQL 8.4, Redis, stancl/tenancy |
-| Scope | TowerOS data plane and request lifecycle |
+| Scope | INFRA SUITE data plane and request lifecycle |
 
 ## Context
 
-TowerOS is multi-tenant SaaS. In MySQL, the native isolation boundary for application data is a **database** (MySQL uses the term *database*; it is equivalent to what other engines call a *schema*). MySQL does not provide multiple named schemas inside one database like PostgreSQL.
+INFRA SUITE is multi-tenant SaaS. In MySQL, the native isolation boundary for application data is a **database** (MySQL uses the term *database*; it is equivalent to what other engines call a *schema*). MySQL does not provide multiple named schemas inside one database like PostgreSQL.
 
 The product requirement **“schema-per-tenant”** is therefore implemented as **one MySQL database per tenant**, provisioned and switched by **stancl/tenancy**, with a separate **central** MySQL database for global metadata (`tenants`, `domains`, billing references, platform identity, SSO configuration, and cross-tenant audit).
 

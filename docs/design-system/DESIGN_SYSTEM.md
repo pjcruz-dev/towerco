@@ -1,10 +1,10 @@
-# TowerOS Design System
+# INFRA SUITE Design System
 
 **Version:** 1.0.0  
 **Stack:** Next.js 14 · Tailwind CSS v4 · shadcn/ui (Base UI primitives) · Lucide Icons · Geist font  
 **Scope:** Platform-wide — tenant workspace, platform console, public pages
 
-> This is the single source of truth for all UI/UX decisions in TowerOS. All new screens, components, and modifications must conform to this document. TowerOS is an enterprise telecom SaaS — the design philosophy is **Operational Minimalism**: clean, fast, data-first, low cognitive load.
+> This is the single source of truth for all UI/UX decisions in INFRA SUITE. All new screens, components, and modifications must conform to this document. INFRA SUITE is an enterprise telecom SaaS — the design philosophy is **Operational Minimalism**: clean, fast, data-first, low cognitive load.
 
 ---
 
@@ -205,7 +205,7 @@ The sidebar uses a dark slate palette independent of the theme.
 
 ## 3. Spacing
 
-TowerOS uses the standard Tailwind spacing scale (0.25rem / 4px per unit) plus enterprise extensions up to `spacing-90`.
+INFRA SUITE uses the standard Tailwind spacing scale (0.25rem / 4px per unit) plus enterprise extensions up to `spacing-90`.
 
 ### 3.1 Core Spacing Scale
 
@@ -1511,4 +1511,4 @@ Never convey status through color alone — always pair with an icon or text lab
 
 ---
 
-*Last updated: June 2026 — TowerOS Design System v1.0.0*
+*Last updated: June 2026 — INFRA SUITE Design System v1.0.0*

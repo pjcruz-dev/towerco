@@ -527,6 +527,61 @@ class EntraGraphAppService
     }
 
     /**
+     * Download the user's profile photo bytes from Microsoft Graph (best-effort).
+     *
+     * @return array{bytes: string, content_type: string}|null
+     */
+    public function fetchUserPhoto(string $token, string $entraUserId): ?array
+    {
+        $entraUserId = trim($entraUserId);
+        if ($entraUserId === '' || $token === '') {
+            return null;
+        }
+
+        try {
+            $response = $this->microsoftHttp(12)
+                ->withToken($token)
+                ->withHeaders(['Accept' => 'image/*'])
+                ->get('https://graph.microsoft.com/v1.0/users/'.rawurlencode($entraUserId).'/photo/$value');
+        } catch (ConnectionException $exception) {
+            Log::warning('Entra photo request timed out', [
+                'entra_id' => $entraUserId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            Log::info('Entra photo request failed', [
+                'entra_id' => $entraUserId,
+                'status' => $response->status(),
+            ]);
+
+            return null;
+        }
+
+        $bytes = $response->body();
+        if ($bytes === '') {
+            return null;
+        }
+
+        $contentType = (string) ($response->header('Content-Type') ?: 'image/jpeg');
+        if (! str_starts_with(strtolower($contentType), 'image/')) {
+            $contentType = 'image/jpeg';
+        }
+
+        return [
+            'bytes' => $bytes,
+            'content_type' => explode(';', $contentType)[0] ?: 'image/jpeg',
+        ];
+    }
+
+    /**
      * @param  array<string, string>  $query
      */
     private function graphGet(string $token, string $path, array $query = []): Response

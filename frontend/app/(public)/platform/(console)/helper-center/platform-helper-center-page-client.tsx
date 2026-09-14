@@ -176,7 +176,7 @@ export function PlatformHelperCenterPageClient() {
             disabled={syncDefaultsMutation.isPending}
             onClick={() => syncDefaultsMutation.mutate()}
           >
-            {syncDefaultsMutation.isPending ? "Syncing…" : "Sync TowerOS defaults"}
+            {syncDefaultsMutation.isPending ? "Syncing…" : "Sync INFRA SUITE defaults"}
           </Button>
           <Button type="button" onClick={() => setShowCreate((open) => !open)}>
             {showCreate ? "Cancel" : "Add acronym"}
@@ -262,7 +262,7 @@ export function PlatformHelperCenterPageClient() {
               {!acronymsQuery.isLoading && filteredRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-sm text-muted-foreground">
-                    No acronyms yet. Run &quot;Sync TowerOS defaults&quot; or add one manually.
+                    No acronyms yet. Run &quot;Sync INFRA SUITE defaults&quot; or add one manually.
                   </TableCell>
                 </TableRow>
               ) : null}
