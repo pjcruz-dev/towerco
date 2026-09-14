@@ -111,25 +111,6 @@ final class AssistantToolFallbackPlanner
             ]);
         }
 
-        if (preg_match('/\b([A-Z]{2,}(?:-[A-Z0-9]+){2,})\b/', $blob, $m) === 1
-            && $this->registry->has('get_controlled_document_by_code')
-            && ($moduleContext === 'document_register' || preg_match('/document|register|revision/i', $blob) === 1)) {
-            return new ToolPlan(ToolPlan::MODE_TOOLS, [
-                new ToolCallRequest('get_controlled_document_by_code', [
-                    'document_code' => strtoupper($m[1]),
-                ]),
-            ]);
-        }
-
-        if (preg_match('/\bsite(?:\s+code)?\s*[:=]?\s*([A-Z0-9][A-Z0-9\-_]{1,63})\b/i', $blob, $m) === 1
-            && $this->registry->has('get_site_by_code')) {
-            return new ToolPlan(ToolPlan::MODE_TOOLS, [
-                new ToolCallRequest('get_site_by_code', [
-                    'site_code' => $m[1],
-                ]),
-            ]);
-        }
-
         return null;
     }
 
@@ -140,11 +121,6 @@ final class AssistantToolFallbackPlanner
                 ? new ToolPlan(ToolPlan::MODE_TOOLS, [new ToolCallRequest('list_my_open_tickets')])
                 : null,
             'e_approval' => $this->planEApprovalFallback($q),
-            'sites' => null,
-            'documents', 'document_register' => $this->registry->has('list_expiring_documents')
-                && preg_match('/\b(expir|due soon)\b/u', $q) === 1
-                ? new ToolPlan(ToolPlan::MODE_TOOLS, [new ToolCallRequest('list_expiring_documents', ['within_days' => 90])])
-                : null,
             default => null,
         };
     }

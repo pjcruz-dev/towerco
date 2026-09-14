@@ -27,7 +27,7 @@ INFRA SUITE is your workspace for telecom site operations, approvals, documents,
 1. Open your tenant URL and sign in.
 2. Land on **Dashboard** for a summary of work that needs attention.
 3. Use the left sidebar to open modules enabled for your workspace.
-4. Open **Notifications** when you need approvals, ticket updates, or rollout alerts.
+4. Open **Notifications** when you need approvals or ticket updates.
 5. Use search / command palette (`Ctrl+K` or `Cmd+K`) to jump to pages or find records.
 
 ## Expected result

@@ -2,7 +2,7 @@ import type { TenantNotificationRow } from "@/modules/notifications/types";
 
 export type NotificationTab = "action" | "update" | "all";
 
-export type NotificationModuleFilter = "all" | "e_approval" | "project_one";
+export type NotificationModuleFilter = "all" | "e_approval";
 
 const E_APPROVAL_ACTION_TYPES = new Set([
   "approval_assigned",
@@ -13,14 +13,10 @@ const E_APPROVAL_ACTION_TYPES = new Set([
   "awaiting_dcf",
 ]);
 
-const PROJECT_ONE_ACTION_TYPES = new Set(["gate_submitted", "gate_escalated"]);
-
 export function notificationModuleLabel(module: string): string {
   switch (module) {
     case "e_approval":
       return "E-Forms";
-    case "project_one":
-      return "PROJECT-ONE";
     default:
       return module;
   }
@@ -31,24 +27,12 @@ export function notificationCategory(notification: TenantNotificationRow): "acti
     return notification.category;
   }
 
-  if (notification.module === "project_one") {
-    return PROJECT_ONE_ACTION_TYPES.has(notification.type) ? "action" : "update";
-  }
-
   return E_APPROVAL_ACTION_TYPES.has(notification.type) ? "action" : "update";
 }
 
 export function resolveNotificationHref(notification: TenantNotificationRow): string {
   if (notification.href) {
     return notification.href;
-  }
-
-  if (notification.module === "project_one") {
-    if (notification.type === "gate_submitted" || notification.type === "gate_escalated") {
-      return "/project-one/gate-approvals?awaiting_me=1";
-    }
-
-    return "/project-one/gate-approvals";
   }
 
   if (
@@ -81,24 +65,7 @@ export function notificationActorLabel(notification: TenantNotificationRow): str
   return "System";
 }
 
-export function notificationActionLabel(type: string, module?: string): string {
-  if (module === "project_one" || type.startsWith("gate_")) {
-    switch (type) {
-      case "gate_submitted":
-        return "requested gate approval";
-      case "gate_step_approved":
-        return "advanced gate approval";
-      case "gate_approved":
-        return "approved a rollout gate";
-      case "gate_rejected":
-        return "rejected gate approval";
-      case "gate_escalated":
-        return "gate approval needs attention";
-      default:
-        return "updated rollout gate approval";
-    }
-  }
-
+export function notificationActionLabel(type: string, _module?: string): string {
   switch (type) {
     case "approval_assigned":
       return "assigned you an approval";

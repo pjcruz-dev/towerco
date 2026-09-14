@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Platform\Services;
 
 use App\Models\Tenant;
-use App\Modules\Platform\Models\RolloutPlaybookVersion;
-use App\Modules\Platform\Models\TenantPlaybookBinding;
 use App\Modules\Tenancy\Support\TenantScopedCache;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -46,22 +44,7 @@ final class PlatformDashboardService
             ->orderByDesc('created_at')
             ->get();
 
-        $tenantIds = $tenants->pluck('id')->all();
-        $bindings = TenantPlaybookBinding::query()
-            ->whereIn('tenant_id', $tenantIds)
-            ->with(['playbookVersion:id,version', 'rolloutPolicyBundle:id,code'])
-            ->get()
-            ->keyBy('tenant_id');
-
-        $latestVersion = RolloutPlaybookVersion::query()
-            ->where('status', 'published')
-            ->orderByDesc('published_at')
-            ->value('version');
-
-        $enriched = $tenants->map(function (Tenant $tenant) use ($bindings, $latestVersion): array {
-            /** @var TenantPlaybookBinding|null $binding */
-            $binding = $bindings->get($tenant->id);
-            $assigned = $binding?->playbookVersion?->version;
+        $enriched = $tenants->map(function (Tenant $tenant): array {
             $domains = $tenant->domains->pluck('domain')->values()->all();
 
             return [
@@ -77,17 +60,12 @@ final class PlatformDashboardService
                 'subscription_status' => (string) ($tenant->subscription_status ?? 'active'),
                 'seat_limit' => (int) ($tenant->seat_limit ?? 25),
                 'created_at' => $tenant->created_at?->toIso8601String(),
-                'playbook_upgrade_available' => $latestVersion !== null
-                    && $assigned !== null
-                    && version_compare((string) $latestVersion, (string) $assigned, '>'),
-                'assigned_playbook_version' => $assigned,
             ];
         });
 
         $organizations = $this->organizationRoots($enriched);
         $environmentCounts = $this->countBy($enriched, 'environment');
         $mfaOn = $enriched->where('mfa_required', true)->count();
-        $upgradePending = $enriched->where('playbook_upgrade_available', true)->count();
         $missingDomain = $enriched->filter(fn (array $row): bool => ($row['primary_domain'] ?? null) === null)->count();
         $recent30d = $enriched->filter(function (array $row): bool {
             if ($row['created_at'] === null) {
@@ -139,13 +117,6 @@ final class PlatformDashboardService
                 'tone' => $mfaOn > 0 ? 'success' : 'warning',
             ],
             [
-                'key' => 'playbook_upgrades',
-                'label' => 'Playbook upgrades',
-                'value' => (string) $upgradePending,
-                'change' => $latestVersion !== null ? "Latest published v{$latestVersion}" : 'No published playbook',
-                'tone' => $upgradePending > 0 ? 'warning' : 'success',
-            ],
-            [
                 'key' => 'missing_domain',
                 'label' => 'Missing hostname',
                 'value' => (string) $missingDomain,
@@ -194,13 +165,6 @@ final class PlatformDashboardService
                 'href' => '/platform#tenant-directory',
                 'priority' => 'high',
             ] : null,
-            $upgradePending > 0 ? [
-                'id' => 'pf-playbook-upgrade',
-                'label' => 'Tenants with playbook upgrade',
-                'count' => $upgradePending,
-                'href' => '/platform#tenant-directory',
-                'priority' => 'high',
-            ] : null,
             $productionWithoutMfa > 0 ? [
                 'id' => 'pf-prod-mfa-off',
                 'label' => 'Production tenants without MFA',
@@ -240,7 +204,6 @@ final class PlatformDashboardService
 
         return [
             'environment' => app()->environment(),
-            'latest_playbook_version' => $latestVersion,
             'kpis' => array_slice($kpis, 0, 9),
             'environment_breakdown' => $environmentCounts,
             'subscription_breakdown' => $this->countBy($enriched, 'subscription_status'),
@@ -262,7 +225,6 @@ final class PlatformDashboardService
                     'primary_domain' => $row['primary_domain'],
                     'created_at' => $row['created_at'],
                     'mfa_required' => $row['mfa_required'],
-                    'playbook_upgrade_available' => $row['playbook_upgrade_available'],
                 ])
                 ->values()
                 ->all(),

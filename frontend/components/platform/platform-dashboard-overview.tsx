@@ -386,11 +386,6 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                         {tenant.environment}
                       </Badge>
                     ) : null}
-                    {tenant.playbook_upgrade_available ? (
-                      <Badge variant="outline" className="border-amber-300 text-amber-700">
-                        Upgrade
-                      </Badge>
-                    ) : null}
                     {tenant.mfa_required ? <Badge variant="outline">MFA</Badge> : null}
                   </div>
                 </li>

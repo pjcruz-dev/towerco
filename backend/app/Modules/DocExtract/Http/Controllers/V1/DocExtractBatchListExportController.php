@@ -10,7 +10,7 @@ use App\Modules\DocExtract\Services\DocExtractBatchService;
 use App\Modules\DocExtract\Services\DocExtractPlanFeaturesService;
 use App\Modules\Identity\Models\ModuleListExport;
 use App\Modules\Identity\Services\ModuleListExportService;
-use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
+use App\Core\Support\SimpleExcelWorkbookWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -129,7 +129,7 @@ final class DocExtractBatchListExportController extends AbstractApiController
                     $headers,
                 );
             }
-            $writer = new ProcurementExcelWorkbookWriter;
+            $writer = new SimpleExcelWorkbookWriter;
             $writer->addSheet('Batches', $sheetRows);
             $binary = $writer->toBinaryString();
 

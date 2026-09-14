@@ -161,10 +161,6 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('07:00')
             ->withoutOverlapping();
 
-        $schedule->command('procurement:export-run-scheduled')
-            ->hourly()
-            ->withoutOverlapping();
-
         $schedule->command('e-approval:reports-run-scheduled')
             ->hourly()
             ->withoutOverlapping();
@@ -179,14 +175,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $schedule->command('workspace:audit-prune')
             ->dailyAt('03:40')
-            ->withoutOverlapping();
-
-        $schedule->command('procurement:rfq-reminders')
-            ->dailyAt('08:30')
-            ->withoutOverlapping();
-
-        $schedule->command('procurement:rfq-auto-close')
-            ->everyFiveMinutes()
             ->withoutOverlapping();
 
         $backupScheduleTime = (string) config('toweros.tenant_database_backup.schedule_time', '02:30');

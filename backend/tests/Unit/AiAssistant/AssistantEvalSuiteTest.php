@@ -90,7 +90,7 @@ final class AssistantEvalSuiteTest extends TestCase
     public function test_module_suggestion_catalog_covers_key_modules(): void
     {
         $catalog = new AssistantModuleSuggestionCatalog;
-        foreach (['e_approval', 'ticketing', 'document_register', 'procurement_one', 'core'] as $module) {
+        foreach (['e_approval', 'ticketing', 'document_register', 'core'] as $module) {
             $suggestions = $catalog->forModule($module);
             $this->assertNotEmpty($suggestions);
             $this->assertLessThanOrEqual(3, count($suggestions));

@@ -9,8 +9,6 @@ use App\Models\Tenant;
 use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Billing\Services\TenantTowerLicenseMeterService;
 use App\Modules\Billing\Services\TenantSubscriptionLifecycleService;
-use App\Modules\Platform\Models\RolloutPlaybookVersion;
-use App\Modules\Platform\Models\TenantPlaybookBinding;
 use App\Modules\Platform\Support\TenantThemeTokensValidator;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -268,35 +266,6 @@ final class PlatformTenantDirectoryService
             ];
         });
 
-        $tenantIds = $rows->pluck('id')->all();
-        $bindings = TenantPlaybookBinding::query()
-            ->whereIn('tenant_id', $tenantIds)
-            ->with(['playbookVersion:id,version', 'rolloutPolicyBundle:id,code,name'])
-            ->get()
-            ->keyBy('tenant_id');
-
-        $latestVersion = RolloutPlaybookVersion::query()
-            ->where('status', 'published')
-            ->orderByDesc('published_at')
-            ->value('version');
-
-        return $rows
-            ->map(function (array $row) use ($bindings, $latestVersion): array {
-                /** @var TenantPlaybookBinding|null $binding */
-                $binding = $bindings->get($row['id']);
-                $assigned = $binding?->playbookVersion?->version;
-
-                $row['assigned_playbook_version'] = $assigned;
-                $row['assigned_rollout_policy_code'] = $binding?->rolloutPolicyBundle?->code;
-                $row['assigned_rollout_policy_name'] = $binding?->rolloutPolicyBundle?->name;
-                $row['rollout_policy_bundle_id'] = $binding?->rollout_policy_bundle_id;
-                $row['playbook_upgrade_available'] = $latestVersion !== null
-                    && $assigned !== null
-                    && version_compare((string) $latestVersion, (string) $assigned, '>');
-
-                return $row;
-            })
-            ->values()
-            ->all();
+        return $rows->values()->all();
     }
 }

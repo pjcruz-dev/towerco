@@ -45,16 +45,6 @@ final class AssistantActionRouter
             return ['action' => 'draft_e_approval_submission', 'args' => []];
         }
 
-        if ($this->matches($q, [
-            'update document metadata',
-            'suggest document metadata',
-            'set document expiry',
-            'rename document',
-            'update document title',
-        ]) || ($moduleContext === 'documents' && $this->matches($q, ['update metadata', 'set expiry', 'change title']))) {
-            return ['action' => 'suggest_document_metadata', 'args' => []];
-        }
-
         return null;
     }
 

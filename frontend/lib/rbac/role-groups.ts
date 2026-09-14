@@ -13,24 +13,46 @@ export type GroupRolesOptions = {
   alwaysIncludeRoleNames?: string[];
 };
 
-const CORE_ROLE_NAMES = new Set(["tenant_admin", "billing", "viewer", "manager", "finance"]);
+const CORE_ROLE_NAMES = new Set([
+  "tenant_admin",
+  "administrator",
+  "billing",
+  "viewer",
+  "manager",
+  "finance",
+  "admin",
+  "commercial_sales_officer",
+  "finance_officer",
+  "procurement_officer",
+  "project_manager",
+  "sa_officer",
+  "sales",
+  "staff",
+]);
+
+/** Metacoresoft Role Management display order. */
+export const ATC_OPERATIONAL_ROLE_ORDER: string[] = [
+  "admin",
+  "administrator",
+  "commercial_sales_officer",
+  "finance_officer",
+  "procurement_officer",
+  "project_manager",
+  "sa_officer",
+  "sales",
+  "staff",
+];
 
 /**
  * Module role groups. `id` must match tenant `enabled_modules` keys.
  */
 const MODULE_GROUP_ORDER: { id: string; label: string; prefix: string }[] = [
-  { id: "project_one", label: "Project-One", prefix: "project_one_" },
   { id: "ticketing", label: "Ticketing", prefix: "ticketing_" },
-  { id: "procurement_one", label: "Procurement-One", prefix: "procurement_" },
-  { id: "finance_one", label: "Finance-One", prefix: "finance_" },
-  { id: "documents", label: "Documents", prefix: "documents_" },
-  { id: "document_register", label: "Document register", prefix: "dcf_" },
-  { id: "sites", label: "Sites", prefix: "sites_" },
   { id: "e_approval", label: "E-Forms", prefix: "e_approval_" },
+  { id: "doc_extract", label: "DocExtract", prefix: "doc_extract_" },
+  { id: "dynamic_entities", label: "Dynamic Entities", prefix: "dynamic_entities_" },
   { id: "ai_assistant", label: "AI Assistant", prefix: "ai_assistant_" },
 ];
-
-const DISCIPLINE_ROLES = new Set(["saq_approver", "pmo_approver", "cme_approver"]);
 
 const TIER_ORDER = ["viewer", "contributor", "requestor", "author", "operator", "approver", "controller", "admin"];
 
@@ -50,15 +72,8 @@ function sortRoles(roles: AdminRoleRow[]): AdminRoleRow[] {
 
 /** Resolve which tenant module a system role belongs to (null = core/custom). */
 export function moduleIdForRoleName(roleName: string): string | null {
-  if (CORE_ROLE_NAMES.has(roleName) && roleName !== "finance") {
+  if (CORE_ROLE_NAMES.has(roleName)) {
     return null;
-  }
-  if (roleName === "finance") {
-    // Legacy cross-module finance role — treat as Project-One gated.
-    return "project_one";
-  }
-  if (DISCIPLINE_ROLES.has(roleName)) {
-    return "project_one";
   }
   for (const moduleGroup of MODULE_GROUP_ORDER) {
     if (roleName.startsWith(moduleGroup.prefix)) {
@@ -136,47 +151,6 @@ export function groupRolesByType(roles: AdminRoleRow[], options?: GroupRolesOpti
     moduleRoles.forEach((role) => assigned.add(role.name));
     if (moduleRoles.length > 0) {
       groups.push({ id: moduleGroup.id, label: moduleGroup.label, roles: moduleRoles });
-    }
-  }
-
-  if (moduleEnabled("project_one")) {
-    const discipline = sortRoles(visibleRoles.filter((role) => DISCIPLINE_ROLES.has(role.name)));
-    discipline.forEach((role) => assigned.add(role.name));
-    if (discipline.length > 0) {
-      groups.push({ id: "discipline", label: "Project-One discipline add-ons", roles: discipline });
-    }
-  } else {
-    const forcedDiscipline = sortRoles(
-      visibleRoles.filter(
-        (role) =>
-          DISCIPLINE_ROLES.has(role.name) &&
-          (options?.alwaysIncludeRoleNames ?? []).includes(role.name),
-      ),
-    );
-    if (forcedDiscipline.length > 0) {
-      forcedDiscipline.forEach((role) => assigned.add(role.name));
-      groups.push({
-        id: "discipline",
-        label: "Project-One discipline add-ons (assigned · module off)",
-        roles: forcedDiscipline,
-      });
-    }
-  }
-
-  const financeLegacy = visibleRoles.filter((role) => role.name === "finance" && !assigned.has(role.name));
-  financeLegacy.forEach((role) => assigned.add(role.name));
-  if (financeLegacy.length > 0 && (moduleEnabled("project_one") || moduleEnabled("finance_one"))) {
-    groups.push({ id: "finance_legacy", label: "Project finance (legacy)", roles: financeLegacy });
-  } else if (financeLegacy.length > 0) {
-    const forcedFinance = financeLegacy.filter((role) =>
-      (options?.alwaysIncludeRoleNames ?? []).includes(role.name),
-    );
-    if (forcedFinance.length > 0) {
-      groups.push({
-        id: "finance_legacy",
-        label: "Project finance (legacy · assigned · module off)",
-        roles: forcedFinance,
-      });
     }
   }
 

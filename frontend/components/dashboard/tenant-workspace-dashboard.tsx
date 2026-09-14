@@ -12,7 +12,7 @@ import { chartColorAt, kpiSeries } from "@/components/dashboard/dashboard-chart-
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
-import { ActionableWidgets } from "@/components/project-one/actionable-widgets";
+import { ActionableWidgets } from "@/components/dashboard/actionable-widgets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,7 +46,6 @@ const DEFAULT_ENABLED_IDS = [
 
 const moduleLabels: Record<string, string> = {
   e_approval: "E-Forms",
-  project_one: "PROJECT-ONE",
   ticketing: "Ticketing",
   notifications: "Notifications",
 };
@@ -154,9 +153,7 @@ export function TenantWorkspaceDashboard() {
         "unread_notifications",
         "ea_awaiting_my_approval",
         "ea_stale_approvals",
-        "rollout_gates_awaiting_me",
         "ticketing_assigned_me",
-        "rollout_sla_risk",
       ]).filter((row) => row.value > 0),
     [dashboard.kpis],
   );

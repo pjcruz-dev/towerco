@@ -513,12 +513,9 @@ final class LocalGroundedLlmProvider implements LlmProviderInterface
             if (in_array($tool->tool, [
                 'get_ticket_by_number',
                 'get_eapproval_submission_by_document_no',
-                'get_controlled_document_by_code',
-                'get_site_by_code',
                 'list_my_eapproval_submissions',
                 'list_my_pending_approvals',
                 'list_my_open_tickets',
-                'list_expiring_documents',
                 'search_workspace_entities',
             ], true)) {
                 return false;

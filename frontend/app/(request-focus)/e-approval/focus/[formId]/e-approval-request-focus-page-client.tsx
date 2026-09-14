@@ -55,7 +55,7 @@ export function EApprovalRequestFocusPageClient({ formId }: Props) {
 
   const handleSubmitted = ({ submission }: { submission: { id: string } }) => {
     if (isControlledDocumentRequest) {
-      router.push("/documents/controlled");
+      router.push("/e-approval/submissions");
       return;
     }
     router.push(`/e-approval/submissions/${submission.id}`);

@@ -12,7 +12,7 @@ use App\Modules\Identity\Models\ModuleListExport;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Services\TenantNotificationService;
 use App\Modules\Notifications\Support\TenantNotificationModule;
-use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
+use App\Core\Support\SimpleExcelWorkbookWriter;
 use App\Modules\Ticketing\Services\TicketingTicketService;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Str;
@@ -151,7 +151,7 @@ class ModuleListExportService extends AbstractDomainService
                         $headers,
                     );
                 }
-                $writer = new ProcurementExcelWorkbookWriter;
+                $writer = new SimpleExcelWorkbookWriter;
                 $writer->addSheet('Export', $sheetRows);
                 file_put_contents($path, $writer->toBinaryString());
             } elseif ($format === 'html') {

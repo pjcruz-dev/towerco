@@ -30,7 +30,7 @@ Quick checks for frequent workspace issues. This guide is for end users—not pl
 2. **Page or module missing**
    - See “Permissions and why a page may be missing”.
 3. **No notifications**
-   - Confirm you have permission for the related module (E-Forms, rollouts, etc.).
+   - Confirm you have permission for the related module (E-Forms, Ticketing, etc.).
    - Refresh the page; check Notification center filters.
 4. **Upload or save failed**
    - Retry once; check required fields and file size/type.

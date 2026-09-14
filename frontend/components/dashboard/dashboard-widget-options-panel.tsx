@@ -30,7 +30,7 @@ import {
   type DashboardDataSourceId,
 } from "@/lib/ui/dashboard-widget-data";
 import { cn } from "@/lib/utils";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
+import type { DashboardKpi } from "@/lib/ui/dashboard-widget-data";
 
 const SPAN_OPTIONS: Array<{ id: DashboardWidgetSpan; label: string }> = [
   { id: "full", label: "Full" },
@@ -78,7 +78,7 @@ type Props = {
   options?: DashboardWidgetOptions;
   span: DashboardWidgetSpan;
   dataSources: DashboardDataSourceId[];
-  kpis?: ProjectOneKpi[];
+  kpis?: DashboardKpi[];
   removable?: boolean;
   onTitleChange: (title: string) => void;
   onSpanChange: (span: DashboardWidgetSpan) => void;

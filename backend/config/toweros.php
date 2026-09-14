@@ -253,21 +253,10 @@ return [
         ),
         /** New tenants created via platform console (default off; enable per tenant when ready). */
         'default_mfa_required' => env('TOWEROS_TENANT_DEFAULT_MFA_REQUIRED', false),
-        /** @deprecated Rollout playbooks are retired; provisioning no longer assigns playbooks. */
-        'default_playbook' => env('TOWEROS_TENANT_DEFAULT_PLAYBOOK', 'latest'),
-        /**
-         * @deprecated Rollout policies are retired; provisioning no longer auto-assigns policy bundles.
-         */
-        'auto_assign_rollout_policy' => env('TOWEROS_TENANT_AUTO_ASSIGN_ROLLOUT_POLICY', false),
-        /** @deprecated Unused after playbook retirement. */
-        'default_rollout_policy_code' => env('TOWEROS_TENANT_DEFAULT_ROLLOUT_POLICY_CODE'),
-        /** @deprecated Holiday auto-seed is a no-op. */
-        'auto_seed_holidays' => env('TOWEROS_TENANT_AUTO_SEED_HOLIDAYS', false),
-        'seed_next_holiday_year' => env('TOWEROS_TENANT_SEED_NEXT_HOLIDAY_YEAR', false),
     ],
 
     /**
-     * Tenant-scoped rollout file uploads (SAQ photos, lease docs, CME evidence).
+     * Tenant-scoped file uploads (E-Forms attachments, DocExtract, ticketing).
      */
     'tenant_files' => [
         'disk' => env('TOWEROS_TENANT_FILES_DISK', 'tenant_files'),
@@ -289,54 +278,7 @@ return [
     ],
 
     /**
-     * Site binder documents (S3 path: {tenantId}/documents/{siteId}/...).
-     */
-    'documents' => [
-        'max_size_kb' => (int) env('TOWEROS_DOCUMENTS_MAX_KB', 51200),
-        'allowed_mimes' => [
-            'image/jpeg',
-            'image/png',
-            'image/webp',
-            'image/gif',
-            'application/pdf',
-            'application/zip',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'application/msword',
-            'application/vnd.ms-excel',
-            'application/dxf',
-            'image/vnd.dwg',
-            'application/acad',
-            'model/vnd.dwf',
-        ],
-        'cad_extensions' => ['dwg', 'dxf', 'dwf', 'dgn', 'step', 'stp', 'iges', 'igs', 'ifc'],
-        'cad_mimes' => [
-            'application/octet-stream',
-            'application/dxf',
-            'image/vnd.dwg',
-            'application/acad',
-            'application/x-dwg',
-            'model/vnd.dwf',
-            'application/vnd.dwg',
-        ],
-        'presigned_upload_enabled' => filter_var(env('TOWEROS_DOCUMENTS_PRESIGNED_UPLOAD', true), FILTER_VALIDATE_BOOLEAN),
-        'presigned_upload_ttl_minutes' => (int) env('TOWEROS_DOCUMENTS_PRESIGNED_TTL_MINUTES', 15),
-        'presigned_upload_min_kb' => (int) env('TOWEROS_DOCUMENTS_PRESIGNED_MIN_KB', 10240),
-        'gate_required_node_keys' => ['saq_phase_1', 'col', 'affidavit'],
-        'gate_enforcement' => [
-            'enabled' => filter_var(env('TOWEROS_DOCUMENTS_GATE_ENFORCEMENT', true), FILTER_VALIDATE_BOOLEAN),
-            'phase_keys' => [
-                'moc_col',
-                'col_social',
-                'pre_assessment',
-                'site_license',
-            ],
-        ],
-    ],
-
-    /**
-     * Tenant web app base URL for deep links in emails (gate approvals, rollouts).
+     * Tenant web app base URL for deep links in emails and notifications.
      */
     'tenant_app_url' => env('TOWEROS_TENANT_APP_URL', env('FRONTEND_APP_URL', 'http://localhost')),
 
@@ -387,7 +329,7 @@ return [
     'tenant_modules' => [
         'enabled' => array_values(array_filter(array_map(
             static fn (string $m): string => trim($m),
-            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,project_one,e_approval,ticketing,procurement_one,finance_one,billings,sites,documents,document_register,ai_assistant,doc_extract,dynamic_entities')),
+            explode(',', (string) env('TOWEROS_TENANT_ENABLED_MODULES', 'core,team_access,e_approval,ticketing,billings,ai_assistant,doc_extract,dynamic_entities')),
         ))),
     ],
 

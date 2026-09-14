@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
 final class DevResetCommand extends Command
 {
     protected $signature = 'toweros:dev-reset
-        {--tenants-only : Remove every tenant; keep users, playbooks, and policy bundles (default)}
+        {--tenants-only : Remove every tenant; keep users and platform catalog data (default)}
         {--force : Skip confirmation}';
 
     protected $description = 'Reset local dev data: remove all tenants or guide a full Docker MySQL wipe.';
@@ -27,8 +27,7 @@ final class DevResetCommand extends Command
             $this->line('  scripts\\docker-dev-fresh.cmd');
             $this->line('Or: npm run dev:fresh');
             $this->line('');
-            $this->line('That recreates central schema, superadmin, and default published playbook (db:seed).');
-            $this->line('Custom policy bundles created in the UI are not restored unless you back them up first.');
+            $this->line('That recreates central schema and the platform superadmin (db:seed).');
 
             return self::SUCCESS;
         }
@@ -75,7 +74,7 @@ final class DevResetCommand extends Command
             }
         }
 
-        $this->info("Deleted {$deleted} tenant(s). Kept: users, rollout_playbook_versions, rollout_policy_bundles.");
+        $this->info("Deleted {$deleted} tenant(s). Kept: platform users and catalog data.");
         $this->line('Create a new tenant from http://localhost/platform/tenants/create');
 
         return self::SUCCESS;

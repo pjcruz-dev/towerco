@@ -51,5 +51,4 @@ A ticket is created with a ticket number, appears in the list, and can be update
 
 - Check a ticket status
 - Notifications
-- Sites / Project-One (link context when the ticket relates to a site or rollout)
 - Common troubleshooting

@@ -183,7 +183,7 @@ export function EApprovalSettingsPageClient() {
 
         <EApprovalSectionCard
           title="Approval SLA"
-          description="Reminder and escalation thresholds for pending approvals. Working days skip weekends and tenant public holidays (same calendar as Project-One rollout)."
+          description="Reminder and escalation thresholds for pending approvals. Working days skip weekends and tenant public holidays."
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

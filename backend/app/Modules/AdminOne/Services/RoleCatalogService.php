@@ -33,6 +33,8 @@ class RoleCatalogService
         'ticketing_' => 'ticketing',
         'e_approval_' => 'e_approval',
         'ai_assistant_' => 'ai_assistant',
+        'doc_extract_' => 'doc_extract',
+        'dynamic_entities_' => 'dynamic_entities',
     ];
 
     public function __construct(
@@ -334,10 +336,6 @@ class RoleCatalogService
         }
 
         if (TenantRbacSystemRoles::isCoreBaseline($roleName)) {
-            return true;
-        }
-
-        if (TenantRbacSystemRoles::isAtcOperational($roleName)) {
             return true;
         }
 

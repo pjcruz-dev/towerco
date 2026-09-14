@@ -18,34 +18,11 @@ final class TenantRbacSystemRoles
         'billing',
         'viewer',
         'manager',
-        'finance',
-        // Project-One tiers
-        'project_one_viewer',
-        'project_one_contributor',
-        'project_one_operator',
-        'project_one_admin',
         // Ticketing tiers
         'ticketing_viewer',
         'ticketing_contributor',
         'ticketing_operator',
         'ticketing_admin',
-        // Procurement tiers
-        'procurement_viewer',
-        'procurement_contributor',
-        'procurement_operator',
-        'procurement_admin',
-        // Finance-One tiers
-        'finance_viewer',
-        'finance_contributor',
-        'finance_operator',
-        'finance_admin',
-        // Documents tiers
-        'documents_viewer',
-        'documents_contributor',
-        'documents_operator',
-        'documents_admin',
-        // Sites
-        'sites_viewer',
         // E-Forms tiers
         'e_approval_viewer',
         'e_approval_requestor',
@@ -62,10 +39,6 @@ final class TenantRbacSystemRoles
         'dynamic_entities_viewer',
         'dynamic_entities_contributor',
         'dynamic_entities_admin',
-        // Project-One discipline add-ons
-        'saq_approver',
-        'pmo_approver',
-        'cme_approver',
     ];
 
     public static function isSystem(string $roleName): bool
@@ -83,8 +56,7 @@ final class TenantRbacSystemRoles
     {
         return array_values(array_filter(
             self::ALL,
-            static fn (string $name): bool => ! in_array($name, ['tenant_admin', 'billing', 'viewer', 'manager', 'finance'], true)
-                && ! in_array($name, ['saq_approver', 'pmo_approver', 'cme_approver'], true),
+            static fn (string $name): bool => ! in_array($name, ['tenant_admin', 'billing', 'viewer', 'manager'], true),
         ));
     }
 }

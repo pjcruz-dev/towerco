@@ -141,56 +141,6 @@ final class TenantWorkspaceDashboardService
             $recentActivity = array_merge($recentActivity, $this->recentUserEApprovalActivity($user));
         }
 
-        $rolloutMetrics = null;
-        if ($user->can('project_one:rollout:view')) {
-            $rolloutMetrics = null;
-            if ($rolloutMetrics !== null) {
-                if (($rolloutMetrics['gate_approvals_awaiting_me'] ?? 0) > 0) {
-                    $kpis[] = [
-                        'key' => 'rollout_gates_awaiting_me',
-                        'label' => 'Gate approvals · awaiting you',
-                        'value' => (string) $rolloutMetrics['gate_approvals_awaiting_me'],
-                        'change' => 'PROJECT-ONE formal gates',
-                        'tone' => 'danger',
-                    ];
-                    $actions[] = [
-                        'id' => 'ws-gate-approvals',
-                        'label' => 'Gate approvals awaiting you',
-                        'count' => (int) $rolloutMetrics['gate_approvals_awaiting_me'],
-                        'href' => '/project-one/gate-approvals?awaiting_me=1',
-                        'priority' => 'high',
-                    ];
-                }
-
-                if (($rolloutMetrics['sla_at_risk'] ?? 0) > 0) {
-                    $kpis[] = [
-                        'key' => 'rollout_sla_risk',
-                        'label' => 'Rollout SLA risk',
-                        'value' => (string) $rolloutMetrics['sla_at_risk'],
-                        'change' => '≤10 working days to RFI',
-                        'tone' => 'danger',
-                    ];
-                    $actions[] = [
-                        'id' => 'ws-rollout-sla',
-                        'label' => 'Rollouts at SLA risk',
-                        'count' => (int) $rolloutMetrics['sla_at_risk'],
-                        'href' => '/project-one/rollouts',
-                        'priority' => 'high',
-                    ];
-                }
-
-                if (($rolloutMetrics['active_rollouts'] ?? 0) > 0 && count($kpis) < 6) {
-                    $kpis[] = [
-                        'key' => 'active_rollouts',
-                        'label' => 'Active rollouts',
-                        'value' => (string) $rolloutMetrics['active_rollouts'],
-                        'change' => 'Open rollout programs',
-                        'tone' => 'neutral',
-                    ];
-                }
-            }
-        }
-
         if ($user->can('ticketing:view') && Schema::connection('tenant')->hasTable('ticketing_tickets')) {
             $assignedToMe = TicketingTicket::query()
                 ->where('assignee_id', $user->id)
@@ -243,7 +193,7 @@ final class TenantWorkspaceDashboardService
             ->values()
             ->all();
 
-        $awaitingMe = $this->awaitingMeHub($user, $actions, $rolloutMetrics);
+        $awaitingMe = $this->awaitingMeHub($user, $actions);
 
         return [
             'environment' => app()->environment(),
@@ -256,13 +206,12 @@ final class TenantWorkspaceDashboardService
     }
 
     /**
-     * Cross-module work queue: e-approval + gates + tickets assigned to the viewer.
+     * Cross-module work queue: e-approval + tickets assigned to the viewer.
      *
      * @param  list<array<string, mixed>>  $actions
-     * @param  array<string, mixed>|null  $rolloutMetrics
      * @return array{total: int, items: list<array<string, mixed>>}
      */
-    private function awaitingMeHub(TenantUser $user, array $actions, ?array $rolloutMetrics): array
+    private function awaitingMeHub(TenantUser $user, array $actions): array
     {
         $items = [];
 
@@ -290,24 +239,6 @@ final class TenantWorkspaceDashboardService
                     'created_at' => $approval->created_at?->toIso8601String(),
                 ];
             }
-        }
-
-        foreach (($rolloutMetrics['gate_approvals_preview'] ?? []) as $gate) {
-            if (! is_array($gate)) {
-                continue;
-            }
-            $rollout = is_array($gate['rollout'] ?? null) ? $gate['rollout'] : [];
-            $phase = is_array($gate['phase'] ?? null) ? $gate['phase'] : [];
-            $ref = (string) ($rollout['rollout_ref'] ?? 'Gate');
-            $phaseLabel = (string) ($phase['label'] ?? $gate['gate_label'] ?? $gate['phase_key'] ?? 'gate');
-            $items[] = [
-                'id' => 'gate-'.($gate['id'] ?? uniqid('g', true)),
-                'module' => 'project_one',
-                'label' => 'Gate approval · '.$ref,
-                'detail' => $phaseLabel,
-                'href' => '/project-one/gate-approvals?awaiting_me=1',
-                'created_at' => $gate['submitted_at'] ?? null,
-            ];
         }
 
         if ($user->can('ticketing:view') && Schema::connection('tenant')->hasTable('ticketing_tickets')) {
@@ -338,7 +269,6 @@ final class TenantWorkspaceDashboardService
         $totalFromActions = collect($actions)
             ->filter(static fn (array $action): bool => in_array($action['id'] ?? '', [
                 'ws-ea-awaiting',
-                'ws-gate-approvals',
                 'ws-tickets-assigned',
             ], true))
             ->sum(static fn (array $action): int => (int) ($action['count'] ?? 0));
@@ -356,9 +286,6 @@ final class TenantWorkspaceDashboardService
     {
         $links = [];
 
-        if ($user->can('project_one:view')) {
-            $links[] = ['label' => 'PROJECT-ONE', 'href' => '/project-one'];
-        }
         if ($user->can('e_approval:view')) {
             $links[] = ['label' => 'E-Forms', 'href' => '/e-approval'];
         }

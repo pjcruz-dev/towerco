@@ -7,7 +7,6 @@ import { useEffect } from "react";
 import { CreditCard, Users } from "lucide-react";
 
 import { BillingEstimateCard } from "@/components/billing/billing-estimate-card";
-import { ProcurementEntitlementsCard } from "@/components/billing/procurement-entitlements-card";
 import { TenantBillingMetricCard } from "@/components/billing/tenant-billing-metric-card";
 import { PlanTierComparisonTable } from "@/components/billing/plan-tier-comparison-table";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -24,7 +23,6 @@ import {
 } from "@/lib/api/modules/admin-billing-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { permissions } from "@/lib/rbac/permissions";
-import type { ProcurementPlanFeatures } from "@/modules/procurement-one/types";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -114,10 +112,6 @@ export function BillingPageClient() {
   const selfServe = payments?.operational === true;
   const currency = snapshot?.currency ?? snapshot?.plan_catalog?.currency ?? "USD";
   const estimate = snapshot?.billing_estimate ?? snapshot?.overage ?? null;
-  const procurementEntitlements = (
-    snapshot?.plan_features.procurement_one ??
-    snapshot?.entitlements?.procurement_one
-  ) as ProcurementPlanFeatures | undefined;
 
   const seatUtilization =
     snapshot && snapshot.seat_limit > 0
@@ -284,10 +278,6 @@ export function BillingPageClient() {
             <div className="grid gap-4 lg:grid-cols-2">
               {estimate ? <BillingEstimateCard estimate={estimate} /> : null}
 
-              {procurementEntitlements ? (
-                <ProcurementEntitlementsCard features={procurementEntitlements} />
-              ) : null}
-
               {!snapshot.plan_features.file_uploads ? (
                 <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm">
                   <p className="font-medium text-foreground">Upgrade for file uploads</p>
@@ -312,10 +302,10 @@ export function BillingPageClient() {
             ) : usageQuery.data ? (
               <EApprovalSectionCard
                 title="Usage (last 30 days)"
-                description="Operational activity across E-Forms, PROJECT-ONE, and Procurement-One."
+                description="Operational activity across E-Forms and active seats."
                 bodyClassName="p-0"
               >
-                <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4 sm:divide-x divide-border">
+                <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-3 sm:divide-x divide-border">
                   {[
                     {
                       label: "E-Forms forms",
@@ -326,11 +316,6 @@ export function BillingPageClient() {
                       label: "Submissions",
                       value: usageQuery.data.modules.e_approval.submissions_last_30d,
                       sub: `${usageQuery.data.modules.e_approval.submissions_total} all time`,
-                    },
-                    {
-                      label: "Rollouts",
-                      value: usageQuery.data.modules.project_one.rollouts_last_30d,
-                      sub: `${usageQuery.data.modules.project_one.rollouts_total} total`,
                     },
                     {
                       label: "Active users",

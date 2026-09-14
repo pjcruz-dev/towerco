@@ -113,27 +113,6 @@ final class AssistantToolRouter
             ]);
         }
 
-        if ($documentCode = $this->extractControlledDocumentCode($question)) {
-            $calls[] = new ToolCallRequest('get_controlled_document_by_code', [
-                'document_code' => $documentCode,
-            ]);
-        }
-
-        if ($this->matches($q, [
-            'site code',
-            'find site',
-            'look up site',
-            'lookup site',
-            'get site',
-            'which site',
-        ]) || ($documentCode === null && $ticketNumber === null && $submissionNo === null
-            && preg_match('/\bsite\s+[A-Za-z0-9\-_]{2,}\b/i', $question) === 1)) {
-            $code = $this->extractSiteCode($question);
-            $calls[] = new ToolCallRequest('get_site_by_code', array_filter([
-                'site_code' => $code,
-            ]));
-        }
-
         if ($this->matches($q, [
             'my open tickets',
             'my tickets',
@@ -153,19 +132,6 @@ final class AssistantToolRouter
         }
 
         if ($this->matches($q, [
-            'expiring document',
-            'expiring lease',
-            'documents expiring',
-            'leases expiring',
-            'about to expire',
-            'expiry',
-            'expire soon',
-        ]) || ($moduleContext === 'documents' && $this->matches($q, ['expir', 'due soon']))) {
-            $days = $this->extractDays($q) ?? 90;
-            $calls[] = new ToolCallRequest('list_expiring_documents', ['within_days' => $days]);
-        }
-
-        if ($this->matches($q, [
             'search for',
             'find the',
             'look up',
@@ -179,11 +145,8 @@ final class AssistantToolRouter
                 if (in_array($existing->tool, [
                     'get_ticket_by_number',
                     'get_eapproval_submission_by_document_no',
-                    'get_controlled_document_by_code',
-                    'get_site_by_code',
                     'list_my_pending_approvals',
                     'list_my_open_tickets',
-                    'list_expiring_documents',
                     'search_workspace_entities',
                 ], true)) {
                     $alreadySpecific = true;

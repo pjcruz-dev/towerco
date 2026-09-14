@@ -102,7 +102,6 @@ final class ScopeTenantPermissionCacheTest extends TestCase
         $admin->assignRole('administrator');
 
         $this->assertTrue($admin->hasPermissionTo('user:manage'));
-        $this->assertTrue($admin->can('project_one:view'));
         $this->assertTrue($admin->can('e_approval:forms:manage'));
 
         tenancy()->end();

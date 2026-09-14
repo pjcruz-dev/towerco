@@ -3,30 +3,17 @@ import type { AuthUser } from "@/types/auth";
 export const TENANT_MODULE_LABELS: Record<string, string> = {
   core: "Dashboard",
   team_access: "Team & Access",
-  project_one: "Project-One",
   e_approval: "E-Forms",
   dynamic_entities: "Dynamic Entities",
-  gis: "GIS",
-  sites: "Sites",
-  tower_one: "Tower-One",
-  fiber_one: "Fiber-One",
-  asset_one: "Asset-One",
   ticketing: "Ticketing",
-  procurement_one: "Procurement-One",
-  finance_one: "Finance-One",
   billings: "Billings",
-  documents: "Documents",
-  document_register: "Document register",
   ai_assistant: "AI Assistant",
   doc_extract: "DocExtract",
 };
 
 export const WORKSPACE_AUDIT_MODULE_FILTERS = [
   { value: "e_approval", label: TENANT_MODULE_LABELS.e_approval },
-  { value: "documents", label: TENANT_MODULE_LABELS.documents ?? "Documents" },
   { value: "team_access", label: TENANT_MODULE_LABELS.team_access },
-  { value: "procurement_one", label: TENANT_MODULE_LABELS.procurement_one ?? "Procurement" },
-  { value: "project_one", label: TENANT_MODULE_LABELS.project_one ?? "Project-One" },
   { value: "ticketing", label: TENANT_MODULE_LABELS.ticketing },
   { value: "dynamic_entities", label: TENANT_MODULE_LABELS.dynamic_entities ?? "Dynamic Entities" },
   { value: "doc_extract", label: TENANT_MODULE_LABELS.doc_extract },
@@ -42,9 +29,6 @@ export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
   dynamic_entities:
     "Dynamic entity packs (PM, Procurement, Finance, Ticketing) with Manage Fields.",
   billings: "Tenant subscription, usage, and self-serve plan billing (/billing).",
-  documents: "Expiring leases, permits, and contracts across sites.",
-  document_register:
-    "ISO master list of approved documents; start requests and revisions via E-Forms.",
   ai_assistant:
     "In-app help assistant for workflows, permissions, and how-to guidance.",
   doc_extract: "Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.",
@@ -52,20 +36,10 @@ export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
 
 /** Optional modules superadmins can enable per tenant (must stay aligned with backend TOGGLEABLE_MODULES). */
 export const TOGGLEABLE_WORKSPACE_MODULES = [
-  "project_one",
   "dynamic_entities",
   "e_approval",
   "ticketing",
-  "procurement_one",
-  "finance_one",
   "billings",
-  "sites",
-  "documents",
-  "document_register",
-  "gis",
-  "tower_one",
-  "fiber_one",
-  "asset_one",
   "ai_assistant",
   "doc_extract",
 ] as const;
@@ -99,19 +73,10 @@ export function resolveToggleableWorkspaceModules(
 export const PLATFORM_TENANT_MODULE_BADGE_ORDER = [
   "e_approval",
   "dynamic_entities",
-  "project_one",
   "ticketing",
-  "procurement_one",
-  "finance_one",
   "billings",
-  "documents",
-  "document_register",
-  "sites",
-  "gis",
-  "tower_one",
-  "fiber_one",
-  "asset_one",
   "doc_extract",
+  "ai_assistant",
 ] as const;
 
 export function resolveEnabledModulesForUser(
@@ -148,10 +113,7 @@ export function isTenantModuleEnabled(
 export function notificationsModuleEnabled(enabledModules: string[]): boolean {
   return (
     enabledModules.includes("e_approval")
-    || enabledModules.includes("project_one")
     || enabledModules.includes("ticketing")
     || enabledModules.includes("dynamic_entities")
-    || enabledModules.includes("procurement_one")
-    || enabledModules.includes("finance_one")
   );
 }

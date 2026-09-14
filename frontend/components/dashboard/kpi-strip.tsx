@@ -1,13 +1,13 @@
+import type { DashboardKpi } from "@/lib/ui/dashboard-widget-data";
+import type { DashboardKpiCardOverride } from "@/lib/ui/dashboard-kpi-card-options";
 import { KpiStripSkeleton } from "@/components/ui/page-skeletons";
 import { WidgetKpiTile } from "@/components/dashboard/widgets/widget-primitives";
 import { DashboardWidgetEmpty } from "@/components/dashboard/dashboard-widget";
-import type { DashboardKpiCardOverride } from "@/lib/ui/dashboard-kpi-card-options";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
 import { cn } from "@/lib/utils";
 
 type KpiStripItem =
-  | (ProjectOneKpi & { href?: string | null })
-  | (Omit<ProjectOneKpi, "key" | "value"> & { id?: string; value: string | number; href?: string | null });
+  | (DashboardKpi & { href?: string | null })
+  | (Omit<DashboardKpi, "key" | "value"> & { id?: string; value: string | number; href?: string | null });
 
 function kpiKey(item: KpiStripItem): string {
   if ("key" in item && item.key) return item.key;

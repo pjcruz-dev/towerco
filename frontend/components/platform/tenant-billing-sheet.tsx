@@ -83,7 +83,6 @@ function buildBillingOverrides(input: {
   overrideFileUploads: boolean;
   overrideUnlimitedFiles: boolean;
   overrideMaxFileFields: string;
-  overrideRolloutUploads: boolean;
   overrideTicketingEnabled: boolean;
   overrideTicketingFileUploads: boolean;
   overrideTicketingUnlimitedAttachments: boolean;
@@ -128,10 +127,6 @@ function buildBillingOverrides(input: {
         ? null
         : Number.parseInt(input.overrideMaxFileFields, 10) || 0,
     };
-  }
-
-  if (input.planTier === "enterprise" && input.overrideRolloutUploads) {
-    overrides.modules!.project_one = { rollout_file_uploads: true };
   }
 
   if (
@@ -212,7 +207,6 @@ export function TenantBillingSheet({
   const [overrideFileUploads, setOverrideFileUploads] = useState(false);
   const [overrideUnlimitedFiles, setOverrideUnlimitedFiles] = useState(false);
   const [overrideMaxFileFields, setOverrideMaxFileFields] = useState("");
-  const [overrideRolloutUploads, setOverrideRolloutUploads] = useState(false);
   const [overrideTicketingEnabled, setOverrideTicketingEnabled] = useState(false);
   const [overrideTicketingFileUploads, setOverrideTicketingFileUploads] = useState(false);
   const [overrideTicketingUnlimitedAttachments, setOverrideTicketingUnlimitedAttachments] =
@@ -254,7 +248,6 @@ export function TenantBillingSheet({
 
     const overrides = tenant.billing_overrides;
     const ea = overrides?.modules?.e_approval;
-    const po = overrides?.modules?.project_one;
     const tk = overrides?.modules?.ticketing;
     setOverrideSeatLimit(
       overrides?.seat_limit != null ? String(overrides.seat_limit) : "",
@@ -264,7 +257,6 @@ export function TenantBillingSheet({
     setOverrideMaxFileFields(
       ea?.max_file_fields != null ? String(ea.max_file_fields) : "",
     );
-    setOverrideRolloutUploads(Boolean(po?.rollout_file_uploads));
     setOverrideTicketingEnabled(Boolean(tk?.enabled));
     setOverrideTicketingFileUploads(Boolean(tk?.file_uploads));
     setOverrideTicketingUnlimitedAttachments(tk?.max_attachments_per_ticket === null);
@@ -679,14 +671,6 @@ export function TenantBillingSheet({
                     <label className="flex items-center gap-2 text-sm text-foreground">
                       <Checkbox
                         className="size-4"
-                        checked={overrideRolloutUploads}
-                        onCheckedChange={(v) => setOverrideRolloutUploads(v === true)}
-                      />
-                      PROJECT-ONE rollout uploads
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <Checkbox
-                        className="size-4"
                         checked={overrideTicketingEnabled}
                         onCheckedChange={(v) => setOverrideTicketingEnabled(v === true)}
                       />
@@ -841,7 +825,6 @@ export function TenantBillingSheet({
                   overrideFileUploads,
                   overrideUnlimitedFiles,
                   overrideMaxFileFields,
-                  overrideRolloutUploads,
                   overrideTicketingEnabled,
                   overrideTicketingFileUploads,
                   overrideTicketingUnlimitedAttachments,

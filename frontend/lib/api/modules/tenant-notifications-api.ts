@@ -6,7 +6,7 @@ export type TenantNotificationsIndexParams = {
   page?: number;
   per_page?: number;
   category?: "action" | "update";
-  module?: "e_approval" | "project_one";
+  module?: string;
   unread_only?: boolean;
 };
 
@@ -38,7 +38,7 @@ export async function markTenantNotificationRead(id: string): Promise<void> {
 }
 
 export async function markAllTenantNotificationsRead(
-  options?: { category?: "action" | "update"; module?: "e_approval" | "project_one" },
+  options?: { category?: "action" | "update"; module?: string },
 ): Promise<void> {
   await apiClient.post("/notifications/mark-all-read", options ?? undefined);
 }

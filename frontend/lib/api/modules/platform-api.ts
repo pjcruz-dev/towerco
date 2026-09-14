@@ -187,7 +187,6 @@ export type PlatformTenantRow = {
     annual_discount_percent?: number | null;
     modules?: {
       e_approval?: { file_uploads?: boolean; max_file_fields?: number | null };
-      project_one?: { rollout_file_uploads?: boolean };
       ticketing?: {
         enabled?: boolean;
         file_uploads?: boolean;
@@ -198,11 +197,6 @@ export type PlatformTenantRow = {
   slug?: string | null;
   brand_domain?: string | null;
   environment?: string | null;
-  assigned_playbook_version?: string | null;
-  assigned_rollout_policy_code?: string | null;
-  assigned_rollout_policy_name?: string | null;
-  rollout_policy_bundle_id?: string | null;
-  playbook_upgrade_available?: boolean;
   access_mode?: string | null;
   operator_access_mode?: string | null;
   parent_tenant_id?: string | null;
@@ -338,7 +332,6 @@ export type PlatformTenantSettingsPatch = {
     annual_discount_percent?: number | null;
     modules?: {
       e_approval?: { file_uploads?: boolean; max_file_fields?: number | null };
-      project_one?: { rollout_file_uploads?: boolean };
       ticketing?: {
         enabled?: boolean;
         file_uploads?: boolean;
@@ -919,186 +912,6 @@ export async function platformCreateTenantEnvironment(
     payload,
     { timeout: PLATFORM_PROVISIONING_TIMEOUT_MS },
   );
-  return response.data.data;
-}
-
-export type PlatformRolloutPlaybookVersion = {
-  id: string;
-  version: string;
-  name: string;
-  sla_working_days_only: boolean;
-  published_at: string | null;
-};
-
-export type PlatformRolloutPlaybookListResponse = {
-  versions: PlatformRolloutPlaybookVersion[];
-  registry_versions: string[];
-};
-
-export async function platformListRolloutPlaybooks(): Promise<PlatformRolloutPlaybookListResponse> {
-  const response = await centralApiClient.get<{ data: PlatformRolloutPlaybookListResponse }>(
-    "/platform/rollout-playbooks",
-  );
-  return response.data.data;
-}
-
-export async function platformAssignTenantPlaybook(
-  tenantId: string,
-  payload: {
-    rollout_policy_bundle_id?: string;
-    playbook_version_id?: string;
-    sync_tenant_database?: boolean;
-    upgrade_policy?: "new_rollouts_only" | "include_draft_rollouts";
-  },
-): Promise<{
-  tenant_id: string;
-  assigned_version: string;
-  assigned_policy_code?: string | null;
-  rollout_policy_bundle_id?: string | null;
-  upgrade_policy: string;
-  assigned_at: string | null;
-}> {
-  const response = await centralApiClient.post<{
-    data: {
-      tenant_id: string;
-      assigned_version: string;
-      assigned_policy_code?: string | null;
-      rollout_policy_bundle_id?: string | null;
-      upgrade_policy: string;
-      assigned_at: string | null;
-    };
-  }>(`/platform/tenants/${tenantId}/playbook`, payload);
-  return response.data.data;
-}
-
-export type PlatformRolloutPolicyBundle = {
-  id: string;
-  code: string;
-  name: string;
-  status: "draft" | "published";
-  playbook_version: string | null;
-  playbook_version_id: string;
-  timeline_templates: Record<string, Array<Record<string, unknown>>>;
-  hidden_phases: Record<string, string[]>;
-  gate_approval_policies: Record<string, Record<string, { enabled: boolean; chain: string[] }>>;
-  email_notification_policies?: {
-    gate_approval: {
-      enabled: boolean;
-      events: Record<string, { enabled: boolean; recipients: string[] }>;
-    };
-  };
-  delivery_periods: Record<string, { working_days: number; day_one_trigger?: string }>;
-  sla_summary: Record<string, { sla_working_days: number; post_day_one_total: number; valid: boolean }>;
-  changelog?: string | null;
-  published_at?: string | null;
-  updated_at?: string | null;
-};
-
-export async function platformListRolloutPolicies(status?: string): Promise<PlatformRolloutPolicyBundle[]> {
-  const response = await centralApiClient.get<{ data: { policies: PlatformRolloutPolicyBundle[] } }>(
-    "/platform/rollout-policies",
-    { params: status ? { status } : undefined },
-  );
-  return response.data.data.policies;
-}
-
-export async function platformCreateRolloutPolicyDraft(body: {
-  playbook_version_id: string;
-  code: string;
-  name: string;
-}): Promise<PlatformRolloutPolicyBundle> {
-  const response = await centralApiClient.post<{ data: PlatformRolloutPolicyBundle }>("/platform/rollout-policies", body);
-  return response.data.data;
-}
-
-export async function platformFetchRolloutPolicy(id: string): Promise<PlatformRolloutPolicyBundle> {
-  const response = await centralApiClient.get<{ data: PlatformRolloutPolicyBundle }>(`/platform/rollout-policies/${id}`);
-  return response.data.data;
-}
-
-export async function platformUpdateRolloutPolicy(
-  id: string,
-  body: Partial<PlatformRolloutPolicyBundle>,
-): Promise<PlatformRolloutPolicyBundle> {
-  const response = await centralApiClient.patch<{ data: PlatformRolloutPolicyBundle }>(
-    `/platform/rollout-policies/${id}`,
-    body,
-  );
-  return response.data.data;
-}
-
-export async function platformPublishRolloutPolicy(id: string): Promise<PlatformRolloutPolicyBundle> {
-  const response = await centralApiClient.post<{ data: PlatformRolloutPolicyBundle }>(
-    `/platform/rollout-policies/${id}/publish`,
-  );
-  return response.data.data;
-}
-
-export async function platformPublishRolloutPlaybook(version: string): Promise<{
-  id: string;
-  version: string;
-  name: string;
-  published_at: string | null;
-}> {
-  const response = await centralApiClient.post<{
-    data: { id: string; version: string; name: string; published_at: string | null };
-  }>("/platform/rollout-playbooks/publish", { version });
-  return response.data.data;
-}
-
-export type PlatformRolloutCustomPhase = {
-  id: string;
-  phase_key: string;
-  label: string;
-  description?: string | null;
-  owner_role?: string | null;
-  default_anchor: "endorsement" | "tssr_approved";
-  default_working_day_start: number;
-  default_working_day_end: number;
-  default_gate?: string | null;
-  counts_toward_sla: boolean;
-  applicable_templates: string[];
-  is_active: boolean;
-  updated_at?: string | null;
-};
-
-export async function platformListRolloutCustomPhases(template?: string): Promise<PlatformRolloutCustomPhase[]> {
-  const response = await centralApiClient.get<{ data: { phases: PlatformRolloutCustomPhase[] } }>(
-    "/platform/rollout-phases",
-    { params: template ? { template } : undefined },
-  );
-  return response.data.data.phases;
-}
-
-export async function platformCreateRolloutCustomPhase(body: {
-  phase_key: string;
-  label: string;
-  description?: string;
-  owner_role?: string;
-  default_anchor?: "endorsement" | "tssr_approved";
-  default_working_day_start?: number;
-  default_working_day_end?: number;
-  default_gate?: string;
-  counts_toward_sla?: boolean;
-  applicable_templates: string[];
-}): Promise<PlatformRolloutCustomPhase> {
-  const response = await centralApiClient.post<{ data: PlatformRolloutCustomPhase }>("/platform/rollout-phases", body);
-  return response.data.data;
-}
-
-export async function platformUpdateRolloutCustomPhase(
-  id: string,
-  body: Partial<PlatformRolloutCustomPhase>,
-): Promise<PlatformRolloutCustomPhase> {
-  const response = await centralApiClient.patch<{ data: PlatformRolloutCustomPhase }>(
-    `/platform/rollout-phases/${id}`,
-    body,
-  );
-  return response.data.data;
-}
-
-export async function platformDeactivateRolloutCustomPhase(id: string): Promise<PlatformRolloutCustomPhase> {
-  const response = await centralApiClient.delete<{ data: PlatformRolloutCustomPhase }>(`/platform/rollout-phases/${id}`);
   return response.data.data;
 }
 

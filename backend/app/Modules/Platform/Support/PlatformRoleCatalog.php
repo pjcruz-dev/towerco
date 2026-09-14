@@ -30,10 +30,6 @@ final class PlatformRoleCatalog
 
     public const PERM_BILLING_MANAGE = 'platform.billing.manage';
 
-    public const PERM_PLAYBOOKS_VIEW = 'platform.playbooks.view';
-
-    public const PERM_PLAYBOOKS_MANAGE = 'platform.playbooks.manage';
-
     public const PERM_OPERATORS_VIEW = 'platform.operators.view';
 
     public const PERM_OPERATORS_MANAGE = 'platform.operators.manage';
@@ -67,8 +63,6 @@ final class PlatformRoleCatalog
             self::PERM_TENANTS_BACKUP,
             self::PERM_BILLING_VIEW,
             self::PERM_BILLING_MANAGE,
-            self::PERM_PLAYBOOKS_VIEW,
-            self::PERM_PLAYBOOKS_MANAGE,
             self::PERM_OPERATORS_VIEW,
             self::PERM_OPERATORS_MANAGE,
             self::PERM_AUDIT_VIEW,
@@ -95,7 +89,6 @@ final class PlatformRoleCatalog
                 self::PERM_TENANTS_MANAGE,
                 self::PERM_TENANTS_IMPERSONATE,
                 self::PERM_TENANTS_BACKUP,
-                self::PERM_PLAYBOOKS_VIEW,
                 self::PERM_AUDIT_VIEW,
             ],
             self::ROLE_VIEWER => [
@@ -141,7 +134,6 @@ final class PlatformRoleCatalog
         $impliedBy = match ($permission) {
             self::PERM_TENANTS_VIEW => self::PERM_TENANTS_MANAGE,
             self::PERM_BILLING_VIEW => self::PERM_BILLING_MANAGE,
-            self::PERM_PLAYBOOKS_VIEW => self::PERM_PLAYBOOKS_MANAGE,
             default => null,
         };
 

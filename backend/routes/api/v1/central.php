@@ -39,18 +39,6 @@ use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorStoreControl
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformRoleCatalogController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPublicClientIpController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseDestroyController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseShowController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutCustomPhaseUpdateController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPlaybookPublishController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleIndexController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundlePublishController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleShowController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleStoreController;
-use App\Modules\Platform\Http\Controllers\V1\CentralRolloutPolicyBundleUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralStripeWebhookController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantAuditIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupDestroyController;
@@ -69,7 +57,6 @@ use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentStoreContro
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantImpersonateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantModulesCatalogController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlanCatalogController;
-use App\Modules\Platform\Http\Controllers\V1\CentralTenantPlaybookAssignController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantProvisioningController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantPublicBrandingController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantSettingsController;
@@ -233,45 +220,6 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::delete('tenants/{tenant}', CentralTenantDestroyController::class)
         ->middleware(['throttle:10,1', 'platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_DELETE])
         ->name('api.central.v1.platform.tenants.destroy');
-    Route::get('rollout-playbooks', CentralRolloutPlaybookIndexController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW)
-        ->name('api.central.v1.platform.rollout_playbooks.index');
-    Route::post('rollout-playbooks/publish', CentralRolloutPlaybookPublishController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_playbooks.publish');
-    Route::get('rollout-policies', CentralRolloutPolicyBundleIndexController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW)
-        ->name('api.central.v1.platform.rollout_policies.index');
-    Route::post('rollout-policies', CentralRolloutPolicyBundleStoreController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_policies.store');
-    Route::get('rollout-policies/{rolloutPolicyBundle}', CentralRolloutPolicyBundleShowController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW)
-        ->name('api.central.v1.platform.rollout_policies.show');
-    Route::patch('rollout-policies/{rolloutPolicyBundle}', CentralRolloutPolicyBundleUpdateController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_policies.update');
-    Route::post('rollout-policies/{rolloutPolicyBundle}/publish', CentralRolloutPolicyBundlePublishController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_policies.publish');
-    Route::get('rollout-phases', CentralRolloutCustomPhaseIndexController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW)
-        ->name('api.central.v1.platform.rollout_phases.index');
-    Route::post('rollout-phases', CentralRolloutCustomPhaseStoreController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_phases.store');
-    Route::get('rollout-phases/{rolloutCustomPhase}', CentralRolloutCustomPhaseShowController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW)
-        ->name('api.central.v1.platform.rollout_phases.show');
-    Route::patch('rollout-phases/{rolloutCustomPhase}', CentralRolloutCustomPhaseUpdateController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_phases.update');
-    Route::delete('rollout-phases/{rolloutCustomPhase}', CentralRolloutCustomPhaseDestroyController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.rollout_phases.destroy');
-    Route::post('tenants/{tenant}/playbook', CentralTenantPlaybookAssignController::class)
-        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_PLAYBOOKS_MANAGE)
-        ->name('api.central.v1.platform.tenants.playbook.assign');
     Route::get('operational-acronyms', CentralOperationalAcronymIndexController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
         ->name('api.central.v1.platform.operational-acronyms.index');

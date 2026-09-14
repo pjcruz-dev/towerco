@@ -27,7 +27,7 @@ import {
   WidgetSingleMetric,
   WidgetSparkBars,
 } from "@/components/dashboard/widgets/widget-primitives";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import type {
   DashboardCatalogEntry,
   DashboardWidgetOptions,

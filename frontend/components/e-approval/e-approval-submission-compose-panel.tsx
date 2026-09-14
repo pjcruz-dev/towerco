@@ -4,11 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ControlledDocumentPicker } from "@/components/e-approval/controlled-document-picker";
 import { ControlledDocumentRequestModePicker } from "@/components/e-approval/controlled-document-request-mode-picker";
 import { EApprovalCashAdvancePicker } from "@/components/e-approval/e-approval-cash-advance-picker";
 import { EApprovalComposeFormFields, type ComposeFormStepMeta } from "@/components/e-approval/e-approval-compose-form-fields";
-import { EApprovalPurchaseRequisitionPicker } from "@/components/e-approval/e-approval-purchase-requisition-picker";
 import { EApprovalFormSectionProgressNav } from "@/components/e-approval/e-approval-form-section-progress";
 import { OperationalAlert } from "@/components/feedback/operational-alert";
 import { Button } from "@/components/ui/button";
@@ -54,7 +52,6 @@ import { applyComputedFieldValues } from "@/modules/e-approval/field-computed";
 import { fieldDefaultValue, parseFieldValidation, validateSubmissionValues } from "@/modules/e-approval/field-validation";
 import { isComposeFillableFieldType } from "@/modules/e-approval/form-compose-structural";
 import { procurementLinkCascadePatch } from "@/modules/e-approval/procurement-link-fields";
-import { attachmentCountsByField } from "@/modules/procurement-one/submit-readiness";
 import { groupSavedAttachmentsByField, hasPendingAttachmentFiles, pendingAttachmentsNotYetSaved } from "@/modules/e-approval/draft-attachments";
 import {
   buildFormSectionProgress,
@@ -139,6 +136,20 @@ function formatSavedAt(date: Date | null): string | null {
     return null;
   }
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function attachmentCountsByField(
+  attachments: Array<{ field_name: string }>,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const attachment of attachments) {
+    const key = attachment.field_name?.trim();
+    if (!key) {
+      continue;
+    }
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export function EApprovalSubmissionComposePanel({
@@ -857,7 +868,7 @@ export function EApprovalSubmissionComposePanel({
   });
 
   const saveDraftMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (_opts?: { silent?: boolean }) => {
       if (isResubmitMode) {
         throw new Error("Drafts are not available while revising a returned submission.");
       }
@@ -1223,26 +1234,16 @@ export function EApprovalSubmissionComposePanel({
             />
           ) : null}
           {usesPurchaseRequisitionPicker ? (
-            <EApprovalPurchaseRequisitionPicker
-              formId={formId}
-              value={parentSubmissionId}
-              onChange={handlePurchaseRequisitionSelect}
-              error={fieldErrors.parent_submission_id}
-              enabled={enabled && !!formId}
+            <OperationalAlert
+              level="warning"
+              title="Purchase requisition linking unavailable"
+              description="Procurement-One was removed from this workspace. Open forms that require a linked PR cannot be submitted here."
             />
           ) : null}
           {showControlledDocumentRegistryUi ? (
             <ControlledDocumentRequestModePicker
               mode={controlledDocumentRequestMode}
               onChange={handleControlledDocumentRequestModeChange}
-              disabled={isBusy}
-            />
-          ) : null}
-          {showControlledDocumentRegistryUi && controlledDocumentRequestMode === "revision" ? (
-            <ControlledDocumentPicker
-              documentCode={controlledDocumentCode}
-              onDocumentCodeChange={handleControlledDocumentCodeChange}
-              onLookupResolved={handleControlledDocumentLookupResolved}
               disabled={isBusy}
             />
           ) : null}

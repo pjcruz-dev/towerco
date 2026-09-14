@@ -21,7 +21,6 @@ export type PlatformDashboardRecentTenant = {
   primary_domain?: string | null;
   created_at?: string | null;
   mfa_required?: boolean;
-  playbook_upgrade_available?: boolean;
 };
 
 export type PlatformDashboardAuditRow = {
@@ -88,7 +87,6 @@ export type PlatformProvisioningTrendPoint = {
 
 export type PlatformDashboardResponse = {
   environment: string;
-  latest_playbook_version?: string | null;
   kpis: PlatformDashboardKpi[];
   environment_breakdown: Record<string, number>;
   subscription_breakdown: Record<string, number>;

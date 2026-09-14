@@ -20,12 +20,11 @@ Keep in-app help Markdown under `backend/app/Modules/*/Knowledge/` — those **a
 ```text
 docs/
 ├── README.md           This index
-├── Rules/              Board deck, rollout playbook DOCX, AI security HTML
+├── Rules/              Board deck, AI security HTML
 ├── archives/           Local-only scratch (gitignored except README)
 ├── local-dev/          Optional Windows .cmd launchers (npm run … preferred)
 ├── guides/             Local Docker / Podman / performance
-├── roadmaps/           PROJECT-ONE, notifications, etc.
-├── rollout/            Playbook phases + gate-approval phases
+├── roadmaps/           Notifications, passkeys, etc.
 ├── architecture/       Tenant isolation, etc.
 ├── design-system/      DESIGN_SYSTEM.md (canonical) + token summary
 ├── frontend/           Frontend engineering notes
@@ -42,7 +41,7 @@ docs/
 | Local Docker guide | [guides/local-development-docker-guide.md](./guides/local-development-docker-guide.md) |
 | Production (EC2 + RDS) | [infrastructure/aws-ec2-rds-production.md](./infrastructure/aws-ec2-rds-production.md) |
 | E-Forms end-user guide | [modules/e-approval-end-user-guide.md](./modules/e-approval-end-user-guide.md) |
-| PROJECT-ONE roadmap | [roadmaps/project-one-roadmap.md](./roadmaps/project-one-roadmap.md) |
+| Dynamic Entities | [modules/dynamic-entities.md](./modules/dynamic-entities.md) |
 | Tenant passkeys (fingerprint / WebAuthn) | [roadmaps/tenant-passkeys-roadmap.md](./roadmaps/tenant-passkeys-roadmap.md) |
 | Tenant database backups | [modules/tenant-database-backups.md](./modules/tenant-database-backups.md) |
 | Passkeys Phase 1 (API) | [architecture/tenant-passkeys-phase-1.md](./architecture/tenant-passkeys-phase-1.md) |
@@ -50,7 +49,6 @@ docs/
 | Passkeys Phase 3 (hardening) | [architecture/tenant-passkeys-phase-3.md](./architecture/tenant-passkeys-phase-3.md) |
 | Passkeys Phase 4 (MFA policy) | [architecture/tenant-passkeys-phase-4.md](./architecture/tenant-passkeys-phase-4.md) |
 | Passkeys staging checklist | [ops/tenant-passkeys-staging-checklist.md](./ops/tenant-passkeys-staging-checklist.md) |
-| Rollout playbooks | [rollout/](./rollout/) |
-| Board presentation | [Rules/INFRA SUITE_Board_Presentation.pdf](./Rules/INFRA SUITE_Board_Presentation.pdf) |
+| Board presentation | [Rules/TowerOS_Board_Presentation.pdf](./Rules/TowerOS_Board_Presentation.pdf) |
 | Design system | [design-system/DESIGN_SYSTEM.md](./design-system/DESIGN_SYSTEM.md) |
 | Dev menu (optional) | [local-dev/tower.cmd](./local-dev/tower.cmd) — or `npm run dev` |

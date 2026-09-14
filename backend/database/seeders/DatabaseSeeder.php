@@ -6,8 +6,6 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Modules\Platform\Services\OperationalAcronymService;
-use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
-use App\Modules\Platform\Services\RolloutPolicyBundleService;
 use App\Modules\Platform\Support\OperationalAcronymDefaults;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -41,12 +39,6 @@ class DatabaseSeeder extends Seeder
                 'platform_role' => 'superadmin',
             ],
         );
-
-        $catalog = app(RolloutPlaybookCatalogService::class);
-        $policyBundles = app(RolloutPolicyBundleService::class);
-
-        $playbookV1 = $catalog->ensurePublishedV1();
-        $policyBundles->ensureDefaultPublishedBundle($playbookV1);
 
         app(OperationalAcronymService::class)->syncDefaults(OperationalAcronymDefaults::all());
 

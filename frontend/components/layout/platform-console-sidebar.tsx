@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
-import { BookOpen, CircleHelp, CreditCard, LayoutGrid, Layers, LogIn, PlusCircle, Users } from "lucide-react";
+import { CircleHelp, CreditCard, LayoutGrid, Layers, LogIn, PlusCircle, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
@@ -43,12 +43,6 @@ const navItems: NavItem[] = [
     href: "/platform/billing",
     icon: CreditCard,
     permission: PLATFORM_PERMS.billingView,
-  },
-  {
-    title: "Playbooks",
-    href: "/platform/playbooks",
-    icon: BookOpen,
-    permission: PLATFORM_PERMS.playbooksView,
   },
   {
     title: "Operators",
@@ -92,8 +86,6 @@ export function PlatformConsoleSidebar() {
     [user],
   );
 
-  const canViewPlaybooks = platformHasPermission(user, PLATFORM_PERMS.playbooksView);
-
   const closeMobile = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -132,18 +124,6 @@ export function PlatformConsoleSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-2">
         <SidebarMenu>
-          {canViewPlaybooks ? (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                render={<Link href="/platform/playbooks" prefetch={false} onClick={closeMobile} />}
-                tooltip="Rollout playbooks (Project-One)"
-                className={navButtonClass}
-              >
-                <BookOpen className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">Rollout playbooks</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               render={<Link href="/login" prefetch={false} onClick={closeMobile} />}

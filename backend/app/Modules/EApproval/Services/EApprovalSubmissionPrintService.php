@@ -6,12 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
-use App\Modules\ProcurementOne\Models\ProcurementPo;
-use App\Modules\ProcurementOne\Models\ProcurementPr;
-use App\Modules\ProcurementOne\Services\ProcurementPoPrintEnrichmentService;
-use App\Modules\ProcurementOne\Services\ProcurementPrPrintEnrichmentService;
-use App\Modules\ProcurementOne\Support\ProcurementGridValueParser;
-use App\Modules\ProcurementOne\Support\ProcurementLineGridColumns;
+use App\Modules\EApproval\Support\EApprovalGridValueParser;
 
 final class EApprovalSubmissionPrintService
 {
@@ -24,9 +19,7 @@ final class EApprovalSubmissionPrintService
         private readonly EApprovalPdfLayoutService $pdfLayout,
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalFormValueDisplayService $valueDisplay,
-        private readonly ProcurementGridValueParser $gridParser,
-        private readonly ProcurementPoPrintEnrichmentService $poPrintEnrichment,
-        private readonly ProcurementPrPrintEnrichmentService $prPrintEnrichment,
+        private readonly EApprovalGridValueParser $gridParser,
     ) {}
 
     /**
@@ -64,9 +57,6 @@ final class EApprovalSubmissionPrintService
         $formMetadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
         $printTemplateKind = (string) ($template['layout_kind'] ?? $formMetadata['print_template_kind'] ?? '');
 
-        $valuesByKey = $this->poPrintEnrichment->enrichSubmissionPrintValues($submission, $valuesByKey);
-        $valuesByKey = $this->prPrintEnrichment->enrichSubmissionPrintValues($submission, $valuesByKey);
-
         $fields = $this->resolvePrintFields($valuesByKey, $layoutRows, $layoutPersisted, $printTemplateKind);
 
         $template['subsidiary_logos'] = $this->pdfLayout->presentSubsidiaryLogoUrls(
@@ -93,11 +83,7 @@ final class EApprovalSubmissionPrintService
             'subsidiary_logos' => $template['subsidiary_logos'],
             'print_template_kind' => $printTemplateKind !== '' ? $printTemplateKind : null,
             'fields' => $fields,
-            'grids' => $this->buildGridPrintModels(
-                $submission,
-                $this->resolveProcurementPo($submission),
-                $this->resolveProcurementPr($submission),
-            ),
+            'grids' => $this->buildGridPrintModels($submission),
             'approvals' => $submission->approvals->map(static fn ($a) => [
                 'step' => $a->step?->step_order,
                 'approver' => $a->approver?->name,
@@ -160,7 +146,7 @@ final class EApprovalSubmissionPrintService
         return in_array($printTemplateKind, self::DEDICATED_PRINT_TEMPLATE_KINDS, true);
     }
 
-    private function buildGridPrintModels(EApprovalSubmission $submission, ?ProcurementPo $po = null, ?ProcurementPr $pr = null): array
+    private function buildGridPrintModels(EApprovalSubmission $submission): array
     {
         $submission->loadMissing(['form.fields', 'values.field']);
 
@@ -181,14 +167,6 @@ final class EApprovalSubmissionPrintService
 
             $raw = is_scalar($row->value) ? trim((string) $row->value) : '';
             $parsedRows = $this->parseGridRowsForPrint($raw, $columns);
-
-            if ($parsedRows === [] && $po !== null && $key === 'line_items') {
-                $parsedRows = $this->gridRowsFromPurchaseOrder($po, $columns);
-            }
-
-            if ($parsedRows === [] && $pr !== null && $key === 'line_items') {
-                $parsedRows = $this->gridRowsFromPurchaseRequisition($pr, $columns);
-            }
 
             // Include empty grids so dynamic print body can still show column headers.
             $grids[] = [
@@ -223,111 +201,8 @@ final class EApprovalSubmissionPrintService
             $seen[$key] = true;
         }
 
-        if ($grids === [] && $po !== null) {
-            $columns = ProcurementLineGridColumns::PO_LABELS;
-            $rows = $this->gridRowsFromPurchaseOrder($po, $columns);
-            if ($rows !== []) {
-                $grids[] = [
-                    'key' => 'line_items',
-                    'label' => 'PO line items',
-                    'columns' => $columns,
-                    'rows' => $rows,
-                ];
-            }
-        }
-
-        if ($grids === [] && $pr !== null) {
-            $columns = ProcurementLineGridColumns::PR_LABELS;
-            $rows = $this->gridRowsFromPurchaseRequisition($pr, $columns);
-            if ($rows !== []) {
-                $grids[] = [
-                    'key' => 'line_items',
-                    'label' => 'Line items',
-                    'columns' => $columns,
-                    'rows' => $rows,
-                ];
-            }
-        }
-
         return $grids;
     }
-
-    private function resolveProcurementPr(EApprovalSubmission $submission): ?ProcurementPr
-    {
-        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
-        if (($metadata['form_family'] ?? null) !== 'purchase_requisition') {
-            return null;
-        }
-
-        return ProcurementPr::query()
-            ->with('lines')
-            ->where('e_approval_submission_id', (string) $submission->id)
-            ->first();
-    }
-
-    private function resolveProcurementPo(EApprovalSubmission $submission): ?ProcurementPo
-    {
-        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
-        if (($metadata['form_family'] ?? null) !== 'purchase_order') {
-            return null;
-        }
-
-        return ProcurementPo::query()
-            ->with('lines')
-            ->where('e_approval_submission_id', (string) $submission->id)
-            ->first();
-    }
-
-    /**
-     * @param  list<string>  $columns
-     * @return list<list<string>>
-     */
-    private function gridRowsFromPurchaseOrder(ProcurementPo $po, array $columns): array
-    {
-        $po->loadMissing('lines');
-        $rows = [];
-
-        foreach ($po->lines as $line) {
-            $row = [];
-            foreach ($columns as $column) {
-                $row[] = ProcurementLineGridColumns::printCellValue($line, $column);
-            }
-
-            if (array_filter($row, static fn (string $cell): bool => trim($cell) !== '') !== []) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param  list<string>  $columns
-     * @return list<list<string>>
-     */
-    private function gridRowsFromPurchaseRequisition(ProcurementPr $pr, array $columns): array
-    {
-        $pr->loadMissing('lines');
-        $rows = [];
-
-        foreach ($pr->lines as $line) {
-            $row = [];
-            foreach ($columns as $column) {
-                $row[] = ProcurementLineGridColumns::printCellValue($line, $column);
-            }
-
-            if (array_filter($row, static fn (string $cell): bool => trim($cell) !== '') !== []) {
-                $rows[] = $row;
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param  list<string>  $columns
-     * @return list<list<string>>
-     */
     private function parseGridRowsForPrint(string $gridRaw, array $columns): array
     {
         if ($gridRaw === '' || $columns === []) {

@@ -2,7 +2,6 @@
 
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 
 const DEFAULT_STYLE =
@@ -77,7 +76,6 @@ export function OperationalMap({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const dragMarkerRef = useRef<maplibregl.Marker | null>(null);
   const onMapClickRef = useRef(onMapClick);
-  const router = useRouter();
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
@@ -144,7 +142,8 @@ export function OperationalMap({
           return;
         }
         if (linkRolloutPins && pin.rollout_id) {
-          router.push(`/project-one/rollouts/${pin.rollout_id}`);
+          // Project-One rollouts UI was removed; keep pin click as a no-op without onPinClick.
+          return;
         }
       });
 
@@ -156,7 +155,7 @@ export function OperationalMap({
     if (bounds) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
     }
-  }, [pins, draggablePin, onPinClick, linkRolloutPins, router]);
+  }, [pins, draggablePin, onPinClick, linkRolloutPins]);
 
   useEffect(() => {
     const map = mapRef.current;

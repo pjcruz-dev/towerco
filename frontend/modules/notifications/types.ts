@@ -1,6 +1,6 @@
 export type TenantNotificationCategory = "action" | "update";
 
-export type TenantNotificationModule = "e_approval" | "project_one" | string;
+export type TenantNotificationModule = "e_approval" | string;
 
 export type TenantNotificationRow = {
   id: string;

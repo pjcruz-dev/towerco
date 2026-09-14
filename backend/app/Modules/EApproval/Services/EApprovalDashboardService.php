@@ -285,7 +285,6 @@ final class EApprovalDashboardService
     {
         $enabled = $this->enabledModules->resolveForCurrentTenant();
 
-        return in_array('procurement_one', $enabled, true)
-            || in_array('finance_one', $enabled, true);
+        return false;
     }
 }

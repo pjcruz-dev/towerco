@@ -6,7 +6,7 @@ namespace App\Modules\DocExtract\Services;
 
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
-use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
+use App\Core\Support\SimpleExcelWorkbookWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class DocExtractExportService
@@ -34,7 +34,7 @@ final class DocExtractExportService
     public function exportXlsx(DocExtractBatch $batch): StreamedResponse
     {
         [$headers, $rows] = $this->buildMainRows($batch);
-        $writer = new ProcurementExcelWorkbookWriter;
+        $writer = new SimpleExcelWorkbookWriter;
         $writer->addSheet('Extraction Results', [$headers, ...$rows]);
 
         foreach ($this->buildNestedTableSheets($batch) as $sheet) {

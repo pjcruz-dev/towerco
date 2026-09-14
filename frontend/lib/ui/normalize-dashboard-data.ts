@@ -1,11 +1,10 @@
 import { chartColorAt, chartFillForKey } from "@/components/dashboard/dashboard-chart-utils";
-import type { DashboardNormalizedData } from "@/lib/ui/dashboard-widget-data";
+import type { DashboardNormalizedData, DashboardKpi } from "@/lib/ui/dashboard-widget-data";
 import { withTicketingKpiHrefs } from "@/lib/ticketing/kpi-deep-links";
 import type { EApprovalDashboardResponse } from "@/modules/e-approval/types";
 import type { EApprovalFormWorkspaceDashboard } from "@/modules/e-approval/form-workspace-types";
 import type { DocExtractBatchListRow } from "@/modules/doc-extract/types";
 import type { TicketingDashboardResponse } from "@/modules/ticketing/types";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
 
 function asKpis(
   rows: Array<{
@@ -16,7 +15,7 @@ function asKpis(
     tone?: string | null;
     href?: string | null;
   }>,
-): ProjectOneKpi[] {
+): DashboardKpi[] {
   return rows.map((row) => ({
     key: row.key,
     label: row.label,
@@ -321,7 +320,7 @@ export function normalizeDocExtractBatches(rows: DocExtractBatchListRow[]): Dash
     else if (row.status === "ready") ready += 1;
     else if (row.status === "failed") failed += 1;
   }
-  const kpis: ProjectOneKpi[] = [
+  const kpis: DashboardKpi[] = [
     { key: "total", label: "Batches", value: rows.length, tone: "neutral" },
     { key: "processing", label: "Scanning", value: processing, tone: "warning" },
     { key: "ready", label: "Ready", value: ready, tone: "success" },
@@ -485,10 +484,8 @@ export function normalizeWorkspaceDashboard(
   const attentionKeys = [
     "unread_notifications",
     "ea_awaiting_my_approval",
-    "ea_stale_approvals",
-    "rollout_gates_awaiting_me",
-    "ticketing_assigned_me",
-    "rollout_sla_risk",
+    "ea_stale_approvals",
+    "ticketing_assigned_me",
   ];
   const attentionSeries = kpis
     .filter((kpi) => attentionKeys.includes(kpi.key))

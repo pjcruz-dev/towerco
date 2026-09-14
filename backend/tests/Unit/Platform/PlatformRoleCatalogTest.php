@@ -50,7 +50,7 @@ final class PlatformRoleCatalogTest extends TestCase
         $this->assertTrue(
             $this->catalog->roleHasPermission(
                 PlatformRoleCatalog::ROLE_SUPPORT,
-                PlatformRoleCatalog::PERM_PLAYBOOKS_VIEW,
+                PlatformRoleCatalog::PERM_TENANTS_VIEW,
             ),
         );
     }

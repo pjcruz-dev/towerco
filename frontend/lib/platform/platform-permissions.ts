@@ -8,9 +8,7 @@ export const PLATFORM_PERMS = {
   tenantsImpersonate: "platform.tenants.impersonate",
   tenantsBackup: "platform.tenants.backup",
   billingView: "platform.billing.view",
-  billingManage: "platform.billing.manage",
-  playbooksView: "platform.playbooks.view",
-  playbooksManage: "platform.playbooks.manage",
+  billingManage: "platform.billing.manage",
   operatorsView: "platform.operators.view",
   operatorsManage: "platform.operators.manage",
   auditView: "platform.audit.view",

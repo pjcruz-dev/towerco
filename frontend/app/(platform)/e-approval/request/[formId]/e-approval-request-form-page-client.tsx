@@ -36,7 +36,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
       return;
     }
     if (isControlledDocumentRequest) {
-      router.push("/documents/controlled");
+      router.push("/e-approval/submissions");
     } else {
       router.push("/e-approval/submissions");
     }
@@ -48,7 +48,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
       return;
     }
     if (isControlledDocumentRequest) {
-      router.push("/documents/controlled");
+      router.push("/e-approval/submissions");
     } else {
       router.push("/e-approval/submissions/new");
     }
@@ -75,7 +75,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
                   <EApprovalBackLink href="/e-approval/submissions">My submissions</EApprovalBackLink>
                 </>
               ) : isControlledDocumentRequest ? (
-                <EApprovalBackLink href="/documents/controlled">Document register</EApprovalBackLink>
+                <EApprovalBackLink href="/e-approval/submissions">E-Forms submissions</EApprovalBackLink>
               ) : (
                 <>
                   <EApprovalBackLink href="/e-approval/submissions/new">Choose another form</EApprovalBackLink>

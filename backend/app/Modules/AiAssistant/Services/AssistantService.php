@@ -396,7 +396,6 @@ final class AssistantService
             $path === '/e-approval/submissions' => 'E-Forms submissions',
             str_starts_with($path, '/e-approval/approvals') => 'E-Forms approvals',
             $path === '/e-approval' => 'E-Forms',
-            $path === '/documents/controlled' => 'Document register',
             default => $href,
         };
     }
@@ -438,7 +437,7 @@ final class AssistantService
             return array_values(array_unique(array_merge([
                 'What else is waiting for my approval?',
                 'Show my open tickets',
-                'Which documents expire soon?',
+                'How do I create an E-Forms request?',
             ], array_slice($moduleSuggestions, 0, 1))));
         }
 

@@ -136,21 +136,6 @@ return [
                 'doc_extract' => [
                     'enabled' => false,
                 ],
-                'procurement_one' => [
-                    'enabled' => false,
-                    'goods_receipt' => false,
-                    'advanced_numbering' => false,
-                    'inventory' => false,
-                    'ap_invoices' => false,
-                    'payment_tracking' => false,
-                    'rfq_sourcing' => false,
-                    'vendor_contracts' => false,
-                    'reporting_exports' => false,
-                ],
-                'documents' => [
-                    'document_uploads' => false,
-                    'max_documents_per_site' => 0,
-                ],
             ],
         ],
         'professional' => [
@@ -182,21 +167,6 @@ return [
                 'doc_extract' => [
                     'enabled' => true,
                 ],
-                'procurement_one' => [
-                    'enabled' => true,
-                    'goods_receipt' => false,
-                    'advanced_numbering' => false,
-                    'inventory' => false,
-                    'ap_invoices' => false,
-                    'payment_tracking' => false,
-                    'rfq_sourcing' => false,
-                    'vendor_contracts' => false,
-                    'reporting_exports' => false,
-                ],
-                'documents' => [
-                    'document_uploads' => true,
-                    'max_documents_per_site' => 500,
-                ],
             ],
         ],
         'enterprise' => [
@@ -227,21 +197,6 @@ return [
                 ],
                 'doc_extract' => [
                     'enabled' => true,
-                ],
-                'procurement_one' => [
-                    'enabled' => true,
-                    'goods_receipt' => true,
-                    'advanced_numbering' => true,
-                    'inventory' => true,
-                    'ap_invoices' => true,
-                    'payment_tracking' => true,
-                    'rfq_sourcing' => true,
-                    'vendor_contracts' => true,
-                    'reporting_exports' => true,
-                ],
-                'documents' => [
-                    'document_uploads' => true,
-                    'max_documents_per_site' => null,
                 ],
             ],
         ],

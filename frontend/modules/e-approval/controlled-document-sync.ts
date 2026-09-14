@@ -27,55 +27,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-export function parseControlledDocumentSync(metadata: unknown): ControlledDocumentSyncMeta | null {
-  const root = asRecord(metadata);
-  const raw = asRecord(root?.controlledDocumentSync) ?? asRecord(root?.controlled_document_sync);
-  if (!raw || raw.enabled !== true) {
-    return null;
-  }
-
-  const fieldMap: Record<string, string> = {
-    title: "title",
-    document_type: "document_type",
-    department: "department",
-    revision_number: "revision_number",
-    effective_date: "effective_date",
-    next_review_date: "next_review_date",
-    change_summary: "change_summary",
-  };
-
-  const custom = asRecord(raw.fieldMap) ?? asRecord(raw.field_map);
-  if (custom) {
-    for (const [key, fieldName] of Object.entries(custom)) {
-      if (typeof fieldName === "string" && fieldName.trim() !== "") {
-        fieldMap[key] = fieldName.trim();
-      }
-    }
-  }
-
-  const documentCodeField = String(raw.documentCodeField ?? raw.document_code_field ?? "document_code").trim();
-  const autoRevision =
-    raw.autoRevision !== undefined || raw.auto_revision !== undefined
-      ? Boolean(raw.autoRevision ?? raw.auto_revision)
-      : true;
-
-  const attachmentField = String(raw.attachmentField ?? raw.attachment_field ?? "attachments").trim() || "attachments";
-
-  const composeRaw = asRecord(raw.composeUi) ?? asRecord(raw.compose_ui);
-  const hideByDefault = true;
-
-  return {
-    enabled: true,
-    autoRevision,
-    documentCodeField,
-    revisionFieldName: fieldMap.revision_number ?? "revision_number",
-    fieldMap,
-    attachmentField,
-    composeUi: {
-      hideSectionProgress: composeRaw?.hideSectionProgress !== false && composeRaw?.hide_section_progress !== false ? hideByDefault : Boolean(composeRaw?.hideSectionProgress ?? composeRaw?.hide_section_progress),
-      hideRegistryPicker: composeRaw?.hideRegistryPicker !== false && composeRaw?.hide_registry_picker !== false ? hideByDefault : Boolean(composeRaw?.hideRegistryPicker ?? composeRaw?.hide_registry_picker),
-    },
-  };
+export function parseControlledDocumentSync(_metadata: unknown): ControlledDocumentSyncMeta | null {
+  // Document register module removed — treat all forms as standard E-Forms.
+  return null;
 }
 
 export function parseControlledDocumentAccessPolicy(metadata: unknown): ControlledDocumentAccessPolicyMeta {

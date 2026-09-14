@@ -21,9 +21,9 @@ describe("resolveAssistantRouteContext", () => {
     expect(ctx.pagePath).toBe("/notifications");
   });
 
-  it("maps procurement routes", () => {
-    const ctx = resolveAssistantRouteContext("/procurement/vendors");
-    expect(ctx.moduleKey).toBe("procurement_one");
-    expect(ctx.suggestedQuestions.some((q) => q.includes("Procurement"))).toBe(true);
+  it("maps dynamic-entities routes", () => {
+    const ctx = resolveAssistantRouteContext("/dynamic-entities/packs");
+    expect(ctx.moduleKey).toBe("dynamic_entities");
+    expect(ctx.suggestedQuestions.some((q) => q.includes("Dynamic Entities"))).toBe(true);
   });
 });

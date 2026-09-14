@@ -8,7 +8,6 @@ import type { WorkspaceAwaitingMeItem } from "@/modules/workspace/types";
 
 const moduleLabels: Record<string, string> = {
   e_approval: "E-Forms",
-  project_one: "PROJECT-ONE",
   ticketing: "Ticketing",
   notifications: "Notifications",
 };
@@ -25,7 +24,7 @@ export function AwaitingMeHub({ total, items }: Props) {
         <div>
           <h2 className="text-base font-medium text-foreground">Awaiting you</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Gate approvals, e-approvals, and tickets assigned to you — one queue across modules.
+            Approvals and tickets assigned to you — one queue across modules.
           </p>
         </div>
         {total > 0 ? (

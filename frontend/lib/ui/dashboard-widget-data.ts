@@ -5,8 +5,16 @@ import type {
 } from "@/components/dashboard/dashboard-chart-utils";
 import { chartColorAt } from "@/components/dashboard/dashboard-chart-utils";
 import type { DashboardCatalogEntry, DashboardWidgetKind } from "@/lib/ui/dashboard-widget-catalog";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
 
+/** Shared KPI shape for dashboard strips and widget options. */
+export type DashboardKpi = {
+  key: string;
+  label: string;
+  value: string | number;
+  change?: string | null;
+  tone?: "success" | "warning" | "danger" | "neutral" | null;
+  href?: string | null;
+};
 export type DashboardModuleId = DashboardCatalogEntry["modules"][number];
 
 export type DashboardActivityItem = {
@@ -51,8 +59,8 @@ export type DashboardExportsTeaser = {
  * Kind renderers consume this so Add Widget always maps to real data.
  */
 export type DashboardNormalizedData = {
-  kpis: ProjectOneKpi[];
-  secondaryKpis?: ProjectOneKpi[];
+  kpis: DashboardKpi[];
+  secondaryKpis?: DashboardKpi[];
   series: {
     status?: DashboardChartDatum[];
     priority?: DashboardChartDatum[];
@@ -119,6 +127,10 @@ export const CATALOG_SLOT_ALIASES: Record<
     kpi_metric_row: "kpis",
     saas_metric_quad: "kpis",
     table: "batch_list",
+  },
+  workspace: {
+    kpi_metric_row: "kpis",
+    saas_metric_quad: "kpis",
   },
 };
 
@@ -265,7 +277,7 @@ export function availableDataSources(data: DashboardNormalizedData): DashboardDa
   return ids;
 }
 
-function kpisAsSeries(kpis: ProjectOneKpi[]): DashboardChartDatum[] {
+function kpisAsSeries(kpis: DashboardKpi[]): DashboardChartDatum[] {
   return kpis.map((kpi) => ({
     key: kpi.key,
     label: kpi.label,
