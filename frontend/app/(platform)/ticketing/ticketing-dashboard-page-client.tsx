@@ -323,7 +323,7 @@ export function TicketingDashboardPageClient() {
             ) : (
               <div className="max-h-[240px] overflow-auto">
                 <table className="w-full text-left text-[13px]">
-                  <thead className="sticky top-0 border-b border-border bg-muted/80 text-xs font-medium text-muted-foreground">
+                  <thead className="sticky top-0 z-10 border-b border-border bg-muted text-xs font-medium text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2">Category</th>
                       <th className="px-3 py-2 text-right">Open</th>

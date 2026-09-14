@@ -6,7 +6,7 @@ export default function EnvironmentHandoffPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background px-6 text-sm text-muted-foreground">
+        <div className="flex min-h-app-shell items-center justify-center bg-background px-6 text-sm text-muted-foreground">
           Switching environment…
         </div>
       }

@@ -2,7 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import type { CreateTenantInitialAdmin } from "@/lib/api/modules/platform-api";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import { tenantLoginUrl } from "@/lib/tenant/resolve-tenant-domain";
+import { useNotificationStore } from "@/stores/notification-store";
 
 type Props = {
   initialAdmin: CreateTenantInitialAdmin;
@@ -17,10 +19,20 @@ export function TenantCredentialsPanel({
   loginUrl,
   title = "Initial Administrator",
 }: Props) {
+  const notify = useNotificationStore((s) => s.push);
   const resolvedLoginUrl =
     loginUrl ?? (loginDomain ? tenantLoginUrl(loginDomain) : null);
   const hasPassword =
     typeof initialAdmin.password === "string" && initialAdmin.password.length > 0;
+
+  const copyValue = async (value: string, label: string) => {
+    const ok = await copyTextToClipboard(value);
+    notify({
+      level: ok ? "success" : "error",
+      title: ok ? "Copied" : "Copy failed",
+      message: ok ? `${label} copied to clipboard.` : "Copy the value manually.",
+    });
+  };
 
   return (
     <div className="space-y-2 rounded-md border border-amber-200/80 bg-amber-50 p-3 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-50">
@@ -73,7 +85,12 @@ export function TenantCredentialsPanel({
       ) : null}
 
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button type="button" size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(initialAdmin.email)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => void copyValue(initialAdmin.email, "Email")}
+        >
           Copy email
         </Button>
         {hasPassword ? (
@@ -81,7 +98,7 @@ export function TenantCredentialsPanel({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => void navigator.clipboard.writeText(initialAdmin.password!)}
+            onClick={() => void copyValue(initialAdmin.password!, "Password")}
           >
             Copy password
           </Button>

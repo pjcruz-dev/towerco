@@ -22,6 +22,7 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
       data-slot="radio-group-item"
       className={cn(
         "peer flex size-4 shrink-0 items-center justify-center rounded-full border border-input bg-background shadow-xs transition-colors",
+        "[-webkit-appearance:none] appearance-none",
         "outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "data-checked:border-primary",
@@ -34,7 +35,7 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
         data-slot="radio-group-indicator"
         className="flex items-center justify-center data-unchecked:hidden"
       >
-        <span className="size-2 rounded-full bg-primary" />
+        <span className="size-2 shrink-0 rounded-full bg-primary" />
       </RadioPrimitive.Indicator>
     </RadioPrimitive.Root>
   );

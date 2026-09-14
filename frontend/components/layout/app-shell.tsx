@@ -41,7 +41,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [activeTenantId, effectivePermissions, user]);
 
   const canReceiveNotifications = useMemo(() => {
-    return hasPermission(scopedUser, [permissions.eApprovalView]);
+    return (
+      hasPermission(scopedUser, [permissions.eApprovalView]) ||
+      hasPermission(scopedUser, [permissions.ticketingView])
+    );
   }, [scopedUser]);
 
   const canUseAssistant = useMemo(() => {
@@ -62,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <GlobalCommandPaletteProvider>
       <AssistantDrawerProvider enabled={canUseAssistant}>
         <SidebarProvider>
-          <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
+          <div className="app-shell-viewport flex w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
             {useNavbar ? null : <AppSidebar />}
             <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent print:overflow-visible">
               {/* Navbar layout: light utility bar → dark module nav (Metacoresoft-style; no global + New). */}

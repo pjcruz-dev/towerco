@@ -19,6 +19,7 @@ import { createEApprovalSubmissionNewTableColumns } from "@/components/e-approva
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { useEApprovalListView } from "@/hooks/use-e-approval-list-view";
 import { getErrorMessage } from "@/lib/api/error";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
   fetchEApprovalFormPublicShareUrl,
   fetchEApprovalFormsIndex,
@@ -110,8 +111,8 @@ export function EApprovalSubmissionNewPageClient() {
       setCopyingFormId(formId);
     },
     onSuccess: async (data) => {
-      try {
-        await navigator.clipboard.writeText(data.public_url);
+      const ok = await copyTextToClipboard(data.public_url);
+      if (ok) {
         push({
           level: "success",
           title: "External link copied",
@@ -119,9 +120,9 @@ export function EApprovalSubmissionNewPageClient() {
             ? "Share the URL with the vendor. They will need the link password."
             : "Share this URL with the vendor or partner to fill the form.",
         });
-      } catch {
-        push({ level: "warning", title: "Copy failed", message: data.public_url });
+        return;
       }
+      push({ level: "warning", title: "Copy failed", message: data.public_url });
     },
     onError: (error) =>
       push({ level: "error", title: "Could not copy external link", message: getErrorMessage(error) }),

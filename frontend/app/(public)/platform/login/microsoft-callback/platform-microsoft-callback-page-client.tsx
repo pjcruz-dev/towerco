@@ -58,7 +58,7 @@ export function PlatformMicrosoftCallbackPageClient() {
 
   if (mfaPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex min-h-app-shell items-center justify-center bg-background px-6">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
           <h1 className="text-base font-medium text-foreground">Verify your identity</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -77,7 +77,7 @@ export function PlatformMicrosoftCallbackPageClient() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6 text-sm text-muted-foreground">
+    <div className="flex min-h-app-shell items-center justify-center bg-background px-6 text-sm text-muted-foreground">
       {message}
     </div>
   );

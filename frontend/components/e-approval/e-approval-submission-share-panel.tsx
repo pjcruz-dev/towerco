@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/api/error";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
   createEApprovalSubmissionShareLink,
   fetchEApprovalSubmissionShareLinks,
@@ -67,13 +68,13 @@ export function EApprovalSubmissionSharePanel({ submissionId, enabled = true }: 
   });
 
   const copyUrl = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyTextToClipboard(url);
+    if (ok) {
       setCopied(true);
       push({ level: "success", title: "Link copied" });
-    } catch {
-      push({ level: "error", title: "Copy failed", message: "Select the URL and copy manually." });
+      return;
     }
+    push({ level: "error", title: "Copy failed", message: "Select the URL and copy manually." });
   };
 
   const activeLinks = (linksQuery.data ?? []).filter((link) => link.is_active);

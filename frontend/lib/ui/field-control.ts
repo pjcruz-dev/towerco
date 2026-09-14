@@ -1,6 +1,8 @@
 /** Shared styles for Input, Select, Textarea, and DatePicker — enterprise form controls. */
 export const fieldControlClassName = [
   "w-full min-w-0 rounded-lg border border-input bg-card px-2.5 text-sm text-foreground shadow-xs",
+  // Safari needs explicit appearance + color so controls don't blend into the page.
+  "[-webkit-appearance:none] appearance-none text-foreground",
   "transition-[color,box-shadow,border-color] outline-none",
   "placeholder:text-muted-foreground",
   "hover:border-ring/50",

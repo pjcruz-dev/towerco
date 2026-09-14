@@ -1484,7 +1484,7 @@ export function EApprovalSubmissionComposePanel({
         )}
       >
         {formBody}
-        <div className="sticky bottom-0 border-t border-border bg-background/95 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="sticky bottom-0 border-t border-border bg-background py-4">
           {actions}
         </div>
       </div>

@@ -99,7 +99,7 @@ export function EnvironmentHandoffPageClient() {
   }, [router, searchParams]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-background px-6 text-center text-sm text-muted-foreground">
+    <div className="flex min-h-app-shell flex-col items-center justify-center gap-2 bg-background px-6 text-center text-sm text-muted-foreground">
       <p>{message}</p>
       <p className="max-w-md text-[11px] leading-snug">
         Seamless switch needs the same email on the other environment. If you use Microsoft sign-in,

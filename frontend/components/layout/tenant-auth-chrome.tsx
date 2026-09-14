@@ -15,8 +15,8 @@ export function TenantAuthChrome({ children }: { children: React.ReactNode }) {
   const organizationLabel = useOrganizationLabel();
 
   return (
-    <div className="grid min-h-screen bg-background antialiased lg:grid-cols-2">
-      <section className="relative flex min-h-screen flex-col">
+    <div className="grid min-h-app-shell bg-background antialiased lg:grid-cols-2">
+      <section className="relative flex min-h-app-shell flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between px-4 sm:px-8">
           <div className="flex items-center gap-3">
             {logoUrl ? (
