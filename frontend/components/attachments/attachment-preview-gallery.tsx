@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, ImageIcon, Paperclip } from "lucide-react";
+import { Expand, FileText, ImageIcon, Paperclip } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { pdfObjectUrlForPreview } from "@/lib/browser/safari";
 import { getErrorMessage } from "@/lib/api/error";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +55,10 @@ export function isCardGalleryAttachment(item: AttachmentGalleryItem): boolean {
   );
 }
 
+function isPhotoAttachment(item: AttachmentGalleryItem): boolean {
+  return Boolean(item.preferImagePreview) || isImageAttachment(item.fileName, item.mimeType);
+}
+
 function inferMimeFromFileName(fileName: string): string | null {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
@@ -73,6 +85,11 @@ export function formatAttachmentBytes(bytes: number | null | undefined): string 
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Safari PDF viewer often fails blob URL fragments; use shared helper. */
+function pdfPreviewSrc(url: string): string {
+  return pdfObjectUrlForPreview(url);
 }
 
 /** Load object URLs for image/PDF card previews via an injected blob fetcher. */
@@ -165,10 +182,12 @@ function PreviewMedia({
   item,
   previewUrl,
   previewError,
+  fit = "cover",
 }: {
   item: AttachmentGalleryItem;
   previewUrl?: string;
   previewError?: string;
+  fit?: "cover" | "contain";
 }) {
   const isPdf = isPdfAttachment(item.fileName, item.mimeType);
   const isImage =
@@ -180,7 +199,10 @@ function PreviewMedia({
       <img
         src={previewUrl}
         alt={item.title || item.fileName}
-        className="h-full w-full object-cover"
+        className={cn(
+          "h-full w-full bg-muted/20",
+          fit === "contain" ? "object-contain" : "object-cover",
+        )}
       />
     );
   }
@@ -188,7 +210,7 @@ function PreviewMedia({
   if (previewUrl && isPdf) {
     return (
       <iframe
-        src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+        src={pdfPreviewSrc(previewUrl)}
         title={item.title || item.fileName}
         className="h-full w-full border-0 bg-white"
       />
@@ -220,11 +242,17 @@ export function AttachmentPreviewGallery({
   className,
 }: Props) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<AttachmentGalleryItem | null>(null);
   const { urls, errors } = useAttachmentPreviewUrls(items, fetchBlob);
 
   if (items.length === 0) {
     return (
-      <div className={cn("rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground", className)}>
+      <div
+        className={cn(
+          "rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground",
+          className,
+        )}
+      >
         {emptyMessage}
       </div>
     );
@@ -235,11 +263,8 @@ export function AttachmentPreviewGallery({
 
   const cardsByGroup = new Map<string, AttachmentGalleryItem[]>();
   for (const item of cardItems) {
-    const isPhoto =
-      Boolean(item.preferImagePreview) || isImageAttachment(item.fileName, item.mimeType);
-    const key =
-      item.groupKey?.trim() ||
-      (isPhoto ? "__photos__" : "__documents__");
+    const isPhoto = isPhotoAttachment(item);
+    const key = item.groupKey?.trim() || (isPhoto ? "__photos__" : "__documents__");
     const list = cardsByGroup.get(key) ?? [];
     list.push(item);
     cardsByGroup.set(key, list);
@@ -282,6 +307,9 @@ export function AttachmentPreviewGallery({
   };
 
   const showHeader = Boolean(title?.trim()) || Boolean(hint?.trim());
+  const expandedPreviewUrl = expandedItem
+    ? expandedItem.previewUrl || urls[expandedItem.id]
+    : undefined;
 
   return (
     <div className={cn("space-y-5", className)}>
@@ -298,11 +326,7 @@ export function AttachmentPreviewGallery({
 
       {[...cardsByGroup.entries()].map(([groupKey, cards]) => {
         const isPhotoGroup =
-          groupKey === "__photos__" ||
-          cards.every(
-            (item) =>
-              Boolean(item.preferImagePreview) || isImageAttachment(item.fileName, item.mimeType),
-          );
+          groupKey === "__photos__" || cards.every((item) => isPhotoAttachment(item));
         const label =
           cards[0]?.groupLabel?.trim() ||
           (groupKey === "__photos__"
@@ -327,7 +351,12 @@ export function AttachmentPreviewGallery({
                 <span className="ml-1.5 font-normal">· {countLabel}</span>
               </h4>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              className={cn(
+                "grid gap-3",
+                isPhotoGroup ? "sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1",
+              )}
+            >
               {cards.map((item) => {
                 const previewUrl = item.previewUrl || urls[item.id];
                 const previewError = errors[item.id];
@@ -338,12 +367,32 @@ export function AttachmentPreviewGallery({
                     key={item.id}
                     className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
                   >
-                    <div className="relative aspect-[4/3] bg-muted/40">
+                    <div
+                      className={cn(
+                        "relative bg-muted/40",
+                        isPhotoGroup
+                          ? "aspect-[4/3]"
+                          : "h-[min(75vh,52rem)] min-h-[28rem] w-full",
+                      )}
+                    >
                       <PreviewMedia
                         item={item}
                         previewUrl={previewUrl}
                         previewError={previewError}
+                        fit={isPhotoGroup ? "cover" : "contain"}
                       />
+                      {canPreview && previewUrl ? (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="secondary"
+                          className="absolute right-2 top-2 z-10 bg-background/95 shadow-sm"
+                          aria-label="Maximize preview"
+                          onClick={() => setExpandedItem(item)}
+                        >
+                          <Expand className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                      ) : null}
                     </div>
                     <div className="space-y-1.5 p-3">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -356,7 +405,7 @@ export function AttachmentPreviewGallery({
                         {canPreview ? (
                           <button
                             type="button"
-                            className="text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
+                            className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
                             disabled={openPreviewDisabled}
                             onClick={() => void handleOpen(item)}
                           >
@@ -365,7 +414,7 @@ export function AttachmentPreviewGallery({
                         ) : null}
                         <button
                           type="button"
-                          className="text-xs font-medium text-foreground hover:underline disabled:opacity-50"
+                          className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-foreground hover:underline disabled:opacity-50"
                           disabled={downloadingId === item.id}
                           onClick={() => void handleDownload(item)}
                         >
@@ -412,7 +461,7 @@ export function AttachmentPreviewGallery({
                       {canPreview ? (
                         <button
                           type="button"
-                          className="text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
+                          className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
                           disabled={openPreviewDisabled}
                           onClick={() => void handleOpen(item)}
                         >
@@ -421,7 +470,7 @@ export function AttachmentPreviewGallery({
                       ) : null}
                       <button
                         type="button"
-                        className="text-xs font-medium text-foreground hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-foreground hover:underline disabled:opacity-50"
                         disabled={downloadingId === item.id}
                         onClick={() => void handleDownload(item)}
                       >
@@ -435,6 +484,56 @@ export function AttachmentPreviewGallery({
           </div>
         </div>
       ) : null}
+
+      <Dialog
+        open={expandedItem != null}
+        onOpenChange={(open) => {
+          if (!open) setExpandedItem(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton
+          className="flex h-[min(92vh,56rem)] w-[min(96vw,72rem)] max-w-none flex-col gap-0 overflow-hidden p-0"
+        >
+          <DialogHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="truncate text-base font-medium">
+              {expandedItem?.title?.trim() || expandedItem?.fileName || "Preview"}
+            </DialogTitle>
+            {expandedItem ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={openPreviewDisabled}
+                  onClick={() => void handleOpen(expandedItem)}
+                >
+                  {resolveOpenLabel(expandedItem)}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={downloadingId === expandedItem.id}
+                  onClick={() => void handleDownload(expandedItem)}
+                >
+                  {downloadingId === expandedItem.id ? "Downloading…" : "Download"}
+                </Button>
+              </div>
+            ) : null}
+          </DialogHeader>
+          <div className="min-h-0 flex-1 bg-muted/30">
+            {expandedItem ? (
+              <PreviewMedia
+                item={expandedItem}
+                previewUrl={expandedPreviewUrl}
+                previewError={errors[expandedItem.id]}
+                fit="contain"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

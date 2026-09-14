@@ -21,6 +21,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { DashboardContentSkeleton, PageHeaderSkeleton } from "@/components/ui/page-skeletons";
 import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { getErrorMessage } from "@/lib/api/error";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
   platformCreateTenantEnvironment,
   platformDeleteTenant,
@@ -403,20 +404,20 @@ export function PlatformHomePageClient() {
 
   const copyTenantId = useCallback(
     async (id: string) => {
-      try {
-        await navigator.clipboard.writeText(id);
+      const ok = await copyTextToClipboard(id);
+      if (ok) {
         notify({
           level: "success",
           title: "Copied",
           message: "Tenant ID copied to clipboard.",
         });
-      } catch {
-        notify({
-          level: "error",
-          title: "Copy failed",
-          message: "Clipboard is not available in this browser context.",
-        });
+        return;
       }
+      notify({
+        level: "error",
+        title: "Copy failed",
+        message: "Clipboard is not available in this browser context.",
+      });
     },
     [notify],
   );

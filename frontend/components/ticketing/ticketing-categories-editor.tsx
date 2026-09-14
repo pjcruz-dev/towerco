@@ -170,7 +170,7 @@ export function TicketingCategoriesEditor({
 
       <div className="max-h-[320px] overflow-auto rounded-lg border border-border">
         <table className="w-full text-left text-[13px]">
-          <thead className="sticky top-0 z-10 border-b border-border bg-muted/95 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+          <thead className="sticky top-0 z-10 border-b border-border bg-muted text-xs font-medium text-muted-foreground">
             <tr>
               <th className="px-3 py-2">Label</th>
               <th className="hidden px-3 py-2 sm:table-cell">Slug</th>

@@ -35,8 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const canReceiveNotifications = useMemo(() => {
     return (
       hasPermission(scopedUser, [permissions.eApprovalView]) ||
-      hasPermission(scopedUser, [permissions.rolloutView]) ||
-      hasPermission(scopedUser, [permissions.rolloutGateApprove])
+      hasPermission(scopedUser, [permissions.ticketingView])
     );
   }, [scopedUser]);
 
@@ -59,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <GlobalCommandPaletteProvider>
       <AssistantDrawerProvider enabled={canUseAssistant}>
         <SidebarProvider>
-          <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
+          <div className="app-shell-viewport flex w-full overflow-hidden bg-background text-foreground antialiased print:h-auto print:overflow-visible">
             <AppSidebar />
             <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent print:overflow-visible">
               <AppHeader />

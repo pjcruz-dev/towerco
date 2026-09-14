@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
   createEApprovalPublicFormLink,
   fetchEApprovalPublicFormLinks,
@@ -97,12 +98,12 @@ export function EApprovalPublicLinksPanel({ formId, formPublished }: Props) {
   });
 
   const copyUrl = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyTextToClipboard(url);
+    if (ok) {
       push({ level: "success", title: "Copied", message: "Public form URL copied to clipboard." });
-    } catch {
-      push({ level: "warning", title: "Copy failed", message: url });
+      return;
     }
+    push({ level: "warning", title: "Copy failed", message: url });
   };
 
   const revealMutation = useMutation({

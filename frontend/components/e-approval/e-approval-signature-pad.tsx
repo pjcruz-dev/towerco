@@ -145,6 +145,8 @@ export function EApprovalSignaturePad({
       return;
     }
 
+    // Safari can scroll / steal the gesture unless we claim the pointer early.
+    event.preventDefault();
     drawingRef.current = true;
     canvasRef.current?.setPointerCapture(event.pointerId);
     const { x, y } = pointerPos(event);
@@ -162,6 +164,7 @@ export function EApprovalSignaturePad({
       return;
     }
 
+    event.preventDefault();
     const { x, y } = pointerPos(event);
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -173,7 +176,11 @@ export function EApprovalSignaturePad({
     }
 
     drawingRef.current = false;
-    canvasRef.current?.releasePointerCapture(event.pointerId);
+    try {
+      canvasRef.current?.releasePointerCapture(event.pointerId);
+    } catch {
+      // Safari may throw if capture was already released.
+    }
     exportCanvas();
   };
 
@@ -276,7 +283,7 @@ export function EApprovalSignaturePad({
             onPointerDown={startDraw}
             onPointerMove={draw}
             onPointerUp={endDraw}
-            onPointerLeave={endDraw}
+            onPointerCancel={endDraw}
           />
         </div>
       ) : null}

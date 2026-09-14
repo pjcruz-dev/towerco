@@ -23,8 +23,9 @@ export function RequestFocusShell({
   backLabel = "All forms",
 }: Props) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="flex min-h-app-shell flex-col bg-background text-foreground">
+      {/* Opaque sticky bar — Safari + backdrop-filter can wash content through translucent headers. */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background">
         <div
           className={cn(
             "mx-auto flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8",

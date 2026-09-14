@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Paperclip, X } from "lucide-react";
 
@@ -36,6 +36,7 @@ export function EApprovalFileField({
   onRemoveSaved,
   removingSavedId = null,
 }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const { allowedFileTypes, maxFiles, maxFileSizeMb, minFileSizeKb } = parseFileFieldOptions(field);
   const multiple = maxFiles > 1;
@@ -95,21 +96,31 @@ export function EApprovalFileField({
 
   return (
     <div className="space-y-2">
-      <input
-        type="file"
-        disabled={disabled || remainingSlots === 0}
-        accept={accept}
-        multiple={multiple}
-        className={cn(
-          "block w-full cursor-pointer rounded-lg border border-input bg-background px-2.5 py-2 text-sm text-foreground",
-          "file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-        )}
-        onChange={(event) => {
-          mergeFiles(event.target.files);
-          event.target.value = "";
-        }}
-      />
+      {/* Button + hidden input: Safari file chrome often breaks with styled native file inputs. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled || remainingSlots === 0}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip className="h-3.5 w-3.5" aria-hidden />
+          {remainingSlots === 0 ? "File limit reached" : multiple ? "Add files" : "Choose file"}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          disabled={disabled || remainingSlots === 0}
+          accept={accept}
+          multiple={multiple}
+          className="sr-only"
+          onChange={(event) => {
+            mergeFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+      </div>
       <p className="text-xs text-muted-foreground">
         {multiple ? `Up to ${maxFiles} files` : "Single file"} · {allowedLabel}
         {sizeHint ? ` · ${sizeHint}` : ""}

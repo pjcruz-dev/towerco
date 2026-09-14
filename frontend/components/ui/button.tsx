@@ -15,6 +15,8 @@ const buttonVariants = cva(
     "group/button inline-flex shrink-0 items-center justify-center gap-2",
     "rounded-md border border-transparent bg-clip-padding",
     "text-sm font-medium whitespace-nowrap",
+    // Safari: keep label/icon paint visible; avoid native button chrome fighting styles.
+    "[-webkit-appearance:none] appearance-none",
     "transition-colors outline-none select-none",
     "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50",

@@ -10,7 +10,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 export function PlatformConsoleShell({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-background text-foreground antialiased">
+      <div className="app-shell-viewport flex w-full overflow-hidden bg-background text-foreground antialiased">
         <PlatformConsoleSidebar />
         <SidebarInset className="flex flex-1 flex-col overflow-hidden bg-transparent">
           <PlatformConsoleHeader />

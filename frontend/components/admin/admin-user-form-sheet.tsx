@@ -17,6 +17,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { getErrorMessage } from "@/lib/api/error";
+import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
   createAdminUser,
   updateAdminUser,
@@ -170,13 +171,13 @@ export function AdminUserFormSheet({
     if (!generatedPassword) {
       return;
     }
-    try {
-      await navigator.clipboard.writeText(generatedPassword);
+    const ok = await copyTextToClipboard(generatedPassword);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      notify({ level: "error", title: "Copy failed", message: "Copy the password manually." });
+      return;
     }
+    notify({ level: "error", title: "Copy failed", message: "Copy the password manually." });
   }
 
   const roleGroups = useMemo(() => {

@@ -129,7 +129,7 @@ export function PlatformLoginPageClient() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+    <div className="flex min-h-app-shell items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Superadmin console</h1>
         <p className="mt-1 text-sm text-muted-foreground">

@@ -551,9 +551,9 @@ export function DocExtractBatchDetailPageClient() {
           <div className="overflow-hidden rounded-lg border border-border">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[13px]">
-                <thead className="border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground">
+                <thead className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
                   <tr>
-                    <th className="sticky left-0 z-10 bg-muted/30 px-4 py-3 whitespace-nowrap">File Name</th>
+                    <th className="sticky left-0 z-10 bg-muted px-4 py-3 whitespace-nowrap">File Name</th>
                     {visibleFields.map((field) => (
                       <th key={field.key} className="px-4 py-3 whitespace-nowrap">
                         <span>{field.label}</span>
@@ -727,7 +727,7 @@ export function DocExtractBatchDetailPageClient() {
               {tableViewer && tableViewer.data.rows.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="min-w-full text-left text-[13px]">
-                    <thead className="border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground">
+                    <thead className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
                       <tr>
                         {tableViewer.data.columns.map((column) => (
                           <th key={column.key} className="px-3 py-2 whitespace-nowrap">

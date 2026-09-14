@@ -1779,7 +1779,7 @@ export function EApprovalVisualFormBuilder({
                             className={cn(
                               "flex items-start gap-0.5 border-b border-border bg-muted/40 px-1 py-1",
                               largeFormMode &&
-                                "sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-sm",
+                                "sticky top-0 z-10 border-b border-border bg-card",
                               // Sticky first-section headers must not steal catalog drops aimed at later sections.
                               isCatalogDragging && largeFormMode && "pointer-events-none",
                             )}
