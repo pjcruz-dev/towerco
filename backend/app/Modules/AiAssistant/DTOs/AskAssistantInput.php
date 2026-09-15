@@ -13,6 +13,7 @@ final readonly class AskAssistantInput
         public ?string $pagePath = null,
         public bool $planMode = false,
         public ?string $preferredModel = null,
+        public ?bool $useRetrieval = null,
     ) {}
 
     /**
@@ -22,7 +23,8 @@ final readonly class AskAssistantInput
      *   module_context?: string|null,
      *   page_path?: string|null,
      *   plan_mode?: bool|null,
-     *   preferred_model?: string|null
+     *   preferred_model?: string|null,
+     *   use_retrieval?: bool|null
      * }  $validated
      */
     public static function fromValidated(array $validated): self
@@ -41,6 +43,9 @@ final readonly class AskAssistantInput
             planMode: (bool) ($validated['plan_mode'] ?? false),
             preferredModel: isset($validated['preferred_model']) && is_string($validated['preferred_model'])
                 ? trim($validated['preferred_model'])
+                : null,
+            useRetrieval: array_key_exists('use_retrieval', $validated)
+                ? (bool) $validated['use_retrieval']
                 : null,
         );
     }

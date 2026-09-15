@@ -438,6 +438,9 @@ export function bubbleFromData(data: DashboardNormalizedData, limit = 12): Dashb
 }
 
 export function dataSatisfiesKind(kind: DashboardWidgetKind, data: DashboardNormalizedData): boolean {
+  if (kind === "dyn_html_report") {
+    return true;
+  }
   const reqs = kindDataRequirements(kind);
   if (reqs.length === 0) return false;
   return reqs.every((req) => {

@@ -167,7 +167,7 @@ export function buildDynamicBoardWidgets({
     }
 
     const entry = getCatalogEntry(id) ?? catalog.find((item) => item.id === baseId);
-    if (entry && dataSatisfiesKind(entry.kind, data)) {
+    if (entry && (entry.bindMode === "always" || dataSatisfiesKind(entry.kind, data))) {
       const help =
         (entry.id === "kpis" || baseId === "kpis") && MODULE_KPI_DATA_HELP[moduleId]
           ? MODULE_KPI_DATA_HELP[moduleId]

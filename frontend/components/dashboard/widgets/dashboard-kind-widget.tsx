@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardCatalogWidgetShell } from "@/components/dashboard/dashboard-catalog-widget-shell";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
@@ -377,6 +379,31 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
             count={teaser?.count}
             message={teaser?.message}
           />
+        </DashboardWidget>
+      );
+    }
+    case "dyn_html_report": {
+      const reportSlug = settings.reportSlug ? String(settings.reportSlug) : "";
+      const href = settings.reportHref
+        ? String(settings.reportHref)
+        : reportSlug
+          ? `/dynamic-entities/html-reports/${reportSlug}`
+          : "/dynamic-entities/html-reports";
+      return (
+        <DashboardWidget title={heading} description={description} dense={dense}>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {reportSlug
+                ? `Pinned HTML report · ${reportSlug}`
+                : "Configure a report slug in widget settings."}
+            </p>
+            <Link
+              href={href}
+              className="inline-flex text-sm font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Open report
+            </Link>
+          </div>
         </DashboardWidget>
       );
     }

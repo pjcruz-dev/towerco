@@ -100,6 +100,9 @@ final class SidebarNavService
 
             $existing = SidebarNavItem::query()->where('key', $key)->first();
             if ($existing) {
+                if ($existing->is_system) {
+                    $this->syncSystemSeedMetadata($existing, $node);
+                }
                 $children = $node['children'] ?? [];
                 if (is_array($children) && $children !== []) {
                     $this->syncMissingSeedNodes($children, (string) $existing->id);
@@ -354,6 +357,69 @@ final class SidebarNavService
         ];
 
         return is_string($href) && in_array($href, $exactIndexes, true);
+    }
+
+    /**
+     * Refresh catalog metadata for seeded system nodes (title, href, sort order, permissions).
+     *
+     * @param  array<string, mixed>  $node
+     */
+    private function syncSystemSeedMetadata(SidebarNavItem $existing, array $node): void
+    {
+        $perms = array_values(array_filter(array_map('strval', $node['required_permissions'] ?? [])));
+        $dirty = false;
+
+        $title = (string) ($node['title'] ?? $existing->title);
+        if ($title !== '' && $existing->title !== $title) {
+            $existing->title = $title;
+            $dirty = true;
+        }
+
+        $href = array_key_exists('href', $node) ? $node['href'] : $existing->href;
+        if ($existing->href !== $href) {
+            $existing->href = is_string($href) ? $href : null;
+            $dirty = true;
+        }
+
+        $icon = array_key_exists('icon', $node) ? $node['icon'] : $existing->icon;
+        if ($existing->icon !== $icon) {
+            $existing->icon = is_string($icon) && $icon !== '' ? $icon : null;
+            $dirty = true;
+        }
+
+        $sortOrder = (int) ($node['sort_order'] ?? $existing->sort_order);
+        if ((int) $existing->sort_order !== $sortOrder) {
+            $existing->sort_order = $sortOrder;
+            $dirty = true;
+        }
+
+        $entitySlug = array_key_exists('entity_slug', $node) ? $node['entity_slug'] : $existing->entity_slug;
+        if ($existing->entity_slug !== $entitySlug) {
+            $existing->entity_slug = is_string($entitySlug) && $entitySlug !== '' ? $entitySlug : null;
+            $dirty = true;
+        }
+
+        $match = ($node['permissions_match'] ?? 'all') === 'any' ? 'any' : 'all';
+        if ($existing->permissions_match !== $match) {
+            $existing->permissions_match = $match;
+            $dirty = true;
+        }
+
+        if ($existing->required_permissions !== $perms) {
+            $existing->required_permissions = $perms;
+            $existing->permission_key = $perms[0] ?? null;
+            $dirty = true;
+        }
+
+        $module = array_key_exists('module', $node) ? $node['module'] : $existing->module;
+        if ($existing->module !== $module) {
+            $existing->module = is_string($module) && $module !== '' ? $module : null;
+            $dirty = true;
+        }
+
+        if ($dirty) {
+            $existing->save();
+        }
     }
 
     /**

@@ -9,6 +9,12 @@ namespace App\Modules\Tenancy\Support;
  */
 final class TenantRbacSystemRoles
 {
+    /** Primary full-access role assigned at tenant bootstrap. */
+    public const FULL_ADMIN = 'tenant_admin';
+
+    /** Legacy / alias full-access roles kept in sync with all enabled permissions. */
+    public const FULL_ACCESS_ALIASES = ['administrator', 'admin'];
+
     /** Core cross-module tiers shown first in Team & Access. */
     public const CORE_BASELINE = ['tenant_admin', 'billing', 'viewer', 'manager'];
 

@@ -22,6 +22,8 @@ final class CursorLlmProvider implements LlmProviderInterface
         private readonly string $apiKey,
         private readonly string $baseUrl,
         private readonly string $modelId,
+        /** @var list<string> */
+        private readonly array $allowedModels = [],
         private readonly int $maxWaitSeconds = 120,
         private readonly int $pollIntervalMs = 1500,
         private readonly int $requestTimeoutSeconds = 30,
@@ -31,6 +33,7 @@ final class CursorLlmProvider implements LlmProviderInterface
     {
         $this->assertConfigured();
 
+        $model = $this->resolveModel($prompt->modelOverride);
         $started = hrtime(true);
         $endpoint = rtrim($this->baseUrl, '/').'/agents';
 
@@ -42,7 +45,7 @@ final class CursorLlmProvider implements LlmProviderInterface
                     'text' => $this->buildPromptText($prompt),
                 ],
                 'model' => [
-                    'id' => $this->modelId,
+                    'id' => $model,
                 ],
             ]);
 
@@ -71,7 +74,7 @@ final class CursorLlmProvider implements LlmProviderInterface
 
         return new LlmCompletionResult(
             answer: $answer,
-            modelName: $this->modelId,
+            modelName: $model,
             promptTokens: null,
             completionTokens: null,
             latencyMs: (int) max(0, (hrtime(true) - $started) / 1_000_000),
@@ -83,6 +86,40 @@ final class CursorLlmProvider implements LlmProviderInterface
     public function modelName(): string
     {
         return $this->modelId;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function allowedModels(): array
+    {
+        $models = $this->allowedModels !== [] ? $this->allowedModels : [$this->modelId];
+        if (! in_array($this->modelId, $models, true)) {
+            array_unshift($models, $this->modelId);
+        }
+
+        return array_values(array_unique($models));
+    }
+
+    private function resolveModel(?string $override): string
+    {
+        $candidate = trim((string) $override);
+        if ($candidate === '') {
+            return $this->modelId;
+        }
+
+        $aliases = (array) config('ai_assistant.cursor.model_aliases', []);
+        $mapped = $aliases[$candidate] ?? null;
+        if (is_string($mapped) && trim($mapped) !== '') {
+            $candidate = trim($mapped);
+        }
+
+        $allowed = $this->allowedModels();
+        if (! in_array($candidate, $allowed, true)) {
+            return $this->modelId;
+        }
+
+        return $candidate;
     }
 
     private function assertConfigured(): void

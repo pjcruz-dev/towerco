@@ -86,6 +86,28 @@ final class DynRecordWorkflowActionService
             $thisPatchValues['status'] = $nextStatus;
         }
 
+        try {
+            $merged = array_merge($values, $thisPatchValues);
+            $hooked = app(DynEntityHookRunner::class)->applyBefore(
+                $entity,
+                $merged,
+                $actor,
+                'before_action',
+                $values,
+                (string) $record->id,
+            );
+            foreach ($hooked as $key => $val) {
+                if (($values[$key] ?? null) !== $val) {
+                    $thisPatchValues[$key] = $val;
+                    if ($key === 'status') {
+                        $nextStatus = is_string($val) ? $val : $nextStatus;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // before_action hooks must not block workflow buttons.
+        }
+
         $payload = ['values' => $thisPatchValues];
         if ($nextStatus !== null) {
             $payload['status'] = $nextStatus;

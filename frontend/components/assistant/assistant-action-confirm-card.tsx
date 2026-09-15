@@ -79,6 +79,29 @@ export function AssistantActionConfirmCard({
         </p>
       </div>
 
+      {Object.keys(proposal.preview ?? {}).length > 0 ? (
+        <dl className="grid gap-1.5 rounded-md border border-border/80 bg-muted/30 px-2.5 py-2 text-[11px]">
+          {Object.entries(proposal.preview).map(([key, value]) => {
+            if (value == null || value === "") return null;
+            const display =
+              Array.isArray(value)
+                ? value.map(String).join(", ")
+                : typeof value === "object"
+                  ? null
+                  : String(value);
+            if (display == null || display === "") return null;
+            return (
+              <div key={key} className="flex gap-2">
+                <dt className="shrink-0 font-medium capitalize text-muted-foreground">
+                  {key.replace(/_/g, " ")}
+                </dt>
+                <dd className="min-w-0 truncate text-foreground">{display}</dd>
+              </div>
+            );
+          })}
+        </dl>
+      ) : null}
+
       <div className="space-y-2">
         {(proposal.editable_fields ?? []).map((field) => (
           <div key={field.key} className="space-y-1">
@@ -128,7 +151,29 @@ export function AssistantActionConfirmCard({
           onClick={() => {
             const payload: Record<string, unknown> = { ...proposal.payload };
             for (const [key, value] of Object.entries(fields)) {
-              payload[key] = value.trim() === "" ? null : value.trim();
+              const trimmed = value.trim();
+              if (key === "pin_to_dashboard") {
+                payload[key] =
+                  trimmed === "1" || trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "yes";
+                continue;
+              }
+              if (key === "replace") {
+                payload[key] =
+                  trimmed === "1" || trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "yes";
+                continue;
+              }
+              if (key === "roles" && trimmed.includes(",")) {
+                payload[key] = trimmed
+                  .split(",")
+                  .map((part) => part.trim())
+                  .filter(Boolean);
+                continue;
+              }
+              if (key === "roles" && trimmed !== "") {
+                payload[key] = [trimmed];
+                continue;
+              }
+              payload[key] = trimmed === "" ? null : trimmed;
             }
             onConfirm(proposal.id, payload);
           }}

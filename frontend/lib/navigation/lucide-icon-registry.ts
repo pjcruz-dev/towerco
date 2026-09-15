@@ -1,6 +1,7 @@
 import {
   Activity,
   Archive,
+  Bot,
   Building2,
   CircleHelp,
   ClipboardCheck,
@@ -22,6 +23,7 @@ import {
 const ICON_BY_NAME: Record<string, LucideIcon> = {
   Activity,
   Archive,
+  Bot,
   Building2,
   CircleHelp,
   ClipboardCheck,

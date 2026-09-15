@@ -155,7 +155,7 @@ export function ManageAiPromptsPageClient() {
       <div className={cn(adminPageShellClass, "h-[calc(100vh-4rem)] gap-4")}>
         <WorkspacePageHeader
           eyebrow="System Core"
-          title="Manage AI Prompts"
+          title="AI System Prompts"
           description="Edit modular Ask TowerOS system instructions assembled by intent. Markdown/text only — never executed as code. Uses your configured LLM provider (`AI_ASSISTANT_LLM_PROVIDER`), not Active Security Tokens."
         />
 

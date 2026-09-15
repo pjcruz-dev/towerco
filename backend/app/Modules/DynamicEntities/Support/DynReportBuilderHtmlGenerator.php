@@ -93,47 +93,48 @@ CSS;
     return currency ? (currency + s) : s;
   }
 
+  function renderData(data) {
+    const columns = data.columns || [];
+    const rows = data.rows || [];
+    const totals = data.totals || {};
+
+    thead.innerHTML = '<tr>' + columns.map(c => '<th class="' + (c.numeric ? 'num' : '') + '">' + (c.label || c.key) + '</th>').join('') + '</tr>';
+    tbody.innerHTML = rows.length
+      ? rows.map(r => '<tr>' + columns.map(c => {
+          const v = r[c.key];
+          const text = c.numeric ? fmt(v) : String(v ?? '');
+          return '<td class="' + (c.numeric ? 'num' : '') + '">' + text + '</td>';
+        }).join('') + '</tr>').join('')
+      : '<tr><td colspan="' + Math.max(columns.length, 1) + '">No matching records.</td></tr>';
+
+    if (totals && Object.keys(totals).length) {
+      tfoot.innerHTML = '<tr>' + columns.map(c => {
+        if (c.key === columns[0]?.key) return '<td>Total</td>';
+        if (c.numeric && totals[c.key] != null) return '<td class="num">' + fmt(totals[c.key]) + '</td>';
+        return '<td></td>';
+      }).join('') + '</tr>';
+    } else {
+      tfoot.innerHTML = '';
+    }
+  }
+
   async function load() {
     try {
-      const slug = def.saved_slug || '';
-      const res = await fetch('/api/v1/dynamic-entities/report-builder/preview', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-XSRF-TOKEN': (document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1]
-            ? decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1])
-            : '',
-        },
-        body: JSON.stringify(def),
-      });
-      if (!res.ok) throw new Error('Preview failed (' + res.status + ')');
-      const json = await res.json();
-      const data = json.data || json;
-      const columns = data.columns || [];
-      const rows = data.rows || [];
-      const totals = data.totals || {};
-
-      thead.innerHTML = '<tr>' + columns.map(c => '<th class="' + (c.numeric ? 'num' : '') + '">' + (c.label || c.key) + '</th>').join('') + '</tr>';
-      tbody.innerHTML = rows.length
-        ? rows.map(r => '<tr>' + columns.map(c => {
-            const v = r[c.key];
-            const text = c.numeric ? fmt(v) : String(v ?? '');
-            return '<td class="' + (c.numeric ? 'num' : '') + '">' + text + '</td>';
-          }).join('') + '</tr>').join('')
-        : '<tr><td colspan="' + Math.max(columns.length, 1) + '">No matching records.</td></tr>';
-
-      if (totals && Object.keys(totals).length) {
-        tfoot.innerHTML = '<tr>' + columns.map(c => {
-          if (c.key === columns[0]?.key) return '<td>Total</td>';
-          if (c.numeric && totals[c.key] != null) return '<td class="num">' + fmt(totals[c.key]) + '</td>';
-          return '<td></td>';
-        }).join('') + '</tr>';
-      } else {
-        tfoot.innerHTML = '';
+      const dataEl = document.getElementById('report-builder-data');
+      if (dataEl) {
+        const embedded = JSON.parse(dataEl.textContent || '{}');
+        renderData(embedded);
+        return;
       }
+
+      // Fallback: ask parent workspace to refresh (srcDoc iframe cannot call Laravel with auth).
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'toweros-html-report-refresh', slug: def.saved_slug || '' }, '*');
+        tbody.innerHTML = '<tr><td>Refreshing live data…</td></tr>';
+        return;
+      }
+
+      throw new Error('No embedded preview data');
     } catch (e) {
       tbody.innerHTML = '<tr><td>Unable to load live data. Open this report from the TowerOS workspace while signed in. ' + (e && e.message ? e.message : '') + '</td></tr>';
     }

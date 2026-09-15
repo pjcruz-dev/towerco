@@ -41,6 +41,7 @@ export type DashboardWidgetKind =
   | "page_tip"
   | "page_attention"
   | "page_exports"
+  | "dyn_html_report"
   | "custom";
 
 export type DashboardWidgetCategory =
@@ -712,6 +713,21 @@ export const DASHBOARD_WIDGET_CATALOG: DashboardCatalogEntry[] = [
     removable: false,
     hideable: false,
     pickerGroup: "sections",
+    modules: ["workspace"],
+  },
+  {
+    id: "dyn_html_report",
+    kind: "dyn_html_report",
+    label: "HTML report",
+    description: "Pinned Dynamic Entities HTML report built from Ask TowerOS or Report Builder.",
+    purpose: "Best for: opening a saved report from the home board.",
+    category: "operations",
+    hazeSource: "shared",
+    defaultSpan: "half",
+    allowedSpans: ["full", "half", "third"],
+    bindMode: "always",
+    pickerGroup: "other",
+    defaultSettings: { showDescription: true },
     modules: ["workspace"],
   },
   {

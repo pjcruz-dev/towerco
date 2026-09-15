@@ -194,6 +194,13 @@ final class TenantRbacModuleRoleTemplates
                 'dynamic_entities:records:manage',
                 'dynamic_entities:fields:manage',
                 'dynamic_entities:entities:manage',
+                'printables:manage',
+                'html_reports:manage',
+                'workflows:manage',
+                'email_templates:manage',
+                'automation:manage',
+                'search_index:manage',
+                'entity_hooks:manage',
             ],
         ];
     }
@@ -214,6 +221,7 @@ final class TenantRbacModuleRoleTemplates
                 'ai_assistant:tools:use',
                 'ai_assistant:actions:execute',
                 'ai_assistant:knowledge:manage',
+                'ai_assistant:prompts:manage',
                 'ai_assistant:conversations:audit',
             ],
         ];

@@ -8,6 +8,7 @@ use App\Modules\AdminOne\Models\TenantPermission;
 use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Tenancy\Support\TenantRbacModuleRoleTemplates;
 use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
+use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -55,9 +56,9 @@ class TenantRbacBaselineService
 
         $this->syncRole($guard, 'tenant_admin', $enabled);
 
-        // Custom full-access role used by some tenants (e.g. staging admin); keep in sync
-        // with enabled modules without creating the role if it does not exist.
-        $this->syncExistingRole($guard, 'administrator', $enabled);
+        foreach (TenantRbacSystemRoles::FULL_ACCESS_ALIASES as $alias) {
+            $this->syncRole($guard, $alias, $enabled);
+        }
     }
 
     /**
@@ -98,7 +99,7 @@ class TenantRbacBaselineService
             ->with('permissions:id,name')
             ->get()
             ->each(function (TenantRole $role) use ($enabled): void {
-                if (in_array($role->name, ['tenant_admin', 'administrator'], true)) {
+                if (in_array($role->name, array_merge(['tenant_admin'], TenantRbacSystemRoles::FULL_ACCESS_ALIASES), true)) {
                     return;
                 }
 

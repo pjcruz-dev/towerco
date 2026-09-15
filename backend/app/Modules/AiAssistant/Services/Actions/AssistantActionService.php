@@ -6,6 +6,7 @@ namespace App\Modules\AiAssistant\Services\Actions;
 
 use App\Modules\AiAssistant\DTOs\ActionExecutionResult;
 use App\Modules\AiAssistant\Models\AiAssistantProposedAction;
+use App\Modules\AiAssistant\Services\Actions\UpdateUserRolesAction;
 use App\Modules\AiAssistant\Support\AssistantProposedActionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
@@ -36,6 +37,7 @@ final class AssistantActionService
         ?string $moduleContext,
         ?string $conversationId,
         ?string $messageId,
+        ?string $preferredModel = null,
     ): ?array {
         if (! (bool) config('ai_assistant.actions.enabled', true)) {
             return null;
@@ -47,7 +49,30 @@ final class AssistantActionService
 
         $match = $this->router->match($question, $moduleContext);
         if ($match === null) {
-            return null;
+            $pendingRole = $this->maybeResurfacePendingUserRoles(
+                viewer: $viewer,
+                question: $question,
+                conversationId: $conversationId,
+            );
+            if ($pendingRole !== null) {
+                return $pendingRole;
+            }
+
+            return $this->maybeRefinePendingHtmlReport(
+                viewer: $viewer,
+                question: $question,
+                conversationId: $conversationId,
+                messageId: $messageId,
+                preferredModel: $preferredModel,
+            );
+        }
+
+        $args = $match['args'];
+        if (is_string($moduleContext) && $moduleContext !== '' && ! isset($args['module_context'])) {
+            $args['module_context'] = $moduleContext;
+        }
+        if (is_string($preferredModel) && trim($preferredModel) !== '') {
+            $args['preferred_model'] = trim($preferredModel);
         }
 
         try {
@@ -55,15 +80,155 @@ final class AssistantActionService
                 viewer: $viewer,
                 actionName: $match['action'],
                 question: $question,
-                args: $match['args'],
+                args: $args,
                 conversationId: $conversationId,
                 messageId: $messageId,
             );
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Throwable) {
             return null;
         }
 
         return $this->asApiPayload($proposal);
+    }
+
+    /**
+     * Re-show a pending role-update card when the user says proceed / confirm / yes.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function maybeResurfacePendingUserRoles(
+        TenantUser $viewer,
+        string $question,
+        ?string $conversationId,
+    ): ?array {
+        $q = mb_strtolower(trim($question));
+        if (! in_array($q, ['proceed', 'confirm', 'yes', 'ok', 'okay', 'do it', 'go ahead'], true)) {
+            return null;
+        }
+
+        $query = AiAssistantProposedAction::query()
+            ->where('user_id', $viewer->id)
+            ->where('action', 'update_user_roles')
+            ->where('status', AssistantProposedActionStatus::PENDING)
+            ->where(function ($q): void {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->orderByDesc('created_at');
+
+        if (is_string($conversationId) && $conversationId !== '') {
+            $query->where('conversation_id', $conversationId);
+        }
+
+        $pending = $query->first();
+        if (! $pending instanceof AiAssistantProposedAction) {
+            return null;
+        }
+
+        return $this->asApiPayload($pending);
+    }
+
+    /**
+     * When the user follows up on a pending HTML report ("TANZA_CAVITE only", "with bar chart"),
+     * update that draft without requiring another full "create dashboard" phrase.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function maybeRefinePendingHtmlReport(
+        TenantUser $viewer,
+        string $question,
+        ?string $conversationId,
+        ?string $messageId,
+        ?string $preferredModel,
+    ): ?array {
+        if (! $this->looksLikeHtmlReportRefine($question)) {
+            return null;
+        }
+
+        $query = AiAssistantProposedAction::query()
+            ->where('user_id', $viewer->id)
+            ->where('action', 'create_html_report_from_prompt')
+            ->where('status', AssistantProposedActionStatus::PENDING)
+            ->where(function ($q): void {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->orderByDesc('created_at');
+
+        if (is_string($conversationId) && $conversationId !== '') {
+            $query->where('conversation_id', $conversationId);
+        }
+
+        $pending = $query->first();
+        if (! $pending instanceof AiAssistantProposedAction) {
+            return null;
+        }
+
+        $payload = is_array($pending->payload) ? $pending->payload : [];
+        $definition = is_array($payload['definition'] ?? null) ? $payload['definition'] : [];
+        if ($definition === []) {
+            return null;
+        }
+
+        $basePrompt = trim((string) ($payload['prompt'] ?? $definition['title'] ?? 'tower sites dashboard'));
+        $combinedPrompt = trim($basePrompt.' '.$question);
+
+        try {
+            $action = $this->registry->get('create_html_report_from_prompt');
+            $this->assertModuleAndDomain($viewer, $action->requiredModule(), $action->requiredDomainPermissions());
+
+            $args = [
+                'entity_slug' => $definition['entity_slug'] ?? $payload['entity_slug'] ?? null,
+                'title' => $payload['title'] ?? $definition['title'] ?? null,
+                'preferred_model' => $preferredModel,
+                'base_definition' => $definition,
+                'refine' => true,
+            ];
+
+            $draft = $action->propose($viewer, $combinedPrompt, $args);
+        } catch (Throwable) {
+            return null;
+        }
+
+        // Supersede the previous pending card so the UI only confirms the refined draft.
+        $pending->forceFill([
+            'status' => AssistantProposedActionStatus::CANCELLED,
+            'rejection_reason' => 'superseded_by_refine',
+        ])->save();
+
+        $ttlMinutes = max(5, (int) config('ai_assistant.actions.proposal_ttl_minutes', 30));
+        $proposal = AiAssistantProposedAction::query()->create([
+            'user_id' => $viewer->id,
+            'conversation_id' => $conversationId,
+            'message_id' => $messageId,
+            'action' => 'create_html_report_from_prompt',
+            'status' => AssistantProposedActionStatus::PENDING,
+            'payload' => $draft->payload,
+            'preview' => [
+                'title' => $draft->title,
+                'summary' => $draft->summary,
+                'preview' => $draft->preview,
+                'editable_fields' => $draft->editableFields,
+                'confirm_label' => $draft->confirmLabel,
+                'module_key' => $draft->moduleKey,
+            ],
+            'expires_at' => now()->addMinutes($ttlMinutes),
+        ]);
+
+        return $this->asApiPayload($proposal);
+    }
+
+    private function looksLikeHtmlReportRefine(string $question): bool
+    {
+        $q = mb_strtolower(trim($question));
+        if ($q === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/\b(only|filter|bar\s+chart|pie\s+chart|line\s+chart|with\s+bar|with\s+chart|confirm\s+with|group\s+by|by\s+status|by\s+region)\b/u',
+            $q,
+        ) || (bool) preg_match('/\b[A-Z]{3,}(?:_[A-Z0-9]+)+\b/u', $question);
     }
 
     /**
@@ -164,8 +329,34 @@ final class AssistantActionService
             }
         }
 
+        if ($proposal->action === 'update_user_roles') {
+            $payload = UpdateUserRolesAction::normalizeConfirmPayload($payload);
+        }
+
         try {
             $validated = Validator::make($payload, $action->argumentRules())->validate();
+            if ($proposal->action === 'update_user_roles') {
+                $roles = is_array($validated['roles'] ?? null) ? $validated['roles'] : [];
+                if ($roles === []) {
+                    throw ValidationException::withMessages([
+                        'roles' => [__('At least one role is required.')],
+                    ]);
+                }
+                foreach ($roles as $role) {
+                    if (! is_string($role) || trim($role) === '' || mb_strlen($role) > 120) {
+                        throw ValidationException::withMessages([
+                            'roles' => [__('Each role must be a valid role name.')],
+                        ]);
+                    }
+                }
+                $validated['roles'] = array_values(array_map(
+                    static fn (mixed $r): string => trim((string) $r),
+                    $roles,
+                ));
+                if (array_key_exists('replace', $validated)) {
+                    $validated['replace'] = (bool) $validated['replace'];
+                }
+            }
         } catch (ValidationException $e) {
             $proposal->forceFill([
                 'status' => AssistantProposedActionStatus::FAILED,

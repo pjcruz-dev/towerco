@@ -3,7 +3,6 @@
 import { ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
 
 import { AssistantActionConfirmCard } from "@/components/assistant/assistant-action-confirm-card";
-import { AssistantCitations } from "@/components/assistant/assistant-citations";
 import { Button } from "@/components/ui/button";
 import type {
   AssistantCitation,
@@ -116,10 +115,6 @@ export function AssistantMessage({
 
         {!isUser ? (
           <>
-            <AssistantCitations
-              citations={message.citations ?? []}
-              relatedLinks={message.relatedLinks}
-            />
             {onFeedback && !isQuotaExceeded ? (
               <div className="mt-3 flex items-center gap-1 border-t border-border/50 pt-2">
                 <span className="mr-1 text-xs text-muted-foreground">Was this helpful?</span>

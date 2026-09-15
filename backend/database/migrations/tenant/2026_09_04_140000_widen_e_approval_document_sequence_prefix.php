@@ -15,6 +15,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // MySQL-only column widen; SQLite has no MODIFY and needs no length change for tests.
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('e_approval_document_sequences')) {
             DB::statement('ALTER TABLE e_approval_document_sequences MODIFY prefix VARCHAR(128) NOT NULL');
         }
@@ -26,6 +31,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('e_approval_document_sequences')) {
             DB::statement('ALTER TABLE e_approval_document_sequences MODIFY prefix VARCHAR(30) NOT NULL');
         }

@@ -15,6 +15,10 @@ final class AssistantProviderErrorClassifier
 
     public const CURSOR_RATE_LIMIT_EXCEEDED = 'cursor_rate_limit_exceeded';
 
+    public const CURSOR_INVALID_MODEL = 'cursor_invalid_model';
+
+    public const CURSOR_TIMEOUT = 'cursor_timeout';
+
     public const GEMINI_QUOTA_EXCEEDED = 'gemini_quota_exceeded';
 
     public static function classify(Throwable $e): ?string
@@ -40,6 +44,21 @@ final class AssistantProviderErrorClassifier
 
         if (str_contains($message, 'http 429') && str_contains($message, 'cursor')) {
             return self::CURSOR_RATE_LIMIT_EXCEEDED;
+        }
+
+        if (
+            str_contains($message, 'invalid_model')
+            || (str_contains($message, 'cursor') && str_contains($message, 'not available or invalid'))
+        ) {
+            return self::CURSOR_INVALID_MODEL;
+        }
+
+        if (
+            str_contains($message, 'curl error 28')
+            || (str_contains($message, 'timed out') && str_contains($message, 'cursor.com'))
+            || (str_contains($message, 'operation timed out') && str_contains($message, 'cursor'))
+        ) {
+            return self::CURSOR_TIMEOUT;
         }
 
         if (
@@ -69,6 +88,18 @@ final class AssistantProviderErrorClassifier
                 'title' => 'Cursor API limit reached',
                 'message' => 'Ask INFRA SUITE cannot answer right now because the configured Cursor API key hit a rate or usage limit.',
                 'admin_action' => 'Ask your workspace administrator to check Cursor billing/limits or retry in a few minutes.',
+            ],
+            self::CURSOR_INVALID_MODEL => [
+                'provider' => 'cursor',
+                'title' => 'Cursor model not available',
+                'message' => 'The selected Cursor model is not enabled for this API key.',
+                'admin_action' => 'Pick another model in the assistant header, or set AI_ASSISTANT_CURSOR_MODEL to a model from GET /v1/models (e.g. composer-2.5, grok-4.5, default).',
+            ],
+            self::CURSOR_TIMEOUT => [
+                'provider' => 'cursor',
+                'title' => 'Cursor API timed out',
+                'message' => 'The Cursor Cloud Agents API did not respond in time.',
+                'admin_action' => 'Retry in a moment, or switch AI_ASSISTANT_LLM_PROVIDER to gemini/openai for faster chat answers.',
             ],
             self::GEMINI_QUOTA_EXCEEDED => [
                 'provider' => 'gemini',

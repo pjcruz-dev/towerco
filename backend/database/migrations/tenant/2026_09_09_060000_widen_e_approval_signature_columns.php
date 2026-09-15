@@ -11,6 +11,11 @@ return new class extends Migration
     public function up(): void
     {
         // Drawn/uploaded signature data URLs routinely exceed MySQL TEXT (64KB).
+        // SQLite has no MODIFY; TEXT affinity already stores large values.
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('e_approval_request_approvals') && Schema::hasColumn('e_approval_request_approvals', 'signature')) {
             DB::statement('ALTER TABLE e_approval_request_approvals MODIFY signature LONGTEXT NULL');
         }
@@ -26,6 +31,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('e_approval_request_approvals') && Schema::hasColumn('e_approval_request_approvals', 'signature')) {
             DB::statement('ALTER TABLE e_approval_request_approvals MODIFY signature TEXT NULL');
         }

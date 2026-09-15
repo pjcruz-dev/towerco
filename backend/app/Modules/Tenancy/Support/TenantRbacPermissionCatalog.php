@@ -22,6 +22,11 @@ final class TenantRbacPermissionCatalog
             'dashboard:view',
             'workspace:audit:view',
             'workspace:environments:switch',
+            // AdminOne / workspace platform tools (always available with core)
+            'sidebar:manage',
+            'system:manage',
+            'api_keys:manage',
+            'notifications:manage',
         ],
         'team_access' => [
             'user:manage',
@@ -55,6 +60,14 @@ final class TenantRbacPermissionCatalog
             'dynamic_entities:records:manage',
             'dynamic_entities:fields:manage',
             'dynamic_entities:entities:manage',
+            // Dyn feature surfaces (controllers gate on these names)
+            'printables:manage',
+            'html_reports:manage',
+            'workflows:manage',
+            'email_templates:manage',
+            'automation:manage',
+            'search_index:manage',
+            'entity_hooks:manage',
         ],
         'ai_assistant' => [
             'ai_assistant:use',

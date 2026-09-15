@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Support\Concerns;
 
 use App\Models\Tenant;
+use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -33,6 +35,12 @@ trait InteractsWithInMemoryTenantApi
                 'foreign_key_constraints' => true,
             ],
             'toweros.allow_tenant_on_central_host' => true,
+            // Avoid Docker-cached /var/www paths when running tests on the host.
+            'tenancy.migration_parameters' => [
+                '--force' => true,
+                '--path' => [database_path('migrations/tenant')],
+                '--realpath' => true,
+            ],
         ]);
 
         DB::purge('central');
@@ -67,6 +75,7 @@ trait InteractsWithInMemoryTenantApi
         tenancy()->initialize($this->testTenant);
         $this->ensurePublicHolidayTable();
         app(TenantRbacBaselineService::class)->ensure();
+        $this->ensureAdministratorRole();
         $this->testTenantAdmin = TenantUser::query()->create([
             'name' => 'Test Admin',
             'email' => 'admin@test.localhost',
@@ -75,6 +84,18 @@ trait InteractsWithInMemoryTenantApi
         ]);
         $this->testTenantAdmin->assignRole('administrator');
         tenancy()->end();
+    }
+
+    /**
+     * Baseline only syncs "administrator" when it already exists; tests need a full-access alias.
+     */
+    private function ensureAdministratorRole(): void
+    {
+        $role = TenantRole::query()->firstOrCreate(
+            ['name' => 'administrator', 'guard_name' => 'sanctum'],
+        );
+        $permissions = app(TenantRbacPermissionCatalog::class)->enabledPermissions();
+        $role->syncPermissions($permissions);
     }
 
     /**

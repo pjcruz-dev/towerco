@@ -1242,6 +1242,7 @@ export async function aiBuildDynReportBuilder(payload: {
   const response = await apiClient.post<{ data: DynReportBuilderAiBuildResult }>(
     "/dynamic-entities/report-builder/ai-build",
     payload,
+    { timeout: 120_000 },
   );
   return response.data.data;
 }
@@ -1325,3 +1326,115 @@ export async function updateDynWorkflow(
 export async function deleteDynWorkflow(id: string): Promise<void> {
   await apiClient.delete(`/dynamic-entities/workflows/${id}`);
 }
+
+export type DynEntityHookEvent =
+  | "before_create"
+  | "after_create"
+  | "before_update"
+  | "after_update"
+  | "before_delete"
+  | "after_delete"
+  | "before_action";
+
+export type DynEntityHookWhenRule = {
+  field: string;
+  op: "eq" | "neq" | "filled" | "empty" | "changed";
+  value?: string;
+};
+
+export type DynEntityHookAction =
+  | { type: "mirror_field"; from: string; to: string }
+  | { type: "set_field"; field: string; value?: unknown }
+  | { type: "clear_field"; field: string };
+
+export type DynEntityHookDefinition = {
+  when: DynEntityHookWhenRule[];
+  actions: DynEntityHookAction[];
+};
+
+export type DynEntityHookRow = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  entity_slug: string;
+  events: DynEntityHookEvent[];
+  definition_json: DynEntityHookDefinition;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type DynEntityHookStats = {
+  total: number;
+  active: number;
+  inactive: number;
+  by_event: Record<string, { active: number; inactive: number }>;
+};
+
+export async function listDynEntityHooks(params?: {
+  entity_slug?: string;
+}): Promise<{ rows: DynEntityHookRow[]; total: number; stats: DynEntityHookStats | null }> {
+  const response = await apiClient.get<{
+    data: DynEntityHookRow[];
+    meta: { total: number; stats?: DynEntityHookStats };
+  }>("/dynamic-entities/hooks", { params });
+  return {
+    rows: response.data.data ?? [],
+    total: response.data.meta?.total ?? 0,
+    stats: response.data.meta?.stats ?? null,
+  };
+}
+
+export async function fetchDynEntityHook(id: string): Promise<DynEntityHookRow> {
+  const response = await apiClient.get<{ data: DynEntityHookRow }>(`/dynamic-entities/hooks/${id}`);
+  return response.data.data;
+}
+
+export async function createDynEntityHook(payload: {
+  name: string;
+  description?: string;
+  entity_slug: string;
+  events: DynEntityHookEvent[];
+  definition_json: DynEntityHookDefinition;
+  is_active?: boolean;
+  sort_order?: number;
+}): Promise<DynEntityHookRow> {
+  const response = await apiClient.post<{ data: DynEntityHookRow }>(
+    "/dynamic-entities/hooks",
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function updateDynEntityHook(
+  id: string,
+  payload: Partial<{
+    name: string;
+    description: string | null;
+    entity_slug: string;
+    events: DynEntityHookEvent[];
+    definition_json: DynEntityHookDefinition;
+    is_active: boolean;
+    sort_order: number;
+  }>,
+): Promise<DynEntityHookRow> {
+  const response = await apiClient.patch<{ data: DynEntityHookRow }>(
+    `/dynamic-entities/hooks/${id}`,
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function deleteDynEntityHook(id: string): Promise<void> {
+  await apiClient.delete(`/dynamic-entities/hooks/${id}`);
+}
+
+export async function toggleDynEntityHook(id: string): Promise<DynEntityHookRow> {
+  const response = await apiClient.post<{ data: DynEntityHookRow }>(
+    `/dynamic-entities/hooks/${id}/toggle`,
+  );
+  return response.data.data;
+}
+

@@ -25,6 +25,7 @@ class AskAssistantRequest extends FormRequest
             'page_path' => ['sometimes', 'nullable', 'string', 'max:512'],
             'plan_mode' => ['sometimes', 'boolean'],
             'preferred_model' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'use_retrieval' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -35,7 +36,8 @@ class AskAssistantRequest extends FormRequest
      *   module_context?: string|null,
      *   page_path?: string|null,
      *   plan_mode?: bool,
-     *   preferred_model?: string|null
+     *   preferred_model?: string|null,
+     *   use_retrieval?: bool
      * }
      */
     public function validatedPayload(): array
@@ -46,7 +48,8 @@ class AskAssistantRequest extends FormRequest
          *   module_context?: string|null,
          *   page_path?: string|null,
          *   plan_mode?: bool,
-         *   preferred_model?: string|null
+         *   preferred_model?: string|null,
+         *   use_retrieval?: bool
          * } $validated
          */
         $validated = $this->validated();

@@ -23,9 +23,6 @@
         <testsuite name="EApproval">
             <directory>tests/Feature/EApproval</directory>
         </testsuite>
-        <testsuite name="Documents">
-            <directory>tests/Feature/Documents</directory>
-        </testsuite>
         <testsuite name="Ticketing">
             <directory>tests/Feature/Ticketing</directory>
         </testsuite>

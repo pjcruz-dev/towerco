@@ -61,6 +61,19 @@ export type AssistantCostEstimate = {
   completion_tokens: number | null;
 };
 
+export type AssistantDailyRateLimit = {
+  limit: number;
+  remaining: number;
+  resets_in_seconds: number;
+};
+
+export type AssistantRateLimit = {
+  limit: number;
+  remaining: number;
+  resets_in_seconds: number;
+  daily?: AssistantDailyRateLimit | null;
+};
+
 export type AssistantAskResponse = {
   conversation_id: string;
   message_id: string;
@@ -82,6 +95,7 @@ export type AssistantAskResponse = {
   prompt_tokens?: number | null;
   completion_tokens?: number | null;
   cost_estimate?: AssistantCostEstimate | null;
+  rate_limit?: AssistantRateLimit | null;
 };
 
 export type AssistantMeta = {
@@ -90,7 +104,24 @@ export type AssistantMeta = {
   model_name: string;
   models: string[];
   supports_model_select: boolean;
+  retrieval_enabled?: boolean;
   greeting: string;
+  rate_limit?: AssistantRateLimit | null;
+};
+
+export type AssistantConversationListRow = {
+  id: string;
+  title: string | null;
+  module_context: string | null;
+  page_path: string | null;
+  status: string;
+  message_count: number;
+  last_message_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  user_id?: string;
+  user_name?: string | null;
+  user_email?: string | null;
 };
 
 export type AssistantActionConfirmResponse = {
@@ -138,6 +169,7 @@ export type AskAssistantPayload = {
   page_path?: string | null;
   plan_mode?: boolean;
   preferred_model?: string | null;
+  use_retrieval?: boolean;
 };
 
 export type AssistantKnowledgeStatus = "draft" | "published" | "archived";
@@ -186,6 +218,9 @@ export async function askAssistant(payload: AskAssistantPayload): Promise<Assist
     page_path: payload.page_path ?? undefined,
     plan_mode: payload.plan_mode === true ? true : undefined,
     preferred_model: payload.preferred_model ?? undefined,
+  }, {
+    // Cursor/Gemini + report-builder actions can exceed the default API timeout.
+    timeout: 180_000,
   });
 
   return response.data.data;
@@ -204,6 +239,56 @@ export async function fetchAssistantConversation(
   );
 
   return response.data.data;
+}
+
+export async function fetchAssistantConversations(params?: {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  status?: string;
+}): Promise<PaginatedEnvelope<AssistantConversationListRow>> {
+  const response = await apiClient.get<{
+    data: AssistantConversationListRow[];
+    meta: PaginatedMeta;
+  }>("/assistant/conversations", { params });
+
+  return { data: response.data.data, meta: response.data.meta };
+}
+
+export async function updateAssistantConversation(
+  conversationId: string,
+  payload: { title: string },
+): Promise<AssistantConversationListRow> {
+  const response = await apiClient.patch<{ data: AssistantConversationListRow }>(
+    `/assistant/conversations/${conversationId}`,
+    payload,
+  );
+
+  return response.data.data;
+}
+
+export async function deleteAssistantConversation(conversationId: string): Promise<void> {
+  await apiClient.delete(`/assistant/conversations/${conversationId}`);
+}
+
+export async function exportAssistantConversationJson(
+  conversationId: string,
+): Promise<Record<string, unknown>> {
+  const response = await apiClient.get<{ data: Record<string, unknown> }>(
+    `/assistant/conversations/${conversationId}/export`,
+    { params: { format: "json" } },
+  );
+
+  return response.data.data;
+}
+
+export async function downloadAssistantConversationCsv(conversationId: string): Promise<Blob> {
+  const response = await apiClient.get<Blob>(`/assistant/conversations/${conversationId}/export`, {
+    params: { format: "csv" },
+    responseType: "blob",
+  });
+
+  return response.data;
 }
 
 export async function submitAssistantFeedback(payload: {

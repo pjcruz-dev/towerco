@@ -19,8 +19,11 @@ use App\Modules\AiAssistant\Support\OpenAiEmbeddingProvider;
 use App\Modules\AiAssistant\Support\OpenAiLlmProvider;
 use App\Modules\AiAssistant\Support\OpenSearchVectorStore;
 use App\Modules\AiAssistant\Services\Actions\AssistantActionRegistry;
+use App\Modules\AiAssistant\Services\Actions\CreateHtmlReportFromPromptAction;
 use App\Modules\AiAssistant\Services\Actions\DraftEApprovalSubmissionAction;
 use App\Modules\AiAssistant\Services\Actions\DraftTicketAction;
+use App\Modules\AiAssistant\Services\Actions\PinHtmlReportToDashboardAction;
+use App\Modules\AiAssistant\Services\Actions\UpdateUserRolesAction;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRegistry;
 use App\Modules\AiAssistant\Services\Tools\GetEApprovalSubmissionByDocumentNoTool;
 use App\Modules\AiAssistant\Services\Tools\GetTicketByNumberTool;
@@ -96,11 +99,19 @@ final class AiAssistantServiceProvider extends ServiceProvider
                     maxTokens: (int) config('ai_assistant.openai.max_tokens', 1024),
                     temperature: (float) config('ai_assistant.openai.temperature', 0.2),
                     timeoutSeconds: (int) config('ai_assistant.openai.timeout', 60),
+                    allowedModels: array_values(array_filter(
+                        (array) config('ai_assistant.openai.chat_models', []),
+                        static fn ($m): bool => is_string($m) && trim($m) !== '',
+                    )),
                 ),
                 'cursor', 'cursor_ai' => new CursorLlmProvider(
                     apiKey: (string) config('ai_assistant.cursor.api_key', ''),
                     baseUrl: (string) config('ai_assistant.cursor.base_url', 'https://api.cursor.com/v1'),
                     modelId: (string) config('ai_assistant.cursor.model', 'composer-2'),
+                    allowedModels: array_values(array_filter(
+                        (array) config('ai_assistant.cursor.chat_models', []),
+                        static fn ($m): bool => is_string($m) && trim($m) !== '',
+                    )),
                     maxWaitSeconds: (int) config('ai_assistant.cursor.max_wait_seconds', 120),
                     pollIntervalMs: (int) config('ai_assistant.cursor.poll_interval_ms', 1500),
                     requestTimeoutSeconds: (int) config('ai_assistant.cursor.timeout', 30),
@@ -108,7 +119,7 @@ final class AiAssistantServiceProvider extends ServiceProvider
                 'gemini', 'google', 'google_ai', 'ai_studio' => new GeminiLlmProvider(
                     apiKey: (string) config('ai_assistant.gemini.api_key', ''),
                     baseUrl: (string) config('ai_assistant.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta'),
-                    modelId: (string) config('ai_assistant.gemini.chat_model', 'gemini-2.0-flash'),
+                    modelId: (string) config('ai_assistant.gemini.chat_model', 'gemini-3.6-flash'),
                     maxTokens: (int) config('ai_assistant.gemini.max_tokens', 2048),
                     temperature: (float) config('ai_assistant.gemini.temperature', 0.2),
                     timeoutSeconds: (int) config('ai_assistant.gemini.timeout', 60),
@@ -135,6 +146,9 @@ final class AiAssistantServiceProvider extends ServiceProvider
             return new AssistantActionRegistry([
                 $app->make(DraftTicketAction::class),
                 $app->make(DraftEApprovalSubmissionAction::class),
+                $app->make(CreateHtmlReportFromPromptAction::class),
+                $app->make(PinHtmlReportToDashboardAction::class),
+                $app->make(UpdateUserRolesAction::class),
             ]);
         });
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 
@@ -43,6 +43,7 @@ export function DynHtmlReportViewPageClient() {
   const [reportId, setReportId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!permissionsReady) return;
@@ -50,6 +51,22 @@ export function DynHtmlReportViewPageClient() {
       router.replace("/dashboard");
     }
   }, [permissionsReady, canView, router]);
+
+  const loadReport = useCallback(async () => {
+    if (!canView || !slug) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const rendered = await renderDynHtmlReport(slug);
+      setTitle(rendered.name);
+      setDoc(rendered.document_html);
+      setReportId(rendered.id);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [canView, slug]);
 
   useEffect(() => {
     if (!canView || !slug) return;
@@ -60,27 +77,19 @@ export function DynHtmlReportViewPageClient() {
       return;
     }
 
-    let cancelled = false;
-    async function run() {
-      setLoading(true);
-      setError(null);
-      try {
-        const rendered = await renderDynHtmlReport(slug);
-        if (cancelled) return;
-        setTitle(rendered.name);
-        setDoc(rendered.document_html);
-        setReportId(rendered.id);
-      } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    void loadReport();
+  }, [slug, canView, router, loadReport, reloadNonce]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if ((data as { type?: string }).type !== "toweros-html-report-refresh") return;
+      setReloadNonce((n) => n + 1);
     }
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, canView, router]);
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   if (!permissionsReady || !canView) {
     return (

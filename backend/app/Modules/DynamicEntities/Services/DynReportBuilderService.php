@@ -220,10 +220,17 @@ final class DynReportBuilderService
     ): array {
         $out = [];
         foreach (array_slice($rows, 0, $limit) as $row) {
-            $item = [
-                'group' => $groupBy !== '' ? $this->groupValue($row, $groupBy, $dateGrouping) : ($row['title'] ?? $row['id'] ?? '—'),
-            ];
+            $item = [];
+            if ($groupBy !== '') {
+                $item['group'] = $this->groupValue($row, $groupBy, $dateGrouping);
+            }
             foreach ($row as $k => $v) {
+                if (! is_string($k) || $k === '') {
+                    continue;
+                }
+                if (in_array($k, ['id', 'uuid', 'payload', 'data', 'actions', 'workflows', 'print'], true)) {
+                    continue;
+                }
                 if (is_scalar($v) || $v === null) {
                     $item[$k] = $v;
                 }
@@ -234,26 +241,51 @@ final class DynReportBuilderService
             $out[] = $item;
         }
 
-        // Prefer a compact set of columns
-        $preferred = array_values(array_unique(array_filter([
-            'group',
-            $groupBy !== '' ? $groupBy : null,
-            'status',
-            'title',
-            $metricField !== '' ? $metricField : null,
-            'metric',
-        ])));
+        $seen = [];
+        foreach ($out as $row) {
+            foreach (array_keys($row) as $key) {
+                if (is_string($key) && $key !== '' && ! isset($seen[$key])) {
+                    $seen[$key] = true;
+                }
+            }
+        }
+
+        $preferred = [];
+        if ($groupBy !== '' && isset($seen['group'])) {
+            $preferred[] = 'group';
+        }
+        foreach (['site_code', 'title', 'name', 'status', 'created_at', 'updated_at', $groupBy, $metricField] as $key) {
+            if (is_string($key) && $key !== '' && isset($seen[$key])) {
+                $preferred[] = $key;
+            }
+        }
+        if ($metric === 'sum' && isset($seen['metric'])) {
+            $preferred[] = 'metric';
+        }
+        foreach (array_keys($seen) as $key) {
+            $preferred[] = $key;
+        }
 
         $columns = [];
         foreach ($preferred as $key) {
-            $columns[] = [
+            if (! isset($seen[$key]) || isset($columns[$key])) {
+                continue;
+            }
+            $columns[$key] = [
                 'key' => $key,
-                'label' => Str::headline($key),
-                'numeric' => $key === 'metric' || $key === $metricField,
+                'label' => Str::headline($key === 'group' && $groupBy !== '' ? $groupBy : $key),
+                'numeric' => $key === 'metric'
+                    || $key === $metricField
+                    || preg_match('/amount|total|price|cost|qty|quantity|lat|lng|long/', $key) === 1,
             ];
+            if (count($columns) >= 16) {
+                break;
+            }
         }
-        if ($columns === []) {
-            $columns[] = ['key' => 'group', 'label' => 'Record', 'numeric' => false];
+
+        $columnList = array_values($columns);
+        if ($columnList === []) {
+            $columnList[] = ['key' => 'title', 'label' => 'Title', 'numeric' => false];
         }
 
         $total = 0.0;
@@ -264,7 +296,7 @@ final class DynReportBuilderService
         }
 
         return [
-            'columns' => $columns,
+            'columns' => $columnList,
             'rows' => $out,
             'totals' => $metric === 'sum' ? ['metric' => $total, $metricField => $total] : [],
             'meta' => ['format' => 'detail', 'row_count' => count($out)],

@@ -134,6 +134,13 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertContains('dynamic_entities:records:manage', $enabled);
         $this->assertContains('dynamic_entities:fields:manage', $enabled);
         $this->assertContains('dynamic_entities:entities:manage', $enabled);
+        $this->assertContains('printables:manage', $enabled);
+        $this->assertContains('html_reports:manage', $enabled);
+        $this->assertContains('workflows:manage', $enabled);
+        $this->assertContains('email_templates:manage', $enabled);
+        $this->assertContains('automation:manage', $enabled);
+        $this->assertContains('search_index:manage', $enabled);
+        $this->assertContains('entity_hooks:manage', $enabled);
         $this->assertArrayHasKey('dynamic_entities', $groups);
         $this->assertSame('Dynamic Entities', $groups['dynamic_entities']['label']);
     }

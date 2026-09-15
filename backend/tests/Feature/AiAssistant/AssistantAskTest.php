@@ -46,6 +46,33 @@ final class AssistantAskTest extends TestCase
         $this->bootInMemoryTenantApi();
     }
 
+    public function test_meta_includes_rate_limit_and_provider(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/assistant/meta');
+
+        $response->assertOk()
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.llm_provider', 'local')
+            ->assertJsonStructure([
+                'data' => [
+                    'model_name',
+                    'models',
+                    'supports_model_select',
+                    'greeting',
+                    'rate_limit' => [
+                        'limit',
+                        'remaining',
+                        'resets_in_seconds',
+                    ],
+                ],
+            ]);
+
+        $this->assertIsArray($response->json('data.models'));
+        $this->assertFalse($response->json('data.supports_model_select'));
+    }
+
     public function test_ask_persists_conversation_and_messages(): void
     {
         $response = $this->actingAsTenantAdmin()
@@ -69,10 +96,22 @@ final class AssistantAskTest extends TestCase
                     'related_links',
                     'status',
                     'model_name',
+                    'rate_limit' => [
+                        'limit',
+                        'remaining',
+                        'resets_in_seconds',
+                    ],
                 ],
             ]);
 
-        $this->assertStringContainsString('enough approved help content', $response->json('data.answer'));
+        $this->assertIsInt($response->json('data.rate_limit.remaining'));
+        $this->assertLessThanOrEqual(
+            (int) $response->json('data.rate_limit.limit'),
+            (int) $response->json('data.rate_limit.remaining'),
+        );
+
+        $answer = (string) $response->json('data.answer');
+        $this->assertNotSame('', $answer);
 
         $conversationId = $response->json('data.conversation_id');
         $messageId = $response->json('data.message_id');

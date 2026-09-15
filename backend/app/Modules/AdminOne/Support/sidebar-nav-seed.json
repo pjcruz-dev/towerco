@@ -1161,6 +1161,7 @@
           "email_templates:manage",
           "automation:manage",
           "search_index:manage",
+          "entity_hooks:manage",
           "ai_assistant:prompts:manage"
         ],
         "permissions_match": "any",
@@ -1198,6 +1199,21 @@
             "children": []
           },
           {
+            "key": "group.operations.system-core.manage-ai-prompts",
+            "type": "internal_page",
+            "title": "AI System Prompts",
+            "icon": "Bot",
+            "href": "/admin/ai-prompts",
+            "entity_slug": null,
+            "required_permissions": [
+              "ai_assistant:prompts:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
             "key": "group.operations.system-core.manage-fields",
             "type": "entity_link",
             "title": "Manage Fields",
@@ -1209,7 +1225,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 2,
+            "sort_order": 3,
             "children": []
           },
           {
@@ -1333,18 +1349,18 @@
             "children": []
           },
           {
-            "key": "group.operations.system-core.manage-ai-prompts",
+            "key": "group.operations.system-core.entity-hooks",
             "type": "internal_page",
-            "title": "Manage AI Prompts",
+            "title": "Entity Hooks",
             "icon": null,
-            "href": "/admin/ai-prompts",
+            "href": "/dynamic-entities/hooks",
             "entity_slug": null,
             "required_permissions": [
-              "ai_assistant:prompts:manage"
+              "entity_hooks:manage"
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 8,
+            "sort_order": 9,
             "children": []
           },
           {

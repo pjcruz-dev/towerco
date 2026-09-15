@@ -193,6 +193,16 @@ final class DynRecordService
         $record = DB::transaction(function () use ($entity, $data, $actor): DynRecord {
             $values = $this->normalizeValues($entity, $data['values'] ?? []);
             $values = $this->automaticIds->assignOnCreate($entity, $values);
+            try {
+                $values = app(DynEntityHookRunner::class)->applyBefore(
+                    $entity,
+                    $values,
+                    $actor,
+                    'before_create',
+                );
+            } catch (\Throwable) {
+                // Before hooks must not block create on unexpected errors.
+            }
             $this->assertRequired($entity, $values);
             $this->assertUniqueFieldValues($entity, $values, null);
 
@@ -235,6 +245,12 @@ final class DynRecordService
             // Auto workflows must not block create.
         }
 
+        try {
+            app(DynEntityHookRunner::class)->afterCreate($entity, $record, $actor);
+        } catch (\Throwable) {
+            // Entity hooks must not block create.
+        }
+
         return $record;
     }
 
@@ -260,6 +276,18 @@ final class DynRecordService
                 );
             }
             $values = array_merge($existing, $incoming);
+            try {
+                $values = app(DynEntityHookRunner::class)->applyBefore(
+                    $entity,
+                    $values,
+                    $actor,
+                    'before_update',
+                    is_array($existing) ? $existing : [],
+                    (string) $record->id,
+                );
+            } catch (\Throwable) {
+                // Before hooks must not block update on unexpected errors.
+            }
             // On update, only enforce required for fields included in this patch
             // (avoids 422 when new schema fields are empty on older records).
             $this->assertRequired($entity, $values, array_keys($incoming));
@@ -325,12 +353,43 @@ final class DynRecordService
             // Auto workflows must not block update.
         }
 
+        try {
+            app(DynEntityHookRunner::class)->afterUpdate(
+                $entity,
+                $updated,
+                $actor,
+                is_array($beforeValues) ? $beforeValues : [],
+            );
+        } catch (\Throwable) {
+            // Entity hooks must not block update.
+        }
+
         return $updated;
     }
 
     public function softDelete(DynRecord $record, TenantUser $actor, bool $audit = true): void
     {
         $entity = $record->relationLoaded('entity') ? $record->entity : $record->entity()->first();
+
+        if ($entity instanceof DynEntity) {
+            try {
+                $values = is_array($record->values_json) ? $record->values_json : [];
+                $values = app(DynEntityHookRunner::class)->applyBefore(
+                    $entity,
+                    $values,
+                    $actor,
+                    'before_delete',
+                    $values,
+                    (string) $record->id,
+                );
+                if ($values !== ($record->values_json ?? [])) {
+                    $record->values_json = $values;
+                }
+            } catch (\Throwable) {
+                // Before-delete hooks must not block soft delete.
+            }
+        }
+
         $record->is_deleted = true;
         $record->deleted_at = now();
         $record->updated_by = $actor->id;
@@ -347,6 +406,14 @@ final class DynRecordService
                     'is_deleted' => ['from' => false, 'to' => true],
                 ]),
             );
+        }
+
+        if ($entity instanceof DynEntity) {
+            try {
+                app(DynEntityHookRunner::class)->afterDelete($entity, $record, $actor);
+            } catch (\Throwable) {
+                // After-delete hooks must not fail the parent delete.
+            }
         }
     }
 

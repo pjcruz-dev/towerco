@@ -20,14 +20,32 @@ final class AssistantCostEstimator
      *   completion_tokens: int|null
      * }|null
      */
-    public static function estimate(?int $promptTokens, ?int $completionTokens): ?array
-    {
-        if ($promptTokens === null && $completionTokens === null) {
-            return null;
+    /**
+     * @param  string|null  $promptText  Used when providers omit usage (e.g. Cursor) — ~4 chars/token heuristic
+     * @param  string|null  $answerText
+     */
+    public static function estimate(
+        ?int $promptTokens,
+        ?int $completionTokens,
+        ?string $promptText = null,
+        ?string $answerText = null,
+    ): ?array {
+        $in = $promptTokens;
+        $out = $completionTokens;
+
+        if ($in === null && $out === null) {
+            $hasText = ($promptText !== null && $promptText !== '')
+                || ($answerText !== null && $answerText !== '');
+            if (! $hasText) {
+                return null;
+            }
+            // Rough heuristic when the provider does not return token counts.
+            $in = max(1, (int) ceil(mb_strlen((string) $promptText) / 4));
+            $out = max(1, (int) ceil(mb_strlen((string) $answerText) / 4));
         }
 
-        $in = max(0, (int) ($promptTokens ?? 0));
-        $out = max(0, (int) ($completionTokens ?? 0));
+        $in = max(0, (int) ($in ?? 0));
+        $out = max(0, (int) ($out ?? 0));
         $total = $in + $out;
         if ($total <= 0) {
             return null;
@@ -62,8 +80,8 @@ final class AssistantCostEstimator
             'high' => $high,
             'label' => sprintf('Est: ₱%s - ₱%s (%s)', number_format($low, 2), number_format($high, 2), $intensityLabel),
             'intensity' => $intensity,
-            'prompt_tokens' => $promptTokens,
-            'completion_tokens' => $completionTokens,
+            'prompt_tokens' => $in,
+            'completion_tokens' => $out,
         ];
     }
 }

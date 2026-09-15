@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Braces, Eye, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Braces, Eye, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
@@ -87,15 +87,26 @@ export function DynReportBuilderPageClient() {
 
   const fieldOptions = useMemo(() => {
     const fields = entityDetail?.fields ?? [];
-    return [
+    const byValue = new Map<string, { value: string; label: string }>();
+
+    // System columns first; entity fields override when they share the same name (e.g. status).
+    for (const row of [
       { value: "status", label: "Status" },
       { value: "title", label: "Title" },
       { value: "created_at", label: "Created at" },
       { value: "updated_at", label: "Updated at" },
-      ...fields
-        .filter((f) => !f.is_system_field)
-        .map((f) => ({ value: f.name, label: f.label || f.name })),
-    ];
+    ]) {
+      byValue.set(row.value, row);
+    }
+
+    for (const f of fields) {
+      if (f.is_system_field) continue;
+      const value = f.name.trim();
+      if (!value) continue;
+      byValue.set(value, { value, label: f.label || f.name });
+    }
+
+    return [...byValue.values()];
   }, [entityDetail]);
 
   const numericFields = useMemo(() => {
@@ -196,6 +207,7 @@ export function DynReportBuilderPageClient() {
     }
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const result = await aiBuildDynReportBuilder({
         prompt: prompt.trim(),
@@ -209,8 +221,11 @@ export function DynReportBuilderPageClient() {
             ? "AI fallback heuristics"
             : "heuristics";
       setNotice(
-        `${result.notes ?? "Structure applied."} Source: ${sourceLabel}. Review and Run Preview.`,
+        `${result.notes ?? "Structure applied."} Source: ${sourceLabel}. Review fields below, then Run Preview.`,
       );
+      if (!result.definition?.entity_slug) {
+        setError("AI could not pick a source entity. Choose one in section 1, then try again.");
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -336,8 +351,12 @@ export function DynReportBuilderPageClient() {
                     disabled={busy || !prompt.trim()}
                     onClick={() => void onBuildFromPrompt()}
                   >
-                    <Sparkles className="mr-1.5 h-4 w-4" />
-                    Build with AI
+                    {busy ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1.5 h-4 w-4" />
+                    )}
+                    {busy ? "Building…" : "Build with AI"}
                   </Button>
                 </div>
               </section>

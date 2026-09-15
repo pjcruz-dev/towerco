@@ -1,21 +1,27 @@
 "use client";
 
-import { FileText, Minus, XIcon } from "lucide-react";
+import { FileText, History, MessageSquarePlus, Minus, XIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AssistantChatPanel } from "@/components/assistant/assistant-chat-panel";
+import { AssistantHeaderStatus } from "@/components/assistant/assistant-header-status";
 import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAssistantDrawer } from "@/hooks/use-assistant-drawer";
 import { resolveAssistantRouteContext } from "@/lib/assistant/route-context";
+import {
+  fetchAssistantMeta,
+  type AssistantCostEstimate,
+  type AssistantMeta,
+  type AssistantRateLimit,
+} from "@/lib/api/modules/assistant-api";
 import { cn } from "@/lib/utils";
 
 const AUTO_PILOT_KEY = "toweros.assistant.auto_pilot";
 const PLAN_MODE_KEY = "toweros.assistant.plan_mode";
 const MODEL_KEY = "toweros.assistant.preferred_model";
-
 export function AssistantDrawer() {
   const { open, setOpen, minimized, setMinimized } = useAssistantDrawer();
   const pathname = usePathname();
@@ -23,6 +29,11 @@ export function AssistantDrawer() {
   const [autoPilot, setAutoPilot] = useState(false);
   const [planMode, setPlanMode] = useState(false);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [newChatNonce, setNewChatNonce] = useState(0);
+  const [meta, setMeta] = useState<AssistantMeta | null>(null);
+  const [rateLimit, setRateLimit] = useState<AssistantRateLimit | null>(null);
+  const [costEstimate, setCostEstimate] = useState<AssistantCostEstimate | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -30,6 +41,62 @@ export function AssistantDrawer() {
     setPlanMode(window.localStorage.getItem(PLAN_MODE_KEY) === "1");
     setPreferredModel(window.localStorage.getItem(MODEL_KEY));
   }, []);
+
+  useEffect(() => {
+    if (!open || minimized) {
+      setHistoryOpen(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await fetchAssistantMeta();
+        if (cancelled) return;
+        setMeta(data);
+        if (data.rate_limit) {
+          setRateLimit(data.rate_limit);
+        }
+        const models = data.models ?? [];
+        const stored = window.localStorage.getItem(MODEL_KEY);
+        if (stored && models.includes(stored)) {
+          setPreferredModel(stored);
+        } else if (data.model_name) {
+          setPreferredModel(data.model_name);
+          window.localStorage.setItem(MODEL_KEY, data.model_name);
+        } else if (stored) {
+          // Stale Cursor model ids (e.g. auto-smart, composer-2) after provider switch.
+          window.localStorage.removeItem(MODEL_KEY);
+          setPreferredModel(null);
+        }
+      } catch {
+        // Meta is optional chrome; chat still works.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, minimized]);
+
+  useEffect(() => {
+    if (!rateLimit || rateLimit.resets_in_seconds <= 0) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setRateLimit((current) => {
+        if (!current || current.resets_in_seconds <= 0) {
+          return current;
+        }
+        const next = current.resets_in_seconds - 1;
+        if (next <= 0) {
+          return { ...current, remaining: current.limit, resets_in_seconds: 0 };
+        }
+        return { ...current, resets_in_seconds: next };
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [rateLimit?.resets_in_seconds && rateLimit.resets_in_seconds > 0 ? "active" : "idle"]);
 
   function toggleAutoPilot(next?: boolean) {
     setAutoPilot((prev) => {
@@ -52,8 +119,6 @@ export function AssistantDrawer() {
     window.localStorage.setItem(MODEL_KEY, model);
   }
 
-  // Keep the chat panel mounted when closed so conversation state survives
-  // closing/reopening the widget within the same page session.
   return (
     <div
       className={cn(
@@ -91,6 +156,30 @@ export function AssistantDrawer() {
             <div className="flex shrink-0 items-center gap-0.5">
               <Button
                 type="button"
+                variant={historyOpen ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label={historyOpen ? "Close conversation history" : "Open conversation history"}
+                title="Conversation history"
+                onClick={() => setHistoryOpen((v) => !v)}
+              >
+                <History className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Start new chat"
+                title="New chat"
+                onClick={() => {
+                  setHistoryOpen(false);
+                  setCostEstimate(null);
+                  setNewChatNonce((n) => n + 1);
+                }}
+              >
+                <MessageSquarePlus className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Minimize assistant"
@@ -110,7 +199,16 @@ export function AssistantDrawer() {
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5">
+          <AssistantHeaderStatus
+            meta={meta}
+            rateLimit={rateLimit}
+            costEstimate={costEstimate}
+            selectedModel={preferredModel}
+            planMode={planMode}
+            onModelChange={onModelChange}
+          />
+
+          <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-border pt-2.5">
             <label
               className="flex items-center gap-2 text-xs font-medium text-foreground"
               title="When On, proposed write actions are confirmed automatically (requires action permission)."
@@ -142,7 +240,12 @@ export function AssistantDrawer() {
           autoPilot={autoPilot}
           planMode={planMode}
           preferredModel={preferredModel}
-          onPreferredModelChange={onModelChange}
+          meta={meta}
+          historyOpen={historyOpen}
+          onHistoryOpenChange={setHistoryOpen}
+          newChatNonce={newChatNonce}
+          onRateLimitChange={setRateLimit}
+          onCostEstimateChange={setCostEstimate}
         />
       </div>
     </div>

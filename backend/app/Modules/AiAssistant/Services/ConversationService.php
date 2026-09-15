@@ -165,25 +165,110 @@ final class ConversationService
     /**
      * @return LengthAwarePaginator<int, AiConversation>
      */
-    public function paginateForViewer(TenantUser $viewer, int $page = 1, int $perPage = 25, string $search = ''): LengthAwarePaginator
-    {
+    public function paginateForViewer(
+        TenantUser $viewer,
+        int $page = 1,
+        int $perPage = 25,
+        string $search = '',
+        ?string $status = null,
+    ): LengthAwarePaginator {
+        $isAudit = $viewer->can('ai_assistant:conversations:audit');
+
         $query = AiConversation::query()
             ->withCount('messages')
             ->orderByDesc('last_message_at')
             ->orderByDesc('created_at');
 
+        if ($isAudit) {
+            $query->with('user:id,name,email');
+        }
+
         $this->scopeVisibleTo($query, $viewer);
+
+        if (! $isAudit) {
+            $query->where('status', AssistantConversationStatus::ACTIVE);
+        } elseif ($status !== null && $status !== '') {
+            $query->where('status', $status);
+        }
 
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
-            $query->where(static function (Builder $inner) use ($like): void {
+            $query->where(static function (Builder $inner) use ($like, $isAudit): void {
                 $inner->where('title', 'like', $like)
                     ->orWhere('module_context', 'like', $like)
                     ->orWhere('page_path', 'like', $like);
+
+                if ($isAudit) {
+                    $inner->orWhereHas('user', static function (Builder $userQuery) use ($like): void {
+                        $userQuery->where('name', 'like', $like)
+                            ->orWhere('email', 'like', $like);
+                    });
+                }
             });
         }
 
         return $query->paginate(perPage: $perPage, page: $page);
+    }
+
+    public function updateTitle(TenantUser $viewer, AiConversation $conversation, string $title): AiConversation
+    {
+        abort_unless($this->canMutate($viewer, $conversation), 403);
+
+        $conversation->forceFill([
+            'title' => Str::limit(trim($title), 255, ''),
+        ])->save();
+
+        return $conversation->refresh();
+    }
+
+    public function archive(TenantUser $viewer, AiConversation $conversation): void
+    {
+        abort_unless($this->canMutate($viewer, $conversation), 403);
+
+        $conversation->forceFill([
+            'status' => AssistantConversationStatus::ARCHIVED,
+        ])->save();
+
+        $this->activity->record(
+            module: 'ai_assistant',
+            action: 'assistant.conversation.archive',
+            summary: 'Assistant conversation archived',
+            entityType: 'ai_conversation',
+            entityId: (string) $conversation->id,
+            entityLabel: $conversation->title,
+            actor: $viewer,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function exportPayload(AiConversation $conversation): array
+    {
+        $conversation->loadMissing(['messages' => static fn ($q) => $q->orderBy('created_at')]);
+
+        return [
+            'exported_at' => now()->toIso8601String(),
+            'conversation' => $this->asDetail($conversation),
+        ];
+    }
+
+    public function exportCsv(AiConversation $conversation): string
+    {
+        $conversation->loadMissing(['messages' => static fn ($q) => $q->orderBy('created_at')]);
+
+        $lines = ['role,content,created_at,model_name,status'];
+        foreach ($conversation->messages as $message) {
+            $lines[] = implode(',', [
+                $this->csvCell((string) $message->role),
+                $this->csvCell((string) $message->content),
+                $this->csvCell($message->created_at?->toIso8601String() ?? ''),
+                $this->csvCell((string) ($message->model_name ?? '')),
+                $this->csvCell((string) $message->status),
+            ]);
+        }
+
+        return implode("\n", $lines);
     }
 
     public function findVisibleOrFail(TenantUser $viewer, string $conversationId): AiConversation
@@ -209,6 +294,11 @@ final class ConversationService
 
     public function canContinue(TenantUser $viewer, AiConversation $conversation): bool
     {
+        return $this->canMutate($viewer, $conversation);
+    }
+
+    public function canMutate(TenantUser $viewer, AiConversation $conversation): bool
+    {
         return (string) $conversation->user_id === (string) $viewer->id
             && $conversation->status === AssistantConversationStatus::ACTIVE;
     }
@@ -218,7 +308,7 @@ final class ConversationService
      */
     public function asListRow(AiConversation $conversation): array
     {
-        return [
+        $row = [
             'id' => (string) $conversation->id,
             'title' => $conversation->title,
             'module_context' => $conversation->module_context,
@@ -230,6 +320,13 @@ final class ConversationService
             'updated_at' => $conversation->updated_at?->toIso8601String(),
             'user_id' => (string) $conversation->user_id,
         ];
+
+        if ($conversation->relationLoaded('user') && $conversation->user !== null) {
+            $row['user_name'] = $conversation->user->name;
+            $row['user_email'] = $conversation->user->email;
+        }
+
+        return $row;
     }
 
     /**
@@ -338,5 +435,12 @@ final class ConversationService
         $normalized = trim(preg_replace('/\s+/', ' ', $question) ?? $question);
 
         return Str::limit($normalized, 120, '…');
+    }
+
+    private function csvCell(string $value): string
+    {
+        $escaped = str_replace('"', '""', $value);
+
+        return '"'.$escaped.'"';
     }
 }

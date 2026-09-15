@@ -457,7 +457,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         title: "System Core",
         icon: Shapes,
         module: "dynamic_entities",
-        permissions: ["dynamic_entities:fields:manage", "printables:manage", "sidebar:manage", "api_keys:manage", "system:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "automation:manage", "search_index:manage", "ai_assistant:prompts:manage"],
+        permissions: ["dynamic_entities:fields:manage", "printables:manage", "sidebar:manage", "api_keys:manage", "system:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "automation:manage", "search_index:manage", "entity_hooks:manage", "ai_assistant:prompts:manage"],
         permissionsMatch: "any",
         items: [
           {
@@ -469,6 +469,11 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             title: "Search Index",
             href: "/admin/search-index",
             permissions: ["search_index:manage"],
+          },
+          {
+            title: "AI System Prompts",
+            href: "/admin/ai-prompts",
+            permissions: ["ai_assistant:prompts:manage"],
           },
           {
             title: "Manage Fields",
@@ -517,9 +522,9 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: ["workflows:manage"],
           },
           {
-            title: "Manage AI Prompts",
-            href: "/admin/ai-prompts",
-            permissions: ["ai_assistant:prompts:manage"],
+            title: "Entity Hooks",
+            href: "/dynamic-entities/hooks",
+            permissions: ["entity_hooks:manage"],
           },
           {
             title: "Manage Sidebar",
@@ -673,11 +678,11 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           { title: "Backups", href: "/admin/backups", section: "Platform", permissions: ["tenant:manage"] },
           { title: "KPI & SLA", href: "/admin/settings/kpi", section: "Platform", permissions: ["tenant:manage"] },
           {
-            title: "Assistant knowledge",
-            href: "/settings/ai-assistant/knowledge",
+            title: "Assistant conversations",
+            href: "/settings/ai-assistant/conversations",
             section: "AI Assistant",
             module: "ai_assistant",
-            permissions: ["ai_assistant:knowledge:manage"],
+            permissions: ["ai_assistant:conversations:audit"],
           },
           {
             title: "My E-Forms profile",

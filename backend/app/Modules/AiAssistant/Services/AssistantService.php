@@ -7,6 +7,8 @@ namespace App\Modules\AiAssistant\Services;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\AskAssistantInput;
 use App\Modules\AiAssistant\DTOs\AskAssistantResult;
+use App\Modules\AiAssistant\Models\AiAssistantProposedAction;
+use App\Modules\AiAssistant\Models\AiConversation;
 use App\Modules\AiAssistant\DTOs\RetrievedKnowledgeChunk;
 use App\Modules\AiAssistant\DTOs\ToolPlan;
 use App\Modules\AiAssistant\DTOs\ToolResult;
@@ -26,6 +28,7 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -75,8 +78,44 @@ final class AssistantService
             $moduleContext = $input->moduleContext ?? $conversation->module_context;
             $pagePath = $input->pagePath ?? $conversation->page_path;
 
+            // Write actions (report builder, tickets, etc.) skip chat LLM — they use domain services directly.
+            if (! $input->planMode) {
+                try {
+                    $earlyAction = $this->actions->maybePropose(
+                        viewer: $viewer,
+                        question: $safeQuestion,
+                        moduleContext: $moduleContext,
+                        conversationId: (string) $conversation->id,
+                        messageId: null,
+                        preferredModel: $input->preferredModel,
+                    );
+                } catch (ValidationException $e) {
+                    return $this->finalizeActionValidationAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        message: (string) collect($e->errors())->flatten()->first(),
+                        modelName: (is_string($input->preferredModel) && $input->preferredModel !== '')
+                            ? $input->preferredModel
+                            : $this->llm->modelName(),
+                    );
+                }
+                if ($earlyAction !== null) {
+                    return $this->finalizeActionOnlyAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        proposedAction: $earlyAction,
+                        modelName: (is_string($input->preferredModel) && $input->preferredModel !== '')
+                            ? $input->preferredModel
+                            : $this->llm->modelName(),
+                    );
+                }
+            }
+
             // Stage 1: deterministic heuristic router.
             $plan = $this->toolRouter->plan($safeQuestion, $moduleContext);
+            if (! (bool) config('ai_assistant.retrieval.enabled', false) && $plan->mode === ToolPlan::MODE_BOTH) {
+                $plan = new ToolPlan(ToolPlan::MODE_TOOLS, $plan->calls);
+            }
 
             // Stage 2: allowlisted fallback when heuristics miss (follow-ups / module bias).
             if (! $plan->useTools()) {
@@ -99,7 +138,11 @@ final class AssistantService
 
             $chunks = [];
             $providerFailure = null;
-            if ($plan->useDocs()) {
+            $retrievalEnabled = (bool) config('ai_assistant.retrieval.enabled', false);
+            if ($retrievalEnabled && $input->useRetrieval === false) {
+                $retrievalEnabled = false;
+            }
+            if ($plan->useDocs() && $retrievalEnabled) {
                 try {
                     $chunks = $this->retrieval->retrieve($viewer, $safeQuestion, null, $moduleContext, $pagePath);
                     $chunks = $this->chunkRanker->rank($chunks, $safeQuestion, $moduleContext, $pagePath);
@@ -120,9 +163,9 @@ final class AssistantService
                 }
             }
 
-            $undocumentedModule = $this->undocumentedEnabledModule($moduleContext);
+            $undocumentedModule = $retrievalEnabled ? $this->undocumentedEnabledModule($moduleContext) : null;
             $notes = [];
-            if ($undocumentedModule !== null && $chunks === [] && ! $usedLiveData) {
+            if ($retrievalEnabled && $undocumentedModule !== null && $chunks === [] && ! $usedLiveData) {
                 $notes[] = sprintf(
                     "The '%s' module is enabled for this tenant, but no help guide has been published yet. "
                     ."Tell the user honestly that the guide is not published yet and suggest a tenant admin publish one. Do not invent steps.",
@@ -242,6 +285,7 @@ final class AssistantService
                     moduleContext: $moduleContext,
                     conversationId: (string) $conversation->id,
                     messageId: (string) $assistantMessage->id,
+                    preferredModel: $input->preferredModel,
                 );
 
                 if ($proposedAction !== null) {
@@ -293,9 +337,114 @@ final class AssistantService
                 providerNotice: $providerNotice,
                 promptTokens: $promptTokens,
                 completionTokens: $completionTokens,
-                costEstimate: AssistantCostEstimator::estimate($promptTokens, $completionTokens),
+                costEstimate: AssistantCostEstimator::estimate(
+                    $promptTokens,
+                    $completionTokens,
+                    $prompt->user ?? $safeQuestion,
+                    $answer,
+                ),
             );
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $proposedAction
+     */
+    private function finalizeActionOnlyAsk(
+        TenantUser $viewer,
+        AiConversation $conversation,
+        array $proposedAction,
+        string $modelName,
+    ): AskAssistantResult {
+        $answer = ($proposedAction['summary'] ?? 'I prepared an action for your review.')
+            ."\n\nNothing has been saved yet — confirm in the card below to proceed.";
+
+        $assistantMessage = $this->conversations->storeAssistantMessage(
+            conversation: $conversation,
+            content: $answer,
+            status: AssistantAskStatus::COMPLETED,
+            citations: [],
+            modelName: $modelName,
+        );
+
+        AiAssistantProposedAction::query()
+            ->where('id', (string) ($proposedAction['id'] ?? ''))
+            ->update(['message_id' => $assistantMessage->id]);
+
+        $proposedAction['message_id'] = (string) $assistantMessage->id;
+
+        $conversation->forceFill([
+            'last_message_at' => now(),
+        ])->save();
+
+        $this->conversations->recordAskAudit($viewer, $conversation, $assistantMessage);
+
+        Log::info('ai_assistant.ask.completed', $this->security->sanitizeLogPayload([
+            'tenant_id' => tenant()?->getTenantKey(),
+            'user_id' => (string) $viewer->id,
+            'conversation_id' => (string) $conversation->id,
+            'message_id' => (string) $assistantMessage->id,
+            'status' => AssistantAskStatus::COMPLETED,
+            'model' => $modelName,
+            'citation_count' => 0,
+            'used_live_data' => false,
+            'proposed_action' => $proposedAction['action'] ?? null,
+            'tools' => [],
+            'prompt_tokens' => null,
+            'completion_tokens' => null,
+            'latency_ms' => null,
+        ]));
+
+        return new AskAssistantResult(
+            conversationId: (string) $conversation->id,
+            messageId: (string) $assistantMessage->id,
+            answer: $answer,
+            citations: [],
+            status: AssistantAskStatus::COMPLETED,
+            suggestedFollowups: [],
+            relatedLinks: [],
+            modelName: $modelName,
+            usedLiveData: false,
+            proposedAction: $proposedAction,
+        );
+    }
+
+    private function finalizeActionValidationAsk(
+        TenantUser $viewer,
+        AiConversation $conversation,
+        string $message,
+        string $modelName,
+    ): AskAssistantResult {
+        $answer = trim($message) !== ''
+            ? $message
+            : 'I could not prepare that action. Check the email and role name, then try again.';
+
+        $assistantMessage = $this->conversations->storeAssistantMessage(
+            conversation: $conversation,
+            content: $answer,
+            status: AssistantAskStatus::COMPLETED,
+            citations: [],
+            modelName: $modelName,
+        );
+
+        $conversation->forceFill([
+            'last_message_at' => now(),
+        ])->save();
+
+        $this->conversations->recordAskAudit($viewer, $conversation, $assistantMessage);
+
+        return new AskAssistantResult(
+            conversationId: (string) $conversation->id,
+            messageId: (string) $assistantMessage->id,
+            answer: $answer,
+            citations: [],
+            status: AssistantAskStatus::COMPLETED,
+            suggestedFollowups: [],
+            relatedLinks: [],
+            modelName: $modelName,
+            usedLiveData: false,
+            proposedAction: null,
+        );
     }
 
     /**

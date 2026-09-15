@@ -9,27 +9,25 @@ import {
   SendHorizontal,
 } from "lucide-react";
 
+import { AssistantHistoryPanel } from "@/components/assistant/assistant-history-panel";
 import { AssistantMessage, type AssistantChatMessage } from "@/components/assistant/assistant-message";
-import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   askAssistant,
   cancelAssistantAction,
   confirmAssistantAction,
   fetchAssistantConversation,
-  fetchAssistantMeta,
   submitAssistantFeedback,
   type AssistantAskResponse,
   type AssistantCitation,
   type AssistantConversationMessage,
   type AssistantCostEstimate,
   type AssistantMeta,
+  type AssistantRateLimit,
 } from "@/lib/api/modules/assistant-api";
 import { getErrorMessage } from "@/lib/api/error";
 import type { AssistantRouteContext } from "@/lib/assistant/route-context";
-import { cn } from "@/lib/utils";
 
 type Props = {
   routeContext: AssistantRouteContext;
@@ -37,17 +35,15 @@ type Props = {
   autoPilot?: boolean;
   planMode?: boolean;
   preferredModel?: string | null;
-  onPreferredModelChange?: (model: string) => void;
+  meta?: AssistantMeta | null;
+  historyOpen?: boolean;
+  onHistoryOpenChange?: (open: boolean) => void;
+  newChatNonce?: number;
+  onRateLimitChange?: (rateLimit: AssistantRateLimit) => void;
+  onCostEstimateChange?: (estimate: AssistantCostEstimate | null) => void;
 };
 
 const CONVERSATION_STORAGE_KEY = "toweros.assistant.conversation_id";
-
-function modelLabel(model: string): string {
-  return model
-    .replace(/^models\//, "")
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function toAssistantMessage(response: AssistantAskResponse): AssistantChatMessage {
   return {
@@ -99,7 +95,12 @@ export function AssistantChatPanel({
   autoPilot = false,
   planMode = false,
   preferredModel = null,
-  onPreferredModelChange,
+  meta = null,
+  historyOpen = false,
+  onHistoryOpenChange,
+  newChatNonce = 0,
+  onRateLimitChange,
+  onCostEstimateChange,
 }: Props) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
@@ -108,9 +109,6 @@ export function AssistantChatPanel({
   const [feedbackPendingId, setFeedbackPendingId] = useState<string | null>(null);
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<AssistantMeta | null>(null);
-  const [activeModel, setActiveModel] = useState<string | null>(preferredModel);
-  const [costEstimate, setCostEstimate] = useState<AssistantCostEstimate | null>(null);
   const [isRestoring, setIsRestoring] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -118,31 +116,6 @@ export function AssistantChatPanel({
   );
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const data = await fetchAssistantMeta();
-        if (cancelled) return;
-        setMeta(data);
-        if (!preferredModel && data.model_name) {
-          setActiveModel(data.model_name);
-        }
-      } catch {
-        // Meta is optional chrome; chat still works.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [preferredModel]);
-
-  useEffect(() => {
-    if (preferredModel) {
-      setActiveModel(preferredModel);
-    }
-  }, [preferredModel]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -186,18 +159,18 @@ export function AssistantChatPanel({
   }, []);
 
   useEffect(() => {
-    if (!open) {
+    if (!open || historyOpen) {
       return;
     }
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isAsking, open]);
+  }, [messages, isAsking, open, historyOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (open && !historyOpen) {
       const timer = window.setTimeout(() => inputRef.current?.focus(), 50);
       return () => window.clearTimeout(timer);
     }
-  }, [open]);
+  }, [open, historyOpen]);
 
   const onConfirmAction = async (
     messageId: string,
@@ -225,7 +198,7 @@ export function AssistantChatPanel({
                 content:
                   message.content +
                   (result.result.entity_label
-                    ? `\n\nCreated: ${result.result.entity_label}`
+                    ? `\n\nUpdated: ${result.result.entity_label}`
                     : "\n\nAction confirmed."),
               }
             : message,
@@ -260,18 +233,18 @@ export function AssistantChatPanel({
         module_context: routeContext.moduleKey,
         page_path: routeContext.pagePath,
         plan_mode: planMode,
-        preferred_model: activeModel,
+        preferred_model: preferredModel,
       });
 
       setConversationId(response.conversation_id);
       if (typeof window !== "undefined") {
         window.localStorage.setItem(CONVERSATION_STORAGE_KEY, response.conversation_id);
       }
-      if (response.model_name) {
-        setActiveModel(response.model_name);
-      }
       if (response.cost_estimate) {
-        setCostEstimate(response.cost_estimate);
+        onCostEstimateChange?.(response.cost_estimate);
+      }
+      if (response.rate_limit) {
+        onRateLimitChange?.(response.rate_limit);
       }
 
       const assistantMsg = toAssistantMessage(response);
@@ -342,17 +315,56 @@ export function AssistantChatPanel({
     setMessages([]);
     setError(null);
     setQuestion("");
-    setCostEstimate(null);
+    onCostEstimateChange?.(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
     }
   };
 
-  const models = meta?.models?.length ? meta.models : activeModel ? [activeModel] : [];
-  const selectedModel = activeModel ?? meta?.model_name ?? models[0] ?? "gemini-2.0-flash";
+  useEffect(() => {
+    if (newChatNonce > 0) {
+      startNewConversation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- header New chat trigger
+  }, [newChatNonce]);
+
+  const loadConversation = async (id: string) => {
+    setError(null);
+    setIsRestoring(true);
+    try {
+      const detail = await fetchAssistantConversation(id);
+      const restored = detail.messages
+        .map(toRestoredMessage)
+        .filter((message): message is AssistantChatMessage => message !== null);
+      setConversationId(detail.id);
+      setMessages(restored);
+      onCostEstimateChange?.(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, detail.id);
+      }
+      onHistoryOpenChange?.(false);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+      <AssistantHistoryPanel
+        open={historyOpen}
+        activeConversationId={conversationId}
+        onClose={() => onHistoryOpenChange?.(false)}
+        onSelect={(id) => void loadConversation(id)}
+        onNewChat={startNewConversation}
+        onArchived={(id) => {
+          if (id === conversationId) {
+            startNewConversation();
+          }
+        }}
+      />
+
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {isRestoring ? (
           <div className="flex items-center gap-2 px-1 py-6 text-sm text-muted-foreground">
@@ -401,7 +413,7 @@ export function AssistantChatPanel({
             placeholder="Type your message..."
             rows={2}
             className="max-h-28 min-h-0 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
-            disabled={isAsking}
+            disabled={isAsking || historyOpen}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -445,7 +457,7 @@ export function AssistantChatPanel({
                 type="button"
                 size="icon"
                 className="size-9 shrink-0"
-                disabled={isAsking || question.trim() === ""}
+                disabled={isAsking || historyOpen || question.trim() === ""}
                 onClick={() => void sendQuestion(question)}
                 aria-label="Send message"
               >
@@ -458,63 +470,7 @@ export function AssistantChatPanel({
             </div>
           </div>
         </div>
-
-        <div className="mt-2.5 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            {meta?.supports_model_select && models.length > 1 ? (
-              <Select
-                className="h-8 max-w-[180px] text-[11px]"
-                value={selectedModel}
-                onChange={(e) => {
-                  setActiveModel(e.target.value);
-                  onPreferredModelChange?.(e.target.value);
-                }}
-                aria-label="Model"
-              >
-                {models.map((m) => (
-                  <option key={m} value={m}>
-                    {modelLabel(m)}
-                  </option>
-                ))}
-              </Select>
-            ) : (
-              <span className="inline-flex max-w-[180px] items-center gap-1 truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground">
-                <TowerOsAssistantMark className="size-3 shrink-0 text-muted-foreground" />
-                {modelLabel(selectedModel)}
-              </span>
-            )}
-            {messages.length > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="h-7 px-2 text-[11px] text-muted-foreground"
-                onClick={startNewConversation}
-              >
-                New chat
-              </Button>
-            ) : null}
-          </div>
-          {costEstimate ? (
-            <span
-              className={cn(
-                "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold",
-                costEstimate.intensity === "high"
-                  ? "bg-amber-200 text-amber-950 dark:bg-amber-400/30 dark:text-amber-100"
-                  : costEstimate.intensity === "medium"
-                    ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"
-                    : "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100",
-              )}
-              title="Rough estimate from token usage × configured Gemini rates (₱)"
-            >
-              {costEstimate.label}
-            </span>
-          ) : (
-            <span className="text-[10px] text-muted-foreground">
-              {planMode ? "Plan mode" : "Enter to send"}
-            </span>
-          )}
-        </div>
+        <p className="mt-2 px-1 text-[10px] text-muted-foreground">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   );

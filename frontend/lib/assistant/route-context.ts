@@ -48,6 +48,7 @@ const ROUTE_RULES: Array<{
     suggestions: [
       "How do I assign roles to a user?",
       "Why can’t a user see a module?",
+      "Build a users dashboard by role as a bar chart",
     ],
   },
   {

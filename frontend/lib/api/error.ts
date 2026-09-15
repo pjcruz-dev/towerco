@@ -109,6 +109,9 @@ export function getErrorMessage(error: unknown): string {
     if (error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout")) {
       const url = typeof error.config?.url === "string" ? error.config.url : "";
       const method = (error.config?.method ?? "").toLowerCase();
+      if (url.includes("/assistant/ask")) {
+        return "The assistant took too long to respond. Try again, or switch to Gemini Flash in the model picker.";
+      }
       if (url.includes("/doc-extract/batches") && method === "post") {
         return "Upload timed out. Check Batches — the file may still have been accepted and is processing in the background.";
       }

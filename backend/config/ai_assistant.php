@@ -27,6 +27,8 @@ return [
     ],
 
     'retrieval' => [
+        // When false, Ask TowerOS skips knowledge-base RAG (LLM + read-only tools only).
+        'enabled' => (bool) env('AI_ASSISTANT_RETRIEVAL_ENABLED', false),
         // Local hash embeddings need a low floor; raise to ~0.25 when using OpenAI / Bedrock embeddings.
         'top_k' => (int) env('AI_ASSISTANT_RETRIEVAL_TOP_K', 5),
         'min_score' => (float) env('AI_ASSISTANT_RETRIEVAL_MIN_SCORE', 0.05),
@@ -56,6 +58,14 @@ return [
         'api_key' => env('AI_ASSISTANT_OPENAI_API_KEY', env('OPENAI_API_KEY', '')),
         'base_url' => env('AI_ASSISTANT_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
         'chat_model' => env('AI_ASSISTANT_OPENAI_CHAT_MODEL', 'gpt-4o-mini'),
+        // Comma-separated allowlist for the in-chat model selector.
+        'chat_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'AI_ASSISTANT_OPENAI_CHAT_MODELS',
+                'gpt-4o-mini,gpt-4o,gpt-4.1-mini,gpt-4.1',
+            )),
+        ))),
         'embedding_model' => env('AI_ASSISTANT_OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
         'dimensions' => (int) env('AI_ASSISTANT_OPENAI_EMBEDDING_DIMENSIONS', 1536),
         'max_tokens' => (int) env('AI_ASSISTANT_OPENAI_MAX_TOKENS', 1024),
@@ -66,10 +76,25 @@ return [
     'cursor' => [
         'api_key' => env('AI_ASSISTANT_CURSOR_API_KEY', env('CURSOR_API_KEY', '')),
         'base_url' => env('AI_ASSISTANT_CURSOR_BASE_URL', 'https://api.cursor.com/v1'),
-        'model' => env('AI_ASSISTANT_CURSOR_MODEL', 'composer-2'),
+        'model' => env('AI_ASSISTANT_CURSOR_MODEL', 'composer-2.5'),
+        // Comma-separated allowlist — must match Cursor API model ids for the key (see GET /v1/models).
+        'chat_models' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'AI_ASSISTANT_CURSOR_CHAT_MODELS',
+                'composer-2.5,grok-4.5,grok-4.6,default',
+            )),
+        ))),
         'max_wait_seconds' => (int) env('AI_ASSISTANT_CURSOR_MAX_WAIT_SECONDS', 120),
         'poll_interval_ms' => (int) env('AI_ASSISTANT_CURSOR_POLL_INTERVAL_MS', 1500),
-        'timeout' => (int) env('AI_ASSISTANT_CURSOR_TIMEOUT', 30),
+        'timeout' => (int) env('AI_ASSISTANT_CURSOR_TIMEOUT', 90),
+        // Optional map of UI aliases → API model ids (e.g. auto-smart → default).
+        'model_aliases' => [
+            'auto' => 'default',
+            'auto-smart' => 'default',
+            'composer-2' => 'composer-2.5',
+            'composer2' => 'composer-2.5',
+        ],
     ],
 
     /*
@@ -79,13 +104,13 @@ return [
     'gemini' => [
         'api_key' => env('AI_ASSISTANT_GOOGLE_AI_API_KEY', env('GOOGLE_AI_API_KEY', '')),
         'base_url' => env('AI_ASSISTANT_GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
-        'chat_model' => env('AI_ASSISTANT_GEMINI_CHAT_MODEL', 'gemini-2.0-flash'),
-        // Comma-separated allowlist for the in-chat model selector.
+        'chat_model' => env('AI_ASSISTANT_GEMINI_CHAT_MODEL', 'gemini-3.6-flash'),
+        // Comma-separated allowlist for the in-chat model selector (must support generateContent).
         'chat_models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env(
                 'AI_ASSISTANT_GEMINI_CHAT_MODELS',
-                'gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro,gemini-2.0-flash,gemini-2.0-flash-lite,gemini-1.5-flash,gemini-1.5-pro',
+                'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-pro-preview,gemini-3.1-flash-lite,gemini-3-flash-preview,gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-latest,gemini-pro-latest',
             )),
         ))),
         'max_tokens' => (int) env('AI_ASSISTANT_GEMINI_MAX_TOKENS', 2048),
@@ -108,6 +133,9 @@ return [
     ],
 
     'rate_limit_per_minute' => (int) env('AI_ASSISTANT_RATE_LIMIT_PER_MINUTE', 20),
+
+    // Per-user daily ask cap (0 = disabled).
+    'daily_ask_limit' => (int) env('AI_ASSISTANT_DAILY_ASK_LIMIT', 0),
 
     'queue' => env('AI_ASSISTANT_QUEUE', env('TOWEROS_QUEUE_INTEGRATIONS', 'toweros-integrations')),
 

@@ -21,11 +21,17 @@ class AssistantConversationIndexController extends AbstractApiController
         abort_unless($user instanceof TenantUser && $user->can('ai_assistant:use'), 403);
 
         $listQuery = $this->validatedTenantListQuery($request);
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', 'max:16'],
+        ]);
+        $status = isset($validated['status']) ? (string) $validated['status'] : null;
+
         $paginator = $conversations->paginateForViewer(
             $user,
             $listQuery['page'],
             $listQuery['per_page'],
             $listQuery['search'],
+            $status,
         );
 
         $data = collect($paginator->items())

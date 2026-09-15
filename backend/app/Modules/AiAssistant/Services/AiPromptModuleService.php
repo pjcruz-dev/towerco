@@ -96,7 +96,8 @@ final class AiPromptModuleService
         $module->sort_order = (int) $def['sort_order'];
         $module->body = (string) $def['body'];
         $module->is_enabled = true;
-        $module->updated_by = (string) $actor->id;
+        // Null = track catalog defaults again on ensureSeeded sync.
+        $module->updated_by = null;
         $module->save();
 
         return $this->present($module, true);
@@ -159,6 +160,8 @@ final class AiPromptModuleService
             return;
         }
 
+        $defaults = collect(AiPromptModuleCatalog::defaults())->keyBy('key');
+
         if (! AiPromptModule::query()->exists()) {
             foreach (AiPromptModuleCatalog::defaults() as $def) {
                 AiPromptModule::query()->create([
@@ -172,14 +175,35 @@ final class AiPromptModuleService
                     'body' => $def['body'],
                     'is_enabled' => true,
                     'is_system' => true,
+                    'updated_by' => null,
                 ]);
             }
 
             return;
         }
 
-        // Align filenames / labels for system modules without overwriting edited bodies.
-        $defaults = collect(AiPromptModuleCatalog::defaults())->keyBy('key');
+        // Insert any new catalog keys that are missing on this tenant.
+        foreach (AiPromptModuleCatalog::defaults() as $def) {
+            $exists = AiPromptModule::query()->where('key', $def['key'])->exists();
+            if ($exists) {
+                continue;
+            }
+            AiPromptModule::query()->create([
+                'key' => $def['key'],
+                'name' => $def['name'],
+                'filename' => $def['filename'],
+                'description' => $def['description'],
+                'kind' => $def['kind'],
+                'intent_key' => $def['intent_key'],
+                'sort_order' => $def['sort_order'],
+                'body' => $def['body'],
+                'is_enabled' => true,
+                'is_system' => true,
+                'updated_by' => null,
+            ]);
+        }
+
+        // Align meta for system modules. Refresh body only when never admin-edited (updated_by null).
         AiPromptModule::query()
             ->where('is_system', true)
             ->get()
@@ -208,6 +232,14 @@ final class AiPromptModuleService
                 $intent = $def['intent_key'] !== null ? (string) $def['intent_key'] : null;
                 if ($module->intent_key !== $intent) {
                     $module->intent_key = $intent;
+                    $dirty = true;
+                }
+                if ((int) $module->sort_order !== (int) $def['sort_order']) {
+                    $module->sort_order = (int) $def['sort_order'];
+                    $dirty = true;
+                }
+                if ($module->updated_by === null && (string) $module->body !== (string) $def['body']) {
+                    $module->body = (string) $def['body'];
                     $dirty = true;
                 }
                 if ($dirty) {

@@ -116,8 +116,13 @@ export const GENERAL_SYSTEM_PERMISSIONS: Array<{
     description: "Inspect and rebuild the workspace search / filter index.",
   },
   {
+    permission: "entity_hooks:manage",
+    title: "Manage Entity Hooks",
+    description: "Configure declarative lifecycle hooks for Dynamic Entities (safe DSL).",
+  },
+  {
     permission: "ai_assistant:prompts:manage",
-    title: "Manage AI Prompts",
+    title: "AI System Prompts",
     description: "Edit modular AI system prompt modules assembled by intent.",
   },
   {
