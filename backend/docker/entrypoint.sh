@@ -172,6 +172,11 @@ if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
     echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
     echo "        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;"
     echo "        proxy_set_header X-Forwarded-Host \$host;"
+    # SSO callback redirects embed tokens in Location (?payload=…); large Azure group
+    # mappings can exceed nginx default proxy_buffer_size (~4–8k) and return 502.
+    echo "        proxy_buffer_size 128k;"
+    echo "        proxy_buffers 8 128k;"
+    echo "        proxy_busy_buffers_size 256k;"
     echo "        proxy_read_timeout 300s;"
     echo "        proxy_pass http://toweros_api_workers;"
     echo "    }"
