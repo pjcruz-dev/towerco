@@ -61,6 +61,8 @@ export type TicketingTicketDetail = TicketingTicketListRow & {
   resolved_at: string | null;
   closed_at: string | null;
   can_reopen?: boolean;
+  reopen_until?: string | null;
+  auto_close_resolved_after_days?: number;
   comments: TicketingCommentRow[];
   attachments: TicketingAttachmentRow[];
   links: TicketingLinkRow[];
@@ -131,6 +133,10 @@ export type TicketingSettings = {
   notify_it_on_reopen: boolean;
   notify_requestor_on_resolve: boolean;
   notify_assignee_on_assign: boolean;
+  /** Configured IT assignee pool (empty until first save of the list). */
+  it_assignee_user_ids: string[];
+  /** True once an IT assignee list has been saved (even if empty). */
+  it_assignee_pool_configured: boolean;
   categories: string[];
   category_options?: TicketingCategoryOption[];
   category_packs?: TicketingCategoryPack[];
@@ -138,6 +144,8 @@ export type TicketingSettings = {
   sla_enabled: boolean;
   sla_response_minutes: number;
   sla_escalation_minutes: number;
+  /** Days after resolve before auto-close. 0 disables. Default 3. */
+  auto_close_resolved_after_days: number;
   teams_webhook_url: string;
   notify_teams_on_create: boolean;
   notify_teams_on_sla_reminder: boolean;

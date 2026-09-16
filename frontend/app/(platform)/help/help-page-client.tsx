@@ -100,8 +100,8 @@ function EApprovalTourGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">E-Forms product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Walk the real screens with coach marks. Sample UI appears while the tour runs and is never
-        saved — jump into chapters from the tour guide anytime.
+        Walk the real screens with coach marks — including drag-and-drop attachments with upload
+        progress. Sample UI appears while the tour runs and is never saved.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <Play className="h-3.5 w-3.5" aria-hidden />
@@ -164,8 +164,8 @@ function TicketingFullTourGuideCard() {
       <h3 className="mt-2 text-base font-medium text-foreground">Ticketing product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         {isAdmin
-          ? "Walk the real screens with coach marks. Sample UI appears while the tour runs and is never saved."
-          : "Walk Overview, the ticket queue, and raising a ticket. Sample UI appears while the tour runs and is never saved."}
+          ? "Coach marks cover attachments, searchable assignees, IT assignee pool, SLA, and auto-close. Sample UI is never saved."
+          : "Walk Overview, the ticket queue, and raising a ticket with drag-and-drop attachments. Sample UI is never saved."}
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <Play className="h-3.5 w-3.5" aria-hidden />
@@ -185,7 +185,7 @@ function PasskeysTourGuideCard() {
       <h3 className="mt-2 text-base font-medium text-foreground">Add a passkey</h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Starts from your account menu → My security → Passkeys. Enroll fingerprint, Face ID, or
-        Windows Hello on this organization host.
+        Windows Hello; enrolled devices show phone vs computer and authenticator type.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <Fingerprint className="h-3.5 w-3.5" aria-hidden />

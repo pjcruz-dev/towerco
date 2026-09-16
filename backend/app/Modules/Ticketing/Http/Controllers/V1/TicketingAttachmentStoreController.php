@@ -21,7 +21,11 @@ class TicketingAttachmentStoreController extends AbstractApiController
         TicketingFileStorageService $files,
         TicketingPlanFeaturesService $planFeatures,
     ): JsonResponse {
-        abort_unless($request->user()?->can('ticketing:tickets:create'), 403);
+        abort_unless(
+            $request->user()?->can('ticketing:tickets:create')
+            || $request->user()?->can('ticketing:tickets:manage'),
+            403
+        );
         $planFeatures->assertCanUploadAttachment();
         $tickets->assertCanView($ticket, $request->user());
 

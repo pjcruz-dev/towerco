@@ -436,10 +436,12 @@ use App\Modules\Sites\Http\Controllers\V1\SiteShowController;
 use App\Modules\Tenancy\Http\Controllers\V1\TenantEnvironmentHandoffMintController;
 use App\Modules\Tenancy\Http\Controllers\V1\TenantLinkedEnvironmentsController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAssignableUsersController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentDestroyController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentDownloadController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentStoreController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingCommentStoreController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingDashboardController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingDirectoryUsersController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingMetadataController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsTestEmailController;
@@ -712,6 +714,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('ticketing/settings/test-webhook', TicketingSettingsTestWebhookController::class)->name('api.tenant.v1.ticketing.settings.test_webhook');
     Route::get('ticketing/metadata', TicketingMetadataController::class)->name('api.tenant.v1.ticketing.metadata');
     Route::get('ticketing/assignable-users', TicketingAssignableUsersController::class)->name('api.tenant.v1.ticketing.assignable_users');
+    Route::get('ticketing/directory-users', TicketingDirectoryUsersController::class)->name('api.tenant.v1.ticketing.directory_users');
     Route::get('ticketing/tickets', TicketingTicketIndexController::class)->name('api.tenant.v1.ticketing.tickets.index');
     Route::get('ticketing/tickets/export', TicketingTicketExportController::class)->name('api.tenant.v1.ticketing.tickets.export');
     Route::post('ticketing/tickets', TicketingTicketStoreController::class)->name('api.tenant.v1.ticketing.tickets.store');
@@ -720,6 +723,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('ticketing/tickets/{ticket}/comments', TicketingCommentStoreController::class)->name('api.tenant.v1.ticketing.tickets.comments.store');
     Route::post('ticketing/tickets/{ticket}/attachments', TicketingAttachmentStoreController::class)->name('api.tenant.v1.ticketing.tickets.attachments.store');
     Route::get('ticketing/attachments/{attachment}', TicketingAttachmentDownloadController::class)->name('api.tenant.v1.ticketing.attachments.show');
+    Route::delete('ticketing/attachments/{attachment}', TicketingAttachmentDestroyController::class)->name('api.tenant.v1.ticketing.attachments.destroy');
     Route::get('procurement-one/dashboard', ProcurementOneDashboardController::class)->name('api.tenant.v1.procurement_one.dashboard');
     Route::get('procurement-one/settings', ProcurementOneSettingsShowController::class)->name('api.tenant.v1.procurement_one.settings.show');
     Route::put('procurement-one/settings', ProcurementOneSettingsUpdateController::class)->name('api.tenant.v1.procurement_one.settings.update');

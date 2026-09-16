@@ -57,6 +57,21 @@ final class TicketingFileStorageService
         return $disk->response($attachment->file_path, $attachment->file_name);
     }
 
+    public function deleteAttachment(TicketingAttachment $attachment): void
+    {
+        $path = (string) $attachment->file_path;
+        $attachment->delete();
+
+        try {
+            $disk = Storage::disk($this->disk());
+            if ($path !== '' && $disk->exists($path)) {
+                $disk->delete($path);
+            }
+        } catch (\Throwable) {
+            // Orphan files can be cleaned later; the attachment row is already gone.
+        }
+    }
+
     private function assertAllowedMime(UploadedFile $file): void
     {
         $mime = (string) $file->getMimeType();

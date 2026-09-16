@@ -61,6 +61,15 @@ final class WorkspaceAuditActionLabel
             'ticket.updated' => 'Ticket updated',
             'ticket.resolved' => 'Ticket resolved',
             'ticket.reopened' => 'Ticket reopened',
+            'ticket.auto_closed' => 'Ticket auto-closed',
+            'ticket.closed' => 'Ticket closed',
+
+            'auth.webauthn.register' => 'Passkey enrolled',
+            'auth.webauthn.register.failed' => 'Passkey enrollment failed',
+            'auth.webauthn.login' => 'Signed in with passkey',
+            'auth.webauthn.login.failed' => 'Passkey sign-in failed',
+            'auth.webauthn.revoke' => 'Passkey removed',
+            'auth.admin.webauthn_revoked' => 'Passkeys revoked by administrator',
 
             'batch.created' => 'DocExtract batch created',
             'batch.requeued' => 'DocExtract stuck scans requeued',

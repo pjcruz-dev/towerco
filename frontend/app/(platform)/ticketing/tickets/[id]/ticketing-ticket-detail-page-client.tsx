@@ -3,25 +3,23 @@
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
+import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
 import { formatTicketingDate, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
-import {
-  AttachmentPreviewGallery,
-  formatAttachmentBytes,
-  type AttachmentGalleryItem,
-} from "@/components/attachments/attachment-preview-gallery";
+import { AttachmentDropzone } from "@/components/attachments/attachment-dropzone";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { WorkspaceEntityActivityPanel } from "@/components/governance/workspace-entity-activity-panel";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionCardSkeleton } from "@/components/ui/page-skeletons";
+import { getErrorMessage } from "@/lib/api/error";
 import {
   addTicketingComment,
-  downloadTicketingAttachment,
+  deleteTicketingAttachment,
   fetchTicketingAssignableUsers,
   fetchTicketingAttachmentBlob,
   fetchTicketingMetadata,
@@ -32,21 +30,25 @@ import {
 import { ticketingLinkHref } from "@/lib/ticketing/link-href";
 import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Paperclip } from "lucide-react";
 
 type Props = {
   ticketId: string;
 };
 
+function localFileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
 export function TicketingTicketDetailPageClient({ ticketId }: Props) {
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const user = useAuthStore((s) => s.user);
   const canManage = user?.permissions.includes(permissions.ticketingTicketsManage) ?? false;
+  const canCreate = user?.permissions.includes(permissions.ticketingTicketsCreate) ?? false;
+  const canEditAttachments = canManage || canCreate;
+  const abortByKey = useRef<Record<string, AbortController>>({});
 
   const [comment, setComment] = useState("");
   const [isInternalComment, setIsInternalComment] = useState(false);
@@ -56,6 +58,11 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
   const [assigneeId, setAssigneeId] = useState("");
   const [resolutionComment, setResolutionComment] = useState("");
   const [manageError, setManageError] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadStateByKey, setUploadStateByKey] = useState<
+    Record<string, { progress: number; status: "uploading" | "complete" | "error"; error?: string | null }>
+  >({});
 
   const ticketQuery = useQuery({
     queryKey: ["ticketing", "ticket", ticketId],
@@ -77,27 +84,30 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
 
   const ticket = ticketQuery.data;
   const showSkeleton = ticketQuery.isLoading;
+  const ticketQueryKey = ["ticketing", "ticket", ticketId] as const;
 
-  const attachmentItems = useMemo((): AttachmentGalleryItem[] => {
-    return (ticket?.attachments ?? []).map((attachment) => {
-      const sizeLabel = formatAttachmentBytes(attachment.size_bytes);
-      const uploadedAt = attachment.created_at ? formatTicketingDate(attachment.created_at) : null;
-      const subtitle = [sizeLabel, uploadedAt].filter(Boolean).join(" · ") || null;
-      return {
+  const persistedItems = useMemo(
+    () =>
+      (ticket?.attachments ?? []).map((attachment) => ({
         id: attachment.id,
         fileName: attachment.file_name,
         mimeType: attachment.mime_type,
         sizeBytes: attachment.size_bytes,
-        title: attachment.file_name,
-        subtitle,
-      };
-    });
-  }, [ticket?.attachments]);
-
-  const fetchAttachmentBlob = useCallback(
-    (id: string) => fetchTicketingAttachmentBlob(id),
-    [],
+        badge: "Saved on ticket",
+      })),
+    [ticket?.attachments],
   );
+
+  const fetchPersistedPreview = useCallback(async (id: string, fileName: string) => {
+    if (!/\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName)) {
+      return null;
+    }
+    try {
+      return await fetchTicketingAttachmentBlob(id);
+    } catch {
+      return null;
+    }
+  }, []);
 
   const updateMutation = useMutation({
     mutationFn: (payload: {
@@ -110,7 +120,7 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
     onSuccess: () => {
       setResolutionComment("");
       setManageError(null);
-      queryClient.invalidateQueries({ queryKey: ["ticketing", "ticket", ticketId] });
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
     },
@@ -128,16 +138,99 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
     onSuccess: () => {
       setComment("");
       setIsInternalComment(false);
-      queryClient.invalidateQueries({ queryKey: ["ticketing", "ticket", ticketId] });
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+    },
+  });
+
+  const removeAttachmentMutation = useMutation({
+    mutationFn: (attachmentId: string) => deleteTicketingAttachment(attachmentId),
+    onMutate: async (attachmentId) => {
+      setAttachmentError(null);
+      await queryClient.cancelQueries({ queryKey: ticketQueryKey });
+      const previous = queryClient.getQueryData(ticketQueryKey);
+      queryClient.setQueryData(ticketQueryKey, (current: typeof ticket) => {
+        if (!current) return current;
+        return {
+          ...current,
+          attachments: (current.attachments ?? []).filter((row) => row.id !== attachmentId),
+        };
+      });
+      return { previous };
+    },
+    onError: (error, _attachmentId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(ticketQueryKey, context.previous);
+      }
+      setAttachmentError(getErrorMessage(error) || "Could not remove attachment.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
     },
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadTicketingAttachment(ticketId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ticketing", "ticket", ticketId] });
+    mutationFn: async (file: File) => {
+      const key = localFileKey(file);
+      const controller = new AbortController();
+      abortByKey.current[key] = controller;
+      setAttachmentError(null);
+      setUploadStateByKey((prev) => ({
+        ...prev,
+        [key]: { progress: 0, status: "uploading" },
+      }));
+      try {
+        await uploadTicketingAttachment(ticketId, file, {
+          signal: controller.signal,
+          onProgress: (percent) => {
+            setUploadStateByKey((prev) => ({
+              ...prev,
+              [key]: { progress: percent, status: "uploading" },
+            }));
+          },
+        });
+        setUploadStateByKey((prev) => ({
+          ...prev,
+          [key]: { progress: 100, status: "complete" },
+        }));
+      } catch (error) {
+        const message =
+          error instanceof Error && (error.name === "CanceledError" || error.name === "AbortError")
+            ? "Upload cancelled"
+            : getErrorMessage(error) || "Upload failed";
+        setUploadStateByKey((prev) => ({
+          ...prev,
+          [key]: { progress: 0, status: "error", error: message },
+        }));
+        throw error;
+      } finally {
+        delete abortByKey.current[key];
+      }
+    },
+    onSuccess: (_data, file) => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      setPendingFiles((prev) => prev.filter((row) => localFileKey(row) !== localFileKey(file)));
+      setUploadStateByKey((prev) => {
+        const next = { ...prev };
+        delete next[localFileKey(file)];
+        return next;
+      });
+    },
+    onError: (error) => {
+      if (error instanceof Error && (error.name === "CanceledError" || error.name === "AbortError")) {
+        return;
+      }
+      setAttachmentError(getErrorMessage(error) || "Could not upload attachment.");
     },
   });
+
+  const onPendingFilesChange = (next: File[]) => {
+    if (!canEditAttachments) return;
+    setPendingFiles(next);
+    const added = next.filter((file) => !pendingFiles.some((p) => localFileKey(p) === localFileKey(file)));
+    for (const file of added) {
+      void uploadMutation.mutateAsync(file).catch(() => undefined);
+    }
+  };
 
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingView]}>
@@ -202,39 +295,44 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                 </div>
               </section>
               <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-sm font-medium text-foreground">Attachments</h2>
-                  <button
-                    type="button"
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex")}
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadMutation.isPending}
-                  >
-                    <Paperclip className="mr-1.5 h-4 w-4" aria-hidden />
-                    {uploadMutation.isPending ? "Uploading…" : "Upload"}
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="sr-only"
-                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) uploadMutation.mutate(file);
-                      e.target.value = "";
-                    }}
-                  />
-                </div>
+                <h2 className="text-sm font-medium text-foreground">Attachments</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Drag & drop, browse, or paste a screenshot. Progress shows while uploading.
+                </p>
                 <div className="mt-3">
-                  <AttachmentPreviewGallery
-                    title=""
-                    hint="Images show inline preview. PDF opens in a new tab."
-                    emptyMessage="No attachments."
-                    items={attachmentItems}
-                    fetchBlob={fetchAttachmentBlob}
-                    onDownload={async (item) => {
-                      await downloadTicketingAttachment(item.id, item.fileName);
+                  <AttachmentDropzone
+                    files={pendingFiles}
+                    onChange={onPendingFilesChange}
+                    multiple
+                    maxFiles={20}
+                    occupiedSlots={persistedItems.length}
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    enablePaste
+                    disabled={!canEditAttachments}
+                    persistedItems={persistedItems}
+                    onRemovePersisted={
+                      canEditAttachments
+                        ? (id) => removeAttachmentMutation.mutateAsync(id)
+                        : undefined
+                    }
+                    removingPersistedId={
+                      removeAttachmentMutation.isPending
+                        ? (removeAttachmentMutation.variables ?? null)
+                        : null
+                    }
+                    fetchPersistedPreview={fetchPersistedPreview}
+                    uploadStateByKey={uploadStateByKey}
+                    onCancelUpload={(key) => {
+                      abortByKey.current[key]?.abort();
+                      setPendingFiles((prev) => prev.filter((file) => localFileKey(file) !== key));
+                      setUploadStateByKey((prev) => {
+                        const next = { ...prev };
+                        delete next[key];
+                        return next;
+                      });
                     }}
+                    hint="PNG, JPG, PDF, Office · paste screenshot with Ctrl+V / ⌘V"
+                    error={attachmentError}
                   />
                 </div>
               </section>
@@ -243,7 +341,8 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                 data-help="tk-detail-activity"
                 className="rounded-xl border border-border bg-card p-5 shadow-sm"
               >
-                <h2 className="text-sm font-medium text-foreground">Activity</h2>                <ul className="mt-3 space-y-3">
+                <h2 className="text-sm font-medium text-foreground">Activity</h2>
+                <ul className="mt-3 space-y-3">
                   {ticket.comments.length === 0 ? (
                     <li className="text-sm text-muted-foreground">No comments yet.</li>
                   ) : (
@@ -369,6 +468,11 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   <h3 className="text-sm font-medium text-foreground">Reopen ticket</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Send this ticket back to IT for follow-up. Status will return to open.
+                    {ticket.reopen_until
+                      ? ` You can reopen until ${formatTicketingDate(ticket.reopen_until)}; after that it auto-closes permanently.`
+                      : ticket.auto_close_resolved_after_days && ticket.auto_close_resolved_after_days > 0
+                        ? ` Resolved tickets auto-close after ${ticket.auto_close_resolved_after_days} day${ticket.auto_close_resolved_after_days === 1 ? "" : "s"} and cannot be reopened.`
+                        : ""}
                   </p>
                   <Button
                     type="button"
@@ -380,6 +484,14 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                     Reopen ticket
                   </Button>
                 </div>
+              ) : ticket.status === "closed" ? (
+                <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                  <h3 className="text-sm font-medium text-foreground">Closed</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This ticket is closed and cannot be reopened.
+                    {ticket.closed_at ? ` Closed ${formatTicketingDate(ticket.closed_at)}.` : ""}
+                  </p>
+                </div>
               ) : null}
 
               {canManage ? (
@@ -387,7 +499,8 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   data-help="tk-detail-manage"
                   className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3"
                 >
-                  <h3 className="text-sm font-medium text-foreground">Manage</h3>                  <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-foreground">Manage</h3>
+                  <div className="space-y-2">
                     <Label htmlFor="status-update">Status</Label>
                     <Select
                       id="status-update"
@@ -395,7 +508,9 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                       value={status || ticket.status}
                       onChange={(e) => setStatus(e.target.value)}
                     >
-                      {(metadata?.statuses ?? []).map((item) => (
+                      {(metadata?.statuses ?? [])
+                        .filter((item) => !(ticket.status === "closed" && item === "open"))
+                        .map((item) => (
                         <option key={item} value={item}>
                           {item.replace(/_/g, " ")}
                         </option>
@@ -447,19 +562,15 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   ) : null}
                   <div className="space-y-2">
                     <Label htmlFor="assignee">Assignee</Label>
-                    <Select
+                    <TicketingUserPicker
                       id="assignee"
-                      className="h-9"
+                      users={assignableUsers ?? []}
                       value={assigneeId || ticket.assignee?.id || ""}
-                      onChange={(e) => setAssigneeId(e.target.value)}
-                    >
-                      <option value="">Unassigned</option>
-                      {(assignableUsers ?? []).map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </Select>
+                      onChange={setAssigneeId}
+                      placeholder="Unassigned"
+                      clearLabel="Unassigned"
+                      emptyLabel="No assignable users match your search."
+                    />
                   </div>
                   {manageError ? <p className="text-xs text-destructive">{manageError}</p> : null}
                   <Button

@@ -76,7 +76,13 @@ final class WebAuthnPasskeyService
     /**
      * @param  array<string, mixed>  $credential  Browser PublicKeyCredential JSON (create)
      */
-    public function completeRegistration(TenantUser $user, string $challengeId, array $credential, ?string $label = null): WebAuthnCredential
+    public function completeRegistration(
+        TenantUser $user,
+        string $challengeId,
+        array $credential,
+        ?string $label = null,
+        ?string $deviceClass = null,
+    ): WebAuthnCredential
     {
         $stored = $this->challenges->pull('register', $challengeId);
         if ($stored === null || ($stored['user_id'] ?? null) !== (string) $user->id) {
@@ -134,6 +140,17 @@ final class WebAuthnPasskeyService
             $transports = array_values(array_filter($response['transports'], 'is_string'));
         }
 
+        $attachment = null;
+        $rawAttachment = $credential['authenticatorAttachment'] ?? $credential['authenticator_attachment'] ?? null;
+        if (is_string($rawAttachment)) {
+            $normalized = strtolower(trim($rawAttachment));
+            if (in_array($normalized, ['platform', 'cross-platform'], true)) {
+                $attachment = $normalized;
+            }
+        }
+
+        $resolvedDeviceClass = $this->normalizeDeviceClass($deviceClass, $attachment, $transports);
+
         $row = WebAuthnCredential::query()->create([
             'id' => (string) Str::uuid(),
             'user_id' => (string) $user->id,
@@ -144,11 +161,15 @@ final class WebAuthnPasskeyService
             'attestation_format' => is_string($data->attestationFormat ?? null) ? $data->attestationFormat : null,
             'aaguid' => self::normalizeAaguid($data->AAGUID ?? null),
             'label' => Str::limit($resolvedLabel, 120, ''),
+            'device_class' => $resolvedDeviceClass,
+            'authenticator_attachment' => $attachment,
         ]);
 
         $this->audit->log('auth.webauthn.register', (string) $user->id, null, [
             'credential_id' => $row->id,
             'label' => $row->label,
+            'device_class' => $row->device_class,
+            'authenticator_attachment' => $row->authenticator_attachment,
         ]);
 
         return $row;
@@ -417,6 +438,31 @@ final class WebAuthnPasskeyService
         $decoded = json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
 
         return $decoded;
+    }
+
+    /**
+     * @param  list<string>  $transports
+     */
+    private function normalizeDeviceClass(?string $deviceClass, ?string $attachment, array $transports): string
+    {
+        $allowed = ['mobile', 'desktop', 'security_key', 'unknown'];
+        if (is_string($deviceClass)) {
+            $normalized = strtolower(trim($deviceClass));
+            if (in_array($normalized, $allowed, true)) {
+                return $normalized;
+            }
+        }
+
+        $transportSet = array_map('strtolower', $transports);
+        if (in_array('usb', $transportSet, true) || in_array('nfc', $transportSet, true) || $attachment === 'cross-platform') {
+            return 'security_key';
+        }
+
+        if (in_array('hybrid', $transportSet, true)) {
+            return 'mobile';
+        }
+
+        return 'unknown';
     }
 
     private function decodeClientBinary(mixed $value): ?string

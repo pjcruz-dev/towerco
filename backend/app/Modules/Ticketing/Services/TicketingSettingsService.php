@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Ticketing\Services;
 
+use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\TeamsWebhookUrl;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
@@ -24,6 +25,9 @@ final class TicketingSettingsService
 
     public const NOTIFY_ASSIGNEE_ON_ASSIGN = 'notify_assignee_on_assign';
 
+    /** JSON list of user UUIDs allowed as ticket assignees. null key = unrestricted legacy. */
+    public const IT_ASSIGNEE_USER_IDS = 'it_assignee_user_ids';
+
     public const CATEGORIES = 'categories';
 
     public const ASSIGNMENT_RULES = 'assignment_rules';
@@ -33,6 +37,9 @@ final class TicketingSettingsService
     public const SLA_RESPONSE_MINUTES = 'sla_response_minutes';
 
     public const SLA_ESCALATION_MINUTES = 'sla_escalation_minutes';
+
+    /** Days after resolve before auto-close. 0 disables. Default 3. */
+    public const AUTO_CLOSE_RESOLVED_AFTER_DAYS = 'auto_close_resolved_after_days';
 
     public const TEAMS_WEBHOOK_URL = 'teams_webhook_url';
 
@@ -85,6 +92,19 @@ final class TicketingSettingsService
     }
 
     /**
+     * Grace window after resolve before auto-close. 0 = disabled. Default 3.
+     */
+    public function autoCloseResolvedAfterDays(): int
+    {
+        $raw = $this->getString(self::AUTO_CLOSE_RESOLVED_AFTER_DAYS);
+        if ($raw === null || $raw === '' || ! is_numeric($raw)) {
+            return 3;
+        }
+
+        return max(0, min(365, (int) $raw));
+    }
+
+    /**
      * @return list<string>
      */
     public function categories(): array
@@ -116,6 +136,88 @@ final class TicketingSettingsService
         }
 
         return app(TicketingAssignmentService::class)->parseStoredRules($decoded);
+    }
+
+    /**
+     * Configured IT assignee pool. null = not configured (legacy: all active users assignable).
+     *
+     * @return list<string>|null
+     */
+    public function itAssigneeUserIds(): ?array
+    {
+        $raw = $this->getString(self::IT_ASSIGNEE_USER_IDS);
+        if ($raw === null || trim($raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return null;
+        }
+
+        $ids = [];
+        foreach ($decoded as $value) {
+            if (is_string($value) && $value !== '') {
+                $ids[] = $value;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public function assertAssigneeAllowed(?string $assigneeId): void
+    {
+        if ($assigneeId === null || $assigneeId === '') {
+            return;
+        }
+
+        $pool = $this->itAssigneeUserIds();
+        if ($pool === null) {
+            return;
+        }
+
+        if (! in_array($assigneeId, $pool, true)) {
+            throw ValidationException::withMessages([
+                'assignee_id' => [__('Assignee must be an IT user from Ticketing settings.')],
+            ]);
+        }
+
+        $exists = TenantUser::query()
+            ->whereKey($assigneeId)
+            ->where('is_active', true)
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'assignee_id' => [__('Selected assignee was not found or is inactive.')],
+            ]);
+        }
+    }
+
+    /**
+     * @param  list<string>  $ids
+     */
+    public function persistItAssigneeUserIds(array $ids): void
+    {
+        $normalized = [];
+        foreach ($ids as $id) {
+            if (is_string($id) && $id !== '') {
+                $normalized[] = $id;
+            }
+        }
+        $normalized = array_values(array_unique($normalized));
+
+        if ($normalized !== []) {
+            $valid = TenantUser::query()
+                ->whereIn('id', $normalized)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->map(static fn ($id): string => (string) $id)
+                ->all();
+            $normalized = array_values(array_intersect($normalized, $valid));
+        }
+
+        $this->setString(self::IT_ASSIGNEE_USER_IDS, json_encode($normalized, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -209,6 +311,8 @@ final class TicketingSettingsService
             'notify_it_on_reopen' => $this->getBool(self::NOTIFY_IT_ON_REOPEN, true),
             'notify_requestor_on_resolve' => $this->getBool(self::NOTIFY_REQUESTOR_ON_RESOLVE, true),
             'notify_assignee_on_assign' => $this->getBool(self::NOTIFY_ASSIGNEE_ON_ASSIGN, true),
+            'it_assignee_user_ids' => $this->itAssigneeUserIds() ?? [],
+            'it_assignee_pool_configured' => $this->itAssigneeUserIds() !== null,
             'categories' => $this->categories(),
             'category_options' => $this->categoryOptions(),
             'category_packs' => app(TicketingCategoryPackCatalog::class)->all(),
@@ -216,6 +320,7 @@ final class TicketingSettingsService
             'sla_enabled' => $this->getBool(self::SLA_ENABLED, true),
             'sla_response_minutes' => $this->getInt(self::SLA_RESPONSE_MINUTES, 480),
             'sla_escalation_minutes' => $this->getInt(self::SLA_ESCALATION_MINUTES, 1440),
+            'auto_close_resolved_after_days' => $this->autoCloseResolvedAfterDays(),
             'teams_webhook_url' => $this->getString(self::TEAMS_WEBHOOK_URL, ''),
             'notify_teams_on_create' => $this->getBool(self::NOTIFY_TEAMS_ON_CREATE, false),
             'notify_teams_on_sla_reminder' => $this->getBool(self::NOTIFY_TEAMS_ON_SLA_REMINDER, true),
@@ -231,7 +336,7 @@ final class TicketingSettingsService
     public function update(array $values): void
     {
         if (array_key_exists('it_support_email', $values)) {
-            $email = trim((string) $values['it_support_email']);
+            $email = trim((string) ($values['it_support_email'] ?? ''));
             if ($email !== '') {
                 foreach ($this->parseEmails($email) as $parsed) {
                     if (! filter_var($parsed, FILTER_VALIDATE_EMAIL)) {
@@ -259,6 +364,12 @@ final class TicketingSettingsService
             }
         }
 
+        // Persist pool before assignment rules so rules are validated against the new list.
+        // Incoming rules that fall outside the pool are dropped (see AssignmentService).
+        if (array_key_exists('it_assignee_user_ids', $values) && is_array($values['it_assignee_user_ids'])) {
+            $this->persistItAssigneeUserIds($values['it_assignee_user_ids']);
+        }
+
         if (array_key_exists('sla_response_minutes', $values)) {
             $this->setString(self::SLA_RESPONSE_MINUTES, (string) max(1, (int) $values['sla_response_minutes']));
         }
@@ -267,8 +378,15 @@ final class TicketingSettingsService
             $this->setString(self::SLA_ESCALATION_MINUTES, (string) max(1, (int) $values['sla_escalation_minutes']));
         }
 
+        if (array_key_exists('auto_close_resolved_after_days', $values)) {
+            $this->setString(
+                self::AUTO_CLOSE_RESOLVED_AFTER_DAYS,
+                (string) max(0, min(365, (int) $values['auto_close_resolved_after_days'])),
+            );
+        }
+
         if (array_key_exists('teams_webhook_url', $values)) {
-            $url = TeamsWebhookUrl::normalize((string) $values['teams_webhook_url']);
+            $url = TeamsWebhookUrl::normalize((string) ($values['teams_webhook_url'] ?? ''));
             if ($url !== '' && ! TeamsWebhookUrl::isValid($url)) {
                 throw ValidationException::withMessages([
                     'teams_webhook_url' => [__('Enter a valid Teams Workflows (Power Automate) webhook URL.')],
@@ -288,7 +406,14 @@ final class TicketingSettingsService
         }
 
         if (array_key_exists('assignment_rules', $values) && is_array($values['assignment_rules'])) {
-            $rules = app(TicketingAssignmentService::class)->normalizeRulesForPersist($values['assignment_rules']);
+            $pendingPool = array_key_exists('it_assignee_user_ids', $values) && is_array($values['it_assignee_user_ids'])
+                ? $this->itAssigneeUserIds()
+                : null;
+            $rules = app(TicketingAssignmentService::class)->normalizeRulesForPersist(
+                $values['assignment_rules'],
+                dropOutOfPool: true,
+                poolOverride: $pendingPool,
+            );
             $this->persistAssignmentRules($rules);
         }
 

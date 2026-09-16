@@ -138,6 +138,25 @@ export function serializeAssertion(credential: PublicKeyCredential): SerializedP
   };
 }
 
+export function inferPasskeyDeviceClass(
+  authenticatorAttachment?: string | null,
+): "mobile" | "desktop" | "security_key" | "unknown" {
+  if (authenticatorAttachment === "cross-platform") {
+    return "security_key";
+  }
+  if (typeof navigator === "undefined") {
+    return "unknown";
+  }
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod|Android/i.test(ua)) {
+    return "mobile";
+  }
+  if (/Macintosh|Windows|Linux|CrOS/i.test(ua)) {
+    return "desktop";
+  }
+  return "unknown";
+}
+
 export function webAuthnUserMessage(error: unknown): string {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
 import type {
   TicketingAssignmentRule,
   TicketingCategoryOption,
@@ -96,17 +97,12 @@ export function TicketingAssignmentRulesEditor({ rules, categories, users, onCha
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Assignee</Label>
-                  <Select
-                    className="h-9"
+                  <TicketingUserPicker
+                    users={users}
                     value={rule.assignee_id}
-                    onChange={(e) => updateRule(index, { assignee_id: e.target.value })}
-                  >
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(assigneeId) => updateRule(index, { assignee_id: assigneeId })}
+                    placeholder="Select assignee…"
+                  />
                 </div>
                 <label className="inline-flex h-9 items-center gap-2 text-xs text-foreground">
                   <Checkbox

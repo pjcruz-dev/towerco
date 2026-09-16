@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Paperclip, X } from "lucide-react";
 
+import { AttachmentDropzone } from "@/components/attachments/attachment-dropzone";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
-import { formatFileSize, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import { ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -19,21 +19,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   createTicketingTicket,
-  fetchTicketingAssignableUsers,
+  fetchTicketingDirectoryUsers,
   fetchTicketingMetadata,
   uploadTicketingAttachment,
 } from "@/lib/api/modules/ticketing-api";
 import { parseRaiseTicketSearchParams } from "@/lib/ticketing/raise-ticket";
 import { permissions } from "@/lib/rbac/permissions";
-import { cn } from "@/lib/utils";
 import { usePermission } from "@/hooks/use-permission";
 import { useAuthStore } from "@/stores/auth-store";
+
+function localFileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
 
 export function TicketingNewTicketPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefill = parseRaiseTicketSearchParams(searchParams);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useAuthStore((state) => state.user);
   const canManageTickets = usePermission([permissions.ticketingTicketsManage]);
 
@@ -43,6 +45,9 @@ export function TicketingNewTicketPageClient() {
   const [requesterId, setRequesterId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [uploadStateByKey, setUploadStateByKey] = useState<
+    Record<string, { progress: number; status: "uploading" | "complete" | "error"; error?: string | null }>
+  >({});
 
   useEffect(() => {
     if (prefill.title) setTitle(prefill.title);
@@ -61,9 +66,9 @@ export function TicketingNewTicketPageClient() {
     staleTime: 300_000,
   });
 
-  const { data: assignableUsers, isLoading: usersLoading } = useQuery({
-    queryKey: ["ticketing", "assignable-users"],
-    queryFn: fetchTicketingAssignableUsers,
+  const { data: directoryUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ["ticketing", "directory-users"],
+    queryFn: fetchTicketingDirectoryUsers,
     enabled: canManageTickets,
     staleTime: 60_000,
   });
@@ -89,8 +94,44 @@ export function TicketingNewTicketPageClient() {
         ...(canManageTickets && requesterId ? { requester_id: requesterId } : {}),
       });
 
+      const failedUploads: string[] = [];
       for (const file of files) {
-        await uploadTicketingAttachment(ticket.id, file);
+        const key = localFileKey(file);
+        setUploadStateByKey((prev) => ({
+          ...prev,
+          [key]: { progress: 0, status: "uploading" },
+        }));
+        try {
+          await uploadTicketingAttachment(ticket.id, file, {
+            onProgress: (percent) => {
+              setUploadStateByKey((prev) => ({
+                ...prev,
+                [key]: { progress: percent, status: "uploading" },
+              }));
+            },
+          });
+          setUploadStateByKey((prev) => ({
+            ...prev,
+            [key]: { progress: 100, status: "complete" },
+          }));
+        } catch (uploadError) {
+          const message = getErrorMessage(uploadError) || "Upload failed";
+          setUploadStateByKey((prev) => ({
+            ...prev,
+            [key]: { progress: 0, status: "error", error: message },
+          }));
+          failedUploads.push(`${file.name}: ${message}`);
+        }
+      }
+
+      if (failedUploads.length > 0) {
+        // Ticket exists; send user to detail so remaining files can be retried there.
+        router.push(`/ticketing/tickets/${ticket.id}`);
+        throw new Error(
+          failedUploads.length === 1
+            ? `Ticket created, but ${failedUploads[0]}`
+            : `Ticket created, but some files failed: ${failedUploads.join("; ")}`,
+        );
       }
 
       return ticket;
@@ -103,17 +144,7 @@ export function TicketingNewTicketPageClient() {
     },
   });
 
-  function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(event.target.files ?? []);
-    if (selected.length > 0) {
-      setFiles((prev) => [...prev, ...selected]);
-    }
-    event.target.value = "";
-  }
-
-  function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  }
+  const isSubmitting = createMutation.isPending;
 
   return (
     <PermissionGate requiredPermissions={[permissions.ticketingTicketsCreate]}>
@@ -140,6 +171,7 @@ export function TicketingNewTicketPageClient() {
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
+            setUploadStateByKey({});
             if (!title.trim()) {
               setError("Title is required.");
               return;
@@ -156,10 +188,10 @@ export function TicketingNewTicketPageClient() {
               <Label htmlFor="requester">Created for (requester)</Label>
               <TicketingUserPicker
                 id="requester"
-                users={assignableUsers ?? []}
+                users={directoryUsers ?? []}
                 value={requesterId}
                 onChange={setRequesterId}
-                disabled={usersLoading}
+                disabled={usersLoading || isSubmitting}
                 placeholder={usersLoading ? "Loading users…" : "Select user…"}
               />
               <p className="text-xs text-muted-foreground">
@@ -179,6 +211,7 @@ export function TicketingNewTicketPageClient() {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Brief summary of the issue"
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -189,6 +222,7 @@ export function TicketingNewTicketPageClient() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Steps to reproduce, expected vs actual behavior, module context…"
                 rows={6}
+                disabled={isSubmitting}
               />
             </div>
           </section>
@@ -200,6 +234,7 @@ export function TicketingNewTicketPageClient() {
               className="h-10"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              disabled={isSubmitting}
             >
               {(metadata?.category_options?.length
                 ? metadata.category_options
@@ -217,64 +252,39 @@ export function TicketingNewTicketPageClient() {
           </section>
 
           <section data-help="tk-compose-attachments" className="space-y-3 border-t border-border pt-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-medium text-foreground">Attachments</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  PNG, JPG, PDF, and office documents up to 10 MB each.
-                </p>
-              </div>
-              <button
-                type="button"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex cursor-pointer")}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Paperclip className="mr-1.5 h-4 w-4" aria-hidden />
-                Add files
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-                className="sr-only"
-                onChange={onFileChange}
-              />
+            <div>
+              <h2 className="text-sm font-medium text-foreground">Attachments</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                PNG, JPG, PDF, and office documents up to 10 MB each. Drag & drop, browse, or paste a
+                screenshot. Progress shows while submitting.
+              </p>
             </div>
-            {files.length > 0 ? (
-              <ul className="divide-y divide-border rounded-lg border border-border">
-                {files.map((file, index) => (
-                  <li
-                    key={`${file.name}-${index}`}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => removeFile(index)}
-                      aria-label={`Remove ${file.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <AttachmentDropzone
+              files={files}
+              onChange={setFiles}
+              multiple
+              maxFiles={20}
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              enablePaste
+              disabled={isSubmitting}
+              uploadStateByKey={uploadStateByKey}
+              hint="PNG, JPG, PDF, Office · up to 10 MB · paste screenshot with Ctrl+V / ⌘V"
+            />
           </section>
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <div className="flex flex-wrap gap-2 border-t border-border pt-5">
             <span data-help="tk-compose-submit" className="inline-flex">
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Submitting…" : "Submit ticket"}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting
+                  ? Object.values(uploadStateByKey).some((entry) => entry.status === "uploading")
+                    ? "Uploading attachments…"
+                    : "Submitting…"
+                  : "Submit ticket"}
               </Button>
             </span>
-            <Button variant="outline" render={<Link href="/ticketing/tickets" />}>
+            <Button variant="outline" disabled={isSubmitting} render={<Link href="/ticketing/tickets" />}>
               Cancel
             </Button>
           </div>

@@ -130,7 +130,7 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 3,
             title: "Attachments",
-            body: "Add screenshots or documents (PNG, JPG, PDF, and office files) to speed up resolution.",
+            body: "Drag and drop, paste screenshots, or browse. Progress shows while uploading — same pattern as E-Forms.",
             x: 30,
             y: 69,
           },
@@ -182,7 +182,7 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 4,
             title: "Details and Manage",
-            body: "Requester, assignee, and SLA due stay on the right. Managers update status, priority, category, and assignee from Manage.",
+            body: "Requester, assignee, and SLA due stay on the right. Managers search assignees from the IT pool, update status/priority, and resolve. Resolved tickets auto-close after the grace window.",
             x: 88,
             y: 55,
           },

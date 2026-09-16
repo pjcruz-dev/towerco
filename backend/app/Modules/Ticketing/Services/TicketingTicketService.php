@@ -40,6 +40,7 @@ final class TicketingTicketService
         private readonly TicketingSlaCalculator $sla,
         private readonly TicketingAssignmentService $assignment,
         private readonly TenantActivityLogger $activity,
+        private readonly TicketingSettingsService $settings,
     ) {}
 
     /**
@@ -319,6 +320,8 @@ final class TicketingTicketService
             'resolved_at' => $ticket->resolved_at?->toIso8601String(),
             'closed_at' => $ticket->closed_at?->toIso8601String(),
             'can_reopen' => $this->canReopen($ticket, $viewer),
+            'reopen_until' => $this->reopenUntil($ticket)?->toIso8601String(),
+            'auto_close_resolved_after_days' => $this->settings->autoCloseResolvedAfterDays(),
             'comments' => $comments->map(fn (TicketingComment $comment) => [
                 'id' => (string) $comment->id,
                 'body' => $comment->body,
@@ -378,6 +381,10 @@ final class TicketingTicketService
             $assigneeId = $data['assignee_id'] ?? null;
             if (($assigneeId === null || $assigneeId === '') && is_string($category)) {
                 $assigneeId = $this->assignment->resolveAssigneeId($category);
+            }
+
+            if (is_string($assigneeId) && $assigneeId !== '') {
+                $this->settings->assertAssigneeAllowed($assigneeId);
             }
 
             $ticket = TicketingTicket::query()->create([
@@ -547,6 +554,9 @@ final class TicketingTicketService
             $nextAssigneeId = $data['assignee_id'] !== null && $data['assignee_id'] !== ''
                 ? (string) $data['assignee_id']
                 : null;
+            if ($nextAssigneeId !== null) {
+                $this->settings->assertAssigneeAllowed($nextAssigneeId);
+            }
             if ($nextAssigneeId !== $previousAssigneeId) {
                 $assigneeChanged = $nextAssigneeId !== null;
             }
@@ -557,10 +567,19 @@ final class TicketingTicketService
             $status = (string) $data['status'];
             $previousStatus = (string) $ticket->status;
 
+            if (
+                $status === TicketingTicket::STATUS_OPEN
+                && $previousStatus === TicketingTicket::STATUS_CLOSED
+            ) {
+                throw ValidationException::withMessages([
+                    'status' => [__('Closed tickets cannot be reopened.')],
+                ]);
+            }
+
             if ($status === TicketingTicket::STATUS_OPEN && $isRequester && ! $canManage) {
-                if (! in_array($previousStatus, [TicketingTicket::STATUS_RESOLVED, TicketingTicket::STATUS_CLOSED], true)) {
+                if ($previousStatus !== TicketingTicket::STATUS_RESOLVED) {
                     throw ValidationException::withMessages([
-                        'status' => [__('Only resolved or closed tickets can be reopened.')],
+                        'status' => [__('Only resolved tickets can be reopened before they auto-close.')],
                     ]);
                 }
                 $updates['status'] = TicketingTicket::STATUS_OPEN;
@@ -690,12 +709,28 @@ final class TicketingTicketService
             return false;
         }
 
+        // Closed is final — auto-close (or manual close) ends the reopen window.
+        if ((string) $ticket->status !== TicketingTicket::STATUS_RESOLVED) {
+            return false;
+        }
+
         $isRequester = (string) $ticket->requester_id === (string) $viewer->id;
 
-        return $isRequester && in_array($ticket->status, [
-            TicketingTicket::STATUS_RESOLVED,
-            TicketingTicket::STATUS_CLOSED,
-        ], true);
+        return $isRequester;
+    }
+
+    public function reopenUntil(TicketingTicket $ticket): ?\Illuminate\Support\Carbon
+    {
+        if ((string) $ticket->status !== TicketingTicket::STATUS_RESOLVED || $ticket->resolved_at === null) {
+            return null;
+        }
+
+        $days = $this->settings->autoCloseResolvedAfterDays();
+        if ($days <= 0) {
+            return null;
+        }
+
+        return $ticket->resolved_at->copy()->addDays($days);
     }
 
     private function syncSla(TicketingTicket $ticket, bool $resetFlags = false): void

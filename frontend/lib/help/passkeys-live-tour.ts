@@ -72,7 +72,7 @@ export const passkeysLiveTour: LiveTourDefinition = {
       query: { tab: "passkeys" },
       target: "ea-passkey-list",
       title: "Registered passkeys",
-      body: "Enrolled devices appear here. Each laptop or phone needs its own passkey. Staging and production hosts are separate — enroll on the host you will use to sign in. Password and Microsoft stay available as backup.",
+      body: "Enrolled devices appear here with device type (phone / computer / security key) and whether the passkey uses fingerprint, Face ID, or an external authenticator. Each laptop or phone needs its own passkey. Staging and production hosts are separate — enroll on the host you will use to sign in.",
     },
     {
       id: "passkeys-complete",
@@ -81,7 +81,7 @@ export const passkeysLiveTour: LiveTourDefinition = {
       query: { tab: "passkeys" },
       target: "ea-passkey-list",
       title: "Tour complete",
-      body: "You’re finished. After you enroll, use Sign in with passkey on the login page for this same host. Click Finish tour to close.",
+      body: "You’re finished. After you enroll, use Sign in with passkey on the login page for this same host (password and Microsoft stay available as backup). Click Finish tour to close.",
     },
   ],
 };

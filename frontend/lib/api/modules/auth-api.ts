@@ -138,6 +138,8 @@ export async function regenerateRecoveryCodes(): Promise<{ recovery_codes: strin
 export type WebAuthnCredentialRow = {
   id: string;
   label: string | null;
+  device_class?: string | null;
+  authenticator_attachment?: string | null;
   transports: string[] | null;
   attestation_format: string | null;
   last_used_at: string | null;
@@ -187,6 +189,7 @@ export async function webAuthnRegisterVerify(payload: {
   challengeId: string;
   credential: Record<string, unknown>;
   label?: string;
+  deviceClass?: string;
 }): Promise<WebAuthnCredentialRow> {
   const response = await apiClient.post<{ data: { credential: WebAuthnCredentialRow } }>(
     "/auth/webauthn/register/verify",
@@ -194,6 +197,7 @@ export async function webAuthnRegisterVerify(payload: {
       challenge_id: payload.challengeId,
       credential: payload.credential,
       ...(payload.label ? { label: payload.label } : {}),
+      ...(payload.deviceClass ? { device_class: payload.deviceClass } : {}),
     },
   );
   return response.data.data.credential;

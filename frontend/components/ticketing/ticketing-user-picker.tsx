@@ -17,6 +17,8 @@ type Props = {
   disabled?: boolean;
   placeholder?: string;
   emptyLabel?: string;
+  /** When set, shows a first option that clears the selection (e.g. Unassigned). */
+  clearLabel?: string | null;
 };
 
 export function TicketingUserPicker({
@@ -27,6 +29,7 @@ export function TicketingUserPicker({
   disabled = false,
   placeholder = "Select user…",
   emptyLabel = "No users match your search.",
+  clearLabel = null,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -73,7 +76,7 @@ export function TicketingUserPicker({
                   ) : null}
                 </>
               ) : (
-                placeholder
+                clearLabel || placeholder
               )}
             </span>
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
@@ -91,6 +94,32 @@ export function TicketingUserPicker({
           />
         </div>
         <ul className="max-h-60 overflow-y-auto p-1" role="listbox">
+          {clearLabel ? (
+            <li>
+              <button
+                type="button"
+                role="option"
+                aria-selected={!value}
+                className={cn(
+                  "flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted",
+                  !value && "bg-muted",
+                )}
+                onClick={() => {
+                  onChange("");
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                <Check
+                  className={cn("mt-0.5 h-4 w-4 shrink-0", !value ? "opacity-100" : "opacity-0")}
+                  aria-hidden
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-muted-foreground">{clearLabel}</span>
+                </span>
+              </button>
+            </li>
+          ) : null}
           {filtered.length === 0 ? (
             <li className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyLabel}</li>
           ) : (

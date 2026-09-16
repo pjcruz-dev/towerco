@@ -609,7 +609,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       autoNavFrom: "ea-picker-start",
       target: "ea-compose-upload",
       title: "Attachments",
-      body: "Attach PDF documents for Document Approval review.",
+      body: "Drag and drop files, paste from the clipboard, or browse. Upload progress shows while files save; remove a file anytime before submit. PDF and Office files open in the attachment preview.",
       missingHint: "Skipped when no compose form is open, or this form has no file field.",
       audience: "requestor",
     },

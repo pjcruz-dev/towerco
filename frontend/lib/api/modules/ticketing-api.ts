@@ -11,6 +11,7 @@ import type {
 import { apiClient } from "@/lib/api/client";
 import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
+import axios from "axios";
 
 export async function fetchTicketingDashboard(
   params: Pick<
@@ -31,6 +32,11 @@ export async function fetchTicketingMetadata(): Promise<TicketingMetadata> {
 
 export async function fetchTicketingAssignableUsers(): Promise<TicketingUserRef[]> {
   const response = await apiClient.get<{ data: TicketingUserRef[] }>("/ticketing/assignable-users");
+  return response.data.data;
+}
+
+export async function fetchTicketingDirectoryUsers(): Promise<TicketingUserRef[]> {
+  const response = await apiClient.get<{ data: TicketingUserRef[] }>("/ticketing/directory-users");
   return response.data.data;
 }
 
@@ -142,13 +148,21 @@ export async function addTicketingComment(
 export async function uploadTicketingAttachment(
   ticketId: string,
   file: File,
+  options?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
 ): Promise<{ id: string; file_name: string }> {
   const form = new FormData();
   form.append("file", file);
   const response = await apiClient.post<{ data: { id: string; file_name: string } }>(
     `/ticketing/tickets/${ticketId}/attachments`,
     form,
-    { headers: { "Content-Type": "multipart/form-data" } },
+    {
+      timeout: 120_000,
+      signal: options?.signal,
+      onUploadProgress: (event) => {
+        if (!options?.onProgress || !event.total) return;
+        options.onProgress(Math.round((event.loaded / event.total) * 100));
+      },
+    },
   );
   return response.data.data;
 }
@@ -199,6 +213,7 @@ export async function sendTicketingSettingsTestWebhook(
 export async function fetchTicketingAttachmentBlob(attachmentId: string): Promise<Blob> {
   const response = await apiClient.get<Blob>(`/ticketing/attachments/${attachmentId}`, {
     responseType: "blob",
+    timeout: 120_000,
   });
   return response.data;
 }
@@ -208,7 +223,24 @@ export async function downloadTicketingAttachment(attachmentId: string, fileName
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = fileName;
+  anchor.download = fileName || "attachment";
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
   anchor.click();
+  anchor.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function deleteTicketingAttachment(attachmentId: string): Promise<void> {
+  try {
+    await apiClient.delete(`/ticketing/attachments/${attachmentId}`, {
+      timeout: 60_000,
+    });
+  } catch (error) {
+    // Idempotent: already removed (e.g. prior request timed out after server success).
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return;
+    }
+    throw error;
+  }
 }

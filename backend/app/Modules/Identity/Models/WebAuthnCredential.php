@@ -20,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $attestation_format
  * @property string|null $aaguid
  * @property string|null $label
+ * @property string|null $device_class mobile|desktop|security_key|unknown
+ * @property string|null $authenticator_attachment platform|cross-platform
  * @property \Illuminate\Support\Carbon|null $last_used_at
  */
 class WebAuthnCredential extends Model
@@ -42,6 +44,8 @@ class WebAuthnCredential extends Model
         'attestation_format',
         'aaguid',
         'label',
+        'device_class',
+        'authenticator_attachment',
         'last_used_at',
     ];
 
@@ -60,13 +64,24 @@ class WebAuthnCredential extends Model
     }
 
     /**
-     * @return array{id: string, label: string|null, transports: list<string>|null, attestation_format: string|null, last_used_at: string|null, created_at: string|null}
+     * @return array{
+     *   id: string,
+     *   label: string|null,
+     *   device_class: string|null,
+     *   authenticator_attachment: string|null,
+     *   transports: list<string>|null,
+     *   attestation_format: string|null,
+     *   last_used_at: string|null,
+     *   created_at: string|null
+     * }
      */
     public function toPublicRow(): array
     {
         return [
             'id' => (string) $this->id,
             'label' => $this->label,
+            'device_class' => $this->device_class,
+            'authenticator_attachment' => $this->authenticator_attachment,
             'transports' => is_array($this->transports) ? array_values($this->transports) : null,
             'attestation_format' => $this->attestation_format,
             'last_used_at' => $this->last_used_at?->toIso8601String(),

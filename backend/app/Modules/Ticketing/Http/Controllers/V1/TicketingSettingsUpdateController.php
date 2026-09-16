@@ -21,15 +21,19 @@ class TicketingSettingsUpdateController extends AbstractApiController
         $planFeatures->assertModuleEnabled();
 
         $data = $request->validate([
-            'it_support_email' => ['sometimes', 'string', 'max:2000'],
+            // nullable: ConvertEmptyStringsToNull turns "" into null on save.
+            'it_support_email' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'notify_it_on_create' => ['sometimes', 'boolean'],
             'notify_it_on_reopen' => ['sometimes', 'boolean'],
             'notify_requestor_on_resolve' => ['sometimes', 'boolean'],
             'notify_assignee_on_assign' => ['sometimes', 'boolean'],
+            'it_assignee_user_ids' => ['sometimes', 'array'],
+            'it_assignee_user_ids.*' => ['uuid', 'exists:users,id'],
             'sla_enabled' => ['sometimes', 'boolean'],
             'sla_response_minutes' => ['sometimes', 'integer', 'min:1'],
             'sla_escalation_minutes' => ['sometimes', 'integer', 'min:1'],
-            'teams_webhook_url' => ['sometimes', 'string', 'max:2000'],
+            'auto_close_resolved_after_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
+            'teams_webhook_url' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'notify_teams_on_create' => ['sometimes', 'boolean'],
             'notify_teams_on_sla_reminder' => ['sometimes', 'boolean'],
             'notify_teams_on_sla_escalation' => ['sometimes', 'boolean'],
@@ -42,7 +46,7 @@ class TicketingSettingsUpdateController extends AbstractApiController
             'assignment_rules.*.category' => ['required', 'string', 'max:64'],
             'assignment_rules.*.assignee_id' => ['required', 'uuid', 'exists:users,id'],
             'assignment_rules.*.enabled' => ['sometimes', 'boolean'],
-            'apply_category_pack' => ['sometimes', 'string', 'max:64'],
+            'apply_category_pack' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
 
         // Laravel validated() omits nested keys without rules; restore full category rows (id/label).

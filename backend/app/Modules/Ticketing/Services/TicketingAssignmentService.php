@@ -39,8 +39,16 @@ final class TicketingAssignmentService
             }
 
             $user = TenantUser::query()->whereKey($assigneeId)->where('is_active', true)->first();
+            if (! $user instanceof TenantUser) {
+                return null;
+            }
 
-            return $user instanceof TenantUser ? (string) $user->id : null;
+            $pool = $this->settings->itAssigneeUserIds();
+            if ($pool !== null && ! in_array((string) $user->id, $pool, true)) {
+                return null;
+            }
+
+            return (string) $user->id;
         }
 
         return null;
@@ -54,29 +62,44 @@ final class TicketingAssignmentService
      */
     public function parseStoredRules(array $raw): array
     {
-        return $this->normalizeRules($raw, false);
+        return $this->normalizeRules($raw, strict: false);
     }
 
     /**
      * Strict normalize for settings writes.
      *
      * @param  list<mixed>  $raw
+     * @param  list<string>|null  $poolOverride  When set (including []), use instead of stored pool.
      * @return list<array{category: string, assignee_id: string, enabled: bool}>
      */
-    public function normalizeRulesForPersist(array $raw): array
-    {
-        return $this->normalizeRules($raw, true);
+    public function normalizeRulesForPersist(
+        array $raw,
+        bool $dropOutOfPool = false,
+        ?array $poolOverride = null,
+    ): array {
+        return $this->normalizeRules(
+            $raw,
+            strict: true,
+            dropOutOfPool: $dropOutOfPool,
+            poolOverride: $poolOverride,
+        );
     }
 
     /**
      * @param  list<mixed>  $raw
+     * @param  list<string>|null  $poolOverride
      * @return list<array{category: string, assignee_id: string, enabled: bool}>
      */
-    private function normalizeRules(array $raw, bool $strict): array
-    {
+    private function normalizeRules(
+        array $raw,
+        bool $strict,
+        bool $dropOutOfPool = false,
+        ?array $poolOverride = null,
+    ): array {
         $validCategories = array_flip($this->categories->resolve());
         $rules = [];
         $seen = [];
+        $pool = $poolOverride !== null ? $poolOverride : $this->settings->itAssigneeUserIds();
 
         foreach ($raw as $item) {
             if (! is_array($item)) {
@@ -98,6 +121,16 @@ final class TicketingAssignmentService
                 if ($strict) {
                     throw ValidationException::withMessages([
                         'assignment_rules' => [__('Assignee for :category must be an active user.', ['category' => $category])],
+                    ]);
+                }
+
+                continue;
+            }
+
+            if ($pool !== null && ! in_array($assigneeId, $pool, true)) {
+                if ($strict && ! $dropOutOfPool) {
+                    throw ValidationException::withMessages([
+                        'assignment_rules' => [__('Assignee for :category must be in the IT assignee list.', ['category' => $category])],
                     ]);
                 }
 

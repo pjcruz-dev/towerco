@@ -162,7 +162,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Attachments",
-            body: "Attach PDF documents for review.",
+            body: "Drag and drop, paste, or browse. Progress shows while uploading; preview PDF and Office files before submit.",
             x: 22,
             y: 45,
           },

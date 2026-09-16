@@ -60,7 +60,7 @@ export const docExtractLiveTour: LiveTourDefinition = {
       entryPath: "/doc-extract/new",
       target: "dx-upload-section",
       title: "1. Upload files",
-      body: "Drop PDFs or images here, or use Upload files. Same document layouts work best for reusable templates.",
+      body: "Drag and drop PDFs or images, or use Upload files. Upload progress shows while files are added. Same document layouts work best for reusable templates.",
     },
     {
       id: "dx-file-list",

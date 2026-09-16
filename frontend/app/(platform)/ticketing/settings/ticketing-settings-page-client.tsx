@@ -7,6 +7,7 @@ import { Clock, Layers, Mail, UserRoundPlus, Webhook } from "lucide-react";
 
 import { TicketingAssignmentRulesEditor } from "@/components/ticketing/ticketing-assignment-rules-editor";
 import { TicketingCategoriesEditor } from "@/components/ticketing/ticketing-categories-editor";
+import { TicketingItAssigneePoolEditor } from "@/components/ticketing/ticketing-it-assignee-pool-editor";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { slugifyTicketingCategory } from "@/components/ticketing/ticketing-utils";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   fetchTicketingAssignableUsers,
+  fetchTicketingDirectoryUsers,
   fetchTicketingSettings,
   sendTicketingSettingsTestEmail,
   sendTicketingSettingsTestWebhook,
@@ -73,9 +75,13 @@ export function TicketingSettingsPageClient() {
   const [notifyItOnReopen, setNotifyItOnReopen] = useState(true);
   const [notifyRequestorOnResolve, setNotifyRequestorOnResolve] = useState(true);
   const [notifyAssigneeOnAssign, setNotifyAssigneeOnAssign] = useState(true);
+  const [itAssigneeUserIds, setItAssigneeUserIds] = useState<string[]>([]);
+  const [itAssigneePoolConfigured, setItAssigneePoolConfigured] = useState(false);
+  const [itPoolTouched, setItPoolTouched] = useState(false);
   const [slaEnabled, setSlaEnabled] = useState(true);
   const [slaResponseMinutes, setSlaResponseMinutes] = useState("480");
   const [slaEscalationMinutes, setSlaEscalationMinutes] = useState("1440");
+  const [autoCloseResolvedAfterDays, setAutoCloseResolvedAfterDays] = useState("3");
   const [categoryRows, setCategoryRows] = useState<TicketingCategoryOption[]>([]);
   const [assignmentRules, setAssignmentRules] = useState<TicketingAssignmentRule[]>([]);
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState("");
@@ -94,6 +100,12 @@ export function TicketingSettingsPageClient() {
     staleTime: 300_000,
   });
 
+  const directoryUsersQuery = useQuery({
+    queryKey: ["ticketing", "directory-users"],
+    queryFn: fetchTicketingDirectoryUsers,
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (settingsQuery.data) {
       setItSupportEmail(settingsQuery.data.it_support_email ?? "");
@@ -101,9 +113,13 @@ export function TicketingSettingsPageClient() {
       setNotifyItOnReopen(settingsQuery.data.notify_it_on_reopen ?? true);
       setNotifyRequestorOnResolve(settingsQuery.data.notify_requestor_on_resolve ?? true);
       setNotifyAssigneeOnAssign(settingsQuery.data.notify_assignee_on_assign ?? true);
+      setItAssigneeUserIds(settingsQuery.data.it_assignee_user_ids ?? []);
+      setItAssigneePoolConfigured(settingsQuery.data.it_assignee_pool_configured ?? false);
+      setItPoolTouched(false);
       setSlaEnabled(settingsQuery.data.sla_enabled ?? true);
       setSlaResponseMinutes(String(settingsQuery.data.sla_response_minutes ?? 480));
       setSlaEscalationMinutes(String(settingsQuery.data.sla_escalation_minutes ?? 1440));
+      setAutoCloseResolvedAfterDays(String(settingsQuery.data.auto_close_resolved_after_days ?? 3));
       setCategoryRows(optionsFromSettings(settingsQuery.data));
       setAssignmentRules(settingsQuery.data.assignment_rules ?? []);
       setTeamsWebhookUrl(settingsQuery.data.teams_webhook_url ?? "");
@@ -125,9 +141,13 @@ export function TicketingSettingsPageClient() {
         notify_it_on_reopen: notifyItOnReopen,
         notify_requestor_on_resolve: notifyRequestorOnResolve,
         notify_assignee_on_assign: notifyAssigneeOnAssign,
+        ...(itPoolTouched || itAssigneePoolConfigured
+          ? { it_assignee_user_ids: itAssigneeUserIds }
+          : {}),
         sla_enabled: slaEnabled,
         sla_response_minutes: Number(slaResponseMinutes),
         sla_escalation_minutes: Number(slaEscalationMinutes),
+        auto_close_resolved_after_days: Number(autoCloseResolvedAfterDays),
         categories,
         assignment_rules: assignmentRules,
         teams_webhook_url: teamsWebhookUrl.trim(),
@@ -139,8 +159,12 @@ export function TicketingSettingsPageClient() {
     onSuccess: (data) => {
       setCategoryRows(optionsFromSettings(data));
       setAssignmentRules(data.assignment_rules ?? []);
+      setItAssigneeUserIds(data.it_assignee_user_ids ?? []);
+      setItAssigneePoolConfigured(data.it_assignee_pool_configured ?? false);
+      setItPoolTouched(false);
       queryClient.invalidateQueries({ queryKey: ["ticketing", "settings"] });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "metadata"] });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "assignable-users"] });
       push({ level: "success", title: "Settings saved" });
     },
     onError: (error) => push({ level: "error", title: "Save failed", message: getErrorMessage(error) }),
@@ -232,6 +256,40 @@ export function TicketingSettingsPageClient() {
           </section>
 
           {!settingsQuery.isLoading && !settingsQuery.isError ? (
+            <section
+              data-help="tk-settings-it-assignees"
+              className="rounded-xl border border-border bg-card p-5 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-700 dark:text-sky-400">
+                  <UserRoundPlus className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <TicketingItAssigneePoolEditor
+                    directoryUsers={
+                      (directoryUsersQuery.data?.length
+                        ? directoryUsersQuery.data
+                        : assignableUsersQuery.data) ?? []
+                    }
+                    selectedIds={itAssigneeUserIds}
+                    onChange={(ids) => {
+                      setItPoolTouched(true);
+                      setItAssigneeUserIds(ids);
+                    }}
+                    poolConfigured={itAssigneePoolConfigured}
+                    loading={directoryUsersQuery.isLoading && assignableUsersQuery.isLoading}
+                    loadError={
+                      directoryUsersQuery.isError && assignableUsersQuery.isError
+                        ? "Could not load users for the IT assignee pool."
+                        : null
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {!settingsQuery.isLoading && !settingsQuery.isError ? (
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -300,6 +358,22 @@ export function TicketingSettingsPageClient() {
                         value={slaEscalationMinutes}
                         onChange={(e) => setSlaEscalationMinutes(e.target.value)}
                       />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="auto-close-days">Auto-close resolved tickets after (days)</Label>
+                      <Input
+                        id="auto-close-days"
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={autoCloseResolvedAfterDays}
+                        onChange={(e) => setAutoCloseResolvedAfterDays(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Default 3. After this grace window, resolved tickets become closed and cannot be
+                        reopened. Set to 0 to disable auto-close. Scheduler runs `ticketing:auto-close-resolved`
+                        hourly.
+                      </p>
                     </div>
                   </div>
                 </div>

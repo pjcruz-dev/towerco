@@ -162,6 +162,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyFiveMinutes()
             ->withoutOverlapping();
 
+        $schedule->command('ticketing:auto-close-resolved')
+            ->hourly()
+            ->withoutOverlapping();
+
         $schedule->command('toweros:subscriptions:process')
             ->hourly()
             ->withoutOverlapping();

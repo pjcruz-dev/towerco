@@ -42,21 +42,66 @@ export function isPdfAttachment(fileName: string, mimeType?: string | null): boo
   return /\.pdf$/i.test(fileName);
 }
 
-export function isPreviewableAttachment(fileName: string, mimeType?: string | null): boolean {
-  return isImageAttachment(fileName, mimeType) || isPdfAttachment(fileName, mimeType);
+const OFFICE_MIME_TYPES = new Set([
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+
+export function isOfficeAttachment(fileName: string, mimeType?: string | null): boolean {
+  if (mimeType && OFFICE_MIME_TYPES.has(mimeType)) return true;
+  return /\.(docx?|xlsx?|pptx?)$/i.test(fileName);
 }
 
-/** Image + PDF get the large card gallery; other types stay in the compact list. */
+export function isTextAttachment(fileName: string, mimeType?: string | null): boolean {
+  if (mimeType === "text/plain") return true;
+  return /\.txt$/i.test(fileName);
+}
+
+/** Browser-native inline preview (image/PDF) or expanded document card (Office/text). */
+export function isPreviewableAttachment(fileName: string, mimeType?: string | null): boolean {
+  return (
+    isImageAttachment(fileName, mimeType) ||
+    isPdfAttachment(fileName, mimeType) ||
+    isOfficeAttachment(fileName, mimeType) ||
+    isTextAttachment(fileName, mimeType)
+  );
+}
+
+/** Formats that get the large card gallery + maximize dialog. */
 export function isCardGalleryAttachment(item: AttachmentGalleryItem): boolean {
   return (
     Boolean(item.preferImagePreview) ||
     isImageAttachment(item.fileName, item.mimeType) ||
-    isPdfAttachment(item.fileName, item.mimeType)
+    isPdfAttachment(item.fileName, item.mimeType) ||
+    isOfficeAttachment(item.fileName, item.mimeType) ||
+    isTextAttachment(item.fileName, item.mimeType)
   );
+}
+
+/** True when the browser can render the blob inline (img / PDF iframe). */
+export function isInlineRenderableAttachment(fileName: string, mimeType?: string | null): boolean {
+  return isImageAttachment(fileName, mimeType) || isPdfAttachment(fileName, mimeType);
 }
 
 function isPhotoAttachment(item: AttachmentGalleryItem): boolean {
   return Boolean(item.preferImagePreview) || isImageAttachment(item.fileName, item.mimeType);
+}
+
+function fileTypeLabel(fileName: string, mimeType?: string | null): string {
+  if (isPdfAttachment(fileName, mimeType)) return "PDF document";
+  if (isImageAttachment(fileName, mimeType)) return "Image";
+  if (/\.docx$/i.test(fileName) || mimeType?.includes("wordprocessingml")) return "Word document";
+  if (/\.doc$/i.test(fileName) || mimeType === "application/msword") return "Word document";
+  if (/\.xlsx$/i.test(fileName) || mimeType?.includes("spreadsheetml")) return "Excel spreadsheet";
+  if (/\.xls$/i.test(fileName) || mimeType === "application/vnd.ms-excel") return "Excel spreadsheet";
+  if (/\.pptx$/i.test(fileName) || mimeType?.includes("presentationml")) return "PowerPoint";
+  if (/\.ppt$/i.test(fileName) || mimeType === "application/vnd.ms-powerpoint") return "PowerPoint";
+  if (isTextAttachment(fileName, mimeType)) return "Text file";
+  return "File";
 }
 
 function inferMimeFromFileName(fileName: string): string | null {
@@ -75,6 +120,20 @@ function inferMimeFromFileName(fileName: string): string | null {
       return "image/bmp";
     case "pdf":
       return "application/pdf";
+    case "doc":
+      return "application/msword";
+    case "docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "xls":
+      return "application/vnd.ms-excel";
+    case "xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "ppt":
+      return "application/vnd.ms-powerpoint";
+    case "pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    case "txt":
+      return "text/plain";
     default:
       return null;
   }
@@ -103,7 +162,10 @@ export function useAttachmentPreviewUrls(
   const previewIds = useMemo(
     () =>
       items
-        .filter((item) => !item.previewUrl && isCardGalleryAttachment(item))
+        .filter(
+          (item) =>
+            !item.previewUrl && isInlineRenderableAttachment(item.fileName, item.mimeType),
+        )
         .map((item) => item.id)
         .sort()
         .join(","),
@@ -115,7 +177,9 @@ export function useAttachmentPreviewUrls(
     const createdUrls: string[] = [];
 
     const load = async () => {
-      const previewItems = items.filter((item) => !item.previewUrl && isCardGalleryAttachment(item));
+      const previewItems = items.filter(
+        (item) => !item.previewUrl && isInlineRenderableAttachment(item.fileName, item.mimeType),
+      );
       if (previewItems.length === 0) {
         setUrls({});
         setErrors({});
@@ -183,15 +247,20 @@ function PreviewMedia({
   previewUrl,
   previewError,
   fit = "cover",
+  expanded = false,
 }: {
   item: AttachmentGalleryItem;
   previewUrl?: string;
   previewError?: string;
   fit?: "cover" | "contain";
+  expanded?: boolean;
 }) {
   const isPdf = isPdfAttachment(item.fileName, item.mimeType);
   const isImage =
     Boolean(item.preferImagePreview) || isImageAttachment(item.fileName, item.mimeType);
+  const isOffice = isOfficeAttachment(item.fileName, item.mimeType);
+  const isText = isTextAttachment(item.fileName, item.mimeType);
+  const sizeLabel = formatAttachmentBytes(item.sizeBytes);
 
   if (previewUrl && isImage && !isPdf) {
     return (
@@ -214,6 +283,36 @@ function PreviewMedia({
         title={item.title || item.fileName}
         className="h-full w-full border-0 bg-white"
       />
+    );
+  }
+
+  if (isOffice || isText || (!isImage && !isPdf)) {
+    return (
+      <div
+        className={cn(
+          "flex h-full flex-col items-center justify-center gap-3 px-6 text-center",
+          expanded ? "bg-muted/20" : "bg-muted/40",
+        )}
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-700 dark:text-sky-400">
+          <FileText className="h-8 w-8" aria-hidden />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            {fileTypeLabel(item.fileName, item.mimeType)}
+          </p>
+          <p className="max-w-md truncate text-xs text-muted-foreground">
+            {item.title?.trim() || item.fileName}
+          </p>
+          {sizeLabel ? <p className="text-xs text-muted-foreground">{sizeLabel}</p> : null}
+        </div>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          {expanded
+            ? "Browsers cannot render this file inline. Download it, or use Open preview when available."
+            : "Expand for a larger view, or download the file."}
+        </p>
+        {previewError ? <p className="text-xs text-destructive">{previewError}</p> : null}
+      </div>
     );
   }
 
@@ -360,8 +459,9 @@ export function AttachmentPreviewGallery({
               {cards.map((item) => {
                 const previewUrl = item.previewUrl || urls[item.id];
                 const previewError = errors[item.id];
-                const canPreview =
-                  Boolean(item.previewUrl) || isPreviewableAttachment(item.fileName, item.mimeType);
+                const canInline = isInlineRenderableAttachment(item.fileName, item.mimeType);
+                const canExpand = isPreviewableAttachment(item.fileName, item.mimeType);
+                const showExpand = canExpand && (canInline ? Boolean(previewUrl) : true);
                 return (
                   <div
                     key={item.id}
@@ -381,7 +481,7 @@ export function AttachmentPreviewGallery({
                         previewError={previewError}
                         fit={isPhotoGroup ? "cover" : "contain"}
                       />
-                      {canPreview && previewUrl ? (
+                      {showExpand ? (
                         <Button
                           type="button"
                           size="icon-sm"
@@ -402,14 +502,24 @@ export function AttachmentPreviewGallery({
                         <p className="text-xs text-muted-foreground">{item.subtitle}</p>
                       ) : null}
                       <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-                        {canPreview ? (
+                        {canExpand ? (
                           <button
                             type="button"
                             className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
                             disabled={openPreviewDisabled}
-                            onClick={() => void handleOpen(item)}
+                            onClick={() => {
+                              if (canInline && onOpenPreview) {
+                                void handleOpen(item);
+                                return;
+                              }
+                              if (canInline) {
+                                void handleOpen(item);
+                                return;
+                              }
+                              setExpandedItem(item);
+                            }}
                           >
-                            {resolveOpenLabel(item)}
+                            {canInline ? resolveOpenLabel(item) : "Expand"}
                           </button>
                         ) : null}
                         <button
@@ -438,6 +548,7 @@ export function AttachmentPreviewGallery({
           <div className="grid gap-3 sm:grid-cols-2">
             {listItems.map((item) => {
               const canPreview = isPreviewableAttachment(item.fileName, item.mimeType);
+              const canInline = isInlineRenderableAttachment(item.fileName, item.mimeType);
               return (
                 <div
                   key={item.id}
@@ -463,9 +574,15 @@ export function AttachmentPreviewGallery({
                           type="button"
                           className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-sky-700 hover:underline disabled:opacity-50 dark:text-sky-400"
                           disabled={openPreviewDisabled}
-                          onClick={() => void handleOpen(item)}
+                          onClick={() => {
+                            if (canInline) {
+                              void handleOpen(item);
+                              return;
+                            }
+                            setExpandedItem(item);
+                          }}
                         >
-                          {resolveOpenLabel(item)}
+                          {canInline ? resolveOpenLabel(item) : "Expand"}
                         </button>
                       ) : null}
                       <button
@@ -501,15 +618,17 @@ export function AttachmentPreviewGallery({
             </DialogTitle>
             {expandedItem ? (
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={openPreviewDisabled}
-                  onClick={() => void handleOpen(expandedItem)}
-                >
-                  {resolveOpenLabel(expandedItem)}
-                </Button>
+                {isInlineRenderableAttachment(expandedItem.fileName, expandedItem.mimeType) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={openPreviewDisabled}
+                    onClick={() => void handleOpen(expandedItem)}
+                  >
+                    {resolveOpenLabel(expandedItem)}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -529,6 +648,7 @@ export function AttachmentPreviewGallery({
                 previewUrl={expandedPreviewUrl}
                 previewError={errors[expandedItem.id]}
                 fit="contain"
+                expanded
               />
             ) : null}
           </div>

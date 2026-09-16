@@ -14,7 +14,9 @@ use App\Modules\Ticketing\Notifications\TicketingTicketMailNotification;
 use App\Modules\Ticketing\Services\TicketingSettingsService;
 use App\Modules\Ticketing\Services\TicketingSlaRunnerService;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -329,6 +331,77 @@ final class TicketingModuleTest extends TestCase
                 return in_array('it@example.com', $notifiable->routes['mail'] ?? [], true);
             },
         );
+    }
+
+    public function test_closed_ticket_cannot_be_reopened(): void
+    {
+        $create = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Close lock test',
+            ])
+            ->assertCreated();
+
+        $ticketId = (string) $create->json('data.id');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson("/api/v1/ticketing/tickets/{$ticketId}", [
+                'status' => 'resolved',
+                'resolution_comment' => 'Done.',
+            ])
+            ->assertOk();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson("/api/v1/ticketing/tickets/{$ticketId}", [
+                'status' => 'closed',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'closed');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson("/api/v1/ticketing/tickets/{$ticketId}", [
+                'status' => 'open',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_auto_closes_resolved_tickets_after_grace_days(): void
+    {
+        $create = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Auto close test',
+            ])
+            ->assertCreated();
+
+        $ticketId = (string) $create->json('data.id');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson("/api/v1/ticketing/tickets/{$ticketId}", [
+                'status' => 'resolved',
+                'resolution_comment' => 'Fixed.',
+            ])
+            ->assertOk();
+
+        tenancy()->initialize($this->testTenant);
+        TicketingTicket::query()->whereKey($ticketId)->update([
+            'resolved_at' => now()->subDays(4),
+        ]);
+        $result = app(\App\Modules\Ticketing\Services\TicketingAutoCloseService::class)->run();
+        $this->assertSame(1, $result['closed']);
+        $this->assertSame('closed', TicketingTicket::query()->whereKey($ticketId)->value('status'));
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/ticketing/tickets/{$ticketId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'closed')
+            ->assertJsonPath('data.can_reopen', false);
     }
 
     public function test_can_create_ticket_from_e_approval_source_with_links(): void
@@ -664,5 +737,54 @@ final class TicketingModuleTest extends TestCase
             ->getJson('/api/v1/ticketing/tickets?category=id_security_incident')
             ->assertOk()
             ->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_can_upload_and_delete_ticket_attachment(): void
+    {
+        Storage::fake('tenant_files');
+
+        $create = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Attachment parity check',
+                'description' => 'Upload and remove should match E-Forms behavior.',
+                'category' => 'general',
+            ]);
+
+        $create->assertCreated();
+        $ticketId = (string) $create->json('data.id');
+
+        $upload = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post("/api/v1/ticketing/tickets/{$ticketId}/attachments", [
+                'file' => UploadedFile::fake()->create('screenshot.png', 120, 'image/png'),
+            ]);
+
+        $upload->assertCreated()
+            ->assertJsonPath('data.file_name', 'screenshot.png');
+
+        $attachmentId = (string) $upload->json('data.id');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/ticketing/tickets/{$ticketId}")
+            ->assertOk()
+            ->assertJsonPath('data.attachments.0.id', $attachmentId);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->deleteJson("/api/v1/ticketing/attachments/{$attachmentId}")
+            ->assertOk()
+            ->assertJsonPath('data.deleted', true);
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertNull(\App\Models\TicketingAttachment::query()->find($attachmentId));
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/ticketing/tickets/{$ticketId}")
+            ->assertOk()
+            ->assertJsonPath('data.attachments', []);
     }
 }

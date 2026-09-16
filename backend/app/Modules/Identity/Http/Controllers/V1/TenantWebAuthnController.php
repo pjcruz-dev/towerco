@@ -70,6 +70,7 @@ final class TenantWebAuthnController extends AbstractApiController
             'challenge_id' => ['required', 'uuid'],
             'credential' => ['required', 'array'],
             'label' => ['nullable', 'string', 'max:120'],
+            'device_class' => ['nullable', 'string', 'in:mobile,desktop,security_key,unknown'],
         ]);
 
         $row = $this->passkeys->completeRegistration(
@@ -77,6 +78,7 @@ final class TenantWebAuthnController extends AbstractApiController
             $data['challenge_id'],
             $data['credential'],
             $data['label'] ?? null,
+            $data['device_class'] ?? null,
         );
 
         return $this->ok(['credential' => $row->toPublicRow()]);

@@ -15,6 +15,7 @@ import {
   webAuthnRegisterVerify,
 } from "@/lib/api/modules/auth-api";
 import {
+  inferPasskeyDeviceClass,
   isPlatformAuthenticatorAvailable,
   isWebAuthnSecureContext,
   isWebAuthnSupported,
@@ -66,10 +67,12 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
       if (!credential) {
         throw new Error("No passkey was created.");
       }
+      const serialized = serializeAttestation(credential);
       return webAuthnRegisterVerify({
         challengeId: options.challenge_id,
-        credential: serializeAttestation(credential),
+        credential: serialized,
         label: label.trim() || undefined,
+        deviceClass: inferPasskeyDeviceClass(serialized.authenticatorAttachment),
       });
     },
     onSuccess: () => {
@@ -228,11 +231,27 @@ export function PasskeysSettingsPanel({ embedded = false }: Props) {
                 <div>
                   <p className="text-sm font-medium text-foreground">{row.label ?? "Passkey"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {row.last_used_at
-                      ? `Last used ${new Date(row.last_used_at).toLocaleString()}`
-                      : row.created_at
-                        ? `Added ${new Date(row.created_at).toLocaleString()}`
-                        : "Registered"}
+                    {[
+                      row.device_class === "mobile"
+                        ? "Phone / tablet"
+                        : row.device_class === "desktop"
+                          ? "Computer"
+                          : row.device_class === "security_key"
+                            ? "Security key"
+                            : null,
+                      row.authenticator_attachment === "platform"
+                        ? "Fingerprint / Face ID"
+                        : row.authenticator_attachment === "cross-platform"
+                          ? "External authenticator"
+                          : null,
+                      row.last_used_at
+                        ? `Last used ${new Date(row.last_used_at).toLocaleString()}`
+                        : row.created_at
+                          ? `Added ${new Date(row.created_at).toLocaleString()}`
+                          : "Registered",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </div>
                 <Button
