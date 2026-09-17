@@ -23,6 +23,8 @@ export function OrgChartBranch({
   onSelect,
   onManageRoles,
   showRoles = false,
+  showLicense = false,
+  hideExpandControls = false,
 }: {
   person: OrgChartNode;
   index: OrgChartIndex;
@@ -34,6 +36,9 @@ export function OrgChartBranch({
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
   showRoles?: boolean;
+  showLicense?: boolean;
+  /** Print/export: keep connectors, hide expand/collapse buttons. */
+  hideExpandControls?: boolean;
 }) {
   if (ancestors.has(person.id) || depth > 12) {
     return null;
@@ -50,10 +55,11 @@ export function OrgChartBranch({
         compact
         emphasis={person.id === focusedId ? "focus" : person.external ? "manager" : "default"}
         showRoles={showRoles}
+        showLicense={showLicense}
         onSelect={onSelect}
         onManageRoles={onManageRoles}
       />
-      {children.length > 0 ? (
+      {children.length > 0 && !hideExpandControls ? (
         <button
           type="button"
           data-org-no-pan=""
@@ -64,6 +70,8 @@ export function OrgChartBranch({
         >
           {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </button>
+      ) : children.length > 0 ? (
+        <div className="h-1" aria-hidden />
       ) : null}
 
       {showChildren ? (
@@ -81,6 +89,8 @@ export function OrgChartBranch({
               onSelect={onSelect}
               onManageRoles={onManageRoles}
               showRoles={showRoles}
+              showLicense={showLicense}
+              hideExpandControls={hideExpandControls}
             />
           ) : (
             <div className="flex items-start">
@@ -104,6 +114,8 @@ export function OrgChartBranch({
                     onSelect={onSelect}
                     onManageRoles={onManageRoles}
                     showRoles={showRoles}
+                    showLicense={showLicense}
+                    hideExpandControls={hideExpandControls}
                   />
                 </div>
               ))}
@@ -121,12 +133,17 @@ export function AdminOrgTreeView({
   onSelect,
   onManageRoles,
   showRoles = false,
+  showLicense = false,
+  /** Force full expansion and hide expand controls (print / PDF / PNG). */
+  exportMode = false,
 }: {
   index: OrgChartIndex;
   focusedId: string | null;
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
   showRoles?: boolean;
+  showLicense?: boolean;
+  exportMode?: boolean;
 }) {
   const roots = useMemo(() => orgChartRoots(index), [index]);
   const trees = useMemo(() => roots.filter((node) => node.direct_report_count > 0), [roots]);
@@ -139,7 +156,12 @@ export function AdminOrgTreeView({
     setExpandedIds(new Set(expandKey === "" ? [] : expandKey.split("|")));
   }, [expandKey]);
 
+  const activeExpandedIds = exportMode ? new Set(allExpandable) : expandedIds;
+
   const toggle = (id: string) => {
+    if (exportMode) {
+      return;
+    }
     setExpandedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) {
@@ -169,13 +191,15 @@ export function AdminOrgTreeView({
               person={root}
               index={index}
               depth={0}
-              expandedIds={expandedIds}
+              expandedIds={activeExpandedIds}
               focusedId={focusedId}
               ancestors={new Set()}
               onToggle={toggle}
               onSelect={onSelect}
               onManageRoles={onManageRoles}
               showRoles={showRoles}
+              showLicense={showLicense}
+              hideExpandControls={exportMode}
             />
           </div>
         ))}
@@ -193,6 +217,7 @@ export function AdminOrgTreeView({
                 compact
                 emphasis={person.id === focusedId ? "focus" : "default"}
                 showRoles={showRoles}
+                showLicense={showLicense}
                 onSelect={onSelect}
                 onManageRoles={onManageRoles}
               />

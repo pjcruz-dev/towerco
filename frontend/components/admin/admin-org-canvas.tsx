@@ -2,6 +2,7 @@
 
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -12,22 +13,24 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const ZOOM_MIN = 0.4;
+const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 1.8;
 const ZOOM_STEP = 0.1;
 
 type Props = {
   children: ReactNode;
   className?: string;
-  /** Reset transform when this key changes (e.g. view mode). */
+  /** Reset / re-center when this key changes (e.g. filters or view mode). */
   resetKey?: string;
 };
 
 /**
  * Pan + zoom surface for org charts (grab cursor, drag to pan, wheel to zoom).
+ * First paint and Reset fit the full chart into the viewport, centered.
  */
 export function AdminOrgCanvas({ children, className, resetKey }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.9);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{
@@ -39,12 +42,51 @@ export function AdminOrgCanvas({ children, className, resetKey }: Props) {
   } | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  useEffect(() => {
-    setScale(0.9);
-    setOffset({ x: 0, y: 0 });
-  }, [resetKey]);
-
   const clampScale = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
+
+  const fitToView = useCallback(() => {
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) {
+      return;
+    }
+
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+    const cw = Math.max(content.scrollWidth, content.offsetWidth, 1);
+    const ch = Math.max(content.scrollHeight, content.offsetHeight, 1);
+    if (vw < 32 || vh < 32) {
+      return;
+    }
+
+    const padX = 48;
+    const padY = 40;
+    const nextScale = clampScale(Math.min((vw - padX) / cw, (vh - padY) / ch, 1));
+    const ox = (vw - cw * nextScale) / 2;
+    const oy = Math.max(20, (vh - ch * nextScale) / 2);
+
+    setScale(Number(nextScale.toFixed(3)));
+    setOffset({ x: ox, y: oy });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) {
+        fitToView();
+      }
+    };
+    // Two frames so tree layout (especially wide branches) settles before measuring.
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+    const timeout = window.setTimeout(run, 120);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [fitToView, resetKey]);
 
   // React's onWheel is passive — preventDefault needs a native non-passive listener.
   useEffect(() => {
@@ -123,16 +165,7 @@ export function AdminOrgCanvas({ children, className, resetKey }: Props) {
         >
           <Plus className="size-3.5" />
         </Button>
-        <Button
-          type="button"
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Reset view"
-          onClick={() => {
-            setScale(0.9);
-            setOffset({ x: 0, y: 0 });
-          }}
-        >
+        <Button type="button" size="icon-xs" variant="ghost" aria-label="Center and fit view" onClick={fitToView}>
           <RotateCcw className="size-3.5" />
         </Button>
       </div>
@@ -149,17 +182,18 @@ export function AdminOrgCanvas({ children, className, resetKey }: Props) {
         onPointerCancel={endDrag}
       >
         <div
-          className="origin-top px-4 py-6"
+          ref={contentRef}
+          className="inline-block w-max max-w-none px-4 py-6"
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-            transformOrigin: "top center",
+            transformOrigin: "0 0",
           }}
         >
           {children}
         </div>
       </div>
       <p className="border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
-        Drag to pan · scroll to zoom · use controls to reset
+        Drag to pan · scroll to zoom · reset centers and fits the chart
       </p>
     </div>
   );

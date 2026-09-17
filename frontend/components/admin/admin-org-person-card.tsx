@@ -14,6 +14,7 @@ export function OrgPersonCard({
   emphasis = "default",
   compact = false,
   showRoles = false,
+  showLicense = false,
   onSelect,
   onManageRoles,
 }: {
@@ -22,11 +23,15 @@ export function OrgPersonCard({
   compact?: boolean;
   /** When false, hide role badges and Assign roles (cleaner org chart). */
   showRoles?: boolean;
+  /** License chips are admin/tenant-admin only. */
+  showLicense?: boolean;
   onSelect: (id: string) => void;
   onManageRoles?: (person: OrgChartNode) => void;
 }) {
   const focused = emphasis === "focus";
-  const license = entraLicenseChipLabel(person.license_label, person.license_names);
+  const license = showLicense
+    ? entraLicenseChipLabel(person.license_label, person.license_names)
+    : null;
   const roles = showRoles ? (person.roles ?? []).slice(0, compact ? 1 : 3) : [];
   const extraRoles = showRoles ? Math.max(0, (person.roles ?? []).length - roles.length) : 0;
   const canAssignRoles = showRoles && Boolean(onManageRoles) && !person.external;

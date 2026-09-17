@@ -7,6 +7,10 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminOrgCanvas } from "@/components/admin/admin-org-canvas";
+import {
+  AdminOrgChartExportDialog,
+  AdminOrgChartExportTrigger,
+} from "@/components/admin/admin-org-chart-export-dialog";
 import { AdminOrgChartView } from "@/components/admin/admin-org-chart-view";
 import { AdminOrgPersonRolesSheet } from "@/components/admin/admin-org-person-roles-sheet";
 import { AdminOrgTreeView } from "@/components/admin/admin-org-tree-view";
@@ -49,6 +53,11 @@ const ORG_MANAGE_PERMISSIONS = [
   permissions.organizationManage,
   permissions.userManage,
 ] as const;
+/** License chips, license filter, and print/download — heads / tenant admin / user admins only. */
+const ORG_PRIVILEGED_PERMISSIONS = [
+  permissions.organizationManage,
+  permissions.userManage,
+] as const;
 
 type OrgView = "line" | "all";
 
@@ -83,6 +92,16 @@ export function OrgPageClient() {
       permissions.userManage,
     ]);
   }, [authUser, effectivePermissions]);
+  /** Heads (organization:manage), user admins, and tenant_admin — not organization:view alone. */
+  const canSeeLicensesAndExport = useMemo(() => {
+    const scoped = authUser
+      ? { ...authUser, permissions: effectivePermissions() }
+      : null;
+    if (hasAnyPermission(scoped, [...ORG_PRIVILEGED_PERMISSIONS])) {
+      return true;
+    }
+    return Boolean(authUser?.roles?.includes("tenant_admin"));
+  }, [authUser, effectivePermissions]);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<OrgView>("all");
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -90,6 +109,7 @@ export function OrgPageClient() {
   const [showRoles, setShowRoles] = useState(false);
   const [rolesPerson, setRolesPerson] = useState<OrgChartNode | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     setShowRoles(readShowRolesPreference());
@@ -113,21 +133,34 @@ export function OrgPageClient() {
   const people = chartQuery.data?.people ?? EMPTY_PEOPLE;
   const index = useMemo(() => buildOrgChartIndex(people), [people]);
   const filterOptions = useMemo(() => collectOrgFilterOptions(index.nodes), [index.nodes]);
-  const filteredIndex = useMemo(() => filterOrgChartIndex(index, filters), [filters, index]);
+  const effectiveFilters = useMemo(
+    () => (canSeeLicensesAndExport ? filters : { ...filters, license: "" }),
+    [canSeeLicensesAndExport, filters],
+  );
+  const filteredIndex = useMemo(
+    () => filterOrgChartIndex(index, effectiveFilters),
+    [effectiveFilters, index],
+  );
   const suggestions = useMemo(
     () => filterOrgPeople(filteredIndex.nodes, search),
     [filteredIndex.nodes, search],
   );
 
   useEffect(() => {
+    if (!canSeeLicensesAndExport && filters.license) {
+      setFilters((current) => ({ ...current, license: "" }));
+    }
+  }, [canSeeLicensesAndExport, filters.license]);
+
+  useEffect(() => {
     if (focusedId && filteredIndex.byId.has(focusedId)) {
       return;
     }
-    if (focusedId && index.byId.has(focusedId) && !orgChartFiltersActive(filters)) {
+    if (focusedId && index.byId.has(focusedId) && !orgChartFiltersActive(effectiveFilters)) {
       return;
     }
     setFocusedId(pickDefaultFocus(filteredIndex, currentUserId));
-  }, [currentUserId, filteredIndex, filters, focusedId, index.byId]);
+  }, [currentUserId, effectiveFilters, filteredIndex, focusedId, index.byId]);
 
   const syncMutation = useMutation({
     mutationFn: syncAdminEntraOrg,
@@ -201,9 +234,11 @@ export function OrgPageClient() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organization</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Browse the full organization chart, or open one person for their manager and direct reports. Sync copies
-              manager, job title, department, Microsoft 365 license, and profile photo onto existing {organizationLabel}{" "}
-              users. People without a Microsoft 365 license are hidden here.
+              Browse the full organization chart, or open one person for their manager and direct reports.
+              {canManageOrganization
+                ? ` Sync copies manager, job title, department, Microsoft 365 license, and profile photo onto existing ${organizationLabel} users.`
+                : ""}{" "}
+              People without a Microsoft 365 license are hidden here.
               {canAssignRoles
                 ? " Turn on Show roles when you need to review or assign tenant roles from the chart."
                 : ""}
@@ -213,6 +248,12 @@ export function OrgPageClient() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canSeeLicensesAndExport ? (
+              <AdminOrgChartExportTrigger
+                disabled={index.nodes.length === 0 || chartQuery.isLoading}
+                onClick={() => setExportOpen(true)}
+              />
+            ) : null}
             {hasAnyPermission(
               authUser ? { ...authUser, permissions: effectivePermissions() } : null,
               [permissions.userManage],
@@ -268,25 +309,27 @@ export function OrgPageClient() {
                       ))}
                     </Select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-license">
-                      License
-                    </label>
-                    <Select
-                      id="org-filter-license"
-                      value={filters.license}
-                      onChange={(event) => patchFilter("license", event.target.value)}
-                      className="h-9 min-w-[10rem]"
-                    >
-                      <option value="">All licenses</option>
-                      {filterOptions.licenses.map((license) => (
-                        <option key={license} value={license}>
-                          {license}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  {orgChartFiltersActive(filters) ? (
+                  {canSeeLicensesAndExport ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="org-filter-license">
+                        License
+                      </label>
+                      <Select
+                        id="org-filter-license"
+                        value={filters.license}
+                        onChange={(event) => patchFilter("license", event.target.value)}
+                        className="h-9 min-w-[10rem]"
+                      >
+                        <option value="">All licenses</option>
+                        {filterOptions.licenses.map((license) => (
+                          <option key={license} value={license}>
+                            {license}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : null}
+                  {orgChartFiltersActive(effectiveFilters) ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -363,13 +406,14 @@ export function OrgPageClient() {
                 No people match these filters. Clear filters to see the full organization.
               </p>
             ) : view === "all" ? (
-              <AdminOrgCanvas resetKey={`all-${filters.department}-${filters.license}`}>
+              <AdminOrgCanvas resetKey={`all-${effectiveFilters.department}-${effectiveFilters.license}`}>
                 <AdminOrgTreeView
                   index={filteredIndex}
                   focusedId={focusedId}
                   onSelect={selectPerson}
                   onManageRoles={canAssignRoles ? openRoles : undefined}
                   showRoles={canAssignRoles && showRoles}
+                  showLicense={canSeeLicensesAndExport}
                 />
               </AdminOrgCanvas>
             ) : focusedId && filteredIndex.byId.has(focusedId) ? (
@@ -381,6 +425,7 @@ export function OrgPageClient() {
                   organizationLabel={organizationLabel}
                   onManageRoles={canAssignRoles ? openRoles : undefined}
                   showRoles={canAssignRoles && showRoles}
+                  showLicense={canSeeLicensesAndExport}
                 />
               </AdminOrgCanvas>
             ) : (
@@ -396,6 +441,17 @@ export function OrgPageClient() {
           open={rolesOpen}
           onOpenChange={setRolesOpen}
         />
+
+        {canSeeLicensesAndExport ? (
+          <AdminOrgChartExportDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            index={index}
+            departments={filterOptions.departments}
+            focusedId={focusedId}
+            showLicense={canSeeLicensesAndExport}
+          />
+        ) : null}
       </div>
     </PermissionGate>
   );

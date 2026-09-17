@@ -20,6 +20,7 @@ export function AdminOrgChartView({
   organizationLabel,
   onManageRoles,
   showRoles = false,
+  showLicense = false,
 }: {
   index: OrgChartIndex;
   focusedId: string;
@@ -27,6 +28,7 @@ export function AdminOrgChartView({
   organizationLabel: string;
   onManageRoles?: (person: OrgChartNode) => void;
   showRoles?: boolean;
+  showLicense?: boolean;
 }) {
   const focused = index.byId.get(focusedId);
   const manager = useMemo(() => resolveManager(index, focused), [focused, index]);
@@ -46,6 +48,7 @@ export function AdminOrgChartView({
             person={manager}
             emphasis="manager"
             showRoles={showRoles}
+            showLicense={showLicense}
             onSelect={onFocus}
             onManageRoles={onManageRoles}
           />
@@ -61,6 +64,7 @@ export function AdminOrgChartView({
         person={focused}
         emphasis="focus"
         showRoles={showRoles}
+        showLicense={showLicense}
         onSelect={onFocus}
         onManageRoles={onManageRoles}
       />
@@ -77,6 +81,7 @@ export function AdminOrgChartView({
                 key={person.id}
                 person={person}
                 showRoles={showRoles}
+                showLicense={showLicense}
                 onSelect={onFocus}
                 onManageRoles={onManageRoles}
               />
