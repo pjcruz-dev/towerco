@@ -10,6 +10,8 @@ final class PlatformTenantAuditEventType
 
     public const TENANT_ENVIRONMENT_PROVISIONED = 'tenant.environment_provisioned';
 
+    public const TENANT_ENVIRONMENT_DATA_CLONED = 'tenant.environment_data_cloned';
+
     public const TENANT_DELETED = 'tenant.deleted';
 
     public const TENANT_MFA_UPDATED = 'tenant.mfa.updated';
@@ -42,6 +44,7 @@ final class PlatformTenantAuditEventType
         return [
             self::TENANT_PROVISIONED,
             self::TENANT_ENVIRONMENT_PROVISIONED,
+            self::TENANT_ENVIRONMENT_DATA_CLONED,
             self::TENANT_DELETED,
             self::TENANT_MFA_UPDATED,
             self::TENANT_BRANDING_UPDATED,
