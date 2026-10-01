@@ -32,6 +32,9 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             'enabled_modules' => ['sometimes', 'nullable', 'array'],
             'enabled_modules.*' => ['string', 'max:64'],
             'admin_password' => ['sometimes', 'nullable', 'string', 'min:12', 'max:128'],
+            'copy_data' => ['sometimes', 'boolean'],
+            'pause_source' => ['sometimes', 'boolean'],
+            'confirm_domain' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         try {
@@ -46,6 +49,13 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             }
             if (! empty($data['admin_password'])) {
                 $payload['admin_password'] = $data['admin_password'];
+            }
+            if (! empty($data['copy_data'])) {
+                $payload['copy_data'] = true;
+                $payload['pause_source'] = (bool) ($data['pause_source'] ?? false);
+                $payload['confirm_domain'] = $data['confirm_domain'] ?? null;
+                $payload['actor_user_id'] = $request->user()?->id;
+                $payload['actor_email'] = $request->user()?->email;
             }
 
             $result = $environments->createFromTenant($tenant, $payload);
@@ -77,6 +87,9 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
         if (isset($result['initial_admin'])) {
             $payload['initial_admin'] = InitialAdminExposure::forTransport($result['initial_admin']);
         }
+        if (isset($result['clone'])) {
+            $payload['clone'] = $result['clone'];
+        }
 
         /** @var User|null $actor */
         $actor = $request->user();
@@ -92,6 +105,6 @@ class CentralTenantEnvironmentStoreController extends AbstractApiController
             ],
         );
 
-        return $this->ok($payload, 201);
+        return $this->ok($payload, isset($payload['clone']) ? 202 : 201);
     }
 }

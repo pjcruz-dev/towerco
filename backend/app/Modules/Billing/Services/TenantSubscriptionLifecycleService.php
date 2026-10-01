@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Billing\Services;
 
 use App\Models\Tenant;
+use App\Models\TenantEnvironmentClone;
 use App\Modules\Tenancy\Support\TenantOperatorAccessMode;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 final class TenantSubscriptionLifecycleService
 {
@@ -92,7 +94,7 @@ final class TenantSubscriptionLifecycleService
                 : ($status === self::STATUS_CANCELED
                     ? __('This organization subscription has been canceled. Contact INFRA SUITE to restore access.')
                     : __('Subscription access is suspended after the payment grace period. Contact INFRA SUITE billing.')),
-            'read_only' => __('This organization is in read-only mode. You can view data but cannot make changes.'),
+            'read_only' => $this->readOnlyMessage($tenant),
             'grace' => __('Subscription is past due. Update billing before :date to avoid suspension.', [
                 'date' => $tenant->past_due_grace_ends_at?->toFormattedDateString() ?? 'the grace deadline',
             ]),
@@ -112,6 +114,22 @@ final class TenantSubscriptionLifecycleService
             'days_until_grace_end' => $this->daysUntil($tenant->past_due_grace_ends_at, $now),
             'message' => $message,
         ];
+    }
+
+    private function readOnlyMessage(Tenant $tenant): string
+    {
+        if (Schema::connection('central')->hasTable('tenant_environment_clones')) {
+            $copying = TenantEnvironmentClone::query()
+                ->where('source_tenant_id', (string) $tenant->id)
+                ->where('pause_source', true)
+                ->whereIn('status', TenantEnvironmentClone::ACTIVE_STATUSES)
+                ->exists();
+            if ($copying) {
+                return (string) __('This workspace is read-only until the environment copy finishes.');
+            }
+        }
+
+        return (string) __('This organization is in read-only mode. You can view data but cannot make changes.');
     }
 
     public function accessAllowed(Tenant $tenant): bool

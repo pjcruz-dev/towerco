@@ -42,6 +42,7 @@ final class TenantEnvironmentProvisioningServiceTest extends TestCase
             $table->string('plan_tier', 32)->default('starter');
             $table->string('subscription_status', 32)->default('active');
             $table->unsignedInteger('seat_limit')->default(25);
+            $table->json('enabled_modules')->nullable();
             $table->timestamps();
             $table->json('data')->nullable();
             $table->unique(['slug', 'environment'], 'tenants_slug_environment_unique');

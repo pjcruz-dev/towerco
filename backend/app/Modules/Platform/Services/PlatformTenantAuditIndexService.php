@@ -8,6 +8,7 @@ use App\Models\PlatformTenantAuditLog;
 use App\Models\Tenant;
 use App\Modules\Platform\Support\PlatformTenantAuditEventType;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 final class PlatformTenantAuditIndexService
 {
@@ -48,7 +49,7 @@ final class PlatformTenantAuditIndexService
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, PlatformTenantAuditLog>  $rows
+     * @param  Collection<int, PlatformTenantAuditLog>  $rows
      * @return list<array<string, mixed>>
      */
     private function mapRows($rows): array
@@ -83,6 +84,7 @@ final class PlatformTenantAuditIndexService
         return match ($eventType) {
             PlatformTenantAuditEventType::TENANT_PROVISIONED => 'Tenant provisioned',
             PlatformTenantAuditEventType::TENANT_ENVIRONMENT_PROVISIONED => 'Environment tenant provisioned',
+            PlatformTenantAuditEventType::TENANT_ENVIRONMENT_DATA_CLONED => 'Environment data copied',
             PlatformTenantAuditEventType::TENANT_DELETED => 'Tenant deleted',
             PlatformTenantAuditEventType::TENANT_MFA_UPDATED => 'MFA policy updated',
             PlatformTenantAuditEventType::TENANT_BRANDING_UPDATED => 'Branding updated',

@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Tenancy\Services;
 
 use App\Models\Tenant;
+use App\Models\TenantEnvironmentClone;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Stancl\Tenancy\Jobs\CreateDatabase;
 use Throwable;
 
 final class TenantEnvironmentProvisioningService
@@ -26,6 +29,7 @@ final class TenantEnvironmentProvisioningService
         private readonly TenantDocumentsBootstrapService $documentsBootstrap,
         private readonly TenantEnabledModulesResolver $enabledModulesResolver,
         private readonly TenantModuleRbacSyncService $moduleRbacSync,
+        private readonly TenantEnvironmentCloneService $clones,
     ) {}
 
     /**
@@ -35,7 +39,12 @@ final class TenantEnvironmentProvisioningService
      *   migrate?: bool,
      *   seed?: bool,
      *   enabled_modules?: list<string>|null,
-     *   admin_password?: string|null
+     *   admin_password?: string|null,
+     *   copy_data?: bool,
+     *   pause_source?: bool,
+     *   confirm_domain?: string|null,
+     *   actor_user_id?: string|null,
+     *   actor_email?: string|null
      * }  $input
      * @return array<string, mixed>
      */
@@ -102,11 +111,18 @@ final class TenantEnvironmentProvisioningService
             ? TenantEnabledModulesValidator::validate($input['enabled_modules'], $this->enabledModulesResolver)
             : $sourceTenant->enabled_modules;
 
+        $copyData = (bool) ($input['copy_data'] ?? false);
+        $this->clones->assertCanStart(
+            $sourceTenant,
+            $environment,
+            $copyData,
+            isset($input['confirm_domain']) ? (string) $input['confirm_domain'] : null,
+        );
+
         $tenant = null;
 
         try {
-            /** @var Tenant $tenant */
-            $tenant = Tenant::create([
+            $attributes = [
                 'id' => (string) Str::uuid(),
                 'slug' => $slug,
                 'brand_domain' => $brandDomain !== '' ? $brandDomain : null,
@@ -119,10 +135,42 @@ final class TenantEnvironmentProvisioningService
                 'subscription_status' => $orgRoot->subscription_status ?? 'active',
                 'seat_limit' => $orgRoot->seat_limit ?? 25,
                 'enabled_modules' => $enabledModules,
-            ]);
+            ];
+
+            // A copy restores the source database over this one, so building the empty schema first only delays the progress UI.
+            /** @var Tenant $tenant */
+            $tenant = $copyData
+                ? Tenant::withoutEvents(fn (): Tenant => Tenant::create($attributes))
+                : Tenant::create($attributes);
+            if ($copyData) {
+                Bus::dispatchSync(new CreateDatabase($tenant));
+            }
 
             $tenant->createDomain($domain);
             $this->domainSlugs->persistEndpoints($tenant, $recommendation);
+
+            if ($copyData) {
+                $clone = $this->clones->queue(
+                    $sourceTenant,
+                    $tenant,
+                    (bool) ($input['pause_source'] ?? false),
+                    isset($input['actor_user_id']) ? (string) $input['actor_user_id'] : null,
+                    isset($input['actor_email']) ? (string) $input['actor_email'] : null,
+                );
+
+                return [
+                    'tenant' => $tenant->fresh(['domains']),
+                    'source_tenant_id' => $sourceTenant->id,
+                    'org_root_tenant_id' => $orgRoot->id,
+                    'domain_endpoints' => $recommendation,
+                    'playbook_version' => null,
+                    'assigned_policy_code' => null,
+                    'initial_admin' => null,
+                    'public_holidays_seeded' => 0,
+                    'holiday_years' => [],
+                    'clone' => $this->clones->present($clone),
+                ];
+            }
 
             $shouldMigrate = ! empty($input['migrate']);
             $shouldSeed = ! empty($input['seed']);
@@ -203,6 +251,16 @@ final class TenantEnvironmentProvisioningService
         if ($tenant === null) {
             return;
         }
+
+        TenantEnvironmentClone::query()
+            ->where('target_tenant_id', (string) $tenant->id)
+            ->whereIn('status', TenantEnvironmentClone::ACTIVE_STATUSES)
+            ->update([
+                'status' => TenantEnvironmentClone::STATUS_FAILED,
+                'error_message' => 'Environment provisioning failed before the copy started.',
+                'finished_at' => now(),
+                'updated_at' => now(),
+            ]);
 
         try {
             $tenant->delete();

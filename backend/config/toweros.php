@@ -193,6 +193,14 @@ return [
         'job_timeout_seconds' => (int) env('TOWEROS_TENANT_DB_BACKUP_JOB_TIMEOUT', 1800),
     ],
 
+    /**
+     * Copy a tenant database and its files into a newly provisioned environment.
+     * skip_preflight is for tests that do not have mysqldump on PATH.
+     */
+    'tenant_environment_clone' => [
+        'skip_preflight' => filter_var(env('TOWEROS_TENANT_ENVIRONMENT_CLONE_SKIP_PREFLIGHT', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     'platform_auth' => [
         'microsoft_callback_frontend' => env('FRONTEND_APP_URL', 'http://localhost'),
         /** Auto-create central operators on first Microsoft sign-in when Entra group maps to a role. */
