@@ -1,19 +1,18 @@
 "use client";
 
-import {
-  isProductionEnvironment,
-  resolveAppEnvironmentLabel,
-  resolveAppVersionLabel,
-} from "@/lib/runtime/app-environment";
+import { useProductRelease } from "@/hooks/use-product-release";
+import { isProductionEnvironment, resolveAppEnvironmentLabel } from "@/lib/runtime/app-environment";
 
 export function AppFooter() {
+  const { displayedVersion } = useProductRelease();
+
   // Production tenants: no version / stack chrome (operational calm).
   if (isProductionEnvironment()) {
     return null;
   }
 
   const envLabel = resolveAppEnvironmentLabel();
-  const version = resolveAppVersionLabel();
+  const version = displayedVersion;
 
   return (
     <footer className="flex h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border bg-card px-6 text-xs text-muted-foreground md:px-8 print:hidden">

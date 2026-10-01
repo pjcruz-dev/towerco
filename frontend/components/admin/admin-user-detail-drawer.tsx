@@ -347,7 +347,7 @@ export function AdminUserDetailDrawer({
         <SheetFooter className="border-t border-border px-4 py-4 sm:flex-row sm:justify-end">
           {canImpersonate && user.can_impersonate && onImpersonate ? (
             <Button variant="outline" onClick={() => onImpersonate(user)}>
-              View as user
+              Impersonate user
             </Button>
           ) : null}
           <Button

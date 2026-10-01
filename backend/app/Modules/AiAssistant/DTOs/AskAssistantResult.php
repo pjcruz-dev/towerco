@@ -11,6 +11,7 @@ final readonly class AskAssistantResult
      * @param  list<string>  $suggestedFollowups
      * @param  list<array{label: string, href: string}>  $relatedLinks
      * @param  array<string, mixed>|null  $proposedAction
+     * @param  array<string, mixed>|null  $costEstimate
      */
     public function __construct(
         public string $conversationId,
@@ -25,23 +26,13 @@ final readonly class AskAssistantResult
         public ?array $proposedAction = null,
         public ?string $errorCode = null,
         public ?array $providerNotice = null,
+        public ?int $promptTokens = null,
+        public ?int $completionTokens = null,
+        public ?array $costEstimate = null,
     ) {}
 
     /**
-     * @return array{
-     *   conversation_id: string,
-     *   message_id: string,
-     *   answer: string,
-     *   citations: list<array<string, mixed>>,
-     *   suggested_followups: list<string>,
-     *   related_links: list<array{label: string, href: string}>,
-     *   status: string,
-     *   model_name: string|null,
-     *   used_live_data: bool,
-     *   proposed_action: array<string, mixed>|null,
-     *   error_code: string|null,
-     *   provider_notice: array<string, mixed>|null
-     * }
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -58,6 +49,9 @@ final readonly class AskAssistantResult
             'proposed_action' => $this->proposedAction,
             'error_code' => $this->errorCode,
             'provider_notice' => $this->providerNotice,
+            'prompt_tokens' => $this->promptTokens,
+            'completion_tokens' => $this->completionTokens,
+            'cost_estimate' => $this->costEstimate,
         ];
     }
 }

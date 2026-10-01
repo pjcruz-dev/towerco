@@ -90,40 +90,94 @@ export function chartColorAt(index: number): string {
   return DASHBOARD_CHART_COLORS[index % DASHBOARD_CHART_COLORS.length];
 }
 
+function statusToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 /**
- * Resolve fill by semantic key. Defaults to brand blue — not backend KPI tone
- * (tones often mark "attention" for inbox volume, which should stay cool).
+ * Stable hue for a workflow status. Null when the token is not a status
+ * (form names, dates, departments stay on the series palette).
  */
-export function chartFillForKey(key: string, index = 0): string {
-  const normalized = key.trim().toLowerCase();
+export function statusChartColor(value: string): string | null {
+  const key = statusToken(value);
+  if (!key) return null;
+
   if (
-    DANGER_KEYS.has(normalized) ||
-    normalized.includes("sla_risk") ||
-    normalized.includes("breached") ||
-    normalized === "canceled" ||
-    normalized === "cancelled"
+    key === "rejected" ||
+    key.endsWith("_rejected") ||
+    key === "failed" ||
+    key.endsWith("_failed") ||
+    key === "denied" ||
+    key === "error" ||
+    key === "canceled" ||
+    key === "cancelled" ||
+    DANGER_KEYS.has(key) ||
+    key.includes("sla_risk") ||
+    key.includes("breached")
   ) {
     return DASHBOARD_CHART.danger;
   }
+
   if (
-    WARNING_KEYS.has(normalized) ||
-    normalized.includes("at_risk") ||
-    normalized.includes("stale") ||
-    normalized === "past_due" ||
-    normalized === "trial"
-  ) {
-    return DASHBOARD_CHART.warning;
-  }
-  if (
-    SUCCESS_KEYS.has(normalized) ||
-    normalized.includes("on_track") ||
-    normalized.includes("_ops") ||
-    normalized === "active" ||
-    normalized === "healthy"
+    key === "approved" ||
+    key === "completed" ||
+    key === "complete" ||
+    key === "resolved" ||
+    key === "ready" ||
+    key === "success" ||
+    key === "published" ||
+    SUCCESS_KEYS.has(key) ||
+    key.includes("on_track") ||
+    key.includes("_ops") ||
+    key === "active" ||
+    key === "healthy"
   ) {
     return DASHBOARD_CHART.success;
   }
-  return chartColorAt(index);
+
+  if (key === "draft") return DASHBOARD_CHART.sky;
+  if (key === "closed") return DASHBOARD_CHART.muted;
+
+  if (
+    key === "pending" ||
+    key === "submitted" ||
+    key === "returned" ||
+    key === "in_review" ||
+    key.startsWith("awaiting") ||
+    key.includes("awaiting") ||
+    WARNING_KEYS.has(key) ||
+    key.includes("at_risk") ||
+    key.includes("stale") ||
+    key === "past_due" ||
+    key === "trial"
+  ) {
+    return DASHBOARD_CHART.warning;
+  }
+
+  if (key === "open" || key === "in_progress" || key === "processing" || key === "scanning") {
+    return DASHBOARD_CHART.brand;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve fill by semantic key. Status tokens win over the rotating palette.
+ */
+export function chartFillForKey(key: string, index = 0, label?: string): string {
+  return (
+    statusChartColor(key) ??
+    (label ? statusChartColor(label) : null) ??
+    chartColorAt(index)
+  );
+}
+
+/** Status color when the slice is a status; otherwise the fill already on the row. */
+export function resolveChartFill(
+  row: { key: string; label?: string; fill?: string },
+  index = 0,
+): string {
+  return statusChartColor(row.key) ?? (row.label ? statusChartColor(row.label) : null) ?? row.fill ?? chartColorAt(index);
 }
 
 export function parseKpiNumber(value: string | number | null | undefined): number {

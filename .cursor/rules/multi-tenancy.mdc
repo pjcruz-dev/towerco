@@ -1,0 +1,46 @@
+---
+description: Multi-tenant isolation rules for stancl/tenancy: central vs tenant data, queues, cache, storage, Echo channels, SSO mapping, two-tenant tests. Use for any data access, job, cache, file or broadcast code.
+globs:
+  - "backend/app/**/*.php"
+  - "backend/routes/**/*.php"
+  - "backend/database/**/*.php"
+  - "backend/config/tenancy.php"
+alwaysApply: false
+---
+
+# Multi-tenancy (stancl/tenancy, database-per-tenant)
+
+Tenant data lives in per-tenant databases (tenant migrations are in `database/migrations/tenant`). Isolation is a security boundary. Any leak is Sev-1.
+
+- Read `app/Modules/Tenancy` and `config/tenancy.php` first. Reuse the existing tenancy bootstrappers and helpers.
+- Central data (tenants, domains, plans, platform admins) uses central migrations and models. Tenant data uses tenant migrations. Do not mix connections in one query or join across them.
+- What `config/tenancy.php` really enables: `DatabaseTenancyBootstrapper` (always), `CacheTenancyBootstrapper` (only when `CACHE_STORE` is redis/memcached, or `TENANCY_CACHE_BOOTSTRAPPER` is on), `FilesystemTenancyBootstrapper` (disks `local` and `public` only) and `QueueTenancyBootstrapper`. There is NO Redis-prefix bootstrapper (`redis.prefixed_connections` is empty) and NO broadcasting bootstrapper. So raw Redis keys, the S3 disk (when `TOWEROS_TENANT_FILES_DISK` points at it, and presigned document uploads) and Soketi channels are NOT isolated automatically. Each one must put the tenant into its own key, path or channel name. Use `Modules/Tenancy/Support/TenantScopedCache` for cache and the module's `<Module>FileStorageService` for files. Permission cache is scoped by the `ScopeTenantPermissionCache` listener.
+- "Environment" means two different things here.
+  1. Deployment environments (local, staging, production infrastructure): each needs its own `CACHE_PREFIX`, `REDIS_PREFIX`, `SESSION_COOKIE`, Redis, bucket/prefix and central database. Never share one between environments.
+  2. Tenant-linked environments: an organisation is a root `Tenant` plus child `Tenant` rows (`parent_tenant_id`). Each child has an `environment` of local, test, staging or production, its own domain(s) and its own database, all inside the SAME deployment (same app, Redis, bucket and central database). `TenantLinkedEnvironmentsService` lists them, `TenantEnvironmentHandoffService` switches between them (SSO soft-switch, flag `TOWEROS_ENVIRONMENT_SWITCH_ENABLED`), and `TenantOffboardingService::deleteTenant` (type-the-tenant-id confirmation, optional cascade to children) is the only removal path. Runbook: find it with `Get-ChildItem docs -Recurse -Filter tenant-environments*`.
+  There is NO detach feature. Never detach by setting `parent_tenant_id` to null on its own. First check what hangs off the org root (billing and plan, SSO config, admin users, domains, every caller of `resolveOrgRoot`), take a `TenantDatabaseBackup`, write an audit entry, and get approval.
+- Module gating per tenant: `TenantEnabledModulesResolver` has `REQUIRED_MODULES` (`core`, `team_access`) and `TOGGLEABLE_MODULES`. `TOWEROS_TENANT_ENABLED_MODULES` sets the platform list, and `Tenant::enabled_modules` can only narrow it. `TenantModuleRbacSyncService` syncs role templates. Check enforcement with `/audit-module-gating` before relying on it.
+- Tenant backups: `TenantDatabaseBackup` (central, statuses pending/running/completed/failed/restoring/expired), `TenantsBackupScheduleCommand`, `TenantsBackupPruneCommand`, `TenantOffboardingService`. Reuse them for detach, export or restore work. Do not write a second backup mechanism.
+- Risky flags: `TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST` must stay off in production. Impersonation (`TOWEROS_*_IMPERSONATION_ENABLED`) is always time-boxed and audited.
+- Queued jobs (Horizon), notifications, mail and scheduled commands run inside tenant context. Assert it in tests.
+- Cache keys, Redis keys, file paths and Soketi channels include the tenant. Channel pattern `private-tenant.{tenantId}.<resource>`. Authorize every channel in `routes/channels.php`.
+- Three frontend API clients exist: `lib/api/client.ts` (tenant-scoped), `lib/api/central-client.ts` (platform-admin / central) and `lib/api/public-tenant-client.ts` (unauthenticated public pages). Central endpoints must never be reachable with the tenant client, and vice versa.
+- Never accept `tenant_id` from the client. Resolve it from the domain and the authenticated token.
+- Cross-tenant lookups return 404, not 403.
+- Platform-admin access to a tenant (support, impersonation) is explicit, time-boxed and audited.
+- SSO: Microsoft Entra via Socialite. Map each tenant to its Entra tenant/domain, provision just in time, map groups to roles server-side.
+- Tests: follow `tests/Feature/Tenancy` and helpers in `tests/Support/Concerns`. Every new endpoint gets a "tenant A cannot touch tenant B" test.
+
+## Linked environments: facts verified in the code
+- Each environment is its own `Tenant` row with its own database, domain(s), users and data. `(slug, environment)` is unique. `parent_tenant_id` (foreign key to `tenants`, null on delete) links children to the org root, and `resolveOrgRoot` walks up that chain.
+- Billing is per row. `plan_tier`, `subscription_status` and `seat_limit` are copied from the org root only when an environment is provisioned (`TenantEnvironmentProvisioningService`). Stripe ids live on the tenant that owns the Stripe customer (webhooks look tenants up by `stripe_customer_id` or `stripe_subscription_id`). Nothing in Billing or the subscription middleware follows `parent_tenant_id`, so later changes on the root (upgrade, past due, cancel) do NOT reach child environments. Treat that as a known gap until someone confirms it is intended.
+- SSO configuration is central (`tenant_sso_configs`, keyed by `tenant_id`), so each environment has its own.
+- Environment switch uses a central one-time ticket (short TTL) and matches users by the same email on the target host. It needs the `workspace:environments:switch` permission on each environment.
+- Deleting a tenant: `TenantOffboardingService::deleteTenant` (confirmation by typing the tenant id, optional cascade to children) is called by `CentralTenantDestroyController` (writes a `PlatformTenantAuditLog` entry), by the CLI `Tenants\DeleteTenant` and by `DevResetCommand` (the last two write no audit entry, only the service's `Log::info`). The service takes no backup, and whether the controller requires one is unverified. Tenant files live on the `tenant_files` disk under `{tenantId}/` (locally `storage/app/tenant-files`), which the purge covers, so files are probably not left behind. Require a completed `TenantDatabaseBackup` before deleting real tenants, and never run `DevResetCommand` outside local development.
+
+## Staging: confirmed topology
+`staging.alliancetowers.com` is a tenant environment provisioned through `console.alliancetowers.com` (`CentralTenantEnvironmentStoreController` / `TenantEnvironmentProvisioningService`), pointed at via a GoDaddy DNS record. It runs the SAME production code and lives on the SAME servers as production; only its tenant database and domain are separate. It is a customer-facing pre-release/training tenant, not a release-testing environment, and a code change cannot be safely tested there before it reaches production, because there is no separate deploy target.
+
+`.github/workflows/deploy-staging.yml` (a real ECS pipeline, its own cluster and RDS) exists in the repo but is gated behind `TOWEROS_CD_ENABLED` and is NOT what currently serves `staging.alliancetowers.com` — that hostname is the tenant environment above, on EC2. Do not assume the ECS workflow is live infrastructure without checking whether `TOWEROS_CD_ENABLED` is set.
+
+See `proposals/staging-environment.md` for the recommended separate pre-release stack (own EC2 or ECS, own RDS, own Redis/bucket, new `*.stg.alliancetowers.com` namespace via Route 53 delegation from GoDaddy) before relying on "staging" to catch a bad migration or release.

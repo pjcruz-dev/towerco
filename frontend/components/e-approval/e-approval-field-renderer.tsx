@@ -2,7 +2,6 @@
 
 import { EApprovalCameraField } from "@/components/e-approval/e-approval-camera-field";
 import { EApprovalChecklistMatrixField } from "@/components/e-approval/e-approval-checklist-matrix-field";
-import { EApprovalProcurementLinkField } from "@/components/e-approval/e-approval-procurement-link-field";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -38,7 +37,6 @@ import {
 } from "@/modules/e-approval/field-companion-size";
 import { formatInstructionBodyForDisplay, parseInstructionBody } from "@/modules/e-approval/field-instruction";
 import { parseSelectChoices, resolveFieldDisplayLabel } from "@/modules/e-approval/field-options";
-import { isProcurementLinkField } from "@/modules/e-approval/procurement-link-fields";
 import { computedFieldHelpText, isFieldComputedReadOnly } from "@/modules/e-approval/field-computed";
 import { fieldHelpText, fieldMaxLength, fieldPlaceholder } from "@/modules/e-approval/field-validation";
 import {
@@ -76,8 +74,8 @@ type Props = {
   /** When set (e.g. public form), skips authenticated metadata fetch for plan tier. */
   planFeaturesOverride?: EApprovalPlanFeatures;
   /**
-   * When false (public / unauthenticated fill), do not call authenticated master-data or
-   * procurement entity APIs — use options embedded in the form payload.
+   * When false (public / unauthenticated fill), do not call authenticated master-data
+   * APIs — use options embedded in the form payload.
    */
   allowRemoteLookups?: boolean;
   helpTextOverride?: string;
@@ -405,7 +403,6 @@ export function EApprovalFieldRenderer({
   allowRemoteLookups = true,
   helpTextOverride,
   allFields = [],
-  allValues = {},
 }: Props) {
   const hookPlan = useEApprovalPlanFeatures();
   const features = planFeaturesOverride ?? hookPlan;
@@ -495,21 +492,6 @@ export function EApprovalFieldRenderer({
       ) : null}
     </Label>
   );
-
-  if (isProcurementLinkField(field)) {
-    return (
-      <EApprovalProcurementLinkField
-        fieldName={field.name}
-        label={displayLabel}
-        value={value}
-        onChange={onChange}
-        allValues={allValues}
-        disabled={disabled}
-        allowRemoteLookups={allowRemoteLookups}
-        helpText={helpTextOverride ?? helpText ?? undefined}
-      />
-    );
-  }
 
   switch (field.type) {
     case "textarea":

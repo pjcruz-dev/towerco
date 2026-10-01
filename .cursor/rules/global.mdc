@@ -1,0 +1,68 @@
+---
+description: TowerOS global rules (always on)
+alwaysApply: true
+---
+
+# TowerOS Global Rules
+
+Multi-tenant SaaS on the TowerOS codebase. **Active modules: Ticketing (`ticketing`), E-Forms (`e_approval`, backend `EApproval`), DocExtract (`doc_extract`), Document Control (`document_register`, backend `Documents` module, `ControlledDocument*` classes, frontend `controlled-documents-api.ts`).** Work only in these four and the shared `core` / `team_access` plumbing they need. AiAssistant, Help, Billing beyond what the four active modules need, and the platform/tenancy/identity/admin/workspace plumbing stay untouched unless asked.
+Document Control and E-Forms call each other (`ControlledDocumentEApprovalHookService`, `UpgradeIsoFormForRevisionsCommand`). The lease/permit feature (module key `documents`) lives in the same backend `Documents` module as Document Control.
+Module gating: the platform list is `TOWEROS_TENANT_ENABLED_MODULES` (comma-separated, parsed in `config/toweros.php`). A tenant's `enabled_modules` can only narrow it. `core` and `team_access` are always on. The product set is `core,team_access,e_approval,ticketing,doc_extract,document_register`. Verified enforcement: the `tenant.module` route middleware returns 403 and is applied to `doc_extract`, `billings`, `ai_assistant`, `documents`, and `document_register`. Ticketing and E-Forms are not route-gated, so switching them off hides navigation and (via `TenantModuleRbacSyncService` / `TenantRbacPermissionCatalog`) removes permissions. Run `/audit-module-gating` for the remaining unknowns.
+Users: agents/staff working tickets, e-form submitters and approvers, document controllers, tenant admins, platform admins.
+
+## Repo map (repo root = TowerOS)
+- `backend/` Laravel 13.7, PHP 8.3.
+  - `app/Core/*` shared base: Contracts, Events, Exceptions, Http, Jobs, Models (`BaseModel`), Services (`AbstractDomainService`), Repositories (`AbstractEloquentRepository`), Support.
+  - Ticketing models live in `app/Models/` (`TicketingTicket`, `TicketingComment`, `TicketingAttachment`, `TicketingLink`), next to `User` and `Tenant`. EApproval, Documents and DocExtract models live in that module's `Models/` folder. Put a new model where that module already puts them.
+  - `app/Modules/<Module>/` holds `Http/Controllers/V1`, `Services`, `Support`, `Notifications` (see `Modules/Ticketing`). Controllers extend `AbstractApiController`.
+  - Routes in `routes/api/v1`. Central migrations in `database/migrations`, tenant migrations in `database/migrations/tenant`.
+  - Tests in `tests/{Feature,Unit,Support}` (PHPUnit 12, helpers in `tests/Support/Concerns`).
+- `frontend/` Next.js 16.2 (App Router, no `src/` folder), React 19, Tailwind 4.
+  - Routes: `app/(platform|public|print|request-focus)/<route>`. UI: `components/<area>` (base primitives, tables and pickers in `components/ui`, shadcn/base-ui + class-variance-authority). Feature helpers: `lib/<area>` (for example `lib/ticketing`).
+  - API: one client per audience in `lib/api` — `client.ts` (tenant), `central-client.ts` (platform admin), `public-tenant-client.ts` (public pages) — plus `error.ts`, `paginated.ts`, and one `lib/api/modules/<module>-api.ts` per module. Shared shapes in `modules/<module>/types.ts`. State: `stores/` (zustand). Hooks: `hooks/`.
+- `services/doc-extract/` Python service behind the DocExtract module.
+- `docker/`, `scripts/`, `.github/workflows/`, `docs/`.
+- Docs are the source of truth. Read the matching one before changing a module or the UI system: `docs/Rules`, `docs/design-system`, `docs/architecture`, `docs/modules`, `docs/frontend`, `docs/local-dev`, `docs/ops`.
+
+## Stack in use (do not add libraries without asking)
+- Backend: Sanctum + Passport, Socialite (Microsoft Azure SSO), WebAuthn (`packages/lbuchs-webauthn`), Spatie Permission 7 + Activitylog, stancl/tenancy 3.10 (database-per-tenant), Horizon + Predis, Soketi (Pusher protocol), Stripe, AWS SDK, Pint. Redis 7 for cache/queue. Tests: PHPUnit. No static analyser or Pest is installed.
+- Frontend: TanStack Query + Table, react-hook-form + zod 4, zustand, axios, next-themes, shadcn (radix-ui + @base-ui/react), recharts, laravel-echo + pusher-js, Vitest, ESLint. No Prettier, Playwright, i18n or URL-state library is installed.
+
+## Deployment
+- Production: AWS EC2 + RDS MySQL 8.4 (baseline), ECS Fargate is the scale path.
+- Hostnames (DNS A records — no IP address in these rules): `app`, `appmenu`, `console`, `staging` under `.alliancetowers.com`.
+- API: `api.alliancetowers.com` via CloudFront, origin nginx on the EC2 host.
+- Never put a server IP or other literal infrastructure address in a rule file.
+
+## Commands (Windows, PowerShell, from repo root)
+- Run the stack: `npm run dev` (docker: mysql, api, soketi), then `npm run dev:web:local` for the frontend.
+- Tests: `npm test` (smoke), `npm run test:backend`, `npm run test:frontend`, `npm run test:all`. Scenario runners for the active modules: `test:team-access`, `test:e-approval`. `npm run test:list` shows all of them.
+- Frontend checks: `cd frontend; npm run lint; npm run typecheck`. Backend format: `cd backend; php vendor/bin/pint --dirty`.
+- Artisan: on the host `cd backend; php artisan ...`, or in the container `node scripts/compose-run.js --env-file .env.docker exec api php artisan ...`.
+- PowerShell syntax only (use `;`, not `&&`). Ask before `npm run dev:fresh` (wipes the local database) or anything that removes Docker volumes.
+
+## Non-negotiables
+1. Tenant isolation: every query, job, cache key, broadcast channel and file path is tenant-scoped. Cross-tenant access must be impossible, not just unlikely.
+2. Every endpoint authorizes and validates. The four active modules do this in the controller: `abort_unless($request->user()?->can('<module>:<resource>:<action>'), 403)`, then `$request->validate([...])`, then a Service, then `AbstractApiController` (`ok`, `created`, `okWithMeta`). They do not use FormRequest, Policy or API Resource classes. Copy the module you are in.
+3. Business rules live in Services (`<Module><Thing>Service`, base in `app/Core/Services`). Repositories are optional (`app/Core/Repositories`). Never put business rules in controllers, models or React components.
+4. No credentials in code or repo. Never read `.env*` files. Config comes from env / secrets manager.
+5. Critical actions write an audit log entry (who, what, tenant, before/after).
+6. UUID (ordered/v7) primary keys.
+7. Production-grade code only: real error handling and logging. Factories, seeders and test doubles inside tests are fine. Placeholder or demo code in app code is not.
+8. No duplicated logic. Reuse existing Core classes, module services, hooks and UI components before creating new ones.
+
+## UI work (any file under `frontend/`)
+Follow @ui-theme.mdc first, then @ui-data-and-forms.mdc and @ui-accessibility.mdc. Use the tokens and variants already in `frontend/app/globals.css` and `components/ui` (see `docs/design-system`). Every screen needs loading, empty and error states and must work in light and dark.
+
+## How to work
+- Match the size of the answer to the size of the request. No folder trees, schema dumps or long step-by-step essays for small changes. Use `/new-feature` when a full deliverable is needed.
+- Before writing code, read the relevant rule, the module's doc in `docs/`, and copy the conventions of the closest existing module (backend and frontend).
+- Definition of done: relevant tests pass (`npm run test:backend` / `test:frontend`), `lint` and `typecheck` pass, Pint applied, and `node scripts/ui-drift.mjs` passes for any frontend change. New endpoints have an authorization test and a cross-tenant test. Report what you actually ran and the results.
+- Ask before: destructive migrations, adding dependencies, changing auth, tenancy, Docker or CI config.
+
+## Rule index (`.cursor/rules/`)
+Backend: architecture, backend-laravel, multi-tenancy, security-rbac, api-conventions, testing
+Frontend: frontend-nextjs, ui-theme, ui-data-and-forms, ui-accessibility
+Skills: crud-module, data-table, tenant-safe-migration
+Subagents: code-reviewer, security-auditor, tenant-isolation-auditor, ui-ux-reviewer
+Commands: /new-feature, /ui-review, /tenant-audit, /review-branch, /fix-issue, /audit-module-gating, /consolidate-status-badges

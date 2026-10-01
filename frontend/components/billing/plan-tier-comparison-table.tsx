@@ -3,18 +3,6 @@
 import { formatMoney } from "@/lib/billing/format-money";
 import { cn } from "@/lib/utils";
 
-export type ProcurementCatalogFeatures = {
-  enabled?: boolean;
-  goods_receipt?: boolean;
-  advanced_numbering?: boolean;
-  inventory?: boolean;
-  ap_invoices?: boolean;
-  payment_tracking?: boolean;
-  rfq_sourcing?: boolean;
-  vendor_contracts?: boolean;
-  reporting_exports?: boolean;
-};
-
 export type PlanCatalogTier = {
   plan_tier: string;
   label: string;
@@ -35,15 +23,11 @@ export type PlanCatalogTier = {
       file_uploads?: boolean;
       max_file_fields?: number | null;
     };
-    project_one?: {
-      rollout_file_uploads?: boolean;
-    };
     ticketing?: {
       enabled?: boolean;
       file_uploads?: boolean;
       max_attachments_per_ticket?: number | null;
     };
-    procurement_one?: ProcurementCatalogFeatures;
   };
 };
 
@@ -65,10 +49,6 @@ function formatFileFields(tier: PlanCatalogTier): string {
   return `Up to ${ea.max_file_fields}`;
 }
 
-function formatRolloutFiles(tier: PlanCatalogTier): string {
-  return tier.modules.project_one?.rollout_file_uploads ? "Included" : "Not included";
-}
-
 function formatTicketingModule(tier: PlanCatalogTier): string {
   return tier.modules.ticketing?.enabled ? "Included" : "Not included";
 }
@@ -82,19 +62,6 @@ function formatTicketAttachments(tier: PlanCatalogTier): string {
     return "Unlimited";
   }
   return `Up to ${ticketing.max_attachments_per_ticket ?? 0}`;
-}
-
-function formatProcurementModule(tier: PlanCatalogTier): string {
-  return tier.modules.procurement_one?.enabled ? "Included" : "Not included";
-}
-
-function formatProcurementFeature(tier: PlanCatalogTier, key: keyof ProcurementCatalogFeatures): string {
-  const procurement = tier.modules.procurement_one;
-  if (!procurement?.enabled) {
-    return "Not included";
-  }
-
-  return procurement[key] ? "Included" : "Not included";
 }
 
 function formatOverageRate(amount: number | undefined, currency: string): string {
@@ -183,14 +150,6 @@ export function PlanTierComparisonTable({ tiers, currentTier, currency = "USD", 
             ))}
           </tr>
           <tr>
-            <td className="px-4 py-3 text-muted-foreground">PROJECT-ONE rollout evidence uploads</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatRolloutFiles(tier)}
-              </td>
-            ))}
-          </tr>
-          <tr>
             <td className="px-4 py-3 text-muted-foreground">Ticketing module</td>
             {sorted.map((tier) => (
               <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
@@ -203,70 +162,6 @@ export function PlanTierComparisonTable({ tiers, currentTier, currency = "USD", 
             {sorted.map((tier) => (
               <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
                 {formatTicketAttachments(tier)}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement-One module</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementModule(tier)}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement goods receipt</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "goods_receipt")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement inventory</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "inventory")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement AP invoices</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "ap_invoices")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement payment tracking</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "payment_tracking")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement RFQ &amp; sourcing</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "rfq_sourcing")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement vendor contracts</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "vendor_contracts")}
-              </td>
-            ))}
-          </tr>
-          <tr>
-            <td className="px-4 py-3 text-muted-foreground">Procurement reports &amp; exports</td>
-            {sorted.map((tier) => (
-              <td key={tier.plan_tier} className="px-4 py-3 text-foreground">
-                {formatProcurementFeature(tier, "reporting_exports")}
               </td>
             ))}
           </tr>

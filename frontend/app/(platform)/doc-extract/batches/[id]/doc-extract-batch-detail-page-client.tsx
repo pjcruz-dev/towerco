@@ -15,27 +15,20 @@ import {
 } from "lucide-react";
 
 import { DocExtractColumnsDefinitionEditor } from "@/components/doc-extract/doc-extract-columns-definition-editor";
+import { DocExtractScanProgressPanel } from "@/components/doc-extract/doc-extract-scan-progress-panel";
+import { DocExtractTableViewerDialog } from "@/components/doc-extract/doc-extract-table-viewer-dialog";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { DocExtractHelpEntryActions } from "@/components/help/doc-extract-help-entry-actions";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import {
   downloadDocExtractBatchExport,
   fetchDocExtractBatch,
+  requeueDocExtractBatch,
   saveDocExtractBatchAsTemplate,
   updateDocExtractBatchFields,
   updateDocExtractDocumentFields,
@@ -53,10 +46,14 @@ import {
 import {
   isTableLikeField,
   parseDocExtractTableValue,
-  stringifyDocExtractTableValue,
   type DocExtractTableData,
 } from "@/modules/doc-extract/table-values";
-import type { DocExtractDocument, DocExtractField, DocExtractFieldType } from "@/modules/doc-extract/types";
+import type {
+  DocExtractDocument,
+  DocExtractField,
+  DocExtractFieldType,
+  DocExtractTableColumn,
+} from "@/modules/doc-extract/types";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -67,17 +64,39 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function fieldValueToText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  try {
+    const encoded = JSON.stringify(value);
+    return typeof encoded === "string" ? encoded : "";
+  } catch {
+    return String(value);
+  }
+}
+
 function buildDraftRow(document: DocExtractDocument, fields: DocExtractField[]): Record<string, string> {
   const row: Record<string, string> = {};
   for (const field of fields) {
-    const value = document.field_values?.[field.key];
-    row[field.key] = value == null ? "" : typeof value === "string" ? value : JSON.stringify(value);
+    row[field.key] = fieldValueToText(document.field_values?.[field.key]);
   }
   return row;
 }
 
-function displayScalar(value: string): string {
-  const trimmed = value.trim();
+function tableColumnsChanged(
+  previous: DocExtractTableColumn[] | undefined,
+  next: DocExtractTableColumn[],
+): boolean {
+  const left = previous ?? [];
+  if (left.length !== next.length) return true;
+  return left.some((column, index) => {
+    const other = next[index];
+    return !other || column.key !== other.key || column.label !== other.label || column.type !== other.type;
+  });
+}
+
+function displayScalar(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim();
   if (!trimmed) return "—";
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
@@ -188,9 +207,8 @@ export function DocExtractBatchDetailPageClient() {
           const row = { ...existing };
           let rowChanged = false;
           for (const field of nextFields) {
-            const serverRaw = document.field_values?.[field.key];
-            const server = serverRaw == null ? "" : typeof serverRaw === "string" ? serverRaw : JSON.stringify(serverRaw);
-            const draft = row[field.key] ?? "";
+            const server = fieldValueToText(document.field_values?.[field.key]);
+            const draft = fieldValueToText(row[field.key]);
             if (!(field.key in row)) {
               row[field.key] = server;
               rowChanged = true;
@@ -276,6 +294,30 @@ export function DocExtractBatchDetailPageClient() {
     },
     onError: (error) => {
       notify({ level: "error", title: "Could not update columns", message: getErrorMessage(error) });
+    },
+  });
+
+  const requeueMutation = useMutation({
+    mutationFn: () => requeueDocExtractBatch(batchId),
+    onSuccess: async (result) => {
+      const remapped = result.remapped ?? 0;
+      const queued = result.requeued ?? 0;
+      const background = result.queued === true;
+      const documentCount = result.document_count ?? 0;
+      notify({
+        level: "success",
+        title: background ? "Rescan queued" : remapped > 0 ? "Values rescanned" : "Scans requeued",
+        message: background
+          ? `${documentCount} document${documentCount === 1 ? "" : "s"} remapping in the background. Refresh results in a minute.`
+          : remapped > 0
+            ? `${remapped} document${remapped === 1 ? "" : "s"} remapped from stored OCR${queued > 0 ? `; ${queued} queued for full scan` : ""}.`
+            : `${queued} document${queued === 1 ? "" : "s"} queued for scan.`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["doc-extract", "batch", batchId] });
+      await queryClient.invalidateQueries({ queryKey: ["doc-extract", "batches"] });
+    },
+    onError: (error) => {
+      notify({ level: "error", title: "Could not rescan values", message: getErrorMessage(error) });
     },
   });
 
@@ -408,6 +450,17 @@ export function DocExtractBatchDetailPageClient() {
               </div>
             </section>
 
+            {(documents?.length ?? 0) > 0 ? (
+              <DocExtractScanProgressPanel
+                documents={documents ?? []}
+                batchStatus={batchQuery.data?.status}
+                live={processing}
+                canRequeue={canRun}
+                requeuePending={requeueMutation.isPending}
+                onRequeue={() => requeueMutation.mutate()}
+              />
+            ) : null}
+
             {/* Section 2 — consolidated records */}
             <section
               id="dx-step-consolidate"
@@ -417,7 +470,7 @@ export function DocExtractBatchDetailPageClient() {
               <div>
                 <h2 className="text-xl font-semibold text-foreground">2. Consolidate</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Final record layout used for extraction (one results row per record).
+                  Final record layout used for extraction (one results row per record). Live scan status is above.
                 </p>
               </div>
               <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -576,14 +629,8 @@ export function DocExtractBatchDetailPageClient() {
                         )}
                       </td>
                       {visibleFields.map((field) => {
-                        const serverRaw = document.field_values?.[field.key];
-                        const serverValue =
-                          serverRaw == null
-                            ? ""
-                            : typeof serverRaw === "string"
-                              ? serverRaw
-                              : JSON.stringify(serverRaw);
-                        const value = drafts[document.id]?.[field.key] ?? serverValue;
+                        const serverValue = fieldValueToText(document.field_values?.[field.key]);
+                        const value = fieldValueToText(drafts[document.id]?.[field.key] ?? serverValue);
                         const isEditing =
                           editingCell?.documentId === document.id && editingCell.key === field.key;
 
@@ -705,113 +752,64 @@ export function DocExtractBatchDetailPageClient() {
           </>
         )}
 
-        <Dialog
+        <DocExtractTableViewerDialog
           open={Boolean(tableViewer?.open)}
+          filename={tableViewer?.filename}
+          field={tableViewer?.field ?? null}
+          data={tableViewer?.data ?? null}
+          canEdit={canRun}
+          saving={saveMutation.isPending || schemaMutation.isPending}
           onOpenChange={(open) => {
             if (!open) setTableViewer(null);
           }}
-        >
-          <DialogContent className="flex max-h-[90vh] w-[min(96vw,52rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
-            <DialogHeader className="border-b border-border px-6 py-4">
-              <DialogTitle className="flex flex-wrap items-center gap-2">
-                {tableViewer?.field.label ?? "Table"}
-                {tableViewer ? (
-                  <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs font-normal text-muted-foreground">
-                    {tableViewer.data.rows.length} rows × {tableViewer.data.columns.length} columns
-                  </span>
-                ) : null}
-              </DialogTitle>
-              <p className="mt-1 text-sm text-muted-foreground">{tableViewer?.filename}</p>
-            </DialogHeader>
-            <DialogBody className="min-h-0 flex-1 overflow-auto px-6 py-4">
-              {tableViewer && tableViewer.data.rows.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="min-w-full text-left text-[13px]">
-                    <thead className="border-b border-border bg-muted text-xs font-medium text-muted-foreground">
-                      <tr>
-                        {tableViewer.data.columns.map((column) => (
-                          <th key={column.key} className="px-3 py-2 whitespace-nowrap">
-                            {column.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableViewer.data.rows.map((row, rowIndex) => (
-                        <tr key={rowIndex} className="border-b border-border last:border-0">
-                          {tableViewer.data.columns.map((column) => (
-                            <td key={column.key} className="px-3 py-2 text-foreground">
-                              {canRun ? (
-                                <Input
-                                  className="h-8"
-                                  value={row[column.key] ?? ""}
-                                  onChange={(event) => {
-                                    const nextValue = event.target.value;
-                                    setTableViewer((current) => {
-                                      if (!current) return current;
-                                      const rows = current.data.rows.map((entry, index) =>
-                                        index === rowIndex ? { ...entry, [column.key]: nextValue } : entry,
-                                      );
-                                      return { ...current, data: { ...current.data, rows } };
-                                    });
-                                  }}
-                                />
-                              ) : (
-                                row[column.key] || "—"
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No table rows extracted yet for this field. After OCR improves nested tables, rows will appear here.
-                </p>
-              )}
-            </DialogBody>
-            <DialogFooter className="border-t border-border px-6 py-4">
-              <Button type="button" variant="outline" onClick={() => setTableViewer(null)}>
-                Close
-              </Button>
-              {canRun && tableViewer ? (
-                <Button
-                  type="button"
-                  disabled={saveMutation.isPending}
-                  onClick={() => {
-                    const encoded = stringifyDocExtractTableValue(tableViewer.data);
-                    setDrafts((current) => ({
-                      ...current,
-                      [tableViewer.documentId]: {
-                        ...(current[tableViewer.documentId] ?? {}),
-                        [tableViewer.field.key]: encoded,
-                      },
-                    }));
-                    const values = {
-                      ...(drafts[tableViewer.documentId] ?? {}),
-                      [tableViewer.field.key]: encoded,
-                    };
-                    const payload: Record<string, string | null> = {};
-                    for (const field of visibleFields) {
-                      const raw = values[field.key] ?? "";
-                      payload[field.key] = raw.trim() === "" ? null : raw;
-                    }
-                    saveMutation.mutate(
-                      { documentId: tableViewer.documentId, values: payload },
-                      {
-                        onSuccess: () => setTableViewer(null),
-                      },
-                    );
-                  }}
-                >
-                  Save table
-                </Button>
-              ) : null}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          onChange={(nextData) => {
+            setTableViewer((current) => (current ? { ...current, data: nextData } : current));
+          }}
+          onSave={(encoded, columns) => {
+            if (!tableViewer) return;
+            const documentId = tableViewer.documentId;
+            const fieldKey = tableViewer.field.key;
+
+            setDrafts((current) => ({
+              ...current,
+              [documentId]: {
+                ...(current[documentId] ?? {}),
+                [fieldKey]: encoded,
+              },
+            }));
+
+            const values = {
+              ...(drafts[documentId] ?? {}),
+              [fieldKey]: encoded,
+            };
+            const payload: Record<string, string | null> = {};
+            for (const field of visibleFields) {
+              const raw = values[field.key] ?? "";
+              payload[field.key] = raw.trim() === "" ? null : raw;
+            }
+
+            const schemaChanged = tableColumnsChanged(tableViewer.field.columns, columns);
+            const persistRow = () => {
+              saveMutation.mutate(
+                { documentId, values: payload },
+                { onSuccess: () => setTableViewer(null) },
+              );
+            };
+
+            if (schemaChanged && canCurate) {
+              const nextFields = visibleFields.map((field) =>
+                field.key === fieldKey ? { ...field, type: "table" as const, columns } : field,
+              );
+              schemaMutation.mutate(nextFields, {
+                onSuccess: () => persistRow(),
+                onError: () => persistRow(),
+              });
+              return;
+            }
+
+            persistRow();
+          }}
+        />
       </div>
     </PermissionGate>
   );

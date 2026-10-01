@@ -31,8 +31,8 @@ final class EApprovalApprovalPolicyContextExtractor
     private function defaultAmountField(?string $documentFamily): string
     {
         return match ($documentFamily) {
-            'purchase_requisition' => 'estimated_total',
-            'purchase_order' => 'total_amount',
+            'cash_advance' => 'requested_amount',
+            'liquidation', 'reimbursement' => 'total_reimbursement',
             default => 'amount',
         };
     }

@@ -10,6 +10,11 @@ type DashboardWidgetProps = {
   className?: string;
   contentClassName?: string;
   action?: ReactNode;
+  /** Large figure under the title, as on analytics boards. */
+  stat?: string;
+  /** Signed change next to the stat, for example +8.4%. */
+  delta?: string | null;
+  deltaTone?: "success" | "danger" | "neutral";
   /** Tighter header for dense operational boards */
   dense?: boolean;
 };
@@ -24,8 +29,18 @@ export function DashboardWidget({
   className,
   contentClassName,
   action,
+  stat,
+  delta,
+  deltaTone = "neutral",
   dense = false,
 }: DashboardWidgetProps) {
+  const deltaClass =
+    deltaTone === "success"
+      ? "text-success"
+      : deltaTone === "danger"
+        ? "text-destructive"
+        : "text-muted-foreground";
+
   return (
     <Card
       className={cn(
@@ -35,14 +50,23 @@ export function DashboardWidget({
     >
       <CardHeader
         className={cn(
-          "flex flex-row items-start justify-between gap-3 space-y-0 border-b border-border/80 bg-muted/20",
-          dense ? "px-3.5 py-2.5" : "px-4 py-3",
+          "flex flex-row items-start justify-between gap-3 space-y-0",
+          dense ? "px-3.5 pb-0 pt-3" : "px-5 pb-0 pt-5",
         )}
       >
-        <div className="min-w-0 space-y-0.5">
+        <div className="min-w-0 space-y-1">
           <CardTitle className="text-sm font-medium leading-snug text-foreground">{title}</CardTitle>
           {description ? (
             <p className="text-[11px] leading-snug text-muted-foreground">{description}</p>
+          ) : null}
+          {stat ? (
+            <p className="pt-1 text-2xl font-semibold tabular-nums tracking-tight text-foreground">{stat}</p>
+          ) : null}
+          {delta ? (
+            <p className={cn("text-xs font-medium tabular-nums", deltaClass)}>
+              {delta}
+              <span className="ml-1 font-normal text-muted-foreground">over this range</span>
+            </p>
           ) : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}

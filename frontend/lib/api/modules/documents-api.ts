@@ -61,7 +61,6 @@ export type DocumentWorkspacePayload = {
   workspace: {
     id: string;
     site_id: string;
-    rollout_program_id: string | null;
   };
   nodes: DocumentSiteNode[];
   last_activity: {
@@ -272,18 +271,15 @@ export async function getDocumentDownloadUrl(documentId: string): Promise<string
 
 export async function updateSiteDocumentWorkspace(
   siteId: string,
-  payload: { rollout_program_id: string | null },
 ): Promise<DocumentWorkspacePayload> {
   const response = await apiClient.patch<{ data: DocumentWorkspacePayload }>(
     `/sites/${siteId}/documents/workspace`,
-    payload,
   );
   return response.data.data;
 }
 
 export type DocumentGateChecklist = {
   site_id: string;
-  rollout_program_id: string | null;
   summary: { required: number; met: number; complete: boolean };
   items: {
     node_key: string;

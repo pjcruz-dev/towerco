@@ -15,8 +15,6 @@ import { fetchEApprovalPdfLayout, updateEApprovalPdfLayout } from "@/lib/api/mod
 import { getErrorMessage } from "@/lib/api/error";
 import { printableGridDesignFields, printableScalarDesignFields } from "@/lib/e-approval/e-approval-print-template-render";
 import { parseGridColumns } from "@/modules/e-approval/field-options";
-import { isPurchaseOrderPrintTemplate } from "@/modules/e-approval/purchase-order-template";
-import { isPurchaseRequisitionPrintTemplate } from "@/modules/e-approval/purchase-requisition-template";
 import {
   EAPPROVAL_DEFAULT_SUBSIDIARY_CODES,
   normalizeSubsidiaryCode,
@@ -165,11 +163,6 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
     onError: (e) => push({ level: "error", title: "Save failed", message: getErrorMessage(e) }),
   });
 
-  const isProcurementTemplate =
-    isPurchaseOrderPrintTemplate(template as Record<string, unknown>) ||
-    isPurchaseRequisitionPrintTemplate(template as Record<string, unknown>) ||
-    fields.some((field) => field.name === "grand_total");
-
   const canSave = allVisibleLayout.length > 0;
 
   const patchFooter = (patch: Partial<NonNullable<EApprovalPrintTemplate["footer"]>>) => {
@@ -195,12 +188,6 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
             Form-style printable for every form. Document design is the body only. Approval signatures come from
             this submission’s workflow (Approval history on print). Attachment merge stays available by default.
           </p>
-          {isProcurementTemplate ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              This form also has a structured PO/PR layout. If you save a Document design, that custom HTML is used
-              for print; otherwise the structured layout is used.
-            </p>
-          ) : null}
         </div>
         <Button
           type="button"

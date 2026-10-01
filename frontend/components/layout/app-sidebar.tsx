@@ -20,15 +20,10 @@ import {
 import { useQuery } from "@tanstack/react-query";
 
 import {
-  fetchGateApprovalsAwaitingMeCount,
-  GATE_APPROVALS_AWAITING_ME_COUNT_QUERY_KEY,
-} from "@/lib/api/modules/rollout-api";
-import {
   EAPPROVAL_FORM_WORKSPACES_QUERY_KEY,
   fetchEApprovalFormWorkspaces,
 } from "@/lib/api/modules/e-approval-api";
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
-import { useProcurementPlanFeatures } from "@/hooks/use-procurement-plan-features";
 import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
@@ -36,7 +31,6 @@ import { isNavActive } from "@/lib/navigation/is-nav-active";
 import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
 import { workspaceNavGroups } from "@/lib/navigation/workspace-nav-config";
 import {
-  isTenantModuleEnabled,
   notificationsModuleEnabled,
   resolveEnabledModulesForUser,
 } from "@/lib/tenant/enabled-modules";
@@ -121,12 +115,10 @@ export function AppSidebar() {
     () => resolveEnabledModulesForUser(user, activeTenantId),
     [activeTenantId, user],
   );
-  const procurementModuleEnabled = isTenantModuleEnabled(enabledModules, "procurement_one");
-  const procurementPlanQuery = useProcurementPlanFeatures({ enabled: procurementModuleEnabled });
-  const procurementPlanFeatures = procurementModuleEnabled ? procurementPlanQuery.data : null;
 
   const groups = useMemo(() => {
     const can = (perms: string[]) => hasPermission(scopedUser, perms);
+    const accessMatrix = scopedUser?.accessMatrix;
     return workspaceNavGroups
       .map((group) => ({
         group: group.group,
@@ -134,39 +126,20 @@ export function AppSidebar() {
           filterByTenantModules(group.items, enabledModules),
           can,
           enabledModules,
-          procurementPlanFeatures,
+          accessMatrix,
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [enabledModules, procurementPlanFeatures, scopedUser]);
+  }, [enabledModules, scopedUser]);
 
   const canViewNotifications = useMemo(
     () =>
       notificationsModuleEnabled(enabledModules) &&
-      (hasPermission(scopedUser, [permissions.eApprovalView]) ||
-        hasPermission(scopedUser, [permissions.rolloutView]) ||
-        hasPermission(scopedUser, [permissions.rolloutGateApprove])),
+      hasPermission(scopedUser, [permissions.eApprovalView]),
     [enabledModules, scopedUser],
   );
   const unreadQuery = useTenantNotificationUnreadCount(canViewNotifications);
   const notificationUnread = unreadQuery.data ?? 0;
-
-  const canViewGateApprovals = useMemo(
-    () =>
-      hasPermission(scopedUser, [permissions.rolloutView]) ||
-      hasPermission(scopedUser, [permissions.rolloutGateApprove]),
-    [scopedUser],
-  );
-  const gateAwaitingQuery = useQuery({
-    queryKey: [...GATE_APPROVALS_AWAITING_ME_COUNT_QUERY_KEY],
-    queryFn: fetchGateApprovalsAwaitingMeCount,
-    enabled: canViewGateApprovals,
-    staleTime: 30_000,
-    // No background polling: rollout Echo events invalidate the "project-one/gate-approvals"
-    // prefix (this key included) and we still refetch on window focus.
-    refetchOnWindowFocus: true,
-  });
-  const gateApprovalsAwaitingMe = gateAwaitingQuery.data ?? 0;
 
   const canViewEApproval = useMemo(
     () => hasPermission(scopedUser, [permissions.eApprovalView]),
@@ -192,38 +165,25 @@ export function AppSidebar() {
       })) ?? [];
 
     return groups.map((group) => {
-      let items = group.items.map((item) => {
-        if (!item.items) {
-          return item;
-        }
-
-        if (item.title !== "Project-One" || gateApprovalsAwaitingMe <= 0) {
-          return item;
-        }
-
-        return {
-          ...item,
-          items: item.items.map((sub) =>
-            sub.href.startsWith("/project-one/gate-approvals")
-              ? { ...sub, badge: gateApprovalsAwaitingMe }
-              : sub,
-          ),
-        };
-      });
+      let items: typeof group.items = group.items;
 
       if (group.group === "Operations" && workspaceTopLevelItems.length > 0) {
         const eApprovalIndex = items.findIndex((item) => item.title === "E-Forms");
         const insertAt = eApprovalIndex >= 0 ? eApprovalIndex : items.length;
+        const workspaceNavItems = workspaceTopLevelItems.map((item) => ({
+          ...item,
+          permissions: [] as string[],
+        }));
         items = [
           ...items.slice(0, insertAt),
-          ...workspaceTopLevelItems,
+          ...workspaceNavItems,
           ...items.slice(insertAt),
         ];
       }
 
       return { ...group, items };
     });
-  }, [gateApprovalsAwaitingMe, groups, workspacesQuery.data]);
+  }, [groups, workspacesQuery.data]);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">

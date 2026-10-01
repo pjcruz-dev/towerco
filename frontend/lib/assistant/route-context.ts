@@ -5,7 +5,7 @@ export type AssistantRouteContext = {
 };
 
 const DEFAULT_SUGGESTIONS = [
-  "How do I get started in INFRA SUITE?",
+  "How do I get started in TowerOS?",
   "Why can’t I see a page or module?",
   "How do I create an E-Forms request?",
 ];
@@ -34,41 +34,6 @@ const ROUTE_RULES: Array<{
     ],
   },
   {
-    match: /^\/procurement\/grns(\/|$)/,
-    moduleKey: "procurement_one",
-    suggestions: [
-      "How do I raise a ticket for a GRN mismatch?",
-      "How do I record a goods receipt?",
-      "How does the purchase order workflow work?",
-    ],
-  },
-  {
-    match: /^\/procurement\/pos(\/|$)/,
-    moduleKey: "procurement_one",
-    suggestions: [
-      "How does the purchase order workflow work?",
-      "How do I track a delayed delivery on a PO?",
-      "How do I raise a ticket from a purchase order?",
-    ],
-  },
-  {
-    match: /^\/procurement(\/|$)/,
-    moduleKey: "procurement_one",
-    suggestions: [
-      "How does the purchase order workflow work?",
-      "How do I raise a ticket for a GRN mismatch?",
-      "What is Procurement-One?",
-    ],
-  },
-  {
-    match: /^\/sites(\/|$)/,
-    moduleKey: "sites",
-    suggestions: [
-      "How do I find a site by site code?",
-      "What is linked to a site in INFRA SUITE?",
-    ],
-  },
-  {
     match: /^\/documents\/controlled(\/|$)/,
     moduleKey: "document_register",
     suggestions: [
@@ -82,14 +47,6 @@ const ROUTE_RULES: Array<{
     suggestions: [
       "How do I upload a document to a site binder?",
       "Where do I track expiring documents?",
-    ],
-  },
-  {
-    match: /^\/project-one(\/|$)/,
-    moduleKey: "project_one",
-    suggestions: [
-      "How do I find a rollout?",
-      "How do gate approvals work?",
     ],
   },
   {

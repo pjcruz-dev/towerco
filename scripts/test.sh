@@ -6,7 +6,7 @@
 #   ./scripts/test.sh all
 #   ./scripts/test.sh list
 #   ./scripts/test.sh scenario team-access
-#   ./scripts/test.sh backend rollout
+#   ./scripts/test.sh backend documents
 #   ./scripts/test.sh frontend
 
 set -euo pipefail
@@ -23,10 +23,7 @@ declare -A SCENARIO_SUITE=(
   [team-access]=TeamAccess
   [admin]=TeamAccess
   [e-approval]=EApproval
-  [rollout]=Rollout
-  [procurement]=ProcurementOne
   [documents]=Documents
-  [project]=ProjectOne
   [ticketing]=Ticketing
   [platform]=Platform
   [infrastructure]=Infrastructure
@@ -80,10 +77,7 @@ Available backend scenarios:
   team-access      Team & Access / IAM
   admin            Team & Access (alias)
   e-approval       E-Forms
-  rollout          Rollout / Project-One gates
-  procurement      Procurement-One
   documents        Documents
-  project          Project-One
   ticketing        Ticketing
   platform         Platform superadmin
   infrastructure   Infrastructure

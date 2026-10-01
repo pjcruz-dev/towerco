@@ -28,10 +28,7 @@ $Scenarios = [ordered]@{
     team-access     = @{ Label = "Team & Access / IAM"; Testsuite = "TeamAccess" }
     admin           = @{ Label = "Team & Access (alias)"; Testsuite = "TeamAccess" }
     e-approval      = @{ Label = "E-Forms"; Testsuite = "EApproval" }
-    rollout         = @{ Label = "Rollout / Project-One gates"; Testsuite = "Rollout" }
-    procurement     = @{ Label = "Procurement-One"; Testsuite = "ProcurementOne" }
     documents       = @{ Label = "Documents"; Testsuite = "Documents" }
-    project         = @{ Label = "Project-One"; Testsuite = "ProjectOne" }
     ticketing       = @{ Label = "Ticketing"; Testsuite = "Ticketing" }
     platform        = @{ Label = "Platform superadmin"; Testsuite = "Platform" }
     infrastructure  = @{ Label = "Infrastructure"; Testsuite = "Infrastructure" }

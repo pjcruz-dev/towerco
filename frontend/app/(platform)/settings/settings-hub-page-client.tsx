@@ -81,7 +81,7 @@ export function SettingsHubPageClient() {
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Configure platform security, module policies, and operational defaults. Personal MFA and sessions are under
-          your profile menu → My security.
+          your account menu → My profile → Security.
         </p>
       </header>
 

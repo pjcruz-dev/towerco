@@ -24,10 +24,11 @@ import {
   WidgetPipelineStrip,
   WidgetProgressRows,
   WidgetShortcutGrid,
+  WidgetShareBar,
   WidgetSingleMetric,
   WidgetSparkBars,
 } from "@/components/dashboard/widgets/widget-primitives";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import type {
   DashboardCatalogEntry,
   DashboardWidgetOptions,
@@ -39,6 +40,7 @@ import {
   multiSeriesFromData,
   scatterFromDataSource,
   seriesFromDataSource,
+  seriesLooksChronological,
   type DashboardNormalizedData,
 } from "@/lib/ui/dashboard-widget-data";
 
@@ -83,9 +85,19 @@ function seriesForChart(
   return seriesFromDataSource(data, "auto", fallback);
 }
 
-function thresholdOf(options?: DashboardWidgetOptions): number | undefined {
-  const value = options?.settings?.threshold;
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+/**
+ * Trend charts keep source order. Date labels never reorder by size.
+ * Category lines reorder only when Sort is set to high-to-low or low-to-high.
+ */
+function orderForTrend(rows: SeriesRow[], explicitSort: unknown): SeriesRow[] {
+  if (seriesLooksChronological(rows)) return rows;
+  if (explicitSort === "asc" || explicitSort === "desc") return sortSeries(rows, explicitSort);
+  return rows;
+}
+
+function chartShapeOf(value: unknown): "donut" | "pie" | "semi" {
+  if (value === "pie" || value === "semi" || value === "donut") return value;
+  return "donut";
 }
 
 /**
@@ -215,6 +227,7 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
           title={heading}
           description={description}
           data={sortSeries(seriesForChart(data, source, "donut"), sort).slice(0, limit)}
+          shape={chartShapeOf(settings.chartShape)}
           emptyMessage="No breakdown to chart."
           height={dense ? 180 : 220}
         />
@@ -225,7 +238,7 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
         <DashboardLineChart
           title={heading}
           description={description}
-          data={sortSeries(seriesForChart(data, source, "primary"), sort).slice(0, limit)}
+          data={orderForTrend(seriesForChart(data, source, "primary"), settings.sort).slice(0, limit)}
           emptyMessage="No series to chart."
           height={dense ? 180 : 220}
         />
@@ -296,9 +309,29 @@ export function DashboardKindWidget({ entry, data, title, options }: KindRenderP
         />
       );
     }
+    case "stacked_comparison": {
+      const shareRows = sortSeries(seriesForChart(data, source, "bar"), sort).slice(0, limit);
+      if (multi.series.length >= 2) {
+        return (
+          <DashboardBarChart
+            title={heading}
+            description={description}
+            data={shareRows}
+            groups={multi}
+            mode="stacked"
+            emptyMessage="No mix to compare."
+            height={dense ? 180 : 240}
+          />
+        );
+      }
+      return (
+        <DashboardWidget title={heading} description={description} dense={dense}>
+          <WidgetShareBar rows={shareRows} />
+        </DashboardWidget>
+      );
+    }
     case "bar_list":
     case "list_progress":
-    case "stacked_comparison":
       return (
         <DashboardWidget title={heading} description={description} dense={dense}>
           <WidgetProgressRows

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Documents\Services\DocumentPresignedUploadService;
-use App\Modules\Sites\Models\Site;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

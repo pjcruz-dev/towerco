@@ -1,0 +1,25 @@
+---
+description: API conventions: follow the existing Core/Http envelope and errors; defaults for versioning, filtering, pagination, idempotency, bulk and export endpoints.
+globs:
+  - "backend/routes/**"
+  - "backend/app/**/Http/**"
+  - "frontend/lib/api/**"
+alwaysApply: false
+---
+
+# API conventions
+
+Routes are in `backend/routes/api/v1`. Controllers are in `Http/Controllers/V1`. The frontend clients are in `frontend/lib/api` (`client.ts`, `central-client.ts`, `public-tenant-client.ts`), with `error.ts` for API errors, `paginated.ts` for list responses and one `modules/<module>-api.ts` per module.
+
+## First, follow what exists
+Read `app/Core/Http/Controllers/AbstractApiController` and one existing controller in the same module. Reuse `ok`, `created` and `okWithMeta`. Do not introduce a second response format or an API Resource class.
+
+## Defaults for anything not already decided
+- Base path `/api/v1`, plural kebab-case resources. Breaking change means a new version.
+- Errors: consistent shape with `message`, machine-readable `code`, `request_id`; validation errors are 422 with an `errors` map keyed by field.
+- Status codes: 200/201/202/204, 401, 403, 404 (also for cross-tenant), 409, 422, 429.
+- Lists: whitelisted `filter[...]`, `sort=-created_at`, `include=`. Cursor pagination for large or live data, offset only where page numbers are needed, with a max `per_page`.
+- Writes: `Idempotency-Key` on critical POSTs. Optimistic concurrency (`version` or `updated_at` + 409) for records edited concurrently (EApproval, Ticketing).
+- Bulk actions: dedicated endpoints returning per-item results. Exports/imports: async job, poll a status resource, signed download URL.
+- Every response carries `X-Request-Id`.
+- Frontend types: shared shapes in `modules/<module>/types.ts`, client in `lib/api/modules/<module>-api.ts`. Keep them in sync with the payload the controller returns.

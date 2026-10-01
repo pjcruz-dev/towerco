@@ -9,6 +9,7 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Support\MfaSecretCipher;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -67,16 +68,12 @@ class MfaService
     }
 
     /**
-     * Challenge MFA when org policy requires it, or when this user already enrolled TOTP.
-     * Personal enrollment must protect the account even if org-wide MFA is optional.
+     * Challenge MFA only while this tenant's MFA policy is on.
+     * A previously enrolled authenticator does not force a code after the tenant turns MFA off.
      */
     public function isMfaRequired(TenantUser $user): bool
     {
-        if ($this->isTenantMfaPolicyActive()) {
-            return true;
-        }
-
-        return $this->userHasVerifiedFactor($user);
+        return $this->isTenantMfaPolicyActive();
     }
 
     /**
@@ -135,7 +132,7 @@ class MfaService
             return false;
         }
 
-        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
+        if (! Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
             return false;
         }
 
@@ -158,7 +155,7 @@ class MfaService
             return;
         }
 
-        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
+        if (! Schema::connection('tenant')->hasColumn('auth_devices', 'mfa_trusted_until')) {
             return;
         }
 
@@ -186,8 +183,8 @@ class MfaService
      */
     public function resolveLoginMfaState(TenantUser $user, string $sessionId, ?string $authMethod = null): array
     {
-        $policyOrEnrolled = $this->isMfaRequired($user);
-        if (! $policyOrEnrolled) {
+        $policyActive = $this->isMfaRequired($user);
+        if (! $policyActive) {
             return [
                 'mfa_required' => false,
                 'mfa_enrollment_required' => false,
@@ -464,4 +461,3 @@ class MfaService
         return true;
     }
 }
-

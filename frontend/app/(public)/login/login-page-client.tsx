@@ -421,14 +421,14 @@ function LoginPageContent() {
       {showPasskeyAsPrimaryOption && passkeysPolicy === "prefer" ? (
         <p className="mt-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           Your organization recommends signing in with a passkey when you have already enrolled one
-          under My security.
+          under My profile → Security → Passkeys.
         </p>
       ) : null}
       {passkeysAvailable && passkeysPolicy === "require" ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
           {showMicrosoftPrimary
-            ? "Passkeys are required. Sign in with Microsoft first, then enroll a fingerprint under My security → Passkeys."
-            : "Passkeys are required. Sign in once with password or Microsoft, then enroll a passkey under My security."}
+            ? "Passkeys are required. Sign in with Microsoft first, then enroll a fingerprint under My profile → Security → Passkeys."
+            : "Passkeys are required. Sign in once with password or Microsoft, then enroll a passkey under My profile → Security → Passkeys."}
         </p>
       ) : null}
 
@@ -462,7 +462,7 @@ function LoginPageContent() {
       {passwordLoginRestricted && !showBreakGlassLogin ? (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
           This organization requires <span className="font-medium text-foreground">Sign in with Microsoft</span>.
-          After your first sign-in, you can add a fingerprint under My security → Passkeys for next time.
+          After your first sign-in, you can add a fingerprint under My profile → Security → Passkeys for next time.
         </p>
       ) : null}
 
@@ -491,7 +491,7 @@ function LoginPageContent() {
               </summary>
               <div className="mt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Use this only if you already added a passkey under My security. First-time users
+                  Use this only if you already added a passkey under My profile → Security. First-time users
                   should sign in with Microsoft above.
                 </p>
                 {passkeySignInButton}
@@ -581,7 +581,7 @@ function LoginPageContent() {
             <div className="space-y-2">
               {passkeySignInButton}
               <p className="text-center text-xs text-muted-foreground">
-                Fingerprint / passkey works only after you enroll one under My security. First time?
+                Fingerprint / passkey works only after you enroll one under My profile → Security. First time?
                 Sign in with Microsoft or email above first.
               </p>
             </div>

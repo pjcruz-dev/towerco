@@ -1,0 +1,28 @@
+---
+description: TowerOS frontend layout and conventions (Next.js 16 App Router, no src/): where routes, components, modules and lib code go; TanStack Query, RHF+zod, rbac, socket, performance.
+globs:
+  - "frontend/**"
+alwaysApply: false
+---
+
+# Frontend (Next.js 16.2, App Router, no `src/`)
+
+## Where things go (per feature, follow the Ticketing pattern)
+- Route: `app/(platform)/<route>/...` (authenticated app), `(public)`, `(print)`, `(request-focus)`. Each segment has `loading.tsx` and `error.tsx`.
+- API client: `lib/api/modules/<module>-api.ts`. Shared shapes: `modules/<module>/types.ts` (plus small module prefs such as `workspace-prefs.ts`).
+- Feature helpers: `lib/<area>/` (for example `lib/ticketing`, `lib/e-approval`). Hooks: `hooks/`. State: `stores/` (zustand).
+- UI: `components/<area>/` (for example `components/ticketing`, `components/e-approval`, `components/documents`, `components/doc-extract`). Base primitives, tables, sheets, dialogs, pickers: `components/ui`. Forms: `components/forms`.
+- Cross-cutting: `lib/rbac`, `lib/tenant`, `lib/query`, `lib/socket`, `lib/theme`, `lib/ui`, `lib/table`, `lib/auth`.
+- Read the module's notes in `docs/frontend` / `docs/modules` and the nearest finished feature before building.
+
+## Rules
+- TypeScript strict. No `any`. No unchecked casts on API data.
+- Server Components by default. Add `"use client"` only for interactivity and keep those components small.
+- Server state: TanStack Query hooks. UI-only state: zustand or local state. Components never call axios directly. Go through `lib/api/modules/*` and pick the right client: `client.ts` (tenant), `central-client.ts` (platform admin only), `public-tenant-client.ts` (public pages). Handle errors with `lib/api/error.ts`. Lists use `lib/api/paginated.ts`.
+- Forms: react-hook-form + zod 4 with `@hookform/resolvers`.
+- Permissions: `lib/rbac` helpers. Tenant context: `lib/tenant`. Realtime: `lib/socket` (Echo over Pusher protocol). Build channel names in one helper that includes the tenant, and clean up listeners on unmount.
+- URL state (filters, sort, page, tab, selection): use Next's `useSearchParams` and router through a shared helper. Do not add a URL-state library without asking.
+- Auth: no tokens in `localStorage`. No secrets in `NEXT_PUBLIC_*`.
+- Performance: `next/dynamic` for heavy pieces (charts, PDF/canvas tools like jspdf and html2canvas, the document/e-approval print views). Use `next/image` and `next/font`.
+- Do not add dependencies without asking (there is no Prettier, Playwright, i18n or Testing Library today).
+- Anything visual follows `ui-theme.mdc`, `ui-data-and-forms.mdc` and `ui-accessibility.mdc`.

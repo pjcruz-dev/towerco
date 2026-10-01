@@ -302,7 +302,7 @@ function AnalyticsFiltersCard({ title, description, compact }: AnalyticsSectionC
       ) : null}
       {data ? (
         <p className="text-xs text-muted-foreground">
-          Showing {data.period.from} → {data.period.to} ({data.period.days} days). Chart Layout & options can
+          Showing {data.period.from} → {data.period.to} ({Math.round(Number(data.period.days) || 0)} days). Chart Layout & options can
           switch data source, max items, and sort.
         </p>
       ) : !isLoading ? (

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Lock, Pencil } from "lucide-react";
 
-import { EApprovalProcurementFormLayout } from "@/components/e-approval/e-approval-procurement-form-layout";
 import { EApprovalFieldRenderer } from "@/components/e-approval/e-approval-field-renderer";
 import { parseBuilderLayoutRows } from "@/modules/e-approval/builder-layout-rows";
 import { visibleFormFields } from "@/modules/e-approval/field-visibility";
@@ -20,10 +19,6 @@ import {
   parseFieldLayout,
   type EApprovalLayoutRowColumns,
 } from "@/modules/e-approval/field-layout";
-import {
-  ensureProcurementFieldLayouts,
-  isProcurementDocumentForm,
-} from "@/modules/e-approval/procurement-document-layout";
 import type { EApprovalPlanFeatures } from "@/hooks/use-e-approval-plan-features";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
@@ -87,40 +82,9 @@ export function EApprovalFormFieldsLayout({
   const unlock = (name: string) =>
     setUnlockedFields((prev) => new Set([...prev, name]));
   const layoutRows = parseBuilderLayoutRows(formMetadata);
-  const layoutFields = normalizeFormFieldLayouts(
-    ensureProcurementFieldLayouts(fields, formMetadata),
-    layoutRows,
-  );
+  const layoutFields = normalizeFormFieldLayouts(fields, layoutRows);
   const displayFields = visibleFormFields(layoutFields, values);
   const groups = buildFieldDisplayGroups(displayFields);
-  const useProcurementLayout = isProcurementDocumentForm(layoutFields, formMetadata);
-
-  if (useProcurementLayout) {
-    return (
-      <EApprovalProcurementFormLayout
-        groups={groups}
-        fields={layoutFields}
-        values={values}
-        onChange={onChange}
-        onFileChange={onFileChange}
-        onCameraChange={onCameraChange}
-        fileSelections={fileSelections}
-        cameraMetadataByField={cameraMetadataByField}
-        existingAttachmentsByField={existingAttachmentsByField}
-        onRemoveSavedAttachment={onRemoveSavedAttachment}
-        removingSavedAttachmentId={removingSavedAttachmentId}
-        approverOptions={approverOptions}
-        approverOptionsLoading={approverOptionsLoading}
-        density={density}
-        disabled={disabled}
-        fieldErrors={fieldErrors}
-        fieldHelpOverrides={fieldHelpOverrides}
-        planFeaturesOverride={planFeaturesOverride}
-        allowRemoteLookups={allowRemoteLookups}
-        formMetadata={formMetadata}
-      />
-    );
-  }
 
   const renderField = (field: EApprovalFormFieldInput, index: number) => {
     const message = fieldErrors?.[field.name];

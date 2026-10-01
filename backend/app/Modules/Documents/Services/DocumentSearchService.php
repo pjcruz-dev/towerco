@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\Document;
-use App\Modules\Sites\Models\Site;
+use App\Modules\Documents\Models\Site;
 use Illuminate\Support\Collection;
 
 final class DocumentSearchService

@@ -5,11 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Tenancy\Services;
 
 use App\Models\Tenant;
-use App\Modules\Platform\Models\RolloutPlaybookVersion;
-use App\Modules\Platform\Models\TenantPlaybookBinding;
-use App\Modules\Platform\Services\RolloutPlaybookCatalogService;
-use App\Modules\Platform\Services\RolloutPolicyBundleService;
-use App\Modules\Rollout\Services\TenantPlaybookSyncService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Tenancy\Support\TenantEnabledModulesValidator;
 use Illuminate\Support\Facades\Artisan;
@@ -26,9 +21,6 @@ final class TenantEnvironmentProvisioningService
 
     public function __construct(
         private readonly TenantDomainSlugService $domainSlugs,
-        private readonly RolloutPlaybookCatalogService $playbookCatalog,
-        private readonly RolloutPolicyBundleService $policyBundles,
-        private readonly TenantPlaybookSyncService $playbookSync,
         private readonly TenantRolloutBootstrapService $rolloutBootstrap,
         private readonly TenantAdminBootstrapService $adminBootstrap,
         private readonly TenantDocumentsBootstrapService $documentsBootstrap,
@@ -132,8 +124,6 @@ final class TenantEnvironmentProvisioningService
             $tenant->createDomain($domain);
             $this->domainSlugs->persistEndpoints($tenant, $recommendation);
 
-            $binding = $this->copyPlaybookBinding($sourceTenant, $tenant);
-
             $shouldMigrate = ! empty($input['migrate']);
             $shouldSeed = ! empty($input['seed']);
 
@@ -157,10 +147,6 @@ final class TenantEnvironmentProvisioningService
             ];
 
             if ($shouldMigrate) {
-                if ($binding !== null) {
-                    $this->playbookSync->syncBindingToTenantDatabase($tenant, $binding);
-                }
-
                 $rolloutBootstrap = $this->rolloutBootstrap->provision($tenant);
             }
 
@@ -182,8 +168,8 @@ final class TenantEnvironmentProvisioningService
                 'source_tenant_id' => $sourceTenant->id,
                 'org_root_tenant_id' => $orgRoot->id,
                 'domain_endpoints' => $recommendation,
-                'playbook_version' => $binding?->playbookVersion?->version,
-                'assigned_policy_code' => $binding?->rolloutPolicyBundle?->code,
+                'playbook_version' => null,
+                'assigned_policy_code' => null,
                 'initial_admin' => $initialAdmin,
                 'public_holidays_seeded' => $rolloutBootstrap['public_holidays_seeded'],
                 'holiday_years' => $rolloutBootstrap['holiday_years'],
@@ -277,58 +263,6 @@ final class TenantEnvironmentProvisioningService
     private function isReservedSlugLabel(string $slug): bool
     {
         return in_array($slug, self::RESERVED_SLUG_LABELS, true);
-    }
-
-    private function copyPlaybookBinding(Tenant $sourceTenant, Tenant $targetTenant): ?TenantPlaybookBinding
-    {
-        /** @var TenantPlaybookBinding|null $sourceBinding */
-        $sourceBinding = TenantPlaybookBinding::query()
-            ->where('tenant_id', $sourceTenant->id)
-            ->with(['playbookVersion', 'rolloutPolicyBundle'])
-            ->first();
-
-        if ($sourceBinding === null) {
-            $version = $this->playbookCatalog->latestPublished();
-            if ($version === null) {
-                return null;
-            }
-
-            $defaultBundle = $this->policyBundles->resolveDefaultForProvisioning($version);
-            if ($defaultBundle !== null) {
-                return $this->policyBundles->assignToTenant($targetTenant, $defaultBundle);
-            }
-
-            return $this->playbookCatalog->assignToTenant($targetTenant, $version);
-        }
-
-        if ($sourceBinding->rollout_policy_bundle_id !== null && $sourceBinding->rolloutPolicyBundle !== null) {
-            return $this->policyBundles->assignToTenant(
-                $targetTenant,
-                $sourceBinding->rolloutPolicyBundle,
-                $sourceBinding->upgrade_policy,
-            );
-        }
-
-        /** @var RolloutPlaybookVersion|null $version */
-        $version = $sourceBinding->playbookVersion;
-        if ($version === null) {
-            return null;
-        }
-
-        $defaultBundle = $this->policyBundles->resolveDefaultForProvisioning($version);
-        if ($defaultBundle !== null) {
-            return $this->policyBundles->assignToTenant(
-                $targetTenant,
-                $defaultBundle,
-                $sourceBinding->upgrade_policy,
-            );
-        }
-
-        return $this->playbookCatalog->assignToTenant(
-            $targetTenant,
-            $version,
-            $sourceBinding->upgrade_policy,
-        );
     }
 
     private function normalizeDomain(string $domain): string

@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 type Props = {
   variant: "tenant" | "platform";
   className?: string;
+  /** Inline brand for top navbar (single line, smaller). */
+  compact?: boolean;
 };
 
 const badgeTone: Record<string, string> = {
@@ -19,7 +21,7 @@ const badgeTone: Record<string, string> = {
 };
 
 /** Sidebar header brand — organization logo/title from branding + auth context. */
-export function SidebarBrand({ variant, className }: Props) {
+export function SidebarBrand({ variant, className, compact = false }: Props) {
   const organizationLabel = useOrganizationLabel();
   const [envBadge, setEnvBadge] = useState<string | null>(null);
 
@@ -35,6 +37,25 @@ export function SidebarBrand({ variant, className }: Props) {
   }, [organizationLabel, variant]);
 
   const subtitle = variant === "platform" ? "Superadmin console" : "Workspace";
+
+  if (compact) {
+    return (
+      <div className={cn("flex min-w-0 items-center gap-2", className)}>
+        <TenantBrandMark size="sm" />
+        <span className="truncate text-sm font-semibold tracking-tight text-foreground">{title}</span>
+        {envBadge ? (
+          <span
+            className={cn(
+              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
+              badgeTone[envBadge] ?? "bg-muted text-muted-foreground",
+            )}
+          >
+            {envBadge}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

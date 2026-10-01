@@ -1,0 +1,44 @@
+---
+description: Backend architecture: modular monolith layering (controller, Service, AbstractApiController), data conventions, audit logging, errors. Use when creating or changing backend code.
+globs:
+  - "backend/app/**/*.php"
+  - "backend/routes/**/*.php"
+  - "backend/database/**/*.php"
+alwaysApply: false
+---
+
+# Architecture
+
+Modular monolith, API-first. Shared base in `backend/app/Core`. One bounded context per folder in `backend/app/Modules/<Module>`.
+
+## Before you write code
+1. Read `app/Core` (Contracts, Services/`AbstractDomainService`, Repositories/`AbstractEloquentRepository`, Http, Exceptions, Support) and the closest existing module (Ticketing is a good reference). Extend the existing base classes and helpers. Do not create parallel abstractions.
+2. Read the module's doc in `docs/modules` and `docs/architecture` if present.
+
+## Module layout (as in Ticketing — the reference module)
+`app/Modules/<Module>/` holds `Http/Controllers/V1` (one class per endpoint, e.g. `TicketingTicketStoreController`, `TicketingTicketIndexController`), `Services`, `Support` (catalogs, factories) and `Notifications`. Ticketing models live in `app/Models/` (`TicketingTicket` and the other `Ticketing*` models). EApproval, Documents and DocExtract models live in `app/Modules/<Module>/Models/`. Extend `App\Core\Models\BaseModel`. Controllers extend `App\Core\Http\Controllers\AbstractApiController`, authorize with `abort_unless($request->user()?->can('...'), 403)`, validate with `$request->validate()`, and return `$this->ok()` / `$this->created()` / `$this->okWithMeta()`. Do not add a FormRequest, Policy or API Resource layer to these modules.
+- Controllers are one class per action (verb-suffixed: `...IndexController`, `...ShowController`, `...StoreController`, `...UpdateController`), not one controller with multiple methods. Follow this for new endpoints.
+- Services extend `App\Core\Services\AbstractDomainService` and are named `<Module><Thing>Service` (`TicketingTicketService`, `TicketingAssignmentService`, `TicketingSlaCalculator`, `TicketingSettingsService`). Use its `transaction()` helper for multi-write operations and its `logInfo`/`logWarning`/`logError` helpers (which log to `config('toweros.logging.application_channel')` with request context already attached) instead of calling `Log::` directly.
+- `<Module>PlanFeaturesService` gates features by billing plan. `<Module>FileStorageService` owns file storage. `<Module>NotificationDispatcher` and `<Module>WebhookDispatcher` own outbound messages. Scheduled work (SLA runners, auto-close) is a Service invoked from a command in `app/Console/Commands/<Module>/` (see `TicketingSlaRunCommand`, `TicketingAutoCloseResolvedCommand`).
+- Repositories are optional. Use one (extending `Core/Repositories/AbstractEloquentRepository`) only for complex or shared queries. Ticketing itself doesn't use one — plain Eloquent inside the Service is the norm here. Do not add a repository just to wrap Eloquent.
+
+## Request flow
+Route (`routes/api/v1`) -> middleware (auth, tenant, throttle) -> Controller (`Http/Controllers/V1`: permission check, request validation) -> Service (business rules, transaction, audit, events) -> Eloquent (or a repository) -> `AbstractApiController` response.
+
+- Controllers never query and never hold business rules. HTTP responses go through `AbstractApiController`.
+- Modules should communicate through events (`Core/Events`) or contracts (`Core/Contracts`). Documents and EApproval call each other through hook services. Do not add new cross-module imports. Before removing or disabling a module, search the codebase for imports of it (`Modules\<Module>`).
+- Long work (imports, exports, OCR/doc extraction, bulk operations, notification fan-out) runs as queued jobs on Horizon, and the API returns a status resource.
+
+## Data
+- Ordered UUID (v7) primary keys. Never expose auto-increment ids.
+- Store time in UTC. Display in the tenant/user timezone.
+- Soft-delete only where restore is a real requirement.
+
+## Audit and observability
+- Audit with the existing helper in `Core/Support` if there is one, otherwise `spatie/laravel-activitylog`. Log: auth and MFA events, role/permission changes, tenant settings, deletes, approvals (EApproval), billing changes, exports, impersonation.
+- Structured logs carry `tenant_id`, `user_id`, `request_id`. Never log secrets, tokens or full PII.
+- Every queued job logs start, outcome and duration.
+
+## Errors
+- Throw the domain exceptions in `Core/Exceptions` and let the shared handler map them. No bare `catch (Exception)` that swallows.
+- Fail closed: if tenant or permission cannot be resolved, deny.

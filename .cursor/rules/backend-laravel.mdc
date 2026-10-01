@@ -1,0 +1,21 @@
+---
+description: Laravel 13 coding standards: strict types, Pint, model strictness, transactions, queue jobs, file storage, entitlements.
+globs:
+  - "backend/**/*.php"
+alwaysApply: false
+---
+
+# Backend (Laravel 13, PHP 8.3)
+
+- `declare(strict_types=1);` in every new file. Typed properties and returns, enums for fixed sets, readonly DTOs for cross-layer data.
+- Format with Pint: `cd backend; php vendor/bin/pint --dirty`. No static analyser is installed. If one is added later, follow it and never add baseline entries to pass.
+- In non-production enable `Model::shouldBeStrict()` (if not already). Eager load relations. No N+1.
+- Mass assignment: explicit `$fillable`. Never `$guarded = []`.
+- Raw SQL: parameter bindings only. Never interpolate user input into `DB::raw`, `orderByRaw`, `whereRaw`.
+- Transactions: wrap multi-write Services in `DB::transaction`. Dispatch events/jobs after commit.
+- Jobs (Horizon): idempotent, tenant-aware, explicit `tries`/`backoff`/`timeout`, `ShouldBeUnique` where duplicates hurt. Tag jobs with the tenant.
+- Config through `config()` only. `env()` outside config files is forbidden. Application logging goes through a Service's `logInfo`/`logWarning`/`logError` (see `AbstractDomainService`), which writes to `config('toweros.logging.application_channel', 'stack')` with request context. Don't call `Log::` directly from a Service.
+- Files (S3): private, tenant-prefixed paths, signed temporary URLs, validate MIME by content. Each module keeps file access in its own `<Module>FileStorageService`. DocExtract calls to `services/doc-extract` go through a service class with timeouts, retries and tenant context.
+- Stripe/Billing: verify webhook signatures, make handlers idempotent, never trust client-sent amounts or plan ids.
+- Plan limits and feature access go through the module's `<Module>PlanFeaturesService` (see `TicketingPlanFeaturesService`) and the Billing/Platform services behind it. No ad-hoc plan checks.
+- Outbound webhooks and email (Teams cards, test-email, test-webhook): go through the module's dispatcher/service, with timeouts, retries and logged failures.

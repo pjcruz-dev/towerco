@@ -21,6 +21,7 @@ import { EApprovalFormBrandLogoPreview } from "@/components/e-approval/e-approva
 import { EApprovalFormWorkspaceSettingsCard } from "@/components/e-approval/e-approval-form-workspace-settings-card";
 import { EApprovalFormWorkspaceDashboardCard } from "@/components/e-approval/e-approval-form-workspace-dashboard-card";
 import { EApprovalFormDocumentNumberCard } from "@/components/e-approval/e-approval-form-document-number-card";
+import { EApprovalFormRequestAccessCard } from "@/components/e-approval/e-approval-form-request-access-card";
 import { EApprovalFormTemplateGallery } from "@/components/e-approval/e-approval-form-template-gallery";
 import { EApprovalFormVersionTimeline } from "@/components/e-approval/e-approval-form-version-timeline";
 import { EApprovalVisualFormBuilder } from "@/components/e-approval/e-approval-visual-form-builder";
@@ -899,6 +900,8 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
                 </div>
               </div>
             </EApprovalSectionCard>
+
+            <EApprovalFormRequestAccessCard metadataJson={metadataJson} onPatch={handleMetadataPatch} />
 
             <EApprovalFormDocumentNumberCard
               value={documentNumber}

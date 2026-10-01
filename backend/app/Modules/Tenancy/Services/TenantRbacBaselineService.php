@@ -6,8 +6,12 @@ namespace App\Modules\Tenancy\Services;
 
 use App\Modules\AdminOne\Models\TenantPermission;
 use App\Modules\AdminOne\Models\TenantRole;
+use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantRbacModuleRoleTemplates;
 use App\Modules\Tenancy\Support\TenantRbacPermissionCatalog;
+use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -37,6 +41,8 @@ class TenantRbacBaselineService
 
         $this->ensurePermissionsRegistered();
         $this->syncSystemRoles($guard, $enabled);
+        $this->foldOwnerAliases($guard);
+        $this->clearOwnerAccessMatrix($guard);
         $this->pruneDisabledPermissionsFromAllRoles($enabled, $guard);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -53,11 +59,85 @@ class TenantRbacBaselineService
             $this->syncRole($guard, $roleName, $this->filterEnabled($permissions, $enabled));
         }
 
-        $this->syncRole($guard, 'tenant_admin', $enabled);
+        $this->syncRole($guard, TenantRbacSystemRoles::FULL_ADMIN, $enabled);
 
-        // Custom full-access role used by some tenants (e.g. staging admin); keep in sync
-        // with enabled modules without creating the role if it does not exist.
-        $this->syncExistingRole($guard, 'administrator', $enabled);
+        // Leftover full-access alias (not created). Keep perms in sync so fold is a no-op if empty.
+        foreach (TenantRbacSystemRoles::OWNER_ALIASES as $alias) {
+            $this->syncExistingRole($guard, $alias, $enabled);
+        }
+    }
+
+    /**
+     * Move leftover owner-alias assignments onto tenant_admin. Controllers keep checking permissions.
+     */
+    public function foldOwnerAliases(?string $guard = 'sanctum'): void
+    {
+        $guard ??= 'sanctum';
+
+        try {
+            if (
+                ! Schema::connection('tenant')->hasTable('roles')
+                || ! Schema::connection('tenant')->hasTable('model_has_roles')
+            ) {
+                return;
+            }
+
+            $owner = TenantRole::query()
+                ->where('name', TenantRbacSystemRoles::FULL_ADMIN)
+                ->where('guard_name', $guard)
+                ->first();
+
+            if ($owner === null) {
+                return;
+            }
+
+            foreach (TenantRbacSystemRoles::OWNER_ALIASES as $aliasName) {
+                $alias = TenantRole::query()
+                    ->where('name', $aliasName)
+                    ->where('guard_name', $guard)
+                    ->first();
+
+                if ($alias === null) {
+                    continue;
+                }
+
+                $users = TenantUser::role($aliasName)->get();
+                foreach ($users as $user) {
+                    if (! $user->hasRole(TenantRbacSystemRoles::FULL_ADMIN)) {
+                        $user->assignRole(TenantRbacSystemRoles::FULL_ADMIN);
+                    }
+                    $user->removeRole($aliasName);
+
+                    Log::info('rbac.owner_alias_folded', [
+                        'user_id' => (string) $user->id,
+                        'from' => $aliasName,
+                        'to' => TenantRbacSystemRoles::FULL_ADMIN,
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('rbac.owner_alias_fold_failed', [
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function clearOwnerAccessMatrix(string $guard): void
+    {
+        if (! Schema::connection('tenant')->hasColumn('roles', 'access_matrix_json')) {
+            return;
+        }
+
+        $names = [
+            TenantRbacSystemRoles::FULL_ADMIN,
+            ...TenantRbacSystemRoles::OWNER_ALIASES,
+        ];
+
+        TenantRole::query()
+            ->where('guard_name', $guard)
+            ->whereIn('name', $names)
+            ->whereNotNull('access_matrix_json')
+            ->update(['access_matrix_json' => null]);
     }
 
     /**
@@ -98,7 +178,10 @@ class TenantRbacBaselineService
             ->with('permissions:id,name')
             ->get()
             ->each(function (TenantRole $role) use ($enabled): void {
-                if (in_array($role->name, ['tenant_admin', 'administrator'], true)) {
+                if (
+                    $role->name === TenantRbacSystemRoles::FULL_ADMIN
+                    || TenantRbacSystemRoles::isOwnerAlias((string) $role->name)
+                ) {
                     return;
                 }
 

@@ -11,13 +11,16 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { eApprovalFocusUrl } from "@/modules/documents/controlled-document-submission-url";
 import { fetchEApprovalForm } from "@/lib/api/modules/e-approval-api";
+import { viewerCanStartFormRequest } from "@/modules/e-approval/form-request-access";
 import { permissions } from "@/lib/rbac/permissions";
+import { useAuthStore } from "@/stores/auth-store";
 
 type Props = { formId: string };
 
 export function EApprovalRequestFormPageClient({ formId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const resubmitSubmissionId = searchParams.get("resubmit")?.trim() || undefined;
 
   const isControlledDocumentRequest =
@@ -29,6 +32,11 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
     queryKey: ["e-approval", "form", formId, "submit-title"],
     queryFn: () => fetchEApprovalForm(formId),
   });
+
+  const startBlocked =
+    !resubmitSubmissionId &&
+    formQuery.isSuccess &&
+    !viewerCanStartFormRequest(formQuery.data?.metadata_json, currentUserId);
 
   const handleSubmitted = ({ submission }: { submission: { id: string } }) => {
     if (resubmitSubmissionId) {
@@ -86,6 +94,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
             </>
           }
           actions={
+            startBlocked ? null : (
             <Button
               type="button"
               variant="outline"
@@ -98,6 +107,7 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
               Focused view
               <ExternalLink className="h-3.5 w-3.5" />
             </Button>
+            )
           }
         />
 

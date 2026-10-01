@@ -70,7 +70,7 @@ export function AdminUserImpersonateDialog({ user, open, onOpenChange }: Props) 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="gap-0 p-0 sm:max-w-md">
         <DialogHeader className="shrink-0">
-          <DialogTitle>View as user</DialogTitle>
+          <DialogTitle>Impersonate user</DialogTitle>
           <DialogDescription className="text-pretty">
             You will see the workspace as{" "}
             <span className="font-medium text-foreground">{user?.name ?? "this user"}</span> (

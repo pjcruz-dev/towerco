@@ -7,9 +7,7 @@ namespace Tests\Feature\Documents;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Documents\Models\DocumentSiteNode;
-use App\Modules\Documents\Services\DocumentWorkspaceService;
-use App\Modules\Rollout\Models\RolloutProgram;
-use App\Modules\Sites\Models\Site;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -28,7 +26,7 @@ final class DocumentSiteBinderTest extends TestCase
 
         config([
             'toweros.tenant_modules.enabled' => [
-                'core', 'team_access', 'project_one', 'e_approval', 'ticketing', 'sites', 'documents',
+                'core', 'team_access', 'e_approval', 'ticketing', 'documents',
             ],
         ]);
 
@@ -122,73 +120,5 @@ final class DocumentSiteBinderTest extends TestCase
         $permitsNode = collect($workspace->json('data.nodes'))->firstWhere('node_key', 'permits_clearances');
         $this->assertNotNull($permitsNode);
         $this->assertSame('Permits & clearances', $permitsNode['label']);
-    }
-
-    public function test_rollout_options_lists_site_linked_program_even_when_not_in_global_index_page(): void
-    {
-        tenancy()->initialize($this->testTenant);
-
-        $matched = RolloutProgram::query()->create([
-            'playbook_version' => 'v2',
-            'rollout_ref' => 'RP-SITE-LINK-'.uniqid('', true),
-            'site_id' => $this->site->id,
-            'mno' => 'smart',
-            'project_type' => 'bts',
-            'status' => 'permitting',
-            'endorsement_date' => '2026-04-01',
-            'sla_working_days' => 120,
-        ]);
-
-        $other = RolloutProgram::query()->create([
-            'playbook_version' => 'v2',
-            'rollout_ref' => 'RP-OTHER-'.uniqid('', true),
-            'mno' => 'globe',
-            'project_type' => 'bts',
-            'status' => 'permitting',
-            'endorsement_date' => '2026-04-01',
-            'sla_working_days' => 120,
-        ]);
-
-        tenancy()->end();
-
-        $response = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->getJson("/api/v1/sites/{$this->site->id}/documents/rollout-options");
-
-        $response->assertOk();
-        $refs = collect($response->json('data'))->pluck('rollout_ref')->all();
-        $this->assertContains($matched->rollout_ref, $refs);
-        $this->assertNotContains($other->rollout_ref, $refs);
-
-        $matchedRow = collect($response->json('data'))->firstWhere('rollout_ref', $matched->rollout_ref);
-        $this->assertTrue($matchedRow['site_match']);
-    }
-
-    public function test_rollout_options_includes_manually_linked_rollout(): void
-    {
-        tenancy()->initialize($this->testTenant);
-
-        $linked = RolloutProgram::query()->create([
-            'playbook_version' => 'v2',
-            'rollout_ref' => 'RP-MANUAL-LINK',
-            'mno' => 'globe',
-            'project_type' => 'bts',
-            'status' => 'permitting',
-            'endorsement_date' => '2026-04-01',
-            'sla_working_days' => 120,
-        ]);
-
-        $workspace = app(DocumentWorkspaceService::class)->ensureForSite($this->site);
-        $workspace->rollout_program_id = $linked->id;
-        $workspace->save();
-
-        tenancy()->end();
-
-        $response = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->getJson("/api/v1/sites/{$this->site->id}/documents/rollout-options");
-
-        $response->assertOk();
-        $this->assertContains('RP-MANUAL-LINK', collect($response->json('data'))->pluck('rollout_ref')->all());
     }
 }

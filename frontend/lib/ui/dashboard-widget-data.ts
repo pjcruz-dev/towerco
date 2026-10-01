@@ -5,7 +5,7 @@ import type {
 } from "@/components/dashboard/dashboard-chart-utils";
 import { chartColorAt } from "@/components/dashboard/dashboard-chart-utils";
 import type { DashboardCatalogEntry, DashboardWidgetKind } from "@/lib/ui/dashboard-widget-catalog";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
+import type { DashboardKpi } from "@/lib/ui/dashboard-kpi";
 
 export type DashboardModuleId = DashboardCatalogEntry["modules"][number];
 
@@ -51,8 +51,8 @@ export type DashboardExportsTeaser = {
  * Kind renderers consume this so Add Widget always maps to real data.
  */
 export type DashboardNormalizedData = {
-  kpis: ProjectOneKpi[];
-  secondaryKpis?: ProjectOneKpi[];
+  kpis: DashboardKpi[];
+  secondaryKpis?: DashboardKpi[];
   series: {
     status?: DashboardChartDatum[];
     priority?: DashboardChartDatum[];
@@ -265,7 +265,7 @@ export function availableDataSources(data: DashboardNormalizedData): DashboardDa
   return ids;
 }
 
-function kpisAsSeries(kpis: ProjectOneKpi[]): DashboardChartDatum[] {
+function kpisAsSeries(kpis: DashboardKpi[]): DashboardChartDatum[] {
   return kpis.map((kpi) => ({
     key: kpi.key,
     label: kpi.label,
@@ -364,12 +364,21 @@ export function multiSeriesFromData(
   const categories = primary.rows.slice(0, limit).map((row) => row.label);
   const categoryKeys = primary.rows.slice(0, limit).map((row) => row.key);
 
-  const series = packs.map((pack, index) => {
+  // Only overlay packs that share categories. Index-aligning Status onto Priority
+  // draws a comparison the module data does not have.
+  const aligned = packs
+    .filter((pack) => packSharesCategories(pack, categoryKeys, categories))
+    .slice(0, 4);
+  const usable = aligned.length > 0 ? aligned : [primary];
+
+  const series = usable.map((pack, index) => {
     const byKey = new Map(pack.rows.map((row) => [row.key, row.value]));
     const byLabel = new Map(pack.rows.map((row) => [row.label, row.value]));
     const values = categories.map((label, i) => {
       const key = categoryKeys[i];
-      return byKey.get(key!) ?? byLabel.get(label) ?? pack.rows[i]?.value ?? 0;
+      if (key != null && byKey.has(key)) return byKey.get(key) ?? 0;
+      if (byLabel.has(label)) return byLabel.get(label) ?? 0;
+      return 0;
     });
     return {
       key: pack.key,
@@ -380,6 +389,26 @@ export function multiSeriesFromData(
   });
 
   return { categories, series };
+}
+
+function packSharesCategories(
+  pack: { key: string; rows: DashboardChartDatum[] },
+  categoryKeys: string[],
+  categories: string[],
+): boolean {
+  const keys = new Set(pack.rows.map((row) => row.key));
+  const labels = new Set(pack.rows.map((row) => row.label));
+  return categoryKeys.some((key, index) => keys.has(key) || labels.has(categories[index] ?? ""));
+}
+
+const CHRONOLOGICAL_LABEL =
+  /\d{4}-\d{2}-\d{2}|\d{4}-\d{2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
+
+/** True when labels are dates or months — those must stay in source order. */
+export function seriesLooksChronological(rows: Array<{ key: string; label: string }>): boolean {
+  if (rows.length < 2) return false;
+  const hits = rows.filter((row) => CHRONOLOGICAL_LABEL.test(`${row.key} ${row.label}`)).length;
+  return hits >= Math.ceil(rows.length * 0.6);
 }
 
 /** Scatter/bubble points from a primary series (x=rank, y=value, z=value). */

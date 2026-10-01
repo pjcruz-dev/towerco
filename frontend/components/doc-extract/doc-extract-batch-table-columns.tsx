@@ -99,13 +99,21 @@ function BatchProgress({ batch }: { batch: DocExtractBatchListRow }) {
 function ReadyBatchActions({
   batchId,
   canExport,
+  canRun,
   downloadPending,
+  requeuePending,
+  requeueActive,
   onDownload,
+  onRequeue,
 }: {
   batchId: string;
   canExport: boolean;
+  canRun: boolean;
   downloadPending: boolean;
+  requeuePending: boolean;
+  requeueActive: boolean;
   onDownload: (batchId: string, format: "csv" | "xlsx") => void;
+  onRequeue: (batchId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const href = `/doc-extract/batches/${batchId}`;
@@ -115,6 +123,20 @@ function ReadyBatchActions({
       <Link href={href} className="text-sm font-medium text-primary hover:underline">
         View results
       </Link>
+      {canRun ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 px-2"
+          disabled={requeuePending}
+          onClick={() => onRequeue(batchId)}
+          title="Remap field values from stored OCR with the latest extractor"
+        >
+          {requeueActive ? <Spinner className="size-3.5" /> : <RotateCcw className="size-3.5" />}
+          Rescan
+        </Button>
+      ) : null}
       {canExport ? (
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger
@@ -267,8 +289,12 @@ export function buildDocExtractBatchTableColumns(options: {
           <ReadyBatchActions
             batchId={batch.id}
             canExport={canExport}
+            canRun={canRun}
             downloadPending={downloadBatchId === batch.id}
+            requeuePending={requeuePending}
+            requeueActive={requeueBatchId === batch.id}
             onDownload={onDownload}
+            onRequeue={onRequeue}
           />
         );
       }

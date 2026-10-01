@@ -1,0 +1,20 @@
+---
+description: WCAG 2.2 AA rules and locale formatting: contrast, keyboard, focus, aria-live, reflow, reduced motion.
+globs:
+  - "frontend/**/*.tsx"
+alwaysApply: false
+---
+
+# Accessibility and internationalization (WCAG 2.2 AA)
+
+- Contrast: text 4.5:1, UI components and focus indicators 3:1. Use the `-fg` status tokens for text.
+- Never colour alone: status chips (ticket status, approval state, document state, extraction status) always carry a text label, and an icon where space allows.
+- Keyboard: everything reachable and operable. Visible focus ring (2px, offset) on every interactive element. Skip-to-content link. Drawers and dialogs trap focus, close on Esc, and return focus to the trigger. Command palette `Ctrl/Cmd+K`. Single-key shortcuts must be disable-able or remappable.
+- Target size: at least 24x24 CSS px everywhere (WCAG 2.2), 44-48px on touch.
+- Semantics: landmarks, real `<button>`/`<a>`, table markup with `<th scope>`, labels bound to inputs, errors linked with `aria-describedby`.
+- Live regions: toasts and realtime counters use `aria-live="polite"`. `assertive` only for something that blocks the user's current task.
+- Reflow at 320px width and 200% zoom. No horizontal scroll except data tables in their own scroll container.
+- Motion: honour `prefers-reduced-motion`.
+- Charts (`recharts`, dashboard widgets): text summary plus a data table / list alternative.
+- Copy and locale: no i18n library is installed, so do not add one unasked. Keep user-facing strings in one place per module so they can be extracted later. Allow 40% text expansion. Use logical CSS properties (`ms-`, `me-`, `ps-`, `pe-`). Format dates, numbers and units with the user's locale and the tenant timezone.
+- Tooling: `eslint-config-next` includes core a11y lint rules, so keep `npm run lint` clean. Do a manual keyboard and screen-reader pass on new screens. Propose axe/Playwright before adding them.

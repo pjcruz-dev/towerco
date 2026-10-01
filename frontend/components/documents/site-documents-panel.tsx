@@ -15,15 +15,12 @@ import { usePermission } from "@/hooks/use-permission";
 import {
   addSiteDocumentLessor,
   fetchPublishedEApprovalForms,
-  fetchRolloutProgramOptions,
   fetchSiteDocumentFiles,
   fetchSiteDocumentGateChecklist,
   fetchSiteDocumentWorkspace,
   getDocumentDownloadUrl,
-  migrateRolloutLeasePackage,
   requestDocumentApproval,
   updateSiteDocumentMetadata,
-  updateSiteDocumentWorkspace,
   uploadSiteDocumentSmart,
   type DocumentFileRow,
   type DocumentSiteNode,
@@ -100,7 +97,6 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
   const canManage = usePermission([permissions.documentsManage]);
   const canUpload = usePermission([permissions.documentsUpload]);
   const canRequestApproval = usePermission([permissions.eApprovalSubmissionsCreate]);
-  const canLinkRollout = usePermission([permissions.rolloutView]);
   const user = useAuthStore((s) => s.user);
   const activeTenantId = useAuthStore((s) => s.activeTenantId);
   const enabledModules = resolveEnabledModulesForUser(user, activeTenantId);
@@ -115,12 +111,6 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
     queryKey: ["documents", "gate-checklist", siteId],
     queryFn: () => fetchSiteDocumentGateChecklist(siteId),
     enabled: canManage,
-  });
-
-  const rolloutsQuery = useQuery({
-    queryKey: ["documents", "rollout-options", siteId],
-    queryFn: () => fetchRolloutProgramOptions(siteId),
-    enabled: canManage && canLinkRollout && !!siteId,
   });
 
   const formsQuery = useQuery({
@@ -151,7 +141,6 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
 
   const selectedNode = workspaceQuery.data?.nodes.find((n) => n.id === selectedNodeId) ?? null;
   const canUploadSelected = selectedNode ? isUploadTarget(selectedNode) : false;
-  const linkedRolloutId = workspaceQuery.data?.workspace.rollout_program_id ?? "";
 
   const filesQuery = useQuery({
     queryKey: ["documents", "files", siteId, selectedNodeId],
@@ -195,45 +184,6 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
       queryClient.invalidateQueries({ queryKey: ["documents", "workspace", siteId] });
       queryClient.invalidateQueries({ queryKey: ["documents", "gate-checklist", siteId] });
     },
-  });
-
-  const rolloutMutation = useMutation({
-    mutationFn: (rolloutProgramId: string | null) =>
-      updateSiteDocumentWorkspace(siteId, { rollout_program_id: rolloutProgramId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", "workspace", siteId] });
-      push({ level: "success", title: "Rollout link updated" });
-    },
-    onError: (e) =>
-      push({ level: "error", title: "Could not link rollout", message: getErrorMessage(e) }),
-  });
-
-  const leaseMigrateMutation = useMutation({
-    mutationFn: () => migrateRolloutLeasePackage(linkedRolloutId),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["documents", "files", siteId] });
-      queryClient.invalidateQueries({ queryKey: ["documents", "workspace", siteId] });
-      queryClient.invalidateQueries({ queryKey: ["documents", "gate-checklist", siteId] });
-      if (data.migrated > 0) {
-        push({
-          level: "success",
-          title: "Lease package migrated",
-          message: `${data.migrated} file(s) copied to binder`,
-        });
-        return;
-      }
-
-      push({
-        level: "warning",
-        title: "No lease files copied",
-        message:
-          data.skipped > 0
-            ? `${data.skipped} file(s) were already in the binder.`
-            : "Select a rollout candidate with lease documents first, then import again.",
-      });
-    },
-    onError: (e) =>
-      push({ level: "error", title: "Migration failed", message: getErrorMessage(e) }),
   });
 
   const approvalMutation = useMutation({
@@ -288,47 +238,7 @@ export function SiteDocumentsPanel({ siteId, siteCode, initialDocumentId }: Prop
               eSite Binder &amp; Engineering folders
             </p>
           </div>
-          {canManage && canLinkRollout ? (
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[200px]">
-                <Label className="text-xs text-muted-foreground">Linked rollout</Label>
-                <Select
-                  className="mt-1 h-8 text-xs"
-                  value={linkedRolloutId}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    rolloutMutation.mutate(value === "" ? null : value);
-                  }}
-                  disabled={rolloutMutation.isPending || rolloutsQuery.isLoading}
-                >
-                  <option value="">None</option>
-                  {(rolloutsQuery.data ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.rollout_ref} ({r.status})
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              {linkedRolloutId ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={leaseMigrateMutation.isPending}
-                  onClick={() => leaseMigrateMutation.mutate()}
-                >
-                  Import lease package
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
-        {linkedRolloutId ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Import copies SAQ lease documents into this binder (Documents / COL). Candidate photos and
-            other gate uploads stay on the rollout and do not complete the gate checklist below.
-          </p>
-        ) : null}
         {lastActivity ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Last activity: {lastActivity.title} · {formatRelative(lastActivity.at)}

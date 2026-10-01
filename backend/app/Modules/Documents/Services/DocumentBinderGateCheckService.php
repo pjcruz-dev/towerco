@@ -6,8 +6,8 @@ namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Models\DocumentSiteNode;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Documents\Support\DocumentStatus;
-use App\Modules\Sites\Models\Site;
 
 final class DocumentBinderGateCheckService
 {
@@ -71,7 +71,6 @@ final class DocumentBinderGateCheckService
 
         return [
             'site_id' => (string) $site->id,
-            'rollout_program_id' => $workspace->rollout_program_id,
             'summary' => [
                 'required' => $total,
                 'met' => $passed,

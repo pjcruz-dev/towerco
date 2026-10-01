@@ -1,0 +1,19 @@
+---
+description: Testing rules: PHPUnit and Vitest via npm scripts, required authz and cross-tenant tests, definition of done.
+globs:
+  - "backend/tests/**"
+  - "frontend/**/*.test.ts"
+  - "frontend/**/*.test.tsx"
+alwaysApply: false
+---
+
+# Testing
+
+- Backend: PHPUnit 12 (`php artisan test` under the hood). Run with `npm run test:backend`, or `npm test` for the smoke set. Scenario runners relevant to the active modules: `test:team-access`, `test:e-approval`. Run `npm run test:list` to see what else exists before assuming a scenario exists for your change.
+- Frontend tests are colocated as `*.test.ts(x)` next to the code (for example `lib/api/modules/branding-api.test.ts`). Frontend: Vitest (`npm run test:frontend`), plus `npm run lint` and `npm run typecheck` in `frontend/`. No Playwright or Testing Library is installed. Ask before adding them.
+- Put backend tests where the module's tests already are (`tests/Feature/<Module>`, `tests/Unit/<Module>`). Reuse `tests/Support/Concerns`.
+- Every new endpoint ships tests for: happy path, 422, 401, 403, and cross-tenant access (404). The 403 test covers the controller's `can()` check.
+- Use factories and seeders. Fake external services (mail, storage, HTTP, Entra, Stripe, doc-extract) at the boundary. Do not mock the database or your own services.
+- Test queued jobs run in tenant context and are idempotent when retried. Test channel authorization for own vs other tenant.
+- A bug fix starts with a failing test that reproduces it.
+- Before declaring work done, run the relevant commands and report the real results.

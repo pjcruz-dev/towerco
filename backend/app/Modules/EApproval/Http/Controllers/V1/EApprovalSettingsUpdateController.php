@@ -26,8 +26,6 @@ class EApprovalSettingsUpdateController extends AbstractApiController
             'liquidation_requires_parent' => ['sometimes', 'in:true,false'],
             'liquidation_overspend_mode' => ['sometimes', 'in:block,warn'],
             'liquidation_max_overspend_percent' => ['sometimes', 'integer', 'min:0', 'max:25'],
-            'po_overspend_mode' => ['sometimes', 'in:block,warn'],
-            'po_max_overspend_percent' => ['sometimes', 'integer', 'min:0', 'max:25'],
             'notify_external_on_received' => ['sometimes', 'in:true,false'],
             'notify_external_on_approved' => ['sometimes', 'in:true,false'],
             'notify_external_on_rejected' => ['sometimes', 'in:true,false'],

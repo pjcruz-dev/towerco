@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { ApprovalHistoryPrintBlock } from "@/components/e-approval/print/approval-history-print-block";
-import { ProcurementPrintPageStyles } from "@/components/e-approval/print/procurement-print-shell";
 import {
   defaultEApprovalDocumentDesignCss,
   defaultEApprovalDocumentDesignHtml,
@@ -97,11 +96,6 @@ export function EApprovalGenericFormPrintView({
 
   return (
     <>
-      <ProcurementPrintPageStyles
-        size={template.page?.size}
-        marginMm={template.page?.marginMm}
-        orientation={template.orientation}
-      />
       {documentCss ? <style dangerouslySetInnerHTML={{ __html: documentCss }} /> : null}
       <div className="eapproval-generic-form-print min-h-screen bg-slate-100 print:bg-white">
         <div className="mx-auto max-w-[210mm] bg-white px-6 py-8 shadow-sm print:max-w-none print:px-8 print:py-6 print:shadow-none">

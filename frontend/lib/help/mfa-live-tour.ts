@@ -1,6 +1,6 @@
 import type { LiveTourDefinition } from "@/lib/help/e-approval-live-tour";
 
-/** Standalone product tour — MFA first-time setup under My security (workspace). */
+/** Standalone product tour — MFA first-time setup from My profile → Security. */
 export const MFA_LIVE_TOUR_ID = "mfa";
 
 /** Coach marks on the first-login Set up MFA screen (`/login/mfa/enroll`). */
@@ -18,7 +18,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       entryPath: "/dashboard",
       target: "ea-account-menu",
       title: "Open your account menu",
-      body: "In the top-right header, open your account menu. Authenticator MFA is under My security — separate from E-Forms.",
+      body: "In the top-right header, open your account menu. Authenticator MFA is inside My profile, under Security.",
       missingHint: "Look for your name or avatar in the top-right corner of the workspace.",
     },
     {
@@ -26,19 +26,30 @@ export const mfaLiveTour: LiveTourDefinition = {
       path: "/dashboard",
       entryPath: "/dashboard",
       target: "ea-account-security",
-      title: "My security",
-      body: "Click My security. Next opens the Authenticator tab where you enroll MFA for the first time.",
-      missingHint: "Open the account menu first, then choose My security.",
+      title: "My profile",
+      body: "Open My profile. Security, notifications, and your records are sections on that page.",
+      missingHint: "Open the account menu first, then choose My profile.",
+    },
+    {
+      id: "mfa-profile-security",
+      path: "/account/profile",
+      entryPath: "/account/profile",
+      query: { section: "security" },
+      autoNavFrom: "ea-account-security",
+      target: "ea-profile-authenticator",
+      title: "Security",
+      body: "Open Authenticator. Passkeys and active sessions are on this same list. If you administer the organization, Sign-in & security is here too.",
+      missingHint: "Choose Security on My profile, then Authenticator.",
     },
     {
       id: "mfa-page",
       path: "/account/security",
       entryPath: "/account/security",
       query: { tab: "mfa" },
-      autoNavFrom: "ea-account-security",
+      autoNavFrom: "ea-profile-authenticator",
       target: "ea-security-page",
-      title: "My security",
-      body: "Use this page for sessions, authenticator MFA, and passkeys. First-time MFA setup happens here — or automatically after login when your organization requires it.",
+      title: "Authenticator",
+      body: "This page is sessions, authenticator, and passkeys. First-time MFA setup happens here — or automatically after login when your organization requires it.",
     },
     {
       id: "mfa-login-paths",
@@ -56,7 +67,7 @@ export const mfaLiveTour: LiveTourDefinition = {
       query: { tab: "mfa" },
       target: "ea-security-tab-mfa",
       title: "Authenticator tab",
-      body: "Choose Authenticator (next to Sessions and Passkeys). Admins turn org MFA on under Sign-in & security; the platform master switch TENANT_MFA_REQUIRED must also be on.",
+      body: "Stay on Authenticator (Sessions and Passkeys are the other tabs). Admins turn org MFA on from My profile → Security → Sign-in & security, or Settings in the sidebar. The platform switch TENANT_MFA_REQUIRED must also be on.",
     },
     {
       id: "mfa-start",

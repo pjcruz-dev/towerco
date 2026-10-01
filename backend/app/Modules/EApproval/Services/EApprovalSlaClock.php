@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\Rollout\Support\TenantWorkingDaysCalendarFactory;
+use App\Modules\EApproval\Support\EApprovalWorkingDaysCalendarFactory;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 
 /**
  * Resolves SLA threshold instants — wall-clock or working-day minutes
- * (Mon–Fri, tenant public holidays) for production-safe reminder/escalation aging.
+ * (Mon–Fri) for production-safe reminder/escalation aging.
  */
 final class EApprovalSlaClock
 {
     public function __construct(
         private readonly EApprovalSettingsService $settings,
-        private readonly TenantWorkingDaysCalendarFactory $calendars,
+        private readonly EApprovalWorkingDaysCalendarFactory $calendars,
     ) {}
 
     public function usesWorkingDays(): bool

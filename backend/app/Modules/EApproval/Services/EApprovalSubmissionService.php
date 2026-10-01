@@ -12,13 +12,12 @@ use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\ProcurementOne\Services\ProcurementPrEApprovalHookService;
-use App\Modules\ProcurementOne\Services\ProcurementVendorPoPolicyGuard;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -51,8 +50,6 @@ final class EApprovalSubmissionService
         private readonly EApprovalSubmissionFinanceAuditService $financeAudit,
         private readonly EApprovalFieldComputedService $computedFields,
         private readonly EApprovalSubmissionWorkflowPreparer $workflowPreparer,
-        private readonly ProcurementVendorPoPolicyGuard $vendorPoPolicy,
-        private readonly ProcurementPrEApprovalHookService $procurementPrHook,
         private readonly ControlledDocumentEApprovalValuesService $controlledDocumentValues,
     ) {}
 
@@ -190,6 +187,8 @@ final class EApprovalSubmissionService
             throw ValidationException::withMessages(['form_id' => [__('This form is retired and no longer accepts new submissions.')]]);
         }
 
+        $this->assertViewerCanStartForm($form, $requestor);
+
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, true);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
         $values = $this->computedFields->apply($form, $values);
@@ -202,7 +201,6 @@ final class EApprovalSubmissionService
         $values = $controlled['values'];
 
         $this->valuesValidator->validate($form, $values);
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
         return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled) {
             $submissionId = (string) Str::uuid();
@@ -240,7 +238,6 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
-            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
 
             return $fresh;
         });
@@ -286,6 +283,8 @@ final class EApprovalSubmissionService
         if ($form->accepts_new_submissions === false) {
             throw ValidationException::withMessages(['form_id' => [__('This form is retired and no longer accepts new submissions.')]]);
         }
+
+        $this->assertViewerCanStartForm($form, $requestor);
 
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, $updateParentLink);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
@@ -408,7 +407,6 @@ final class EApprovalSubmissionService
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
         );
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
         return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId, $controlled) {
             $documentNo = $controlled['document_no'];
@@ -452,7 +450,6 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
-            $this->procurementPrHook->afterSubmissionMutation($fresh, $requestor);
 
             return $fresh;
         });
@@ -525,7 +522,6 @@ final class EApprovalSubmissionService
 
         $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
         $this->notifySubmissionCancelled($fresh, $actor, $pendingApproverIds);
-        $this->procurementPrHook->afterSubmissionMutation($fresh, $actor);
 
         return $fresh;
     }
@@ -588,7 +584,6 @@ final class EApprovalSubmissionService
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
         );
-        $this->vendorPoPolicy->assertPurchaseOrderVendor($form, $values);
 
         $previousValues = $this->currentValuesMap($submission);
         $revisionConfig = EApprovalRevisionRouting::fromFormMetadata(
@@ -946,26 +941,26 @@ final class EApprovalSubmissionService
 
         $pendingAtStep = $submissionIsOpen
             ? $submission->approvals
-            ->filter(
-                static function (EApprovalRequestApproval $approval) use ($currentStep, $cycle, $activeStepIds): bool {
-                    if ($approval->status !== EApprovalApprovalStatus::PENDING) {
-                        return false;
-                    }
-                    if ((int) ($approval->step?->step_order ?? 0) !== $currentStep) {
-                        return false;
-                    }
-                    $approvalCycle = (int) ($approval->approval_cycle ?: 1);
-                    if ($approvalCycle !== $cycle) {
-                        return false;
-                    }
-                    if ($activeStepIds !== [] && ! isset($activeStepIds[(string) $approval->step_id])) {
-                        return false;
-                    }
+                ->filter(
+                    static function (EApprovalRequestApproval $approval) use ($currentStep, $cycle, $activeStepIds): bool {
+                        if ($approval->status !== EApprovalApprovalStatus::PENDING) {
+                            return false;
+                        }
+                        if ((int) ($approval->step?->step_order ?? 0) !== $currentStep) {
+                            return false;
+                        }
+                        $approvalCycle = (int) ($approval->approval_cycle ?: 1);
+                        if ($approvalCycle !== $cycle) {
+                            return false;
+                        }
+                        if ($activeStepIds !== [] && ! isset($activeStepIds[(string) $approval->step_id])) {
+                            return false;
+                        }
 
-                    return true;
-                },
-            )
-            ->values()
+                        return true;
+                    },
+                )
+                ->values()
             : collect();
 
         // Prefer the viewer's own pending row (critical for parallel any/all/N-of-M bands).
@@ -1313,5 +1308,19 @@ final class EApprovalSubmissionService
         }
 
         return $slots;
+    }
+
+    private function assertViewerCanStartForm(EApprovalForm $form, TenantUser $requestor): void
+    {
+        if (EApprovalFormRequestAccessSupport::viewerCanStart(
+            $requestor,
+            is_array($form->metadata_json) ? $form->metadata_json : null,
+        )) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'form_id' => [__('You are not allowed to start a request with this form.')],
+        ]);
     }
 }

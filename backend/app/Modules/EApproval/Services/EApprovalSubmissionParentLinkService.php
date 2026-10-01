@@ -1,49 +1,29 @@
 <?php
 
-
-
 declare(strict_types=1);
-
-
 
 namespace App\Modules\EApproval\Services;
 
-
-
 use App\Modules\EApproval\Models\EApprovalForm;
-
 use App\Modules\EApproval\Models\EApprovalSubmission;
-
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
-
 use App\Modules\Identity\Models\TenantUser;
-
 use Illuminate\Validation\ValidationException;
 
-
-
 final class EApprovalSubmissionParentLinkService
-
 {
-
     public function __construct(
         private readonly EApprovalCashAdvanceService $cashAdvances,
-        private readonly EApprovalPurchaseRequisitionService $purchaseRequisitions,
         private readonly EApprovalFinanceProcurementPolicyService $procurementPolicy,
     ) {}
 
-
-
     /**
-
      * Validate and normalize a parent submission link for a new or updated child submission.
 
      *
 
      * @throws ValidationException
-
      */
-
     public function resolve(
         ?string $parentSubmissionId,
         TenantUser $requestor,
@@ -55,61 +35,43 @@ final class EApprovalSubmissionParentLinkService
 
         $trimmedParentId = $parentSubmissionId !== null ? trim($parentSubmissionId) : '';
 
-
-
         if ($trimmedParentId === '') {
 
             if ($requiresParent) {
 
                 throw ValidationException::withMessages([
-
                     'parent_submission_id' => [__('A linked parent submission is required for this form.')],
 
                 ]);
 
             }
 
-
-
             return null;
 
         }
 
-
-
         $parentId = $trimmedParentId;
 
-
-
         /** @var EApprovalSubmission|null $parent */
-
         $parent = EApprovalSubmission::query()->with('form')->find($parentId);
-
-
 
         if ($parent === null) {
 
             throw ValidationException::withMessages([
-
                 'parent_submission_id' => [__('Parent submission not found.')],
 
             ]);
 
         }
 
-
-
         if ((string) $parent->requestor_id !== (string) $requestor->id) {
 
             throw ValidationException::withMessages([
-
                 'parent_submission_id' => [__('Parent submission must belong to the same requestor.')],
 
             ]);
 
         }
-
-
 
         if (in_array((string) $parent->status, [
 
@@ -122,14 +84,11 @@ final class EApprovalSubmissionParentLinkService
         ], true)) {
 
             throw ValidationException::withMessages([
-
                 'parent_submission_id' => [__('Parent submission cannot be linked in its current status.')],
 
             ]);
 
         }
-
-
 
         $requiredParentFamily = $this->formMetadataString($childForm, 'parent_form_family');
 
@@ -141,12 +100,9 @@ final class EApprovalSubmissionParentLinkService
 
                 : null;
 
-
-
             if ($parentFamily !== $requiredParentFamily) {
 
                 throw ValidationException::withMessages([
-
                     'parent_submission_id' => [
 
                         __('Parent submission must be a :family form.', ['family' => $requiredParentFamily]),
@@ -159,40 +115,31 @@ final class EApprovalSubmissionParentLinkService
 
         }
 
-
-
         if ($requiredParentFamily === 'cash_advance') {
 
             if ((string) $parent->status !== EApprovalSubmissionStatus::APPROVED) {
 
                 throw ValidationException::withMessages([
-
                     'parent_submission_id' => [__('Cash advance must be approved before it can be liquidated.')],
 
                 ]);
 
             }
 
-
-
             $openBalance = $this->cashAdvances->openBalanceForParent($parentId, $excludeChildSubmissionId);
 
             if ($openBalance === null) {
 
                 throw ValidationException::withMessages([
-
                     'parent_submission_id' => [__('Cash advance does not have a valid requested amount.')],
 
                 ]);
 
             }
 
-
-
             if ($openBalance <= 0) {
 
                 throw ValidationException::withMessages([
-
                     'parent_submission_id' => [__('Cash advance has no remaining balance to liquidate.')],
 
                 ]);
@@ -201,45 +148,19 @@ final class EApprovalSubmissionParentLinkService
 
         }
 
-        if ($requiredParentFamily === 'purchase_requisition') {
-            if ((string) $parent->status !== EApprovalSubmissionStatus::APPROVED) {
-                throw ValidationException::withMessages([
-                    'parent_submission_id' => [__('Purchase requisition must be approved before a purchase order can be issued.')],
-                ]);
-            }
-
-            $openBalance = $this->purchaseRequisitions->openBalanceForParent($parentId, $excludeChildSubmissionId);
-            if ($openBalance === null) {
-                throw ValidationException::withMessages([
-                    'parent_submission_id' => [__('Purchase requisition does not have a valid estimated total.')],
-                ]);
-            }
-
-            if ($openBalance <= 0) {
-                throw ValidationException::withMessages([
-                    'parent_submission_id' => [__('Purchase requisition has no remaining budget for purchase orders.')],
-                ]);
-            }
-        }
-
         return $parentId;
 
     }
 
-
-
     /**
-
      * Ensure liquidation/reimbursement amounts do not exceed the parent open balance.
 
      *
 
      * @param  array<string, mixed>  $values
-
      *
 
      * @throws ValidationException
-
      */
 
     /**
@@ -268,10 +189,6 @@ final class EApprovalSubmissionParentLinkService
 
         if ($childForm->fields->contains(static fn ($field): bool => (string) $field->name === 'total_reimbursement')) {
             return $this->assertCashAdvanceChildAmount($childForm, $parentSubmissionId, $values, $excludeChildSubmissionId);
-        }
-
-        if ($childForm->fields->contains(static fn ($field): bool => (string) $field->name === 'total_amount')) {
-            return $this->assertPurchaseRequisitionChildAmount($parentSubmissionId, $values, $excludeChildSubmissionId);
         }
 
         return null;
@@ -385,58 +302,6 @@ final class EApprovalSubmissionParentLinkService
      *     warning: string
      * }|null
      */
-    private function assertPurchaseRequisitionChildAmount(
-        string $parentSubmissionId,
-        array $values,
-        ?string $excludeChildSubmissionId,
-    ): ?array {
-        /** @var EApprovalSubmission|null $parent */
-        $parent = EApprovalSubmission::query()->with('form')->find($parentSubmissionId);
-        if ($parent === null || ! $parent->form instanceof EApprovalForm) {
-            return null;
-        }
-
-        if ($this->formMetadataString($parent->form, 'form_family') !== 'purchase_requisition') {
-            return null;
-        }
-
-        $amount = $this->parseAmount($values['total_amount'] ?? null);
-        if ($amount === null) {
-            return null;
-        }
-
-        $evaluation = $this->procurementPolicy->evaluatePurchaseOrderAmount(
-            $parentSubmissionId,
-            $amount,
-            $excludeChildSubmissionId,
-        );
-
-        if ($evaluation['blocked']) {
-            $policyMax = $evaluation['policy_max_amount'];
-            $strictOpen = $evaluation['strict_open_balance'];
-
-            if ($policyMax !== null && $amount > $policyMax + 0.0001) {
-                throw ValidationException::withMessages([
-                    'total_amount' => [
-                        __('PO total exceeds the tenant overspend policy maximum of :max.', [
-                            'max' => number_format($policyMax, 2, '.', ''),
-                        ]),
-                    ],
-                ]);
-            }
-
-            throw ValidationException::withMessages([
-                'total_amount' => [
-                    __('PO total exceeds the purchase requisition open balance of :balance.', [
-                        'balance' => number_format($strictOpen ?? 0, 2, '.', ''),
-                    ]),
-                ],
-            ]);
-        }
-
-        return $this->overspendContext('purchase_order', $parentSubmissionId, $amount, $evaluation);
-    }
-
     /**
      * @param  array{
      *     blocked: bool,
@@ -475,15 +340,12 @@ final class EApprovalSubmissionParentLinkService
     }
 
     /**
-
      * Prefill reference document fields on the child when a parent is linked.
 
      *
 
      * @param  array<string, mixed>  $values
-
      * @return array<string, mixed>
-
      */
 
     /**
@@ -509,7 +371,6 @@ final class EApprovalSubmissionParentLinkService
 
         return match ($parentFamily) {
             'cash_advance' => $this->prefillFromCashAdvance($parent, $childForm, $parentValues),
-            'purchase_requisition' => $this->prefillFromPurchaseRequisition($parent, $childForm, $parentValues),
             default => [],
         };
     }
@@ -625,37 +486,6 @@ final class EApprovalSubmissionParentLinkService
     }
 
     /**
-     * @param  array<string, string>  $parentValues
-     * @return array<string, string>
-     */
-    private function prefillFromPurchaseRequisition(EApprovalSubmission $parent, EApprovalForm $childForm, array $parentValues): array
-    {
-        $prefill = [];
-
-        if ($this->childHasField($childForm, 'purchase_requisition_document_no')) {
-            $prefill['purchase_requisition_document_no'] = trim((string) $parent->document_no);
-        }
-
-        foreach ([
-            'line_items' => 'line_items',
-            'estimated_total' => 'total_amount',
-        ] as $parentField => $childField) {
-            if (! $this->childHasField($childForm, $childField)) {
-                continue;
-            }
-
-            $raw = $parentValues[$parentField] ?? null;
-            if ($this->isEmptyChildValue($raw)) {
-                continue;
-            }
-
-            $prefill[$childField] = trim((string) $raw);
-        }
-
-        return $prefill;
-    }
-
-    /**
      * @return array<string, string>
      */
     private function parentValuesByFieldName(EApprovalSubmission $parent): array
@@ -728,10 +558,7 @@ final class EApprovalSubmissionParentLinkService
         return true;
     }
 
-
-
     private function requiresParentSubmission(EApprovalForm $form): bool
-
     {
 
         $metadata = $form->metadata_json;
@@ -742,24 +569,14 @@ final class EApprovalSubmissionParentLinkService
 
         }
 
-
-
         if ($this->formMetadataString($form, 'form_family') === 'liquidation') {
             return $this->procurementPolicy->liquidationRequiresParent();
         }
 
-        if (($metadata['requires_parent_submission'] ?? false) === true) {
-            return true;
-        }
-
-        return $this->formMetadataString($form, 'form_family') === 'purchase_order'
-            && $this->formMetadataString($form, 'parent_form_family') === 'purchase_requisition';
+        return ($metadata['requires_parent_submission'] ?? false) === true;
     }
 
-
-
     private function parseAmount(mixed $raw): ?float
-
     {
 
         if ($raw === null) {
@@ -767,8 +584,6 @@ final class EApprovalSubmissionParentLinkService
             return null;
 
         }
-
-
 
         if (is_string($raw)) {
 
@@ -780,13 +595,9 @@ final class EApprovalSubmissionParentLinkService
 
             }
 
-
-
             return is_numeric($trimmed) ? (float) $trimmed : null;
 
         }
-
-
 
         if (is_int($raw) || is_float($raw)) {
 
@@ -794,16 +605,11 @@ final class EApprovalSubmissionParentLinkService
 
         }
 
-
-
         return null;
 
     }
 
-
-
     private function formMetadataString(EApprovalForm $form, string $key): ?string
-
     {
 
         $metadata = $form->metadata_json;
@@ -814,15 +620,9 @@ final class EApprovalSubmissionParentLinkService
 
         }
 
-
-
         $value = $metadata[$key] ?? null;
-
-
 
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
 
     }
-
 }
-

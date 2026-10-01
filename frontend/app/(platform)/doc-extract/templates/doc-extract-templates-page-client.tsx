@@ -52,6 +52,11 @@ import type {
   DocExtractTemplate,
   DocExtractTemplateStatus,
 } from "@/modules/doc-extract/types";
+import {
+  DOC_EXTRACT_OT_OVERTIME_TEMPLATE_DESCRIPTION,
+  DOC_EXTRACT_OT_OVERTIME_TEMPLATE_NAME,
+  buildOtOvertimeTemplateFields,
+} from "@/modules/doc-extract/ot-overtime-template";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const LAYOUT_KEY = "toweros.doc-extract.templates.layout";
@@ -169,6 +174,17 @@ export function DocExtractTemplatesPageClient() {
       ...initialEditor("create"),
       open: true,
       fields: [emptyField()],
+    });
+  };
+
+  const openCreateOtOvertime = () => {
+    setEditor({
+      ...initialEditor("create"),
+      open: true,
+      name: DOC_EXTRACT_OT_OVERTIME_TEMPLATE_NAME,
+      description: DOC_EXTRACT_OT_OVERTIME_TEMPLATE_DESCRIPTION,
+      status: "published",
+      fields: buildOtOvertimeTemplateFields(),
     });
   };
 
@@ -453,10 +469,15 @@ export function DocExtractTemplatesPageClient() {
                 />
               ) : null}
               {isVisible("new") ? (
-                <Button size="sm" onClick={openCreate}>
-                  <Plus className="size-4" />
-                  Create template
-                </Button>
+                <>
+                  <Button size="sm" variant="outline" onClick={openCreateOtOvertime}>
+                    OT overtime template
+                  </Button>
+                  <Button size="sm" onClick={openCreate}>
+                    <Plus className="size-4" />
+                    Create template
+                  </Button>
+                </>
               ) : null}
             </>
           )}
@@ -555,6 +576,29 @@ export function DocExtractTemplatesPageClient() {
                     <option value="published">Published — available for Extract</option>
                   </Select>
                 </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Column definitions become extraction fields and Excel headers.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setEditor((current) => ({
+                      ...current,
+                      name: current.name.trim() || DOC_EXTRACT_OT_OVERTIME_TEMPLATE_NAME,
+                      description:
+                        current.description.trim() || DOC_EXTRACT_OT_OVERTIME_TEMPLATE_DESCRIPTION,
+                      status: "published",
+                      fields: buildOtOvertimeTemplateFields(),
+                    }))
+                  }
+                >
+                  Load OT overtime columns
+                </Button>
               </div>
 
               <DocExtractColumnsDefinitionEditor

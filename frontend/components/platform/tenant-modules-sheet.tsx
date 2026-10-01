@@ -186,12 +186,11 @@ export function TenantModulesSheet({ open, onOpenChange, tenant, isPending, onSa
 
           {!usePlatformDefault &&
           !selected.has("e_approval") &&
-          !selected.has("project_one") &&
-          !selected.has("procurement_one") &&
-          !selected.has("documents") &&
-          !selected.has("document_register") ? (
+          !selected.has("ticketing") &&
+          !selected.has("document_register") &&
+          !selected.has("doc_extract") ? (
             <p className="text-xs text-amber-700 dark:text-amber-300">
-              Enable at least E-Forms, Project-One, Procurement-One, Documents, or Document register so
+              Enable at least E-Forms, Ticketing, Document register, or DocExtract so
               users have an operational workspace module.
             </p>
           ) : null}

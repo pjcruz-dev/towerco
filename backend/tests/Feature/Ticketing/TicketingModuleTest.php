@@ -6,12 +6,15 @@ namespace Tests\Feature\Ticketing;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Models\TicketingAttachment;
 use App\Models\TicketingTicket;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Ticketing\Notifications\TicketingTicketMailNotification;
+use App\Modules\Ticketing\Services\TicketingAutoCloseService;
 use App\Modules\Ticketing\Services\TicketingSettingsService;
+use App\Modules\Ticketing\Services\TicketingSlaCalculator;
 use App\Modules\Ticketing\Services\TicketingSlaRunnerService;
 use App\Modules\Ticketing\Support\TicketingCategoryPackCatalog;
 use Illuminate\Http\UploadedFile;
@@ -391,7 +394,7 @@ final class TicketingModuleTest extends TestCase
         TicketingTicket::query()->whereKey($ticketId)->update([
             'resolved_at' => now()->subDays(4),
         ]);
-        $result = app(\App\Modules\Ticketing\Services\TicketingAutoCloseService::class)->run();
+        $result = app(TicketingAutoCloseService::class)->run();
         $this->assertSame(1, $result['closed']);
         $this->assertSame('closed', TicketingTicket::query()->whereKey($ticketId)->value('status'));
         tenancy()->end();
@@ -721,7 +724,7 @@ final class TicketingModuleTest extends TestCase
 
         tenancy()->initialize($this->testTenant);
         $ticket = TicketingTicket::query()->findOrFail($ticketId);
-        $dueAt = app(\App\Modules\Ticketing\Services\TicketingSlaCalculator::class)->dueAt($ticket);
+        $dueAt = app(TicketingSlaCalculator::class)->dueAt($ticket);
         $this->assertNotNull($dueAt);
         $this->assertSame(60, (int) $ticket->created_at->diffInMinutes($dueAt));
         tenancy()->end();
@@ -778,7 +781,7 @@ final class TicketingModuleTest extends TestCase
             ->assertJsonPath('data.deleted', true);
 
         tenancy()->initialize($this->testTenant);
-        $this->assertNull(\App\Models\TicketingAttachment::query()->find($attachmentId));
+        $this->assertNull(TicketingAttachment::query()->find($attachmentId));
         tenancy()->end();
 
         $this->actingAsTenantAdmin()

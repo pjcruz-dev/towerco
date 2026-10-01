@@ -311,21 +311,6 @@ final class WorkspaceAuditIndexService
                 'e_approval_form' => '/e-approval/forms/'.$entityId,
                 default => '/documents',
             },
-            'procurement_one' => match ($entityType) {
-                'pr', 'purchase_requisition' => '/procurement/prs/'.$entityId,
-                'po', 'purchase_order' => '/procurement/pos/'.$entityId,
-                'request_for_quotation' => '/procurement/rfqs/'.$entityId,
-                'vendor_contract' => '/procurement/contracts/'.$entityId,
-                'ap_invoice' => '/procurement/ap-invoices/'.$entityId,
-                'goods_receipt' => '/procurement/grns/'.$entityId,
-                'payment_request' => '/procurement/payment-requests/'.$entityId,
-                'payment_batch' => '/procurement/payment-batches/'.$entityId,
-                default => '/procurement',
-            },
-            'project_one' => match ($entityType) {
-                'rollout' => '/project-one/rollouts/'.$entityId,
-                default => '/project-one/rollouts',
-            },
             'ticketing' => match ($entityType) {
                 'ticket' => '/ticketing/tickets/'.$entityId,
                 default => '/ticketing/tickets',

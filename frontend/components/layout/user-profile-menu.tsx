@@ -10,9 +10,9 @@ import {
   LogOut,
   Monitor,
   Moon,
-  Settings,
-  Shield,
+  PanelLeft,
   Sun,
+  PanelTop,
   UserCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -49,6 +49,7 @@ import {
 } from "@/lib/api/modules/workspace-environments-api";
 import { clearSessionCookie } from "@/lib/auth/session-cookie";
 import { hasPermission, permissions } from "@/lib/rbac/permissions";
+import { useProductRelease } from "@/hooks/use-product-release";
 import { isEchoEnabled } from "@/lib/socket/echo-client";
 import {
   buildEnvironmentFallbackUrl,
@@ -56,6 +57,10 @@ import {
 } from "@/lib/tenant/environment-switch";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import {
+  useNavigationLayoutStore,
+  type NavigationLayout,
+} from "@/stores/navigation-layout-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
 type ThemeChoice = "light" | "dark" | "system";
@@ -152,6 +157,53 @@ function ThemeSegment({ onSelect }: { onSelect?: () => void }) {
   );
 }
 
+function NavigationLayoutSegment() {
+  const layout = useNavigationLayoutStore((s) => s.layout);
+  const setLayout = useNavigationLayoutStore((s) => s.setLayout);
+  const hydrate = useNavigationLayoutStore((s) => s.hydrate);
+  const hydrated = useNavigationLayoutStore((s) => s.hydrated);
+
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  const options: { value: NavigationLayout; label: string; icon: typeof PanelLeft }[] = [
+    { value: "sidebar", label: "Sidebar", icon: PanelLeft },
+    { value: "navbar", label: "Navbar", icon: PanelTop },
+  ];
+
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <PanelLeft className="size-3.5" aria-hidden />
+        Navigation Layout
+      </p>
+      <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        {options.map((option) => {
+          const Icon = option.icon;
+          const isActive = hydrated ? layout === option.value : option.value === "sidebar";
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setLayout(option.value)}
+              className={cn(
+                "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors",
+                isActive
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+              )}
+            >
+              <span>{option.label}</span>
+              <Icon className="size-3.5 opacity-80" aria-hidden />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
   const notify = useNotificationStore((state) => state.push);
   const actorEmail = useAuthStore((state) => state.user?.email ?? null);
@@ -221,7 +273,7 @@ function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
             return (
               <div
                 key={env.environment}
-                className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-foreground"
+                className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
               >
                 <Layers className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 truncate font-medium">{env.label}</span>
@@ -332,7 +384,7 @@ function TenantPicker({ onSelect }: { onSelect?: () => void }) {
                 className={cn(
                   "flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                   isActive
-                    ? "border-primary/30 bg-primary/5 text-foreground"
+                    ? "border-border bg-muted/50 text-foreground"
                     : "border-transparent bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >
@@ -368,33 +420,16 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 
   const realtimeEnabled = isEchoEnabled();
+  const { displayedVersion } = useProductRelease();
 
   const settingsLinks = useMemo(
     () =>
       [
         {
-          href: "/account/security",
-          label: "My security",
-          icon: Shield,
-          visible: hasPermission(scopedUser, [permissions.dashboardView]),
-        },
-        {
-          href: "/admin/settings",
-          label: "Sign-in & security",
-          icon: Settings,
-          visible: hasPermission(scopedUser, [permissions.tenantManage]),
-        },
-        {
-          href: "/settings",
-          label: "Settings",
-          icon: Settings,
-          visible: hasPermission(scopedUser, [permissions.tenantManage]),
-        },
-        {
-          href: "/e-approval/profile",
-          label: "E-Forms profile",
+          href: "/account/profile",
+          label: "My profile",
           icon: UserCircle,
-          visible: hasPermission(scopedUser, [permissions.eApprovalView]),
+          visible: hasPermission(scopedUser, [permissions.dashboardView]),
         },
       ].filter((link) => link.visible),
     [scopedUser],
@@ -432,6 +467,8 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
           <ThemeSegment onSelect={onNavigate} />
         </div>
 
+        <NavigationLayoutSegment />
+
         {settingsLinks.length > 0 ? (
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Account</p>
@@ -443,10 +480,8 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
                     key={link.href}
                     href={link.href}
                     onClick={onNavigate}
-                    data-help={link.href === "/account/security" ? "ea-account-security" : undefined}
-                    data-tour-nav={
-                      link.href === "/account/security" ? "/account/security" : undefined
-                    }
+                    data-help="ea-account-security"
+                    data-tour-nav="/account/profile?section=security"
                     className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                   >
                     <Icon className="size-4 text-muted-foreground" aria-hidden />
@@ -471,6 +506,8 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
             aria-hidden
           />
           {realtimeEnabled ? "Realtime connected" : "Polling mode"}
+          <span aria-hidden>·</span>
+          <span>{displayedVersion}</span>
         </div>
         <Button type="button" variant="destructive" className="w-full" onClick={signOut}>
           <LogOut className="size-4" aria-hidden />

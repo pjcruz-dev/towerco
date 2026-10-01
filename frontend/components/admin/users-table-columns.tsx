@@ -108,7 +108,7 @@ export function UserRowActions({
         },
         {
           key: "impersonate",
-          label: "View as user",
+          label: "Impersonate user",
           hidden: !showImpersonate,
           onSelect: () => onImpersonate(row),
         },
@@ -164,6 +164,7 @@ export function createUsersTableColumns(options: {
   onView: (row: AdminUserRow) => void;
   onEdit: (row: AdminUserRow) => void;
   onImpersonate: (row: AdminUserRow) => void;
+  onAssignRoles: (row: AdminUserRow) => void;
   onMutate: () => void;
 }): ColumnDef<AdminUserRow>[] {
   return [
@@ -278,7 +279,12 @@ export function createUsersTableColumns(options: {
       id: "roles",
       header: "Roles",
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          className="flex flex-wrap gap-1 text-left"
+          onClick={() => options.onAssignRoles(row.original)}
+          aria-label={`Change roles for ${row.original.name}`}
+        >
           {row.original.roles.slice(0, 2).map((role) => (
             <Badge key={role} variant="secondary">
               {roleLabel(role)}
@@ -287,7 +293,10 @@ export function createUsersTableColumns(options: {
           {row.original.roles.length > 2 ? (
             <Badge variant="ghost">+{row.original.roles.length - 2}</Badge>
           ) : null}
-        </div>
+          {row.original.roles.length === 0 ? (
+            <span className="text-xs text-muted-foreground">Assign role</span>
+          ) : null}
+        </button>
       ),
     },
     {

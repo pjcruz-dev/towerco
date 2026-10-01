@@ -6,8 +6,8 @@ import { useMemo } from "react";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { recordToSeries, DASHBOARD_CHART } from "@/components/dashboard/dashboard-chart-utils";
-import { ActionableWidgets } from "@/components/project-one/actionable-widgets";
-import { KpiStrip } from "@/components/project-one/kpi-strip";
+import { ActionableWidgets } from "@/components/dashboard/actionable-widgets";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import { PlatformProvisioningChart } from "@/components/platform/platform-provisioning-chart";
 import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
@@ -384,11 +384,6 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                     {tenant.environment ? (
                       <Badge variant="outline" className={environmentBadgeClass(tenant.environment)}>
                         {tenant.environment}
-                      </Badge>
-                    ) : null}
-                    {tenant.playbook_upgrade_available ? (
-                      <Badge variant="outline" className="border-amber-300 text-amber-700">
-                        Upgrade
                       </Badge>
                     ) : null}
                     {tenant.mfa_required ? <Badge variant="outline">MFA</Badge> : null}

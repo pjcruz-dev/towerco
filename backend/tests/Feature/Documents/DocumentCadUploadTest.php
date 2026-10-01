@@ -6,7 +6,7 @@ namespace Tests\Feature\Documents;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
-use App\Modules\Sites\Models\Site;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;

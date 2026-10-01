@@ -79,7 +79,7 @@ export const E_APPROVAL_TOUR_CHAPTER_STARTS: EApprovalTourChapterStart[] = [
   },
   {
     id: "signature",
-    how: "Settings → My E-Forms profile → save signature",
+    how: "My profile → Account → E-Forms signature, or Settings → My E-Forms profile",
     audience: "approver",
   },
   {
@@ -461,7 +461,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       autoNavFrom: "ea-nav-e-approval-overview",
       target: "ea-overview-kpis",
       title: "Status cards",
-      body: "Counts for approvals waiting on you, returns, open submissions, and SLA risk. Empty until you have work in the system.",
+      body: "Counts for approvals waiting on you, returns, open submissions, and SLA risk. Empty until you have work in the system. Requests you filed, and their files, also sit on My profile → Account, collapsed until you open E-Forms.",
     },
     {
       id: "overview-awaiting",
@@ -894,7 +894,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval/approvals",
       target: "ea-nav-settings",
       title: "Open Settings",
-      body: "In the left sidebar, open Settings. Your signature is under personal E-Forms settings — not on the Approvals list.",
+      body: "In the left sidebar, open Settings. Your signature is My E-Forms profile — not on the Approvals list. The same page is also My profile → Account → E-Forms signature.",
       audience: "approver",
       missingHint: "Expand Settings in the sidebar if it is collapsed, then continue.",
     },
@@ -904,7 +904,7 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       entryPath: "/e-approval/approvals",
       target: "ea-nav-e-approval-profile",
       title: "My E-Forms profile",
-      body: "Under Settings, click My E-Forms profile. Next opens that page so you can save your signature.",
+      body: "Under Settings, click My E-Forms profile. Next opens that page so you can save your signature. From the account menu, the same link is My profile → Account.",
       audience: "approver",
       missingHint: "Expand Settings in the sidebar to see My E-Forms profile.",
     },

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Modules\Rollout\Support\WorkingDaysCalendar;
+use App\Modules\EApproval\Support\WorkingDaysCalendar;
 use Carbon\Carbon;
 use PHPUnit\Framework\TestCase;
 
@@ -12,7 +12,7 @@ final class WorkingDaysCalendarTest extends TestCase
 {
     public function test_weekends_are_not_working_days(): void
     {
-        $calendar = new WorkingDaysCalendar();
+        $calendar = new WorkingDaysCalendar;
 
         $this->assertFalse($calendar->isWorkingDay(Carbon::parse('2026-05-16'))); // Saturday
         $this->assertFalse($calendar->isWorkingDay(Carbon::parse('2026-05-17'))); // Sunday
@@ -37,7 +37,7 @@ final class WorkingDaysCalendarTest extends TestCase
 
     public function test_working_days_between_counts_signed_values(): void
     {
-        $calendar = new WorkingDaysCalendar();
+        $calendar = new WorkingDaysCalendar;
 
         $forward = $calendar->workingDaysBetween(Carbon::parse('2026-05-18'), Carbon::parse('2026-05-22'));
         $backward = $calendar->workingDaysBetween(Carbon::parse('2026-05-22'), Carbon::parse('2026-05-18'));

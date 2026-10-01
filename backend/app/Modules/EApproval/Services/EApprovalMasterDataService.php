@@ -6,18 +6,11 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalMasterDataRow;
 use App\Modules\EApproval\Models\EApprovalMasterDataSet;
-use App\Modules\ProcurementOne\Services\ProcurementVendorRegistryService;
-use App\Modules\Sites\Models\Site;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class EApprovalMasterDataService
 {
-    public function __construct(
-        private readonly EApprovalVendorMasterDataMapper $vendorMasterDataMapper,
-        private readonly ProcurementVendorRegistryService $vendorRegistry,
-    ) {}
-
     /**
      * @return list<array<string, mixed>>
      */
@@ -200,25 +193,17 @@ final class EApprovalMasterDataService
             ->orderBy('label')
             ->get();
 
-        $options = $rows->map(function (EApprovalMasterDataRow $r) use ($key) {
-            $data = is_array($r->data_json) ? $r->data_json : [];
-
+        $options = $rows->map(static function (EApprovalMasterDataRow $r) {
             return [
                 'id' => (string) $r->id,
                 'code' => (string) ($r->code ?? ''),
                 'label' => $r->label,
-                'subtitle' => $key === EApprovalVendorRegistrationMasterDataService::VENDORS_SET_KEY
-                    ? $this->vendorMasterDataMapper->lookupSubtitle($data)
-                    : null,
+                'subtitle' => null,
                 'value' => (string) ($r->code ?: $r->label),
                 'data' => $r->data_json,
                 'sort_order' => $r->sort_order,
             ];
         })->values()->all();
-
-        if ($key === EApprovalVendorRegistrationMasterDataService::VENDORS_SET_KEY) {
-            $options = $this->vendorRegistry->enrichVendorLookupOptions($options);
-        }
 
         return [
             'key' => $set->key,
@@ -252,29 +237,11 @@ final class EApprovalMasterDataService
      */
     private function sitesLookup(): array
     {
-        $options = Site::query()
-            ->orderBy('site_code')
-            ->orderBy('name')
-            ->get()
-            ->map(static fn (Site $site) => [
-                'id' => (string) $site->id,
-                'code' => (string) $site->site_code,
-                'label' => trim($site->site_code.' — '.$site->name),
-                'value' => (string) $site->site_code,
-                'data' => [
-                    'site_id' => (string) $site->id,
-                    'site_code' => (string) $site->site_code,
-                    'name' => (string) $site->name,
-                ],
-            ])
-            ->values()
-            ->all();
-
         return [
             'key' => 'sites',
             'name' => 'Sites',
             'status' => 'active',
-            'options' => $options,
+            'options' => [],
         ];
     }
 }

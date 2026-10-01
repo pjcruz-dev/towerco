@@ -23,7 +23,13 @@ class UserUiPreferenceSharedUpdateController extends AbstractApiController
 
         $value = $validated['value'];
 
-        if ($preferences->isDashboardLayoutKey($key)) {
+        if ($preferences->isProductReleaseKey($key)) {
+            if (! isset($value['release']) || ! is_array($value['release'])) {
+                throw ValidationException::withMessages([
+                    'value.release' => 'A product update must include a release object.',
+                ]);
+            }
+        } elseif ($preferences->isDashboardLayoutKey($key)) {
             if (! isset($value['layout']) || ! is_array($value['layout'])) {
                 throw ValidationException::withMessages([
                     'value.layout' => 'Shared dashboard layout payload must include a layout object.',

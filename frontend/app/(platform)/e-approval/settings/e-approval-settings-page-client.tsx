@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import { SelectField } from "@/components/ui/select-field";
 import { Switch } from "@/components/ui/switch";
 import {
   fetchEApprovalSettings,
@@ -21,8 +21,6 @@ import {
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
 import { permissions } from "@/lib/rbac/permissions";
-import type { EApprovalFinanceProcurementPolicy } from "@/modules/e-approval/finance-procurement-policy";
-
 type SettingsForm = {
   sla_reminder_minutes: number;
   sla_escalation_minutes: number;
@@ -30,8 +28,6 @@ type SettingsForm = {
   liquidation_requires_parent: boolean;
   liquidation_overspend_mode: "block" | "warn";
   liquidation_max_overspend_percent: number;
-  po_overspend_mode: "block" | "warn";
-  po_max_overspend_percent: number;
   notify_external_on_received: boolean;
   notify_external_on_approved: boolean;
   notify_external_on_rejected: boolean;
@@ -47,8 +43,6 @@ const defaultForm: SettingsForm = {
   liquidation_requires_parent: true,
   liquidation_overspend_mode: "block",
   liquidation_max_overspend_percent: 0,
-  po_overspend_mode: "block",
-  po_max_overspend_percent: 0,
   notify_external_on_received: false,
   notify_external_on_approved: false,
   notify_external_on_rejected: false,
@@ -57,19 +51,14 @@ const defaultForm: SettingsForm = {
   notify_teams_on_external_submit: false,
 };
 
-function parseSettings(data: Record<string, string | number | EApprovalFinanceProcurementPolicy | undefined>): SettingsForm {
-  const nested = data.finance_procurement_policy;
-  const source = typeof nested === "object" && nested !== null ? nested : data;
-
+function parseSettings(data: Record<string, string | number | undefined>): SettingsForm {
   return {
     sla_reminder_minutes: toInt(data.sla_reminder_minutes, 2880),
     sla_escalation_minutes: toInt(data.sla_escalation_minutes, 4320),
     sla_use_working_days: toBool(data.sla_use_working_days, true),
-    liquidation_requires_parent: toBool(source.liquidation_requires_parent, true),
-    liquidation_overspend_mode: source.liquidation_overspend_mode === "warn" ? "warn" : "block",
-    liquidation_max_overspend_percent: toInt(source.liquidation_max_overspend_percent, 0),
-    po_overspend_mode: source.po_overspend_mode === "warn" ? "warn" : "block",
-    po_max_overspend_percent: toInt(source.po_max_overspend_percent, 0),
+    liquidation_requires_parent: toBool(data.liquidation_requires_parent, true),
+    liquidation_overspend_mode: data.liquidation_overspend_mode === "warn" ? "warn" : "block",
+    liquidation_max_overspend_percent: toInt(data.liquidation_max_overspend_percent, 0),
     notify_external_on_received: toBool(data.notify_external_on_received, false),
     notify_external_on_approved: toBool(data.notify_external_on_approved, false),
     notify_external_on_rejected: toBool(data.notify_external_on_rejected, false),
@@ -117,8 +106,6 @@ export function EApprovalSettingsPageClient() {
         liquidation_requires_parent: form.liquidation_requires_parent ? "true" : "false",
         liquidation_overspend_mode: form.liquidation_overspend_mode,
         liquidation_max_overspend_percent: form.liquidation_max_overspend_percent,
-        po_overspend_mode: form.po_overspend_mode,
-        po_max_overspend_percent: form.po_max_overspend_percent,
         notify_external_on_received: form.notify_external_on_received ? "true" : "false",
         notify_external_on_approved: form.notify_external_on_approved ? "true" : "false",
         notify_external_on_rejected: form.notify_external_on_rejected ? "true" : "false",
@@ -152,7 +139,7 @@ export function EApprovalSettingsPageClient() {
       <div className="space-y-6">
         <EApprovalPageHeader
           title="E-Forms settings"
-          description="SLA timers, tenant finance controls, external submitter notifications, and Teams webhooks."
+          description="SLA timers, cash advance and liquidation controls, external submitter notifications, and Teams webhooks."
           actions={
             <Button
               size="sm"
@@ -183,7 +170,7 @@ export function EApprovalSettingsPageClient() {
 
         <EApprovalSectionCard
           title="Approval SLA"
-          description="Reminder and escalation thresholds for pending approvals. Working days skip weekends and tenant public holidays (same calendar as Project-One rollout)."
+          description="Reminder and escalation thresholds for pending approvals. Working days skip weekends and tenant public holidays."
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -233,6 +220,72 @@ export function EApprovalSettingsPageClient() {
               </span>
             </span>
           </label>
+        </EApprovalSectionCard>
+
+        <EApprovalSectionCard
+          title="Cash advance & liquidation"
+          description="Control whether liquidation must link to an approved cash advance and how over-balance totals are handled."
+        >
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-3">
+              <div>
+                <Label htmlFor="liquidation_requires_parent">Require linked cash advance</Label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, liquidation submissions must include a parent cash advance.
+                </p>
+              </div>
+              <Switch
+                id="liquidation_requires_parent"
+                checked={form.liquidation_requires_parent}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, liquidation_requires_parent: checked }))
+                }
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="liquidation_overspend_mode">Over-liquidation mode</Label>
+                <SelectField
+                  id="liquidation_overspend_mode"
+                  allowEmpty={false}
+                  value={form.liquidation_overspend_mode}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      liquidation_overspend_mode: value === "warn" ? "warn" : "block",
+                    }))
+                  }
+                  options={[
+                    { value: "block", label: "Block overspend" },
+                    { value: "warn", label: "Warn and allow (within percent)" },
+                  ]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="liquidation_max_overspend_percent">Max overspend percent</Label>
+                <SelectField
+                  id="liquidation_max_overspend_percent"
+                  allowEmpty={false}
+                  disabled={form.liquidation_overspend_mode !== "warn"}
+                  value={String(form.liquidation_max_overspend_percent)}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      liquidation_max_overspend_percent: Number(value),
+                    }))
+                  }
+                  options={[
+                    { value: "0", label: "0%" },
+                    { value: "5", label: "5%" },
+                    { value: "10", label: "10%" },
+                    { value: "15", label: "15%" },
+                    { value: "20", label: "20%" },
+                    { value: "25", label: "25%" },
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
         </EApprovalSectionCard>
 
         <EApprovalSectionCard
@@ -291,112 +344,6 @@ export function EApprovalSettingsPageClient() {
             >
               {testWebhookMutation.isPending ? "Sending…" : "Send test webhook"}
             </Button>
-          </div>
-        </EApprovalSectionCard>
-
-        <EApprovalSectionCard
-          title="Cash advance & liquidation"
-          description="Control whether liquidation must link to an approved cash advance and how over-balance totals are handled."
-        >
-          <div className="space-y-5">
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-3">
-              <div>
-                <Label htmlFor="liquidation_requires_parent">Require linked cash advance</Label>
-                <p className="text-xs text-muted-foreground">
-                  When enabled, liquidation submissions must include a parent cash advance.
-                </p>
-              </div>
-              <Switch
-                id="liquidation_requires_parent"
-                checked={form.liquidation_requires_parent}
-                onCheckedChange={(checked) =>
-                  setForm((current) => ({ ...current, liquidation_requires_parent: checked }))
-                }
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Over-liquidation mode</Label>
-                <Select
-                  value={form.liquidation_overspend_mode}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      liquidation_overspend_mode: event.target.value as "block" | "warn",
-                    }))
-                  }
-                >
-                  <option value="block">Block above open balance</option>
-                  <option value="warn">Warn and allow buffer</option>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="liquidation_max_overspend_percent">Max overspend percent</Label>
-                <Select
-                  id="liquidation_max_overspend_percent"
-                  value={String(form.liquidation_max_overspend_percent)}
-                  disabled={form.liquidation_overspend_mode !== "warn"}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      liquidation_max_overspend_percent: Number(event.target.value),
-                    }))
-                  }
-                >
-                  {Array.from({ length: 26 }, (_, index) => (
-                    <option key={index} value={String(index)}>
-                      {index}%
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-          </div>
-        </EApprovalSectionCard>
-
-        <EApprovalSectionCard
-          title="Purchase requisition & PO"
-          description="Control how purchase orders may exceed the remaining PR budget."
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>PO overspend mode</Label>
-              <Select
-                value={form.po_overspend_mode}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    po_overspend_mode: event.target.value as "block" | "warn",
-                  }))
-                }
-              >
-                <option value="block">Block above open balance</option>
-                <option value="warn">Warn and allow buffer</option>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="po_max_overspend_percent">Max overspend percent</Label>
-              <Select
-                id="po_max_overspend_percent"
-                value={String(form.po_max_overspend_percent)}
-                disabled={form.po_overspend_mode !== "warn"}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    po_max_overspend_percent: Number(event.target.value),
-                  }))
-                }
-              >
-                {Array.from({ length: 26 }, (_, index) => (
-                  <option key={index} value={String(index)}>
-                    {index}%
-                  </option>
-                ))}
-              </Select>
-            </div>
           </div>
         </EApprovalSectionCard>
 

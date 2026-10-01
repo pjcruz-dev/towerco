@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BookOpen,
   ChevronDown,
   CircleHelp,
   CreditCard,
@@ -165,12 +164,6 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
           label: "Billing & revenue",
           icon: CreditCard,
           visible: platformHasPermission(user, PLATFORM_PERMS.billingView),
-        },
-        {
-          href: "/platform/playbooks",
-          label: "Rollout playbooks",
-          icon: BookOpen,
-          visible: true,
         },
         {
           href: "/platform/operators",

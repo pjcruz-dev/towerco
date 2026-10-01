@@ -63,10 +63,16 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
 
             try {
                 $bytes = $storage->readBytes((string) $document->stored_path);
+                $batch = DocExtractBatch::query()->with('template')->find($document->batch_id);
                 $template = $document->template_id
                     ? DocExtractTemplate::query()->find($document->template_id)
-                    : null;
-                $fields = $template !== null && is_array($template->fields) ? $template->fields : [];
+                    : ($batch?->template);
+                $fields = [];
+                if ($batch !== null && is_array($batch->field_schema) && $batch->field_schema !== []) {
+                    $fields = $batch->field_schema;
+                } elseif ($template !== null && is_array($template->fields)) {
+                    $fields = $template->fields;
+                }
 
                 $sourcePages = null;
                 if (is_array($document->scan_meta)) {

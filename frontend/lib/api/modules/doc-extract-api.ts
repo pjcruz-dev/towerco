@@ -8,6 +8,7 @@ import type {
   DocExtractPreviewFile,
   DocExtractTemplate,
 } from "@/modules/doc-extract/types";
+import { DOC_EXTRACT_PREVIEW_CHUNK_SIZE } from "@/modules/doc-extract/limits";
 import { apiClient } from "@/lib/api/client";
 import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 import { parseModuleListExportResponse, type ModuleListExportResult } from "@/lib/ui/module-list-export-response";
@@ -95,28 +96,55 @@ export async function fetchDocExtractBatch(id: string): Promise<DocExtractBatchD
 
 export async function requeueDocExtractBatch(
   batchId: string,
-): Promise<DocExtractBatchListRow & { requeued: number }> {
-  const response = await apiClient.post<{ data: DocExtractBatchListRow & { requeued: number } }>(
-    `/doc-extract/batches/${batchId}/requeue`,
-  );
+): Promise<
+  DocExtractBatchListRow & {
+    requeued: number;
+    remapped?: number;
+    rescanned?: number;
+    queued?: boolean;
+    document_count?: number;
+  }
+> {
+  const response = await apiClient.post<{
+    data: DocExtractBatchListRow & {
+      requeued: number;
+      remapped?: number;
+      rescanned?: number;
+      queued?: boolean;
+      document_count?: number;
+    };
+  }>(`/doc-extract/batches/${batchId}/requeue`, {}, { timeout: 60_000 });
   return response.data.data;
 }
 
 export async function previewDocExtractFiles(files: File[]): Promise<DocExtractPreviewFile[]> {
-  const form = new FormData();
-  for (const file of files) {
-    form.append("files[]", file);
+  const chunkSize = DOC_EXTRACT_PREVIEW_CHUNK_SIZE;
+  const merged: DocExtractPreviewFile[] = [];
+
+  for (let offset = 0; offset < files.length; offset += chunkSize) {
+    const chunk = files.slice(offset, offset + chunkSize);
+    const form = new FormData();
+    for (const file of chunk) {
+      form.append("files[]", file);
+    }
+    const response = await apiClient.post<{ data: { files: DocExtractPreviewFile[] } }>(
+      "/doc-extract/preview",
+      form,
+      { timeout: 180_000 },
+    );
+    const filesPayload = response.data?.data?.files;
+    if (!Array.isArray(filesPayload)) {
+      throw new Error("Preview response was incomplete. Try again.");
+    }
+    for (const item of filesPayload) {
+      merged.push({
+        ...item,
+        index: offset + item.index,
+      });
+    }
   }
-  const response = await apiClient.post<{ data: { files: DocExtractPreviewFile[] } }>(
-    "/doc-extract/preview",
-    form,
-    { timeout: 180_000 },
-  );
-  const filesPayload = response.data?.data?.files;
-  if (!Array.isArray(filesPayload)) {
-    throw new Error("Preview response was incomplete. Try again.");
-  }
-  return filesPayload;
+
+  return merged;
 }
 
 export async function createDocExtractBatch(input: {
@@ -151,12 +179,12 @@ export async function createDocExtractBatch(input: {
   for (const file of input.files) {
     form.append("files[]", file);
   }
-  // Large PDFs need a long upload window; OCR runs after the response.
+  // Large multi-file batches need a long upload window; OCR runs after the response.
   // Do not set Content-Type manually — axios must include the multipart boundary.
   const response = await apiClient.post<{ data: DocExtractBatchDetail | DocExtractBatchListRow }>(
     "/doc-extract/batches",
     form,
-    { timeout: 180_000 },
+    { timeout: 300_000 },
   );
   const batch = response.data?.data;
   if (!batch || typeof batch !== "object" || !("id" in batch) || !batch.id) {

@@ -13,51 +13,34 @@ final class TenantEnabledModulesResolver
 
     /** @var list<string> */
     public const TOGGLEABLE_MODULES = [
-        'project_one',
         'e_approval',
-        'sites',
-        'gis',
-        'tower_one',
-        'fiber_one',
-        'asset_one',
         'ticketing',
-        'procurement_one',
-        'finance_one',
-        'billings',
-        'documents',
         'document_register',
-        'ai_assistant',
         'doc_extract',
+        'dynamic_entities',
+        'ai_assistant',
     ];
 
     /** @var array<string, string> */
     public const MODULE_LABELS = [
         'core' => 'Dashboard',
         'team_access' => 'Team & Access',
-        'project_one' => 'Project-One',
         'e_approval' => 'E-Forms',
-        'gis' => 'GIS',
-        'sites' => 'Sites',
-        'tower_one' => 'Tower-One',
-        'fiber_one' => 'Fiber-One',
-        'asset_one' => 'Asset-One',
         'ticketing' => 'Ticketing',
-        'procurement_one' => 'Procurement-One',
-        'finance_one' => 'Finance-One',
-        'billings' => 'Billings',
-        'documents' => 'Documents',
         'document_register' => 'Document register',
-        'ai_assistant' => 'AI Assistant',
         'doc_extract' => 'DocExtract',
+        'dynamic_entities' => 'Dynamic Entities',
+        'ai_assistant' => 'AI Assistant',
     ];
 
     /** @var array<string, string> */
     public const MODULE_DESCRIPTIONS = [
-        'billings' => 'Tenant subscription, usage, and self-serve plan billing (/billing).',
-        'documents' => 'Expiring leases, permits, and contracts across sites.',
+        'e_approval' => 'Forms, submissions, and approval workflows.',
+        'ticketing' => 'Tickets, assignments, and SLA follow-up.',
         'document_register' => 'ISO master list of approved documents; start requests and revisions via E-Forms.',
-        'ai_assistant' => 'In-app help assistant for workflows, permissions, and how-to guidance.',
         'doc_extract' => 'Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.',
+        'dynamic_entities' => 'Dynamic entity packs, records, fields, reports, and workflows.',
+        'ai_assistant' => 'In-app assistant for workflows, permissions, and how-to guidance.',
     ];
 
     /**
@@ -66,21 +49,9 @@ final class TenantEnabledModulesResolver
     public function platformModules(): array
     {
         $configured = config('toweros.tenant_modules.enabled');
-        if (! is_array($configured) || $configured === []) {
-            return $this->normalizeSelection([
-                'project_one',
-                'e_approval',
-                'ticketing',
-                'procurement_one',
-                'sites',
-                'documents',
-                'document_register',
-                'ai_assistant',
-                'doc_extract',
-            ]);
-        }
+        $fromConfig = is_array($configured) ? array_map('strval', $configured) : [];
 
-        return $this->normalizeSelection(array_map('strval', $configured));
+        return $this->normalizeSelection(array_merge(self::TOGGLEABLE_MODULES, $fromConfig));
     }
 
     /**

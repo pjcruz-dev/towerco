@@ -2,18 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Shield, Trash2, Users } from "lucide-react";
 
-import { AdminRoleComparePanel } from "@/components/admin/admin-role-compare-panel";
-import { AdminRoleDetailDrawer } from "@/components/admin/admin-role-detail-drawer";
-import { GroupedPermissionPicker } from "@/components/admin/grouped-permission-picker";
-import { createRolesTableColumns } from "@/components/admin/roles-table-columns";
+import { RoleAccessMatrixPanels } from "@/components/admin/role-access-matrix-panels";
+import { RoleModuleAccessGrid } from "@/components/admin/role-module-access-grid";
 import { PermissionGate } from "@/components/layout/permission-gate";
-import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -21,61 +18,121 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminRoleCatalog } from "@/hooks/use-admin-role-catalog";
 import { getErrorMessage } from "@/lib/api/error";
 import {
   cloneAdminRole,
   createAdminRole,
   deleteAdminRole,
-  fetchAdminRole,
   suggestRoleCloneName,
   updateAdminRole,
-  type AdminRoleDetail,
   type AdminRoleRow,
+  type RoleAccessMatrix,
 } from "@/lib/api/modules/admin-roles-api";
+import {
+  fetchDynEntities,
+  fetchDynEntity,
+  type DynEntityDetail,
+} from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
-import { filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
+import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
+import { GENERAL_SYSTEM_PERMISSIONS } from "@/lib/rbac/role-management-layout";
+import { ATC_OPERATIONAL_ROLE_ORDER, filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
+type PermTab = "general" | "data" | "fields" | "workflow";
+
 function roleLabel(name: string): string {
-  return name.replace(/_/g, " ");
+  return roleDisplayLabel(name);
+}
+
+function sortRolesForList(roles: AdminRoleRow[]): AdminRoleRow[] {
+  const order = new Map(ATC_OPERATIONAL_ROLE_ORDER.map((name, index) => [name, index]));
+  return [...roles].sort((a, b) => {
+    const ai = order.has(a.name) ? order.get(a.name)! : 1000;
+    const bi = order.has(b.name) ? order.get(b.name)! : 1000;
+    if (ai !== bi) return ai - bi;
+    return roleLabel(a.name).localeCompare(roleLabel(b.name));
+  });
 }
 
 export function RolesPageClient() {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
-
   const catalogQuery = useAdminRoleCatalog();
 
   const enabledModules = catalogQuery.data?.enabled_modules;
   const roles = useMemo(
     () =>
-      filterRolesForEnabledModules(catalogQuery.data?.roles ?? [], {
-        enabledModules,
-      }),
+      sortRolesForList(
+        filterRolesForEnabledModules(catalogQuery.data?.roles ?? [], {
+          enabledModules,
+        }),
+      ),
     [catalogQuery.data?.roles, enabledModules],
   );
   const allPermissions = catalogQuery.data?.permissions ?? [];
+  const permissionSet = useMemo(() => new Set(allPermissions), [allPermissions]);
 
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [draftPermissions, setDraftPermissions] = useState<string[]>([]);
+  const [draftMatrix, setDraftMatrix] = useState<RoleAccessMatrix>({});
+  const [permTab, setPermTab] = useState<PermTab>("general");
+  const [permFilter, setPermFilter] = useState("");
+  const [dirty, setDirty] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editRole, setEditRole] = useState<AdminRoleRow | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailRoleId, setDetailRoleId] = useState<number | null>(null);
-  const [cloneRole, setCloneRole] = useState<AdminRoleRow | null>(null);
-  const [cloneName, setCloneName] = useState("");
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [compareLeftId, setCompareLeftId] = useState<number | null>(null);
-  const [compareRightId, setCompareRightId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-
-  const detailQuery = useQuery({
-    queryKey: ["admin", "roles", detailRoleId],
-    queryFn: () => fetchAdminRole(detailRoleId!),
-    enabled: detailOpen && detailRoleId !== null,
+  const [createName, setCreateName] = useState("");
+  const [entityDetails, setEntityDetails] = useState<Record<string, DynEntityDetail | undefined>>({});
+  const dynEnabled = (enabledModules ?? []).includes("dynamic_entities");
+  const entitiesQuery = useQuery({
+    queryKey: ["dynamic-entities", "entities", "role-acl"],
+    queryFn: () => fetchDynEntities({ active_only: false }),
+    enabled: dynEnabled,
     staleTime: 60_000,
+    retry: 1,
   });
+  const dynEntities = entitiesQuery.data ?? [];
+
+  const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
+  const canEditSelected = Boolean(selectedRole && !selectedRole.is_system);
+
+  useEffect(() => {
+    if (roles.length === 0) {
+      setSelectedRoleId(null);
+      return;
+    }
+    if (selectedRoleId === null || !roles.some((r) => r.id === selectedRoleId)) {
+      setSelectedRoleId(roles[0]!.id);
+    }
+  }, [roles, selectedRoleId]);
+
+  useEffect(() => {
+    if (!dynEnabled && (permTab === "fields" || permTab === "workflow")) {
+      setPermTab("data");
+    }
+  }, [dynEnabled, permTab]);
+
+  useEffect(() => {
+    if (!selectedRole) {
+      setDraftPermissions([]);
+      setDraftMatrix({});
+      setDirty(false);
+      return;
+    }
+    setDraftPermissions([...selectedRole.permissions]);
+    setDraftMatrix(selectedRole.access_matrix ?? {});
+    setDirty(false);
+  }, [selectedRole?.id, selectedRole?.permissions, selectedRole?.access_matrix]);
+
+
+  function loadEntityDetail(slug: string) {
+    if (entityDetails[slug]) return;
+    fetchDynEntity(slug)
+      .then((detail) => setEntityDetails((prev) => ({ ...prev, [slug]: detail })))
+      .catch(() => undefined);
+  }
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
@@ -83,11 +140,11 @@ export function RolesPageClient() {
 
   const createMutation = useMutation({
     mutationFn: createAdminRole,
-    onSuccess: () => {
+    onSuccess: (created) => {
       invalidate();
       setCreateOpen(false);
-      setName("");
-      setSelectedPermissions([]);
+      setCreateName("");
+      setSelectedRoleId(created.id);
       notify({ level: "success", title: "Role created", message: "Custom role is ready to assign." });
     },
     onError: (error) => {
@@ -96,26 +153,42 @@ export function RolesPageClient() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ roleId, permissions: perms }: { roleId: number; permissions: string[] }) =>
-      updateAdminRole(roleId, perms),
-    onSuccess: () => {
-      invalidate();
-      setEditRole(null);
-      setSelectedPermissions([]);
-      notify({ level: "success", title: "Role updated", message: "Permissions saved." });
+    mutationFn: ({
+      roleId,
+      permissions: perms,
+      accessMatrix,
+    }: {
+      roleId: number;
+      permissions: string[];
+      accessMatrix: RoleAccessMatrix;
+    }) => updateAdminRole(roleId, perms, accessMatrix),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+      setDirty(false);
+      setDraftPermissions(variables.permissions);
+      setDraftMatrix(variables.accessMatrix);
+      notify({
+        level: "success",
+        title: "Permission updated successfully",
+        message: "Role access saved.",
+      });
     },
     onError: (error) => {
-      notify({ level: "error", title: "Update failed", message: getErrorMessage(error) });
+      notify({ level: "error", title: "Save failed", message: getErrorMessage(error) });
+      if (selectedRole) {
+        setDraftPermissions([...selectedRole.permissions]);
+        setDraftMatrix(selectedRole.access_matrix ?? {});
+        setDirty(false);
+      }
     },
   });
 
   const cloneMutation = useMutation({
-    mutationFn: ({ roleId, roleName }: { roleId: number; roleName: string }) => cloneAdminRole(roleId, roleName),
+    mutationFn: ({ roleId, roleName }: { roleId: number; roleName: string }) =>
+      cloneAdminRole(roleId, roleName),
     onSuccess: (created) => {
       invalidate();
-      setCloneRole(null);
-      setCloneName("");
-      setDetailOpen(false);
+      setSelectedRoleId(created.id);
       notify({
         level: "success",
         title: "Role cloned",
@@ -131,8 +204,7 @@ export function RolesPageClient() {
     mutationFn: deleteAdminRole,
     onSuccess: () => {
       invalidate();
-      setDetailOpen(false);
-      setDetailRoleId(null);
+      setSelectedRoleId(null);
       notify({ level: "success", title: "Role deleted", message: "Custom role removed." });
     },
     onError: (error) => {
@@ -140,29 +212,43 @@ export function RolesPageClient() {
     },
   });
 
-  const togglePermission = (permission: string) => {
-    setSelectedPermissions((prev) =>
-      prev.includes(permission) ? prev.filter((p) => p !== permission) : [...prev, permission],
-    );
-  };
+  function persist(nextPermissions: string[], nextMatrix: RoleAccessMatrix) {
+    if (!selectedRole || !canEditSelected) return;
+    setDraftPermissions(nextPermissions);
+    setDraftMatrix(nextMatrix);
+    setDirty(false);
+    updateMutation.mutate({
+      roleId: selectedRole.id,
+      permissions: nextPermissions,
+      accessMatrix: nextMatrix,
+    });
+  }
 
-  const openView = (role: AdminRoleRow) => {
-    setDetailRoleId(role.id);
-    setDetailOpen(true);
-  };
+  function persistPermissions(next: string[]) {
+    persist(next, draftMatrix);
+  }
 
-  const openEdit = (role: AdminRoleRow) => {
-    setDetailOpen(false);
-    setEditRole(role);
-    setSelectedPermissions([...role.permissions]);
-  };
+  function persistMatrix(next: RoleAccessMatrix) {
+    persist(draftPermissions, next);
+  }
 
-  const openClone = (role: AdminRoleRow) => {
-    setCloneRole(role);
-    setCloneName(suggestRoleCloneName(role.name));
-  };
+  function togglePermission(permission: string) {
+    if (!canEditSelected || !permissionSet.has(permission) || updateMutation.isPending) return;
+    const next = draftPermissions.includes(permission)
+      ? draftPermissions.filter((p) => p !== permission)
+      : [...draftPermissions, permission];
+    persistPermissions(next);
+  }
 
-  const confirmDelete = (role: AdminRoleRow) => {
+  function confirmDelete(role: AdminRoleRow) {
+    if (role.is_system || role.is_baseline) {
+      notify({
+        level: "warning",
+        title: "Protected role",
+        message: "System and core baseline roles cannot be deleted. Clone to customize.",
+      });
+      return;
+    }
     if (role.user_count > 0) {
       notify({
         level: "warning",
@@ -171,246 +257,357 @@ export function RolesPageClient() {
       });
       return;
     }
-
     if (window.confirm(`Delete role "${roleLabel(role.name)}"? This cannot be undone.`)) {
       deleteMutation.mutate(role.id);
     }
-  };
+  }
 
-  const permissionPicker = (
-    <GroupedPermissionPicker
-      allPermissions={allPermissions}
-      permissionGroups={catalogQuery.data?.permission_groups}
-      selectedPermissions={selectedPermissions}
-      onToggle={togglePermission}
-      maxHeightClassName="max-h-72"
-    />
-  );
+  const filterNeedle = permFilter.trim().toLowerCase();
 
-  const detailRole: AdminRoleDetail | AdminRoleRow | null =
-    detailQuery.data ?? roles.find((role) => role.id === detailRoleId) ?? null;
+  const generalCards = useMemo(() => {
+    return GENERAL_SYSTEM_PERMISSIONS.filter((card) => permissionSet.has(card.permission)).filter(
+      (card) =>
+        !filterNeedle ||
+        card.title.toLowerCase().includes(filterNeedle) ||
+        card.permission.toLowerCase().includes(filterNeedle),
+    );
+  }, [permissionSet, filterNeedle]);
 
-  const columns = useMemo(
-    () =>
-      createRolesTableColumns({
-        onView: openView,
-        onClone: openClone,
-        onEdit: openEdit,
-        onDelete: confirmDelete,
-        deletePending: deleteMutation.isPending,
-      }),
-    [deleteMutation.isPending],
-  );
+  const tabs: Array<{ id: PermTab; label: string }> = [
+    { id: "general", label: "General System" },
+    { id: "data", label: dynEnabled ? "Data Access (Entities)" : "Data Access" },
+    ...(dynEnabled
+      ? [
+          { id: "fields" as const, label: "Field Level Security" },
+          { id: "workflow" as const, label: "Workflow Approvals" },
+        ]
+      : []),
+  ];
 
   return (
     <PermissionGate requiredPermissions={[permissions.roleManage]}>
-      <div className="space-y-5">
+      <div className="space-y-4">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Roles & permissions</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Role Management</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Manage baseline and custom roles. Clone baseline roles to customize access, or create roles from scratch.
+              Define permissions and access controls for system roles.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/users"
-              prefetch={false}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
+            <Button type="button" size="sm" variant="outline" render={<Link href="/users" prefetch={false} />}>
               Back to users
-            </Link>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={roles.length < 2}
-              onClick={() => {
-                setCompareLeftId(roles[0]?.id ?? null);
-                setCompareRightId(roles[1]?.id ?? null);
-                setCompareOpen(true);
-              }}
-            >
-              Compare roles
             </Button>
             <Button
+              type="button"
               size="sm"
               onClick={() => {
-                setName("");
-                setSelectedPermissions(["dashboard:view"]);
+                setCreateName("");
                 setCreateOpen(true);
               }}
             >
-              New role
+              <Plus className="size-3.5" />
+              Create New Role
             </Button>
           </div>
         </header>
 
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <RegistryDataTableView
-            columns={columns}
-            data={roles}
-            getRowId={(row) => String(row.id)}
-            isLoading={catalogQuery.isLoading}
-            isEmpty={!catalogQuery.isLoading && roles.length === 0}
-            emptyMessage="No roles found."
-            enableColumnVisibility
-            columnVisibilityStorageKey="toweros.table.columns.admin.roles"
-            manualSorting={false}
-          />
-        </div>
-
         {catalogQuery.isError ? (
-          <p className="text-sm text-destructive">
-            Could not load roles. {getErrorMessage(catalogQuery.error)} Only tenant administrators with{" "}
-            <span className="font-medium">role:manage</span> can manage roles.
-          </p>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+            <p className="min-w-0 flex-1 text-sm text-destructive">
+              Could not load roles. {getErrorMessage(catalogQuery.error)}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void catalogQuery.refetch();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
         ) : null}
 
-        <AdminRoleDetailDrawer
-          role={detailRole}
-          open={detailOpen}
-          isLoading={detailOpen && detailQuery.isLoading}
-          onOpenChange={setDetailOpen}
-          onEdit={openEdit}
-          onClone={openClone}
-          onDelete={confirmDelete}
-        />
+        <div className="grid min-h-[34rem] overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:grid-cols-[minmax(16rem,20rem)_1fr]">
+          {/* Available roles */}
+          <aside className="flex flex-col border-b border-border lg:border-b-0 lg:border-r">
+            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+              <Users className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-medium text-foreground">Available Roles</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {catalogQuery.isLoading ? (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">Loading roles…</p>
+              ) : catalogQuery.isError ? (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+                  Role list unavailable until the request succeeds.
+                </p>
+              ) : roles.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-muted-foreground">No roles found.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {roles.map((role) => {
+                    const active = role.id === selectedRoleId;
+                    return (
+                      <li key={role.id}>
+                        <div
+                          className={cn(
+                            "group flex items-center gap-1 rounded-md",
+                            active
+                              ? "bg-muted text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 px-3 py-2.5 text-left"
+                            onClick={() => {
+                              if (dirty && !window.confirm("Discard unsaved permission changes?")) {
+                                return;
+                              }
+                              setSelectedRoleId(role.id);
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "truncate text-sm capitalize",
+                                  active ? "font-medium text-foreground" : "font-normal",
+                                )}
+                              >
+                                {roleLabel(role.name)}
+                              </span>
+                              {role.is_baseline ? (
+                                <Shield
+                                  className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+                                  aria-label="Protected role"
+                                />
+                              ) : null}
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {role.user_count} user{role.user_count === 1 ? "" : "s"}
+                            </p>
+                          </button>
+                          {!role.is_system && !role.is_baseline ? (
+                            <button
+                              type="button"
+                              className="mr-2 rounded p-1.5 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                              title="Delete role"
+                              onClick={() => confirmDelete(role)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </aside>
+
+          {/* Permissions pane */}
+          <section className="flex min-w-0 flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <div>
+                <h2 className="text-sm font-medium text-foreground">
+                  Permissions for{" "}
+                  <span className="capitalize">{selectedRole ? roleLabel(selectedRole.name) : "…"}</span>
+                </h2>
+                {selectedRole?.is_system ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Protected system role — clone to customize permissions.
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Changes save automatically when you toggle a permission.
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={permFilter}
+                  onChange={(e) => setPermFilter(e.target.value)}
+                  placeholder="Filter permissions…"
+                  className="h-8 w-48 text-xs"
+                />
+                {selectedRole?.is_system ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!selectedRole || cloneMutation.isPending}
+                    onClick={() => {
+                      if (!selectedRole) return;
+                      cloneMutation.mutate({
+                        roleId: selectedRole.id,
+                        roleName: suggestRoleCloneName(selectedRole.name),
+                      });
+                    }}
+                  >
+                    Clone role
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!canEditSelected || updateMutation.isPending || !selectedRole}
+                  onClick={() => {
+                    if (!selectedRole) return;
+                    persist(draftPermissions, draftMatrix);
+                  }}
+                >
+                  {updateMutation.isPending ? "Saving…" : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            <Tabs
+              value={permTab}
+              onValueChange={(value) => setPermTab(value as PermTab)}
+              className="border-b border-border px-4 pt-2"
+            >
+              <TabsList variant="line" className="h-auto w-full justify-start gap-0 rounded-none bg-transparent p-0">
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.id} value={tab.id} className="flex-none px-3 py-2 text-xs">
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {!selectedRole ? (
+                <p className="text-sm text-muted-foreground">Select a role to manage permissions.</p>
+              ) : null}
+
+              {selectedRole && permTab === "general" ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Global permissions
+                  </p>
+                  {generalCards.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No matching permissions.</p>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {generalCards.map((card) => {
+                        const checked = draftPermissions.includes(card.permission);
+                        return (
+                          <label
+                            key={card.permission}
+                            className={cn(
+                              "flex cursor-pointer gap-3 rounded-lg border border-border p-3 transition-colors",
+                              checked
+                                ? "border-foreground/20 bg-muted/50"
+                                : "bg-card hover:bg-muted/40",
+                              !canEditSelected && "cursor-default opacity-80",
+                            )}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              disabled={!canEditSelected}
+                              onCheckedChange={() => togglePermission(card.permission)}
+                              className="mt-0.5"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-foreground">{card.title}</span>
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                {card.description}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {selectedRole && permTab === "data" && !dynEnabled ? (
+                <RoleModuleAccessGrid
+                  enabledModules={enabledModules}
+                  granted={draftPermissions}
+                  filter={permFilter}
+                  disabled={!canEditSelected || updateMutation.isPending}
+                  onToggle={togglePermission}
+                />
+              ) : null}
+
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && entitiesQuery.isError ? (
+                <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                  <p className="min-w-0 flex-1 text-sm text-destructive">
+                    Could not load Dynamic Entities. {getErrorMessage(entitiesQuery.error)}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void entitiesQuery.refetch();
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && entitiesQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading entities…</p>
+              ) : null}
+
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && !entitiesQuery.isLoading ? (
+                <RoleAccessMatrixPanels
+                  tab={permTab}
+                  roleName={selectedRole.name}
+                  entities={dynEntities}
+                  entityDetails={entityDetails}
+                  loadEntityDetail={loadEntityDetail}
+                  matrix={draftMatrix}
+                  filter={permFilter}
+                  disabled={!canEditSelected || updateMutation.isPending}
+                  onChange={persistMatrix}
+                />
+              ) : null}
+            </div>
+          </section>
+        </div>
 
         <Sheet open={createOpen} onOpenChange={setCreateOpen}>
           <SheetContent className="w-full overflow-y-auto sm:max-w-md">
             <SheetHeader>
-              <SheetTitle>New custom role</SheetTitle>
-              <SheetDescription>Use lowercase names with underscores. Permissions are required.</SheetDescription>
+              <SheetTitle>Create New Role</SheetTitle>
+              <SheetDescription>
+                Use lowercase names with underscores. Starts with dashboard access — refine permissions
+                in the tabs after create.
+              </SheetDescription>
             </SheetHeader>
             <div className="mt-6 space-y-4 px-1">
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Role name</span>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="field_supervisor" />
+                <Input
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="finance_officer"
+                />
               </label>
-              {permissionPicker}
               <Button
                 className="w-full"
-                disabled={createMutation.isPending || !name.trim() || selectedPermissions.length === 0}
+                disabled={createMutation.isPending || !createName.trim()}
                 onClick={() =>
                   createMutation.mutate({
-                    name: name.trim(),
-                    permissions: selectedPermissions,
+                    name: createName.trim(),
+                    permissions: permissionSet.has("dashboard:view")
+                      ? ["dashboard:view"]
+                      : allPermissions.slice(0, 1),
                   })
                 }
               >
                 {createMutation.isPending ? "Creating…" : "Create role"}
               </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        <Sheet
-          open={editRole !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditRole(null);
-              setSelectedPermissions([]);
-            }
-          }}
-        >
-          <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-            <SheetHeader>
-              <SheetTitle>Edit {editRole ? roleLabel(editRole.name) : "role"}</SheetTitle>
-              <SheetDescription>Update permission assignments for this custom role.</SheetDescription>
-            </SheetHeader>
-            <div className="mt-6 space-y-4 px-1">
-              {permissionPicker}
-              <Button
-                className="w-full"
-                disabled={updateMutation.isPending || !editRole || selectedPermissions.length === 0}
-                onClick={() => {
-                  if (!editRole) return;
-                  updateMutation.mutate({ roleId: editRole.id, permissions: selectedPermissions });
-                }}
-              >
-                {updateMutation.isPending ? "Saving…" : "Save permissions"}
-              </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        <Sheet
-          open={cloneRole !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setCloneRole(null);
-              setCloneName("");
-            }
-          }}
-        >
-          <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-            <SheetHeader>
-              <SheetTitle>Clone {cloneRole ? roleLabel(cloneRole.name) : "role"}</SheetTitle>
-              <SheetDescription>
-                Create a new custom role with the same permissions. You can edit permissions after cloning.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="mt-6 space-y-4 px-1">
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">New role name</span>
-                <Input value={cloneName} onChange={(e) => setCloneName(e.target.value)} placeholder="manager_copy" />
-              </label>
-              <Button
-                className="w-full"
-                disabled={cloneMutation.isPending || !cloneRole || !cloneName.trim()}
-                onClick={() => {
-                  if (!cloneRole) return;
-                  cloneMutation.mutate({ roleId: cloneRole.id, roleName: cloneName.trim() });
-                }}
-              >
-                {cloneMutation.isPending ? "Cloning…" : "Clone role"}
-              </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        <Sheet open={compareOpen} onOpenChange={setCompareOpen}>
-          <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-            <SheetHeader>
-              <SheetTitle>Compare roles</SheetTitle>
-              <SheetDescription>See permission differences between two roles.</SheetDescription>
-            </SheetHeader>
-            <div className="mt-6 space-y-4 px-1">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block space-y-1.5">
-                  <Label htmlFor="compare-left-role">Left role</Label>
-                  <Select
-                    id="compare-left-role"
-                    className="h-9"
-                    value={compareLeftId ?? ""}
-                    onChange={(e) => setCompareLeftId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">Select role</option>
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {roleLabel(role.name)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <label className="block space-y-1.5">
-                  <Label htmlFor="compare-right-role">Right role</Label>
-                  <Select
-                    id="compare-right-role"
-                    className="h-9"
-                    value={compareRightId ?? ""}
-                    onChange={(e) => setCompareRightId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">Select role</option>
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {roleLabel(role.name)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-              </div>
-              <AdminRoleComparePanel leftId={compareLeftId} rightId={compareRightId} />
             </div>
           </SheetContent>
         </Sheet>

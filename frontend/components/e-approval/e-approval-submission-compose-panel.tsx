@@ -8,7 +8,6 @@ import { ControlledDocumentPicker } from "@/components/e-approval/controlled-doc
 import { ControlledDocumentRequestModePicker } from "@/components/e-approval/controlled-document-request-mode-picker";
 import { EApprovalCashAdvancePicker } from "@/components/e-approval/e-approval-cash-advance-picker";
 import { EApprovalComposeFormFields, type ComposeFormStepMeta } from "@/components/e-approval/e-approval-compose-form-fields";
-import { EApprovalPurchaseRequisitionPicker } from "@/components/e-approval/e-approval-purchase-requisition-picker";
 import { EApprovalFormSectionProgressNav } from "@/components/e-approval/e-approval-form-section-progress";
 import { OperationalAlert } from "@/components/feedback/operational-alert";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ import {
   fetchEApprovalMetadata,
   fetchEApprovalApprovalPolicy,
   fetchEApprovalOpenCashAdvances,
-  fetchEApprovalOpenPurchaseRequisitions,
   fetchEApprovalSubmission,
   resubmitEApprovalSubmission,
   submitEApprovalSubmissionDraft,
@@ -28,6 +26,8 @@ import {
   uploadEApprovalSubmissionAttachmentsOrThrow,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { viewerCanStartFormRequest } from "@/modules/e-approval/form-request-access";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   mapEApprovalAssignableUsersToOptions,
   useEApprovalAssignableUsers,
@@ -53,8 +53,6 @@ import { lookupControlledDocument, type ControlledDocumentLookupResult } from "@
 import { applyComputedFieldValues } from "@/modules/e-approval/field-computed";
 import { fieldDefaultValue, parseFieldValidation, validateSubmissionValues } from "@/modules/e-approval/field-validation";
 import { isComposeFillableFieldType } from "@/modules/e-approval/form-compose-structural";
-import { procurementLinkCascadePatch } from "@/modules/e-approval/procurement-link-fields";
-import { attachmentCountsByField } from "@/modules/procurement-one/submit-readiness";
 import { groupSavedAttachmentsByField, hasPendingAttachmentFiles, pendingAttachmentsNotYetSaved } from "@/modules/e-approval/draft-attachments";
 import {
   buildFormSectionProgress,
@@ -66,14 +64,12 @@ import {
 } from "@/modules/e-approval/form-compose-config";
 import {
   applyCashAdvanceParentSelection,
-  applyParentPrefillValues,
+  formMetadataString,
   formRequiresParentSubmission,
   formUsesCashAdvanceParentPicker,
-  formUsesPurchaseRequisitionParentPicker,
   formatSubmissionAmount,
   parentSubmissionLinkLabel,
   parentSubmissionLinkTitle,
-  evaluatePurchaseOrderAmountWithPolicy,
   parseSubmissionAmount,
   validateLiquidationAmountAgainstOpenBalance,
 } from "@/modules/e-approval/parent-submission-link";
@@ -86,7 +82,6 @@ import {
 import type {
   EApprovalFormFieldInput,
   EApprovalOpenCashAdvance,
-  EApprovalOpenPurchaseRequisition,
   EApprovalSubmissionDetail,
 } from "@/modules/e-approval/types";
 import { AlertCircle, CheckCircle2, GitBranch } from "lucide-react";
@@ -156,6 +151,7 @@ export function EApprovalSubmissionComposePanel({
   initialDocumentCode,
 }: Props) {
   const push = useNotificationStore((s) => s.push);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const shouldNotify = notifyOnSuccess ?? fullPage;
@@ -201,10 +197,15 @@ export function EApprovalSubmissionComposePanel({
     enabled: enabled && !!formId,
   });
 
+  const startBlocked =
+    !isResubmitMode &&
+    formQuery.isSuccess &&
+    !viewerCanStartFormRequest(formQuery.data?.metadata_json, currentUserId);
+
   const draftQuery = useQuery({
     queryKey: ["e-approval", "form", formId, "my-draft"],
     queryFn: () => fetchEApprovalFormMyDraft(formId),
-    enabled: enabled && !!formId && !isResubmitMode,
+    enabled: enabled && !!formId && !isResubmitMode && formQuery.isSuccess && !startBlocked,
     staleTime: 0,
   });
 
@@ -222,19 +223,11 @@ export function EApprovalSubmissionComposePanel({
     [formMetadata],
   );
   const usesCashAdvancePicker = formUsesCashAdvanceParentPicker(formMetadata);
-  const usesPurchaseRequisitionPicker = formUsesPurchaseRequisitionParentPicker(formMetadata);
 
   const openCashAdvancesQuery = useQuery({
     queryKey: ["e-approval", "cash-advances", "open", formId],
     queryFn: () => fetchEApprovalOpenCashAdvances(formId),
     enabled: enabled && !!formId && usesCashAdvancePicker,
-    staleTime: 30_000,
-  });
-
-  const openPurchaseRequisitionsQuery = useQuery({
-    queryKey: ["e-approval", "purchase-requisitions", "open", formId],
-    queryFn: () => fetchEApprovalOpenPurchaseRequisitions(formId),
-    enabled: enabled && !!formId && usesPurchaseRequisitionPicker,
     staleTime: 30_000,
   });
 
@@ -400,7 +393,10 @@ export function EApprovalSubmissionComposePanel({
   }, [controlledDocumentRequestMode, controlledDocumentSync]);
 
   const procurementPolicy = metadataQuery.data?.finance_procurement_policy;
-  const requiresParentSubmission = formRequiresParentSubmission(formMetadata);
+  const requiresParentSubmission =
+    formMetadataString(formMetadata, "form_family") === "liquidation"
+      ? (procurementPolicy?.liquidation_requires_parent ?? true)
+      : formRequiresParentSubmission(formMetadata);
   const parentLinkLabel = parentSubmissionLinkLabel(formMetadata);
   const parentLinkTitle = parentSubmissionLinkTitle(formMetadata);
   const parentWriteOptions = { parentSubmissionId };
@@ -420,6 +416,13 @@ export function EApprovalSubmissionComposePanel({
 
   useEffect(() => {
     if (!formQuery.data?.fields || hydratedRef.current) {
+      return;
+    }
+    if (
+      !isResubmitMode &&
+      !viewerCanStartFormRequest(formQuery.data.metadata_json, currentUserId)
+    ) {
+      hydratedRef.current = true;
       return;
     }
     if (isResubmitMode) {
@@ -537,6 +540,7 @@ export function EApprovalSubmissionComposePanel({
   }, [
     controlledDocumentDeepLink,
     formQuery.data,
+    currentUserId,
     draftQuery.data,
     draftQuery.isLoading,
     formId,
@@ -609,15 +613,17 @@ export function EApprovalSubmissionComposePanel({
     ? (resubmitQuery.data?.attachments ?? [])
     : (draftQuery.data?.attachments ?? []);
 
-  const draftExistingAttachmentCounts = useMemo(
-    () =>
-      attachmentCountsByField(
-        activeSubmissionAttachments.map((attachment) => ({
-          field_name: attachment.field_name ?? "",
-        })),
-      ),
-    [activeSubmissionAttachments],
-  );
+  const draftExistingAttachmentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const attachment of activeSubmissionAttachments) {
+      const key = attachment.field_name ?? "";
+      if (!key) {
+        continue;
+      }
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [activeSubmissionAttachments]);
 
   const draftExistingAttachmentsByField = useMemo(
     () => groupSavedAttachmentsByField(activeSubmissionAttachments),
@@ -636,31 +642,7 @@ export function EApprovalSubmissionComposePanel({
     [openCashAdvancesQuery.data, parentSubmissionId],
   );
 
-  const selectedPurchaseRequisition = useMemo(
-    () => openPurchaseRequisitionsQuery.data?.find((item) => item.id === parentSubmissionId) ?? null,
-    [openPurchaseRequisitionsQuery.data, parentSubmissionId],
-  );
-
-  const selectedParentOpenBalance = selectedCashAdvance?.open_balance ?? selectedPurchaseRequisition?.open_balance;
-
-  const poAmountEvaluation = useMemo(() => {
-    if (!usesPurchaseRequisitionPicker) {
-      return null;
-    }
-
-    return evaluatePurchaseOrderAmountWithPolicy(
-      parseSubmissionAmount(computedValues.total_amount),
-      selectedPurchaseRequisition?.open_balance,
-      selectedPurchaseRequisition?.estimated_total,
-      procurementPolicy,
-    );
-  }, [
-    computedValues.total_amount,
-    procurementPolicy,
-    selectedPurchaseRequisition?.estimated_total,
-    selectedPurchaseRequisition?.open_balance,
-    usesPurchaseRequisitionPicker,
-  ]);
+  const selectedParentOpenBalance = selectedCashAdvance?.open_balance;
 
   const balanceError = useMemo(() => {
     if (usesCashAdvancePicker) {
@@ -669,32 +651,11 @@ export function EApprovalSubmissionComposePanel({
         selectedParentOpenBalance,
       );
     }
-    if (usesPurchaseRequisitionPicker && poAmountEvaluation?.blocked) {
-      const openBalance = selectedPurchaseRequisition?.open_balance;
-      if (openBalance == null) {
-        return null;
-      }
-
-      return `PO total exceeds the tenant overspend policy maximum.`;
-    }
 
     return null;
-  }, [
-    poAmountEvaluation?.blocked,
-    selectedParentOpenBalance,
-    selectedPurchaseRequisition?.open_balance,
-    computedValues.total_reimbursement,
-    usesCashAdvancePicker,
-    usesPurchaseRequisitionPicker,
-  ]);
+  }, [selectedParentOpenBalance, computedValues.total_reimbursement, usesCashAdvancePicker]);
 
-  const overspendWarning = poAmountEvaluation?.warning ?? null;
-
-  const balanceFieldName = usesPurchaseRequisitionPicker
-    ? "total_amount"
-    : usesCashAdvancePicker
-      ? "total_reimbursement"
-      : null;
+  const balanceFieldName = usesCashAdvancePicker ? "total_reimbursement" : null;
 
   const validateParentLink = useCallback((): string | null => {
     if (!requiresParentSubmission) {
@@ -737,14 +698,8 @@ export function EApprovalSubmissionComposePanel({
       }
     }
 
-    if (selectedParentOpenBalance != null && balanceFieldName) {
-      if (balanceFieldName === "total_reimbursement") {
-        overrides.total_reimbursement = `Maximum liquidation amount for this cash advance: ${formatSubmissionAmount(selectedParentOpenBalance)}.`;
-      } else if (poAmountEvaluation?.helpText) {
-        overrides.total_amount = poAmountEvaluation.helpText;
-      } else {
-        overrides.total_amount = `Maximum PO amount for this purchase requisition: ${formatSubmissionAmount(selectedParentOpenBalance)}.`;
-      }
+    if (selectedParentOpenBalance != null && balanceFieldName === "total_reimbursement") {
+      overrides.total_reimbursement = `Maximum liquidation amount for this cash advance: ${formatSubmissionAmount(selectedParentOpenBalance)}.`;
     }
 
     return Object.keys(overrides).length > 0 ? overrides : undefined;
@@ -753,23 +708,11 @@ export function EApprovalSubmissionComposePanel({
     controlledDocumentSync,
     fields,
     formMetadata?.use_approval_policy,
-    poAmountEvaluation?.helpText,
     requiredApproverFieldNames,
     selectedParentOpenBalance,
   ]);
 
   const hasBalanceBlocker = Boolean(balanceError);
-
-  const applyParentPrefill = useCallback(
-    (prefillValues: Record<string, string | null | undefined> | undefined, documentNo: string, documentField: string) => {
-      setValues((prev) => {
-        const next = applyParentPrefillValues(prev, prefillValues);
-        next[documentField] = documentNo;
-        return applyComputedFieldValues(fields, next);
-      });
-    },
-    [fields],
-  );
 
   const handleCashAdvanceSelect = useCallback(
     (item: EApprovalOpenCashAdvance | null) => {
@@ -791,28 +734,6 @@ export function EApprovalSubmissionComposePanel({
     [fields],
   );
 
-  const handlePurchaseRequisitionSelect = useCallback(
-    (item: EApprovalOpenPurchaseRequisition | null) => {
-      userEditedRef.current = true;
-      setParentSubmissionId(item?.id ?? null);
-      parentPrefillAppliedRef.current = item?.id ?? null;
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next.parent_submission_id;
-        delete next.total_amount;
-        delete next._form;
-        return next;
-      });
-
-      if (!item) {
-        return;
-      }
-
-      applyParentPrefill(item.prefill_values, item.document_no, "purchase_requisition_document_no");
-    },
-    [applyParentPrefill],
-  );
-
   useEffect(() => {
     if (!hydratedRef.current || userEditedRef.current || !parentSubmissionId) {
       return;
@@ -829,17 +750,7 @@ export function EApprovalSubmissionComposePanel({
       );
       return;
     }
-
-    const purchaseRequisition = openPurchaseRequisitionsQuery.data?.find((entry) => entry.id === parentSubmissionId);
-    if (purchaseRequisition) {
-      parentPrefillAppliedRef.current = parentSubmissionId;
-      applyParentPrefill(
-        purchaseRequisition.prefill_values,
-        purchaseRequisition.document_no,
-        "purchase_requisition_document_no",
-      );
-    }
-  }, [applyParentPrefill, fields, openCashAdvancesQuery.data, openPurchaseRequisitionsQuery.data, parentSubmissionId]);
+  }, [fields, openCashAdvancesQuery.data, parentSubmissionId]);
 
   const removeSavedAttachmentMutation = useMutation({
     mutationFn: (attachmentId: string) => deleteEApprovalAttachment(attachmentId),
@@ -1182,7 +1093,7 @@ export function EApprovalSubmissionComposePanel({
           description={`Current status is “${resubmitQuery.data.status}”. Only returned or rejected requests can be edited and resubmitted.`}
         />
       ) : null}
-      {formQuery.data?.description ? (
+      {formQuery.data?.description && !startBlocked ? (
         <p className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
           {formQuery.data.description}
         </p>
@@ -1207,6 +1118,14 @@ export function EApprovalSubmissionComposePanel({
         />
       ) : formQuery.data?.status === "draft" ? (
         <p className="text-sm text-destructive">This form is not published yet. Contact your administrator.</p>
+      ) : formQuery.data &&
+        !isResubmitMode &&
+        !viewerCanStartFormRequest(formQuery.data.metadata_json, currentUserId) ? (
+        <OperationalAlert
+          level="warning"
+          title="You can't start this form"
+          description="Only selected people can start a request here. Ask a form owner to add you on Setup."
+        />
       ) : fields.length === 0 ? (
         <p className="text-sm text-muted-foreground">This form has no fields yet.</p>
       ) : isResubmitMode &&
@@ -1218,15 +1137,6 @@ export function EApprovalSubmissionComposePanel({
               formId={formId}
               value={parentSubmissionId}
               onChange={handleCashAdvanceSelect}
-              error={fieldErrors.parent_submission_id}
-              enabled={enabled && !!formId}
-            />
-          ) : null}
-          {usesPurchaseRequisitionPicker ? (
-            <EApprovalPurchaseRequisitionPicker
-              formId={formId}
-              value={parentSubmissionId}
-              onChange={handlePurchaseRequisitionSelect}
               error={fieldErrors.parent_submission_id}
               enabled={enabled && !!formId}
             />
@@ -1291,15 +1201,9 @@ export function EApprovalSubmissionComposePanel({
               level="warning"
               title="Amount exceeds open balance"
               description={
-                balanceError ??
-                (usesPurchaseRequisitionPicker
-                  ? "Reduce the PO total before saving or submitting."
-                  : "Reduce the liquidation amount before saving or submitting.")
+                balanceError ?? "Reduce the liquidation amount before saving or submitting."
               }
             />
-          ) : null}
-          {!hasBalanceBlocker && overspendWarning ? (
-            <OperationalAlert level="warning" title="Overspend policy warning" description={overspendWarning} />
           ) : null}
           {fieldErrors._form ? (
             <OperationalAlert level="warning" title="Cannot submit yet" description={fieldErrors._form} />
@@ -1345,17 +1249,11 @@ export function EApprovalSubmissionComposePanel({
                 if (controlledDocumentSync?.documentCodeField === name) {
                   revisionManualRef.current = false;
                 }
-                setValues((prev) => {
-                  const patch = procurementLinkCascadePatch(name, value);
-                  return applyComputedFieldValues(fields, { ...prev, ...patch });
-                });
+                setValues((prev) => applyComputedFieldValues(fields, { ...prev, [name]: value }));
                 setFieldErrors((prev) => {
                   const next = { ...prev };
                   delete next[name];
                   delete next._form;
-                  for (const key of Object.keys(procurementLinkCascadePatch(name, value))) {
-                    delete next[key];
-                  }
                   return next;
                 });
               }}
@@ -1483,9 +1381,11 @@ export function EApprovalSubmissionComposePanel({
         )}
       >
         {formBody}
-        <div className="sticky bottom-0 border-t border-border bg-background py-4">
-          {actions}
-        </div>
+        {startBlocked ? null : (
+          <div className="sticky bottom-0 border-t border-border bg-background py-4">
+            {actions}
+          </div>
+        )}
       </div>
     );
   }
@@ -1493,7 +1393,7 @@ export function EApprovalSubmissionComposePanel({
   return (
     <div className="space-y-4">
       {formBody}
-      {actions}
+      {startBlocked ? null : actions}
     </div>
   );
 }

@@ -6,9 +6,9 @@ namespace Tests\Feature\EApproval;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Modules\Documents\Models\Site;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 

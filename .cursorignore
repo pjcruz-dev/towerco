@@ -1,0 +1,11 @@
+# Keep secrets away from indexing and the agent
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Noise
+storage/logs/

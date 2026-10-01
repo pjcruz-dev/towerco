@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Workspace\Services;
 
 use App\Models\TicketingTicket;
-use App\Modules\AssetOne\Models\Asset;
 use App\Modules\Documents\Services\ControlledDocumentSearchService;
 use App\Modules\Documents\Services\DocumentSearchService;
 use App\Modules\EApproval\Models\EApprovalForm;
@@ -13,13 +12,8 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
-use App\Modules\FiberOne\Models\FiberRoute;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\ProjectOne\Models\Project;
-use App\Modules\Rollout\Models\RolloutProgram;
-use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
-use App\Modules\TowerOne\Models\Tower;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -88,32 +82,8 @@ final class WorkspaceSearchService
             $providers[] = fn (): array => $this->searchTicketingTickets($viewer, $search, $like, $limitPerType);
         }
 
-        if ($this->canSearchModule($enabled, $viewer, 'sites', 'sites:view')) {
-            $providers[] = fn (): array => $this->searchSites($like, $limitPerType);
-        }
-
         if ($this->canSearchModule($enabled, $viewer, 'documents', 'documents:view')) {
             $providers[] = fn (): array => $this->documents->asWorkspaceResults($search, $limitPerType);
-        }
-
-        if ($this->canSearchModule($enabled, $viewer, 'tower_one', 'tower_one:view')) {
-            $providers[] = fn (): array => $this->searchTowers($like, $limitPerType);
-        }
-
-        if ($this->canSearchModule($enabled, $viewer, 'asset_one', 'asset_one:view')) {
-            $providers[] = fn (): array => $this->searchAssets($like, $limitPerType);
-        }
-
-        if ($this->canSearchModule($enabled, $viewer, 'fiber_one', 'fiber_one:view')) {
-            $providers[] = fn (): array => $this->searchFiberRoutes($like, $limitPerType);
-        }
-
-        if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:view')) {
-            $providers[] = fn (): array => $this->searchProjects($like, $limitPerType);
-        }
-
-        if ($this->canSearchModule($enabled, $viewer, 'project_one', 'project_one:rollout:view')) {
-            $providers[] = fn (): array => $this->searchRollouts($like, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'team_access', 'user:manage')) {
@@ -445,244 +415,6 @@ final class WorkspaceSearchService
                     'subtitle' => $ticket->assignee?->name ? 'Assignee: '.$ticket->assignee->name : null,
                     'status' => (string) $ticket->status,
                     'href' => '/ticketing/tickets/'.$ticket->id,
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchSites(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            Site::query()
-                ->select(['id', 'site_code', 'name', 'type', 'status'])
-                ->where(static function (Builder $q) use ($like): void {
-                    $q->where('site_code', 'like', $like)
-                        ->orWhere('name', 'like', $like);
-                })
-                ->orderBy('site_code')
-                ->limit($limit)
-                ->get(),
-            static function (Site $site): array {
-                return [
-                    'module' => 'sites',
-                    'entity_type' => 'site',
-                    'id' => (string) $site->id,
-                    'title' => trim($site->site_code.' · '.$site->name),
-                    'subtitle' => $site->type,
-                    'status' => $site->status,
-                    'href' => '/sites/'.$site->id,
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchTowers(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            Tower::query()
-                ->select(['id', 'tower_type', 'status', 'site_id'])
-                ->with(['site:id,site_code,name'])
-                ->where(static function (Builder $q) use ($like): void {
-                    $q->where('tower_type', 'like', $like)
-                        ->orWhereHas('site', static function (Builder $site) use ($like): void {
-                            $site->where('site_code', 'like', $like)
-                                ->orWhere('name', 'like', $like);
-                        });
-                })
-                ->orderByDesc('updated_at')
-                ->limit($limit)
-                ->get(),
-            static function (Tower $tower): array {
-                $siteLabel = $tower->site
-                    ? trim($tower->site->site_code.' · '.$tower->site->name)
-                    : 'Unlinked site';
-
-                return [
-                    'module' => 'tower_one',
-                    'entity_type' => 'tower',
-                    'id' => (string) $tower->id,
-                    'title' => ucfirst((string) $tower->tower_type).' tower',
-                    'subtitle' => $siteLabel,
-                    'status' => $tower->status,
-                    'href' => '/tower-one/towers/'.$tower->id,
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchAssets(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            Asset::query()
-                ->select(['id', 'asset_code', 'name', 'category', 'status'])
-                ->where(static function (Builder $q) use ($like): void {
-                    $q->where('asset_code', 'like', $like)
-                        ->orWhere('name', 'like', $like)
-                        ->orWhere('rfid_tag', 'like', $like);
-                })
-                ->orderBy('asset_code')
-                ->limit($limit)
-                ->get(),
-            static function (Asset $asset): array {
-                return [
-                    'module' => 'asset_one',
-                    'entity_type' => 'asset',
-                    'id' => (string) $asset->id,
-                    'title' => trim($asset->asset_code.' · '.$asset->name),
-                    'subtitle' => $asset->category,
-                    'status' => $asset->status,
-                    'href' => '/asset-one/assets/'.$asset->id,
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchFiberRoutes(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            FiberRoute::query()
-                ->select(['id', 'name', 'status', 'from_site_id', 'to_site_id'])
-                ->with(['fromSite:id,site_code,name', 'toSite:id,site_code,name'])
-                ->where('name', 'like', $like)
-                ->orderBy('name')
-                ->limit($limit)
-                ->get(),
-            static function (FiberRoute $route): array {
-                $from = $route->fromSite?->site_code ?? '—';
-                $to = $route->toSite?->site_code ?? '—';
-
-                return [
-                    'module' => 'fiber_one',
-                    'entity_type' => 'fiber_route',
-                    'id' => (string) $route->id,
-                    'title' => (string) $route->name,
-                    'subtitle' => $from.' → '.$to,
-                    'status' => $route->status,
-                    'href' => '/fiber-one/routes?search='.rawurlencode((string) $route->name),
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchProjects(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            Project::query()
-                ->select(['id', 'name', 'status', 'site_id'])
-                ->with(['site:id,site_code,name'])
-                ->where(static function (Builder $q) use ($like): void {
-                    $q->where('name', 'like', $like)
-                        ->orWhereHas('site', static function (Builder $site) use ($like): void {
-                            $site->where('site_code', 'like', $like)
-                                ->orWhere('name', 'like', $like);
-                        });
-                })
-                ->orderByDesc('updated_at')
-                ->limit($limit)
-                ->get(),
-            static function (Project $project): array {
-                return [
-                    'module' => 'project_one',
-                    'entity_type' => 'project',
-                    'id' => (string) $project->id,
-                    'title' => (string) $project->name,
-                    'subtitle' => $project->site
-                        ? trim($project->site->site_code.' · '.$project->site->name)
-                        : null,
-                    'status' => $project->status,
-                    'href' => '/project-one/projects/'.$project->id,
-                ];
-            },
-        );
-    }
-
-    /**
-     * @return list<array{
-     *   module: string,
-     *   entity_type: string,
-     *   id: string,
-     *   title: string,
-     *   subtitle: string|null,
-     *   status: string|null,
-     *   href: string
-     * }>
-     */
-    private function searchRollouts(string $like, int $limit): array
-    {
-        return $this->mapRows(
-            RolloutProgram::query()
-                ->select(['id', 'rollout_ref', 'search_ring_name', 'status'])
-                ->where(static function (Builder $q) use ($like): void {
-                    $q->where('rollout_ref', 'like', $like)
-                        ->orWhere('search_ring_name', 'like', $like);
-                })
-                ->orderBy('rollout_ref')
-                ->limit($limit)
-                ->get(),
-            static function (RolloutProgram $rollout): array {
-                return [
-                    'module' => 'project_one',
-                    'entity_type' => 'rollout',
-                    'id' => (string) $rollout->id,
-                    'title' => (string) $rollout->rollout_ref,
-                    'subtitle' => $rollout->search_ring_name,
-                    'status' => $rollout->status,
-                    'href' => '/project-one/rollouts/'.$rollout->id,
                 ];
             },
         );

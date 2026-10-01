@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,6 +24,19 @@ class EApprovalFormShowController extends AbstractApiController
 
         if ($form->status === 'draft' && ! $user?->can('e_approval:forms:manage')) {
             abort(404);
+        }
+
+        $canManage = $user?->can('e_approval:forms:manage') === true;
+        if (
+            ! $canManage
+            && $canSubmit
+            && $user instanceof TenantUser
+            && ! EApprovalFormRequestAccessSupport::viewerCanStart(
+                $user,
+                is_array($form->metadata_json) ? $form->metadata_json : null,
+            )
+        ) {
+            abort(403, 'You are not allowed to start this form.');
         }
 
         $form->load(['fields', 'workflowTemplate.steps']);

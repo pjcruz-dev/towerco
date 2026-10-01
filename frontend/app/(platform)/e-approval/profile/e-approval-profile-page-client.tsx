@@ -41,7 +41,11 @@ export function EApprovalProfilePageClient() {
           description={
             <>
               <EApprovalBackLink href="/e-approval">Dashboard</EApprovalBackLink>
-              {" · "}Signature and delegation settings used on approvals and printed documents.
+              {" · "}Signature and delegation settings used on approvals and printed documents. Records and files from other modules are on{" "}
+              <Link href="/account/profile" className="text-primary hover:underline">
+                My profile
+              </Link>
+              .
             </>
           }
         />

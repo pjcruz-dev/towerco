@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Models;
 
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

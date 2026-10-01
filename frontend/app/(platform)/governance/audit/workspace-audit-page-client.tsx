@@ -187,8 +187,6 @@ export function WorkspaceAuditPageClient() {
               <option value="e_approval">E-Forms</option>
               <option value="documents">Documents</option>
               <option value="team_access">Team &amp; access</option>
-              <option value="procurement_one">Procurement</option>
-              <option value="project_one">Project-One</option>
               <option value="ticketing">Ticketing</option>
               <option value="doc_extract">DocExtract</option>
               <option value="ai_assistant">AI Assistant</option>

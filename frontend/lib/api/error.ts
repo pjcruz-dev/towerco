@@ -28,6 +28,30 @@ export function getApiFieldErrors(error: unknown, prefixToStrip = ""): Record<st
   return map;
 }
 
+export function isCanceledRequestError(error: unknown): boolean {
+  if (axios.isAxiosError(error) && error.code === "ERR_CANCELED") {
+    return true;
+  }
+
+  return typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError";
+}
+
+export function isApiTimeoutError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  return error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout");
+}
+
+export function isForbiddenApiError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 403;
+}
+
+export function isNetworkApiError(error: unknown): boolean {
+  return axios.isAxiosError(error) && (error.code === "ERR_NETWORK" || error.message === "Network Error");
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as
@@ -88,7 +112,13 @@ export function getErrorMessage(error: unknown): string {
     if (error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout")) {
       const url = typeof error.config?.url === "string" ? error.config.url : "";
       const method = (error.config?.method ?? "").toLowerCase();
-      if (url.includes("/doc-extract/batches") && method === "post") {
+      if (url.includes("/admin/roles")) {
+        return "Roles took too long to load. Refresh the page. If it keeps failing, the API may be busy — try again in a few seconds.";
+      }
+      if (url.includes("/doc-extract/batches") && url.includes("/requeue")) {
+        return "Rescan timed out waiting for the API. The job may still be running in the background — refresh Batches in a minute.";
+      }
+      if (url.includes("/doc-extract/batches") && method === "post" && !url.includes("/requeue")) {
         return "Upload timed out. Check Batches — the file may still have been accepted and is processing in the background.";
       }
       if (process.env.NEXT_PUBLIC_APP_ENV === "local") {

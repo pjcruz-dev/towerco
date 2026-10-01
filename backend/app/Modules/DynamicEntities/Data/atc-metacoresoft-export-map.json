@@ -1,0 +1,718 @@
+{
+    "generated_at": "2026-08-30T11:21:17+00:00",
+    "entities": {
+        "bank_accounts": {
+            "metacoresoft_slug": "bank_accounts",
+            "toweros_slug": "bank_accounts",
+            "columns": {
+                "Account Number": "account_number",
+                "Bank Name": "bank_name",
+                "Account Name": "account_name",
+                "Status": "status",
+                "Current Balance": "current_balance"
+            }
+        },
+        "bank_reconciliations": {
+            "metacoresoft_slug": "bank_reconciliations",
+            "toweros_slug": "bank_reconciliations",
+            "columns": {
+                "Reconciliation Number": "reconciliation_number",
+                "Bank Account": "bank_account_id",
+                "Statement Date": "statement_date",
+                "Period Start": "period_start",
+                "Period End": "period_end",
+                "Opening Balance": "opening_balance",
+                "Ending Balance": "ending_balance",
+                "Status": "status",
+                "Reconciled By": "reconciled_by"
+            }
+        },
+        "bank_transactions": {
+            "metacoresoft_slug": "bank_transactions",
+            "toweros_slug": "bank_transactions",
+            "columns": {
+                "Transaction Date": "transaction_date",
+                "Bank Reference": "bank_reference",
+                "Transaction Type": "transaction_type",
+                "Amount": "amount",
+                "Bank Account": "bank_account_id",
+                "Status": "status",
+                "Reconciliation": "reconciliation_id",
+                "Description": "description"
+            }
+        },
+        "bir_form_2307_certificates": {
+            "metacoresoft_slug": "bir_form_2307_certificates",
+            "toweros_slug": "bir_form_2307_certificates",
+            "columns": {
+                "Control Number": "control_number",
+                "Status": "status",
+                "Period From": "period_from",
+                "Period To": "period_to",
+                "Supplier Link": "supplier_id",
+                "Payee TIN": "payee_tin",
+                "Payee Name": "payee_name",
+                "Payee Address": "payee_address",
+                "Payee Zip Code": "payee_zip",
+                "Payor TIN": "payor_tin",
+                "Payor Name": "payor_name",
+                "Payor Address": "payor_address",
+                "Payor Zip Code": "payor_zip",
+                "Income Description": "income_description",
+                "ATC Code": "atc_code",
+                "Income Month 1": "income_month1",
+                "Income Month 2": "income_month2",
+                "Income Month 3": "income_month3",
+                "Tax Rate": "tax_rate"
+            }
+        },
+        "branches": {
+            "metacoresoft_slug": "branches",
+            "toweros_slug": "branches",
+            "columns": {
+                "Branch Code": "branch_code",
+                "Branch Name": "branch_name",
+                "Status": "status",
+                "Address": "address"
+            }
+        },
+        "capex_budgets": {
+            "metacoresoft_slug": "capex_budgets",
+            "toweros_slug": "capex_budgets",
+            "columns": {
+                "Budget Code": "budget_code",
+                "Fiscal Year": "fiscal_year",
+                "Target Towers": "target_towers",
+                "Total Budget": "total_budget",
+                "Status": "status"
+            }
+        },
+        "chart_of_accounts": {
+            "metacoresoft_slug": "chart_of_accounts",
+            "toweros_slug": "chart_of_accounts",
+            "columns": {
+                "Account Code": "account_code",
+                "Account Name": "account_name",
+                "Status": "status",
+                "Account Type": "account_type",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category"
+            }
+        },
+        "construction_activities": {
+            "metacoresoft_slug": "construction_activities",
+            "toweros_slug": "construction_activities",
+            "columns": {
+                "Construction Project": "construction_project_id",
+                "Activity": "activity",
+                "Start Plan": "start_plan",
+                "Start Actual": "start_actual",
+                "Finish Plan": "finish_plan",
+                "Finish Actual": "finish_actual",
+                "Sequence": "sequence",
+                "Remarks": "activity_remarks"
+            }
+        },
+        "construction_projects": {
+            "metacoresoft_slug": "construction_projects",
+            "toweros_slug": "construction_projects",
+            "columns": {
+                "Budget Year": "budget_year",
+                "Project Number": "project_number",
+                "Serial Number": "serial_number",
+                "Project Name": "project_name",
+                "Status": "status",
+                "CME Status": "cme_status",
+                "Tower Site": "tower_site_id",
+                "CME Vendor": "cme_vendor_id",
+                "PM-In-Charge": "pm_in_charge",
+                "Supervisor-In-Charge": "supervisor_in_charge",
+                "RGS / RFTI Tagging": "rgs_rfti_tagging",
+                "Site Type": "site_type",
+                "Start Date": "start_date",
+                "End Date": "end_date",
+                "RTB Actual Date": "rtb_actual_date",
+                "Risk Build Declared Date": "risk_build_declared_date",
+                "RTB Forecast": "rtb_forecast",
+                "SKOM Date": "skom_date",
+                "CW Start Date": "cw_start_date",
+                "CW Completed Date": "cw_completed_date",
+                "DDD Plan Date": "ddd_plan_date",
+                "DDD Actual Date": "ddd_actual_date",
+                "Budget": "budget",
+                "Percentage in Progress": "percentage_in_progress",
+                "DDD Remarks": "ddd_remarks"
+            }
+        },
+        "customers": {
+            "metacoresoft_slug": "customers",
+            "toweros_slug": "customers",
+            "columns": {
+                "Customer Code": "customer_code",
+                "Customer Name": "customer_name",
+                "Contact Person": "contact_person",
+                "Email": "email",
+                "Phone": "phone",
+                "TIN": "tin",
+                "Tax Type": "tax_type",
+                "Status": "status",
+                "Address": "address"
+            }
+        },
+        "electric_utilities": {
+            "metacoresoft_slug": "electric_utilities",
+            "toweros_slug": "electric_utilities",
+            "columns": {
+                "Utility Name": "utility_name",
+                "Coverage Area": "coverage_area",
+                "Contact Number": "contact_number",
+                "Utility Type": "utility_type",
+                "Region": "region"
+            }
+        },
+        "fiscal_periods": {
+            "metacoresoft_slug": "fiscal_periods",
+            "toweros_slug": "fiscal_periods",
+            "columns": {
+                "Period Name": "period_name",
+                "Start Date": "start_date",
+                "End Date": "end_date",
+                "Status": "status"
+            }
+        },
+        "fixed_assets": {
+            "metacoresoft_slug": "fixed_assets",
+            "toweros_slug": "fixed_assets",
+            "columns": {
+                "Asset Code": "asset_code",
+                "Asset Name": "asset_name",
+                "Category": "category",
+                "Acquisition Cost": "acquisition_cost",
+                "Tower Site": "tower_site_id",
+                "Acquisition Date": "acquisition_date",
+                "Useful Life (Years)": "useful_life_years",
+                "Accumulated Depreciation": "accumulated_depreciation",
+                "Status": "status"
+            }
+        },
+        "general_ledger": {
+            "metacoresoft_slug": "general_ledger",
+            "toweros_slug": "general_ledger",
+            "columns": {
+                "Reference Number": "reference_number",
+                "Account": "account_id",
+                "Tower Site": "tower_site_id",
+                "Source Entity": "source_entity",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category",
+                "Entry Date": "entry_date",
+                "Debit Amount": "debit_amount",
+                "Credit Amount": "credit_amount",
+                "Source Record ID": "source_record_id",
+                "Description": "description"
+            }
+        },
+        "land_leases": {
+            "metacoresoft_slug": "land_leases",
+            "toweros_slug": "land_leases",
+            "columns": {
+                "Lease Number": "lease_number",
+                "Status": "status",
+                "Tower Site": "tower_site_id",
+                "Lessor": "lessor_id",
+                "Start Date": "start_date",
+                "End Date": "end_date",
+                "Period of Lease (Years)": "period_of_lease_years",
+                "Payment Terms": "payment_terms",
+                "Payment End Date": "payment_end_date",
+                "Advance Payment Requested": "advance_payment_requested",
+                "Advance Payment Paid": "advance_payment_paid",
+                "Monthly Rent": "monthly_rent",
+                "Security Deposit": "security_deposit",
+                "Escalation (%)": "escalation",
+                "Advance Rental (months)": "advance_rental_months",
+                "Payment Remarks": "payment_remarks",
+                "RFP Status": "rfp_status",
+                "RFP Requested Date": "rfp_requested_date",
+                "RFP Actual Date": "rfp_actual_date",
+                "RFP Remarks": "rfp_remarks",
+                "Final COL Plan": "final_col_plan",
+                "Final COL Actual": "final_col_actual",
+                "Final COL Remarks": "final_col_remarks"
+            }
+        },
+        "lessors": {
+            "metacoresoft_slug": "lessors",
+            "toweros_slug": "lessors",
+            "columns": {
+                "Lessor Name": "lessor_name",
+                "Attorney-in-Fact / SPA": "atty_in_fact_spa",
+                "Contact Number": "contact_number",
+                "Email Address": "email_address",
+                "Ownership Type": "ownership_type",
+                "Lease Area (sqm)": "lease_area_sqm",
+                "Lessor Latitude": "lessor_latitude",
+                "Lessor Longitude": "lessor_longitude",
+                "Lessor Address": "lessor_address",
+                "Site Address": "site_address"
+            }
+        },
+        "products": {
+            "metacoresoft_slug": "materials_&_equipment",
+            "toweros_slug": "products",
+            "columns": {
+                "Product Code": "product_code",
+                "Product Name": "product_name",
+                "Status": "status",
+                "Charge Account": "gl_account_id",
+                "Default Warehouse": "default_warehouse_id",
+                "Category": "category",
+                "Unit of Measure": "unit_of_measure",
+                "Product Type": "product_type",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category",
+                "Standard Cost": "cost_price",
+                "Charge-out / Sell Price": "retail_price",
+                "Opening Stock (pre-system)": "initial_stock",
+                "Reorder Level": "reorder_level",
+                "Stocked Item": "is_stocked"
+            }
+        },
+        "milestone_catalogue": {
+            "metacoresoft_slug": "milestone_catalogue",
+            "toweros_slug": "milestone_catalogue",
+            "columns": {
+                "Milestone Code": "milestone_code",
+                "Milestone Name": "milestone_name",
+                "Phase": "phase",
+                "Parent Milestone": "parent_milestone_id",
+                "Level": "milestone_level",
+                "Sequence": "sequence"
+            }
+        },
+        "payments_and_receipts": {
+            "metacoresoft_slug": "payments_and_receipts",
+            "toweros_slug": "payments_and_receipts",
+            "columns": {
+                "Payment Number": "payment_number",
+                "Reference Number": "reference_number",
+                "Status": "status",
+                "Customer": "customer_id",
+                "Supplier": "supplier_id",
+                "Account": "account_id",
+                "Tower Site": "tower_site_id",
+                "Type": "type",
+                "Payment Method": "payment_method",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category",
+                "Payment Date": "payment_date",
+                "Amount": "amount",
+                "Description": "description"
+            }
+        },
+        "postcon_trackers": {
+            "metacoresoft_slug": "postcon_trackers",
+            "toweros_slug": "postcon_trackers",
+            "columns": {
+                "Tower Site": "tower_site_id",
+                "SAQ Contractor": "saq_contractor_id",
+                "CFEI Milestone": "cfei_milestone",
+                "Redline": "redline",
+                "Logbook": "logbook",
+                "Site Photos": "site_photos",
+                "CME Requirements Complete": "cme_requirements_complete",
+                "RTB Date": "rtb_date",
+                "CME RFTI Actual (Internal)": "cme_rfti_actual_internal",
+                "CFEI Applied": "cfei_applied_date",
+                "CFEI Secured": "cfei_secured_date",
+                "Occupancy Permit Applied": "occupancy_applied_date",
+                "Occupancy Permit Secured": "occupancy_secured_date",
+                "FSIC Applied": "fsic_applied_date",
+                "FSIC Secured": "fsic_secured_date",
+                "CME Progress (%)": "cme_progress",
+                "Remarks": "postcon_remarks",
+                "Major Dependency": "major_dependency"
+            }
+        },
+        "power_trackers": {
+            "metacoresoft_slug": "power_trackers",
+            "toweros_slug": "power_trackers",
+            "columns": {
+                "Permanent Power Application No.": "permanent_power_app_no",
+                "Energization Status": "energization_status",
+                "External Status": "external_status",
+                "Site Folder Status": "site_folder_status",
+                "Tower Site": "tower_site_id",
+                "Electric Company": "electric_utility_id",
+                "Power Vendor": "power_vendor_id",
+                "Main Tagging": "main_tagging",
+                "Current Milestone": "current_milestone",
+                "ROW": "row_clearance",
+                "Previous Contractor": "previous_contractor",
+                "DITO Coloc": "dito_coloc",
+                "For Coloc to Smart": "for_coloc_to_smart",
+                "Accepted Sites": "accepted_sites",
+                "Connection Type": "connection_type",
+                "Permanent Power Application": "permanent_power_application_date",
+                "Survey with Coop / MERALCO": "survey_with_utility_date",
+                "Project Design and Costing": "project_design_costing_date",
+                "Final Inspection": "final_inspection_date",
+                "Payment for Bill Deposit": "payment_bill_deposit_date",
+                "Start of Line Extension": "start_line_extension_date",
+                "Completion of Line Extension": "completion_line_extension_date",
+                "Energization Date": "energization_date",
+                "Energization (Tempo)": "energization_tempo_date",
+                "Energization (Permanent)": "energization_permanent_date",
+                "CFEI Application": "cfei_application_date",
+                "CFEI Secured": "cfei_secured_date",
+                "Temp. Power Connected": "temp_power_connected",
+                "GLIST Forecast": "glist_forecast",
+                "Internal Forecast": "internal_forecast",
+                "Tempo Power To Date": "tempo_power_to_date",
+                "Yellow Card Handover to SAQ": "yellow_card_handover_to_saq",
+                "CFEI to Energized (days)": "cfei_to_energized_aging",
+                "CME Progress (%)": "cme_progress",
+                "Transformer (KVA)": "transformer_kva",
+                "Primary Line Length (m)": "primary_line_length_m",
+                "Number of Primary Poles": "primary_poles",
+                "Secondary Line Length (m)": "secondary_line_length_m",
+                "Number of Secondary Poles": "secondary_poles",
+                "CFEI Remarks": "cfei_remarks",
+                "Remarks / History": "remarks_history"
+            }
+        },
+        "procurement_requests": {
+            "metacoresoft_slug": "procurement_requests",
+            "toweros_slug": "procurement_requests",
+            "columns": {
+                "PR Number": "pr_number",
+                "PO Number": "po_number",
+                "PO Status": "po_status",
+                "Tower Site": "tower_site_id",
+                "Deliver To Warehouse": "warehouse_id",
+                "Payment (Milestone)": "payment_milestone",
+                "Discipline": "discipline",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category",
+                "Fulfilment Mode": "fulfilment_mode",
+                "PR Request Date": "pr_request_date",
+                "PR Fully Approved Date": "pr_fully_approved_date",
+                "PO Issuance Date": "po_issuance_date",
+                "PR Amount": "pr_amount",
+                "PO Amount": "po_amount",
+                "Invoiced Amount": "invoiced_amount",
+                "PR to PO Ageing (days)": "pr_to_po_ageing",
+                "Budget Year": "budget_year",
+                "Remarks": "procurement_remarks"
+            }
+        },
+        "project_teams": {
+            "metacoresoft_slug": "project_teams",
+            "toweros_slug": "project_teams",
+            "columns": {
+                "Team Name": "team_name",
+                "Scope": "team_scope"
+            }
+        },
+        "purchase_transactions": {
+            "metacoresoft_slug": "purchase_transactions",
+            "toweros_slug": "purchase_transactions",
+            "columns": {
+                "Purchase Number": "purchase_number",
+                "Status": "status",
+                "Supplier": "supplier_id",
+                "Tower Site": "tower_site_id",
+                "Transaction Type": "transaction_type",
+                "Tax Type": "tax_type",
+                "Cost Classification": "cost_classification",
+                "Cost Category": "cost_category",
+                "Purchase Date": "purchase_date"
+            }
+        },
+        "sales_transactions": {
+            "metacoresoft_slug": "sales_transactions",
+            "toweros_slug": "sales_transactions",
+            "columns": {
+                "Transaction Number": "transaction_number",
+                "Transaction Date": "transaction_date",
+                "Customer": "customer_id",
+                "Transaction Type": "transaction_type",
+                "Status": "status",
+                "Tax Type": "tax_type",
+                "Discount Amount": "discount_amount"
+            }
+        },
+        "saq_trackers": {
+            "metacoresoft_slug": "saq_trackers",
+            "toweros_slug": "saq_trackers",
+            "columns": {
+                "ELAS Application No.": "elas_app_no",
+                "Overall Status": "overall_status",
+                "Site Hunting Status": "site_hunting_status",
+                "TSSR Status": "tssr_status",
+                "MOC Status": "moc_status",
+                "Tower Site": "tower_site_id",
+                "Lessor": "lessor_id",
+                "SAQ Vendor": "saq_vendor_id",
+                "Saq Lead": "saq_lead",
+                "Saq Officer": "saq_officer",
+                "SAQ Sub-milestone": "saq_submilestone",
+                "ELAS Email Subject": "elas_email_subject",
+                "SAQ Milestone": "saq_milestone",
+                "Site Hunting Plan Date": "site_hunting_plan_date",
+                "Site Hunting Actual": "site_hunting_actual",
+                "SHR Submit Date": "shr_submit_date",
+                "Re-hunt Date": "rehunt_date",
+                "Pre-assess Submitted to MNO": "pre_assess_submitted_to_mno",
+                "Pre-assess Approved Date": "pre_assess_approved_date",
+                "Latest Site Hunting Date": "latest_site_hunting_date",
+                "TSSR Plan Date": "tssr_plan_date",
+                "ATC TSSR Submitted": "atc_tssr_submitted",
+                "TSSR Submission to MNO": "tssr_submission_to_mno",
+                "RRE Approved Date": "rre_approved_date",
+                "TSSR Fully Approved Date": "tssr_fully_approved_date",
+                "MOC Lessor Secured": "moc_lessor_secured",
+                "MOC Submitted to ATC": "moc_submitted_to_atc",
+                "MOC Plan Date": "moc_plan_date",
+                "MOC Actual Date": "moc_actual_date",
+                "ELAS Applied Date": "elas_applied_date",
+                "Signed & Seal Plan Date": "signed_seal_plan_date",
+                "Signed & Seal Actual": "signed_seal_actual",
+                "Lot Seg Plan Mobilisation": "lotseg_plan_mob_date",
+                "Lot Seg Mobilisation Actual": "lotseg_mob_date",
+                "Lot Seg Plan Received": "lotseg_plan_received",
+                "SBT/SI Date Endorsed": "sbt_si_date_endorsed",
+                "SBT/SI Plan Date": "sbt_si_plan_date",
+                "SBT/SI Mobilisation Date": "sbt_si_mob_date",
+                "SBT/SI Report Received": "sbt_si_report_received",
+                "TSSR Submission Ageing (days)": "tssr_submission_ageing",
+                "TSSR Approval Ageing (days)": "tssr_approval_ageing",
+                "SAQ Remarks": "saq_remarks",
+                "Site Hunting Remarks": "site_hunting_remarks",
+                "TSSR Remarks": "tssr_remarks",
+                "MOC Remarks": "moc_remarks",
+                "ELAS Remarks": "elas_remarks",
+                "Signed & Seal Remarks": "signed_seal_remarks",
+                "Lot Segregation Remarks": "lotseg_remarks",
+                "SBT/SI Remarks": "sbt_si_remarks"
+            }
+        },
+        "site_colocations": {
+            "metacoresoft_slug": "site_colocations",
+            "toweros_slug": "site_colocations",
+            "columns": {
+                "Colocation Site Name": "coloc_site_name",
+                "Tenancy Slot": "slot_number",
+                "Tower Site": "tower_site_id",
+                "Colocation Site ID": "coloc_site_id",
+                "MNO": "mno",
+                "RFTI Date": "rfti_date",
+                "Site Licence Remarks": "sl_remarks"
+            }
+        },
+        "site_documents": {
+            "metacoresoft_slug": "site_documents",
+            "toweros_slug": "site_documents",
+            "columns": {
+                "Status": "document_status",
+                "Tower Site": "tower_site_id",
+                "Lessor": "lessor_id",
+                "Document Type": "document_type",
+                "Date Secured": "date_secured",
+                "Completion Plan Date": "completion_plan_date",
+                "Completed Date": "completed_date",
+                "Lacking Documents": "lacking_documents",
+                "Remarks": "document_remarks"
+            }
+        },
+        "site_operating_costs": {
+            "metacoresoft_slug": "site_operating_costs",
+            "toweros_slug": "site_operating_costs",
+            "columns": {
+                "Reference": "cost_reference",
+                "Invoice / Billing No.": "invoice_number",
+                "Payment Status": "payment_status",
+                "Tower Site": "tower_site_id",
+                "GL Account": "account_id",
+                "Supplier / Payee": "supplier_id",
+                "Cost Category": "cost_category",
+                "Cost Period": "period_month",
+                "Amount": "amount",
+                "Remarks": "remarks"
+            }
+        },
+        "site_permits": {
+            "metacoresoft_slug": "site_permits",
+            "toweros_slug": "site_permits",
+            "columns": {
+                "Permit Number": "permit_number",
+                "Status": "status",
+                "Stage": "permit_stage",
+                "Tower Site": "tower_site_id",
+                "Issuing Agency": "issuing_agency",
+                "Permit Milestone": "permit_milestone",
+                "Permit Type": "permit_type",
+                "Issue Date": "issue_date",
+                "Expiry Date": "expiry_date",
+                "Application Plan Date": "plan_date",
+                "Applied Date": "applied_date",
+                "Secured Date": "secured_date",
+                "Target Release": "target_release",
+                "Permit Cost": "permit_cost",
+                "Remarks": "permit_remarks"
+            }
+        },
+        "stock_movements": {
+            "metacoresoft_slug": "stock_movements",
+            "toweros_slug": "stock_movements",
+            "columns": {
+                "Reference": "reference",
+                "Movement No.": "movement_reference",
+                "Item": "product_id",
+                "Warehouse": "warehouse_id",
+                "Tower Site": "tower_site_id",
+                "Transfer To": "to_warehouse_id",
+                "Purchase Order": "procurement_request_id",
+                "Issued To / Received By": "issued_to",
+                "Direction": "type",
+                "Movement Type": "movement_type",
+                "Movement Date": "movement_date",
+                "Unit Cost": "unit_cost",
+                "Extended Cost": "total_cost",
+                "Quantity": "quantity",
+                "Notes": "notes"
+            }
+        },
+        "suppliers": {
+            "metacoresoft_slug": "suppliers",
+            "toweros_slug": "suppliers",
+            "columns": {
+                "Supplier Code": "supplier_code",
+                "Supplier Name": "supplier_name",
+                "Contact Person": "contact_person",
+                "Email": "email",
+                "Phone": "phone",
+                "TIN": "tin",
+                "Tax Type": "tax_type",
+                "Status": "status",
+                "Address": "address"
+            }
+        },
+        "telco_contracts": {
+            "metacoresoft_slug": "telco_contracts",
+            "toweros_slug": "telco_contracts",
+            "columns": {
+                "Contract Number": "contract_number",
+                "Status": "status",
+                "Site License Status": "site_license_status",
+                "Tower Site": "tower_site_id",
+                "Telco Operator": "telco_operator",
+                "Start Date": "start_date",
+                "End Date": "end_date",
+                "RFTI Docs Submitted": "rfti_docs_submitted",
+                "RFTI Docs Signed (Tempo)": "rfti_docs_signed_tempo",
+                "RFTI Docs Signed (Permanent)": "rfti_docs_signed_permanent",
+                "Monthly Billing Rate": "monthly_billing_rate",
+                "Site Licence Submitted": "sl_submitted",
+                "Site Licence Signed by MNO": "sl_signed",
+                "Site Licence Remarks": "sl_remarks"
+            }
+        },
+        "territories": {
+            "metacoresoft_slug": "territories",
+            "toweros_slug": "territories",
+            "columns": {
+                "Territory Code": "territory_code",
+                "Territory Name": "territory_name",
+                "Region": "region"
+            }
+        },
+        "tower_sites": {
+            "metacoresoft_slug": "tower_sites",
+            "toweros_slug": "tower_sites",
+            "columns": {
+                "Site Name": "site_name",
+                "Status": "status",
+                "TCO Site ID": "site_code",
+                "MNO Anchor Site ID": "mno_anchor_site_id",
+                "Sales Order Category": "sales_order_category",
+                "Subsidiary": "subsidiary",
+                "SAQ Tagging Project": "saq_tagging_project",
+                "Globe Project Batch": "batch",
+                "Project Type": "project_type",
+                "MNO Anchor": "mno_anchor",
+                "Endorsement Type": "endorsement_type",
+                "Date Endorsed by MNO": "date_endorsed_by_mno",
+                "Date Accepted by ATC": "date_accepted_by_atc",
+                "120 BD from Endorsement": "sla_target_120bd",
+                "Order Tagging (Year)": "order_tagging",
+                "Coordinates": "coordinates",
+                "Province / Area": "province",
+                "Town / City / Municipality": "town",
+                "Region": "region",
+                "Globe Territory": "territory",
+                "Latitude": "latitude",
+                "Longitude": "longitude",
+                "Full Address": "full_address",
+                "Grid Status": "grid_status",
+                "Antenna Azimuth": "antenna_azimuth",
+                "ACL": "acl",
+                "Solution / Site Type": "solution",
+                "Tower Type": "tower_type",
+                "Tower Height (m)": "tower_height_m",
+                "Wind Speed (KPH)": "wind_speed_kph",
+                "Site Status": "site_status",
+                "Overall Status / Milestone": "milestone",
+                "Project Milestone": "project_milestone",
+                "Sub-milestone": "submilestone",
+                "GT Project Milestone": "gt_project_milestone",
+                "Target Tagging": "target_year",
+                "Colocation Remarks": "colocation_remarks",
+                "Precon / Postcon Dependency": "precon_postcon_dependency",
+                "Latest Remarks": "remarks",
+                "Weekly Bottleneck": "weekly_bottleneck",
+                "Billing Tag": "billing_tag",
+                "RFI SLA": "rfi_sla_remarks",
+                "FAD Forecast (Quarterly)": "fad_forecast_quarter",
+                "Actual Quarter": "qt_based_remarks",
+                "RFTI Forecast": "rfti_forecast",
+                "RFI Forecast (MLA Based)": "rfi_forecast_mla_based",
+                "FAD Forecast": "fad_forecast",
+                "Days to RFTI": "days_to_rfti",
+                "Landowner Name": "landowner_name",
+                "Landowner Contact": "landowner_contact",
+                "Assigned user": "assigned_user"
+            }
+        },
+        "vendors": {
+            "metacoresoft_slug": "vendors",
+            "toweros_slug": "vendors",
+            "columns": {
+                "Vendor Name": "vendor_name",
+                "Status": "vendor_status",
+                "Contact Person": "contact_person",
+                "Contact Number": "contact_number",
+                "Email": "email",
+                "Discipline": "discipline",
+                "Notes": "notes"
+            }
+        },
+        "warehouses": {
+            "metacoresoft_slug": "warehouses",
+            "toweros_slug": "warehouses",
+            "columns": {
+                "Warehouse Code": "warehouse_code",
+                "Warehouse Name": "warehouse_name",
+                "Custodian": "custodian_name",
+                "Status": "status",
+                "Inventory GL Account": "inventory_account_id",
+                "Province": "province",
+                "Custodian Contact": "custodian_contact",
+                "Type": "warehouse_type",
+                "Region": "region",
+                "Address": "full_address",
+                "Remarks": "remarks"
+            }
+        }
+    }
+}

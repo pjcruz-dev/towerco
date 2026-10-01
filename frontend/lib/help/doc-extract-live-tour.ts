@@ -26,7 +26,7 @@ export const docExtractLiveTour: LiveTourDefinition = {
       entryPath: "/doc-extract",
       target: "dx-nav-doc-extract-batches",
       title: "Batches",
-      body: "Batches shows every extraction run — status, template, and how many documents are ready.",
+      body: "Batches shows every extraction run — status, template, and how many documents are ready. Runs linked to you also sit on My profile → Account. Open DocExtract there, then open a batch, before the file names appear.",
     },
     {
       id: "dx-batches-page",

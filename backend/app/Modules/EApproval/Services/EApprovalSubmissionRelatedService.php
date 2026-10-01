@@ -6,14 +6,13 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
-use Illuminate\Support\Collection;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
+use Illuminate\Support\Collection;
 
 final class EApprovalSubmissionRelatedService
 {
     public function __construct(
         private readonly EApprovalCashAdvanceService $cashAdvances,
-        private readonly EApprovalPurchaseRequisitionService $purchaseRequisitions,
     ) {}
 
     /**
@@ -129,7 +128,6 @@ final class EApprovalSubmissionRelatedService
             'requested_amount' => 'Requested',
             'total_reimbursement' => 'Liquidation amount',
             'estimated_total' => 'Estimated total',
-            'total_amount' => 'PO total',
         ];
 
         foreach ($preferredFields as $fieldName => $label) {
@@ -155,43 +153,11 @@ final class EApprovalSubmissionRelatedService
      */
     private function buildChainSummary(EApprovalSubmission $submission, ?string $contextFamily): ?array
     {
-        if ($contextFamily === 'purchase_requisition') {
-            return $this->buildPurchaseRequisitionSummary($submission);
-        }
-
         if ($contextFamily === 'cash_advance') {
             return $this->buildCashAdvanceSummary($submission);
         }
 
         return null;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function buildPurchaseRequisitionSummary(EApprovalSubmission $submission): ?array
-    {
-        $estimated = $this->fieldAmount($submission, 'estimated_total');
-        if ($estimated === null) {
-            return null;
-        }
-
-        $openBalance = $this->purchaseRequisitions->openBalanceForParent((string) $submission->id);
-        if ($openBalance === null) {
-            $committed = $this->sumChildAmounts($submission, 'total_amount');
-            $openBalance = max(0, round($estimated - $committed, 2));
-        } else {
-            $committed = max(0, round($estimated - $openBalance, 2));
-        }
-
-        return [
-            'kind' => 'purchase_requisition_budget',
-            'total_label' => 'Estimated total',
-            'total_amount' => $estimated,
-            'committed_label' => 'Committed on POs',
-            'committed_amount' => $committed,
-            'open_balance' => $openBalance,
-        ];
     }
 
     /**

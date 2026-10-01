@@ -6,11 +6,14 @@ namespace Tests\Feature\Workspace;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Modules\Documents\Models\ControlledDocument;
+use App\Modules\Documents\Models\Site;
+use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -77,13 +80,13 @@ final class WorkspaceSearchTest extends TestCase
 
         tenancy()->initialize($this->testTenant);
         app(TenantRbacBaselineService::class)->ensure();
-        \App\Modules\Documents\Models\ControlledDocument::query()->create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
+        ControlledDocument::query()->create([
+            'id' => (string) Str::uuid(),
             'document_code' => 'WS-CD-SEARCH-001',
             'title' => 'Quality Manual',
             'department' => 'QMS',
             'current_revision' => 1,
-            'status' => \App\Modules\Documents\Support\ControlledDocumentStatus::PUBLISHED,
+            'status' => ControlledDocumentStatus::PUBLISHED,
         ]);
         tenancy()->end();
 

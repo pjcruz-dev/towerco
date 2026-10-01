@@ -10,7 +10,6 @@ import {
   TenantDirectoryTable,
   type TenantDirectoryFilters,
 } from "@/components/platform/tenant-directory-table";
-import { TenantPlaybookManageSheet } from "@/components/platform/tenant-playbook-manage-sheet";
 import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
@@ -33,7 +32,6 @@ import {
   type PlatformTenantThemeTokens,
 } from "@/lib/api/modules/platform-api";
 import { exportTenantsCsv } from "@/lib/platform/tenant-directory-utils";
-import { platformHasPermission, PLATFORM_PERMS } from "@/lib/platform/platform-permissions";
 import { usePlatformAuthStore } from "@/stores/platform-auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -66,8 +64,6 @@ export function PlatformHomePageClient() {
   const accessToken = usePlatformAuthStore((state) => state.accessToken);
   const platformUser = usePlatformAuthStore((state) => state.user);
   const isHydrated = usePlatformAuthStore((state) => state.isHydrated);
-  const canManagePlaybooks = platformHasPermission(platformUser, PLATFORM_PERMS.playbooksManage);
-
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -130,7 +126,6 @@ export function PlatformHomePageClient() {
   const [brandingTarget, setBrandingTarget] = useState<PlatformTenantRow | null>(null);
   const [billingTarget, setBillingTarget] = useState<PlatformTenantRow | null>(null);
   const [modulesTarget, setModulesTarget] = useState<PlatformTenantRow | null>(null);
-  const [playbookTarget, setPlaybookTarget] = useState<PlatformTenantRow | null>(null);
   const [billingDowngradeWarnings, setBillingDowngradeWarnings] = useState<string[]>([]);
   const [confirmPlanDowngrade, setConfirmPlanDowngrade] = useState(false);
 
@@ -502,15 +497,6 @@ export function PlatformHomePageClient() {
               onBranding={setBrandingTarget}
               onBilling={setBillingTarget}
               onModules={setModulesTarget}
-              onPlaybook={
-                canManagePlaybooks
-                  ? (row) => {
-                      if ((row.effective_enabled_modules ?? []).includes("project_one")) {
-                        setPlaybookTarget(row);
-                      }
-                    }
-                  : undefined
-              }
               onAddEnv={setEnvironmentTarget}
               onMfaToggle={(row) => mfaMutation.mutate({ id: row.id, mfaRequired: !row.mfa_required })}
               onDelete={(row) => {
@@ -614,19 +600,6 @@ export function PlatformHomePageClient() {
           onConfirmDowngradeChange={setConfirmPlanDowngrade}
           onClearDowngradeWarnings={() => setBillingDowngradeWarnings([])}
           onSave={(payload) => billingMutation.mutate({ id: billingTarget.id, ...payload })}
-        />
-      ) : null}
-
-      {playbookTarget ? (
-        <TenantPlaybookManageSheet
-          key={playbookTarget.id}
-          open
-          onOpenChange={(open) => {
-            if (!open) {
-              setPlaybookTarget(null);
-            }
-          }}
-          tenant={playbookTarget}
         />
       ) : null}
 

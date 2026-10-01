@@ -19,7 +19,6 @@ import type {
   EApprovalHealthResponse,
   EApprovalMeProfile,
   EApprovalOpenCashAdvance,
-  EApprovalOpenPurchaseRequisition,
   EApprovalNotificationRow,
   EApprovalPdfLayoutResponse,
   EApprovalPrintPayload,
@@ -34,8 +33,12 @@ import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
 import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 
-export async function fetchEApprovalAssignableUsers(): Promise<EApprovalAssignableUser[]> {
-  const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users");
+export async function fetchEApprovalAssignableUsers(
+  audience: "approvers" | "requestors" = "approvers",
+): Promise<EApprovalAssignableUser[]> {
+  const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users", {
+    params: audience === "requestors" ? { audience } : undefined,
+  });
   return response.data.data;
 }
 
@@ -81,21 +84,6 @@ export async function createEApprovalFormFromTemplate(templateId: string): Promi
   return response.data.data.form;
 }
 
-export async function createEApprovalFinanceProcurementBundle(): Promise<{
-  bundle: { id: string; name: string; description?: string; template_ids: string[] };
-  forms: EApprovalFormDetail[];
-  warnings: string[];
-}> {
-  const response = await apiClient.post<{
-    data: {
-      bundle: { id: string; name: string; description?: string; template_ids: string[] };
-      forms: EApprovalFormDetail[];
-      warnings: string[];
-    };
-  }>("/e-approval/form-templates/finance-procurement-bundle");
-  return response.data.data;
-}
-
 export async function fetchEApprovalCustomFormTemplate(
   templateId: string,
 ): Promise<EApprovalFormTemplateDefinition> {
@@ -135,9 +123,14 @@ export async function fetchEApprovalFormsIndex(params: {
   search?: string;
   status?: "published" | "draft";
   sort?: string;
+  for_request?: boolean;
 }): Promise<{ data: EApprovalFormListRow[]; meta: PaginatedMeta }> {
+  const { for_request, ...rest } = params;
   const response = await apiClient.get<{ data: EApprovalFormListRow[]; meta: PaginatedMeta }>("/e-approval/forms", {
-    params,
+    params: {
+      ...rest,
+      ...(for_request ? { for_request: 1 } : {}),
+    },
   });
   return response.data;
 }
@@ -363,22 +356,6 @@ export async function fetchEApprovalOpenCashAdvances(
     "/e-approval/cash-advances/open",
     {
       params: forFormId ? { for_form_id: forFormId } : undefined,
-    },
-  );
-  return response.data.data.items ?? [];
-}
-
-export async function fetchEApprovalOpenPurchaseRequisitions(
-  forFormId?: string,
-  options?: { scope?: "requestor" | "procurement" },
-): Promise<EApprovalOpenPurchaseRequisition[]> {
-  const response = await apiClient.get<{ data: { items: EApprovalOpenPurchaseRequisition[] } }>(
-    "/e-approval/purchase-requisitions/open",
-    {
-      params: {
-        ...(forFormId ? { for_form_id: forFormId } : {}),
-        ...(options?.scope === "procurement" ? { scope: "procurement" } : {}),
-      },
     },
   );
   return response.data.data.items ?? [];
@@ -1046,8 +1023,6 @@ export type EApprovalMetadataResponse = {
     liquidation_requires_parent: boolean;
     liquidation_overspend_mode: "block" | "warn";
     liquidation_max_overspend_percent: number;
-    po_overspend_mode: "block" | "warn";
-    po_max_overspend_percent: number;
   };
 };
 

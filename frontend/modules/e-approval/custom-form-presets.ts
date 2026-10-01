@@ -1,17 +1,12 @@
 import { suggestApiKeyFromLabel } from "@/modules/e-approval/field-api-key";
 import { catalogFieldDragId } from "@/modules/e-approval/field-layout";
 import type { GridColumnDef } from "@/modules/e-approval/field-options";
-import {
-  buildPurchaseOrderFormMetadata,
-  buildPurchaseOrderTemplateFields,
-} from "@/modules/e-approval/purchase-order-template";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
 export type EApprovalFormFieldBundleId =
   | "expense_lines_total"
   | "reimbursement_expense_lines_total"
-  | "po_line_items_total"
-  | "purchase_order_full";
+  | "po_line_items_total";
 
 export type EApprovalGridColumnPresetId =
   | "expense_lines_liquidation"
@@ -37,11 +32,6 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
     id: "po_line_items_total",
     label: "Total + PO line items",
     description: "Currency total auto-calculates Qty × unit price per row.",
-  },
-  {
-    id: "purchase_order_full",
-    label: "Purchase order (full)",
-    description: "PO layout with line items, VAT tax summary, totals, and print template.",
   },
 ];
 
@@ -174,10 +164,6 @@ export function buildFormFieldBundle(
     ];
   }
 
-  if (bundleId === "purchase_order_full") {
-    return buildPurchaseOrderTemplateFields(startIndex, taken).fields;
-  }
-
   return null;
 }
 
@@ -199,12 +185,8 @@ export function formFieldBundleCatalogDragId(bundleId: EApprovalFormFieldBundleI
 }
 
 export function getFormFieldBundleMetadataPatch(
-  bundleId: EApprovalFormFieldBundleId,
-  insertIndex = 0,
+  _bundleId: EApprovalFormFieldBundleId,
+  _insertIndex = 0,
 ): Record<string, unknown> | null {
-  if (bundleId === "purchase_order_full") {
-    return buildPurchaseOrderFormMetadata(insertIndex);
-  }
-
   return null;
 }

@@ -13,8 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class UserUiPreferenceService extends AbstractDomainService
 {
-    /** module-list.* (named column layouts) or dashboard-layout.* (page board prefs). */
-    public const KEY_PATTERN = '/^(module-list|dashboard-layout)\.[A-Za-z0-9._-]{1,140}$/';
+    /** module-list.*, dashboard-layout.*, or product-release.* (seen flag and published notes). */
+    public const KEY_PATTERN = '/^(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]{1,140}$/';
 
     public const MAX_VALUE_BYTES = 65536;
 
@@ -74,6 +74,15 @@ class UserUiPreferenceService extends AbstractDomainService
 
             return [
                 'layout' => is_array($layout) ? $layout : null,
+                ...$meta,
+            ];
+        }
+
+        if ($this->isProductReleaseKey($key)) {
+            $release = $payload['release'] ?? null;
+
+            return [
+                'release' => is_array($release) ? $release : null,
                 ...$meta,
             ];
         }
@@ -140,6 +149,8 @@ class UserUiPreferenceService extends AbstractDomainService
                 ]);
             }
             $normalized = ['layout' => $layout];
+        } elseif ($this->isProductReleaseKey($key)) {
+            $normalized = $this->normalizeProductRelease($value);
         } else {
             $layouts = $value['layouts'] ?? null;
             if (! is_array($layouts)) {
@@ -167,7 +178,7 @@ class UserUiPreferenceService extends AbstractDomainService
 
         return $this->getShared($key) ?? ($this->isDashboardLayoutKey($key)
             ? ['layout' => null]
-            : ['layouts' => []]);
+            : ($this->isProductReleaseKey($key) ? ['release' => null] : ['layouts' => []]));
     }
 
     public function clearShared(string $key, ?TenantUser $actor = null): void
@@ -213,6 +224,9 @@ class UserUiPreferenceService extends AbstractDomainService
         $out = [];
         foreach ($rows as $row) {
             $key = (string) $row->storage_key;
+            if ($this->isProductReleaseKey($key)) {
+                continue;
+            }
             $payload = is_array($row->layouts_json) ? $row->layouts_json : [];
             $kind = $this->isDashboardLayoutKey($key) ? 'dashboard-layout' : 'module-list';
             $summary = $kind === 'dashboard-layout'
@@ -244,12 +258,65 @@ class UserUiPreferenceService extends AbstractDomainService
         return str_starts_with($key, 'dashboard-layout.');
     }
 
+    public function isProductReleaseKey(string $key): bool
+    {
+        return str_starts_with($key, 'product-release.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $value
+     * @return array{release: array{version: string, title: string, summary: string, sections: list<array{heading: string, body: string}>}}
+     */
+    private function normalizeProductRelease(array $value): array
+    {
+        $release = $value['release'] ?? null;
+        if (! is_array($release)) {
+            throw ValidationException::withMessages([
+                'value.release' => 'A product update must include a release object.',
+            ]);
+        }
+
+        $version = trim((string) ($release['version'] ?? ''));
+        $title = trim((string) ($release['title'] ?? ''));
+        if ($version === '' || $title === '') {
+            throw ValidationException::withMessages([
+                'value.release' => 'Version and title are required.',
+            ]);
+        }
+
+        $sections = [];
+        $incoming = is_array($release['sections'] ?? null) ? $release['sections'] : [];
+        foreach (array_slice($incoming, 0, 20) as $section) {
+            if (! is_array($section)) {
+                continue;
+            }
+            $heading = trim((string) ($section['heading'] ?? ''));
+            $body = trim((string) ($section['body'] ?? ''));
+            if ($heading === '' && $body === '') {
+                continue;
+            }
+            $sections[] = [
+                'heading' => mb_substr($heading, 0, 160),
+                'body' => mb_substr($body, 0, 4000),
+            ];
+        }
+
+        return [
+            'release' => [
+                'version' => mb_substr($version, 0, 40),
+                'title' => mb_substr($title, 0, 160),
+                'summary' => mb_substr(trim((string) ($release['summary'] ?? '')), 0, 500),
+                'sections' => $sections,
+            ],
+        ];
+    }
+
     private function assertKey(string $key): string
     {
         $trimmed = trim($key);
         if ($trimmed === '' || ! preg_match(self::KEY_PATTERN, $trimmed)) {
             throw ValidationException::withMessages([
-                'key' => 'Preference key must match module-list.* or dashboard-layout.* and use safe characters.',
+                'key' => 'Preference key must match module-list.*, dashboard-layout.*, or product-release.* and use safe characters.',
             ]);
         }
 

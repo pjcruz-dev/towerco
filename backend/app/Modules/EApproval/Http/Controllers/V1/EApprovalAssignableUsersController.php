@@ -20,6 +20,10 @@ class EApprovalAssignableUsersController extends AbstractApiController
             403,
         );
 
-        return $this->ok($service->listForPickers());
+        $audience = $request->validate([
+            'audience' => ['sometimes', 'string', 'in:approvers,requestors'],
+        ])['audience'] ?? 'approvers';
+
+        return $this->ok($audience === 'requestors' ? $service->listRequestors() : $service->listForPickers());
     }
 }

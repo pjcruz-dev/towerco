@@ -36,7 +36,7 @@ final class EnsurePasskeyEnrollment
         }
 
         return response()->json([
-            'message' => __('Your organization requires a passkey. Enroll one under My security → Passkeys.'),
+            'message' => __('Your organization requires a passkey. Enroll one under My profile → Security → Passkeys.'),
             'code' => 'passkey_enrollment_required',
         ], 403);
     }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Console\Commands\Tenants;
 
 use App\Models\Tenant;
+use App\Modules\Documents\Models\Site;
+use App\Modules\Identity\Models\TenantUser;
 use Database\Seeders\AllianceDemoSeeder;
 use Illuminate\Console\Command;
 
@@ -56,22 +58,8 @@ class SeedAllianceDemo extends Command
 
             $this->ensureAllianceCentralMetadata($tenant);
 
-            $this->components->twoColumnDetail('  Sites', (string) $tenant->run(fn () => \App\Modules\Sites\Models\Site::query()->count()));
-            $this->components->twoColumnDetail('  Projects', (string) $tenant->run(fn () => \App\Modules\ProjectOne\Models\Project::query()->count()));
-            $this->components->twoColumnDetail('  Towers', (string) $tenant->run(fn () => \App\Modules\TowerOne\Models\Tower::query()->count()));
-            $this->components->twoColumnDetail('  Fiber routes', (string) $tenant->run(fn () => \App\Modules\FiberOne\Models\FiberRoute::query()->count()));
-            $this->components->twoColumnDetail('  Assets', (string) $tenant->run(fn () => \App\Modules\AssetOne\Models\Asset::query()->count()));
-            $this->components->twoColumnDetail('  Users', (string) $tenant->run(fn () => \App\Modules\Identity\Models\TenantUser::query()->count()));
-            $rolloutCount = $tenant->run(function (): int {
-                if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasTable('rollout_programs')) {
-                    return 0;
-                }
-
-                return \App\Modules\Rollout\Models\RolloutProgram::query()->count();
-            });
-            if ($rolloutCount > 0) {
-                $this->components->twoColumnDetail('  Rollouts', (string) $rolloutCount);
-            }
+            $this->components->twoColumnDetail('  Sites', (string) $tenant->run(fn () => Site::query()->count()));
+            $this->components->twoColumnDetail('  Users', (string) $tenant->run(fn () => TenantUser::query()->count()));
         }
 
         $this->newLine();

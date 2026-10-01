@@ -155,7 +155,7 @@ if [ "$WORKERS" -gt 1 ] && command -v nginx >/dev/null 2>&1; then
     echo "server {"
     echo "    listen 8000;"
     echo "    server_name _;"
-    echo "    client_max_body_size 128m;"
+    echo "    client_max_body_size 512m;"
     # Docker publishes host→container via the bridge gateway (e.g. 172.18.0.1).
     # Trust that hop so X-Forwarded-For from the EC2 nginx keeps the real client IP.
     echo "    set_real_ip_from 10.0.0.0/8;"

@@ -9,6 +9,7 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Services\AuthAuditService;
 use App\Modules\Identity\Services\AuthSessionService;
 use App\Modules\Identity\Services\RefreshTokenService;
+use App\Modules\Tenancy\Support\TenantRbacSystemRoles;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,6 +37,7 @@ class TenantUserAdminService
      */
     public function create(string $name, string $email, array $roles, ?string $password = null): array
     {
+        $roles = TenantRbacSystemRoles::canonicalizeAssignableRoles($roles);
         $this->seatLimits->assertCanAddActiveUser($roles);
 
         $email = TenantUser::normalizeEmail($email);
@@ -129,6 +131,7 @@ class TenantUserAdminService
 
         $beforeRoles = $user->getRoleNames()->sort()->values()->all();
         if ($roles !== null) {
+            $roles = TenantRbacSystemRoles::canonicalizeAssignableRoles($roles);
             $this->assertRolesExist($roles);
             $this->seatLimits->assertCanTransitionToRoles($user, $roles !== [] ? $roles : ['viewer']);
             $user->syncRoles($roles);
@@ -318,8 +321,8 @@ class TenantUserAdminService
         string $mode = 'add',
         array $removeRoles = [],
     ): array {
-        $roles = array_values(array_unique(array_filter(array_map('trim', $roles))));
-        $removeRoles = array_values(array_unique(array_filter(array_map('trim', $removeRoles))));
+        $roles = TenantRbacSystemRoles::canonicalizeAssignableRoles($roles);
+        $removeRoles = TenantRbacSystemRoles::canonicalizeAssignableRoles($removeRoles);
 
         if ($roles === [] && $removeRoles === []) {
             throw ValidationException::withMessages([
@@ -644,7 +647,6 @@ class TenantUserAdminService
     /**
      * Accept a single role, comma/semicolon/pipe-separated roles, or a roles list.
      *
-     * @param  mixed  $raw
      * @return list<string>
      */
     private function parseImportRoles(mixed $raw): array
@@ -669,7 +671,7 @@ class TenantUserAdminService
             $roles[] = $role;
         }
 
-        return array_values(array_unique($roles));
+        return TenantRbacSystemRoles::canonicalizeAssignableRoles($roles);
     }
 
     /**

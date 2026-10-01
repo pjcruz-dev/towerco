@@ -250,7 +250,11 @@ export function reportsBoardCatalogEntries(): DashboardCatalogEntry[] {
     defaultSpan: widget.defaultSpan,
     allowedSpans: [...widget.allowedSpans],
     defaultSettings: widget.defaultDataSource
-      ? { dataSource: widget.defaultDataSource, limit: 8, sort: "desc" }
+      ? {
+          dataSource: widget.defaultDataSource,
+          limit: 8,
+          sort: widget.id === "reports_analytics_trend" ? "none" : "desc",
+        }
       : undefined,
     modules: ["e-approval" as const],
   }));

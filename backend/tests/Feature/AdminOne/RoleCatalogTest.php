@@ -113,6 +113,61 @@ final class RoleCatalogTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_role_catalog_hides_administrator_alias(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        TenantRole::query()->firstOrCreate([
+            'name' => 'administrator',
+            'guard_name' => 'sanctum',
+        ]);
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/roles');
+
+        $response->assertOk();
+        $names = collect($response->json('data.roles'))->pluck('name')->all();
+        $this->assertContains('tenant_admin', $names);
+        $this->assertNotContains('administrator', $names);
+    }
+
+    public function test_administrator_assignments_fold_onto_tenant_admin(): void
+    {
+        $user = $this->createTenantUser('alias@towerone.test', 'Alias Admin');
+        tenancy()->initialize($this->testTenant);
+        TenantRole::query()->firstOrCreate([
+            'name' => 'administrator',
+            'guard_name' => 'sanctum',
+        ]);
+        $user->syncRoles(['administrator']);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/roles')
+            ->assertOk();
+
+        tenancy()->initialize($this->testTenant);
+        $fresh = $user->fresh();
+        $this->assertNotNull($fresh);
+        $this->assertTrue($fresh->hasRole('tenant_admin'));
+        $this->assertFalse($fresh->hasRole('administrator'));
+        tenancy()->end();
+    }
+
+    public function test_owner_alias_cannot_be_created_as_custom_role(): void
+    {
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/admin/roles', [
+                'name' => 'administrator',
+                'permissions' => ['dashboard:view'],
+            ]);
+
+        $response->assertStatus(422);
+    }
+
     private function createTenantUser(string $email, string $name): TenantUser
     {
         tenancy()->initialize($this->testTenant);

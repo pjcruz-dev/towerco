@@ -126,19 +126,6 @@ export type EApprovalOpenCashAdvance = {
   prefill_values?: Record<string, string>;
 };
 
-export type EApprovalOpenPurchaseRequisition = {
-  id: string;
-  document_no: string;
-  created_at: string | null;
-  requestor_id: string;
-  requestor_name: string | null;
-  requisition_title: string | null;
-  estimated_total: number;
-  committed_amount: number;
-  open_balance: number;
-  prefill_values?: Record<string, string>;
-};
-
 export type EApprovalSubmissionListRow = {
   id: string;
   document_no: string;
@@ -181,7 +168,7 @@ export type EApprovalRelatedSubmissionRow = {
 };
 
 export type EApprovalRelatedSubmissionsSummary = {
-  kind: "cash_advance_balance" | "purchase_requisition_budget";
+  kind: "cash_advance_balance";
   total_label: string;
   total_amount: number;
   committed_label: string;

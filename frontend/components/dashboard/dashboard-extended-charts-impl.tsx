@@ -7,8 +7,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -27,6 +25,7 @@ import {
 import {
   DASHBOARD_CHART,
   chartColorAt,
+  resolveChartFill,
   type DashboardChartDatum,
   type DashboardMultiSeries,
   type DashboardScatterPoint,
@@ -58,7 +57,7 @@ function ChartShell({
 }: ShellProps) {
   return (
     <Card className={cn("flex h-full flex-col overflow-hidden rounded-xl border-border shadow-sm", className)}>
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 border-b border-border/80 bg-muted/20 px-4 py-3">
+      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 px-5 pb-0 pt-5">
         <div className="min-w-0 space-y-0.5">
           <CardTitle className="text-sm font-medium text-foreground">{title}</CardTitle>
           {description ? (
@@ -106,6 +105,7 @@ export function DashboardMultiLineChartImpl({
   className,
   summary,
 }: DashboardMultiLineChartProps) {
+  const gradientBase = useId().replace(/:/g, "");
   const rows = useMemo(
     () =>
       data.categories.map((label, index) => {
@@ -135,7 +135,15 @@ export function DashboardMultiLineChartImpl({
         ) : null
       }
     >
-      <LineChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <AreaChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <defs>
+          {data.series.map((series) => (
+            <linearGradient key={series.key} id={`ml-${gradientBase}-${series.key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={series.color} stopOpacity={0.28} />
+              <stop offset="95%" stopColor={series.color} stopOpacity={0.02} />
+            </linearGradient>
+          ))}
+        </defs>
         <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
         <XAxis
           dataKey="label"
@@ -153,18 +161,17 @@ export function DashboardMultiLineChartImpl({
         <Tooltip contentStyle={tooltipStyle} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {data.series.map((series) => (
-          <Line
+          <Area
             key={series.key}
             type="monotone"
             dataKey={series.key}
             name={series.label}
             stroke={series.color}
+            fill={`url(#ml-${gradientBase}-${series.key})`}
             strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
           />
         ))}
-      </LineChart>
+      </AreaChart>
     </ChartShell>
   );
 }
@@ -327,7 +334,7 @@ export function DashboardPolarChartImpl({
         .filter((row) => row.value > 0)
         .map((row, index) => ({
           ...row,
-          fill: row.fill ?? chartColorAt(index),
+          fill: resolveChartFill(row, index),
         })),
     [data],
   );

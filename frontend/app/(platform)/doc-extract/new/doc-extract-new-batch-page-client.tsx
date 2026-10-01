@@ -27,6 +27,7 @@ import { permissions } from "@/lib/rbac/permissions";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 import type { DocExtractConsolidateRecord, DocExtractPreviewFile } from "@/modules/doc-extract/types";
+import { DOC_EXTRACT_MAX_FILES_PER_BATCH } from "@/modules/doc-extract/limits";
 
 function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
@@ -61,7 +62,8 @@ export function DocExtractNewBatchPageClient() {
       notify({
         level: "success",
         title: "Ready to consolidate",
-        message: "Review page thumbnails and group pages that belong to the same record.",
+        message:
+          "Each file starts as one record (all pages included). Use “One page = one record” only when you need a results row per page.",
       });
     },
     onError: (error) => {
@@ -70,15 +72,73 @@ export function DocExtractNewBatchPageClient() {
   });
 
   const createMutation = useMutation({
-    mutationFn: createDocExtractBatch,
-    onSuccess: (batch) => {
-      const count = batch.document_count ?? records.length;
-      notify({
-        level: "success",
-        title: "Extraction started",
-        message: `Created ${count} record${count === 1 ? "" : "s"} from your consolidate layout. Customize columns next.`,
-      });
-      router.push(`/doc-extract/batches/${batch.id}`);
+    mutationFn: async () => {
+      const max = DOC_EXTRACT_MAX_FILES_PER_BATCH;
+      const pageCountsByIndex = Object.fromEntries(
+        previews.map((file) => [file.index, file.page_count]),
+      );
+
+      const createChunk = async (chunkRecords: DocExtractConsolidateRecord[]) => {
+        const usedIndexes = [...new Set(chunkRecords.map((record) => record.fileIndex))].sort(
+          (a, b) => a - b,
+        );
+        const indexMap = new Map(usedIndexes.map((oldIndex, nextIndex) => [oldIndex, nextIndex]));
+        const chunkFiles = usedIndexes.map((index) => files[index]).filter(Boolean);
+        if (chunkFiles.length === 0) {
+          throw new Error("No files available for this extraction chunk.");
+        }
+        const remappedRecords = chunkRecords.map((record) => ({
+          ...record,
+          fileIndex: indexMap.get(record.fileIndex) ?? 0,
+        }));
+        const filePageCounts: Record<number, number> = {};
+        for (const [oldIndex, nextIndex] of indexMap) {
+          filePageCounts[nextIndex] = pageCountsByIndex[oldIndex] ?? 1;
+        }
+
+        return createDocExtractBatch({
+          templateId: templateId || null,
+          files: chunkFiles,
+          records: remappedRecords,
+          filePageCounts,
+        });
+      };
+
+      if (records.length <= max) {
+        return { batches: [await createChunk(records)], chunked: false as const };
+      }
+
+      const batches = [];
+      for (let offset = 0; offset < records.length; offset += max) {
+        batches.push(await createChunk(records.slice(offset, offset + max)));
+      }
+      return { batches, chunked: true as const };
+    },
+    onSuccess: (result) => {
+      const first = result.batches[0];
+      if (!first?.id) {
+        notify({
+          level: "error",
+          title: "Upload failed",
+          message: "Extraction started but no batch id was returned.",
+        });
+        return;
+      }
+      if (result.chunked) {
+        notify({
+          level: "success",
+          title: "Extraction started in multiple batches",
+          message: `Created ${result.batches.length} batches covering all ${records.length} records. Opening the first batch.`,
+        });
+      } else {
+        const count = first.document_count ?? records.length;
+        notify({
+          level: "success",
+          title: "Extraction started",
+          message: `Created ${count} record${count === 1 ? "" : "s"} from your consolidate layout. Customize columns next.`,
+        });
+      }
+      router.push(`/doc-extract/batches/${first.id}`);
     },
     onError: (error) => {
       notify({ level: "error", title: "Upload failed", message: getErrorMessage(error) });
@@ -86,7 +146,11 @@ export function DocExtractNewBatchPageClient() {
   });
 
   const totalBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
-  const canExtract = records.length > 0 && records.length <= 25 && files.length > 0;
+  const batchCount =
+    records.length <= 0
+      ? 0
+      : Math.ceil(records.length / DOC_EXTRACT_MAX_FILES_PER_BATCH);
+  const canExtract = records.length > 0 && files.length > 0;
 
   const addFiles = (incoming: FileList | File[]) => {
     const next = Array.from(incoming).filter((file) => {
@@ -104,13 +168,22 @@ export function DocExtractNewBatchPageClient() {
       );
     });
     if (next.length === 0) return;
-    setFiles((current) => {
-      const map = new Map(current.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
-      for (const file of next) {
-        map.set(`${file.name}:${file.size}:${file.lastModified}`, file);
-      }
-      return Array.from(map.values());
-    });
+
+    const map = new Map(files.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
+    for (const file of next) {
+      map.set(`${file.name}:${file.size}:${file.lastModified}`, file);
+    }
+    let merged = Array.from(map.values());
+    if (merged.length > DOC_EXTRACT_MAX_FILES_PER_BATCH) {
+      notify({
+        level: "error",
+        title: "Too many files",
+        message: `A batch may include at most ${DOC_EXTRACT_MAX_FILES_PER_BATCH} files. Extra files were not added.`,
+      });
+      merged = merged.slice(0, DOC_EXTRACT_MAX_FILES_PER_BATCH);
+    }
+
+    setFiles(merged);
     // Changing files invalidates consolidate preview.
     setPreviews([]);
     setRecords([]);
@@ -146,31 +219,78 @@ export function DocExtractNewBatchPageClient() {
             Extract data from documents
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload → consolidate pages into records → extract → customize columns → view results.
+            Steps 1–2 happen here. After extract starts, customize fields and view results open on the
+            batch page.
           </p>
           <ol className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
             {(
               [
-                { step: 1, label: "1. Upload files", active: wizardStep === 1 },
-                { step: 2, label: "2. Consolidate", active: wizardStep === 2 },
-                { step: 3, label: "3. Customize fields", active: false },
-                { step: 4, label: "4. View results", active: false },
+                {
+                  step: 1 as const,
+                  label: "1. Upload files",
+                  available: true,
+                  hint: "Add PDFs or images",
+                },
+                {
+                  step: 2 as const,
+                  label: "2. Consolidate",
+                  available: files.length > 0 || previews.length > 0,
+                  hint: "Arrange pages into records",
+                },
+                {
+                  step: 3 as const,
+                  label: "3. Customize fields",
+                  available: false,
+                  hint: "Opens on the batch after extract",
+                },
+                {
+                  step: 4 as const,
+                  label: "4. View results",
+                  available: false,
+                  hint: "Opens on the batch after extract",
+                },
               ] as const
-            ).map((item) => (
-              <li
-                key={item.step}
-                className={cn(
-                  "rounded-md border px-2.5 py-1",
-                  item.active
-                    ? "border-primary/30 bg-primary/5 font-medium text-foreground"
-                    : wizardStep > item.step
-                      ? "border-border bg-muted/60 text-foreground"
-                      : "border-border bg-muted/40",
-                )}
-              >
-                {item.label}
-              </li>
-            ))}
+            ).map((item) => {
+              const isActive = wizardStep === item.step;
+              const isDone = wizardStep > item.step;
+              if (item.available) {
+                return (
+                  <li key={item.step}>
+                    <button
+                      type="button"
+                      title={item.hint}
+                      onClick={() => {
+                        if (item.step === 1) setWizardStep(1);
+                        if (item.step === 2 && (files.length > 0 || previews.length > 0)) {
+                          setWizardStep(2);
+                        }
+                      }}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 transition-colors",
+                        isActive
+                          ? "border-primary/30 bg-primary/5 font-medium text-foreground"
+                          : isDone
+                            ? "border-border bg-muted/60 text-foreground hover:bg-muted"
+                            : "border-border bg-muted/40 hover:bg-muted",
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                );
+              }
+              return (
+                <li key={item.step}>
+                  <span
+                    title={item.hint}
+                    className="inline-flex cursor-default items-center gap-1 rounded-md border border-dashed border-border bg-muted/20 px-2.5 py-1 text-muted-foreground"
+                  >
+                    {item.label}
+                    <span className="text-[10px] opacity-70">after extract</span>
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </div>
 
@@ -179,7 +299,8 @@ export function DocExtractNewBatchPageClient() {
             <div>
               <h2 className="text-xl font-semibold text-foreground">1. Upload files</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                PDF or images (PNG, JPEG, WebP, TIFF). Max 50 MB per file. Next you will arrange pages into records.
+                PDF or images (PNG, JPEG, WebP, TIFF). Max 50 MB per file, up to{" "}
+                {DOC_EXTRACT_MAX_FILES_PER_BATCH} files per batch. Next you will arrange pages into records.
               </p>
             </div>
 
@@ -343,22 +464,15 @@ export function DocExtractNewBatchPageClient() {
                 type="button"
                 data-help="dx-extract-button"
                 disabled={!canExtract || createMutation.isPending}
-                onClick={() =>
-                  createMutation.mutate({
-                    templateId: templateId || null,
-                    files,
-                    records,
-                    filePageCounts: Object.fromEntries(
-                      previews.map((file) => [file.index, file.page_count]),
-                    ),
-                  })
-                }
+                onClick={() => createMutation.mutate()}
               >
                 {createMutation.isPending ? (
                   <>
                     <Spinner className="size-4" />
                     Starting extraction…
                   </>
+                ) : batchCount > 1 ? (
+                  `Extract all ${records.length} records in ${batchCount} batches`
                 ) : (
                   `Extract ${records.length} record${records.length === 1 ? "" : "s"}`
                 )}

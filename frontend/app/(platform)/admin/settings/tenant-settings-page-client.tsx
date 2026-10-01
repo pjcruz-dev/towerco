@@ -326,7 +326,7 @@ export function TenantSettingsPageClient() {
                 <span className="mt-0.5 block text-xs text-muted-foreground">
                   {security?.passkeys_global_enabled === false
                     ? "Platform master switch is off — passkeys cannot be enabled for this organization."
-                    : "When on, users can enroll under My security → Passkeys and use Sign in with passkey on the login page."}
+                    : "When on, users can enroll under My profile → Security → Passkeys and use Sign in with passkey on the login page."}
                 </span>
               </span>
             </label>

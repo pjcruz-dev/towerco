@@ -6,6 +6,7 @@ namespace App\Modules\DocExtract\Services;
 
 use App\Core\Support\ModuleListSearchDsl;
 use App\Modules\DocExtract\Jobs\ProcessDocExtractDocumentJob;
+use App\Modules\DocExtract\Jobs\RemapDocExtractBatchJob;
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
 use App\Modules\DocExtract\Models\DocExtractTemplate;
@@ -233,6 +234,7 @@ final class DocExtractBatchService
         foreach ($parsed['clauses'] as $clause) {
             if ($clause['key'] === 'status') {
                 $this->applyBatchStatusClause($query, $clause['op'], $clause['value']);
+
                 continue;
             }
 
@@ -352,8 +354,8 @@ final class DocExtractBatchService
     /**
      * @param  list<UploadedFile>  $files
      * @param  list<array{file_index?: mixed, pages?: mixed, label?: mixed}>|null  $records
-     *        When provided, each item becomes one extract document with exact page membership.
-     *        When null, falls back to one-document-per-file (or per-page if $splitPages).
+     *                                                                                       When provided, each item becomes one extract document with exact page membership.
+     *                                                                                       When null, falls back to one-document-per-file (or per-page if $splitPages).
      * @param  array<int, int>  $filePageCounts  Optional page counts from Consolidate preview (file index → pages).
      */
     public function create(
@@ -364,7 +366,7 @@ final class DocExtractBatchService
         ?array $records = null,
         array $filePageCounts = [],
     ): DocExtractBatch {
-        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 25));
+        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 150));
         $maxPagesPerFile = max(1, (int) config('doc_extract.max_pages_per_file', 50));
         if ($files === []) {
             throw ValidationException::withMessages([
@@ -493,7 +495,7 @@ final class DocExtractBatchService
      */
     public function previewFiles(array $files): array
     {
-        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 25));
+        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 150));
         $maxPagesPerFile = max(1, (int) config('doc_extract.max_pages_per_file', 50));
         if ($files === []) {
             throw ValidationException::withMessages([
@@ -590,6 +592,7 @@ final class DocExtractBatchService
                 || str_ends_with(strtolower((string) $meta['original_filename']), '.pdf');
             if (! $isPdf) {
                 $pageCounts[$index] = 1;
+
                 continue;
             }
 
@@ -801,6 +804,7 @@ final class DocExtractBatchService
             $current = $sorted[$i];
             if ($current === $prev + 1) {
                 $prev = $current;
+
                 continue;
             }
             $parts[] = $start === $prev ? (string) $start : $start.'–'.$prev;
@@ -1068,6 +1072,164 @@ final class DocExtractBatchService
     }
 
     /**
+     * Queue a background remap for ready/failed documents (avoids HTTP timeouts on large batches).
+     *
+     * @return array{queued: bool, document_count: int, remapped: int, rescanned: int, requeued: int}
+     */
+    public function remapBatchFieldValues(string $batchId, string $tenantId = ''): array
+    {
+        $batch = $this->findOrFail($batchId);
+        $batch->loadMissing('documents');
+
+        if ($tenantId === '') {
+            $tenantId = (string) (tenant('id') ?? '');
+        }
+
+        $documentCount = $batch->documents
+            ->filter(static function (DocExtractDocument $document): bool {
+                if ($document->purged_at !== null) {
+                    return false;
+                }
+
+                return in_array((string) $document->status, [
+                    DocExtractDocumentStatus::READY,
+                    DocExtractDocumentStatus::FAILED,
+                ], true);
+            })
+            ->count();
+
+        $stuck = $this->requeueStuckDocuments(batchId: $batchId, tenantId: $tenantId);
+
+        if ($documentCount === 0) {
+            return [
+                'queued' => false,
+                'document_count' => 0,
+                'remapped' => 0,
+                'rescanned' => 0,
+                'requeued' => (int) ($stuck['requeued'] ?? 0),
+            ];
+        }
+
+        $queueConnection = (string) config('doc_extract.queue_connection', 'redis');
+        if ($queueConnection === '' || $queueConnection === 'sync') {
+            $queueConnection = 'redis';
+        }
+
+        RemapDocExtractBatchJob::dispatch($tenantId, $batchId)
+            ->onConnection($queueConnection);
+
+        $batch->message = __('Rescanning field values in the background (:count documents)…', [
+            'count' => $documentCount,
+        ]);
+        $batch->save();
+
+        return [
+            'queued' => true,
+            'document_count' => $documentCount,
+            'remapped' => 0,
+            'rescanned' => 0,
+            'requeued' => (int) ($stuck['requeued'] ?? 0),
+        ];
+    }
+
+    /**
+     * Synchronously remap ready documents onto the current schema using stored OCR text.
+     *
+     * @return array{remapped: int, rescanned: int, requeued: int}
+     */
+    public function remapBatchFieldValuesNow(string $batchId, string $tenantId = ''): array
+    {
+        $batch = $this->findOrFail($batchId);
+        $batch->loadMissing(['documents', 'template']);
+        $fields = $this->effectiveFields($batch);
+
+        if ($tenantId === '') {
+            $tenantId = (string) (tenant('id') ?? '');
+        }
+
+        $queueConnection = (string) config('doc_extract.queue_connection', 'redis');
+        if ($queueConnection === '' || $queueConnection === 'sync') {
+            $queueConnection = 'redis';
+        }
+
+        $remapped = 0;
+        $rescanned = 0;
+
+        foreach ($batch->documents as $document) {
+            if ($document->purged_at !== null) {
+                continue;
+            }
+            if (! in_array((string) $document->status, [
+                DocExtractDocumentStatus::READY,
+                DocExtractDocumentStatus::FAILED,
+            ], true)) {
+                continue;
+            }
+
+            $text = trim((string) ($document->extracted_text ?? ''));
+            if ($text === '' || $fields === []) {
+                if ($document->stored_path === null) {
+                    continue;
+                }
+                $document->status = DocExtractDocumentStatus::PENDING;
+                $document->error_message = null;
+                $document->save();
+                ProcessDocExtractDocumentJob::dispatch($tenantId, (string) $document->id)
+                    ->onConnection($queueConnection);
+                $rescanned++;
+
+                continue;
+            }
+
+            try {
+                $mapped = $this->scanClient->mapText($text, $fields);
+            } catch (\Throwable $exception) {
+                Log::warning('DocExtract force remap failed', [
+                    'document_id' => (string) $document->id,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            $existing = is_array($document->field_values) ? $document->field_values : [];
+            $merged = $existing;
+            foreach ($fields as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+                // Force overwrite so prior label/header mis-captures are replaced.
+                $merged[$key] = array_key_exists($key, $mapped) ? $mapped[$key] : null;
+            }
+
+            $meta = is_array($document->scan_meta) ? $document->scan_meta : [];
+            $document->field_values = $merged;
+            $document->status = DocExtractDocumentStatus::READY;
+            $document->error_message = null;
+            $document->scan_meta = array_merge($meta, [
+                'schema_reconciled' => true,
+                'values_remapped_at' => now()->toIso8601String(),
+                'schema_field_count' => count($fields),
+            ]);
+            $document->save();
+            $remapped++;
+        }
+
+        $fresh = $batch->fresh() ?? $batch;
+        $fresh->message = __('Rescan complete — :count value set(s) updated.', ['count' => $remapped]);
+        $fresh->save();
+
+        $this->refreshBatchCounters($fresh);
+
+        return [
+            'remapped' => $remapped,
+            'rescanned' => $rescanned,
+            'requeued' => 0,
+        ];
+    }
+
+    /**
      * Auto mode discovers fields per document. After the batch is ready, remap each
      * document's OCR text onto the union schema so shared columns fill across pages.
      */
@@ -1076,9 +1238,6 @@ final class DocExtractBatchService
         $batch->loadMissing(['documents', 'template']);
 
         if ($batch->template_id !== null) {
-            return;
-        }
-        if (is_array($batch->field_schema) && $batch->field_schema !== []) {
             return;
         }
 
@@ -1108,6 +1267,7 @@ final class DocExtractBatchService
                     'document_id' => (string) $document->id,
                     'message' => $exception->getMessage(),
                 ]);
+
                 continue;
             }
 
@@ -1120,7 +1280,11 @@ final class DocExtractBatchService
                 }
                 $current = $merged[$key] ?? null;
                 $incoming = $mapped[$key] ?? null;
-                if (($current === null || $current === '') && $incoming !== null && $incoming !== '') {
+                $currentText = is_scalar($current) ? trim((string) $current) : '';
+                $incomingText = is_scalar($incoming) ? trim((string) $incoming) : '';
+
+                // Prefer fresh mapped values; also replace label/header mis-captures.
+                if ($incomingText !== '' && ($currentText === '' || $this->looksLikeCapturedLabel($currentText))) {
                     $merged[$key] = $incoming;
                 } elseif (! array_key_exists($key, $merged)) {
                     $merged[$key] = $incoming;
@@ -1134,6 +1298,35 @@ final class DocExtractBatchService
             ]);
             $document->save();
         }
+    }
+
+    private function looksLikeCapturedLabel(string $value): bool
+    {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return true;
+        }
+        if (str_ends_with($trimmed, ':')) {
+            return true;
+        }
+        $lower = mb_strtolower(rtrim($trimmed, ': '));
+
+        return in_array($lower, [
+            'name',
+            'date',
+            'currency',
+            'purchase order information',
+            'work completion note',
+            'service start',
+            'service start date',
+            'service end date',
+            'po value',
+            'supplier name',
+            'work order id',
+            'reference no',
+            'reference no.',
+            'delivery address',
+        ], true);
     }
 
     /**

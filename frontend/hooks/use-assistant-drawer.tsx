@@ -6,12 +6,15 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 type AssistantDrawerContextValue = {
   open: boolean;
+  minimized: boolean;
   setOpen: (open: boolean) => void;
+  setMinimized: (minimized: boolean) => void;
   toggle: () => void;
 };
 
@@ -24,15 +27,33 @@ export function AssistantDrawerProvider({
   children: React.ReactNode;
   enabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const openRef = useRef(open);
+  const minimizedRef = useRef(minimized);
+  openRef.current = open;
+  minimizedRef.current = minimized;
+
+  const setOpen = useCallback((next: boolean) => {
+    setOpenState(next);
+    if (next) {
+      setMinimized(false);
+    }
+  }, []);
 
   const toggle = useCallback(() => {
-    setOpen((current) => !current);
+    if (openRef.current && minimizedRef.current) {
+      setMinimized(false);
+      return;
+    }
+    setOpenState((current) => !current);
+    setMinimized(false);
   }, []);
 
   useEffect(() => {
     if (!enabled) {
-      setOpen(false);
+      setOpenState(false);
+      setMinimized(false);
       return;
     }
 
@@ -52,7 +73,8 @@ export function AssistantDrawerProvider({
       }
 
       if (event.key === "Escape" && !isEditable) {
-        setOpen(false);
+        setOpenState(false);
+        setMinimized(false);
       }
     };
 
@@ -63,10 +85,12 @@ export function AssistantDrawerProvider({
   const value = useMemo(
     () => ({
       open,
+      minimized,
       setOpen,
+      setMinimized,
       toggle,
     }),
-    [open, toggle],
+    [open, minimized, setOpen, toggle],
   );
 
   return (

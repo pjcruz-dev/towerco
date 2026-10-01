@@ -7,7 +7,7 @@ namespace App\Modules\Documents\Services;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Models\DocumentSiteNode;
 use App\Modules\Documents\Models\DocumentSiteWorkspace;
-use App\Modules\Sites\Models\Site;
+use App\Modules\Documents\Models\Site;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -186,7 +186,6 @@ final class DocumentWorkspaceService
             'workspace' => [
                 'id' => (string) $workspace->id,
                 'site_id' => (string) $site->id,
-                'rollout_program_id' => $workspace->rollout_program_id,
             ],
             'nodes' => $nodes,
             'last_activity' => $lastTouch ? [
@@ -201,13 +200,9 @@ final class DocumentWorkspaceService
         ];
     }
 
-    public function updateWorkspace(Site $site, ?string $rolloutProgramId): DocumentSiteWorkspace
+    public function updateWorkspace(Site $site): DocumentSiteWorkspace
     {
-        $workspace = $this->ensureForSite($site);
-        $workspace->rollout_program_id = $rolloutProgramId;
-        $workspace->save();
-
-        return $workspace;
+        return $this->ensureForSite($site);
     }
 
     /**

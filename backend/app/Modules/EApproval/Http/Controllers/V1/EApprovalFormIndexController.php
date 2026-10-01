@@ -21,9 +21,12 @@ class EApprovalFormIndexController extends AbstractApiController
         abort_unless($user !== null, 401);
 
         $query = $this->validatedTenantListQuery($request);
-        $status = $request->validate([
+        $filters = $request->validate([
             'status' => ['sometimes', 'string', 'in:published,draft'],
-        ])['status'] ?? null;
+            'for_request' => ['sometimes', 'in:0,1,true,false'],
+        ]);
+        $status = $filters['status'] ?? null;
+        $forRequest = $request->boolean('for_request');
 
         $canViewAll = $user->can('e_approval:view') || $user->can('e_approval:forms:manage');
         $canPickPublished = $user->can('e_approval:submissions:create') && $status === 'published';
@@ -46,6 +49,7 @@ class EApprovalFormIndexController extends AbstractApiController
             is_string($status) ? $status : null,
             $query['sort'],
             $submissionPickerOnly,
+            $forRequest,
         );
 
         return $this->okWithMeta(

@@ -1,0 +1,9 @@
+# Index-only exclusions (the agent can still open these when asked)
+docs/archives/
+docs/exports/
+docs/samples/
+docs/communications/
+scripts/output/
+services/doc-extract/app/__pycache__/
+backend/packages/lbuchs-webauthn/
+frontend/public/help/

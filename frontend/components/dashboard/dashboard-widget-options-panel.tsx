@@ -30,7 +30,7 @@ import {
   type DashboardDataSourceId,
 } from "@/lib/ui/dashboard-widget-data";
 import { cn } from "@/lib/utils";
-import type { ProjectOneKpi } from "@/modules/project-one/types";
+import type { DashboardKpi } from "@/lib/ui/dashboard-kpi";
 
 const SPAN_OPTIONS: Array<{ id: DashboardWidgetSpan; label: string }> = [
   { id: "full", label: "Full" },
@@ -70,6 +70,7 @@ const SORTABLE_KINDS = new Set([
   "stacked_comparison",
 ]);
 const THRESHOLD_KINDS = new Set(["kpi_gauge", "list_progress", "bar_list"]);
+const TREND_KINDS = new Set(["chart_line", "chart_area", "chart_multi_line", "chart_stacked_area"]);
 
 type Props = {
   widgetId: string;
@@ -78,7 +79,7 @@ type Props = {
   options?: DashboardWidgetOptions;
   span: DashboardWidgetSpan;
   dataSources: DashboardDataSourceId[];
-  kpis?: ProjectOneKpi[];
+  kpis?: DashboardKpi[];
   removable?: boolean;
   onTitleChange: (title: string) => void;
   onSpanChange: (span: DashboardWidgetSpan) => void;
@@ -466,9 +467,10 @@ export function DashboardWidgetOptionsPanel({
                 { id: "none", label: "As provided" },
               ] as const
             ).map((item) => {
+              const defaultSort = kind && TREND_KINDS.has(kind) ? "none" : "desc";
               const active =
                 settings.sort === item.id ||
-                (item.id === "desc" && (settings.sort == null || settings.sort === ""));
+                (item.id === defaultSort && (settings.sort == null || settings.sort === ""));
               return (
                 <Button
                   key={item.id}
@@ -477,6 +479,35 @@ export function DashboardWidgetOptionsPanel({
                   variant={active ? "secondary" : "outline"}
                   className="h-7 px-2 text-xs"
                   onClick={() => onSettingsChange({ sort: item.id })}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {kind === "chart_donut" ? (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium text-muted-foreground">Shape</p>
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                { id: "donut", label: "Donut" },
+                { id: "pie", label: "Pie" },
+                { id: "semi", label: "Semi" },
+              ] as const
+            ).map((item) => {
+              const active = (settings.chartShape ?? "donut") === item.id;
+              return (
+                <Button
+                  key={item.id}
+                  type="button"
+                  size="sm"
+                  variant={active ? "secondary" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => onSettingsChange({ chartShape: item.id })}
                 >
                   {item.label}
                 </Button>

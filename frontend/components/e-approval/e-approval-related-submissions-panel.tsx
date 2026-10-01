@@ -28,9 +28,6 @@ function formatAmount(label: string | null, value: string | null): string | null
 }
 
 function parentSectionLabel(row: EApprovalRelatedSubmissionRow): string {
-  if (row.form_family === "purchase_requisition") {
-    return "Purchase requisition";
-  }
   if (row.form_family === "cash_advance") {
     return "Cash advance";
   }
@@ -39,11 +36,6 @@ function parentSectionLabel(row: EApprovalRelatedSubmissionRow): string {
 }
 
 function childrenSectionLabel(children: EApprovalRelatedSubmissionRow[], contextFamily: string | null | undefined): string {
-  const poChildren = children.filter((child) => child.form_family === "purchase_order");
-  if (poChildren.length > 0 || contextFamily === "purchase_requisition") {
-    return poChildren.length === 1 ? "Purchase order" : `Purchase orders (${poChildren.length || children.length})`;
-  }
-
   const liquidationChildren = children.filter((child) => child.form_family === "liquidation");
   if (liquidationChildren.length > 0 || contextFamily === "cash_advance") {
     return liquidationChildren.length === 1

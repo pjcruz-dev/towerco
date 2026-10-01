@@ -6,25 +6,7 @@ namespace App\Modules\Ticketing\Support;
 
 final class TicketingCategoryPackCatalog
 {
-    public const PACK_PROCUREMENT_ONE = 'procurement_one';
-
     public const PACK_ENTERPRISE_IT = 'enterprise_it';
-
-    /**
-     * @return list<string>
-     */
-    public static function procurementOneCategories(): array
-    {
-        return [
-            'procurement_delivery_delay',
-            'procurement_vendor_issue',
-            'procurement_invoice_dispute',
-            'procurement_grn_mismatch',
-            'procurement_approval_delay',
-            'procurement_contract',
-            'procurement_general',
-        ];
-    }
 
     /**
      * Enterprise IT service-desk categories (flat slugs for ticket.category).
@@ -69,12 +51,6 @@ final class TicketingCategoryPackCatalog
                 'description' => 'Hardware, software, identity/security, and workplace IT categories for corporate service desk triage.',
                 'categories' => self::enterpriseItCategories(),
             ],
-            [
-                'id' => self::PACK_PROCUREMENT_ONE,
-                'label' => 'Procurement-One',
-                'description' => 'Delivery delays, vendor issues, GRN mismatches, invoice disputes, and contract follow-ups.',
-                'categories' => self::procurementOneCategories(),
-            ],
         ];
     }
 
@@ -90,7 +66,6 @@ final class TicketingCategoryPackCatalog
     {
         return match ($packId) {
             self::PACK_ENTERPRISE_IT => self::enterpriseItCategories(),
-            self::PACK_PROCUREMENT_ONE => self::procurementOneCategories(),
             default => [],
         };
     }

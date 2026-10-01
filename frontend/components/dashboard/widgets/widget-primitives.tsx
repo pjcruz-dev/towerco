@@ -23,7 +23,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
 import { DashboardWidgetEmpty } from "@/components/dashboard/dashboard-widget";
 import { buttonVariants } from "@/components/ui/button";
-import type { DashboardChartDatum } from "@/components/dashboard/dashboard-chart-utils";
+import { resolveChartFill, type DashboardChartDatum } from "@/components/dashboard/dashboard-chart-utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   DashboardKpiAccent,
@@ -1182,12 +1182,6 @@ export function WidgetKpiTile({
   const palette = resolveAccentClasses(accent, effectiveTone);
   const Icon = kpiIconFor(metricKey, effectiveTone, icon);
   const trendTone = change ? changeTone(change, effectiveTone) : effectiveTone;
-  const badgeClass =
-    trendTone === "danger"
-      ? accentBadge.rose
-      : trendTone === "success"
-        ? accentBadge.emerald
-        : palette.badge;
   const TrendIcon = change ? (trendTone === "danger" ? TrendingDown : TrendingUp) : null;
   const sparkSeed = `${metricKey ?? label}:${String(value)}`;
   const heights = useMemo(() => sparkHeights(sparkSeed, numeric), [sparkSeed, numeric]);
@@ -1205,17 +1199,6 @@ export function WidgetKpiTile({
       ? layout
       : resolveKpiLayout("auto", resolvedViz === "none" ? "bars" : resolvedViz);
 
-  const metricBlock = (
-    <>
-      <p id={titleId} className="truncate text-xs font-medium text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums tracking-tight text-foreground">
-        {formatKpiDisplay(value, reducedMotion ? numeric : animated)}
-      </p>
-    </>
-  );
-
   const viz = showViz ? (
     <KpiCardVisual
       style={resolvedViz}
@@ -1231,43 +1214,45 @@ export function WidgetKpiTile({
     />
   ) : null;
 
+  const trendClass =
+    trendTone === "danger"
+      ? "text-destructive"
+      : trendTone === "success"
+        ? "text-success"
+        : "text-muted-foreground";
+
   const body = (
     <>
-      <div
-        className={cn("absolute inset-x-0 top-0 h-0.5 rounded-t-xl bg-gradient-to-r", palette.barTop)}
-        aria-hidden
-      />
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p id={titleId} className="truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+            {formatKpiDisplay(value, reducedMotion ? numeric : animated)}
+          </p>
+          {change ? (
+            <p className={cn("mt-2 flex items-center gap-1 text-xs font-medium tabular-nums", trendClass)}>
+              {TrendIcon ? <TrendIcon className="size-3.5 shrink-0" aria-hidden /> : null}
+              <span className="truncate">{change}</span>
+            </p>
+          ) : null}
+        </div>
         <span
-          className={cn(
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-transform duration-300",
-            palette.iconWrap,
-            !reducedMotion && "group-hover:scale-[1.04]",
-          )}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground"
           aria-hidden
         >
-          <Icon className="size-3.5" strokeWidth={2} />
+          <Icon className="size-4" strokeWidth={1.75} />
         </span>
-        {change ? (
-          <span
-            className={cn(
-              "inline-flex max-w-[55%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
-              badgeClass,
-            )}
-          >
-            {TrendIcon ? <TrendIcon className="size-3 shrink-0" aria-hidden /> : null}
-            <span className="truncate">{change}</span>
-          </span>
-        ) : null}
       </div>
+      {viz ? (
       <div
         className={cn(
-          "mt-1.5 flex gap-2",
+          "mt-3 flex gap-2",
           layoutMode === "stack" && "flex-col",
           layoutMode === "split" && "flex-row items-end justify-between gap-3",
         )}
       >
-        <div className="min-w-0 flex-1">{metricBlock}</div>
         {viz ? (
           <div
             className={cn(
@@ -1285,11 +1270,12 @@ export function WidgetKpiTile({
           </div>
         ) : null}
       </div>
+      ) : null}
     </>
   );
 
   const shell = cn(
-    "@container/kpi group relative min-w-0 overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm",
+    "@container/kpi group relative min-w-0 overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm",
     tinted && palette.tint,
     "transition-[box-shadow,border-color,opacity] duration-300 ease-out",
     "hover:border-border/80 hover:shadow-md",
@@ -1779,6 +1765,54 @@ export function WidgetHeroBanner({
           {ctaLabel}
         </Link>
       ) : null}
+    </div>
+  );
+}
+
+/** One horizontal stacked bar — each category is a share of the live total. */
+export function WidgetShareBar({ rows }: { rows: DashboardChartDatum[] }) {
+  const slices = rows
+    .filter((row) => row.value > 0)
+    .map((row, index) => ({ ...row, fill: resolveChartFill(row, index) }));
+  const total = slices.reduce((sum, row) => sum + row.value, 0);
+  if (total <= 0) {
+    return <p className="py-6 text-center text-xs text-muted-foreground">No mix to chart.</p>;
+  }
+
+  return (
+    <div>
+      <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label="Share of total">
+        {slices.map((row) => (
+          <div
+            key={row.key}
+            className="h-full"
+            style={{
+              width: `${(row.value / total) * 100}%`,
+              backgroundColor: row.fill ?? "var(--chart-1)",
+            }}
+            title={`${row.label}: ${row.value}`}
+          />
+        ))}
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+        {slices.map((row) => {
+          const pct = Math.round((row.value / total) * 100);
+          return (
+            <li key={row.key} className="flex items-center gap-1.5">
+              <span
+                className="h-2 w-2 shrink-0 rounded-sm"
+                style={{ backgroundColor: row.fill ?? "var(--chart-1)" }}
+                aria-hidden
+              />
+              <span className="text-muted-foreground">{row.label}</span>
+              <span className="tabular-nums font-medium text-foreground">
+                {row.value}
+                <span className="ml-1 font-normal text-muted-foreground">({pct}%)</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

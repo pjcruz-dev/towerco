@@ -20,16 +20,6 @@ final class EApprovalSettingsService
 
     public const PROVISION_MANAGER_USERS = 'provision_manager_users';
 
-    public const LIQUIDATION_REQUIRES_PARENT = 'liquidation_requires_parent';
-
-    public const LIQUIDATION_OVERSPEND_MODE = 'liquidation_overspend_mode';
-
-    public const LIQUIDATION_MAX_OVERSPEND_PERCENT = 'liquidation_max_overspend_percent';
-
-    public const PO_OVERSPEND_MODE = 'po_overspend_mode';
-
-    public const PO_MAX_OVERSPEND_PERCENT = 'po_max_overspend_percent';
-
     public const NOTIFY_EXTERNAL_ON_RECEIVED = 'notify_external_on_received';
 
     public const NOTIFY_EXTERNAL_ON_APPROVED = 'notify_external_on_approved';
@@ -41,6 +31,12 @@ final class EApprovalSettingsService
     public const TEAMS_WEBHOOK_URL = 'teams_webhook_url';
 
     public const NOTIFY_TEAMS_ON_EXTERNAL_SUBMIT = 'notify_teams_on_external_submit';
+
+    public const LIQUIDATION_REQUIRES_PARENT = 'liquidation_requires_parent';
+
+    public const LIQUIDATION_OVERSPEND_MODE = 'liquidation_overspend_mode';
+
+    public const LIQUIDATION_MAX_OVERSPEND_PERCENT = 'liquidation_max_overspend_percent';
 
     public function getString(string $key, ?string $default = null): ?string
     {
@@ -109,17 +105,15 @@ final class EApprovalSettingsService
             self::MANUAL_FOLLOW_UP_COOLDOWN_MINUTES,
             self::FEATURE_DELEGATION_UI,
             self::PROVISION_MANAGER_USERS,
-            self::LIQUIDATION_REQUIRES_PARENT,
-            self::LIQUIDATION_OVERSPEND_MODE,
-            self::LIQUIDATION_MAX_OVERSPEND_PERCENT,
-            self::PO_OVERSPEND_MODE,
-            self::PO_MAX_OVERSPEND_PERCENT,
             self::NOTIFY_EXTERNAL_ON_RECEIVED,
             self::NOTIFY_EXTERNAL_ON_APPROVED,
             self::NOTIFY_EXTERNAL_ON_REJECTED,
             self::NOTIFY_EXTERNAL_ON_RETURNED,
             self::TEAMS_WEBHOOK_URL,
             self::NOTIFY_TEAMS_ON_EXTERNAL_SUBMIT,
+            self::LIQUIDATION_REQUIRES_PARENT,
+            self::LIQUIDATION_OVERSPEND_MODE,
+            self::LIQUIDATION_MAX_OVERSPEND_PERCENT,
         ];
 
         foreach ($allowed as $key) {

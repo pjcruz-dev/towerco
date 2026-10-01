@@ -9,8 +9,8 @@ use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Documents\Data\DocumentBinderTemplateDefaults;
 use App\Modules\Documents\Models\DocumentBinderTemplate;
 use App\Modules\Documents\Models\DocumentSiteNode;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Documents\Services\DocumentWorkspaceService;
-use App\Modules\Sites\Models\Site;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 

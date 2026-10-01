@@ -1,622 +1,138 @@
-# INFRA SUITE
+# ⚠️ READ THIS FIRST — one manual step, still not done as of v11
 
-Enterprise multi-tenant telecom SaaS for tower companies (TowerCos). Modular monolith: **Laravel API** + **Next.js** tenant workspace + **platform superadmin console**.
+Your own Cursor agent just confirmed it: `.cursor/rules/toweros.mdc` and `.cursor/rules/uiux-theme.mdc`
+are STILL in your repo, STILL `alwaysApply: true`, and STILL loading on every single turn alongside
+`global.mdc` and `ui-theme.mdc`. This has been true since v5. No zip can fix this — extracting a zip only
+adds or overwrites files, it never deletes anything, so these two files survive every update untouched.
 
-**Board reference:** [`docs/Rules/INFRA SUITE_Board_Presentation.pdf`](docs/Rules/INFRA SUITE_Board_Presentation.pdf) — module names, phases, and roadmap.
+Run this now, before anything else, from the repo root:
 
----
-
-## Table of contents
-
-1. [Technology stack](#technology-stack)
-2. [Platform modules](#platform-modules)
-3. [Repository layout](#repository-layout)
-4. [Prerequisites](#prerequisites)
-5. [Local development (Docker) — start to finish](#local-development-docker--start-to-finish)
-6. [Daily development commands](#daily-development-commands)
-7. [Authentication & security](#authentication--security)
-8. [Microsoft Entra ID (SSO)](#microsoft-entra-id-sso)
-9. [Tenant features & URLs](#tenant-features--urls)
-10. [Platform console](#platform-console)
-11. [Database & migrations](#database--migrations)
-12. [Production deployment](#production-deployment)
-13. [Troubleshooting](#troubleshooting)
-14. [Documentation index](#documentation-index)
-
----
-
-## Technology stack
-
-| Layer | Technology |
-|-------|------------|
-| Backend | Laravel 13, PHP 8.3 |
-| Frontend | Next.js 16, React 19, TypeScript |
-| Database | **MySQL 8.4** — database-per-tenant ([stancl/tenancy](https://tenancyforlaravel.com/)) |
-| Cache / queues | Redis (cache, sessions, permission cache) — local `toweros-redis`; production Docker Redis on EC2 or ElastiCache; queues `sync` locally, `redis` in prod |
-| Auth | Sanctum (tenant SPA) + Passport (platform console) |
-| SSO | Microsoft Entra ID per tenant |
-| RBAC | Spatie Laravel Permission |
-| Realtime | Pusher protocol / Soketi (optional in dev) |
-| Maps | MapLibre GL |
-| UI | Tailwind CSS 4, shadcn/ui, Geist |
-
-> The board deck mentions PostgreSQL + PostGIS + TimescaleDB. **Current implementation uses MySQL** with decimal coordinates and MapLibre. See [`docs/architecture/tenant-isolation-mysql.md`](docs/architecture/tenant-isolation-mysql.md).
-
----
-
-## Platform modules
-
-| Module | Purpose | Typical URL (tenant) |
-|--------|---------|----------------------|
-| **Foundation** | Auth, tenancy, RBAC, settings | `/dashboard`, `/admin/settings` |
-| **Sites** | Shared site registry | `/sites` |
-| **PROJECT-ONE** | Projects, rollouts, SAQ/CME, gate approvals | `/project-one` |
-| **TOWER-ONE** | Tower registry | `/tower-one` |
-| **FIBER-ONE** | Fiber routes | `/fiber-one` |
-| **ASSET-ONE** | Asset registry | `/asset-one` |
-| **GIS** | Operational map | `/gis` |
-| **E-Forms** | Forms, submissions, approvals | `/e-approval` |
-
-Roadmap modules (TASK-ONE, VENDOR-ONE, etc.) are in the board deck; not all are in the tenant shell yet.
-
-**Deep dives:** [PROJECT-ONE](docs/roadmaps/project-one-roadmap.md) · [E-Forms](docs/modules/e-approval.md) · [E-Forms form builder](docs/modules/e-approval-form-builder.md) · [E-Forms go-live](docs/modules/e-approval-go-live-checklist.md)
-
----
-
-## Repository layout
-
-```text
-INFRA SUITE/
-├── backend/              Laravel API (central + tenant routes)
-├── frontend/             Next.js tenant app + platform console
-├── docs/                 All non-prod docs: phases, Rules, guides, rollout
-│   ├── Rules/            Board deck + rollout playbook
-│   ├── archives/         Local scratch only (gitignored)
-│   ├── guides/           Docker / Podman / performance
-│   ├── roadmaps/         Product roadmaps
-│   ├── rollout/          Playbook + gate-approval phases
-│   └── local-dev/        Optional Windows launchers (use npm run … day-to-day)
-├── docker-compose.yml    mysql, api, web, phpmyadmin
-├── env.docker.example    Root Docker ports & MySQL credentials
-├── package.json          npm scripts (dev, dev:fresh, …)
-└── scripts/              Docker helpers (grants, fresh reset)
+```powershell
+cd C:\LaravelProject\TowerOS
+git rm .cursor/rules/toweros.mdc .cursor/rules/uiux-theme.mdc
+git commit -m "Remove superseded always-on rules (replaced by global.mdc and ui-theme.mdc)"
 ```
 
-**AWS note:** Deploy builds Docker images from `backend/` and `frontend/` only. The entire `docs/` tree is **not** included in production/staging images. See [`docs/README.md`](docs/README.md).
+Then verify it actually worked:
 
-**Docker service names** (use these in `docker compose exec`):
-
-| Service | Container | Role |
-|---------|-----------|------|
-| `api` | `toweros-api` | Laravel (`:8000`) |
-| `web` | `toweros-web` | Next.js (`:80`) |
-| `mysql` | `toweros-mysql` | MySQL (`:3307` on host) |
-| `phpmyadmin` | `toweros-phpmyadmin` | DB UI (`:8080`) |
-
-There is **no** `backend` service name in Compose.
-
----
-
-## Prerequisites
-
-| Tool | Purpose |
-|------|---------|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Run full stack (recommended) |
-| [Node.js](https://nodejs.org/) LTS | Root `npm run dev` scripts only |
-| Git | Clone and pull updates |
-
-**Optional (without Docker):** PHP 8.3, Composer, MySQL 8.4, Node 22+ — see [Host-only development](#host-only-development).
-
----
-
-## Local development (Docker) — start to finish
-
-Estimated time: **~15 minutes** first run (image build + MySQL init).
-
-### Step 1 — Clone and open the repo
-
-```bash
-git clone <your-repo-url> INFRA SUITE
-cd INFRA SUITE
+```powershell
+Test-Path .cursor\rules\toweros.mdc      # must print False
+Test-Path .cursor\rules\uiux-theme.mdc   # must print False
 ```
 
-### Step 2 — Create environment files
+If either prints `True`, the delete did not take — paste the exact error PowerShell gave you.
+Until both print `False`, every rule below is competing with a stale copy of itself on every turn.
 
-```bash
-# Root: Docker ports & MySQL passwords
-copy env.docker.example .env.docker          # Windows
-# cp env.docker.example .env.docker          # macOS / Linux
+---
 
-# App config (created automatically on first API boot if missing)
-# backend/.env.docker  → copied to backend/.env once (see entrypoint)
-# frontend/.env.docker → used by web container
+# TowerOS: Cursor config (v13)
+
+**Scope change:** the rules now only cover the Ticketing, EApproval (E-Forms), DocExtract and Documents (Document Control) modules. `ui-map.mdc`, `ui-mobile-field.mdc` and the `map-view` skill were removed (telecom/NOC/GIS content, not used by these modules). `global.mdc` tells the agent not to build in AssetOne, FiberOne, TowerOne, Sites, Rollout, ProcurementOne, ProjectOne, AiAssistant or Help, and not to touch the shared platform plumbing (Identity, Tenancy, Notifications, Platform, AdminOne, Billing, Workspace, `app/Core`) without asking, since the four active modules depend on it.
+**I assumed "E-Forms" = the `EApproval` module and "Document Control" = the `Documents` module** (its frontend API client is literally `controlled-documents-api.ts`). Tell me if that's wrong.
+**I have not touched any code or removed any modules from the repo itself** — this only changes what the Cursor agent is told to work on. Deleting the actual AssetOne/FiberOne/etc. code is a separate, larger job (routes, permissions, nav entries, tests, migrations) that I'd want to scope with you before running.
+
+
+Extract over your repo root. It overwrites the files from the first zip and leaves your own `toweros.mdc` and `uiux-theme.mdc` untouched. Then resolve those two (below).
+
+```
+.cursorignore                 secrets out of indexing and agent reads
+.cursorindexingignore         noisy folders out of the index only
+.cursor/
+  mcp.json                    Context7, Playwright (Laravel Boost removed: not installed)
+  hooks.json + hooks/         guardrails (Node, Windows-safe)
+  rules/                      global.mdc (always on) + 12 scoped rules
+  skills/                     crud-module, data-table, map-view, tenant-safe-migration
+  agents/                     code-reviewer, security-auditor, tenant-isolation-auditor, ui-ux-reviewer
+  commands/                   /new-feature /ui-review /tenant-audit /review-branch /fix-issue
 ```
 
-Install root npm scripts:
+## Resolve the duplicates
+`toweros.mdc` (your global rules) and `uiux-theme.mdc` (your UI theme) are probably `alwaysApply: true`. Together with `global.mdc` and `ui-theme.mdc` that means two overlapping always-on rule sets, which can conflict. If they are your original text, everything in them is already covered, so delete them. If you added project-specific lines since, move those lines into `global.mdc` / `ui-theme.mdc` first.
 
-```bash
-npm install
+## What changed in v3 (from your folder listing and globals.css)
+- Tables are `components/ui/data-table*.tsx`, `app-table.tsx`, `lib/table/server-sort.ts`, `lib/api/paginated.ts` and the list-export files. `components/data` was empty, so nothing points there any more.
+- Modules use `<Module><Thing>Service`, `<Module>PlanFeaturesService` and `<Module>FileStorageService`. Repositories are optional (only an abstract base exists).
+- Frontend per feature: route in `app/(platform)`, client in `lib/api/modules/<m>-api.ts`, types in `modules/<m>/types.ts`, helpers in `lib/<area>`, UI in `components/<area>`.
+- Three API clients (`client`, `central-client`, `public-tenant-client`) are now a tenancy rule.
+- ui-theme keeps your existing `globals.css` tokens and only adds status/alarm tokens. Fonts are system stacks. Radius is 0.5rem.
+- Added an SSRF check for tenant-configurable webhooks (Ticketing has test-webhook endpoints).
+
+## What changed from v1 (based on your repo)
+- No `src/` in frontend: routes in `app/`, UI in `components/`, module code in `modules/`, shared code in `lib/`.
+- Backend uses `app/Core` + `app/Modules` and the repository/service pattern. Tenant migrations are in `database/migrations/tenant` (database-per-tenant).
+- Tests are PHPUnit (not Pest). Commands come from your root `package.json` scripts. No Larastan, Prettier, Playwright, i18n or URL-state library are assumed.
+- Hooks: added blocks for Docker volume removal, `dev:fresh`, PowerShell download-and-run and `git clean -f`. Pint now runs as `php vendor/bin/pint`. The Prettier step was removed.
+- ui-theme and the reviewer defer to `frontend/app/globals.css` and `docs/design-system` as the source of truth.
+
+## Verify in Cursor
+Settings, then Hooks: confirm the four hooks load and check the Hooks output channel. Try editing `pnpm-lock.yaml`/`package-lock.json` once to confirm `protect-writes` blocks it. Hooks intentionally block the agent from editing `.cursor/hooks*` and `.cursorignore`.
+
+
+## v5: fix a duplicate-file bug from v1-v4
+Extracting these zips over your repo only adds/overwrites files by name — it never deletes anything. So your **original** `toweros.mdc` and `uiux-theme.mdc` were still sitting in `.cursor/rules/` this whole time, alongside the new `global.mdc` and `ui-theme.mdc`, both marked `alwaysApply: true`. That's why `toweros.mdc` still had the stale PostgreSQL/PostGIS/TimescaleDB lines — nothing in these zips ever touched it.
+
+Run this once, from the repo root, to delete both superseded files (back them up first if you want the history):
+
+```powershell
+cd C:\LaravelProject\TowerOS
+git rm .cursor/rules/toweros.mdc .cursor/rules/uiux-theme.mdc
 ```
 
-### Step 3 — Start the stack
+`global.mdc` now carries everything `toweros.mdc` had, plus the deployment/hostname block:
+- Redis 7 (was unversioned)
+- Production hostnames (`app`, `appmenu`, `console`, `staging`.alliancetowers.com) and the CloudFront → nginx → EC2 API path — no IP address, as instructed
+- The PostgreSQL/PostGIS/TimescaleDB lines are gone, since this repo doesn't use them
 
-**Clean first install (wipes MySQL, seeds superadmin + playbooks):**
+I also fixed a leftover doubled "## Stack in use" heading in `global.mdc` from an earlier edit pass.
 
-```bash
-npm run dev:fresh
-```
 
-When prompted, type **`FRESH`** (all caps).
+## v6: UI drift ratchet + tenancy corrections
+1. Copy `scripts/ui-drift.mjs` to the repo's `scripts/` folder.
+2. Add to the ROOT `package.json` scripts: `"ui:drift": "node scripts/ui-drift.mjs"`.
+3. Once, run `node scripts/ui-drift.mjs --report`, then `node scripts/ui-drift.mjs --update` and commit `scripts/ui-drift-baseline.json`.
+4. Add a step to `.github/workflows/ci.yml` after checkout: `- run: node scripts/ui-drift.mjs`.
 
-**Normal start (keep existing data):**
+The script fails only when a file gets WORSE than its baseline, so the existing drift does not block anyone. The agent is blocked from editing the script or baseline and from running `--update`.
 
-```bash
-npm run dev
-# or detached:
-docker compose --env-file .env.docker up -d --build
-```
+Rule corrections from your `config/tenancy.php`: there is no Redis-prefix or broadcasting bootstrapper, the cache bootstrapper is conditional, and the filesystem bootstrapper covers `local`/`public` only. `multi-tenancy.mdc` now says so, and adds environments, module gating and backups.
 
-Verify containers:
 
-```bash
-docker compose --env-file .env.docker ps
-```
+## v7: corrections from your tokens.css, badges, module resolver and tenancy services
+- `ui-theme.mdc` now follows `tokens.css` (status tokens, radius, shadow and z-index tokens already exist there). My earlier "border-first, no shadow, rounded-lg" card rule contradicted your tokens and is gone.
+- New one-time commands: `/consolidate-status-badges` (shared status palette, fixes the failing `destructive` badge contrast) and `/audit-module-gating` (read-only check of whether disabling a module really blocks it).
+- `global.mdc` now uses the real module keys. `e_approval` is labelled "E-Forms" in code. Document Control is most likely `document_register`, not `documents` (which is leases/permits/contracts across sites).
+- `multi-tenancy.mdc` now describes tenant-linked environments (root tenant plus children via `parent_tenant_id`) and says plainly that no detach feature exists.
 
-Expect: `toweros-mysql` (healthy), `toweros-api`, `toweros-web`, `toweros-phpmyadmin`.
 
-### Step 4 — MySQL grants (first time per MySQL volume)
+## v8: corrections from the second PowerShell audit
+- Card shape: measured, not guessed. `rounded-xl` + `shadow-sm` is what the UI really uses. The `rounded-card`/`shadow-card` tokens (which v7 told the agent to use) have 0 uses. `ui-theme.mdc` now says so and points at DESIGN_SYSTEM.md sections 4, 5 and 9.
+- DESIGN_SYSTEM.md already has badge and status-colour sections (16, 17). `/consolidate-status-badges` now reads them first and stops if they conflict.
+- `global.mdc` records the hard dependencies that block deleting modules (E-Forms -> ProcurementOne, Document Control <-> E-Forms) and the verified gating facts. `architecture.mdc` no longer claims modules never import each other.
+- `multi-tenancy.mdc` records verified facts about linked environments: billing columns are per row and do not follow the org root, and offboarding takes no backup and may leave local files behind.
 
-Tenant databases are named `tenant<uuid>`. The app user needs `CREATE DATABASE`:
 
-```bash
-npm run dev:mysql:grants
-```
+## v9: status colours follow DESIGN_SYSTEM.md, not my earlier token idea
+- DESIGN_SYSTEM.md 16.2 and 17 already prescribe Tailwind palette classes for statuses (emerald, amber, red, sky). Most of the 817 "drift" matches are that documented pattern, so `scripts/ui-drift.mjs` no longer counts those four families (or sidebar files). It now flags undocumented families (blue, green, orange, slate, gray...), hex and rgb/hsl values. Install it and run `node scripts/ui-drift.mjs --report` to see the real number.
+- `proposals/status-badges/` holds three files (status-tone.ts, status-badge.tsx, ticketing-badges.tsx) that implement 17.1 once. They were typechecked against a copy of your real `badge.tsx`. Copy them into `frontend/components/...` by hand (no Cursor credits needed), then run lint, typecheck and tests. `/consolidate-status-badges` now describes this instead of new tokens.
+- `global.mdc` and `/audit-module-gating` now state what gating really enforces: only 5 route groups carry `tenant.module`.
+- `multi-tenancy.mdc`: deletion callers and audit behaviour, tenant file location, and the staging-topology question.
 
-### Step 5 — Seed platform data (skip if you used `dev:fresh`)
 
-```bash
-npm run dev:seed
-```
+## v10: staging recommendation + ProcurementOne removal plan
+- `proposals/staging-environment.md`: `staging.alliancetowers.com` is confirmed to be a tenant environment on the production servers (created via `console.alliancetowers.com`, DNS at GoDaddy), not a release-testing environment. Recommends a separate pre-release stack instead of relying on it.
+- `procurement_one` is confirmed unneeded and being removed, but E-Forms calls into it directly today, so it cannot be deleted yet. `global.mdc` now says this explicitly so the agent does not delete ProcurementOne prematurely nor build new work there.
+- `proposals/procurement-one-decoupling-plan.md`: the ordered plan (audit -> decide what E-Forms loses -> remove the calls -> remove the module -> verify).
+- `proposals/procurement-removal-audit.ps1`: read-only PowerShell script listing every file outside ProcurementOne that references it, so Step 1 of the plan can be filled in with real file names. I could not execute this script myself (no PowerShell in my environment) — only syntax-balance-checked it. Please run it and confirm it works before relying on its output.
 
-Creates:
 
-- Platform superadmin (`superadmin@toweros.local` / `123123123` by default)
-- Published rollout playbooks and policy bundles
-- Passport personal access client
+## v12: stale rule index fixed; the toweros.mdc/uiux-theme.mdc deletion still isn't done
+Cursor's own agent reviewed the v11 rules and confirmed both files are still present, `alwaysApply: true`, and actively contradicting `global.mdc` (INFRA SUITE vs TowerOS, Postgres/PostGIS/TimescaleDB vs the real MySQL-only stack, the old blue-primary theme vs the real near-black one). It also caught that `global.mdc`'s own rule index at the bottom never got updated after `/audit-module-gating`, `/consolidate-status-badges` and `/decouple-procurement` were added — fixed that too. The file-deletion step is still on you; see the banner at the top of this README.
 
-### Step 6 — Platform superadmin login
+## v11: procurement audit came back — real scope, plan finalized
+The audit script worked and returned real data: ProcurementOne removal touches ~40 frontend pages, 6 E-Forms services, billing entitlements, 4 RBAC roles, an AI Assistant catalog entry, a Ticketing category pack, 8 scheduled commands and 17 tenant migrations. Given that scale, the plan now commits to Option A (drop procurement-linked E-Forms form types entirely, not just their sync). `proposals/procurement-one-decoupling-plan.md` was rewritten with the real file/class names from the audit, in execution order. New command `/decouple-procurement` runs it step by step with checkpoints, and asks before dropping the 17 tenant-database tables or deleting an RBAC role that a real user holds.
 
-| | |
-|---|---|
-| URL | http://localhost/platform/login |
-| Email | `superadmin@toweros.local` |
-| Password | `123123123` (from `backend/.env.docker` → `TOWEROS_PLATFORM_DEV_PASSWORD`) |
 
-If you see **Unauthenticated** after a fresh reset, clear browser `localStorage` key `toweros.platform.session` and sign in again.
+## v13: removal scope expanded to six more modules
+AssetOne, FiberOne, TowerOne, Sites, Rollout and ProjectOne are now confirmed for removal, same status ProcurementOne had before its audit: no new work, no deletion until audited. Two are already known to be entangled, not just switchable, from earlier audit output: Sites is imported directly by E-Forms (`EApprovalMasterDataService`), and Rollout has module-specific code living inside Document Control (`DocumentRolloutGateEnforcementService` and others) and is not even present in the toggleable-modules list — it looks baked into tenant provisioning itself. `global.mdc` now states this so the agent does not attempt to delete either prematurely.
 
-### Step 7 — Create your first tenant
-
-1. Open http://localhost/platform/tenants/create  
-2. Example local tenant:
-
-| Field | Example |
-|-------|---------|
-| Environment | `local` |
-| Slug | `atc` |
-| Brand domain | `alliancetowers.com` (or `example.com`) |
-| Hostname | `atc.localhost` (auto-suggested) |
-| Rollout playbook | Latest published |
-
-3. Click **Create tenant** and wait **1–2 minutes**.  
-4. Save the one-time **bootstrap admin password** and **tenant login URL**.
-
-Provisioning automatically:
-
-- Creates central tenant + domain rows  
-- Creates MySQL database `tenant<uuid>`  
-- Runs tenant migrations  
-- Assigns rollout policy, syncs playbook, seeds holidays  
-- Creates `admin@<hostname>` (e.g. `admin@atc.localhost`)
-
-### Step 8 — Tenant login (recommended)
-
-Add to `C:\Windows\System32\drivers\etc\hosts` (Administrator):
-
-```text
-127.0.0.1 atc.localhost
-```
-
-Open **http://atc.localhost/login** and sign in with the bootstrap admin from step 7.
-
-> Prefer `*.localhost` for tenant UX. The platform host (`localhost`) is for superadmin only.
-
-### Step 9 — After `git pull` (migrations)
-
-```bash
-docker compose exec api php artisan toweros:migrate
-```
-
-Runs central + all tenant migrations.
-
----
-
-### Local URLs
-
-| Service | URL |
-|---------|-----|
-| Tenant web (central host) | http://localhost |
-| Tenant web (tenant host) | http://atc.localhost |
-| API | http://localhost:8000 |
-| Platform console | http://localhost/platform |
-| phpMyAdmin | http://localhost:8080 |
-
-### MySQL connection (host tools)
-
-| Setting | Value |
-|---------|--------|
-| Host | `127.0.0.1` |
-| Port | `3307` |
-| Database | `toweros` |
-| User | `root` |
-| Password | `toweros` |
-
-SSO and tenant settings live in **central** DB table `tenant_sso_configs`, not in `tenant<uuid>` databases.
-
----
-
-## Daily development commands
-
-| Task | Command |
-|------|---------|
-| Start (foreground logs) | `npm run dev` |
-| Start (background) | `docker compose --env-file .env.docker up -d` |
-| Stop | `npm run dev:down` |
-| API logs | `npm run dev:logs:api` |
-| All logs | `npm run dev:logs` |
-| Central migrate | `docker compose exec api php artisan migrate` |
-| All tenants migrate | `docker compose exec api php artisan tenants:migrate` |
-| Both | `docker compose exec api php artisan toweros:migrate` |
-| Repair missing tenant DBs | `docker compose exec api php artisan toweros:repair-tenant-databases --create` |
-| Full local reset | `npm run dev:fresh` |
-| Restart API | `docker compose restart api` |
-
-**Detailed walkthrough:** [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md)
-
----
-
-## Authentication & security
-
-### Two consoles
-
-| Console | URL | Auth | Who |
-|---------|-----|------|-----|
-| **Platform (superadmin)** | `/platform` | Passport | INFRA SUITE operators — provision tenants |
-| **Tenant workspace** | `https://app.{customer}/` or `*.localhost` | Sanctum (+ optional MFA) | Customer org users |
-
-Tenant users do **not** use the platform console for daily work.
-
-### Tenant sign-in options
-
-| Method | Where configured |
-|--------|------------------|
-| Email + password | Team & Access (users) |
-| Microsoft Entra ID | **Administration → Settings → Sign-in & security** (`/admin/settings`) |
-| MFA (TOTP) | **Settings → MFA Security**; tenant `mfa_required` on platform |
-
-### Standard security defaults (per tenant)
-
-Configured under **Sign-in & security**:
-
-| Setting | Default | Meaning |
-|---------|---------|---------|
-| Auto-provision on Microsoft sign-in | Off | Users must exist in Team & Access first |
-| Disable password when SSO enabled | On | Normal users use Microsoft; break-glass `admin@…` keeps password |
-| Allowed email domains | Empty | Optional restrict (e.g. `atc.com`) |
-
-### APP_KEY and encrypted SSO secrets (Docker)
-
-- **`backend/.env`** is the only place for `APP_KEY` (generated once on first boot). **Do not reset** after saving Microsoft client secrets.  
-- **`backend/.env.docker` must not define `APP_KEY`.** Docker Compose `env_file` injects variables into the container; an empty `APP_KEY=` there **overrides** `.env` on every `docker compose restart` and breaks decryption.  
-- Entrypoint copies `.env.docker` → `.env` **only if `.env` is missing**, and runs `key:generate` **only if** `.env` has no `APP_KEY=base64:…` line.  
-- After fixing a key mismatch, re-paste the Microsoft client secret on **Sign-in & security** once and save.  
-- `backend/.env` must contain **`APP_KEY=base64:…`** (not a bare `APP_KEY` line). If you see *No application encryption key*, run `docker compose up -d --force-recreate api` so an old empty `APP_KEY=` container env is cleared.
-
----
-
-## Microsoft Entra ID (SSO)
-
-Configured **per tenant** (not on the platform console).
-
-### A. Azure Portal (one app registration per customer)
-
-1. **Microsoft Entra ID → App registrations → New registration**  
-2. **Supported account types:** single org (typical)  
-3. **Authentication → Web redirect URI** — must match INFRA SUITE exactly, e.g. local:
-
-   ```text
-   http://localhost:8000/api/v1/auth/sso/azure/callback
-   ```
-
-4. **Certificates & secrets → New client secret** — copy the **Value** immediately  
-5. **API permissions:** `openid`, `profile`, `email`, `User.Read` (+ optional group reads for role mapping)  
-6. **Enterprise applications → Users and groups** — assign who may use the app  
-
-Note from app **Overview**:
-
-- **Application (client) ID**  
-- **Directory (tenant) ID** — use this in INFRA SUITE (not `common` for single-tenant apps)
-
-### B. INFRA SUITE tenant admin
-
-1. Sign in at **http://atc.localhost/login** (tenant admin)  
-2. **Administration → Settings → Sign-in & security** → http://atc.localhost/admin/settings  
-3. Enable Microsoft sign-in; paste Client ID, **Directory (tenant) ID**, and **client secret Value**  
-4. **Entra group → role mapping:** use `{}` when empty (not `[]`) to skip Entra role sync — assign roles only in **Team & Access**. When you map a group, roles are **merged** on each Microsoft sign-in (they do not remove roles already assigned in INFRA SUITE), e.g.:
-
-   ```json
-   {
-     "<entra-group-object-id>": ["viewer"]
-   }
-   ```
-
-   A user in that group gets `viewer` from Entra plus any roles you set in Team & Access (e.g. `e_approval_requestor`). No matching group → existing INFRA SUITE roles are unchanged.
-
-5. **Save sign-in settings** → **Validate Microsoft app**  
-6. Ensure the user exists in **Team & Access** (or enable auto-provision). **Bulk CSV import** (`email`, `name`, `role`) matches users case-insensitively — Microsoft sign-in reuses the same account (no duplicate). See [docs/modules/tenant-user-bulk-import.md](docs/modules/tenant-user-bulk-import.md).  
-7. Test: **http://atc.localhost/login** → **Sign in with Microsoft**
-
-### Production redirect URI
-
-Use your real API host, e.g.:
-
-```text
-https://api.customer.com/api/v1/auth/sso/azure/callback
-```
-
-Same host routing model as local; update Azure and INFRA SUITE together.
-
----
-
-## Tenant features & URLs
-
-After login on a tenant host (e.g. `atc.localhost`):
-
-| Area | Path |
-|------|------|
-| Dashboard | `/dashboard` |
-| Notifications | `/notifications` |
-| Sites | `/sites` |
-| PROJECT-ONE | `/project-one` (rollouts, projects, approvals, playbook, holidays) |
-| TOWER-ONE | `/tower-one` |
-| FIBER-ONE | `/fiber-one` |
-| ASSET-ONE | `/asset-one` |
-| GIS | `/gis` |
-| E-Forms | `/e-approval` (forms, submissions, approvals, audit, settings) |
-| Team & Access | `/users` |
-| Sign-in & security | `/admin/settings` |
-| KPI & SLA (admin JSON) | `/admin/settings/kpi` |
-| Sessions | `/settings/sessions` |
-| MFA | `/settings/security/mfa` |
-
-**E-Forms** runs inside this Next.js app only. Standalone formbuilder is decommissioned (historical only; not in this repo or deploy).
-
----
-
-## Platform console
-
-| Feature | Path |
-|---------|------|
-| Superadmin dashboard | `/platform` |
-| Tenant directory | `/platform#tenant-directory` |
-| Create tenant | `/platform/tenants/create` |
-| Rollout playbooks | `/platform/playbooks` |
-| Helper center | `/platform/helper-center` |
-
-**Tenant hostname patterns:** [`docs/infrastructure/tenant-domain-slugs.md`](docs/infrastructure/tenant-domain-slugs.md)
-
----
-
-## Database & migrations
-
-| Scope | Command |
-|-------|---------|
-| Central only | `docker compose exec api php artisan migrate` |
-| All tenants | `docker compose exec api php artisan tenants:migrate` |
-| Both | `docker compose exec api php artisan toweros:migrate` |
-
-New tenants from the platform UI run tenant migrations automatically during provisioning.
-
-**Central tables include:** `tenants`, `domains`, `tenant_sso_configs`, playbooks, platform users.  
-**Tenant tables include:** `users`, rollouts, e-approval, sites, etc. (per `tenant<uuid>` database).
-
----
-
-## Production deployment
-
-**Confirmed production baseline:** Amazon **EC2 t3.large** + **RDS MySQL db.t3.medium Multi-AZ** (AWS 1-year subscription). Full provision + env + cutover steps:
-
-→ [`docs/infrastructure/aws-ec2-rds-production.md`](docs/infrastructure/aws-ec2-rds-production.md)  
-→ Env template: [`backend/.env.production.example`](backend/.env.production.example)
-
-| Model | Best for | Doc |
-|-------|----------|-----|
-| **A — Linux EC2 + RDS** (current production) | First customer go-live, fixed monthly cost | [`aws-ec2-rds-production.md`](docs/infrastructure/aws-ec2-rds-production.md) |
-| **B — ECS Fargate + Aurora** (scale path) | Multi-tenant scale, autoscaling, zero-downtime | [`aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md) |
-
-**Release process:** Phase 1 — [`release-runbook.md`](docs/infrastructure/release-runbook.md). Phase 2 — [`tenant-environments-phase-2.md`](docs/infrastructure/tenant-environments-phase-2.md). Phase 3 — [`cicd-phase-3.md`](docs/infrastructure/cicd-phase-3.md). Phase 4 — [`hardening-phase-4.md`](docs/infrastructure/hardening-phase-4.md).
-
----
-
-### Is INFRA SUITE ready for production?
-
-**Application:** Yes for the modules you have been testing (Project-One, Sites, Documents, Document register, E-Forms, Ticketing). Priority automated tests pass; run your staging manual checklist before cutover.
-
-**Operations:** Production is ready when **you** complete the checklist below — not only when code is merged.
-
-| Area | Status | Before go-live |
-|------|--------|----------------|
-| Staging validation | Your checklist on `staging.*` | Complete smoke + module flows |
-| Secrets & TLS | Required | `APP_KEY`, DB passwords, OAuth secrets in a vault (not git) |
-| HTTPS everywhere | Required | ACM cert + Route 53 (or ALB) |
-| Database | Required | RDS MySQL 8.4 Multi-AZ; app user can `CREATE DATABASE` |
-| Redis | **Required** | Queues + cache — Docker on EC2 or ElastiCache (gap vs subscription slide) |
-| Queue worker | **Required** | `php artisan queue:work` always running |
-| Scheduler | **Required** | Cron every minute: `schedule:run` |
-| File storage | Required | S3 (`TOWEROS_TENANT_FILES_DISK=s3`) — not local EC2 disk |
-| CDN | Recommended | CloudFront; set `AWS_URL` when enabled |
-| Backups | Required | AWS Backup **30-day** (RDS + EBS) + S3 versioning |
-| Monitoring | Required | CloudWatch alarms (5xx, disk, RDS CPU, free storage) |
-| Mail | Required | SES or Microsoft 365 SMTP for approvals / gate emails |
-| SSO | Per tenant | Entra redirect URI on production API host |
-
----
-
-### A. Confirmed AWS production stack
-
-| Resource | Spec | INFRA SUITE use |
-|----------|------|-------------|
-| **EC2 t3.large** | 2 vCPU, 8 GB, 50 GB root | Docker: API + Next.js + Redis + queue worker |
-| **EBS gp3** | 100 GB | Images, logs, temp |
-| **RDS MySQL db.t3.medium** | 2 vCPU, 4 GB, 50 GB, **Multi-AZ** | Central `toweros` + per-tenant DBs |
-| **S3 Standard** | 50 GB/mo + request allowance | Documents, exports, binders |
-| **CloudFront** | CDN | Static assets + file downloads |
-| **Route 53** | DNS | Console / app / tenant hosts |
-| **CloudWatch** | Logs + metrics + alarms | Health monitoring |
-| **AWS Backup** | **30-day** retention | RDS + EBS |
-
-**Must still add:** Redis, queue worker, scheduler, TLS (ALB/Nginx), SES. Details in the [EC2 + RDS runbook](docs/infrastructure/aws-ec2-rds-production.md).
-
-```text
-Internet → Route 53 → CloudFront → ALB/Nginx :443
-  → Laravel :8000 + Next.js :80 (Docker on EC2)
-  → RDS MySQL Multi-AZ | S3 | Redis | CloudWatch | AWS Backup (30d)
-```
-
-**Quick start on the EC2:**
-
-```bash
-cp backend/.env.production.example backend/.env
-# Set APP_KEY, DB_HOST=<rds-endpoint>, AWS_BUCKET, domains, SES
-docker compose --env-file .env.docker up -d --build redis api
-docker compose --env-file .env.docker --profile web up -d --build web
-# Then: migrate, seed, passport client, systemd queue worker, cron schedule:run, TLS
-```
-
----
-
-### B. ECS Fargate (scale path)
-
-Target for multi-tenant scale: **ECS Fargate**, **Aurora MySQL 8.4**, **ElastiCache Redis**, **ALB + WAF**, **S3**, **Secrets Manager**.
-
-Full diagram and pipeline: [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md)
-
-#### Environment checklist (all deployments)
-
-| Concern | Production guidance |
-|---------|---------------------|
-| `APP_ENV` | `production` |
-| `APP_DEBUG` | `false` |
-| `APP_KEY` | Stable secret — never rotate without re-encrypting SSO secrets |
-| `CENTRAL_DOMAINS` | Platform hostnames only (e.g. `console.toweros.app`) |
-| `TOWEROS_ALLOW_TENANT_ON_CENTRAL_HOST` | `false` |
-| Tenant API | Same hostname as SPA (`app.customer.com/api/v1`) |
-| TLS | ACM certificates; wildcard DNS for tenant apps |
-| Database | MySQL 8.4; central DB + one DB per tenant |
-| Queues | Redis + dedicated worker service |
-| Scheduler | Cron or ECS scheduled task: `schedule:run` |
-| Files | S3 for `TOWEROS_TENANT_FILES_DISK` |
-| Mail | SES or Microsoft 365 SMTP |
-| SSO | Per-tenant Entra app; production redirect URI on API host |
-| Bootstrap passwords | `TOWEROS_TENANT_BOOTSTRAP_EXPOSE_PASSWORD_IN_API=false` |
-
-#### Deploy runbook (ECS summary)
-
-1. **CI:** PR → lint, test, build (`.github/workflows/ci.yml`)
-2. **Build & push** Docker images to ECR (`toweros-api`, `toweros-web`)
-3. **Migrate:** ECS one-off: `php artisan migrate --force` then `tenants:migrate --force`
-4. **Deploy** ECS services (API, web, worker, scheduler)
-5. **Smoke test:** `/up`, platform login, tenant login, one SSO flow
-
-#### Post-deploy tenant operations
-
-- Create tenants from the **production** platform console with production `brand_domain` and DNS.
-- Point customer DNS (CNAME) to ALB.
-- Configure **Sign-in & security** per tenant.
-- Run `toweros:migrate` after releases that include migrations.
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `service "backend" is not running` | Use service name **`api`**: `docker compose exec api …` |
-| `tenant_sso_configs` doesn't exist | `docker compose exec api php artisan migrate` (central table) |
-| Query on wrong DB for SSO | SSO config is **central** only; pull latest API code |
-| `The MAC is invalid` / client secret cannot be decrypted | Remove `APP_KEY` from `.env.docker`; keep stable key in `backend/.env`; `docker compose restart api`; re-save client secret once |
-| `Undefined variable $request` (SSO) | Pull latest; `docker compose restart api` |
-| Group mapping save failed | Use `{}` not `[]` for empty mapping |
-| Access denied creating `tenant*` DB | `npm run dev:mysql:grants` |
-| Orphan tenant / missing DB | `docker compose exec api php artisan toweros:repair-tenant-databases --create` |
-| Port in use | Change ports in `.env.docker` |
-| `atc.localhost` won't open | Add hosts file entry `127.0.0.1 atc.localhost` |
-| Microsoft login: tenant context | Sign in from **tenant URL** (`atc.localhost`), not platform host |
-| Account not provisioned (SSO) | Add user in Team & Access or enable auto-provision |
-
-**More:** [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md#troubleshooting)
-
----
-
-## Documentation index
-
-| Document | Description |
-|----------|-------------|
-| [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md) | Step-by-step Docker setup (printable checklist) |
-| [`docs/infrastructure/aws-ec2-rds-production.md`](docs/infrastructure/aws-ec2-rds-production.md) | **Production:** EC2 t3.large + RDS MySQL Multi-AZ (confirmed AWS stack) |
-| [`backend/.env.production.example`](backend/.env.production.example) | Production env template (RDS, S3, Redis, SES, CloudFront) |
-| [`docs/infrastructure/aws-ecs-cicd.md`](docs/infrastructure/aws-ecs-cicd.md) | Scale path: AWS ECS, Aurora, CI/CD |
-| [`docs/infrastructure/hardening-phase-4.md`](docs/infrastructure/hardening-phase-4.md) | Phase 4: circuit breaker, snapshots, rollback drill |
-| [`docs/infrastructure/cicd-phase-3.md`](docs/infrastructure/cicd-phase-3.md) | Phase 3: GitHub Actions Staging / Production CD |
-| [`docs/infrastructure/release-runbook.md`](docs/infrastructure/release-runbook.md) | Phase 1: Staging → tag → Production → rollback |
-| [`docs/infrastructure/tenant-environments-phase-2.md`](docs/infrastructure/tenant-environments-phase-2.md) | Phase 2: Staging + production tenant workspaces |
-| [`docs/infrastructure/tenant-domain-slugs.md`](docs/infrastructure/tenant-domain-slugs.md) | Hostnames per environment |
-| [`docs/architecture/tenant-isolation-mysql.md`](docs/architecture/tenant-isolation-mysql.md) | Multi-tenant MySQL |
-| [`docs/README.md`](docs/README.md) | Docs home (phases, Rules, archives) — not deployed to AWS |
-| [`docs/Rules/INFRA SUITE_Board_Presentation.pdf`](docs/Rules/INFRA SUITE_Board_Presentation.pdf) | Board / investor module map |
-| [`docs/design-system/DESIGN_SYSTEM.md`](docs/design-system/DESIGN_SYSTEM.md) | Full UI design system |
-| [`docs/design-system/toweros-design-system.md`](docs/design-system/toweros-design-system.md) | Token / component summary |
-| [`docs/modules/e-approval.md`](docs/modules/e-approval.md) | E-Forms module |
-| [`docs/roadmaps/project-one-roadmap.md`](docs/roadmaps/project-one-roadmap.md) | PROJECT-ONE / rollouts |
-| [`.cursor/rules/toweros.mdc`](.cursor/rules/toweros.mdc) | Coding standards |
-| [`.cursor/rules/uiux-theme.mdc`](.cursor/rules/uiux-theme.mdc) | UI/UX rules |
-
----
-
-## Design & UX
-
-- **Font:** Geist  
-- **Style:** Operational minimalism (Azure Portal / ServiceNow-inspired)  
-- **Layout:** Left sidebar, top header, module-first navigation  
-- **Details:** [`docs/design-system/DESIGN_SYSTEM.md`](docs/design-system/DESIGN_SYSTEM.md)
-
----
-
-## Host-only development (fastest on Windows)
-
-Running the API on host PHP avoids ~1.5–2 s/request of Docker-on-Windows overhead (~6× faster). Infra stays in Docker.
-
-1. Start infra only: `docker compose --env-file .env.docker up -d mysql redis soketi`
-2. Configure `backend/.env`: `DB_HOST=127.0.0.1`, `DB_PORT=3307`, `CENTRAL_DB_PORT=3307`, `REDIS_HOST=127.0.0.1`, `REDIS_PORT=6379`
-3. If you previously ran the Docker API, clear its baked config: `cd backend && php artisan config:clear`
-4. Terminal 1: `cd backend && php artisan serve --host=127.0.0.1 --port=8000`
-5. Terminal 2: `cd frontend && npm run dev -- -p 80`
-
-Switch back to Docker API: stop the host `php artisan serve`, then `docker compose --env-file .env.docker up -d api` (compose overrides `DB_HOST=mysql` automatically).
-
-Prefer full Docker (`npm run dev`) for the least setup; prefer host mode for the fastest requests. Full step-by-step: [`docs/guides/local-development-docker-guide.md`](docs/guides/local-development-docker-guide.md#run-modes--performance-updated-jul-2026).
-
----
-
-## License & support
-
-Proprietary — Alliance / INFRA SUITE. For internal setup questions, use this README and `docs/guides/local-development-docker-guide.md` first, then check API logs: `npm run dev:logs:api`.
+`proposals/module-removal-audit.ps1` (new, could not be executed here — no PowerShell in this environment, only brace/quote-balance checked) audits all six at once: cross-references from outside each module, RBAC/billing/AI-assistant/Ticketing coupling, tenant-database migrations, and whether each is even toggleable. It also cross-checks whether the four ACTIVE modules reference any of the six. `/audit-modules-for-removal` runs the same read-only investigation from inside Cursor and asks for a per-module verdict before any decoupling plan gets written.

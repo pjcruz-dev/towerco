@@ -156,18 +156,25 @@ export function DocExtractBatchesPageClient() {
     mutationFn: requeueDocExtractBatch,
     onMutate: (batchId) => setRequeueBatchId(batchId),
     onSuccess: async (result) => {
+      const remapped = result.remapped ?? 0;
+      const queued = result.requeued ?? 0;
+      const background = result.queued === true;
+      const documentCount = result.document_count ?? 0;
       notify({
         level: "success",
-        title: "Scans requeued",
-        message:
-          result.requeued > 0
-            ? `${result.requeued} document(s) sent back to the OCR queue.`
-            : "No pending documents needed a retry.",
+        title: background ? "Rescan queued" : remapped > 0 ? "Values rescanned" : "Scans requeued",
+        message: background
+          ? `${documentCount} document(s) remapping in the background. Open the batch in a minute to review.`
+          : remapped > 0
+            ? `${remapped} document(s) remapped from stored OCR${queued > 0 ? `; ${queued} queued for full scan` : ""}.`
+            : queued > 0
+              ? `${queued} document(s) sent back to the OCR queue.`
+              : "No documents needed a retry.",
       });
       await queryClient.invalidateQueries({ queryKey: ["doc-extract", "batches"] });
     },
     onError: (error) => {
-      notify({ level: "error", title: "Could not requeue", message: getErrorMessage(error) });
+      notify({ level: "error", title: "Could not rescan", message: getErrorMessage(error) });
     },
     onSettled: () => setRequeueBatchId(null),
   });

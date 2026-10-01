@@ -1,0 +1,90 @@
+---
+description: TowerOS UI/UX theme (Operational Minimalism): tokens, badge/status variants, typography, shape, density, layout, motion, theming. Use for ANY UI or styling work.
+globs:
+  - "frontend/**/*.tsx"
+  - "frontend/**/*.ts"
+  - "frontend/**/*.css"
+alwaysApply: false
+---
+
+# TowerOS UI/UX Theme: "Operational Minimalism"
+
+Enterprise SaaS for Ticketing, E-Forms (approvals), DocExtract and Document Control. Feels like Linear, Jira, ServiceNow, Azure Portal. Not a startup landing page, not neon, not glassmorphism, not a cluttered ERP.
+
+Principles: data-first, low cognitive load, low-click actions, clear hierarchy, operational calm.
+
+**Source of truth is the code, in this order:**
+1. `frontend/app/tokens.css`: brand scale (`brand-50..900`), status colours (`--success`, `--warning`, `--danger`, `--info`, light and `.dark`, mapped so `bg-success`, `text-warning`, `bg-danger`, `bg-info` and `/10` opacity forms work), radius tokens (`--radius-card` 0.75rem, `--radius-panel`, `--radius-interactive`) and shadow tokens (`--shadow-surface|card|overlay`), both defined but with 0 uses in components today, z-index layers, shell/sidebar/dashboard/card layout sizes.
+2. `frontend/app/globals.css`: the shadcn variables (`background`, `card`, `primary`, `muted`, `border`, `destructive`, `sidebar-*`, `chart-1..5`).
+3. `components/ui`: shadcn/base-ui components and their variants (class-variance-authority).
+4. `docs/design-system/DESIGN_SYSTEM.md` (19 sections) is the canonical written spec: read the section you need. It is stale on primary colour (says blue `#2563EB`, the code is near-black `#171717`), on the sidebar (says dark slate, `globals.css` has a white sidebar in light mode) and on the base radius (says 0.75rem, `globals.css` has 0.5rem). It also contradicts itself: section 2 bans colour literals, while 16.2 and 17 prescribe Tailwind palette classes for statuses. When docs and code disagree, follow the code, and follow the doc for structure and for the status recipes. Flag the difference.
+Never fork a second set of tokens. Before adding a token, search `tokens.css` and `globals.css` for it.
+
+## Colour tokens
+Use the existing semantic classes: `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, `text-destructive`, `bg-secondary`, `bg-sidebar`. No hard-coded hex in components.
+
+| Token | Light | Dark |
+|---|---|---|
+| background | #f8fafc | #0f172a |
+| card, popover | #ffffff | #111827 |
+| foreground | #0f172a | #f8fafc |
+| primary (actions/CTA) | #171717 | #f9fafb |
+| secondary, muted, accent | #f1f5f9 | #1f2937 |
+| muted-foreground | #64748b | #94a3b8 |
+| destructive | #dc2626 | see globals.css |
+| border, input | #e2e8f0 | see globals.css |
+
+`--radius` is 0.5rem (shadcn base). Charts use `--chart-1..5` (chart-1 is a blue, about #2563eb light / #3b82f6 dark) for graphs and info highlights, never for buttons.
+
+Contrast note: `muted-foreground` on `background` is 4.55:1 in light mode, right at the AA text minimum. Fine for 14px secondary text; use `foreground` for anything smaller or essential.
+
+## Status and badges
+- The approved status palette is `DESIGN_SYSTEM.md` section 17.1: success = emerald, warning = amber, danger = red, info = sky, neutral = `muted`, each with the documented light and dark recipe (checked: 4.8 to 5.9:1 in light, 6.4 to 10.3:1 in dark). Do not invent other status colours or new status tokens.
+- Implement it once. `components/ui/status-tone.ts` (`statusToneClasses` for badge, dot, alert, icon) and `components/ui/status-badge.tsx` (`<StatusBadge tone=... >label</StatusBadge>`) are the shared implementation (drop-in files in the package under `proposals/status-badges`; if they are not in the repo yet, add them). Every status chip, dot and notice uses them. Never write a new per-file colour map.
+- Measured: `<Badge` is used 97 times, but hand-written status maps exist in ticketing, billing, exports and out-of-scope modules, and the `--success|warning|danger|info` tokens in `tokens.css` are used only about 18 times. The tokens stay as they are (used for charts and dots via CSS variables), not for chips.
+- Do not use the `default` Badge variant for a status (it is near-black). The `destructive` variant is about 4.1:1 in light mode (below AA): use tone `danger` instead.
+- Always keep a text label. Ticket statuses map: open = info, in progress = warning, resolved = success, closed = neutral. Priority: low and normal = neutral, high = warning, urgent = danger.
+
+## Typography
+Fonts are the `--font-geist-sans` and `--font-geist-mono` CSS variables in `globals.css`, currently system font stacks (no webfont is loaded). Do not add a webfont unasked. Use the mono stack for IDs, ticket/document numbers, reference codes.
+
+| Use | Size | Weight |
+|---|---|---|
+| Page title | 24px `text-2xl` | 600 |
+| Section title | 20px `text-xl` | 600 |
+| Card title | 16px `text-base` | 500 |
+| Body | 14px | 400 |
+| Table cell | 13px | 400 |
+| Table header, labels | 12px | 500, sentence case |
+
+Weights 400/500/600 only. Never bold/extrabold/black. 600 is reserved for titles and primary actions. No all-caps with wide tracking. Numeric columns and IDs: `tabular-nums`, right-aligned in tables. Timestamps: relative in lists ("5 min ago") with the absolute time in a tooltip.
+
+## Shape and elevation
+Measured in the code (occurrences in `frontend/**/*.tsx`): `rounded-xl` 508, `rounded-lg` 452, `rounded-md` 329, `shadow-sm` 474, `shadow-md` 23, and `rounded-card`, `shadow-card`, `shadow-surface` 0. So real cards are `rounded-xl` with `shadow-sm`, controls are `rounded-lg` or `rounded-md`, and the radius and shadow tokens in `tokens.css` are unused. Follow `DESIGN_SYSTEM.md` section 4 (radius), 5 (shadows) and 9 (cards; 9.3 is the "raw card pattern (most common)") and copy an existing card. Do not use the unused tokens unless a human decides to adopt them. Badges keep the `rounded-4xl` pill. z-index follows DESIGN_SYSTEM section 10.3. The `Card` component uses `ring-1 ring-foreground/10` (9.2) while the pattern most pages use is `rounded-xl border border-border bg-card shadow-sm` (9.3): use the raw pattern for new cards and do not mix both styles on one page.
+
+## Density (user preference where practical)
+| | Comfortable (default) | Compact |
+|---|---|---|
+| Table row | 44px | 32px |
+| Control height | 36px | 28-32px |
+| Page padding | 24px | 16px |
+
+## Layout
+- App shell: collapsible left sidebar (`components/ui/sidebar.tsx`), top header (search, notifications, theme, user menu), workspace.
+- Navigation depth: Module > Feature > Action. Never a fourth nested menu level.
+- Page header: breadcrumb, title, optional one-line description, primary action on the right.
+- Persist and put in the URL: filters, search, sort, page, active tab, selected record. Back/forward and shared links must restore the same view.
+- Forms max-width ~720px. Data pages use the full width.
+
+## Motion
+Fade/opacity/transform only, 100-150ms ease-out. Skeletons (`skeleton.tsx`, `page-skeletons.tsx`) instead of spinners for loads over ~300ms; `spinner.tsx` for short inline waits only. No bounce, parallax or looping decoration. Respect `prefers-reduced-motion`. Live data must never shift layout under the user's cursor.
+
+## Theming implementation
+- `next-themes`, class strategy (`.dark`), default `system`, no flash on load.
+- Every screen is verified in light and dark before it is done.
+
+## Content style
+Sentence case. Buttons start with a verb and name the object ("Create ticket", not "Submit"). Errors say what happened and what to do next. Destructive buttons name the outcome ("Delete 3 tickets").
+
+## Drift check
+Run `node scripts/ui-drift.mjs` from the repo root before finishing any frontend change. It fails if a file gains hard-coded hex, rgb()/hsl() values or undocumented Tailwind palette classes (`bg-blue-600`, `text-slate-600`, `bg-gray-100`) compared with `scripts/ui-drift-baseline.json`. Fix it with semantic classes (`bg-card`, `text-muted-foreground`, `border-border`) or the shared `StatusBadge`. Never edit the baseline or the script and never run it with `--update`: a human does that. Exempt by design: print templates (`*print*`), chart palettes, token files, sidebar files, tests, and the documented status families (emerald, amber, red, sky), which belong in `statusToneClasses` only.

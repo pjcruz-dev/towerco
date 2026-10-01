@@ -106,7 +106,7 @@ final class WorkspaceAuditTaxonomy
         $severity = match (true) {
             str_contains($action, 'rejected'),
             str_contains($action, 'voided'),
-            str_contains($action, 'cancelled') && $module === 'procurement_one' => self::SEVERITY_HIGH,
+            str_contains($action, 'cancelled') => self::SEVERITY_HIGH,
             str_contains($action, 'approved_final'),
             str_contains($action, 'resolved'),
             str_contains($action, 'obsolete') => self::SEVERITY_MEDIUM,

@@ -26,7 +26,6 @@ import {
 } from "@/lib/api/modules/admin-users-api";
 import type { AdminRoleRow } from "@/lib/api/modules/admin-roles-api";
 import { groupRolesByType } from "@/lib/rbac/role-groups";
-import { groupPermissionsByModule, permissionLabel } from "@/lib/rbac/permission-groups";
 import { getTenantRoleGuide } from "@/lib/rbac/tenant-role-guides";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -103,7 +102,6 @@ export function AdminUserFormSheet({
         return updateAdminUser(editing.id, {
           name: form.name.trim(),
           email: form.email.trim(),
-          roles: form.roles,
           password: form.password.trim() || undefined,
         });
       }
@@ -149,6 +147,7 @@ export function AdminUserFormSheet({
     form.name.trim() !== "" &&
     form.email.trim() !== "" &&
     (!setPasswordManually || form.password.trim().length >= 8) &&
+    (editing !== null || form.roles.length > 0) &&
     !createBlockedBySeats;
 
   const toggleRole = (roleName: string) => {
@@ -210,11 +209,6 @@ export function AdminUserFormSheet({
     });
   }, [editing?.roles, enabledModules, form.roles, roleCatalog, roleOptions]);
 
-  const effectivePermissionGroups = useMemo(
-    () => groupPermissionsByModule(editing?.permissions ?? []),
-    [editing?.permissions],
-  );
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col p-0 sm:max-w-lg">
@@ -222,8 +216,8 @@ export function AdminUserFormSheet({
           <SheetTitle>{editing ? "Edit user" : "Add user"}</SheetTitle>
           <SheetDescription>
             {editing
-              ? "Update profile, roles, or password. Deactivated users stay in the directory until permanently deleted."
-              : "Create an organization account. A secure password is generated unless you set one manually."}
+              ? "Update name, email, or password. Assign roles from the people list, not from this form."
+              : "Create an organization account and pick a starting role. A secure password is generated unless you set one manually."}
           </SheetDescription>
         </SheetHeader>
 
@@ -278,14 +272,15 @@ export function AdminUserFormSheet({
                 />
               </section>
 
+              {isCreate ? (
+              <>
               <Separator />
 
               <section className="space-y-3">
                 <div>
-                  <h3 className="text-sm font-medium text-foreground">Roles</h3>
+                  <h3 className="text-sm font-medium text-foreground">Starting role</h3>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Select one or more roles. At least one role is required. Only roles for modules enabled
-                    on this organization are listed.
+                    One role is required to create the account. Add or remove roles later from the people list.
                   </p>
                 </div>
                 <div className="space-y-4">
@@ -318,37 +313,9 @@ export function AdminUserFormSheet({
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Gate approvals also require the user as SAQ / PMO / CME owner on each rollout (edit rollout metadata).
-                  Use <span className="font-medium">manager</span> if one person covers multiple disciplines.
-                </p>
-                {editing && effectivePermissionGroups.length > 0 ? (
-                  <div className="rounded-lg border border-border/60 bg-muted/10 p-3">
-                    <p className="text-xs font-medium text-foreground">
-                      Current effective permissions ({editing.permissions.length})
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Saved permissions from assigned roles. Re-save after role changes to refresh access.
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {effectivePermissionGroups.slice(0, 3).map((group) => (
-                        <div key={group.id}>
-                          <p className="text-[11px] font-medium text-muted-foreground">{group.label}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {group.permissions.slice(0, 4).map(permissionLabel).join(" · ")}
-                            {group.permissions.length > 4 ? ` · +${group.permissions.length - 4} more` : ""}
-                          </p>
-                        </div>
-                      ))}
-                      {effectivePermissionGroups.length > 3 ? (
-                        <p className="text-xs text-muted-foreground">
-                          +{effectivePermissionGroups.length - 3} more module groups — open user profile for full list.
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
               </section>
+              </>
+              ) : null}
 
               {showCredentials ? (
                 <>

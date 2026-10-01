@@ -23,12 +23,15 @@ final class OpenAiLlmProvider implements LlmProviderInterface
         private readonly int $maxTokens = 1024,
         private readonly float $temperature = 0.2,
         private readonly int $timeoutSeconds = 60,
+        /** @var list<string> */
+        private readonly array $allowedModels = [],
     ) {}
 
     public function complete(LlmPrompt $prompt): LlmCompletionResult
     {
         $this->assertConfigured();
 
+        $model = $this->resolveModel($prompt->modelOverride);
         $started = hrtime(true);
         $endpoint = rtrim($this->baseUrl, '/').'/chat/completions';
 
@@ -36,7 +39,7 @@ final class OpenAiLlmProvider implements LlmProviderInterface
             ->acceptJson()
             ->timeout($this->timeoutSeconds)
             ->post($endpoint, [
-                'model' => $this->modelId,
+                'model' => $model,
                 'temperature' => $this->temperature,
                 'max_tokens' => $this->maxTokens,
                 'messages' => [
@@ -68,7 +71,7 @@ final class OpenAiLlmProvider implements LlmProviderInterface
 
         return new LlmCompletionResult(
             answer: $answer,
-            modelName: $this->modelId,
+            modelName: $model,
             promptTokens: isset($usage['prompt_tokens']) ? (int) $usage['prompt_tokens'] : null,
             completionTokens: isset($usage['completion_tokens']) ? (int) $usage['completion_tokens'] : null,
             latencyMs: (int) max(0, (hrtime(true) - $started) / 1_000_000),
@@ -80,6 +83,34 @@ final class OpenAiLlmProvider implements LlmProviderInterface
     public function modelName(): string
     {
         return $this->modelId;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function allowedModels(): array
+    {
+        $models = $this->allowedModels !== [] ? $this->allowedModels : [$this->modelId];
+        if (! in_array($this->modelId, $models, true)) {
+            array_unshift($models, $this->modelId);
+        }
+
+        return array_values(array_unique($models));
+    }
+
+    private function resolveModel(?string $override): string
+    {
+        $candidate = trim((string) $override);
+        if ($candidate === '') {
+            return $this->modelId;
+        }
+
+        $allowed = $this->allowedModels();
+        if (! in_array($candidate, $allowed, true)) {
+            return $this->modelId;
+        }
+
+        return $candidate;
     }
 
     private function assertConfigured(): void

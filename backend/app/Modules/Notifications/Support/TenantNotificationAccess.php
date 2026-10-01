@@ -26,13 +26,6 @@ final class TenantNotificationAccess
         }
 
         if (
-            in_array('project_one', $enabled, true)
-            && ($user->can('project_one:rollout:view') || $user->can('project_one:rollout:gate:approve'))
-        ) {
-            $modules[] = TenantNotificationModule::PROJECT_ONE;
-        }
-
-        if (
             in_array('ticketing', $enabled, true)
             && ($user->can('ticketing:view') || $user->can('ticketing:tickets:manage'))
         ) {

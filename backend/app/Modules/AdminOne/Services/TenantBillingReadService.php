@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\AdminOne\Services;
 
 use App\Models\Tenant;
-use App\Modules\Billing\Support\PlatformBillingCurrencyCatalog;
-use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Billing\Services\StripeBillingService;
 use App\Modules\Billing\Services\TenantBillingEstimateService;
+use App\Modules\Billing\Services\TenantPlanEntitlementsService;
 use App\Modules\Billing\Services\TenantRfiMeterService;
 use App\Modules\Billing\Services\TenantSubscriptionLifecycleService;
+use App\Modules\Billing\Support\PlatformBillingCurrencyCatalog;
 
 class TenantBillingReadService
 {
@@ -36,7 +36,6 @@ class TenantBillingReadService
         $viewerCount = $this->seats->activeViewerCount();
         $tier = $this->entitlements->normalizeTier($central?->plan_tier);
         $planSnapshot = $this->entitlements->eApprovalFeatures($tenantKey);
-        $procurementSnapshot = $this->entitlements->procurementOneFeatures($tenantKey);
         $entitlements = $central !== null
             ? $this->entitlements->forTenant($central)
             : $this->entitlements->forTier($tier);
@@ -84,7 +83,6 @@ class TenantBillingReadService
             'plan_features' => [
                 'file_uploads' => $planSnapshot['file_uploads'],
                 'max_file_fields' => $planSnapshot['max_file_fields'],
-                'procurement_one' => $procurementSnapshot,
             ],
             'has_enterprise_overrides' => $central !== null && $this->entitlements->hasBillingOverrides($central),
             'billing_overrides' => $central?->billing_overrides,

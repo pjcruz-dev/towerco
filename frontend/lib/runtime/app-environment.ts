@@ -1,3 +1,5 @@
+import { bundledRelease } from "@/content/release-notes";
+
 const raw = process.env.NEXT_PUBLIC_APP_ENV?.trim().toLowerCase();
 
 const LABELS: Record<string, string> = {
@@ -56,7 +58,7 @@ export function resolveAppEnvironmentLabel(): string {
 }
 
 export function resolveAppVersionLabel(): string {
-  return process.env.NEXT_PUBLIC_APP_VERSION?.trim() || "v1.0.4";
+  return process.env.NEXT_PUBLIC_APP_VERSION?.trim() || bundledRelease.version;
 }
 
 export function isProductionEnvironment(): boolean {

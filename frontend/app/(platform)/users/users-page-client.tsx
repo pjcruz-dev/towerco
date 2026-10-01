@@ -20,6 +20,7 @@ import {
   UserRowActions,
   UserStatusBadge,
 } from "@/components/admin/users-table-columns";
+import { UserRoleAssignSheet } from "@/components/admin/user-role-assign-sheet";
 import { UsersBulkRolePicker } from "@/components/admin/users-bulk-role-picker";
 import { FilterSelect } from "@/components/forms/filter-select";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
@@ -151,6 +152,7 @@ export function UsersPageClient() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailUser, setDetailUser] = useState<AdminUserRow | null>(null);
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  const [roleAssignUser, setRoleAssignUser] = useState<AdminUserRow | null>(null);
   const [impersonateTarget, setImpersonateTarget] = useState<AdminUserRow | null>(null);
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -259,6 +261,7 @@ export function UsersPageClient() {
         onView: openView,
         onEdit: openEdit,
         onImpersonate: openImpersonate,
+        onAssignRoles: setRoleAssignUser,
         onMutate: invalidateUsers,
       }),
     [user?.id, canImpersonateUsers, isImpersonating, organizationLabel, queryClient],
@@ -610,9 +613,9 @@ export function UsersPageClient() {
         </header>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
-            <div className="min-w-0 flex-1">
-              <label className="mb-1 block text-xs font-medium text-muted-foreground" htmlFor="users-search">
+          <div className="space-y-3 border-b border-border px-4 py-3">
+            <div className="max-w-md">
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground" htmlFor="users-search">
                 Search
               </label>
               <Input
@@ -620,9 +623,10 @@ export function UsersPageClient() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Name, email, department, or title"
-                className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
+                className="h-11 w-full text-base sm:h-9 sm:text-sm"
               />
             </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FilterSelect
               id="users-status"
               label="Status"
@@ -632,7 +636,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[10rem] sm:w-auto"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -649,7 +652,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[10rem] sm:w-auto"
             >
               {LAST_ACTIVE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -666,7 +668,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[10rem] sm:w-auto"
             >
               {MFA_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -680,7 +681,6 @@ export function UsersPageClient() {
               value={roleFilter}
               onChange={updateRoleFilter}
               touchFriendly
-              className="w-full min-w-[10rem] sm:w-auto"
             >
               <option value="all">Any role</option>
               {roleOptions.map((role) => (
@@ -698,7 +698,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[12rem] sm:w-auto"
             >
               <option value="all">Any department</option>
               {filterOptions?.has_unassigned_department ? (
@@ -719,7 +718,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[12rem] sm:w-auto"
             >
               <option value="all">Any manager</option>
               {filterOptions?.has_unassigned_manager ? (
@@ -740,7 +738,6 @@ export function UsersPageClient() {
                 setPage(1);
               }}
               touchFriendly
-              className="w-full min-w-[12rem] sm:w-auto"
             >
               <option value="all">Any license</option>
               {filterOptions?.has_unassigned_license ? (
@@ -757,7 +754,7 @@ export function UsersPageClient() {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-9 self-end text-xs"
+                className="h-9 self-end justify-self-start text-xs"
                 onClick={() => {
                   setDepartmentFilter("all");
                   setManagerFilter("all");
@@ -768,6 +765,7 @@ export function UsersPageClient() {
                 Clear org filters
               </Button>
             ) : null}
+            </div>
           </div>
 
           {selectedCount > 0 ? (
@@ -858,13 +856,21 @@ export function UsersPageClient() {
                           <UserMfaStatusBadge mfaEnrolled={row.mfa_enrolled} mfaRequired={row.mfa_required} />
                         </div>
                         <UserAuthMethodsBadges methods={row.auth_methods} />
-                        <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          className="flex flex-wrap gap-1 text-left"
+                          onClick={() => setRoleAssignUser(row)}
+                          aria-label={`Change roles for ${row.name}`}
+                        >
                           {row.roles.map((role) => (
                             <Badge key={role} variant="secondary">
                               {roleLabel(role)}
                             </Badge>
                           ))}
-                        </div>
+                          {row.roles.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">Assign role</span>
+                          ) : null}
+                        </button>
                         <UserRowActions
                           row={row}
                           currentUserId={user?.id}
@@ -962,6 +968,17 @@ export function UsersPageClient() {
           onImpersonate={openImpersonate}
           canImpersonate={canImpersonateUsers}
           canManageUsers={canManageUsers}
+        />
+
+        <UserRoleAssignSheet
+          user={roleAssignUser}
+          open={roleAssignUser !== null}
+          onOpenChange={(open) => {
+            if (!open) setRoleAssignUser(null);
+          }}
+          roleCatalog={rolesQuery.data?.roles ?? []}
+          enabledModules={enabledModules}
+          onSaved={invalidateUsers}
         />
 
         <AdminUserFormSheet

@@ -1,28 +1,12 @@
 import type { ComponentType } from "react";
 
-import { EApprovalPurchaseOrderPrintView } from "@/components/e-approval/e-approval-purchase-order-print-view";
-import { EApprovalPurchaseRequisitionPrintView } from "@/components/e-approval/e-approval-purchase-requisition-print-view";
 import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
 import type { EApprovalPrintTemplate } from "@/modules/e-approval/print-template-types";
-import {
-  PO_PRINT_TEMPLATE_KIND,
-  buildPurchaseOrderPrintTemplate,
-  isPurchaseOrderFormMetadata,
-  isPurchaseOrderPrintTemplate,
-} from "@/modules/e-approval/purchase-order-template";
-import {
-  PR_PRINT_TEMPLATE_KIND,
-  buildPurchaseRequisitionPrintTemplate,
-  isPurchaseRequisitionFormMetadata,
-  isPurchaseRequisitionPrintTemplate,
-} from "@/modules/e-approval/purchase-requisition-template";
-
-export type ProcurementPrintTemplateKind = typeof PO_PRINT_TEMPLATE_KIND | typeof PR_PRINT_TEMPLATE_KIND;
 
 type PrintViewProps = { data: EApprovalPrintPayload; showApprovalFooter?: boolean };
 
 export type PrintTemplateRegistryEntry = {
-  kind: ProcurementPrintTemplateKind;
+  kind: string;
   label: string;
   buildDefaultTemplate: () => EApprovalPrintTemplate;
   isFormMetadata: (metadata: Record<string, unknown> | null | undefined) => boolean;
@@ -31,32 +15,7 @@ export type PrintTemplateRegistryEntry = {
   PrintView: ComponentType<PrintViewProps>;
 };
 
-export const PRINT_TEMPLATE_REGISTRY: PrintTemplateRegistryEntry[] = [
-  {
-    kind: PR_PRINT_TEMPLATE_KIND,
-    label: "Purchase Requisition",
-    buildDefaultTemplate: () => buildPurchaseRequisitionPrintTemplate() as EApprovalPrintTemplate,
-    isFormMetadata: isPurchaseRequisitionFormMetadata,
-    isPrintTemplate: isPurchaseRequisitionPrintTemplate,
-    isPrintPayload: (data) =>
-      data.print_template_kind === PR_PRINT_TEMPLATE_KIND ||
-      isPurchaseRequisitionPrintTemplate(data.template) ||
-      data.fields.some((field) => field.key === "estimated_total" && !data.fields.some((f) => f.key === "grand_total")),
-    PrintView: EApprovalPurchaseRequisitionPrintView,
-  },
-  {
-    kind: PO_PRINT_TEMPLATE_KIND,
-    label: "Purchase Order",
-    buildDefaultTemplate: () => buildPurchaseOrderPrintTemplate() as EApprovalPrintTemplate,
-    isFormMetadata: isPurchaseOrderFormMetadata,
-    isPrintTemplate: isPurchaseOrderPrintTemplate,
-    isPrintPayload: (data) =>
-      data.print_template_kind === PO_PRINT_TEMPLATE_KIND ||
-      isPurchaseOrderPrintTemplate(data.template) ||
-      data.fields.some((field) => field.key === "grand_total"),
-    PrintView: EApprovalPurchaseOrderPrintView,
-  },
-];
+export const PRINT_TEMPLATE_REGISTRY: PrintTemplateRegistryEntry[] = [];
 
 export function resolvePrintTemplateEntry(
   data: EApprovalPrintPayload,

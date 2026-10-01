@@ -61,16 +61,43 @@ def map_fields(fields: list[dict[str, Any]], text: str) -> dict[str, str | None]
             values[key] = json.dumps(table, ensure_ascii=False) if table else None
             continue
         raw = _find_value(normalized, field)
-        values[key] = _coerce(raw, field_type)
+        coerced = _coerce(raw, field_type)
+        values[key] = _sanitize_mapped_value(field, coerced)
     return values
 
 
-def discover_fields(text: str, max_fields: int = 40) -> tuple[list[dict[str, Any]], dict[str, str | None]]:
+def _sanitize_mapped_value(field: dict[str, Any], value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if cleaned == "":
+        return None
+    key = (field.get("key") or "").lower()
+    label = (field.get("label") or "").lower()
+    field_type = (field.get("type") or "text").lower()
+    blob = f"{key} {label}"
+
+    if field_type == "date" or "date" in blob:
+        if _looks_like_identifier_not_date(cleaned) or not _looks_like_date_value(cleaned):
+            # Allow already-normalized ISO dates from _coerce.
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", cleaned):
+                return None
+    if "reference" in blob:
+        if not _looks_like_reference_no(cleaned) and not re.fullmatch(r"\d{6,}", cleaned):
+            # Keep numeric-only refs; reject "Purchase" etc.
+            if not re.search(r"\d", cleaned) or cleaned.lower().startswith("purchase"):
+                return None
+    if _looks_like_label_fragment(cleaned) or cleaned.lower() in {"purchase", "purchase order"}:
+        return None
+    return cleaned
+
+
+def discover_fields(text: str, max_fields: int = 80) -> tuple[list[dict[str, Any]], dict[str, str | None]]:
     """
     Build fields from OCR:
     1) Layout-aware recommendations (CitiDirect payment advice, etc.)
     2) Detect repeated row blocks as type=table
-    3) Then Label: value scalars — skipped for layouts that already recommended fields
+    3) Label: value scalars (always merged; skips keys already recommended)
     """
     normalized = _normalize_text(text)
     fields: list[dict[str, Any]] = []
@@ -98,13 +125,7 @@ def discover_fields(text: str, max_fields: int = 40) -> tuple[list[dict[str, Any
         stored = value if field_type == "table" else _coerce(value, field_type)
         if stored is None or str(stored).strip() == "":
             return
-        if any(
-            field_key == existing
-            or field_key.startswith(existing + "_")
-            or existing.startswith(field_key + "_")
-            for existing in seen_keys
-        ):
-            return
+        # Allow closely related keys (present_reading vs present_rdg) — only block exact duplicates.
         seen_keys.add(field_key)
         row: dict[str, Any] = {
             "key": field_key,
@@ -141,14 +162,19 @@ def discover_fields(text: str, max_fields: int = 40) -> tuple[list[dict[str, Any
             key=table_field.get("key"),
         )
 
-    # Generic Label: value discovery — skip for strong layout matches (keeps recommendations clean).
-    if not recommended:
+    # Always merge generic Label: value pairs for fuller capture (skip keys already taken).
+    # Skip noisy auto-pairs on structured OT worksheets / WCN forms — layouts already recommended.
+    skip_generic_pairs = _looks_like_ot_calculation_sheet(normalized) or _looks_like_wcn(normalized)
+    if not skip_generic_pairs:
         for label, raw in _iter_label_value_pairs(normalized):
             if _is_month_token(label):
                 continue
             if _looks_like_table_row(f"{label} - {raw}"):
                 continue
             if _looks_like_label_fragment(raw, label):
+                continue
+            # Skip ID-like "labels" created from codes such as OT26-0163.
+            if re.fullmatch(r"[A-Z]{1,4}\d{2,}", label.strip(), flags=re.IGNORECASE):
                 continue
             field_type = _guess_type(label, raw)
             add_field(label, raw, field_type)
@@ -281,6 +307,14 @@ def _recommend_layout_fields(text: str) -> list[dict[str, Any]]:
                 }
             )
 
+    if _looks_like_wcn(text):
+        for item in _wcn_recommended(text):
+            push(item)
+
+    if _looks_like_ot_calculation_sheet(text):
+        for item in _ot_calc_recommended(text):
+            push(item)
+
     if _looks_like_meralco(text):
         for item in _meralco_recommended(text):
             push(item)
@@ -374,32 +408,32 @@ _DEFAULT_SITE_PAYMENT_COLUMNS = [
 def _discover_tables(text: str) -> list[tuple[dict[str, Any], str]]:
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     found: list[tuple[dict[str, Any], str]] = []
+    ot_sheet = _looks_like_ot_calculation_sheet(text)
+
+    # OT calculation worksheets — summary + daily logs (never treat as utility consumption).
+    if ot_sheet:
+        for table_field, table_json in _discover_ot_calc_tables(text):
+            found.append((table_field, table_json))
+        return found
 
     # 1) Month + numbers blocks (Monthly Consumption History style)
     month_rows = _collect_month_numeric_rows(lines)
-    if len(month_rows) >= 3:
+    if _is_credible_consumption_table(lines, month_rows):
         title = _nearest_table_title(lines, month_rows[0]["line_index"]) or "Monthly Consumption History"
         columns = list(_DEFAULT_CONSUMPTION_COLUMNS)
-        rows = []
-        for entry in month_rows:
-            rows.append(
-                {
-                    "bill_month": entry["bill_month"],
-                    "present_rdg": entry["numbers"][0] if len(entry["numbers"]) > 0 else "",
-                    "previous_rdg": entry["numbers"][1] if len(entry["numbers"]) > 1 else "",
-                    "kwh_used": entry["numbers"][2] if len(entry["numbers"]) > 2 else "",
-                    "bill_amount": entry["numbers"][3] if len(entry["numbers"]) > 3 else "",
-                }
-            )
-        payload = {"columns": columns, "rows": rows}
-        field = {
-            "key": _slugify(title),
-            "label": title,
-            "type": "table",
-            "hint": "Consumption History",
-            "columns": columns,
-        }
-        found.append((field, json.dumps(payload, ensure_ascii=False)))
+        rows = [_consumption_cells_from_entry(entry) for entry in month_rows]
+        # Drop rows that still have almost no numeric cells after mapping.
+        rows = [row for row in rows if _consumption_row_has_signal(row)]
+        if len(rows) >= 2:
+            payload = {"columns": columns, "rows": rows}
+            field = {
+                "key": _slugify(title),
+                "label": title,
+                "type": "table",
+                "hint": "Consumption History",
+                "columns": columns,
+            }
+            found.append((field, json.dumps(payload, ensure_ascii=False)))
 
     # 2) Payment history style: period + date + channel + amount on one line
     payment_rows = _collect_payment_rows(lines)
@@ -454,24 +488,219 @@ def _discover_tables(text: str) -> list[tuple[dict[str, Any], str]]:
     return found
 
 
+def _looks_like_year_token(value: str) -> bool:
+    return bool(re.fullmatch(r"(?:19|20)\d{2}", value.strip()))
+
+
+def _peel_years_into_bill_month(bill_month: str, numbers: list[str]) -> tuple[str, list[str]]:
+    """Move bare YYYY tokens out of the number list into Bill Month."""
+    years: list[str] = []
+    kept: list[str] = []
+    for number in numbers:
+        if _looks_like_year_token(number):
+            years.append(number)
+        else:
+            kept.append(number)
+    month = bill_month.strip()
+    if years and not re.search(r"\b(?:19|20)\d{2}\b", month):
+        month = f"{month} - {years[0]}" if month else years[0]
+    return month, kept
+
+
+def _map_consumption_numbers(numbers: list[str]) -> dict[str, str]:
+    """
+    Map OCR numbers onto Present / Previous / kWh / Amount.
+
+    Heuristics:
+    - trailing value with a decimal is Bill Amount
+    - remaining left-to-right: Present, Previous, kWh
+    - if four+ integers remain and no amount yet, last is Amount
+    - when only 1–2 numbers exist, prefer Present / Previous (do not invent kWh)
+    """
+    nums = [n for n in numbers if n != ""]
+    amount = ""
+    if nums and ("." in nums[-1]):
+        amount = nums.pop()
+    elif len(nums) >= 4:
+        # Last of four+ readings is usually the peso amount (no decimal OCR).
+        amount = nums.pop()
+
+    present = nums[0] if len(nums) > 0 else ""
+    previous = nums[1] if len(nums) > 1 else ""
+    kwh = nums[2] if len(nums) > 2 else ""
+    if not amount and len(nums) > 3:
+        amount = nums[3]
+
+    # If OCR only captured Present + Amount (decimal), keep previous/kwh empty.
+    if amount and previous and not kwh and "." in amount and len(nums) == 2:
+        pass
+
+    return {
+        "present_rdg": present,
+        "previous_rdg": previous,
+        "kwh_used": kwh,
+        "bill_amount": amount,
+    }
+
+
+def _consumption_cells_from_entry(entry: dict[str, Any]) -> dict[str, str]:
+    bill_month, numbers = _peel_years_into_bill_month(
+        str(entry.get("bill_month") or ""),
+        list(entry.get("numbers") or []),
+    )
+    cells = _map_consumption_numbers(numbers)
+    return {"bill_month": bill_month, **cells}
+
+
+def _consumption_row_has_signal(row: dict[str, str]) -> bool:
+    filled = sum(1 for key in ("present_rdg", "previous_rdg", "kwh_used", "bill_amount") if (row.get(key) or "").strip())
+    return filled >= 2 or bool((row.get("bill_amount") or "").strip())
+
+
+def _has_consumption_context(lines: list[str], near_index: int) -> bool:
+    title = _nearest_table_title(lines, near_index)
+    if title and any(token in title.lower() for token in ("consumption", "bill month", "kwh")):
+        return True
+    start = max(0, near_index - 20)
+    blob = "\n".join(lines[start : near_index + 4]).lower()
+    return bool(
+        re.search(
+            r"present\s*rdg|previous\s*rdg|kwh\s*used|bill\s*amount|consumption\s*history|monthly\s*consumption",
+            blob,
+        )
+    )
+
+
+def _is_credible_consumption_table(lines: list[str], month_rows: list[dict[str, Any]]) -> bool:
+    if len(month_rows) < 2:
+        return False
+    blob = "\n".join(lines)
+    if _looks_like_ot_calculation_sheet(blob) or _looks_like_wcn(blob):
+        return False
+    # Always require bill/consumption context — OT sheets have month+number noise.
+    if not _has_consumption_context(lines, month_rows[0]["line_index"]):
+        return False
+    strong = [row for row in month_rows if len(row.get("numbers") or []) >= 3]
+    if len(strong) >= 2:
+        return True
+    total_numbers = sum(len(row.get("numbers") or []) for row in month_rows)
+    return total_numbers >= 6 and len(month_rows) >= 2
+
+
+def _is_numeric_only_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if _is_month_token(stripped.split()[0] if stripped.split() else ""):
+        return False
+    numbers = _extract_numbers(stripped)
+    if not numbers:
+        return False
+    residual = re.sub(
+        r"(?:PHP|PhP|₱|P)?\s*[\d,.\s\-–]+",
+        "",
+        stripped,
+        flags=re.IGNORECASE,
+    ).strip()
+    return residual == ""
+
+
+def _amount_only_from_line(line: str) -> str | None:
+    match = _AMOUNT_ONLY_LINE_RE.match(line.strip())
+    if match:
+        return match.group("amount").replace(",", "")
+    return None
+
+
+_AMOUNT_ONLY_LINE_RE = re.compile(
+    r"^(?:PHP|PhP|₱|P)?\s*(?P<amount>\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})\s*$"
+)
+
+
+def _absorb_following_numeric_lines(
+    lines: list[str],
+    start_index: int,
+    numbers: list[str],
+    *,
+    target: int = 4,
+) -> tuple[list[str], int]:
+    """
+    OCR often stacks Present / Previous / kWh / Amount on separate lines under the month.
+    Pull those into the current row until we have enough numbers or hit a non-numeric line.
+    """
+    merged = list(numbers)
+    cursor = start_index
+    while cursor < len(lines) and len(merged) < target:
+        nxt = lines[cursor].strip()
+        if not nxt:
+            cursor += 1
+            continue
+        if _MONTH_ROW_RE.match(nxt) or (_is_month_token(nxt.split()[0]) if nxt.split() else False):
+            break
+        amount = _amount_only_from_line(nxt)
+        if amount and not any("." in n for n in merged):
+            merged.append(amount)
+            cursor += 1
+            continue
+        if _is_numeric_only_line(nxt):
+            extras = _extract_numbers(nxt)
+            # Avoid swallowing a following month's year-only line.
+            if len(extras) == 1 and _looks_like_year_token(extras[0]) and not merged:
+                break
+            merged.extend(extras)
+            cursor += 1
+            continue
+        break
+    return merged, cursor
+
+
 def _collect_month_numeric_rows(lines: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for index, line in enumerate(lines):
+    index = 0
+    while index < len(lines):
+        line = lines[index]
         match = _MONTH_ROW_RE.match(line)
         if match:
             month = match.group("month")
             year = match.group("year") or ""
             numbers = _extract_numbers(match.group("rest"))
-            if len(numbers) < 2:
-                continue
             bill_month = f"{month.upper()[:3]} - {year}" if year else month.upper()[:3]
+            bill_month, numbers = _peel_years_into_bill_month(bill_month, numbers)
+            numbers, consumed_through = _absorb_following_numeric_lines(lines, index + 1, numbers)
+            if len(numbers) < 1:
+                index += 1
+                continue
             rows.append({"line_index": index, "bill_month": bill_month, "numbers": numbers})
+            index = max(index + 1, consumed_through)
             continue
 
         # Fallback for OCR spacing quirks around "FEB - 2026 …"
         parts = line.split()
         if not parts or not _is_month_token(parts[0]) or not _looks_like_table_row(line):
+            # Bare month line with numbers on following lines (common OCR split).
+            if parts and _is_month_token(parts[0]) and len(parts) <= 3:
+                month = parts[0]
+                year = ""
+                nums_start = 1
+                if len(parts) > 1 and re.fullmatch(r"\d{4}", parts[1].strip("-–")):
+                    year = parts[1].strip("-–")
+                    nums_start = 2
+                elif len(parts) > 2 and parts[1] in {"-", "–"} and re.fullmatch(r"\d{4}", parts[2]):
+                    year = parts[2]
+                    nums_start = 3
+                inline_numbers = _extract_numbers(" ".join(parts[nums_start:]))
+                bill_month = f"{month.upper()[:3]} - {year}" if year else month.upper()[:3]
+                bill_month, inline_numbers = _peel_years_into_bill_month(bill_month, inline_numbers)
+                numbers, consumed_through = _absorb_following_numeric_lines(
+                    lines, index + 1, inline_numbers
+                )
+                if len(numbers) >= 2:
+                    rows.append({"line_index": index, "bill_month": bill_month, "numbers": numbers})
+                    index = max(index + 1, consumed_through)
+                    continue
+            index += 1
             continue
+
         month = parts[0]
         year = ""
         nums_start = 1
@@ -482,10 +711,14 @@ def _collect_month_numeric_rows(lines: list[str]) -> list[dict[str, Any]]:
             year = parts[2]
             nums_start = 3
         numbers = _extract_numbers(" ".join(parts[nums_start:]))
-        if len(numbers) < 2:
-            continue
         bill_month = f"{month.upper()[:3]} - {year}" if year else month.upper()[:3]
+        bill_month, numbers = _peel_years_into_bill_month(bill_month, numbers)
+        numbers, consumed_through = _absorb_following_numeric_lines(lines, index + 1, numbers)
+        if len(numbers) < 1:
+            index += 1
+            continue
         rows.append({"line_index": index, "bill_month": bill_month, "numbers": numbers})
+        index = max(index + 1, consumed_through)
     return rows
 
 
@@ -659,23 +892,72 @@ def _find_named_table(text: str, field: dict[str, Any]) -> dict[str, Any] | None
     discovered = _discover_tables(text)
     if not discovered:
         return None
+
+    chosen: dict[str, Any] | None = None
     for table_field, table_json in discovered:
         title = (table_field.get("label") or "").lower()
         if any(token in title for token in ("payment", "consumption", "history")) and any(
             token in blob for token in ("payment", "consumption", "history", title.split()[0])
         ):
-            return json.loads(table_json)
+            chosen = json.loads(table_json)
+            break
         if label and label in title:
-            return json.loads(table_json)
-    # Fall back to best matching shape by column count.
+            chosen = json.loads(table_json)
+            break
+
     columns = field.get("columns") if isinstance(field.get("columns"), list) else []
-    best = json.loads(discovered[0][1])
+    if chosen is None:
+        chosen = json.loads(discovered[0][1])
+        if columns:
+            for _, table_json in discovered:
+                parsed = json.loads(table_json)
+                if len(parsed.get("columns") or []) == len(columns):
+                    chosen = parsed
+                    break
+
+    if not chosen:
+        return None
+
+    # Prefer the caller's column schema while keeping discovered row values.
     if columns:
-        for _, table_json in discovered:
-            parsed = json.loads(table_json)
-            if len(parsed.get("columns") or []) == len(columns):
-                return parsed
-    return best
+        return _align_table_to_columns(chosen, columns)
+    return chosen
+
+
+def _align_table_to_columns(table: dict[str, Any], columns: list[dict[str, Any]]) -> dict[str, Any]:
+    source_columns = table.get("columns") if isinstance(table.get("columns"), list) else []
+    source_rows = table.get("rows") if isinstance(table.get("rows"), list) else []
+    target_columns: list[dict[str, Any]] = []
+    for index, column in enumerate(columns):
+        if not isinstance(column, dict):
+            continue
+        target_columns.append(
+            {
+                "key": str(column.get("key") or f"col_{index + 1}"),
+                "label": str(column.get("label") or column.get("key") or f"Column {index + 1}"),
+                "type": str(column.get("type") or "text"),
+                "description": column.get("description"),
+            }
+        )
+
+    aligned_rows: list[dict[str, str]] = []
+    for row in source_rows:
+        if not isinstance(row, dict):
+            continue
+        next_row: dict[str, str] = {}
+        for index, target in enumerate(target_columns):
+            key = target["key"]
+            label = str(target.get("label") or "")
+            value = row.get(key)
+            if value is None and index < len(source_columns) and isinstance(source_columns[index], dict):
+                source_key = str(source_columns[index].get("key") or "")
+                value = row.get(source_key)
+            if value is None and label:
+                value = row.get(label)
+            next_row[key] = "" if value is None else str(value)
+        aligned_rows.append(next_row)
+
+    return {"columns": target_columns, "rows": aligned_rows}
 
 
 def _nearest_table_title(lines: list[str], near_index: int) -> str | None:
@@ -724,7 +1006,7 @@ def _extract_numbers(text: str) -> list[str]:
 
 
 _LABEL_VALUE_RE = re.compile(
-    r"(?m)^(?P<label>[A-Za-z][A-Za-z0-9 /#().&\-]{1,60}?)\s*[:\-]\s*(?P<value>.+?)\s*$"
+    r"(?m)^(?P<label>[A-Za-z][A-Za-z0-9 /#().&\-]{1,60}?)\s*(?::|\s-\s)\s*(?P<value>.+?)\s*$"
 )
 
 _SKIP_LABELS = {
@@ -791,7 +1073,7 @@ def _normalize_text(value: str) -> str:
 
 def _find_value(text: str, field: dict[str, Any]) -> str | None:
     # More specific utility layouts before CitiDirect (hybrid payment packs).
-    for lookup in (_iseco_lookup, _neeco_lookup, _meralco_lookup, _citidirect_lookup):
+    for lookup in (_ot_calc_lookup, _wcn_lookup, _iseco_lookup, _neeco_lookup, _meralco_lookup, _citidirect_lookup):
         hit = lookup(text, field)
         if hit is not None and str(hit).strip() != "" and not _looks_like_label_fragment(str(hit)):
             return hit
@@ -1054,12 +1336,837 @@ def _citidirect_lookup(text: str, field: dict[str, Any]) -> str | None:
     return None
 
 
+_WCN_RECOMMENDED: list[dict[str, str]] = [
+    {"key": "reference_no", "label": "Reference No.", "type": "text", "hint": "Reference No / WCN Reference No"},
+    {"key": "document_date", "label": "Date", "type": "date", "hint": "Date"},
+    {"key": "work_order_id", "label": "Work Order ID", "type": "text", "hint": "Work Order ID"},
+    {"key": "name", "label": "Name", "type": "text", "hint": "Name / Resource Name"},
+    {
+        "key": "purchase_order_no",
+        "label": "Purchase Order No",
+        "type": "text",
+        "hint": "Purchase Order No / PO No",
+    },
+    {"key": "po_value", "label": "PO Value", "type": "currency", "hint": "PO Value"},
+    {"key": "currency", "label": "Currency", "type": "text", "hint": "Currency"},
+    {"key": "supplier_name", "label": "Supplier Name", "type": "text", "hint": "Supplier Name / Agency Name"},
+    {"key": "terms_of_payment", "label": "Terms of payment", "type": "text", "hint": "Terms of payment"},
+    {
+        "key": "service_start_date",
+        "label": "Service Start Date",
+        "type": "date",
+        "hint": "Service Start Date",
+    },
+    {"key": "service_end_date", "label": "Service End Date", "type": "date", "hint": "Service End Date"},
+    {
+        "key": "delivery_address",
+        "label": "Delivery Address",
+        "type": "multiline",
+        "hint": "Delivery Address",
+    },
+]
+
+# Ordered longest-first so "Service Start Date" wins over "Date".
+_WCN_LABEL_ALIASES: list[tuple[str, tuple[str, ...]]] = [
+    ("service_start_date", ("service start date",)),
+    ("service_end_date", ("service end date",)),
+    ("delivery_address", ("delivery address",)),
+    ("terms_of_payment", ("terms of payment",)),
+    ("purchase_order_no", ("purchase order no", "purchase order no.", "purchase order number", "po no", "po no.")),
+    ("work_order_id", ("work order id", "work order id.", "work order no", "work order number")),
+    ("supplier_name", ("supplier name", "supplier name :")),
+    ("reference_no", ("reference no", "reference no.", "wcn reference no", "wcn reference no.")),
+    ("po_value", ("po value", "po value :")),
+    ("document_date", ("date",)),
+    ("currency", ("currency",)),
+    ("name", ("name",)),
+]
+
+
+_OT_CALC_RECOMMENDED: list[dict[str, str]] = [
+    {"key": "name", "label": "Name", "type": "text", "hint": "Name / Resource Name"},
+    {"key": "basic_salary", "label": "Basic Salary", "type": "currency", "hint": "Basic Salary"},
+    {"key": "daily_rate", "label": "Daily Rate", "type": "currency", "hint": "Daily Rate"},
+    {"key": "hourly_rate", "label": "Hourly Rate", "type": "currency", "hint": "Hourly Rate"},
+    {"key": "period_covered", "label": "Period Covered", "type": "text", "hint": "Period Covered"},
+    {"key": "subtotal_amount", "label": "Subtotal Amount", "type": "currency", "hint": "Subtotal Amount"},
+    {
+        "key": "management_fee",
+        "label": "Management Fee (10%)",
+        "type": "currency",
+        "hint": "Management Fee / Add: Management Fee",
+    },
+    {"key": "ot_total", "label": "TOTAL", "type": "currency", "hint": "TOTAL / Total Amount"},
+]
+
+_OT_SUMMARY_COLUMNS = [
+    {"key": "ot_type", "label": "OT Premium Rates", "type": "text", "description": None},
+    {"key": "rate", "label": "Rate", "type": "currency", "description": None},
+    {"key": "hours_01_15", "label": "Hours 01-15", "type": "number", "description": None},
+    {"key": "hours_16_30", "label": "Hours 16-30", "type": "number", "description": None},
+    {"key": "hours_total", "label": "Hours Total", "type": "number", "description": None},
+    {"key": "amount_01_15", "label": "Amount 01-15", "type": "currency", "description": None},
+    {"key": "amount_16_30", "label": "Amount 16-30", "type": "currency", "description": None},
+    {"key": "amount_total", "label": "Amount Total", "type": "currency", "description": None},
+]
+
+_OT_LOG_COLUMNS = [
+    {"key": "date", "label": "Date", "type": "text", "description": None},
+    {"key": "ot_type", "label": "OT Type", "type": "text", "description": None},
+    {"key": "hours", "label": "Hours", "type": "number", "description": None},
+]
+
+_OT_ND_COLUMNS = [
+    {"key": "date", "label": "Date", "type": "text", "description": None},
+    {"key": "start_time", "label": "Start Time", "type": "text", "description": None},
+    {"key": "end_time", "label": "End Time", "type": "text", "description": None},
+    {"key": "hours", "label": "Total Hours", "type": "number", "description": None},
+]
+
+
+def _looks_like_ot_calculation_sheet(text: str) -> bool:
+    blob = text.lower()
+    has_rates = "hourly rate" in blob and ("daily rate" in blob or "basic salary" in blob)
+    has_premium = "ot premium" in blob or "regular ot" in blob or "rest day ot" in blob
+    has_period = "period covered" in blob or re.search(r"\b\d{2}-\d{2}\b", blob) is not None
+    has_nd = "night differential" in blob or re.search(r"\bnd\b", blob) is not None
+    return has_rates and (has_premium or (has_period and has_nd))
+
+
+def _ot_calc_pairs(text: str) -> dict[str, str]:
+    if not _looks_like_ot_calculation_sheet(text):
+        return {}
+    pairs: dict[str, str] = {}
+
+    def grab(key: str, *patterns: str) -> None:
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
+            if not match:
+                continue
+            value = _clean_value(match.group(1))
+            if value and not _looks_like_label_fragment(value):
+                # Never store the next label (e.g. Daily Rate -> "Hourly Rate").
+                if _match_ot_calc_label(value):
+                    continue
+                pairs[key] = value
+                return
+
+    grab(
+        "name",
+        r"(?im)^Name\s*[:\-]\s*([A-Z][A-Z ,.'\-]+)",
+        r"(?im)^Name\s*\n\s*([A-Z][A-Z ,.'\-]{5,})",
+    )
+    grab(
+        "basic_salary",
+        r"(?im)^Basic\s*Salary\s*[:\-]?\s*([\d,]+\.\d{2})",
+        r"(?im)^Basic\s*Salary\s*\n\s*([\d,]+\.\d{2})",
+    )
+    grab(
+        "daily_rate",
+        r"(?im)^Daily\s*Rate\s*[:\-]?\s*([\d,]+\.\d{2})",
+        r"(?im)^Daily\s*Rate\s*\n\s*([\d,]+\.\d{2})",
+    )
+    grab(
+        "hourly_rate",
+        r"(?im)^Hourly\s*Rate\s*[:\-]?\s*([\d,]+\.\d{2})",
+        r"(?im)^Hourly\s*Rate\s*\n\s*([\d,]+\.\d{2})",
+    )
+    grab(
+        "period_covered",
+        r"(?im)^Period\s*Covered\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2}\s*[-–]\s*\d{1,2},?\s*\d{4})",
+        r"(?im)^Period\s*Covered\s*\n\s*([A-Za-z]+\s+\d{1,2}\s*[-–]\s*\d{1,2},?\s*\d{4})",
+    )
+    grab(
+        "subtotal_amount",
+        r"(?im)Subtotal\s*Amount[^\n]*?([\d,]+\.\d{2})",
+    )
+    grab(
+        "management_fee",
+        r"(?im)Management\s*Fee[^\n]*?([\d,]+\.\d{2})",
+    )
+    grab(
+        "ot_total",
+        r"(?im)^TOTAL\s*[:\-]?\s*([\d,]+\.\d{2})",
+        r"(?im)TOTAL\s*\n\s*([\d,]+\.\d{2})",
+    )
+
+    return pairs
+
+
+def _match_ot_calc_label(value: str) -> bool:
+    lower = value.strip().lower().rstrip(":")
+    return lower in {
+        "name",
+        "basic salary",
+        "daily rate",
+        "hourly rate",
+        "period covered",
+        "ot premium rates",
+        "no. of hours",
+        "amount",
+        "subtotal amount",
+        "management fee",
+        "total",
+        "night differential",
+        "regular ot",
+        "rest day ot",
+        "legal holiday ot",
+    }
+
+
+def _ot_calc_recommended(text: str) -> list[dict[str, Any]]:
+    pairs = _ot_calc_pairs(text)
+    items: list[dict[str, Any]] = []
+    for spec in _OT_CALC_RECOMMENDED:
+        value = pairs.get(spec["key"])
+        if not value:
+            continue
+        items.append(
+            {
+                "key": spec["key"],
+                "label": spec["label"],
+                "type": spec["type"],
+                "hint": spec["hint"],
+                "value": value,
+            }
+        )
+    for table_field, table_json in _discover_ot_calc_tables(text):
+        items.append(
+            {
+                "key": table_field["key"],
+                "label": table_field["label"],
+                "type": "table",
+                "hint": table_field.get("hint"),
+                "columns": table_field.get("columns"),
+                "value": table_json,
+            }
+        )
+    return items
+
+
+def _ot_calc_lookup(text: str, field: dict[str, Any]) -> str | None:
+    pairs = _ot_calc_pairs(text)
+    if not pairs:
+        return None
+    key = (field.get("key") or "").strip().lower()
+    label = (field.get("label") or "").strip().lower()
+    hint = (field.get("hint") or "").strip().lower()
+    blob = f"{key} {label} {hint}"
+
+    aliases: dict[str, tuple[str, ...]] = {
+        "name": ("name",),
+        "resource_name": ("name",),
+        "basic_salary": ("basic_salary",),
+        "daily_rate": ("daily_rate",),
+        "hourly_rate": ("hourly_rate",),
+        "period_covered": ("period_covered",),
+        "ot_period_from": ("period_covered",),
+        "ot_period_to": ("period_covered",),
+        "subtotal_amount": ("subtotal_amount",),
+        "management_fee": ("management_fee",),
+        "ot_total": ("ot_total",),
+        "amount_php": ("ot_total",),
+        "total": ("ot_total",),
+    }
+    for candidate in aliases.get(key, ()):
+        if candidate in pairs and pairs[candidate].strip():
+            return pairs[candidate].strip()
+
+    for pair_key, value in pairs.items():
+        human = pair_key.replace("_", " ")
+        if pair_key == key or human == label:
+            return value
+        if pair_key == "daily_rate" and "daily rate" in blob:
+            return value
+        if pair_key == "hourly_rate" and "hourly rate" in blob:
+            return value
+        if pair_key == "ot_total" and ("total" in blob or "amount" in blob):
+            return value
+        if pair_key == "name" and re.search(r"(^|\s)name(\s|$)", label):
+            return value
+    return None
+
+
+def _discover_ot_calc_tables(text: str) -> list[tuple[dict[str, Any], str]]:
+    if not _looks_like_ot_calculation_sheet(text):
+        return []
+    found: list[tuple[dict[str, Any], str]] = []
+    summary_rows = _collect_ot_summary_rows(text)
+    if len(summary_rows) >= 2:
+        columns = list(_OT_SUMMARY_COLUMNS)
+        payload = {"columns": columns, "rows": summary_rows}
+        found.append(
+            (
+                {
+                    "key": "ot_premium_summary",
+                    "label": "OT Premium Summary",
+                    "type": "table",
+                    "hint": "OT Premium Rates",
+                    "columns": columns,
+                },
+                json.dumps(payload, ensure_ascii=False),
+            )
+        )
+
+    first_half = _collect_ot_log_rows(text, half="first")
+    if first_half:
+        columns = list(_OT_LOG_COLUMNS)
+        payload = {"columns": columns, "rows": first_half}
+        found.append(
+            (
+                {
+                    "key": "ot_log_01_15",
+                    "label": "OT Log 01-15",
+                    "type": "table",
+                    "hint": "01-15",
+                    "columns": columns,
+                },
+                json.dumps(payload, ensure_ascii=False),
+            )
+        )
+
+    second_half = _collect_ot_log_rows(text, half="second")
+    if second_half:
+        columns = list(_OT_LOG_COLUMNS)
+        payload = {"columns": columns, "rows": second_half}
+        found.append(
+            (
+                {
+                    "key": "ot_log_16_31",
+                    "label": "OT Log 16-31",
+                    "type": "table",
+                    "hint": "16-31",
+                    "columns": columns,
+                },
+                json.dumps(payload, ensure_ascii=False),
+            )
+        )
+
+    nd_rows = _collect_ot_nd_rows(text)
+    if nd_rows:
+        columns = list(_OT_ND_COLUMNS)
+        payload = {"columns": columns, "rows": nd_rows}
+        found.append(
+            (
+                {
+                    "key": "night_differential_log",
+                    "label": "Night Differential",
+                    "type": "table",
+                    "hint": "ND",
+                    "columns": columns,
+                },
+                json.dumps(payload, ensure_ascii=False),
+            )
+        )
+
+    return found
+
+
+_OT_SUMMARY_ROW_RE = re.compile(
+    r"(?im)^(?P<kind>Regular\s*OT|Rest\s*Day\s*OT|Legal\s*Holiday\s*OT|Night\s*Differential|"
+    r"Special\s*Holiday\s*OT|RD\s*on\s*SH\s*OT|RD\s*on\s*LH\s*OT)"
+    r"\s+(?P<rate>\d+(?:\.\d+)?)"
+    r"(?:\s+(?P<h1>\d+(?:\.\d+)?|-))?"
+    r"(?:\s+(?P<h2>\d+(?:\.\d+)?|-))?"
+    r"(?:\s+(?P<ht>\d+(?:\.\d+)?|-))?"
+    r"(?:\s+(?P<a1>[\d,]+(?:\.\d+)?|-))?"
+    r"(?:\s+(?P<a2>[\d,]+(?:\.\d+)?|-))?"
+    r"(?:\s+(?P<at>[\d,]+(?:\.\d+)?|-))?\s*$"
+)
+
+_OT_LOG_ROW_RE = re.compile(
+    r"(?im)^(?P<date>\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}|\d{1,2}-[A-Za-z]{3}-\d{2})"
+    r"\s+(?P<kind>REG\s*OT|RDOT|RD|LH|SH|ND|[A-Z]{2,}(?:\s+OT)?)"
+    r"\s+(?P<hours>\d+(?:\.\d+)?)\s*$"
+)
+
+_OT_ND_ROW_RE = re.compile(
+    r"(?im)^(?P<date>\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}|\d{1,2}-[A-Za-z]{3}-\d{2})"
+    r"\s+(?P<start>\d{1,2}:\d{2})"
+    r"\s+(?P<end>\d{1,2}:\d{2}|24:00)"
+    r"\s+(?P<hours>\d+(?:\.\d+)?)\s*$"
+)
+
+
+def _dash_or_num(value: str | None) -> str:
+    if value is None or value.strip() in {"", "-"}:
+        return ""
+    return value.replace(",", "").strip()
+
+
+def _collect_ot_summary_rows(text: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for match in _OT_SUMMARY_ROW_RE.finditer(text):
+        rows.append(
+            {
+                "ot_type": re.sub(r"\s+", " ", match.group("kind")).strip(),
+                "rate": _dash_or_num(match.group("rate")),
+                "hours_01_15": _dash_or_num(match.group("h1")),
+                "hours_16_30": _dash_or_num(match.group("h2")),
+                "hours_total": _dash_or_num(match.group("ht")),
+                "amount_01_15": _dash_or_num(match.group("a1")),
+                "amount_16_30": _dash_or_num(match.group("a2")),
+                "amount_total": _dash_or_num(match.group("at")),
+            }
+        )
+    return rows
+
+
+def _collect_ot_log_rows(text: str, *, half: str) -> list[dict[str, str]]:
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    rows: list[dict[str, str]] = []
+    capture = False
+    for line in lines:
+        lower = line.lower()
+        if half == "first" and re.search(r"01\s*[-–]\s*15|may\s*01\s*[-–]\s*15", lower):
+            capture = True
+            continue
+        if half == "second" and re.search(r"16\s*[-–]\s*3[01]|may\s*16\s*[-–]\s*3[01]", lower):
+            capture = True
+            continue
+        if capture and (
+            "night differential" in lower
+            or "total hours" in lower
+            or (half == "first" and re.search(r"16\s*[-–]\s*3[01]", lower))
+            or (half == "second" and "night differential" in lower)
+        ):
+            if "total hours" in lower and rows:
+                break
+            if half == "first" and re.search(r"16\s*[-–]\s*3[01]", lower):
+                break
+            if "night differential" in lower:
+                break
+        if not capture:
+            continue
+        match = _OT_LOG_ROW_RE.match(line)
+        if match:
+            rows.append(
+                {
+                    "date": match.group("date"),
+                    "ot_type": re.sub(r"\s+", " ", match.group("kind")).strip(),
+                    "hours": match.group("hours"),
+                }
+            )
+    return rows
+
+
+def _collect_ot_nd_rows(text: str) -> list[dict[str, str]]:
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    rows: list[dict[str, str]] = []
+    capture = False
+    for line in lines:
+        lower = line.lower()
+        if "night differential" in lower or re.search(r"\bnd\b", lower):
+            capture = True
+            continue
+        if not capture:
+            continue
+        if lower.startswith("total"):
+            break
+        match = _OT_ND_ROW_RE.match(line)
+        if match:
+            rows.append(
+                {
+                    "date": match.group("date"),
+                    "start_time": match.group("start"),
+                    "end_time": match.group("end"),
+                    "hours": match.group("hours"),
+                }
+            )
+    return rows
+
+
+def _looks_like_wcn(text: str) -> bool:
+    blob = text.lower()
+    return "work completion note" in blob or (
+        "purchase order information" in blob
+        and "work order id" in blob
+        and ("supplier name" in blob or "po value" in blob)
+    )
+
+
+def _is_wcn_section_header(line: str) -> bool:
+    lower = re.sub(r"\s+", " ", line.strip().lower())
+    if lower in {"work completion note", "purchase order information"}:
+        return True
+    collapsed = re.sub(r"[^a-z]", "", lower)
+    return collapsed in {
+        "workcompletionnote",
+        "purchaseorderinformation",
+        "purchaseorderinfo",
+    }
+
+
+def _looks_like_reference_no(value: str) -> bool:
+    cleaned = value.strip()
+    if not cleaned or _looks_like_label_fragment(cleaned):
+        return False
+    if _is_wcn_section_header(cleaned):
+        return False
+    lower = cleaned.lower()
+    if lower in {"purchase", "purchase order", "order", "information", "reference", "date"}:
+        return False
+    if lower.startswith("purchase"):
+        return False
+    # Canonical WCN refs: OT26-0163 / OT-26-0163
+    if re.fullmatch(r"OT[- ]?\d{2}[- ]?\d{3,6}", cleaned, flags=re.IGNORECASE):
+        return True
+    # Generic code with at least one digit and a separator or letter prefix.
+    if re.fullmatch(r"[A-Z]{1,6}\d{2,}[-/][A-Z0-9]{2,}", cleaned, flags=re.IGNORECASE):
+        return True
+    if re.search(r"\d", cleaned) and re.search(r"[A-Za-z]", cleaned) and len(cleaned) >= 6:
+        if not re.fullmatch(r"[A-Za-z]+", cleaned):
+            return True
+    return False
+
+
+def _looks_like_date_value(value: str) -> bool:
+    cleaned = value.strip()
+    if not cleaned or _looks_like_label_fragment(cleaned):
+        return False
+    if _DATE_RE.search(cleaned):
+        return True
+    if re.fullmatch(
+        r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}",
+        cleaned,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+def _looks_like_identifier_not_date(value: str) -> bool:
+    cleaned = value.strip()
+    if _looks_like_date_value(cleaned):
+        return False
+    if _looks_like_reference_no(cleaned):
+        return True
+    if re.fullmatch(r"[A-Z0-9][A-Z0-9\-_/]{5,}", cleaned, flags=re.IGNORECASE) and re.search(
+        r"\d", cleaned
+    ):
+        return True
+    return False
+    blob = text.lower()
+    return "work completion note" in blob or (
+        "purchase order information" in blob
+        and "work order id" in blob
+        and ("supplier name" in blob or "po value" in blob)
+    )
+
+
+def _normalize_wcn_label(line: str) -> str:
+    return re.sub(r"\s+", " ", line.strip().lower().rstrip(":").strip())
+
+
+def _match_wcn_label(token: str) -> str | None:
+    cleaned = _normalize_wcn_label(token)
+    if not cleaned:
+        return None
+    for key, aliases in _WCN_LABEL_ALIASES:
+        for alias in aliases:
+            if cleaned == alias or cleaned.rstrip(".") == alias.rstrip("."):
+                return key
+    return None
+
+
+def _split_wcn_label_line(line: str) -> list[str]:
+    """
+    Split 'Work Order ID : Name :' into label keys.
+    """
+    parts = re.split(r"\s*:\s*", line.strip())
+    keys: list[str] = []
+    for part in parts:
+        if not part.strip():
+            continue
+        key = _match_wcn_label(part)
+        if key:
+            keys.append(key)
+    return keys
+
+
+def _split_wcn_value_line(keys: list[str], value_line: str) -> dict[str, str]:
+    raw = value_line.strip()
+    if not raw or not keys:
+        return {}
+    if len(keys) == 1:
+        return {keys[0]: raw}
+
+    out: dict[str, str] = {}
+    remaining = raw
+
+    # Date pairs: "May 1, 2026 May 31, 2026"
+    if len(keys) == 2 and all(k.endswith("_date") or k == "document_date" for k in keys):
+        dates = list(_DATE_RE.finditer(raw))
+        if len(dates) >= 2:
+            out[keys[0]] = dates[0].group(1)
+            out[keys[1]] = dates[1].group(1)
+            return out
+
+    first_key = keys[0]
+    if first_key in {"reference_no", "work_order_id", "purchase_order_no", "currency"}:
+        tokens = remaining.split()
+        if not tokens:
+            return {}
+        out[first_key] = tokens[0]
+        rest = " ".join(tokens[1:]).strip()
+        # Strip OCR noise like trailing "vatex" on PO Value cells.
+        rest = re.sub(r"\bvatex\b", "", rest, flags=re.IGNORECASE).strip()
+        if len(keys) > 1 and rest:
+            out[keys[1]] = rest
+        return out
+
+    if first_key == "po_value":
+        amount_match = re.search(
+            r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+\.\d{2})",
+            remaining,
+        )
+        if amount_match:
+            out[first_key] = amount_match.group(1)
+            rest = (remaining[: amount_match.start()] + remaining[amount_match.end() :]).strip()
+            rest = re.sub(r"\bvatex\b", "", rest, flags=re.IGNORECASE).strip()
+            if len(keys) > 1 and rest:
+                out[keys[1]] = rest
+            return out
+
+    # Fallback: split on 2+ spaces, else give first token / remainder.
+    chunks = re.split(r"\s{2,}", remaining)
+    if len(chunks) >= len(keys):
+        for index, key in enumerate(keys):
+            out[key] = chunks[index].strip()
+        return out
+
+    tokens = remaining.split()
+    if len(tokens) >= 2:
+        out[keys[0]] = tokens[0]
+        out[keys[1]] = " ".join(tokens[1:]).strip()
+    else:
+        out[keys[0]] = remaining
+    return out
+
+
+def _wcn_pairs(text: str) -> dict[str, str]:
+    """
+    Work Completion Note PDFs are cell grids. OCR often emits:
+      Work Order ID : Name :
+      ERCSWO00178100 DE GUZMAN, LORETO JR. P.
+    Pair labels on one line with values on the next, and skip section headers.
+    """
+    if not _looks_like_wcn(text):
+        return {}
+
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    pairs: dict[str, str] = {}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if _is_wcn_section_header(line):
+            index += 1
+            continue
+
+        keys = _split_wcn_label_line(line)
+        # Require the line to look like labels (contains ':' or pure known label).
+        if not keys or (":" not in line and _match_wcn_label(line) is None):
+            index += 1
+            continue
+
+        # Same-line values after the last colon: "Currency : PHP"
+        if ":" in line:
+            after = line.rsplit(":", 1)[-1].strip()
+            if after and _match_wcn_label(after) is None and not _looks_like_label_fragment(after):
+                if len(keys) == 1 and _wcn_value_acceptable(keys[0], after):
+                    pairs.setdefault(keys[0], after)
+                    index += 1
+                    continue
+
+        # Walk forward past section headers / empty noise to the real value line.
+        cursor = index + 1
+        value_line = ""
+        while cursor < len(lines):
+            candidate = lines[cursor]
+            if _is_wcn_section_header(candidate):
+                cursor += 1
+                continue
+            if _split_wcn_label_line(candidate) and ":" in candidate:
+                break
+            value_line = candidate
+            break
+
+        if not value_line:
+            index += 1
+            continue
+
+        extracted = _split_wcn_value_line(keys, value_line)
+        for key, value in extracted.items():
+            cleaned = value.strip()
+            if not cleaned or _looks_like_label_fragment(cleaned):
+                continue
+            if not _wcn_value_acceptable(key, cleaned):
+                continue
+            if key == "delivery_address" and cursor + 1 < len(lines):
+                nxt = lines[cursor + 1]
+                if (
+                    not _split_wcn_label_line(nxt)
+                    and ":" not in nxt
+                    and not _is_wcn_section_header(nxt)
+                ):
+                    cleaned = f"{cleaned} {nxt.strip()}".strip()
+                    cursor += 1
+            pairs.setdefault(key, cleaned)
+        index = max(cursor + 1, index + 1)
+
+    # Prefer explicit OT reference codes anywhere near the header.
+    if "reference_no" not in pairs or not _looks_like_reference_no(pairs.get("reference_no", "")):
+        match = re.search(
+            r"(?im)(?:reference\s*no\.?\s*:?\s*(?:date\s*:?\s*)?\n?\s*)?(OT[- ]?\d{2}[- ]?\d{3,6})\b",
+            text,
+        )
+        if match and _looks_like_reference_no(match.group(1)):
+            pairs["reference_no"] = re.sub(r"\s+", "", match.group(1).upper().replace("OT-", "OT"))
+            # Normalize OT26-0163 style
+            pairs["reference_no"] = re.sub(
+                r"(?i)^OT[- ]?(\d{2})[- ]?(\d{3,6})$",
+                lambda m: f"OT{m.group(1)}-{m.group(2)}",
+                pairs["reference_no"],
+            )
+
+    if "work_order_id" not in pairs:
+        match = re.search(r"(?im)work\s*order\s*id\.?\s*:?\s*(?:name\s*:?\s*)?\n?\s*([A-Z0-9]{8,})", text)
+        if match and not _looks_like_label_fragment(match.group(1)):
+            pairs["work_order_id"] = match.group(1).strip()
+    if "purchase_order_no" not in pairs:
+        match = re.search(
+            r"(?im)purchase\s*order\s*no\.?\s*:?\s*(?:po\s*value\s*:?\s*)?\n?\s*(\d{7,})",
+            text,
+        )
+        if match:
+            pairs["purchase_order_no"] = match.group(1).strip()
+    if "po_value" not in pairs:
+        match = re.search(
+            r"(?im)po\s*value\s*:?\s*\n?\s*[^\d\n]*(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d+\.\d{2})",
+            text,
+        )
+        if match:
+            pairs["po_value"] = match.group(1).strip()
+    if "supplier_name" not in pairs:
+        match = re.search(
+            r"(?im)supplier\s*name\s*:?\s*\n?\s*([A-Z0-9][A-Z0-9 ,.&'\-]{8,})",
+            text,
+        )
+        if match and not _looks_like_label_fragment(match.group(1)):
+            pairs["supplier_name"] = match.group(1).strip()
+
+    # Drop invalid date captures (IDs mistaken for dates).
+    if "document_date" in pairs and not _looks_like_date_value(pairs["document_date"]):
+        pairs.pop("document_date", None)
+
+    if "reference_no" in pairs and not _looks_like_reference_no(pairs["reference_no"]):
+        pairs.pop("reference_no", None)
+
+    return pairs
+
+
+def _wcn_value_acceptable(key: str, value: str) -> bool:
+    if key == "reference_no":
+        return _looks_like_reference_no(value)
+    if key in {"document_date", "service_start_date", "service_end_date"}:
+        return _looks_like_date_value(value)
+    if key == "currency":
+        return bool(re.fullmatch(r"[A-Z]{3}", value.strip(), flags=re.IGNORECASE))
+    if _is_wcn_section_header(value) or value.strip().lower().startswith("purchase"):
+        return False
+    return not _looks_like_label_fragment(value)
+
+
+def _wcn_recommended(text: str) -> list[dict[str, Any]]:
+    pairs = _wcn_pairs(text)
+    if not pairs:
+        return []
+    items: list[dict[str, Any]] = []
+    for spec in _WCN_RECOMMENDED:
+        value = pairs.get(spec["key"])
+        if not value:
+            continue
+        items.append(
+            {
+                "key": spec["key"],
+                "label": spec["label"],
+                "type": spec["type"],
+                "hint": spec["hint"],
+                "value": value,
+            }
+        )
+    return items
+
+
+def _wcn_lookup(text: str, field: dict[str, Any]) -> str | None:
+    pairs = _wcn_pairs(text)
+    if not pairs:
+        return None
+    key = (field.get("key") or "").strip().lower()
+    label = (field.get("label") or "").strip().lower()
+    hint = (field.get("hint") or "").strip().lower()
+    blob = f"{key} {label} {hint}"
+
+    aliases: dict[str, tuple[str, ...]] = {
+        "reference_no": ("reference_no",),
+        "wcn_reference_no": ("reference_no",),
+        "document_date": ("document_date",),
+        "date": ("document_date",),
+        "work_order_id": ("work_order_id",),
+        "name": ("name",),
+        "resource_name": ("name",),
+        "purchase_order_no": ("purchase_order_no",),
+        "po_no": ("purchase_order_no",),
+        "po_value": ("po_value",),
+        "currency": ("currency",),
+        "supplier_name": ("supplier_name",),
+        "agency_name": ("supplier_name",),
+        "terms_of_payment": ("terms_of_payment",),
+        "service_start_date": ("service_start_date",),
+        "ot_period_from": ("service_start_date",),
+        "service_end_date": ("service_end_date",),
+        "ot_period_to": ("service_end_date",),
+        "delivery_address": ("delivery_address",),
+    }
+
+    for candidate in aliases.get(key, ()):
+        if candidate in pairs and pairs[candidate].strip():
+            return pairs[candidate].strip()
+
+    # Fuzzy match on label/hint text for customized columns.
+    for pair_key, value in pairs.items():
+        human = pair_key.replace("_", " ")
+        if pair_key == key or human == label:
+            return value
+        if pair_key == "reference_no" and "reference" in blob:
+            return value
+        if pair_key == "purchase_order_no" and ("purchase order" in blob or re.search(r"\bpo\b", blob)):
+            return value
+        if pair_key == "supplier_name" and ("supplier" in blob or "agency" in blob):
+            return value
+        if pair_key == "po_value" and "po value" in blob:
+            return value
+        if pair_key == "delivery_address" and "delivery" in blob:
+            return value
+        if pair_key == "work_order_id" and "work order" in blob:
+            return value
+        if pair_key == "name" and re.search(r"(^|\s)name(\s|$)", label) and "supplier" not in blob:
+            return value
+        if pair_key == "document_date" and re.search(r"(^|\s)date(\s|$)", label) and "start" not in blob and "end" not in blob:
+            return value
+    return None
+
+
 def _looks_like_label_fragment(value: str, needle: str = "") -> bool:
     cleaned = value.strip().strip(".")
     if not cleaned:
         return True
-    lower = cleaned.lower()
+    lower = cleaned.lower().rstrip(":").strip()
+    raw_lower = cleaned.lower().strip()
     if cleaned.startswith("/") or lower.startswith("account currency") or lower.startswith("account name"):
+        return True
+    # Trailing colon almost always means we captured the next form label.
+    if raw_lower.endswith(":"):
         return True
     if lower in {
         "name",
@@ -1077,11 +2184,50 @@ def _looks_like_label_fragment(value: str, needle: str = "") -> bool:
         "consumer type",
         "meter reading date",
         "no",
-        "name:",
+        "date",
+        "reference no",
+        "reference no.",
+        "work order id",
+        "purchase order no",
+        "po value",
+        "supplier name",
+        "terms of payment",
+        "service start date",
+        "service end date",
+        "delivery address",
+        "purchase order information",
+        "work completion note",
+        "purchase",
+        "purchase order",
+        "hourly rate",
+        "daily rate",
+        "basic salary",
+        "period covered",
+        "ot premium rates",
+        "management fee",
+        "subtotal amount",
+        "night differential",
+        "regular ot",
+        "rest day ot",
     }:
         return True
     if re.fullmatch(r"(previous|current|present)\s+reading", lower):
         return True
+    # Section headers / title-case label rows without a real value payload.
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9 /&().\-]{2,60}", cleaned) and not re.search(r"\d", cleaned):
+        if any(
+            token in lower
+            for token in (
+                "information",
+                "history",
+                "details",
+                "address",
+                "payment",
+                "completion",
+                "order",
+            )
+        ) and len(cleaned.split()) <= 6:
+            return True
     # Captured the remainder of a compound CitiDirect label.
     if "account currency" in lower and not re.search(r"\d{6,}", cleaned):
         return True
@@ -1314,16 +2460,7 @@ def _neeco_pairs(text: str) -> dict[str, str]:
         columns = list(_DEFAULT_CONSUMPTION_COLUMNS)
         payload = {
             "columns": columns,
-            "rows": [
-                {
-                    "bill_month": entry["bill_month"],
-                    "present_rdg": entry["numbers"][0] if len(entry["numbers"]) > 0 else "",
-                    "previous_rdg": entry["numbers"][1] if len(entry["numbers"]) > 1 else "",
-                    "kwh_used": entry["numbers"][2] if len(entry["numbers"]) > 2 else "",
-                    "bill_amount": entry["numbers"][3] if len(entry["numbers"]) > 3 else "",
-                }
-                for entry in month_rows
-            ],
+            "rows": [_consumption_cells_from_entry(entry) for entry in month_rows],
         }
         pairs["monthly_consumption_history"] = json.dumps(payload, ensure_ascii=False)
 
@@ -1740,22 +2877,58 @@ def _match_label_value(text: str, needle: str) -> str | None:
         patterns.append(rf"(?m)^{escaped}\.?\s+([^\n]+)")
 
     for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if not match:
-            continue
-        value = _clean_value(match.group(1))
-        if not value or _looks_like_label_fragment(value, needle):
-            continue
-        if "meter" in needle.lower():
-            meter = re.search(r"([A-Za-z0-9][A-Za-z0-9\-]{4,})", value)
-            if not meter:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            value = _clean_value(match.group(1))
+            # Same-line capture often grabs the neighboring grid label ("Name :").
+            if value and _looks_like_label_fragment(value, needle):
+                # Prefer the next non-label line under this match.
+                tail = text[match.end() :]
+                next_line_match = re.match(r"\s*\n\s*([^\n]+)", tail)
+                if next_line_match:
+                    value = _clean_value(next_line_match.group(1))
+                else:
+                    continue
+            if not value or _looks_like_label_fragment(value, needle):
                 continue
-            token = meter.group(1)
-            if token.lower() in {"previous", "current", "present", "reading", "number"}:
+            # Dual-label grid: "Work Order ID : Name :" then "ERCSWO… DE GUZMAN…"
+            # If the captured "value" still starts another label, reject.
+            if re.match(r"^[A-Za-z][A-Za-z0-9 /#().&\-]{1,40}\s*:", value):
                 continue
-            return token
-        return value
+            if "meter" in needle.lower():
+                meter = re.search(r"([A-Za-z0-9][A-Za-z0-9\-]{4,})", value)
+                if not meter:
+                    continue
+                token = meter.group(1)
+                if token.lower() in {"previous", "current", "present", "reading", "number"}:
+                    continue
+                return token
+            # For ID-like needles, prefer the first token when the line holds two cell values.
+            if _needle_is_id_like(needle):
+                first = value.split()[0] if value.split() else value
+                if first and not _looks_like_label_fragment(first, needle):
+                    return first
+            return value
     return None
+
+
+def _needle_is_id_like(needle: str) -> bool:
+    lower = needle.lower()
+    return any(
+        token in lower
+        for token in (
+            "reference",
+            "work order",
+            "wo id",
+            "wo no",
+            "purchase order",
+            "po no",
+            "po number",
+            "invoice",
+            "account",
+            "signum",
+            "docusign id",
+        )
+    )
 
 
 def _clean_value(value: str) -> str:
@@ -1793,7 +2966,16 @@ def _find_date_near(text: str, needles: list[str]) -> str | None:
             if date_match:
                 return date_match.group(1)
             cleaned = _clean_value(match.group(1))
-            if cleaned:
+            if cleaned and _looks_like_date_value(cleaned) and not _looks_like_identifier_not_date(cleaned):
+                return cleaned
+        # Label on its own line, value on the next.
+        match = re.search(rf"(?m)^{re.escape(needle)}\.?\s*:?\s*\n\s*([^\n]+)", text, flags=re.IGNORECASE)
+        if match:
+            date_match = _DATE_RE.search(match.group(1))
+            if date_match:
+                return date_match.group(1)
+            cleaned = _clean_value(match.group(1))
+            if cleaned and _looks_like_date_value(cleaned) and not _looks_like_identifier_not_date(cleaned):
                 return cleaned
     match = _DATE_RE.search(text)
     return match.group(1) if match else None
@@ -1852,9 +3034,13 @@ def _coerce(value: str | None, field_type: str) -> str | None:
         digits = re.sub(r"[^\d+]", "", cleaned)
         return digits or cleaned
 
-    # Common OCR confusion for invoice codes: letter O vs zero when digit-heavy.
-    if re.fullmatch(r"[A-Z0-9\-]+", cleaned) and sum(ch.isdigit() for ch in cleaned) >= 4:
-        return cleaned.replace("O", "0").replace("o", "0")
+    # Common OCR confusion: isolated letter O between digits (12O34 → 12034).
+    # Do not rewrite intentional letter prefixes such as OT26-0163 / ERCSWO….
+    if re.search(r"\d[Oo]\d|\d[Oo]$|^[Oo]\d", cleaned) and re.fullmatch(r"[A-Z0-9\-]+", cleaned, flags=re.I):
+        fixed = re.sub(r"(?<=\d)[Oo](?=\d)", "0", cleaned)
+        fixed = re.sub(r"(?<=\d)[Oo]$", "0", fixed)
+        fixed = re.sub(r"^[Oo](?=\d)", "0", fixed)
+        return fixed
 
     return cleaned
 

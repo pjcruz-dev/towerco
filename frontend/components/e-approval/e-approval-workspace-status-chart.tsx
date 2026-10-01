@@ -9,10 +9,19 @@ type Props = {
 
 const TONE_BY_STATUS: Record<string, string> = {
   pending: "bg-amber-500",
+  submitted: "bg-amber-500",
+  awaiting: "bg-amber-500",
   returned: "bg-orange-500",
+  draft: "bg-sky-500",
+  open: "bg-blue-600",
+  in_progress: "bg-blue-600",
   approved: "bg-emerald-500",
+  resolved: "bg-emerald-500",
+  ready: "bg-emerald-500",
   rejected: "bg-red-500",
+  failed: "bg-red-500",
   cancelled: "bg-slate-400",
+  closed: "bg-slate-400",
 };
 
 export function EApprovalWorkspaceStatusChart({ items }: Props) {

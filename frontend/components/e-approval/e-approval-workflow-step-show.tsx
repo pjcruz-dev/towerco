@@ -17,8 +17,8 @@ export type WorkflowStepShowItem = {
   key: string;
   label: string;
   description?: string;
-  /** completed | current | upcoming | cancelled | skipped */
-  state: "completed" | "current" | "upcoming" | "cancelled" | "skipped";
+  /** completed | current | upcoming | cancelled | skipped | rejected */
+  state: "completed" | "current" | "upcoming" | "cancelled" | "skipped" | "rejected";
   /** Primary approver display name for this step */
   approverName?: string | null;
   /** Parallel / multi-approver names */
@@ -54,6 +54,8 @@ function statusForStep(step: WorkflowStepShowItem): string {
       return "Pending";
     case "cancelled":
       return "Cancelled";
+    case "rejected":
+      return "Rejected";
     case "skipped":
       return "Skipped";
     default:
@@ -61,7 +63,23 @@ function statusForStep(step: WorkflowStepShowItem): string {
   }
 }
 
-function compactCaption(steps: WorkflowStepShowItem[]): { progress: string; waiting: string | null } {
+export function workflowStepCompactCaption(steps: WorkflowStepShowItem[]): {
+  progress: string;
+  waiting: string | null;
+} {
+  const rejected = steps.find((step) => step.state === "rejected");
+  if (rejected) {
+    const who = formatApproverLine(rejected);
+    const index = Math.max(
+      0,
+      steps.findIndex((step) => step.state === "rejected"),
+    );
+    return {
+      progress: `Rejected · step ${index + 1} of ${steps.length}`,
+      waiting: who ? `Rejected · ${who}` : "Rejected",
+    };
+  }
+
   const actionable = steps.filter((step) => step.state !== "skipped" && step.state !== "cancelled");
   const current = steps.find((step) => step.state === "current");
   const currentIndex = Math.max(
@@ -156,7 +174,7 @@ export function EApprovalWorkflowStepShow({
   }
 
   if (variant === "compact") {
-    const { progress, waiting } = compactCaption(steps);
+    const { progress, waiting } = workflowStepCompactCaption(steps);
     const lines = tooltipLines(steps);
 
     return (
@@ -182,6 +200,7 @@ export function EApprovalWorkflowStepShow({
                   step.state === "completed" && "bg-emerald-500",
                   // Pending / in-progress — amber (not primary charcoal)
                   step.state === "current" && "bg-amber-500",
+                  step.state === "rejected" && "bg-rose-500",
                   step.state === "upcoming" && "bg-muted",
                   (step.state === "cancelled" || step.state === "skipped") && "bg-muted-foreground/25",
                 )}
@@ -222,13 +241,14 @@ export function EApprovalWorkflowStepShow({
         const done = step.state === "completed";
         const cancelled = step.state === "cancelled";
         const skipped = step.state === "skipped";
+        const rejected = step.state === "rejected";
         const who = formatApproverLine(step);
         const status = statusForStep(step);
         // Title already includes the approver ("Step 1 · Name") — keep subtitle status-only.
         const nameAlreadyInLabel =
           who != null && step.label.toLowerCase().includes(who.toLowerCase());
         const description =
-          who && !nameAlreadyInLabel && (done || active || cancelled)
+          who && !nameAlreadyInLabel && (done || active || cancelled || rejected)
             ? `${status} · ${who}`
             : status;
 
@@ -244,10 +264,11 @@ export function EApprovalWorkflowStepShow({
                 className={cn(
                   "flex size-9 shrink-0 items-center justify-center rounded-lg shadow-sm",
                   active && "bg-amber-500 text-white",
+                  rejected && "bg-rose-500 text-white",
                   done && !active && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
                   skipped && "border border-dashed border-border bg-muted/40 text-muted-foreground",
                   cancelled && "bg-muted text-muted-foreground/60",
-                  !active && !done && !cancelled && !skipped && "bg-muted text-muted-foreground",
+                  !active && !done && !cancelled && !skipped && !rejected && "bg-muted text-muted-foreground",
                 )}
               >
                 <Icon className="size-4" aria-hidden />
@@ -299,7 +320,8 @@ export function buildWorkflowStepShowItems(input: {
         stateRaw === "current" ||
         stateRaw === "upcoming" ||
         stateRaw === "cancelled" ||
-        stateRaw === "skipped"
+        stateRaw === "skipped" ||
+        stateRaw === "rejected"
           ? stateRaw
           : "upcoming";
       const names = (step.approver_names ?? []).filter(Boolean);
@@ -330,7 +352,8 @@ export function buildWorkflowStepShowItems(input: {
   const current = Math.max(0, input.currentStep);
   const approved = status === "approved";
   const cancelled = status === "cancelled";
-  const returned = status === "returned" || status === "rejected";
+  const rejected = status === "rejected";
+  const returned = status === "returned";
 
   return Array.from({ length: total }, (_, index) => {
     const order = index + 1;
@@ -339,6 +362,8 @@ export function buildWorkflowStepShowItems(input: {
       state = order < current ? "completed" : "cancelled";
     } else if (approved) {
       state = "completed";
+    } else if (rejected) {
+      state = order < current ? "completed" : order === current ? "rejected" : "skipped";
     } else if (returned) {
       state = order < current ? "completed" : order === current ? "current" : "upcoming";
     } else if (current <= 0) {
@@ -386,9 +411,13 @@ export function workflowPreviewToStepShowItems(
       state = "completed";
     } else if (cancelled || runtime === "cancelled") {
       state = "cancelled";
+    } else if (runtime === "rejected") {
+      state = "rejected";
+    } else if (status === "rejected" && (runtime === "pending" || runtime === "waiting" || runtime === "in_progress")) {
+      state = "skipped";
     } else if (runtime === "pending" || runtime === "waiting" || runtime === "in_progress") {
       state = "current";
-    } else if (runtime === "rejected" || runtime === "returned") {
+    } else if (runtime === "returned") {
       state = "current";
     } else if (approved) {
       state = "completed";
@@ -403,15 +432,17 @@ export function workflowPreviewToStepShowItems(
       description: undefined,
       state,
       statusLabel:
-        state === "current"
-          ? "Pending"
-          : state === "completed"
-            ? "Approved"
-            : state === "cancelled"
-              ? "Cancelled"
-              : state === "skipped"
-                ? "Skipped"
-                : "Upcoming",
+        state === "rejected"
+          ? "Rejected"
+          : state === "current"
+            ? "Pending"
+            : state === "completed"
+              ? "Approved"
+              : state === "cancelled"
+                ? "Cancelled"
+                : state === "skipped"
+                  ? "Skipped"
+                  : "Upcoming",
       approverName: state === "skipped" ? null : approverName,
       approverNames: state === "skipped" || !approverName ? [] : [approverName],
     } satisfies WorkflowStepShowItem;

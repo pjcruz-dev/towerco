@@ -20,8 +20,10 @@ final class DocExtractPreviewController extends AbstractApiController
         abort_unless($request->user()?->can('doc-extract:run'), 403);
         $planFeatures->assertModuleEnabled();
 
+        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 150));
+
         $request->validate([
-            'files' => ['required', 'array', 'min:1'],
+            'files' => ['required', 'array', 'min:1', 'max:'.$maxFiles],
             'files.*' => ['file'],
         ]);
 

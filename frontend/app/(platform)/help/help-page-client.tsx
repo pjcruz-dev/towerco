@@ -184,7 +184,7 @@ function PasskeysTourGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">Add a passkey</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Starts from your account menu → My security → Passkeys. Enroll fingerprint, Face ID, or
+        Starts from your account menu → My profile → Security → Passkeys. Enroll fingerprint, Face ID, or
         Windows Hello; enrolled devices show phone vs computer and authenticator type.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
@@ -204,7 +204,7 @@ function MfaTourGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">Set up MFA (first time)</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Workspace tour: My security → sample QR → Start setup → verify. After sign-in, the split-screen{" "}
+        Workspace tour: My profile → Security → Authenticator, then sample QR → Start setup → verify. After sign-in, the split-screen{" "}
         <span className="font-medium text-foreground">Set up MFA</span> and{" "}
         <span className="font-medium text-foreground">Two-factor authentication</span> pages include a
         short guided tour when enrollment is required.

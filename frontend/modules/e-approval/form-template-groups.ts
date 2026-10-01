@@ -1,6 +1,6 @@
 import type { EApprovalFormTemplate } from "@/modules/e-approval/types";
 
-export const FORM_TEMPLATE_GROUP_ORDER = ["finance", "procurement", "hr", "documents", "general"] as const;
+export const FORM_TEMPLATE_GROUP_ORDER = ["finance", "hr", "documents", "general"] as const;
 
 export type FormTemplateGroupId = (typeof FORM_TEMPLATE_GROUP_ORDER)[number];
 
@@ -14,11 +14,7 @@ export type FormTemplateGroup = {
 const GROUP_COPY: Record<FormTemplateGroupId, { label: string; description: string }> = {
   finance: {
     label: "Finance",
-    description: "Cash advance, liquidation, reimbursement, and vendor payments.",
-  },
-  procurement: {
-    label: "Procurement",
-    description: "Requisition through purchase order, invoices, and vendor intake.",
+    description: "Cash advance, liquidation, and reimbursement.",
   },
   hr: {
     label: "People & HR",
@@ -38,12 +34,6 @@ const GROUP_BY_TEMPLATE_ID: Record<string, FormTemplateGroupId> = {
   cash_advance: "finance",
   liquidation: "finance",
   reimbursement: "finance",
-  request_for_payment: "finance",
-  purchase_request: "procurement",
-  purchase_requisition: "procurement",
-  purchase_order: "procurement",
-  ap_invoice: "procurement",
-  vendor_registration: "procurement",
   leave_request: "hr",
   employee_onboarding: "hr",
   site_document_review: "documents",
@@ -51,7 +41,6 @@ const GROUP_BY_TEMPLATE_ID: Record<string, FormTemplateGroupId> = {
 
 const CATEGORY_TO_GROUP: Record<string, FormTemplateGroupId> = {
   finance: "finance",
-  procurement: "procurement",
   hr: "hr",
   documents: "documents",
   general: "general",

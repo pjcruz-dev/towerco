@@ -192,8 +192,6 @@ function EApprovalDashboardPageInner() {
 
   const awaitingQueue = data?.queues?.awaiting_approval ?? [];
   const attentionQueue = data?.queues?.my_attention ?? [];
-  const financeKpis = data?.finance_kpis ?? [];
-
   const shortcuts = useMemo(
     () =>
       [
@@ -236,11 +234,8 @@ function EApprovalDashboardPageInner() {
       { id: "queue_attention", label: "Needs my attention" },
       { id: "shortcuts", label: "Shortcuts" },
     ];
-    if (financeKpis.length > 0) {
-      items.splice(3, 0, { id: "finance", label: "Finance & procurement" });
-    }
     return items;
-  }, [financeKpis.length]);
+  }, []);
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
     const widgets: DashboardWidgetDef[] = [

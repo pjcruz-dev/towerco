@@ -11,11 +11,7 @@ use Illuminate\Support\Collection;
 final class EApprovalFormPolicySupport
 {
     /** @var list<string> */
-    public const POLICY_CAPABLE_FORM_FAMILIES = [
-        'purchase_requisition',
-        'purchase_order',
-        'ap_invoice',
-    ];
+    public const POLICY_CAPABLE_FORM_FAMILIES = [];
 
     public static function usesApprovalPolicy(EApprovalForm $form): bool
     {
@@ -32,7 +28,7 @@ final class EApprovalFormPolicySupport
     }
 
     /**
-     * Resolved workflow mode for policy-capable procurement forms.
+     * Resolved workflow mode for policy-capable forms.
      * All other forms always use Workflow tab steps.
      */
     public static function effectiveWorkflowSource(EApprovalForm $form): string

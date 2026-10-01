@@ -9,6 +9,7 @@ export type PaginatedMeta = {
     ready?: number;
     failed?: number;
   };
+  column_totals?: Record<string, string | number | null>;
 };
 
 export type PaginatedEnvelope<T> = {

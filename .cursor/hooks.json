@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      { "command": "node .cursor/hooks/validate-shell.mjs", "timeout": 10, "failClosed": true }
+    ],
+    "beforeReadFile": [
+      { "command": "node .cursor/hooks/protect-reads.mjs", "timeout": 10, "failClosed": true }
+    ],
+    "preToolUse": [
+      { "command": "node .cursor/hooks/protect-writes.mjs", "matcher": "Write|Delete", "timeout": 10, "failClosed": true }
+    ],
+    "afterFileEdit": [
+      { "command": "node .cursor/hooks/format-after-edit.mjs", "timeout": 60 }
+    ]
+  }
+}

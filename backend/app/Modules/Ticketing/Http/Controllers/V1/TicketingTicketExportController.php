@@ -9,7 +9,6 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Core\Support\ModuleListExportQuery;
 use App\Modules\Identity\Models\ModuleListExport;
 use App\Modules\Identity\Services\ModuleListExportService;
-use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
 use App\Modules\Ticketing\Services\TicketingPlanFeaturesService;
 use App\Modules\Ticketing\Services\TicketingTicketService;
 use Illuminate\Http\JsonResponse;
@@ -130,7 +129,7 @@ class TicketingTicketExportController extends AbstractApiController
                     $headers,
                 );
             }
-            $writer = new ProcurementExcelWorkbookWriter;
+            $writer = new ExcelWorkbookWriter;
             $writer->addSheet('Tickets', $sheetRows);
             $binary = $writer->toBinaryString();
 

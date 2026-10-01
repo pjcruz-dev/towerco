@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Core\Support\AllowlistedSort;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
@@ -43,8 +44,13 @@ final class EApprovalFormService
         ?string $statusFilter = null,
         ?string $sort = null,
         bool $submissionPickerOnly = false,
+        bool $forRequest = false,
     ): LengthAwarePaginator {
         $query = EApprovalForm::query();
+
+        if ($forRequest || $submissionPickerOnly) {
+            EApprovalFormRequestAccessSupport::constrainVisibleTo($query, (string) $viewer->id);
+        }
 
         if ($statusFilter === 'published') {
             $query->where('status', 'published');
@@ -105,6 +111,9 @@ final class EApprovalFormService
     public function create(array $payload, TenantUser $actor): array
     {
         $payload = $this->normalizeFieldApiKeys($payload);
+        if (is_array($payload['metadata_json'] ?? null)) {
+            $payload['metadata_json'] = EApprovalFormRequestAccessSupport::sanitizeMetadata($payload['metadata_json']);
+        }
         $status = in_array($payload['status'] ?? 'draft', ['draft', 'published'], true)
             ? (string) $payload['status']
             : 'draft';
@@ -177,6 +186,9 @@ final class EApprovalFormService
     public function update(EApprovalForm $form, array $payload, TenantUser $actor, bool $confirmFormUpgrade = false): array
     {
         $payload = $this->normalizeFieldApiKeys($payload);
+        if (is_array($payload['metadata_json'] ?? null)) {
+            $payload['metadata_json'] = EApprovalFormRequestAccessSupport::sanitizeMetadata($payload['metadata_json']);
+        }
         $status = $payload['status'] ?? $form->status;
         $warnings = $this->validator->validate($payload, $status === 'published');
         $warnings = array_merge($warnings, $this->publishGuard->warningsFor($form, $payload));
@@ -387,5 +399,4 @@ final class EApprovalFormService
 
         return $payload;
     }
-
 }

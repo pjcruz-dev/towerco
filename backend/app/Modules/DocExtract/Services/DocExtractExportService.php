@@ -6,7 +6,6 @@ namespace App\Modules\DocExtract\Services;
 
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
-use App\Modules\ProcurementOne\Support\ProcurementExcelWorkbookWriter;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class DocExtractExportService
@@ -14,9 +13,10 @@ final class DocExtractExportService
     public function exportCsv(DocExtractBatch $batch): StreamedResponse
     {
         [$headers, $rows] = $this->buildMainRows($batch);
+        $flat = $this->buildFlattenedTableRows($batch);
         $filename = 'extraction-results-'.$batch->id.'.csv';
 
-        return response()->streamDownload(function () use ($headers, $rows): void {
+        return response()->streamDownload(function () use ($headers, $rows, $flat): void {
             $handle = fopen('php://output', 'w');
             if ($handle === false) {
                 return;
@@ -24,6 +24,13 @@ final class DocExtractExportService
             fputcsv($handle, $headers);
             foreach ($rows as $row) {
                 fputcsv($handle, $row);
+            }
+            if ($flat['rows'] !== []) {
+                fputcsv($handle, []);
+                fputcsv($handle, $flat['headers']);
+                foreach ($flat['rows'] as $row) {
+                    fputcsv($handle, $row);
+                }
             }
             fclose($handle);
         }, $filename, [
@@ -34,8 +41,13 @@ final class DocExtractExportService
     public function exportXlsx(DocExtractBatch $batch): StreamedResponse
     {
         [$headers, $rows] = $this->buildMainRows($batch);
-        $writer = new ProcurementExcelWorkbookWriter;
+        $writer = new ExcelWorkbookWriter;
         $writer->addSheet('Extraction Results', [$headers, ...$rows]);
+
+        $flat = $this->buildFlattenedTableRows($batch);
+        if ($flat['rows'] !== []) {
+            $writer->addSheet('All table details', [$flat['headers'], ...$flat['rows']]);
+        }
 
         foreach ($this->buildNestedTableSheets($batch) as $sheet) {
             $writer->addSheet($sheet['name'], $sheet['rows']);
@@ -61,6 +73,10 @@ final class DocExtractExportService
 
         $headers = ['File Name'];
         foreach ($fields as $field) {
+            $type = (string) ($field['type'] ?? 'text');
+            if ($type === 'table') {
+                continue;
+            }
             $headers[] = (string) ($field['label'] ?? $field['key']);
         }
 
@@ -72,17 +88,107 @@ final class DocExtractExportService
             foreach ($fields as $field) {
                 $key = (string) $field['key'];
                 $type = (string) ($field['type'] ?? 'text');
-                $value = $values[$key] ?? null;
                 if ($type === 'table') {
-                    $row[] = $this->tableHasRows($value) ? 'View' : null;
-                } else {
-                    $row[] = $value === null ? null : (string) $value;
+                    continue;
                 }
+                $value = $values[$key] ?? null;
+                $row[] = $value === null ? null : (string) $value;
             }
             $rows[] = $row;
         }
 
         return [$headers, $rows];
+    }
+
+    /**
+     * One row per nested table row across all documents (full detail export).
+     *
+     * @return array{headers: list<string>, rows: list<list<string|null>>}
+     */
+    private function buildFlattenedTableRows(DocExtractBatch $batch): array
+    {
+        $batch->loadMissing(['template', 'documents']);
+        $fields = app(DocExtractBatchService::class)->effectiveFields($batch);
+        $tableFields = array_values(array_filter(
+            $fields,
+            static fn (array $field): bool => ($field['type'] ?? '') === 'table',
+        ));
+        if ($tableFields === []) {
+            return ['headers' => [], 'rows' => []];
+        }
+
+        $columnKeys = [];
+        $columnLabels = [];
+        foreach ($tableFields as $field) {
+            $parsed = $this->parseTableValue(null, $field);
+            foreach ($parsed['columns'] as $column) {
+                $key = $column['key'];
+                if (isset($columnKeys[$key])) {
+                    continue;
+                }
+                $columnKeys[$key] = true;
+                $columnLabels[$key] = $column['label'];
+            }
+        }
+
+        // Discover keys from actual row payloads too (dynamic columns).
+        /** @var DocExtractDocument $document */
+        foreach ($batch->documents as $document) {
+            $values = is_array($document->field_values) ? $document->field_values : [];
+            foreach ($tableFields as $field) {
+                $parsed = $this->parseTableValue($values[(string) $field['key']] ?? null, $field);
+                foreach ($parsed['columns'] as $column) {
+                    $key = $column['key'];
+                    if (isset($columnKeys[$key])) {
+                        continue;
+                    }
+                    $columnKeys[$key] = true;
+                    $columnLabels[$key] = $column['label'];
+                }
+                foreach ($parsed['rows'] as $row) {
+                    foreach (array_keys($row) as $key) {
+                        if (isset($columnKeys[$key])) {
+                            continue;
+                        }
+                        $columnKeys[$key] = true;
+                        $columnLabels[$key] = $key;
+                    }
+                }
+            }
+        }
+
+        $orderedKeys = array_keys($columnLabels);
+        $headers = ['File Name', 'Table'];
+        foreach ($orderedKeys as $key) {
+            $headers[] = $columnLabels[$key];
+        }
+
+        $rows = [];
+        foreach ($batch->documents->sortBy('original_filename') as $document) {
+            $values = is_array($document->field_values) ? $document->field_values : [];
+            foreach ($tableFields as $field) {
+                $key = (string) $field['key'];
+                $parsed = $this->parseTableValue($values[$key] ?? null, $field);
+                if ($parsed['rows'] === []) {
+                    continue;
+                }
+                $tableLabel = (string) ($field['label'] ?? $key);
+                foreach ($parsed['rows'] as $tableRow) {
+                    $line = [
+                        (string) $document->original_filename,
+                        $tableLabel,
+                    ];
+                    foreach ($orderedKeys as $columnKey) {
+                        $line[] = isset($tableRow[$columnKey]) && $tableRow[$columnKey] !== ''
+                            ? (string) $tableRow[$columnKey]
+                            : null;
+                    }
+                    $rows[] = $line;
+                }
+            }
+        }
+
+        return ['headers' => $headers, 'rows' => $rows];
     }
 
     /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -15,8 +15,7 @@ import {
   type DashboardChartDatum,
 } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardResponsiveChart } from "@/components/dashboard/dashboard-responsive-chart";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { DashboardWidget } from "@/components/dashboard/dashboard-widget";
 
 export type DashboardLineChartProps = {
   title: string;
@@ -37,6 +36,7 @@ export function DashboardLineChartImpl({
   height = 220,
   className,
 }: DashboardLineChartProps) {
+  const gradientId = `analytics-area-${useId().replace(/:/g, "")}`;
   const chartData = useMemo(
     () =>
       data.map((row) => ({
@@ -46,16 +46,26 @@ export function DashboardLineChartImpl({
     [data],
   );
   const hasData = chartData.some((row) => row.value > 0);
+  const latest = chartData.length > 0 ? chartData[chartData.length - 1]!.value : 0;
+  const first = chartData.length > 0 ? chartData[0]!.value : 0;
+  const deltaPct =
+    chartData.length > 1 && first !== 0 ? ((latest - first) / Math.abs(first)) * 100 : null;
+  const delta =
+    deltaPct == null
+      ? null
+      : `${deltaPct > 0 ? "+" : ""}${deltaPct.toFixed(1)}%`;
+  const deltaTone = deltaPct == null ? "neutral" : deltaPct > 0 ? "success" : deltaPct < 0 ? "danger" : "neutral";
 
   return (
-    <Card className={cn("flex h-full flex-col overflow-hidden rounded-xl border-border shadow-sm", className)}>
-      <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 py-3">
-        <CardTitle className="text-sm font-medium text-foreground">{title}</CardTitle>
-        {description ? (
-          <p className="text-[11px] font-normal leading-snug text-muted-foreground">{description}</p>
-        ) : null}
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col p-4 pt-4">
+    <DashboardWidget
+      title={title}
+      description={description}
+      className={className}
+      contentClassName="pt-2"
+      stat={hasData ? latest.toLocaleString() : undefined}
+      delta={hasData ? delta : null}
+      deltaTone={deltaTone}
+    >
         {!hasData ? (
           <p className="flex flex-1 items-center justify-center py-8 text-center text-xs text-muted-foreground">
             {emptyMessage}
@@ -64,7 +74,7 @@ export function DashboardLineChartImpl({
           <DashboardResponsiveChart height={height}>
             <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="analyticsArea" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={DASHBOARD_CHART.brand} stopOpacity={0.35} />
                   <stop offset="95%" stopColor={DASHBOARD_CHART.brand} stopOpacity={0.02} />
                 </linearGradient>
@@ -100,13 +110,12 @@ export function DashboardLineChartImpl({
                 type="monotone"
                 dataKey="value"
                 stroke={DASHBOARD_CHART.brand}
-                fill="url(#analyticsArea)"
+                fill={`url(#${gradientId})`}
                 strokeWidth={2}
               />
             </AreaChart>
           </DashboardResponsiveChart>
         )}
-      </CardContent>
-    </Card>
+    </DashboardWidget>
   );
 }

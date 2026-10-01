@@ -12,8 +12,9 @@ import type {
   DocExtractPreviewFile,
   DocExtractPreviewPage,
 } from "@/modules/doc-extract/types";
+import { DOC_EXTRACT_MAX_FILES_PER_BATCH } from "@/modules/doc-extract/limits";
 
-const MAX_RECORDS = 25;
+const MAX_RECORDS = DOC_EXTRACT_MAX_FILES_PER_BATCH;
 
 function newId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -48,12 +49,22 @@ function defaultLabel(filename: string, pages: number[]): string {
   return filename;
 }
 
-export function buildDefaultConsolidateRecords(
+export function buildWholeFileConsolidateRecords(
+  previews: DocExtractPreviewFile[],
+): DocExtractConsolidateRecord[] {
+  return previews.map((file) => ({
+    id: newId(),
+    fileIndex: file.index,
+    pages: file.pages.map((page) => page.page),
+    label: file.filename,
+  }));
+}
+
+export function buildPageSplitConsolidateRecords(
   previews: DocExtractPreviewFile[],
 ): DocExtractConsolidateRecord[] {
   const records: DocExtractConsolidateRecord[] = [];
   for (const file of previews) {
-    // Accuracy default: multi-page PDF → one record per page; single page/image → one record.
     if (file.page_count > 1) {
       for (const page of file.pages) {
         records.push({
@@ -73,6 +84,13 @@ export function buildDefaultConsolidateRecords(
     }
   }
   return records;
+}
+
+/** Default: one record per file so multi-page packets stay under batch limits and OCR still covers all pages. */
+export function buildDefaultConsolidateRecords(
+  previews: DocExtractPreviewFile[],
+): DocExtractConsolidateRecord[] {
+  return buildWholeFileConsolidateRecords(previews);
 }
 
 function pageMeta(
@@ -232,19 +250,12 @@ export function DocExtractConsolidateStep({ previews, records, onChange, disable
   };
 
   const splitAllPages = () => {
-    onChange(buildDefaultConsolidateRecords(previews));
+    onChange(buildPageSplitConsolidateRecords(previews));
     setSelected({});
   };
 
   const keepFilesWhole = () => {
-    onChange(
-      previews.map((file) => ({
-        id: newId(),
-        fileIndex: file.index,
-        pages: file.pages.map((page) => page.page),
-        label: file.filename,
-      })),
-    );
+    onChange(buildWholeFileConsolidateRecords(previews));
     setSelected({});
   };
 
@@ -279,9 +290,19 @@ export function DocExtractConsolidateStep({ previews, records, onChange, disable
       </div>
 
       {records.length > MAX_RECORDS ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          Too many records ({records.length}). Max is {MAX_RECORDS}. Group pages or discard extras before extracting.
-        </p>
+        <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <p>
+            Too many records ({records.length}). Max per batch is {MAX_RECORDS}. Prefer{" "}
+            <span className="font-medium">Keep each file whole</span> (OCR still reads every page), or extract in
+            multiple batches from the button below.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={keepFilesWhole}>
+              <Combine className="size-4" />
+              Keep each file whole
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       <div className="space-y-3">

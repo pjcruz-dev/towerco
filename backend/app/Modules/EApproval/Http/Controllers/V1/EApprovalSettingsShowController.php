@@ -16,11 +16,11 @@ class EApprovalSettingsShowController extends AbstractApiController
         Request $request,
         EApprovalSettingsService $settings,
         EApprovalFinanceProcurementPolicyService $procurementPolicy,
-    ): JsonResponse
-    {
+    ): JsonResponse {
         abort_unless($request->user()?->can('e_approval:settings:manage'), 403);
 
         $mailer = (string) config('toweros.notifications_mail_mailer', config('mail.default'));
+        $policy = $procurementPolicy->snapshot();
 
         return $this->ok([
             'sla_reminder_minutes' => $settings->getInt(EApprovalSettingsService::SLA_REMINDER_MINUTES, 2880),
@@ -37,8 +37,9 @@ class EApprovalSettingsShowController extends AbstractApiController
             'notify_external_on_returned' => $settings->notifyExternalOnReturned() ? 'true' : 'false',
             'teams_webhook_url' => $settings->teamsWebhookUrl(),
             'notify_teams_on_external_submit' => $settings->notifyTeamsOnExternalSubmit() ? 'true' : 'false',
-            'finance_procurement_policy' => $procurementPolicy->snapshot(),
-            ...$procurementPolicy->snapshot(),
+            'liquidation_requires_parent' => $policy['liquidation_requires_parent'] ? 'true' : 'false',
+            'liquidation_overspend_mode' => $policy['liquidation_overspend_mode'],
+            'liquidation_max_overspend_percent' => $policy['liquidation_max_overspend_percent'],
         ]);
     }
 }

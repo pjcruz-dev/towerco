@@ -1,0 +1,31 @@
+---
+description: Authorization (Policies, permission naming), authentication (Sanctum vs Passport), input/output, transport and secrets. Use for auth, permissions, uploads and any endpoint.
+globs:
+  - "backend/app/**/*.php"
+  - "backend/routes/**/*.php"
+  - "frontend/lib/auth/**"
+  - "frontend/lib/rbac/**"
+alwaysApply: false
+---
+
+# Security and RBAC
+
+## Authorization
+- Server is authoritative. Hiding a button is cosmetic.
+- Every controller action authorizes before it does work. In Ticketing, E-Forms, DocExtract and Document Control that is `abort_unless($request->user()?->can('...'), 403)` on the controller. No route without auth middleware unless explicitly public and commented.
+- Permissions (Spatie Permission 7): name them `<module>:<resource>:<action>`, matching the existing strings (`ticketing:tickets:create`, `e_approval:forms:manage`, `doc-extract:run`, `documents:controlled:view`). Code checks permissions, never role names. The sole workspace-owner role is `tenant_admin` (full enabled permission set, empty entity matrix). Do not treat ATC `admin` or leftover `administrator` as the owner; hide `administrator` from Team & Access and fold assignments onto `tenant_admin`. `dynamic_entities_admin` is the scoped Dynamic Entities module admin.
+- Sensitive actions (delete, approve, export, role change, billing change) need explicit permissions and an audit entry.
+- Frontend: use the existing helpers in `frontend/lib/rbac`. Do not add a second permission-check mechanism.
+
+## Authentication
+- Sanctum for the first-party SPA/app. Passport only for third-party OAuth2 clients and machine-to-machine APIs. Do not mix them on one route group.
+- MFA and passkeys (WebAuthn) live in the Identity module. Never bypass, weaken or special-case them. Enforce SSO for tenants that enable it.
+- Rate-limit login, MFA, password reset, token and export endpoints.
+
+## Input, output, transport
+- Validate everything server-side, whitelist fields, and return only the fields the service payload includes.
+- Strict CORS, CSP, HSTS, secure cookies.
+- Uploads (Documents, DocExtract, e-approval imports): size and type limits, content sniffing, virus-scan hook, never served from a public path.
+- Tenant-configurable outbound URLs (webhooks, Teams, callbacks): require HTTPS, block private/link-local/loopback IPs and redirects to them (SSRF), set short timeouts, sign payloads. Test-email and test-webhook endpoints are rate-limited and permission-gated.
+- Secrets never in the repo, logs or client bundles. Only `NEXT_PUBLIC_*` values are public.
+- Run `composer audit` and `npm audit` in CI. PII: minimize, encrypt sensitive columns, redact in logs.

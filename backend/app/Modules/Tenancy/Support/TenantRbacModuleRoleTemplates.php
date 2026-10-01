@@ -25,17 +25,13 @@ final class TenantRbacModuleRoleTemplates
     {
         $roles = array_merge(
             self::coreRoles(),
-            self::projectOneRoles(),
             self::ticketingRoles(),
-            self::procurementRoles(),
-            self::financeRoles(),
             self::eApprovalRoles(),
             self::documentsRoles(),
             self::controlledDocumentsRoles(),
             self::docExtractRoles(),
-            self::sitesRoles(),
+            self::dynamicEntitiesRoles(),
             self::aiAssistantRoles(),
-            self::disciplineAddons(),
             self::legacyAliases(),
         );
 
@@ -84,14 +80,6 @@ final class TenantRbacModuleRoleTemplates
                 'dashboard:view',
                 'ai_assistant:use',
                 'organization:view',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view_discipline',
                 'e_approval:view',
                 'e_approval:submissions:create',
                 'e_approval:submissions:view',
@@ -99,70 +87,9 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:view',
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'finance_one:view',
-                'sites:view',
                 'documents:view',
                 'documents:upload',
                 'documents:manage',
-            ],
-            'finance' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:finance:view',
-                'project_one:finance:edit',
-                'finance_one:view',
-                'finance_one:reports:view',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function projectOneRoles(): array
-    {
-        return [
-            'project_one_viewer' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-            ],
-            'project_one_contributor' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-            ],
-            'project_one_operator' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view_discipline',
-            ],
-            'project_one_admin' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:manage',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-                'project_one:rollout:gate:approve',
-                'project_one:saq:manage',
-                'project_one:cme:manage',
-                'project_one:finance:view',
-                'project_one:finance:edit',
-                'project_one:playbook:configure',
             ],
         ];
     }
@@ -192,104 +119,6 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
                 'ticketing:settings:manage',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function procurementRoles(): array
-    {
-        return [
-            'procurement_viewer' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:vendors:view',
-                'procurement_one:inventory:view',
-            ],
-            'procurement_contributor' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:vendors:view',
-                'procurement_one:inventory:view',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'procurement_operator' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'procurement_admin' => [
-                'dashboard:view',
-                'procurement_one:view',
-                'procurement_one:documents:create',
-                'procurement_one:documents:manage',
-                'procurement_one:vendors:view',
-                'procurement_one:vendors:manage',
-                'procurement_one:inventory:view',
-                'procurement_one:inventory:manage',
-                'procurement_one:settings:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function financeRoles(): array
-    {
-        return [
-            'finance_viewer' => [
-                'dashboard:view',
-                'finance_one:view',
-            ],
-            'finance_contributor' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-            ],
-            'finance_operator' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'finance_one:documents:manage',
-                'finance_one:budget:manage',
-                'finance_one:contracts:manage',
-                'finance_one:payments:manage',
-                'finance_one:reports:view',
-                'e_approval:view',
-                'e_approval:submissions:view',
-                'e_approval:approve',
-            ],
-            'finance_admin' => [
-                'dashboard:view',
-                'finance_one:view',
-                'finance_one:documents:create',
-                'finance_one:documents:manage',
-                'finance_one:budget:manage',
-                'finance_one:contracts:manage',
-                'finance_one:payments:manage',
-                'finance_one:reports:view',
-                'finance_one:settings:manage',
-                'e_approval:view',
-                'e_approval:submissions:create',
-                'e_approval:submissions:view',
-                'e_approval:approve',
             ],
         ];
     }
@@ -430,12 +259,31 @@ final class TenantRbacModuleRoleTemplates
     }
 
     /** @return array<string, list<string>> */
-    private static function sitesRoles(): array
+    private static function dynamicEntitiesRoles(): array
     {
         return [
-            'sites_viewer' => [
+            'dynamic_entities_viewer' => [
                 'dashboard:view',
-                'sites:view',
+                'dynamic_entities:view',
+            ],
+            'dynamic_entities_contributor' => [
+                'dashboard:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+            ],
+            'dynamic_entities_admin' => [
+                'dashboard:view',
+                'dynamic_entities:view',
+                'dynamic_entities:records:manage',
+                'dynamic_entities:fields:manage',
+                'dynamic_entities:entities:manage',
+                'printables:manage',
+                'html_reports:manage',
+                'workflows:manage',
+                'email_templates:manage',
+                'automation:manage',
+                'search_index:manage',
+                'entity_hooks:manage',
             ],
         ];
     }
@@ -457,31 +305,6 @@ final class TenantRbacModuleRoleTemplates
                 'ai_assistant:actions:execute',
                 'ai_assistant:knowledge:manage',
                 'ai_assistant:conversations:audit',
-            ],
-        ];
-    }
-
-    /** @return array<string, list<string>> */
-    private static function disciplineAddons(): array
-    {
-        return [
-            'saq_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:saq:manage',
-            ],
-            'pmo_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:rollout:manage',
-            ],
-            'cme_approver' => [
-                'dashboard:view',
-                'project_one:view',
-                'project_one:rollout:view',
-                'project_one:cme:manage',
             ],
         ];
     }

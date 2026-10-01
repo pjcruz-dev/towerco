@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Modules\Documents\Data\SiteDocumentReviewFormTemplate;
 
 return [
     'public_links' => [
@@ -202,6 +203,6 @@ return [
                 ['type' => 'manager', 'step_order' => 1],
             ],
         ],
-        'site_document_review' => \App\Modules\Documents\Data\SiteDocumentReviewFormTemplate::definition(),
+        'site_document_review' => SiteDocumentReviewFormTemplate::definition(),
     ], require __DIR__.'/e_approval_finance_procurement_templates.php'),
 ];

@@ -20,17 +20,16 @@ describe("groupFormTemplates", () => {
     const groups = groupFormTemplates([
       template("leave_request", "hr", "Leave request"),
       template("cash_advance", "finance", "Cash advance"),
-      template("purchase_order", "procurement", "Purchase order"),
+      template("liquidation", "finance", "Liquidation"),
       template("site_document_review", "documents", "Site document review"),
     ]);
 
-    expect(groups.map((group) => group.id)).toEqual(["finance", "procurement", "hr", "documents"]);
-    expect(groups[0]?.templates.map((item) => item.id)).toEqual(["cash_advance"]);
-    expect(groups[1]?.templates.map((item) => item.id)).toEqual(["purchase_order"]);
+    expect(groups.map((group) => group.id)).toEqual(["finance", "hr", "documents"]);
+    expect(groups[0]?.templates.map((item) => item.id)).toEqual(["cash_advance", "liquidation"]);
   });
 
-  it("puts CAPEX with procurement even when the API category is finance", () => {
-    expect(formTemplateGroupId({ id: "purchase_request", category: "finance" })).toBe("procurement");
+  it("keeps cash advance in finance", () => {
+    expect(formTemplateGroupId({ id: "cash_advance", category: "finance" })).toBe("finance");
   });
 
   it("falls back to Other for unknown tenant templates", () => {

@@ -6,13 +6,18 @@ namespace Tests\Feature\AiAssistant;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
+use App\Models\TicketingTicket;
 use App\Modules\AiAssistant\DTOs\ToolCallRequest;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolExecutor;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRouter;
+use App\Modules\Documents\Models\ControlledDocument;
+use App\Modules\Documents\Models\Site;
+use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Workspace\Models\TenantActivityLog;
+use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -143,7 +148,7 @@ final class AssistantToolsTest extends TestCase
         tenancy()->initialize($this->testTenant);
         app(TenantRbacBaselineService::class)->ensure();
 
-        \App\Modules\Documents\Models\ControlledDocument::query()->create([
+        ControlledDocument::query()->create([
             'document_code' => 'ATC-F-HR-003',
             'title' => 'HR Policy',
             'document_type' => 'P',
@@ -171,8 +176,8 @@ final class AssistantToolsTest extends TestCase
         tenancy()->initialize($this->testTenant);
         app(TenantRbacBaselineService::class)->ensure();
 
-        $form = \App\Modules\EApproval\Models\EApprovalForm::query()->create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
             'name' => 'Cash Advance',
             'status' => 'published',
             'schema_version' => 1,
@@ -180,7 +185,7 @@ final class AssistantToolsTest extends TestCase
             'doc_type_code' => 'F',
         ]);
 
-        $submission = \App\Modules\EApproval\Models\EApprovalSubmission::query()->create([
+        $submission = EApprovalSubmission::query()->create([
             'document_no' => 'GEN-F-00042',
             'form_id' => $form->id,
             'requestor_id' => $this->testTenantAdmin->id,
@@ -207,12 +212,12 @@ final class AssistantToolsTest extends TestCase
         tenancy()->initialize($this->testTenant);
         app(TenantRbacBaselineService::class)->ensure();
 
-        $ticket = \App\Models\TicketingTicket::query()->create([
+        $ticket = TicketingTicket::query()->create([
             'ticket_number' => 4,
             'title' => 'Access request',
             'description' => 'Need access',
-            'status' => \App\Models\TicketingTicket::STATUS_OPEN,
-            'priority' => \App\Models\TicketingTicket::PRIORITY_NORMAL,
+            'status' => TicketingTicket::STATUS_OPEN,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
             'requester_id' => $this->testTenantAdmin->id,
         ]);
 
@@ -326,7 +331,7 @@ final class AssistantToolsTest extends TestCase
     public function test_ask_api_returns_live_document_status_for_document_code(): void
     {
         tenancy()->initialize($this->testTenant);
-        \App\Modules\Documents\Models\ControlledDocument::query()->create([
+        ControlledDocument::query()->create([
             'document_code' => 'ATC-F-HR-003',
             'title' => 'HR Policy',
             'document_type' => 'P',
@@ -400,8 +405,8 @@ final class AssistantToolsTest extends TestCase
         tenancy()->initialize($this->testTenant);
         app(TenantRbacBaselineService::class)->ensure();
 
-        $form = \App\Modules\EApproval\Models\EApprovalForm::query()->create([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
             'name' => 'AI Search Parity Form',
             'description' => 'Published form for assistant search parity',
             'category' => 'Ops',
@@ -412,7 +417,7 @@ final class AssistantToolsTest extends TestCase
             'accepts_new_submissions' => true,
         ]);
 
-        \App\Modules\EApproval\Models\EApprovalSubmission::query()->create([
+        EApprovalSubmission::query()->create([
             'document_no' => 'GEN-F-AISEARCH',
             'form_id' => $form->id,
             'requestor_id' => $this->testTenantAdmin->id,

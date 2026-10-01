@@ -57,7 +57,8 @@ export function EApprovalSubmissionNewPageClient() {
 
   const formsQuery = useQuery({
     queryKey: ["e-approval", "forms", "published-picker"],
-    queryFn: () => fetchEApprovalFormsIndex({ page: 1, per_page: 100, status: "published" }),
+    queryFn: () =>
+      fetchEApprovalFormsIndex({ page: 1, per_page: 100, status: "published", for_request: true }),
     staleTime: 0,
     refetchOnMount: "always",
     enabled: !requestRedirect,

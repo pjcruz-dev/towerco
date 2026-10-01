@@ -27,7 +27,7 @@ final class DocExtractBatchRequeueController extends AbstractApiController
         $model = $batches->findOrFail($batch);
         $model->loadMissing('template');
 
-        $result = $batches->requeueStuckDocuments(
+        $result = $batches->remapBatchFieldValues(
             batchId: (string) $model->id,
             tenantId: (string) (tenant('id') ?? ''),
         );
@@ -36,13 +36,24 @@ final class DocExtractBatchRequeueController extends AbstractApiController
         if ($actor instanceof TenantUser) {
             $audit->record(
                 action: 'batch.requeued',
-                summary: __('Requeued :count stuck DocExtract document(s).', ['count' => $result['requeued']]),
+                summary: ($result['queued'] ?? false)
+                    ? __('Queued DocExtract value rescan for :count document(s).', [
+                        'count' => $result['document_count'] ?? 0,
+                    ])
+                    : __('Remapped :remapped DocExtract value(s); requeued :requeued stuck document(s).', [
+                        'remapped' => $result['remapped'] ?? 0,
+                        'requeued' => ($result['requeued'] ?? 0) + ($result['rescanned'] ?? 0),
+                    ]),
                 entityType: 'batch',
                 entityId: (string) $model->id,
                 entityLabel: $model->template?->name ?? 'Auto-detect',
                 actor: $actor,
                 changes: [
-                    'requeued' => ['from' => null, 'to' => $result['requeued']],
+                    'queued' => ['from' => null, 'to' => $result['queued'] ?? false],
+                    'document_count' => ['from' => null, 'to' => $result['document_count'] ?? 0],
+                    'remapped' => ['from' => null, 'to' => $result['remapped'] ?? 0],
+                    'rescanned' => ['from' => null, 'to' => $result['rescanned'] ?? 0],
+                    'requeued' => ['from' => null, 'to' => $result['requeued'] ?? 0],
                 ],
             );
         }
@@ -51,7 +62,11 @@ final class DocExtractBatchRequeueController extends AbstractApiController
 
         return $this->ok([
             ...$batches->asListRow($fresh),
-            'requeued' => $result['requeued'],
+            'queued' => (bool) ($result['queued'] ?? false),
+            'document_count' => (int) ($result['document_count'] ?? 0),
+            'requeued' => (int) (($result['requeued'] ?? 0) + ($result['rescanned'] ?? 0)),
+            'remapped' => (int) ($result['remapped'] ?? 0),
+            'rescanned' => (int) ($result['rescanned'] ?? 0),
         ]);
     }
 }

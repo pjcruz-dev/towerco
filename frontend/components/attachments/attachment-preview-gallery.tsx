@@ -232,6 +232,8 @@ type Props = {
   items: AttachmentGalleryItem[];
   fetchBlob: (id: string) => Promise<Blob>;
   onDownload: (item: AttachmentGalleryItem) => void | Promise<void>;
+  /** Optional remove for saved files (tickets). Hidden when omitted. */
+  onRemove?: (item: AttachmentGalleryItem) => void | Promise<void>;
   /** Optional open/preview (e.g. stamped PDF). Falls back to opening blob in a new tab for images/PDFs. */
   onOpenPreview?: (item: AttachmentGalleryItem) => void | Promise<void>;
   openPreviewLabel?: string | ((item: AttachmentGalleryItem) => string);
@@ -332,6 +334,7 @@ export function AttachmentPreviewGallery({
   items,
   fetchBlob,
   onDownload,
+  onRemove,
   onOpenPreview,
   openPreviewLabel = "Open preview",
   openPreviewDisabled = false,
@@ -341,6 +344,7 @@ export function AttachmentPreviewGallery({
   className,
 }: Props) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [expandedItem, setExpandedItem] = useState<AttachmentGalleryItem | null>(null);
   const { urls, errors } = useAttachmentPreviewUrls(items, fetchBlob);
 
@@ -378,6 +382,16 @@ export function AttachmentPreviewGallery({
       await onDownload(item);
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleRemove = async (item: AttachmentGalleryItem) => {
+    if (!onRemove) return;
+    setRemovingId(item.id);
+    try {
+      await onRemove(item);
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -530,6 +544,16 @@ export function AttachmentPreviewGallery({
                         >
                           {downloadingId === item.id ? "Downloading…" : "Download"}
                         </button>
+                        {onRemove ? (
+                          <button
+                            type="button"
+                            className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+                            disabled={removingId === item.id}
+                            onClick={() => void handleRemove(item)}
+                          >
+                            {removingId === item.id ? "Removing…" : "Remove"}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -593,6 +617,16 @@ export function AttachmentPreviewGallery({
                       >
                         {downloadingId === item.id ? "Downloading…" : "Download"}
                       </button>
+                      {onRemove ? (
+                        <button
+                          type="button"
+                          className="inline-flex min-h-8 items-center rounded-md px-1 text-xs font-medium text-destructive hover:underline disabled:opacity-50"
+                          disabled={removingId === item.id}
+                          onClick={() => void handleRemove(item)}
+                        >
+                          {removingId === item.id ? "Removing…" : "Remove"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>

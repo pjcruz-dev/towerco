@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, LifeBuoy, Plus, Ticket } from "lucide-react";
+import { ArrowRight, BarChart3, LifeBuoy, Plus, Ticket } from "lucide-react";
 
 import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
@@ -69,6 +69,12 @@ const NAV_TILES = [
     label: "Report an issue",
     description: "Describe the problem and attach screenshots.",
     icon: LifeBuoy,
+  },
+  {
+    href: "/ticketing/reports",
+    label: "Reports",
+    description: "Analytics and exports",
+    icon: BarChart3,
   },
 ] as const;
 export function TicketingDashboardPageClient() {

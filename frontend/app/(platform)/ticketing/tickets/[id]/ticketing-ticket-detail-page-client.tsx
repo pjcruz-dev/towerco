@@ -5,6 +5,11 @@ import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
 import { formatTicketingDate, ticketingCategoryLabel } from "@/components/ticketing/ticketing-utils";
+import {
+  AttachmentPreviewGallery,
+  formatAttachmentBytes,
+  type AttachmentGalleryItem,
+} from "@/components/attachments/attachment-preview-gallery";
 import { AttachmentDropzone } from "@/components/attachments/attachment-dropzone";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { WorkspaceEntityActivityPanel } from "@/components/governance/workspace-entity-activity-panel";
@@ -20,6 +25,7 @@ import { getErrorMessage } from "@/lib/api/error";
 import {
   addTicketingComment,
   deleteTicketingAttachment,
+  downloadTicketingAttachment,
   fetchTicketingAssignableUsers,
   fetchTicketingAttachmentBlob,
   fetchTicketingMetadata,
@@ -30,6 +36,7 @@ import {
 import { ticketingLinkHref } from "@/lib/ticketing/link-href";
 import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
+import { useNotificationStore } from "@/stores/notification-store";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -44,6 +51,7 @@ function localFileKey(file: File): string {
 
 export function TicketingTicketDetailPageClient({ ticketId }: Props) {
   const queryClient = useQueryClient();
+  const pushNotice = useNotificationStore((s) => s.push);
   const user = useAuthStore((s) => s.user);
   const canManage = user?.permissions.includes(permissions.ticketingTicketsManage) ?? false;
   const canCreate = user?.permissions.includes(permissions.ticketingTicketsCreate) ?? false;
@@ -86,28 +94,22 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
   const showSkeleton = ticketQuery.isLoading;
   const ticketQueryKey = ["ticketing", "ticket", ticketId] as const;
 
-  const persistedItems = useMemo(
-    () =>
-      (ticket?.attachments ?? []).map((attachment) => ({
+  const savedAttachmentItems = useMemo((): AttachmentGalleryItem[] => {
+    return (ticket?.attachments ?? []).map((attachment) => {
+      const sizeLabel = formatAttachmentBytes(attachment.size_bytes);
+      const uploadedAt = attachment.created_at ? formatTicketingDate(attachment.created_at) : null;
+      return {
         id: attachment.id,
         fileName: attachment.file_name,
         mimeType: attachment.mime_type,
         sizeBytes: attachment.size_bytes,
-        badge: "Saved on ticket",
-      })),
-    [ticket?.attachments],
-  );
+        title: attachment.file_name,
+        subtitle: [sizeLabel, uploadedAt].filter(Boolean).join(" · ") || null,
+      };
+    });
+  }, [ticket?.attachments]);
 
-  const fetchPersistedPreview = useCallback(async (id: string, fileName: string) => {
-    if (!/\.(png|jpe?g|gif|webp|bmp)$/i.test(fileName)) {
-      return null;
-    }
-    try {
-      return await fetchTicketingAttachmentBlob(id);
-    } catch {
-      return null;
-    }
-  }, []);
+  const fetchSavedAttachment = useCallback((id: string) => fetchTicketingAttachmentBlob(id), []);
 
   const updateMutation = useMutation({
     mutationFn: (payload: {
@@ -299,28 +301,16 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Drag & drop, browse, or paste a screenshot. Progress shows while uploading.
                 </p>
-                <div className="mt-3">
+                <div className="mt-3 space-y-4">
                   <AttachmentDropzone
                     files={pendingFiles}
                     onChange={onPendingFilesChange}
                     multiple
                     maxFiles={20}
-                    occupiedSlots={persistedItems.length}
+                    occupiedSlots={savedAttachmentItems.length}
                     accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                     enablePaste
                     disabled={!canEditAttachments}
-                    persistedItems={persistedItems}
-                    onRemovePersisted={
-                      canEditAttachments
-                        ? (id) => removeAttachmentMutation.mutateAsync(id)
-                        : undefined
-                    }
-                    removingPersistedId={
-                      removeAttachmentMutation.isPending
-                        ? (removeAttachmentMutation.variables ?? null)
-                        : null
-                    }
-                    fetchPersistedPreview={fetchPersistedPreview}
                     uploadStateByKey={uploadStateByKey}
                     onCancelUpload={(key) => {
                       abortByKey.current[key]?.abort();
@@ -334,6 +324,30 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                     hint="PNG, JPG, PDF, Office · paste screenshot with Ctrl+V / ⌘V"
                     error={attachmentError}
                   />
+                  {savedAttachmentItems.length > 0 ? (
+                    <AttachmentPreviewGallery
+                      title="Saved files"
+                      hint="Images and PDFs open in the browser. Other files expand or download."
+                      items={savedAttachmentItems}
+                      fetchBlob={fetchSavedAttachment}
+                      onDownload={async (item) => {
+                        try {
+                          await downloadTicketingAttachment(item.id, item.fileName);
+                        } catch (error) {
+                          pushNotice({
+                            level: "error",
+                            title: "Download failed",
+                            message: getErrorMessage(error) || "Could not download this file.",
+                          });
+                        }
+                      }}
+                      onRemove={
+                        canEditAttachments
+                          ? (item) => removeAttachmentMutation.mutateAsync(item.id)
+                          : undefined
+                      }
+                    />
+                  ) : null}
                 </div>
               </section>
 

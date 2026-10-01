@@ -21,9 +21,9 @@ describe("resolveAssistantRouteContext", () => {
     expect(ctx.pagePath).toBe("/notifications");
   });
 
-  it("maps procurement routes", () => {
-    const ctx = resolveAssistantRouteContext("/procurement/vendors");
-    expect(ctx.moduleKey).toBe("procurement_one");
-    expect(ctx.suggestedQuestions.some((q) => q.includes("Procurement"))).toBe(true);
+  it("maps document register routes", () => {
+    const ctx = resolveAssistantRouteContext("/documents/controlled");
+    expect(ctx.moduleKey).toBe("document_register");
+    expect(ctx.suggestedQuestions.length).toBeGreaterThan(0);
   });
 });

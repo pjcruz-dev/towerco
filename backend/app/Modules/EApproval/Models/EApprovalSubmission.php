@@ -266,13 +266,26 @@ class EApprovalSubmission extends Model
 
         $approvedAll = $submissionStatus === 'approved';
         $cancelled = $submissionStatus === 'cancelled';
+        $rejected = $submissionStatus === 'rejected';
         $hasSnapshotScope = $snapshotOrders !== [];
+        $rejectedFromOrder = 0;
+        foreach ($byOrder as $order => $actors) {
+            foreach ($actors as $actor) {
+                if ($actor['status'] === 'rejected' && ($rejectedFromOrder === 0 || $order < $rejectedFromOrder)) {
+                    $rejectedFromOrder = $order;
+                }
+            }
+        }
+        if ($rejected && $rejectedFromOrder === 0) {
+            $rejectedFromOrder = $currentStep;
+        }
 
         $rows = [];
         for ($order = 1; $order <= $total; $order++) {
             $actors = $byOrder[$order] ?? [];
             $pendingNames = [];
             $approvedNames = [];
+            $rejectedNames = [];
             $otherNames = [];
             $invalidatedOnly = $actors !== [];
 
@@ -282,6 +295,9 @@ class EApprovalSubmission extends Model
                     $invalidatedOnly = false;
                 } elseif ($actor['status'] === 'approved') {
                     $approvedNames[] = $actor['name'];
+                    $invalidatedOnly = false;
+                } elseif ($actor['status'] === 'rejected') {
+                    $rejectedNames[] = $actor['name'];
                     $invalidatedOnly = false;
                 } elseif ($actor['status'] === 'invalidated') {
                     // keep invalidatedOnly unless other statuses appear
@@ -293,26 +309,40 @@ class EApprovalSubmission extends Model
 
             $pendingNames = array_values(array_unique($pendingNames));
             $approvedNames = array_values(array_unique($approvedNames));
+            $rejectedNames = array_values(array_unique($rejectedNames));
 
-            $notInActivePath = $hasSnapshotScope && ! isset($activeOrders[$order]) && $pendingNames === [] && $approvedNames === [];
+            $notInActivePath = $hasSnapshotScope && ! isset($activeOrders[$order]) && $pendingNames === [] && $approvedNames === [] && $rejectedNames === [];
             $unresolvable = $actors === []
                 && $pendingNames === []
                 && $approvedNames === []
+                && $rejectedNames === []
                 && $this->snapshotStepIsUnresolvable($snapshotStepMeta[$order] ?? null, $policyContext);
 
             if ($invalidatedOnly || $notInActivePath || $unresolvable) {
                 $state = 'skipped';
                 $statusLabel = 'Skipped';
                 $names = [];
-            } elseif ($approvedAll || ($actors !== [] && $pendingNames === [] && $approvedNames !== [] && $otherNames === [])) {
+            } elseif ($approvedAll || ($actors !== [] && $pendingNames === [] && $rejectedNames === [] && $approvedNames !== [] && $otherNames === [])) {
                 $state = 'completed';
                 $statusLabel = 'Approved';
                 $names = $approvedNames !== [] ? $approvedNames : $otherNames;
+            } elseif ($rejectedNames !== []) {
+                $state = 'rejected';
+                $statusLabel = 'Rejected';
+                $names = $rejectedNames;
+            } elseif ($rejected && $rejectedFromOrder > 0 && $order === $rejectedFromOrder) {
+                $state = 'rejected';
+                $statusLabel = 'Rejected';
+                $names = $otherNames !== [] ? $otherNames : $pendingNames;
+            } elseif ($rejected && $rejectedFromOrder > 0 && $order > $rejectedFromOrder && $approvedNames === []) {
+                $state = 'skipped';
+                $statusLabel = 'Not reached';
+                $names = [];
             } elseif ($cancelled && ($currentStep <= 0 || $order >= $currentStep) && $pendingNames === []) {
                 $state = $order < $currentStep ? 'completed' : 'cancelled';
                 $statusLabel = $state === 'completed' ? 'Approved' : 'Cancelled';
                 $names = $approvedNames !== [] ? $approvedNames : $otherNames;
-            } elseif ($pendingNames !== [] || ($currentStep > 0 && $order === $currentStep && ! $approvedAll && ! $cancelled)) {
+            } elseif (! $rejected && ($pendingNames !== [] || ($currentStep > 0 && $order === $currentStep && ! $approvedAll && ! $cancelled))) {
                 $state = 'current';
                 $statusLabel = 'Pending';
                 $names = $pendingNames !== [] ? $pendingNames : ($otherNames !== [] ? $otherNames : $approvedNames);

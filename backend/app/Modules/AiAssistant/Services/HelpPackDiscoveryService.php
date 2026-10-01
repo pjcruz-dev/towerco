@@ -51,7 +51,7 @@ final class HelpPackDiscoveryService
 
     /**
      * Map a module directory name (StudlyCase) to its module key (snake_case).
-     * e.g. "ProcurementOne" => "procurement_one", "EApproval" => "e_approval".
+     * e.g. "EApproval" => "e_approval", "DocExtract" => "doc_extract".
      */
     public function moduleKeyForFolder(string $folder): string
     {

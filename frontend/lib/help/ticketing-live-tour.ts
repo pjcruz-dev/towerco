@@ -220,7 +220,7 @@ export const ticketingLiveTour: LiveTourDefinition = {
       target: "tk-overview-kpis",
       chapter: "overview",
       title: "Status cards",
-      body: "Open, assigned to you, urgent, SLA at risk, and resolved this week. Counts stay at zero until tickets exist.",
+      body: "Open, assigned to you, urgent, SLA at risk, and resolved this week. Counts stay at zero until tickets exist. Tickets linked to you, and their files, also sit on My profile → Account. That list stays collapsed until you open Tickets.",
     },
     {
       id: "overview-actions",

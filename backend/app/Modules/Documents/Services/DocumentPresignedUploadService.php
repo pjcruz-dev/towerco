@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\DocumentUploadIntent;
+use App\Modules\Documents\Models\Site;
 use App\Modules\Documents\Support\DocumentUploadValidator;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Sites\Models\Site;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;

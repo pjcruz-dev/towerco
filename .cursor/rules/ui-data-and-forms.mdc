@@ -1,0 +1,52 @@
+---
+description: Patterns for data tables, forms, drawers vs modals, dashboards, required screen states, realtime UX, permission-aware UI.
+globs:
+  - "frontend/**/*.tsx"
+alwaysApply: false
+---
+
+# Tables, forms, drawers, dashboards, states
+
+Reuse what exists before building. All in `frontend/components/ui`: `data-table.tsx` (+ `data-table-column-header`, `-column-helpers`, `-row-selection`, `-view-options`), `app-table.tsx`, `row-actions-menu.tsx`, `data-list-card.tsx` (mobile/list variant), `sheet.tsx` (drawers), `dialog.tsx`, `select-field.tsx`, `currency-input.tsx`, date/date-range/date-time pickers, `page-skeletons.tsx`, `skeleton.tsx`, `refreshing-hint.tsx`, `tooltip.tsx`. Table support: `lib/table/server-sort.ts`, `lib/api/paginated.ts`, `lib/api/module-list-export-params.ts` with `lib/api/modules/module-list-exports-api.ts` (the export mechanism). Other areas: `components/forms`, `components/modals`, `components/feedback`, `components/dashboard`, `components/widgets`. Extend them. Do not create parallel versions.
+
+## Data tables (TanStack Table + shadcn)
+- Server-side pagination, sorting, filtering. Client-side only for small static lists.
+- Sticky header and sticky first column. Row virtualization above ~200 rendered rows.
+- Column visibility, order and width persisted per user. Saved views (named filter sets) for shared team use.
+- Active filters shown as removable chips above the table. Global search debounced 250ms.
+- Bulk select shows a sticky action bar with the count and "Select all N results". Row actions: one primary inline action + overflow menu.
+- Row click opens a right-side drawer (detail/edit) and keeps list scroll and selection.
+- Export (CSV/XLSX) uses the current filters. Above a threshold it becomes an async job with a notification and signed download.
+- Numbers right-aligned, `tabular-nums`. Status = chip with icon + text. Truncate long text with tooltip.
+- Two distinct empty states: "no data yet" (with the create action) and "no results for these filters" (with clear-filters).
+
+## Forms (react-hook-form + zod)
+- Single column, labels above inputs, help text below, required fields marked, grouped sections with headings.
+- Validate on blur and on submit. Map server 422 `errors` onto fields. Focus the first invalid field. Long forms get an error summary.
+- Submit disables while pending and shows progress. Enter submits. Warn on unsaved changes. Autosave drafts for long forms.
+- Appropriate `inputmode`, units shown in the input (dBm, m, MHz), coordinate inputs validate range and order (lat, lng).
+
+## Drawers vs modals
+- Create/view/edit records: right drawer (480/640/800px). Keep the list visible behind it.
+- Modal only for short confirmations. Never a modal over a modal.
+- Destructive confirmation: name the object and the consequence. Irreversible or bulk actions require type-to-confirm.
+
+## Dashboards
+- Top of page = what needs attention: SLA-at-risk tickets, pending approvals (e-forms), documents awaiting review, failed/needs-review extractions, my tasks.
+- Each tile is a link into a pre-filtered list. 6-8 widgets above the fold at most.
+- Every metric shows its time range and "updated N min ago".
+- Chart only when showing trend or comparison. No 3D, no dual axes, no pies with more than 5 slices. Every chart has a table alternative.
+
+## Required states for every screen
+Loading skeleton matching the final layout | empty with next action | error with Retry and copyable request id | partial failure | offline banner | 403 explaining who can grant access | stale-data indicator when the realtime connection drops.
+
+## Realtime (Soketi + Echo, `frontend/lib/socket`)
+- Show a connection indicator. New rows arrive behind a "N new items" pill, never inserted under the cursor.
+- Batch and throttle updates. Reconcile events into the TanStack Query cache. Clean up listeners on unmount.
+- Optimistic updates roll back with a toast on failure.
+
+## Feedback
+Toast for non-blocking success (auto-dismiss ~5s). Errors that need action stay until dismissed. Errors tied to a field are inline, never toast-only.
+
+## Permissions in UI
+Use the helpers in `frontend/lib/rbac` (do not add a second mechanism). Hide nav/actions the user can never use. If an action exists but is unavailable right now, disable it with a tooltip that explains why. The server enforces regardless.

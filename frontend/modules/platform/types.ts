@@ -1,6 +1,6 @@
-import type { ProjectOneKpi } from "@/modules/project-one/types";
+import type { DashboardKpi } from "@/lib/ui/dashboard-kpi";
 
-export type PlatformDashboardKpi = ProjectOneKpi;
+export type PlatformDashboardKpi = DashboardKpi;
 
 export type PlatformDashboardAction = {
   id: string;
@@ -17,7 +17,6 @@ export type PlatformDashboardRecentTenant = {
   primary_domain?: string | null;
   created_at?: string | null;
   mfa_required?: boolean;
-  playbook_upgrade_available?: boolean;
 };
 
 export type PlatformDashboardAuditRow = {

@@ -118,8 +118,9 @@ export function TenantNotificationBell({ enabled = true }: Props) {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-            {unreadCount > 99 ? "99+" : unreadCount}
+          <span className="absolute -right-0.5 -top-0.5 flex size-2.5" aria-hidden>
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-destructive" />
           </span>
         ) : null}
       </Button>

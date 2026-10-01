@@ -68,6 +68,15 @@ export function normalizeAuthSession(payload: unknown): AuthSession {
     userData?.is_impersonating ?? userData?.isImpersonating ?? impersonator,
   );
 
+  const roles = asRoles(userData?.roles);
+  const rawAccessMatrix =
+    userData?.access_matrix && typeof userData.access_matrix === "object"
+      ? (userData.access_matrix as AuthUser["accessMatrix"])
+      : userData?.accessMatrix && typeof userData.accessMatrix === "object"
+        ? (userData.accessMatrix as AuthUser["accessMatrix"])
+        : undefined;
+  const accessMatrix = roles.includes("tenant_admin") ? undefined : rawAccessMatrix;
+
   const user: AuthUser | null = userData
     ? {
         id: asString(userData.id),
@@ -77,9 +86,17 @@ export function normalizeAuthSession(payload: unknown): AuthSession {
         ...(asString(userData.tenant_domain ?? userData.tenantDomain)
           ? { tenantDomain: asString(userData.tenant_domain ?? userData.tenantDomain) }
           : {}),
-        roles: asRoles(userData.roles),
+        roles,
         permissions: asStringArray(userData.permissions),
         ...(enabledModules.length > 0 ? { enabledModules } : {}),
+        ...(accessMatrix ? { accessMatrix } : {}),
+        ...(asString(userData.default_landing_href ?? userData.defaultLandingHref)
+          ? {
+              defaultLandingHref: asString(
+                userData.default_landing_href ?? userData.defaultLandingHref,
+              ),
+            }
+          : {}),
         tenantAccesses,
         ...(isImpersonating ? { isImpersonating: true } : {}),
         ...(impersonator ? { impersonator } : {}),

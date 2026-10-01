@@ -6,6 +6,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Tooltip,
   XAxis,
   YAxis,
@@ -13,7 +14,9 @@ import {
 
 import {
   DASHBOARD_CHART,
+  resolveChartFill,
   type DashboardChartDatum,
+  type DashboardMultiSeries,
 } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardResponsiveChart } from "@/components/dashboard/dashboard-responsive-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +28,9 @@ export type DashboardBarChartProps = {
   data: DashboardChartDatum[];
   emptyMessage?: string;
   layout?: "vertical" | "horizontal";
+  /** Stacked or grouped columns when `groups` has two or more aligned series. */
+  mode?: "single" | "stacked" | "grouped";
+  groups?: DashboardMultiSeries;
   valueLabel?: string;
   height?: number;
   className?: string;
@@ -36,6 +42,8 @@ export function DashboardBarChartImpl({
   data,
   emptyMessage = "No data to chart yet.",
   layout = "vertical",
+  mode = "single",
+  groups,
   valueLabel = "Count",
   height = 220,
   className,
@@ -43,19 +51,32 @@ export function DashboardBarChartImpl({
   const gradientId = useId().replace(/:/g, "");
   const chartData = useMemo(
     () =>
-      data.map((row) => ({
+      data.map((row, index) => ({
         ...row,
-        fill: row.fill ?? DASHBOARD_CHART.brand,
+        fill: resolveChartFill(row, index),
       })),
     [data],
   );
-  const hasData = chartData.some((row) => row.value > 0);
+  const groupedRows = useMemo(() => {
+    if (!groups || groups.series.length < 2 || groups.categories.length === 0) return [];
+    return groups.categories.map((label, index) => {
+      const row: Record<string, string | number> = { label };
+      for (const series of groups.series) {
+        row[series.key] = series.values[index] ?? 0;
+      }
+      return row;
+    });
+  }, [groups]);
+  const useGroups = mode !== "single" && groupedRows.length > 0;
+  const hasData = useGroups
+    ? groupedRows.some((row) => groups!.series.some((series) => Number(row[series.key]) > 0))
+    : chartData.some((row) => row.value > 0);
   const isHorizontal = layout === "horizontal";
   const usesPerBarFill = chartData.some((row) => Boolean(row.fill));
 
   return (
     <Card className={cn("flex h-full flex-col overflow-hidden rounded-xl border-border shadow-sm", className)}>
-      <CardHeader className="space-y-0.5 border-b border-border/80 bg-muted/20 px-4 py-3">
+      <CardHeader className="space-y-0.5 px-5 pb-0 pt-5">
         <CardTitle className="text-sm font-medium text-foreground">{title}</CardTitle>
         {description ? (
           <p className="text-[11px] font-normal leading-snug text-muted-foreground">{description}</p>
@@ -69,7 +90,7 @@ export function DashboardBarChartImpl({
         ) : (
           <DashboardResponsiveChart height={height}>
             <BarChart
-              data={chartData}
+              data={useGroups ? groupedRows : chartData}
               layout={isHorizontal ? "vertical" : "horizontal"}
               margin={{ top: 8, right: 8, left: isHorizontal ? 8 : 0, bottom: 0 }}
             >
@@ -79,12 +100,7 @@ export function DashboardBarChartImpl({
                   <stop offset="95%" stopColor={DASHBOARD_CHART.brand} stopOpacity={0.28} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={!isHorizontal}
-                horizontal
-                className="stroke-border"
-              />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} horizontal className="stroke-border" />
               {isHorizontal ? (
                 <>
                   <XAxis
@@ -133,16 +149,31 @@ export function DashboardBarChartImpl({
                 }}
                 formatter={(value) => [`${value}`, valueLabel]}
               />
-              <Bar
-                dataKey="value"
-                fill={usesPerBarFill ? undefined : `url(#${gradientId})`}
-                radius={isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
-                maxBarSize={40}
-              >
-                {usesPerBarFill
-                  ? chartData.map((row) => <Cell key={row.key} fill={row.fill} />)
-                  : null}
-              </Bar>
+              {useGroups && groups
+                ? groups.series.map((series) => (
+                    <Bar
+                      key={series.key}
+                      dataKey={series.key}
+                      name={series.label}
+                      fill={series.color}
+                      stackId={mode === "stacked" ? "mix" : undefined}
+                      radius={mode === "grouped" ? [4, 4, 0, 0] : undefined}
+                      maxBarSize={36}
+                    />
+                  ))
+                : (
+                    <Bar
+                      dataKey="value"
+                      fill={usesPerBarFill ? undefined : `url(#${gradientId})`}
+                      radius={isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+                      maxBarSize={40}
+                    >
+                      {usesPerBarFill
+                        ? chartData.map((row) => <Cell key={row.key} fill={row.fill} />)
+                        : null}
+                    </Bar>
+                  )}
+              {useGroups ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
             </BarChart>
           </DashboardResponsiveChart>
         )}

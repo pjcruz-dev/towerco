@@ -21,12 +21,14 @@ final class DocExtractBatchStoreController extends AbstractApiController
         abort_unless($request->user()?->can('doc-extract:run'), 403);
         $planFeatures->assertModuleEnabled();
 
+        $maxFiles = max(1, (int) config('doc_extract.max_files_per_batch', 150));
+
         $data = $request->validate([
             'template_id' => ['nullable', 'uuid'],
             'split_pages' => ['sometimes', 'boolean'],
             'records' => ['sometimes', 'nullable', 'string'],
             'file_page_counts' => ['sometimes', 'nullable', 'string'],
-            'files' => ['required', 'array', 'min:1'],
+            'files' => ['required', 'array', 'min:1', 'max:'.$maxFiles],
             'files.*' => ['file'],
         ]);
 

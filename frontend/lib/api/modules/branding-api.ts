@@ -8,6 +8,10 @@ export type TenantBrandingPayload = {
   dark: Record<string, string>;
   /** From tenant slug (e.g. ATC). Present on known hosts so pre-login chrome can brand correctly. */
   organization_label?: string | null;
+  company_address?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_tin?: string | null;
 };
 
 export function resolveBrandingAssetUrl(url: string | null | undefined): string | null {

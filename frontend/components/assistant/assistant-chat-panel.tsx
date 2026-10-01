@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, SendHorizontal, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  Mic,
+  Paperclip,
+  Phone,
+  SendHorizontal,
+} from "lucide-react";
 
+import { AssistantHistoryPanel } from "@/components/assistant/assistant-history-panel";
 import { AssistantMessage, type AssistantChatMessage } from "@/components/assistant/assistant-message";
-import { AssistantSuggestedQuestions } from "@/components/assistant/assistant-suggested-questions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   askAssistant,
   cancelAssistantAction,
@@ -16,6 +22,9 @@ import {
   type AssistantAskResponse,
   type AssistantCitation,
   type AssistantConversationMessage,
+  type AssistantCostEstimate,
+  type AssistantMeta,
+  type AssistantRateLimit,
 } from "@/lib/api/modules/assistant-api";
 import { getErrorMessage } from "@/lib/api/error";
 import type { AssistantRouteContext } from "@/lib/assistant/route-context";
@@ -23,6 +32,15 @@ import type { AssistantRouteContext } from "@/lib/assistant/route-context";
 type Props = {
   routeContext: AssistantRouteContext;
   open: boolean;
+  autoPilot?: boolean;
+  planMode?: boolean;
+  preferredModel?: string | null;
+  meta?: AssistantMeta | null;
+  historyOpen?: boolean;
+  onHistoryOpenChange?: (open: boolean) => void;
+  newChatNonce?: number;
+  onRateLimitChange?: (rateLimit: AssistantRateLimit) => void;
+  onCostEstimateChange?: (estimate: AssistantCostEstimate | null) => void;
 };
 
 const CONVERSATION_STORAGE_KEY = "toweros.assistant.conversation_id";
@@ -71,11 +89,22 @@ function toRestoredMessage(message: AssistantConversationMessage): AssistantChat
   };
 }
 
-export function AssistantChatPanel({ routeContext, open }: Props) {
+export function AssistantChatPanel({
+  routeContext,
+  open,
+  autoPilot = false,
+  planMode = false,
+  preferredModel = null,
+  meta = null,
+  historyOpen = false,
+  onHistoryOpenChange,
+  newChatNonce = 0,
+  onRateLimitChange,
+  onCostEstimateChange,
+}: Props) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [followups, setFollowups] = useState<string[]>(routeContext.suggestedQuestions);
   const [isAsking, setIsAsking] = useState(false);
   const [feedbackPendingId, setFeedbackPendingId] = useState<string | null>(null);
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
@@ -86,11 +115,8 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
       window.localStorage.getItem(CONVERSATION_STORAGE_KEY) !== null,
   );
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Rehydrate the last conversation across page refreshes. Only the conversation id is
-  // persisted locally; message content is fetched from the server (access-checked), so
-  // no chat content leaks between accounts on a shared browser.
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -119,7 +145,6 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
           window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
         }
       } catch {
-        // Conversation missing or not accessible for this session — start fresh.
         window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
       } finally {
         if (!cancelled) {
@@ -134,79 +159,18 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
   }, []);
 
   useEffect(() => {
-    if (messages.length === 0) {
-      setFollowups(routeContext.suggestedQuestions);
-    }
-  }, [routeContext.suggestedQuestions, messages.length]);
-
-  useEffect(() => {
-    if (!open) {
+    if (!open || historyOpen) {
       return;
     }
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isAsking, open]);
+  }, [messages, isAsking, open, historyOpen]);
 
   useEffect(() => {
-    if (open) {
+    if (open && !historyOpen) {
       const timer = window.setTimeout(() => inputRef.current?.focus(), 50);
       return () => window.clearTimeout(timer);
     }
-  }, [open]);
-
-  const sendQuestion = async (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed || isAsking) {
-      return;
-    }
-
-    setError(null);
-    setQuestion("");
-    const tempUserId = `local-user-${Date.now()}`;
-    setMessages((current) => [
-      ...current,
-      { id: tempUserId, role: "user", content: trimmed },
-    ]);
-    setIsAsking(true);
-
-    try {
-      const response = await askAssistant({
-        question: trimmed,
-        conversation_id: conversationId,
-        module_context: routeContext.moduleKey,
-        page_path: routeContext.pagePath,
-      });
-
-      setConversationId(response.conversation_id);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, response.conversation_id);
-      }
-      setMessages((current) => [...current, toAssistantMessage(response)]);
-      if (response.suggested_followups.length > 0) {
-        setFollowups(response.suggested_followups);
-      }
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsAsking(false);
-    }
-  };
-
-  const onFeedback = async (messageId: string, rating: "up" | "down") => {
-    setFeedbackPendingId(messageId);
-    setError(null);
-    try {
-      await submitAssistantFeedback({ message_id: messageId, rating });
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === messageId ? { ...message, feedback: rating } : message,
-        ),
-      );
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setFeedbackPendingId(null);
-    }
-  };
+  }, [open, historyOpen]);
 
   const onConfirmAction = async (
     messageId: string,
@@ -234,7 +198,7 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
                 content:
                   message.content +
                   (result.result.entity_label
-                    ? `\n\nCreated: ${result.result.entity_label}`
+                    ? `\n\nUpdated: ${result.result.entity_label}`
                     : "\n\nAction confirmed."),
               }
             : message,
@@ -244,6 +208,81 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
       setError(getErrorMessage(err));
     } finally {
       setActionPendingId(null);
+    }
+  };
+
+  const sendQuestion = async (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed || isAsking) {
+      return;
+    }
+
+    setError(null);
+    setQuestion("");
+    const tempUserId = `local-user-${Date.now()}`;
+    setMessages((current) => [
+      ...current,
+      { id: tempUserId, role: "user", content: trimmed },
+    ]);
+    setIsAsking(true);
+
+    try {
+      const response = await askAssistant({
+        question: trimmed,
+        conversation_id: conversationId,
+        module_context: routeContext.moduleKey,
+        page_path: routeContext.pagePath,
+        plan_mode: planMode,
+        preferred_model: preferredModel,
+      });
+
+      setConversationId(response.conversation_id);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, response.conversation_id);
+      }
+      if (response.cost_estimate) {
+        onCostEstimateChange?.(response.cost_estimate);
+      }
+      if (response.rate_limit) {
+        onRateLimitChange?.(response.rate_limit);
+      }
+
+      const assistantMsg = toAssistantMessage(response);
+      setMessages((current) => [...current, assistantMsg]);
+
+      if (
+        autoPilot &&
+        !planMode &&
+        response.proposed_action?.id &&
+        response.proposed_action.requires_confirmation !== false
+      ) {
+        void onConfirmAction(
+          response.message_id,
+          response.proposed_action.id,
+          response.proposed_action.payload ?? {},
+        );
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsAsking(false);
+    }
+  };
+
+  const onFeedback = async (messageId: string, rating: "up" | "down") => {
+    setFeedbackPendingId(messageId);
+    setError(null);
+    try {
+      await submitAssistantFeedback({ message_id: messageId, rating });
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === messageId ? { ...message, feedback: rating } : message,
+        ),
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setFeedbackPendingId(null);
     }
   };
 
@@ -276,14 +315,56 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
     setMessages([]);
     setError(null);
     setQuestion("");
-    setFollowups(routeContext.suggestedQuestions);
+    onCostEstimateChange?.(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(CONVERSATION_STORAGE_KEY);
     }
   };
 
+  useEffect(() => {
+    if (newChatNonce > 0) {
+      startNewConversation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- header New chat trigger
+  }, [newChatNonce]);
+
+  const loadConversation = async (id: string) => {
+    setError(null);
+    setIsRestoring(true);
+    try {
+      const detail = await fetchAssistantConversation(id);
+      const restored = detail.messages
+        .map(toRestoredMessage)
+        .filter((message): message is AssistantChatMessage => message !== null);
+      setConversationId(detail.id);
+      setMessages(restored);
+      onCostEstimateChange?.(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, detail.id);
+      }
+      onHistoryOpenChange?.(false);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+      <AssistantHistoryPanel
+        open={historyOpen}
+        activeConversationId={conversationId}
+        onClose={() => onHistoryOpenChange?.(false)}
+        onSelect={(id) => void loadConversation(id)}
+        onNewChat={startNewConversation}
+        onArchived={(id) => {
+          if (id === conversationId) {
+            startNewConversation();
+          }
+        }}
+      />
+
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {isRestoring ? (
           <div className="flex items-center gap-2 px-1 py-6 text-sm text-muted-foreground">
@@ -291,24 +372,8 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             Restoring your conversation…
           </div>
         ) : messages.length === 0 ? (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-xl bg-muted/40 px-3.5 py-3">
-              <div className="mt-0.5 rounded-full bg-card p-2 text-muted-foreground shadow-sm ring-1 ring-border">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">How can I help?</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Ask about workflows, permissions, or processes. Answers use approved help for your
-                  workspace.
-                </p>
-              </div>
-            </div>
-            <AssistantSuggestedQuestions
-              questions={followups}
-              disabled={isAsking}
-              onSelect={(value) => void sendQuestion(value)}
-            />
+          <div className="max-w-[92%] rounded-2xl border border-border bg-card px-3.5 py-3 text-sm text-foreground shadow-sm">
+            {meta?.greeting ?? "Hey! What are we building or fixing today?"}
           </div>
         ) : (
           <>
@@ -326,15 +391,8 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             {isAsking ? (
               <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Looking up approved guidance…
+                Thinking…
               </div>
-            ) : null}
-            {!isAsking && followups.length > 0 ? (
-              <AssistantSuggestedQuestions
-                questions={followups}
-                disabled={isAsking}
-                onSelect={(value) => void sendQuestion(value)}
-              />
             ) : null}
           </>
         )}
@@ -347,14 +405,15 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
             {error}
           </p>
         ) : null}
-        <div className="flex items-center gap-2 rounded-full border border-border bg-background px-2 py-1.5 shadow-sm">
-          <Input
+        <div className="rounded-xl border border-border bg-background px-3 py-2 shadow-sm">
+          <Textarea
             ref={inputRef}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Type your message…"
-            className="h-9 flex-1 border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
-            disabled={isAsking}
+            placeholder="Type your message..."
+            rows={2}
+            className="max-h-28 min-h-0 resize-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+            disabled={isAsking || historyOpen}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -362,35 +421,56 @@ export function AssistantChatPanel({ routeContext, open }: Props) {
               }
             }}
           />
-          <Button
-            type="button"
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-full"
-            disabled={isAsking || question.trim() === ""}
-            onClick={() => void sendQuestion(question)}
-            aria-label="Send message"
-          >
-            {isAsking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <SendHorizontal className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2 px-1">
-          <p className="text-[11px] text-muted-foreground">
-            {routeContext.moduleKey ?? "workspace"} · Enter to send
-          </p>
-          {messages.length > 0 ? (
-            <button
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <Button
               type="button"
-              className="text-[11px] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={startNewConversation}
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              title="Attachments coming soon"
+              disabled
             >
-              New chat
-            </button>
-          ) : null}
+              <Paperclip className="size-4" />
+            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                title="Voice coming soon"
+                disabled
+              >
+                <Phone className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                title="Microphone coming soon"
+                disabled
+              >
+                <Mic className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                className="size-9 shrink-0"
+                disabled={isAsking || historyOpen || question.trim() === ""}
+                onClick={() => void sendQuestion(question)}
+                aria-label="Send message"
+              >
+                {isAsking ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
+        <p className="mt-2 px-1 text-[10px] text-muted-foreground">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   );

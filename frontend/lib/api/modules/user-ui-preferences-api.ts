@@ -1,8 +1,10 @@
 import { apiClient } from "@/lib/api/client";
+import type { ProductRelease } from "@/content/release-notes";
 
 export type UserUiPreferenceSharedPayload = {
   layouts?: unknown;
   layout?: Record<string, unknown> | null;
+  release?: ProductRelease | null;
   updated_by?: string | null;
   updated_at?: string | null;
 };
@@ -44,7 +46,7 @@ export async function deleteUserUiPreference(key: string): Promise<void> {
 
 export async function putSharedUserUiPreference(
   key: string,
-  value: { layouts: unknown[] } | { layout: Record<string, unknown> },
+  value: { layouts: unknown[] } | { layout: Record<string, unknown> } | { release: ProductRelease },
 ): Promise<UserUiPreferenceSharedPayload | null> {
   const response = await apiClient.put<{ data: UserUiPreferencePayload }>(
     `/me/ui-preferences/${encodeURIComponent(key)}/shared`,

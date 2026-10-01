@@ -117,10 +117,6 @@ final class TenantBillingOverridesValidator
             }
         }
 
-        if ($moduleKey === 'project_one' && array_key_exists('rollout_file_uploads', $config)) {
-            $out['rollout_file_uploads'] = (bool) $config['rollout_file_uploads'];
-        }
-
         if ($moduleKey === 'ticketing') {
             if (array_key_exists('enabled', $config)) {
                 $out['enabled'] = (bool) $config['enabled'];
@@ -131,36 +127,6 @@ final class TenantBillingOverridesValidator
             if (array_key_exists('max_attachments_per_ticket', $config)) {
                 $max = $config['max_attachments_per_ticket'];
                 $out['max_attachments_per_ticket'] = $max === null || $max === '' ? null : max(0, (int) $max);
-            }
-        }
-
-        if ($moduleKey === 'procurement_one') {
-            if (array_key_exists('enabled', $config)) {
-                $out['enabled'] = (bool) $config['enabled'];
-            }
-            if (array_key_exists('goods_receipt', $config)) {
-                $out['goods_receipt'] = (bool) $config['goods_receipt'];
-            }
-            if (array_key_exists('advanced_numbering', $config)) {
-                $out['advanced_numbering'] = (bool) $config['advanced_numbering'];
-            }
-            if (array_key_exists('inventory', $config)) {
-                $out['inventory'] = (bool) $config['inventory'];
-            }
-            if (array_key_exists('ap_invoices', $config)) {
-                $out['ap_invoices'] = (bool) $config['ap_invoices'];
-            }
-            if (array_key_exists('payment_tracking', $config)) {
-                $out['payment_tracking'] = (bool) $config['payment_tracking'];
-            }
-            if (array_key_exists('rfq_sourcing', $config)) {
-                $out['rfq_sourcing'] = (bool) $config['rfq_sourcing'];
-            }
-            if (array_key_exists('vendor_contracts', $config)) {
-                $out['vendor_contracts'] = (bool) $config['vendor_contracts'];
-            }
-            if (array_key_exists('reporting_exports', $config)) {
-                $out['reporting_exports'] = (bool) $config['reporting_exports'];
             }
         }
 

@@ -11,7 +11,6 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,11 +20,6 @@ final class EApprovalDashboardService
     private const STALE_APPROVAL_DAYS = 3;
 
     private const QUEUE_LIMIT = 8;
-
-    public function __construct(
-        private readonly EApprovalFinanceProcurementKpiService $financeProcurementKpis,
-        private readonly TenantEnabledModulesResolver $enabledModules,
-    ) {}
 
     /**
      * @return array<string, mixed>
@@ -137,15 +131,6 @@ final class EApprovalDashboardService
             ] : null,
         ]));
 
-        $financeCounts = [];
-        $financeKpis = [];
-        $financeActions = [];
-        if ($this->financeProcurementModuleEnabled()) {
-            $financeCounts = $this->financeProcurementKpis->counts();
-            $financeKpis = $this->financeProcurementKpis->kpiCards($financeCounts);
-            $financeActions = $this->financeProcurementKpis->actions($financeCounts);
-        }
-
         $queues = [
             'awaiting_approval' => $canApprove && $user !== null
                 ? $this->awaitingApprovalQueue($user)
@@ -175,8 +160,8 @@ final class EApprovalDashboardService
 
         return [
             'kpis' => $kpis,
-            'finance_kpis' => $financeKpis,
-            'finance_counts' => $financeCounts,
+            'finance_kpis' => [],
+            'finance_counts' => [],
             'queues' => $queues,
             'capabilities' => [
                 'can_approve' => $canApprove,
@@ -206,7 +191,6 @@ final class EApprovalDashboardService
                     'href' => '/e-approval/submissions?status=draft&mine=1',
                     'priority' => 'medium',
                 ] : null,
-                ...$financeActions,
             ])),
             'recent_audit' => $recentAudit,
             'phase' => 'P7',
@@ -257,7 +241,7 @@ final class EApprovalDashboardService
                 EApprovalSubmissionStatus::RETURNED,
                 EApprovalSubmissionStatus::DRAFT,
             ])
-            ->orderByRaw("CASE WHEN status = ? THEN 0 WHEN status = ? THEN 1 ELSE 2 END", [
+            ->orderByRaw('CASE WHEN status = ? THEN 0 WHEN status = ? THEN 1 ELSE 2 END', [
                 EApprovalSubmissionStatus::RETURNED,
                 EApprovalSubmissionStatus::DRAFT,
             ])
@@ -279,13 +263,5 @@ final class EApprovalDashboardService
             })
             ->values()
             ->all();
-    }
-
-    private function financeProcurementModuleEnabled(): bool
-    {
-        $enabled = $this->enabledModules->resolveForCurrentTenant();
-
-        return in_array('procurement_one', $enabled, true)
-            || in_array('finance_one', $enabled, true);
     }
 }
