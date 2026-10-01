@@ -830,6 +830,38 @@ export async function platformCreateTenant(
   return response.data.data;
 }
 
+export type EnvironmentCloneStatus =
+  | "queued"
+  | "copying_database"
+  | "copying_files"
+  | "verifying"
+  | "ready"
+  | "failed"
+  | "cancelled"
+  | "discarded";
+
+export type EnvironmentCloneSnapshot = {
+  id: string;
+  status: EnvironmentCloneStatus;
+  source_tenant_id: string;
+  target_tenant_id: string | null;
+  domain?: string | null;
+  environment?: string | null;
+  pause_source: boolean;
+  cancel_requested?: boolean;
+  snapshot_at: string | null;
+  files_copied: number;
+  files_total: number | null;
+  paused_schedules: number;
+  counts: {
+    users?: number;
+    pending_approvals?: number;
+    controlled_documents?: number;
+    automation_schedules?: number;
+  } | null;
+  error_message: string | null;
+};
+
 export type CreateTenantEnvironmentPayload = {
   environment: "local" | "test" | "staging" | "production";
   domain?: string | null;
@@ -837,6 +869,9 @@ export type CreateTenantEnvironmentPayload = {
   seed?: boolean;
   enabled_modules?: string[] | null;
   admin_password?: string | null;
+  copy_data?: boolean;
+  pause_source?: boolean;
+  confirm_domain?: string | null;
 };
 
 export type CreateTenantEnvironmentResponse = {
@@ -852,6 +887,7 @@ export type CreateTenantEnvironmentResponse = {
   public_holidays_seeded?: number;
   holiday_years?: number[];
   initial_admin?: CreateTenantInitialAdmin;
+  clone?: EnvironmentCloneSnapshot;
 };
 
 export async function platformCreateTenantEnvironment(
@@ -862,6 +898,55 @@ export async function platformCreateTenantEnvironment(
     `/platform/tenants/${tenantId}/environments`,
     payload,
     { timeout: PLATFORM_PROVISIONING_TIMEOUT_MS },
+  );
+  return response.data.data;
+}
+
+export async function platformLatestEnvironmentClone(
+  tenantId: string,
+): Promise<EnvironmentCloneSnapshot | null> {
+  const response = await centralApiClient.get<{ data: { clone: EnvironmentCloneSnapshot | null } }>(
+    `/platform/tenants/${tenantId}/environment-clones/latest`,
+  );
+  return response.data.data?.clone ?? null;
+}
+
+export async function platformShowEnvironmentClone(
+  tenantId: string,
+  cloneId: string,
+): Promise<EnvironmentCloneSnapshot> {
+  const response = await centralApiClient.get<{ data: EnvironmentCloneSnapshot }>(
+    `/platform/tenants/${tenantId}/environment-clones/${cloneId}`,
+  );
+  return response.data.data;
+}
+
+export async function platformRetryEnvironmentClone(
+  tenantId: string,
+  cloneId: string,
+): Promise<EnvironmentCloneSnapshot> {
+  const response = await centralApiClient.post<{ data: EnvironmentCloneSnapshot }>(
+    `/platform/tenants/${tenantId}/environment-clones/${cloneId}/retry`,
+  );
+  return response.data.data;
+}
+
+export async function platformCancelEnvironmentClone(
+  tenantId: string,
+  cloneId: string,
+): Promise<EnvironmentCloneSnapshot> {
+  const response = await centralApiClient.post<{ data: EnvironmentCloneSnapshot }>(
+    `/platform/tenants/${tenantId}/environment-clones/${cloneId}/cancel`,
+  );
+  return response.data.data;
+}
+
+export async function platformDiscardEnvironmentClone(
+  tenantId: string,
+  cloneId: string,
+): Promise<EnvironmentCloneSnapshot> {
+  const response = await centralApiClient.post<{ data: EnvironmentCloneSnapshot }>(
+    `/platform/tenants/${tenantId}/environment-clones/${cloneId}/discard`,
   );
   return response.data.data;
 }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { FormInput } from "@/components/forms/form-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   TenantModulesPicker,
   type TenantModulesPickerValue,
@@ -16,7 +17,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { PlatformTenantRow } from "@/lib/api/modules/platform-api";
+import { EnvironmentCloneProgress } from "@/components/platform/environment-clone-progress";
+import type { EnvironmentCloneSnapshot, PlatformTenantRow } from "@/lib/api/modules/platform-api";
 import {
   recommendedTenantDomain,
   type TenantEnvironment,
@@ -37,6 +39,9 @@ export type TenantEnvironmentConfirmPayload = {
   domain?: string;
   enabled_modules?: TenantModulesPickerValue;
   admin_password?: string;
+  copy_data?: boolean;
+  pause_source?: boolean;
+  confirm_domain?: string;
 };
 
 type Props = {
@@ -45,7 +50,12 @@ type Props = {
   sourceTenant: PlatformTenantRow;
   existingEnvironments: string[];
   isPending: boolean;
+  clone?: EnvironmentCloneSnapshot | null;
+  cloneActionPending?: boolean;
   onConfirm: (payload: TenantEnvironmentConfirmPayload) => void;
+  onRetryClone?: () => void;
+  onCancelClone?: () => void;
+  onDiscardClone?: () => void;
 };
 
 export function TenantEnvironmentSheet({
@@ -54,7 +64,12 @@ export function TenantEnvironmentSheet({
   sourceTenant,
   existingEnvironments,
   isPending,
+  clone = null,
+  cloneActionPending = false,
   onConfirm,
+  onRetryClone,
+  onCancelClone,
+  onDiscardClone,
 }: Props) {
   const availableOptions = ENVIRONMENT_OPTIONS.filter(
     (option) =>
@@ -68,6 +83,9 @@ export function TenantEnvironmentSheet({
     () => sourceTenant.enabled_modules ?? null,
   );
   const [adminPassword, setAdminPassword] = useState("");
+  const [copyData, setCopyData] = useState(false);
+  const [pauseSource, setPauseSource] = useState(false);
+  const [confirmDomain, setConfirmDomain] = useState("");
 
   const recommendedDomain = useMemo(
     () => recommendedTenantDomain(environment, sourceTenant.slug, sourceTenant.brand_domain),
@@ -75,6 +93,10 @@ export function TenantEnvironmentSheet({
   );
 
   const effectiveDomain = domainOverride.trim() || recommendedDomain;
+  const sourceDomain = sourceTenant.domains[0] ?? "";
+  const productionConfirmOk =
+    environment !== "production" || confirmDomain.trim().toLowerCase() === sourceDomain.toLowerCase();
+  const copyRunning = clone !== null && !["ready", "failed", "cancelled", "discarded"].includes(clone.status);
 
   return (
     <Sheet
@@ -84,6 +106,9 @@ export function TenantEnvironmentSheet({
         if (!nextOpen) {
           setDomainOverride("");
           setAdminPassword("");
+          setCopyData(false);
+          setPauseSource(false);
+          setConfirmDomain("");
           setEnabledModules(sourceTenant.enabled_modules ?? null);
         }
       }}
@@ -103,7 +128,36 @@ export function TenantEnvironmentSheet({
             from the source tenant.
           </p>
 
-          {availableOptions.length === 0 ? (
+          {clone ? (
+            <div className="rounded-lg border border-border bg-card p-3">
+              <p className="mb-3 text-sm font-medium text-foreground">Copy progress</p>
+              <EnvironmentCloneProgress
+                clone={clone}
+                pending={cloneActionPending}
+                onRetry={onRetryClone}
+                onCancel={onCancelClone}
+                onDiscard={onDiscardClone}
+              />
+            </div>
+          ) : isPending && copyData ? (
+            <div className="space-y-2 rounded-lg border border-border bg-card p-3 text-foreground">
+              <p className="text-sm font-medium">Copy progress</p>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-valuenow={5}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Environment copy"
+              >
+                <div className="h-full bg-primary" style={{ width: "5%" }} />
+              </div>
+              <p className="text-sm tabular-nums">5% · Creating the environment</p>
+              <p className="text-muted-foreground">
+                The percent moves to the database copy, then to the file count, as soon as this step finishes.
+              </p>
+            </div>
+          ) : availableOptions.length === 0 ? (
             <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
               All standard environments already exist for this tenant group.
             </p>
@@ -155,18 +209,66 @@ export function TenantEnvironmentSheet({
                 <TenantModulesPicker value={enabledModules} onChange={setEnabledModules} />
               </div>
 
-              <FormInput
-                label="Admin password (optional)"
-                type="password"
-                value={adminPassword}
-                onChange={(event) => setAdminPassword(event.target.value)}
-                placeholder="Leave blank to auto-generate"
-                autoComplete="new-password"
-              />
-              <p className="text-xs text-muted-foreground">
-                Sets the password for the bootstrap admin account. Minimum 12 characters when provided; leave blank to
-                auto-generate (shown once after create).
-              </p>
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <label className="flex items-start gap-2 text-xs text-foreground">
+                  <Checkbox
+                    checked={copyData}
+                    onCheckedChange={(checked) => setCopyData(checked === true)}
+                    aria-label="Copy database and attachments"
+                  />
+                  <span>
+                    <span className="font-medium">Copy database and attachments</span>
+                    <span className="mt-1 block text-muted-foreground">
+                      Copies the full workspace as of the moment the job starts, including users, automation,
+                      pending approvals, and files. People can keep using this workspace. Work saved after the start
+                      is not included. Schedules stay paused on the new environment until you enable them.
+                    </span>
+                  </span>
+                </label>
+                {copyData ? (
+                  <label className="flex items-start gap-2 text-xs text-foreground">
+                    <Checkbox
+                      checked={pauseSource}
+                      onCheckedChange={(checked) => setPauseSource(checked === true)}
+                      aria-label="Pause changes on the source until the copy finishes"
+                    />
+                    <span>
+                      <span className="font-medium">Pause changes until the copy finishes</span>
+                      <span className="mt-1 block text-muted-foreground">
+                        Sign-in stays open. New uploads and approvals wait, so the new environment matches this one
+                        exactly. Leave this off for a rehearsal.
+                      </span>
+                    </span>
+                  </label>
+                ) : null}
+              </div>
+
+              {copyData && environment === "production" ? (
+                <FormInput
+                  label="Type the source domain to confirm"
+                  value={confirmDomain}
+                  onChange={(event) => setConfirmDomain(event.target.value)}
+                  placeholder={sourceDomain}
+                  autoComplete="off"
+                />
+              ) : null}
+
+              {copyData ? null : (
+                <>
+                  <FormInput
+                    label="Admin password (optional)"
+                    type="password"
+                    value={adminPassword}
+                    onChange={(event) => setAdminPassword(event.target.value)}
+                    placeholder="Leave blank to auto-generate"
+                    autoComplete="new-password"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sets the password for the bootstrap admin account. Minimum 12 characters when provided; leave blank to
+                    auto-generate (shown once after create).
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>
@@ -175,20 +277,25 @@ export function TenantEnvironmentSheet({
           <Button type="button" variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
+          {clone || copyRunning ? null : (
           <Button
             type="button"
-            disabled={isPending || availableOptions.length === 0}
+            disabled={isPending || availableOptions.length === 0 || (copyData && !productionConfirmOk)}
             onClick={() =>
               onConfirm({
                 environment,
                 domain: domainOverride.trim() || undefined,
                 enabled_modules: enabledModules,
-                admin_password: adminPassword.trim() || undefined,
+                admin_password: copyData ? undefined : adminPassword.trim() || undefined,
+                copy_data: copyData || undefined,
+                pause_source: copyData ? pauseSource : undefined,
+                confirm_domain: copyData && environment === "production" ? confirmDomain.trim() : undefined,
               })
             }
           >
-            {isPending ? "Creating…" : "Create environment tenant"}
+            {isPending ? (copyData ? "Starting copy…" : "Creating…") : copyData ? "Copy into new environment" : "Create environment tenant"}
           </Button>
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>

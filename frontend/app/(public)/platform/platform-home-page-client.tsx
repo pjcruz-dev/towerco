@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PlatformDashboardOverview } from "@/components/platform/platform-dashboard-overview";
 import {
@@ -22,12 +22,17 @@ import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { getErrorMessage } from "@/lib/api/error";
 import { copyTextToClipboard } from "@/lib/browser/clipboard";
 import {
+  platformCancelEnvironmentClone,
   platformCreateTenantEnvironment,
   platformDeleteTenant,
+  platformDiscardEnvironmentClone,
   platformListTenants,
   platformPatchTenantSettings,
+  platformRetryEnvironmentClone,
+  platformShowEnvironmentClone,
   platformUpdateTenantMfa,
   type CreateTenantEnvironmentResponse,
+  type EnvironmentCloneSnapshot,
   type PlatformTenantRow,
   type PlatformTenantThemeTokens,
 } from "@/lib/api/modules/platform-api";
@@ -123,6 +128,7 @@ export function PlatformHomePageClient() {
   const [deleteCascade, setDeleteCascade] = useState(false);
   const [environmentTarget, setEnvironmentTarget] = useState<PlatformTenantRow | null>(null);
   const [environmentCreated, setEnvironmentCreated] = useState<CreateTenantEnvironmentResponse | null>(null);
+  const [activeClone, setActiveClone] = useState<EnvironmentCloneSnapshot | null>(null);
   const [brandingTarget, setBrandingTarget] = useState<PlatformTenantRow | null>(null);
   const [billingTarget, setBillingTarget] = useState<PlatformTenantRow | null>(null);
   const [modulesTarget, setModulesTarget] = useState<PlatformTenantRow | null>(null);
@@ -327,25 +333,45 @@ export function PlatformHomePageClient() {
       domain,
       enabled_modules,
       admin_password,
+      copy_data,
+      pause_source,
+      confirm_domain,
     }: {
       tenantId: string;
       environment: "local" | "test" | "staging" | "production";
       domain?: string;
       enabled_modules?: string[] | null;
       admin_password?: string;
+      copy_data?: boolean;
+      pause_source?: boolean;
+      confirm_domain?: string;
     }) =>
       platformCreateTenantEnvironment(tenantId, {
         environment,
         domain,
-        migrate: true,
+        migrate: !copy_data,
         seed: false,
         enabled_modules,
         admin_password,
+        copy_data,
+        pause_source,
+        confirm_domain,
       }),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
       void queryClient.invalidateQueries({ queryKey: ["platform", "dashboard"] });
+      if (data.clone) {
+        setActiveClone(data.clone);
+        setEnvironmentCreated(null);
+        notify({
+          level: "success",
+          title: "Environment copy started",
+          message: `Copying into ${data.domain ?? data.tenant_id}. This workspace stays usable.`,
+        });
+        return;
+      }
       setEnvironmentTarget(null);
+      setActiveClone(null);
       setEnvironmentCreated(data);
       notify({
         level: "success",
@@ -357,6 +383,89 @@ export function PlatformHomePageClient() {
       notify({
         level: "error",
         title: "Could not create environment tenant",
+        message: getErrorMessage(error),
+      }),
+  });
+
+  const cloneTerminal = activeClone !== null && ["ready", "failed", "cancelled", "discarded"].includes(activeClone.status);
+  const cloneQuery = useQuery({
+    queryKey: ["platform", "environment-clone", activeClone?.source_tenant_id, activeClone?.id],
+    queryFn: () => platformShowEnvironmentClone(activeClone!.source_tenant_id, activeClone!.id),
+    enabled: Boolean(activeClone && !cloneTerminal),
+    refetchInterval: activeClone && !cloneTerminal ? 2000 : false,
+  });
+  const visibleClone = cloneQuery.data ?? activeClone;
+  const closedCloneId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!cloneQuery.data) {
+      return;
+    }
+    if (
+      (cloneQuery.data.status === "cancelled" || cloneQuery.data.status === "discarded") &&
+      closedCloneId.current !== cloneQuery.data.id
+    ) {
+      closedCloneId.current = cloneQuery.data.id;
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      setActiveClone(null);
+      setEnvironmentTarget(null);
+      notify({
+        level: "success",
+        title: "Environment removed",
+        message: "The new environment and its database were deleted. Staging was not changed.",
+      });
+      return;
+    }
+    if (cloneQuery.data.status === "ready" && closedCloneId.current !== `${cloneQuery.data.id}:ready`) {
+      closedCloneId.current = `${cloneQuery.data.id}:ready`;
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      setActiveClone(null);
+      setEnvironmentTarget(null);
+      notify({
+        level: "success",
+        title: "Environment copy ready",
+        message: "The new environment is in the directory. Staging was not changed.",
+      });
+      return;
+    }
+    setActiveClone(cloneQuery.data);
+  }, [cloneQuery.data, queryClient, notify]);
+
+  const cloneActionMutation = useMutation({
+    mutationFn: async (action: "retry" | "cancel" | "discard") => {
+      if (!visibleClone) {
+        throw new Error("No copy is in progress.");
+      }
+      if (action === "retry") {
+        return platformRetryEnvironmentClone(visibleClone.source_tenant_id, visibleClone.id);
+      }
+      if (action === "cancel") {
+        return platformCancelEnvironmentClone(visibleClone.source_tenant_id, visibleClone.id);
+      }
+      return platformDiscardEnvironmentClone(visibleClone.source_tenant_id, visibleClone.id);
+    },
+    onSuccess: (data, action) => {
+      setActiveClone(data);
+      if (action === "cancel") {
+        notify({
+          level: "success",
+          title: "Cancel requested",
+          message: "The copy will stop, then the new environment and its database will be removed. Staging is not deleted.",
+        });
+      }
+      if (data.status === "discarded" || data.status === "cancelled") {
+        setEnvironmentTarget(null);
+        notify({
+          level: "success",
+          title: "Environment removed",
+          message: "The new environment and its database were deleted. Staging was not changed.",
+        });
+      }
+    },
+    onError: (error) =>
+      notify({
+        level: "error",
+        title: "Could not update the copy",
         message: getErrorMessage(error),
       }),
   });
@@ -525,19 +634,32 @@ export function PlatformHomePageClient() {
           open
           onOpenChange={(open) => {
             if (!open) {
-              setEnvironmentTarget(null);
+              const running =
+                visibleClone !== null &&
+                ["queued", "copying_database", "copying_files", "verifying"].includes(visibleClone.status);
+              if (!running) {
+                setEnvironmentTarget(null);
+              }
             }
           }}
           sourceTenant={environmentTarget}
           existingEnvironments={tenantGroupEnvironments(rows, environmentTarget)}
           isPending={environmentMutation.isPending}
-          onConfirm={({ environment, domain, enabled_modules, admin_password }) => {
+          clone={visibleClone && visibleClone.source_tenant_id === environmentTarget.id ? visibleClone : null}
+          cloneActionPending={cloneActionMutation.isPending}
+          onRetryClone={() => cloneActionMutation.mutate("retry")}
+          onCancelClone={() => cloneActionMutation.mutate("cancel")}
+          onDiscardClone={() => cloneActionMutation.mutate("discard")}
+          onConfirm={({ environment, domain, enabled_modules, admin_password, copy_data, pause_source, confirm_domain }) => {
             environmentMutation.mutate({
               tenantId: environmentTarget.id,
               environment,
               domain,
               enabled_modules,
               admin_password,
+              copy_data,
+              pause_source,
+              confirm_domain,
             });
           }}
         />

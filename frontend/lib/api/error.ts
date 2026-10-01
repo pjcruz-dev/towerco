@@ -44,6 +44,10 @@ export function isApiTimeoutError(error: unknown): boolean {
   return error.code === "ECONNABORTED" || error.message.toLowerCase().includes("timeout");
 }
 
+export function isNotFoundApiError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 export function isForbiddenApiError(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 403;
 }

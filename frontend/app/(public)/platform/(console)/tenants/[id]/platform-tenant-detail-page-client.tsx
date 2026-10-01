@@ -2,7 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Shield } from "lucide-react";
 
 import { PlatformTenantAccessPanel } from "@/components/platform/platform-tenant-access-panel";
@@ -11,16 +12,21 @@ import { TenantOperatorAccessCard } from "@/components/platform/tenant-operator-
 import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
+import { EnvironmentCloneProgress } from "@/components/platform/environment-clone-progress";
 import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardContentSkeleton, PageHeaderSkeleton } from "@/components/ui/page-skeletons";
-import { getErrorMessage } from "@/lib/api/error";
+import { getErrorMessage, isApiTimeoutError, isNotFoundApiError } from "@/lib/api/error";
 import {
+  platformCancelEnvironmentClone,
+  platformDiscardEnvironmentClone,
   platformFetchTenant,
   platformFetchTenantAudit,
+  platformLatestEnvironmentClone,
   platformPatchTenantSettings,
+  platformRetryEnvironmentClone,
   platformUpdateTenantComingSoon,
   platformUpdateTenantMfa,
   type PlatformTenantRow,
@@ -56,6 +62,7 @@ const tabs: { id: Tab; label: string }[] = [
 
 export function PlatformTenantDetailPageClient({ tenantId }: Props) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const notify = useNotificationStore((s) => s.push);
   const accessToken = usePlatformAuthStore((s) => s.accessToken);
   const platformUser = usePlatformAuthStore((s) => s.user);
@@ -69,12 +76,128 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
   const [brandingOpen, setBrandingOpen] = useState(false);
   const [billingDowngradeWarnings, setBillingDowngradeWarnings] = useState<string[]>([]);
   const [confirmPlanDowngrade, setConfirmPlanDowngrade] = useState(false);
+  const [removalNotice, setRemovalNotice] = useState<"removing" | "cancelling" | "removed" | null>(null);
+  const removalTold = useRef(false);
 
   const tenantQuery = useQuery({
     queryKey: ["platform", "tenants", tenantId],
     queryFn: () => platformFetchTenant(tenantId),
-    enabled: Boolean(isHydrated && accessToken),
+    enabled: Boolean(isHydrated && accessToken) && removalNotice !== "removed",
+    retry: (count, error) => !isNotFoundApiError(error) && count < 1,
   });
+
+  const cloneQuery = useQuery({
+    queryKey: ["platform", "tenants", tenantId, "environment-clone"],
+    queryFn: () => platformLatestEnvironmentClone(tenantId),
+    enabled: Boolean(isHydrated && accessToken) && removalNotice !== "removed",
+    retry: (count, error) => !isNotFoundApiError(error) && count < 1,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      const cancelling = query.state.data?.cancel_requested === true;
+      return (cancelling || (status && ["queued", "copying_database", "copying_files", "verifying"].includes(status)))
+        ? 2000
+        : false;
+    },
+  });
+
+  const cloneAction = useMutation({
+    mutationFn: async (action: "retry" | "cancel" | "discard") => {
+      const clone = cloneQuery.data;
+      if (!clone) {
+        throw new Error("No environment copy is recorded for this tenant.");
+      }
+      if (action === "retry") {
+        return platformRetryEnvironmentClone(tenantId, clone.id);
+      }
+      if (action === "cancel") {
+        return platformCancelEnvironmentClone(tenantId, clone.id);
+      }
+      return platformDiscardEnvironmentClone(tenantId, clone.id);
+    },
+    onMutate: (action) => {
+      if (action === "discard") {
+        setRemovalNotice("removing");
+      }
+    },
+    onSuccess: async (data, action) => {
+      if (action === "discard" || data.status === "discarded") {
+        setRemovalNotice("removed");
+        notify({
+          level: "success",
+          title: "Environment removed",
+          message: "The new environment and its database were deleted. Staging was not changed.",
+        });
+        return;
+      }
+      if (action === "cancel") {
+        setRemovalNotice("cancelling");
+        queryClient.setQueryData(["platform", "tenants", tenantId, "environment-clone"], data);
+        notify({
+          level: "success",
+          title: "Cancel requested",
+          message: "The copy will stop, then the new environment and its database will be removed. Staging is not deleted.",
+        });
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId, "environment-clone"] });
+      await queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId] });
+    },
+    onError: async (error, action) => {
+      if (action === "discard") {
+        setRemovalNotice(null);
+      }
+      if (!isNotFoundApiError(error)) {
+        await queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId, "environment-clone"] });
+        await queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId] });
+      }
+      notify({
+        level: "error",
+        title: "Copy action failed",
+        message: isApiTimeoutError(error)
+          ? "The browser stopped waiting. Refresh this page — the copy may still be running."
+          : getErrorMessage(error),
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (removalNotice !== "cancelling" || removalTold.current) {
+      return;
+    }
+    const finished =
+      cloneQuery.data?.status === "cancelled" ||
+      isNotFoundApiError(cloneQuery.error) ||
+      isNotFoundApiError(tenantQuery.error);
+    if (!finished) {
+      return;
+    }
+    removalTold.current = true;
+    setRemovalNotice("removed");
+    notify({
+      level: "success",
+      title: "Copy cancelled",
+      message: "The new environment and its database were removed. Staging was not changed.",
+    });
+  }, [removalNotice, cloneQuery.data?.status, cloneQuery.error, tenantQuery.error, notify]);
+
+  useEffect(() => {
+    if (cloneQuery.data?.status !== "ready") {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId] });
+    void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+  }, [cloneQuery.data?.status, queryClient, tenantId]);
+
+  useEffect(() => {
+    if (removalNotice !== "removed") {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      router.replace("/platform#tenant-directory");
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [removalNotice, queryClient, router]);
 
   const auditQuery = useQuery({
     queryKey: ["platform", "tenants", tenantId, "audit"],
@@ -219,6 +342,32 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
     );
   }
 
+  if (removalNotice === "removed") {
+    return (
+      <div className="flex flex-col gap-6">
+        <Card className="rounded-xl border border-border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base font-medium">Environment copy</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {cloneQuery.data ? (
+              <EnvironmentCloneProgress
+                clone={{ ...cloneQuery.data, status: "cancelled", cancel_requested: true }}
+              />
+            ) : (
+              <p className="text-sm text-foreground">
+                The new environment and its database were removed. Staging was not changed.
+              </p>
+            )}
+            <Link href="/platform#tenant-directory" className={buttonVariants({ variant: "outline" })}>
+              Back to directory
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (tenantQuery.isError || !tenant) {
     return (
       <div className="p-6">
@@ -289,6 +438,24 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
           ) : null}
         </div>
       </header>
+
+      {cloneQuery.data ? (
+        <Card className="rounded-xl border border-border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base font-medium">Environment copy</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EnvironmentCloneProgress
+              clone={cloneQuery.data}
+              pending={cloneAction.isPending}
+              phase={removalNotice === "removing" || removalNotice === "removed" ? removalNotice : undefined}
+              onRetry={canManageTenants ? () => cloneAction.mutate("retry") : undefined}
+              onCancel={canManageTenants ? () => cloneAction.mutate("cancel") : undefined}
+              onDiscard={canManageTenants && removalNotice === null ? () => cloneAction.mutate("discard") : undefined}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <nav className="flex flex-wrap gap-1 border-b border-border pb-1">
         {tabs.map((item) => (
