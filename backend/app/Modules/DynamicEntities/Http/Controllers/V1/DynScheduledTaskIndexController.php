@@ -16,12 +16,14 @@ class DynScheduledTaskIndexController extends AbstractApiController
         abort_unless($request->user()?->can('automation:manage'), 403);
 
         $rows = $service->list();
+        $meta = $service->meta();
 
         return $this->okWithMeta($rows, [
             'total' => count($rows),
-            'runner' => $service->meta()['runner'],
-            'commands' => $service->meta()['commands'],
-            'schedule_presets' => $service->meta()['schedule_presets'],
+            'runner' => $meta['runner'],
+            'commands' => $meta['commands'],
+            'schedule_presets' => $meta['schedule_presets'],
+            'timezone' => $meta['timezone'],
         ]);
     }
 }

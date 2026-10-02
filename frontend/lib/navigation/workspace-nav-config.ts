@@ -463,7 +463,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         title: "System Core",
         icon: Shapes,
         module: "dynamic_entities",
-        permissions: ["dynamic_entities:fields:manage", "printables:manage", "sidebar:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "automation:manage", "search_index:manage", "entity_hooks:manage", "ai_assistant:prompts:manage"],
+        permissions: ["dynamic_entities:fields:manage", "printables:manage", "sidebar:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "search_index:manage", "entity_hooks:manage", "ai_assistant:prompts:manage"],
         permissionsMatch: "any",
         items: [
           {
@@ -511,11 +511,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             title: "Email Templates",
             href: "/dynamic-entities/email-templates",
             permissions: ["email_templates:manage"],
-          },
-          {
-            title: "Manage Cron Jobs",
-            href: "/admin/automation",
-            permissions: ["automation:manage"],
           },
           {
             title: "Manage Workflows",
@@ -652,6 +647,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           "e_approval:view",
           "doc-extract:view",
           "ticketing:view",
+          "automation:manage",
         ],
         permissionsMatch: "any",
         items: [
@@ -669,6 +665,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           },
           { title: "Sign-in & security", href: "/admin/settings", section: "Platform", permissions: ["tenant:manage"] },
           { title: "Backups", href: "/admin/backups", section: "Platform", permissions: ["tenant:manage"] },
+          { title: "Manage Cron Jobs", href: "/admin/automation", section: "Platform", permissions: ["automation:manage"] },
           { title: "KPI & SLA", href: "/admin/settings/kpi", section: "Platform", permissions: ["tenant:manage"] },
           {
             title: "Assistant conversations",

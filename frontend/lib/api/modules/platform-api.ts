@@ -496,6 +496,64 @@ export async function platformFetchBillingInsights(): Promise<PlatformBillingIns
   return response.data.data;
 }
 
+export type PlatformFleetJob = {
+  command: string;
+  module: string;
+  label: string;
+  cadence: string;
+};
+
+export type PlatformScheduleTaskStatus = "active" | "paused" | "failed" | "overdue";
+
+export type PlatformScheduleTenant = {
+  tenant_id: string;
+  slug: string;
+  environment: string;
+  domain: string | null;
+  has_schedule_table: boolean;
+  paused_after_copy: boolean;
+  unreachable: boolean;
+};
+
+export type PlatformScheduleTask = {
+  tenant_id: string;
+  slug: string;
+  environment: string;
+  domain: string | null;
+  id: string;
+  name: string;
+  command_key: string;
+  cron_expression: string;
+  is_active: boolean;
+  status: PlatformScheduleTaskStatus;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+};
+
+export type PlatformScheduleIndex = {
+  fleet: PlatformFleetJob[];
+  tenants: PlatformScheduleTenant[];
+  tasks: PlatformScheduleTask[];
+  counts: {
+    environments: number;
+    active: number;
+    paused: number;
+    failed: number;
+    overdue: number;
+  };
+  timezone?: string;
+};
+
+export async function platformFetchScheduledTasks(): Promise<PlatformScheduleIndex> {
+  const response = await centralApiClient.get<{ data: PlatformScheduleIndex }>(
+    "/platform/scheduled-tasks",
+    { timeout: 120_000 },
+  );
+  return response.data.data;
+}
+
 export async function platformPatchTenantSettings(
   tenantId: string,
   payload: PlatformTenantSettingsPatch,

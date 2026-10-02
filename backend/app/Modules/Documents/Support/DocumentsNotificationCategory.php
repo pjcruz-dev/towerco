@@ -9,7 +9,7 @@ final class DocumentsNotificationCategory
     public static function forType(string $type): string
     {
         return match ($type) {
-            'document_expiring' => 'action',
+            'document_expiring', 'controlled_document_review' => 'action',
             default => 'update',
         };
     }

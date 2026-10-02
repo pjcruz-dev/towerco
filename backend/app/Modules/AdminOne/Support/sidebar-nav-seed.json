@@ -1159,7 +1159,6 @@
           "html_reports:manage",
           "workflows:manage",
           "email_templates:manage",
-          "automation:manage",
           "search_index:manage",
           "entity_hooks:manage",
           "ai_assistant:prompts:manage"
@@ -1316,21 +1315,6 @@
             "permissions_match": "all",
             "module": null,
             "sort_order": 6,
-            "children": []
-          },
-          {
-            "key": "group.operations.system-core.manage-cron-jobs",
-            "type": "internal_page",
-            "title": "Manage Cron Jobs",
-            "icon": null,
-            "href": "/admin/automation",
-            "entity_slug": null,
-            "required_permissions": [
-              "automation:manage"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 7,
             "children": []
           },
           {
@@ -1706,7 +1690,8 @@
           "tenant:manage",
           "e_approval:settings:manage",
           "ticketing:settings:manage",
-          "e_approval:view"
+          "e_approval:view",
+          "automation:manage"
         ],
         "permissions_match": "any",
         "module": "core",
@@ -1760,6 +1745,21 @@
             "children": []
           },
           {
+            "key": "group.administration.settings.manage-cron-jobs",
+            "type": "internal_page",
+            "title": "Manage Cron Jobs",
+            "icon": null,
+            "href": "/admin/automation",
+            "entity_slug": null,
+            "required_permissions": [
+              "automation:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
             "key": "group.administration.settings.kpi-sla",
             "type": "internal_page",
             "title": "KPI & SLA",
@@ -1771,7 +1771,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 3,
+            "sort_order": 4,
             "children": []
           },
           {

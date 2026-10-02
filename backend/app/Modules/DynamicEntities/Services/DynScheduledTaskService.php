@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\DynamicEntities\Services;
 
 use App\Modules\DynamicEntities\Models\DynScheduledTask;
+use App\Modules\DynamicEntities\Models\DynScheduledTaskRun;
 use App\Modules\DynamicEntities\Support\DynScheduledTaskCatalog;
+use App\Modules\DynamicEntities\Support\DynScheduledTaskStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Carbon\CarbonInterface;
 use Cron\CronExpression;
 use Illuminate\Support\Carbon;
@@ -17,17 +20,27 @@ use Throwable;
 
 final class DynScheduledTaskService
 {
+    public function __construct(
+        private readonly TenantEnabledModulesResolver $modules,
+    ) {}
+
     /**
      * @return list<array<string, mixed>>
      */
     public function list(): array
     {
-        $this->ensureSeeded();
-
-        return DynScheduledTask::query()
+        $this->ensureCatalogRows();
+        $enabled = $this->enabledModules();
+        $tasks = DynScheduledTask::query()
             ->orderBy('number')
             ->get()
-            ->map(fn (DynScheduledTask $task): array => $this->present($task))
+            ->filter(fn (DynScheduledTask $task): bool => DynScheduledTaskCatalog::isRunnable((string) $task->command_key, $enabled))
+            ->values();
+        $runs = $this->recentRunsByTask($tasks->pluck('id')->map(static fn ($id): string => (string) $id)->all());
+
+        return $tasks
+            ->map(fn (DynScheduledTask $task): array => $this->present($task, $runs[(string) $task->id] ?? []))
+            ->values()
             ->all();
     }
 
@@ -51,14 +64,18 @@ final class DynScheduledTaskService
                 'command' => '* * * * * cd /opt/toweros && docker compose --env-file .env.docker exec -T api php artisan schedule:run',
                 'local_command' => 'docker exec toweros-api php artisan schedule:run',
             ],
-            'commands' => array_map(static fn (array $def): array => [
+            'commands' => array_values(array_map(static fn (array $def): array => [
                 'key' => $def['key'],
                 'name' => $def['name'],
                 'description' => $def['description'],
                 'default_schedule' => $def['schedule'],
                 'execution_label' => $def['execution_label'],
-            ], DynScheduledTaskCatalog::allowlistedCommands()),
+            ], array_filter(
+                DynScheduledTaskCatalog::allowlistedCommands(),
+                fn (array $def): bool => DynScheduledTaskCatalog::isRunnable($def['key'], $this->enabledModules()),
+            ))),
             'schedule_presets' => DynScheduledTaskCatalog::schedulePresets(),
+            'timezone' => (string) config('app.timezone'),
         ];
     }
 
@@ -79,6 +96,9 @@ final class DynScheduledTaskService
         $def = DynScheduledTaskCatalog::find($commandKey);
         if ($def === null) {
             throw ValidationException::withMessages(['command_key' => [__('Unknown or disallowed command.')]]);
+        }
+        if (! DynScheduledTaskCatalog::isRunnable($commandKey, $this->enabledModules())) {
+            throw ValidationException::withMessages(['command_key' => [__('That module is not enabled for this environment.')]]);
         }
 
         $schedule = trim((string) ($data['schedule'] ?? $def['schedule']));
@@ -220,9 +240,10 @@ final class DynScheduledTaskService
             return 0;
         }
 
-        $this->ensureSeeded();
+        $this->ensureCatalogRows();
         $ran = 0;
         $now = now();
+        $enabled = $this->enabledModules();
 
         DynScheduledTask::query()
             ->where('is_active', true)
@@ -231,7 +252,11 @@ final class DynScheduledTaskService
             })
             ->orderBy('number')
             ->get()
-            ->each(function (DynScheduledTask $task) use (&$ran): void {
+            ->each(function (DynScheduledTask $task) use (&$ran, $enabled): void {
+                if (! DynScheduledTaskCatalog::isRunnable((string) $task->command_key, $enabled)) {
+                    return;
+                }
+
                 $this->executeTask($task);
                 $ran++;
             });
@@ -241,18 +266,26 @@ final class DynScheduledTaskService
 
     public function ensureSeeded(): void
     {
+        $this->ensureCatalogRows();
+    }
+
+    private function ensureCatalogRows(): void
+    {
         if (! $this->tableReady()) {
             return;
         }
 
-        if (DynScheduledTask::query()->exists()) {
-            return;
-        }
+        $existing = DynScheduledTask::query()->pluck('command_key')->all();
+        $number = (int) DynScheduledTask::query()->max('number');
 
-        $n = 1;
         foreach (DynScheduledTaskCatalog::builtins() as $def) {
+            if (in_array($def['key'], $existing, true)) {
+                continue;
+            }
+
+            $number++;
             DynScheduledTask::query()->create([
-                'number' => $n,
+                'number' => $number,
                 'name' => $def['name'],
                 'description' => $def['description'],
                 'command_key' => $def['key'],
@@ -261,14 +294,33 @@ final class DynScheduledTaskService
                 'is_system' => true,
                 'is_active' => true,
                 'next_run_at' => $this->computeNextRun($def['cron_expression']),
-                'sort_order' => $n,
+                'sort_order' => $number,
             ]);
-            $n++;
         }
+
+        DynScheduledTask::query()
+            ->where('command_key', 'documents_expiry')
+            ->where('is_system', true)
+            ->where('description', 'Notify owners when controlled documents are near expiry.')
+            ->update([
+                'description' => 'Notify document controllers when a published controlled document is due for review in 90, 60, or 30 days.',
+            ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function enabledModules(): array
+    {
+        return $this->modules->resolveForCurrentTenant();
     }
 
     private function executeTask(DynScheduledTask $task): void
     {
+        if (! DynScheduledTaskCatalog::isRunnable((string) $task->command_key, $this->enabledModules())) {
+            return;
+        }
+
         $def = DynScheduledTaskCatalog::find((string) $task->command_key);
         if ($def === null) {
             $task->forceFill([
@@ -277,6 +329,7 @@ final class DynScheduledTaskService
                 'last_error' => 'Unknown command key.',
                 'next_run_at' => $this->computeNextRun((string) $task->cron_expression),
             ])->save();
+            $this->recordRun($task);
 
             return;
         }
@@ -313,12 +366,15 @@ final class DynScheduledTaskService
                 'next_run_at' => $this->computeNextRun((string) $task->cron_expression),
             ])->save();
         }
+
+        $this->recordRun($task);
     }
 
     /**
+     * @param  list<array{id: string, ran_at: string|null, status: string, error: string|null}>  $recentRuns
      * @return array<string, mixed>
      */
-    private function present(DynScheduledTask $task): array
+    private function present(DynScheduledTask $task, ?array $recentRuns = null): array
     {
         $def = DynScheduledTaskCatalog::find((string) $task->command_key);
 
@@ -337,12 +393,98 @@ final class DynScheduledTaskService
             'execution_label' => $def['execution_label'] ?? (string) $task->command_key,
             'is_system' => (bool) $task->is_system,
             'is_active' => (bool) $task->is_active,
+            'status' => DynScheduledTaskStatus::resolve(
+                (bool) $task->is_active,
+                $task->next_run_at,
+                $task->last_status,
+            ),
             'last_run_at' => optional($task->last_run_at)?->toIso8601String(),
             'next_run_at' => optional($task->next_run_at)?->toIso8601String(),
             'last_status' => $task->last_status,
             'last_error' => $task->last_error,
+            'recent_runs' => $recentRuns ?? $this->recentRunsFor((string) $task->id),
             'created_at' => optional($task->created_at)?->toIso8601String(),
             'updated_at' => optional($task->updated_at)?->toIso8601String(),
+        ];
+    }
+
+    private function recordRun(DynScheduledTask $task): void
+    {
+        if (! $this->runsTableReady()) {
+            return;
+        }
+
+        $error = $task->last_error;
+        if (is_string($error) && strlen($error) > 2000) {
+            $error = substr($error, 0, 2000);
+        }
+
+        DynScheduledTaskRun::query()->create([
+            'dyn_scheduled_task_id' => $task->id,
+            'ran_at' => $task->last_run_at ?? now(),
+            'status' => (string) ($task->last_status ?: 'failed'),
+            'error' => $error,
+        ]);
+
+        $keep = DynScheduledTaskRun::query()
+            ->where('dyn_scheduled_task_id', $task->id)
+            ->orderByDesc('ran_at')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->pluck('id');
+
+        DynScheduledTaskRun::query()
+            ->where('dyn_scheduled_task_id', $task->id)
+            ->whereNotIn('id', $keep)
+            ->delete();
+    }
+
+    /**
+     * @param  list<string>  $taskIds
+     * @return array<string, list<array{id: string, ran_at: string|null, status: string, error: string|null}>>
+     */
+    private function recentRunsByTask(array $taskIds): array
+    {
+        if ($taskIds === [] || ! $this->runsTableReady()) {
+            return [];
+        }
+
+        $grouped = [];
+        $rows = DynScheduledTaskRun::query()
+            ->whereIn('dyn_scheduled_task_id', $taskIds)
+            ->orderByDesc('ran_at')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($rows as $run) {
+            $key = (string) $run->dyn_scheduled_task_id;
+            if (count($grouped[$key] ?? []) >= 20) {
+                continue;
+            }
+            $grouped[$key][] = $this->presentRun($run);
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * @return list<array{id: string, ran_at: string|null, status: string, error: string|null}>
+     */
+    private function recentRunsFor(string $taskId): array
+    {
+        return $this->recentRunsByTask([$taskId])[$taskId] ?? [];
+    }
+
+    /**
+     * @return array{id: string, ran_at: string|null, status: string, error: string|null}
+     */
+    private function presentRun(DynScheduledTaskRun $run): array
+    {
+        return [
+            'id' => (string) $run->id,
+            'ran_at' => optional($run->ran_at)?->toIso8601String(),
+            'status' => (string) $run->status,
+            'error' => $run->error,
         ];
     }
 
@@ -389,6 +531,15 @@ final class DynScheduledTaskService
     {
         try {
             return Schema::connection('tenant')->hasTable('dyn_scheduled_tasks');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function runsTableReady(): bool
+    {
+        try {
+            return Schema::connection('tenant')->hasTable('dyn_scheduled_task_runs');
         } catch (Throwable) {
             return false;
         }

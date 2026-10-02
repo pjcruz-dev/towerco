@@ -622,6 +622,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('auth/mfa/recovery-codes/regenerate', [TenantAuthController::class, 'mfaRecoveryCodesRegenerate'])->name('api.tenant.v1.auth.mfa.recovery_codes.regenerate');
 
     require __DIR__.'/dynamic-entities.php';
+    require __DIR__.'/automation.php';
 
     Route::prefix('admin')->group(function () {
         Route::get('sso/config', [TenantSsoConfigController::class, 'show'])->name('api.tenant.v1.admin.sso.config.show');

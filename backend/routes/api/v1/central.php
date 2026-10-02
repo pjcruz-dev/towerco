@@ -39,6 +39,7 @@ use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorStoreControl
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformOperatorUpdateController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPlatformRoleCatalogController;
 use App\Modules\Platform\Http\Controllers\V1\CentralPublicClientIpController;
+use App\Modules\Platform\Http\Controllers\V1\CentralScheduledTaskIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralStripeWebhookController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantAuditIndexController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantBackupDestroyController;
@@ -166,6 +167,9 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::get('audit', CentralPlatformAuditIndexController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_AUDIT_VIEW)
         ->name('api.central.v1.platform.audit.index');
+    Route::get('scheduled-tasks', CentralScheduledTaskIndexController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_VIEW)
+        ->name('api.central.v1.platform.scheduled_tasks.index');
     Route::get('tenants', [CentralTenantDirectoryController::class, 'index'])
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_VIEW)
         ->name('api.central.v1.platform.tenants.index');

@@ -119,6 +119,7 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
                 'ticketing:settings:manage',
+                'automation:manage',
             ],
         ];
     }
@@ -153,6 +154,7 @@ final class TenantRbacModuleRoleTemplates
                 'e_approval:approve',
                 'e_approval:audit:view',
                 'e_approval:settings:manage',
+                'automation:manage',
             ],
         ];
     }

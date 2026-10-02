@@ -11,6 +11,7 @@ use App\Core\Http\Middleware\EnsurePlatformMfaVerified;
 use App\Core\Http\Middleware\EnsurePlatformPermission;
 use App\Core\Http\Middleware\EnsureTenantModule;
 use App\Core\Http\Middleware\EnsureTenantSubscriptionAccess;
+use App\Modules\Platform\Support\TowerOsSchedule;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -18,7 +19,6 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
-use Laravel\Horizon\Horizon;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Symfony\Component\HttpFoundation\Response;
@@ -141,52 +141,5 @@ return Application::configure(basePath: dirname(__DIR__))
             ], $e->getStatusCode());
         });
     })->withSchedule(function (Schedule $schedule): void {
-        if (class_exists(Horizon::class)) {
-            $schedule->command('horizon:snapshot')->everyFiveMinutes();
-        }
-
-        $schedule->command('e-approval:sla-run')
-            ->everyFiveMinutes()
-            ->withoutOverlapping();
-
-        $schedule->command('ticketing:sla-run')
-            ->everyFiveMinutes()
-            ->withoutOverlapping();
-
-        $schedule->command('ticketing:auto-close-resolved')
-            ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('toweros:subscriptions:process')
-            ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('documents:expiry-notify')
-            ->dailyAt('07:00')
-            ->withoutOverlapping();
-
-        $schedule->command('e-approval:reports-run-scheduled')
-            ->hourly()
-            ->withoutOverlapping();
-
-        $schedule->command('e-approval:exports-prune')
-            ->dailyAt('03:15')
-            ->withoutOverlapping();
-
-        $schedule->command('doc-extract:prune')
-            ->dailyAt('03:25')
-            ->withoutOverlapping();
-
-        $schedule->command('workspace:audit-prune')
-            ->dailyAt('03:40')
-            ->withoutOverlapping();
-
-        $backupScheduleTime = (string) config('toweros.tenant_database_backup.schedule_time', '02:30');
-        $schedule->command('tenants:backup-schedule')
-            ->dailyAt($backupScheduleTime !== '' ? $backupScheduleTime : '02:30')
-            ->withoutOverlapping();
-
-        $schedule->command('tenants:backup-prune')
-            ->dailyAt('03:50')
-            ->withoutOverlapping();
+        TowerOsSchedule::register($schedule);
     })->create();

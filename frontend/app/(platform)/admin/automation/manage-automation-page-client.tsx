@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  History,
   Pause,
   Pencil,
   Play,
@@ -18,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -27,21 +29,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { getErrorMessage } from "@/lib/api/error";
+import { getErrorMessage, isApiTimeoutError } from "@/lib/api/error";
 import {
-  createDynScheduledTask,
-  deleteDynScheduledTask,
-  listDynScheduledTasks,
-  runDynScheduledTask,
-  syncDynScheduledTasks,
-  toggleDynScheduledTask,
-  updateDynScheduledTask,
-  type DynScheduledTaskMeta,
-  type DynScheduledTaskRow,
-} from "@/lib/api/modules/dynamic-entities-api";
+  createScheduledTask,
+  deleteScheduledTask,
+  listScheduledTasks,
+  runScheduledTask,
+  syncScheduledTasks,
+  toggleScheduledTask,
+  updateScheduledTask,
+  type ScheduledTaskMeta,
+  type ScheduledTaskRow,
+} from "@/lib/api/modules/automation-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { adminPageShellClass } from "@/lib/ui/page-shell";
-import { cn } from "@/lib/utils";
+import { statusToneClassName, type StatusTone } from "@/lib/ui/status-tone";
 
 type FormState = {
   name: string;
@@ -51,7 +53,7 @@ type FormState = {
   cron_expression: string;
 };
 
-function emptyForm(meta: DynScheduledTaskMeta | null): FormState {
+function emptyForm(meta: ScheduledTaskMeta | null): FormState {
   const first = meta?.commands[0];
   return {
     name: first?.name ?? "",
@@ -60,6 +62,34 @@ function emptyForm(meta: DynScheduledTaskMeta | null): FormState {
     schedule: first?.default_schedule ?? "daily",
     cron_expression: "",
   };
+}
+
+function taskTone(status: ScheduledTaskRow["status"] | undefined): StatusTone {
+  switch (status) {
+    case "failed":
+      return "danger";
+    case "overdue":
+      return "warning";
+    case "paused":
+      return "neutral";
+    default:
+      return "success";
+  }
+}
+
+function taskLabel(row: ScheduledTaskRow): string {
+  switch (row.status) {
+    case "failed":
+      return "Failed";
+    case "overdue":
+      return "Overdue";
+    case "paused":
+      return "Paused";
+    case "active":
+      return "Active";
+    default:
+      return row.is_active ? "Active" : "Paused";
+  }
 }
 
 function formatTs(iso: string | null): string {
@@ -78,8 +108,8 @@ function formatTs(iso: string | null): string {
 }
 
 export function ManageAutomationPageClient() {
-  const [rows, setRows] = useState<DynScheduledTaskRow[]>([]);
-  const [meta, setMeta] = useState<DynScheduledTaskMeta | null>(null);
+  const [rows, setRows] = useState<ScheduledTaskRow[]>([]);
+  const [meta, setMeta] = useState<ScheduledTaskMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,17 +117,22 @@ export function ManageAutomationPageClient() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm(null));
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listDynScheduledTasks();
+      const data = await listScheduledTasks();
       setRows(data.rows);
       setMeta(data.meta);
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(
+        isApiTimeoutError(err)
+          ? "The cron list took too long because the API is busy. Nothing was saved. Retry."
+          : getErrorMessage(err),
+      );
     } finally {
       setLoading(false);
     }
@@ -133,7 +168,7 @@ export function ManageAutomationPageClient() {
     setNotice(null);
   }
 
-  function openEdit(row: DynScheduledTaskRow) {
+  function openEdit(row: ScheduledTaskRow) {
     setEditingId(row.id);
     setForm({
       name: row.name,
@@ -150,7 +185,7 @@ export function ManageAutomationPageClient() {
     setBusy(true);
     setError(null);
     try {
-      const result = await syncDynScheduledTasks();
+      const result = await syncScheduledTasks();
       setNotice(`Cron sync complete — ${result.synced} task(s) updated.`);
       await load();
     } catch (err) {
@@ -160,11 +195,11 @@ export function ManageAutomationPageClient() {
     }
   }
 
-  async function onRun(row: DynScheduledTaskRow) {
+  async function onRun(row: ScheduledTaskRow) {
     setBusy(true);
     setError(null);
     try {
-      await runDynScheduledTask(row.id);
+      await runScheduledTask(row.id);
       setNotice(`Ran “${row.name}”.`);
       await load();
     } catch (err) {
@@ -174,11 +209,11 @@ export function ManageAutomationPageClient() {
     }
   }
 
-  async function onToggle(row: DynScheduledTaskRow) {
+  async function onToggle(row: ScheduledTaskRow) {
     setBusy(true);
     setError(null);
     try {
-      const updated = await toggleDynScheduledTask(row.id);
+      const updated = await toggleScheduledTask(row.id);
       setNotice(updated.is_active ? `Resumed “${row.name}”.` : `Paused “${row.name}”.`);
       await load();
     } catch (err) {
@@ -188,12 +223,12 @@ export function ManageAutomationPageClient() {
     }
   }
 
-  async function onDelete(row: DynScheduledTaskRow) {
+  async function onDelete(row: ScheduledTaskRow) {
     if (!window.confirm(`Delete scheduled task “${row.name}”?`)) return;
     setBusy(true);
     setError(null);
     try {
-      await deleteDynScheduledTask(row.id);
+      await deleteScheduledTask(row.id);
       if (editingId === row.id) {
         setShowForm(false);
         setEditingId(null);
@@ -215,7 +250,7 @@ export function ManageAutomationPageClient() {
     setError(null);
     try {
       if (editingId) {
-        await updateDynScheduledTask(editingId, {
+        await updateScheduledTask(editingId, {
           name: form.name.trim(),
           description: form.description.trim() || null,
           command_key: form.command_key,
@@ -224,7 +259,7 @@ export function ManageAutomationPageClient() {
         });
         setNotice("Task updated.");
       } else {
-        await createDynScheduledTask({
+        await createScheduledTask({
           name: form.name.trim(),
           description: form.description.trim() || null,
           command_key: form.command_key,
@@ -249,9 +284,8 @@ export function ManageAutomationPageClient() {
     <PermissionGate requiredPermissions={[permissions.automationManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
-          title="Automation & Cron Jobs"
-          description="Manage scheduled tasks and automated system processes."
+          title="Cron jobs"
+          description="Jobs for the modules this environment has turned on. Pause and resume apply only in this workspace."
           actions={
             <>
               <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void onSync()}>
@@ -267,28 +301,15 @@ export function ManageAutomationPageClient() {
         />
 
         {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
-            {error}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-card px-4 py-3 text-sm text-destructive">
+            <p>{error}</p>
+            <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => void load()}>
+              Retry
+            </Button>
           </div>
         ) : null}
         {notice ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-            {notice}
-          </div>
-        ) : null}
-
-        {meta?.runner ? (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-100">
-            <p className="font-medium">{meta.runner.title}</p>
-            <p className="mt-1 text-sky-900/80 dark:text-sky-200/90">{meta.runner.hint}</p>
-            <code className="mt-2 block overflow-x-auto rounded-lg bg-sky-950/90 px-3 py-2 font-mono text-[12px] text-sky-50">
-              {meta.runner.local_command || meta.runner.command}
-            </code>
-            <p className="mt-2 text-xs text-sky-800/80 dark:text-sky-300/80">
-              Production typically uses host crontab:{" "}
-              <code className="font-mono text-[11px]">{meta.runner.command}</code>
-            </p>
-          </div>
+          <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground">{notice}</div>
         ) : null}
 
         {showForm ? (
@@ -397,8 +418,12 @@ export function ManageAutomationPageClient() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                    Loading…
+                  <TableCell colSpan={8} className="py-6">
+                    <div className="flex flex-col gap-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-2/3" />
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
@@ -409,7 +434,8 @@ export function ManageAutomationPageClient() {
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <Fragment key={row.id}>
+                  <TableRow>
                     <TableCell>
                       <Checkbox
                         checked={selected.has(row.id)}
@@ -421,8 +447,16 @@ export function ManageAutomationPageClient() {
                     <TableCell className="whitespace-normal">
                       <div className="font-medium text-foreground">{row.name}</div>
                       <div className="text-[12px] text-muted-foreground">{row.description}</div>
+                      {row.last_error ? (
+                        <div className="mt-1 text-[12px] text-destructive">{row.last_error}</div>
+                      ) : null}
                     </TableCell>
-                    <TableCell className="font-mono text-[12px]">{row.schedule_display}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <div className="font-mono text-[12px]">{row.cron_expression || row.schedule_display}</div>
+                      {meta?.timezone ? (
+                        <div className="text-[11px] text-muted-foreground">{meta.timezone}</div>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="whitespace-normal">
                       <div className="font-mono text-[12px] text-foreground">{row.execution_label}</div>
                       <div className="text-[11px] text-muted-foreground">
@@ -432,16 +466,7 @@ export function ManageAutomationPageClient() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{formatTs(row.next_run_at)}</TableCell>
                     <TableCell>
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
-                          row.is_active
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
-                            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-                        )}
-                      >
-                        {row.is_active ? "Active" : "Paused"}
-                      </span>
+                      <span className={statusToneClassName(taskTone(row.status))}>{taskLabel(row)}</span>
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
@@ -450,10 +475,21 @@ export function ManageAutomationPageClient() {
                           size="icon-sm"
                           variant="outline"
                           disabled={busy}
+                          title="Run history"
+                          aria-expanded={historyId === row.id}
+                          onClick={() => setHistoryId((current) => (current === row.id ? null : row.id))}
+                        >
+                          <History className="size-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          disabled={busy}
                           title="Run now"
                           onClick={() => void onRun(row)}
                         >
-                          <Play className="size-3.5 text-amber-600" />
+                          <Play className="size-3.5" />
                         </Button>
                         <Button
                           type="button"
@@ -463,7 +499,7 @@ export function ManageAutomationPageClient() {
                           title="Edit"
                           onClick={() => openEdit(row)}
                         >
-                          <Pencil className="size-3.5 text-sky-600" />
+                          <Pencil className="size-3.5" />
                         </Button>
                         <Button
                           type="button"
@@ -483,11 +519,37 @@ export function ManageAutomationPageClient() {
                           title="Delete"
                           onClick={() => void onDelete(row)}
                         >
-                          <Trash2 className="size-3.5 text-red-600" />
+                          <Trash2 className="size-3.5 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
+                  {historyId === row.id ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="bg-muted/30">
+                        <p className="text-xs font-medium text-foreground">Last 20 runs</p>
+                        {(row.recent_runs ?? []).length === 0 ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            No runs recorded yet. They appear after the scheduler or Run now.
+                          </p>
+                        ) : (
+                          <ul className="mt-2 flex flex-col gap-1">
+                            {(row.recent_runs ?? []).map((run) => (
+                              <li key={run.id} className="text-xs text-muted-foreground">
+                                <span className="tabular-nums text-foreground">{formatTs(run.ran_at)}</span>
+                                {" · "}
+                                <span className={run.status === "failed" ? "text-destructive" : undefined}>
+                                  {run.status}
+                                </span>
+                                {run.error ? <span className="text-destructive"> · {run.error}</span> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                  </Fragment>
                 ))
               )}
             </TableBody>

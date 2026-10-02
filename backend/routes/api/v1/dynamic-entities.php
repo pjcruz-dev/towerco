@@ -64,13 +64,6 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynRelationshipLayoutControl
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderAiBuildController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderPreviewController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynReportBuilderSaveController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskDestroyController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskIndexController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskRunController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskStoreController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskSyncController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskToggleController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\DynScheduledTaskUpdateController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynSearchIndexActionController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynSearchIndexStatusController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowDestroyController;
@@ -148,13 +141,6 @@ Route::middleware('tenant.module:dynamic_entities')->group(function () {
     Route::get('dynamic-entities/email-templates/{template}', DynEmailTemplateShowController::class)->name('api.tenant.v1.dynamic_entities.email_templates.show');
     Route::patch('dynamic-entities/email-templates/{template}', DynEmailTemplateUpdateController::class)->name('api.tenant.v1.dynamic_entities.email_templates.update');
     Route::delete('dynamic-entities/email-templates/{template}', DynEmailTemplateDestroyController::class)->name('api.tenant.v1.dynamic_entities.email_templates.destroy');
-    Route::get('dynamic-entities/scheduled-tasks', DynScheduledTaskIndexController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.index');
-    Route::post('dynamic-entities/scheduled-tasks', DynScheduledTaskStoreController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.store');
-    Route::post('dynamic-entities/scheduled-tasks/sync', DynScheduledTaskSyncController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.sync');
-    Route::patch('dynamic-entities/scheduled-tasks/{task}', DynScheduledTaskUpdateController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.update');
-    Route::delete('dynamic-entities/scheduled-tasks/{task}', DynScheduledTaskDestroyController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.destroy');
-    Route::post('dynamic-entities/scheduled-tasks/{task}/run', DynScheduledTaskRunController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.run');
-    Route::post('dynamic-entities/scheduled-tasks/{task}/toggle', DynScheduledTaskToggleController::class)->name('api.tenant.v1.dynamic_entities.scheduled_tasks.toggle');
     Route::get('dynamic-entities/workflows', DynWorkflowIndexController::class)->name('api.tenant.v1.dynamic_entities.workflows.index');
     Route::post('dynamic-entities/workflows', DynWorkflowStoreController::class)->name('api.tenant.v1.dynamic_entities.workflows.store');
     Route::get('dynamic-entities/workflows/{workflow}', DynWorkflowShowController::class)->name('api.tenant.v1.dynamic_entities.workflows.show');

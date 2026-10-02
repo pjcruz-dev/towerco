@@ -56,6 +56,7 @@ final class SidebarNavService
     {
         if (! $force && SidebarNavItem::query()->exists()) {
             $this->syncMissingSeedNodes(SidebarNavSeedCatalog::tree(), null);
+            $this->relocateManageCronJobs();
 
             return;
         }
@@ -80,6 +81,40 @@ final class SidebarNavService
         foreach (SidebarNavSeedCatalog::tree() as $node) {
             $this->insertSeedNode($node, null);
         }
+    }
+
+    /**
+     * Move the system cron link out of System Core so search still finds it when Dynamic Entities is off.
+     * A custom (non-system) item with the same key is left where an admin put it.
+     */
+    private function relocateManageCronJobs(): void
+    {
+        $settings = SidebarNavItem::query()->where('key', 'group.administration.settings')->first();
+        $current = SidebarNavItem::query()->where('key', 'group.administration.settings.manage-cron-jobs')->first();
+        $legacy = SidebarNavItem::query()->where('key', 'group.operations.system-core.manage-cron-jobs')->first();
+
+        if ($legacy !== null && $legacy->is_system) {
+            if ($current !== null && (string) $current->id !== (string) $legacy->id) {
+                $legacy->delete();
+            } else {
+                $legacy->key = 'group.administration.settings.manage-cron-jobs';
+                $current = $legacy;
+            }
+        }
+
+        if ($current === null || ! $current->is_system || $settings === null) {
+            return;
+        }
+
+        $current->parent_id = $settings->id;
+        $current->title = 'Manage Cron Jobs';
+        $current->href = '/admin/automation';
+        $current->module = null;
+        $current->required_permissions = ['automation:manage'];
+        $current->permissions_match = 'all';
+        $current->permission_key = 'automation:manage';
+        $current->sort_order = 3;
+        $current->save();
     }
 
     /**

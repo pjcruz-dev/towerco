@@ -15,7 +15,8 @@ namespace App\Modules\DynamicEntities\Support;
  *   cron_expression: string,
  *   artisan: string,
  *   execution_label: string,
- *   tenant_scoped: bool
+ *   tenant_scoped: bool,
+ *   module: string|null
  * }
  */
 final class DynScheduledTaskCatalog
@@ -35,6 +36,7 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'e-approval:sla-run',
                 'execution_label' => 'e-approval:sla-run',
                 'tenant_scoped' => true,
+                'module' => 'e_approval',
             ],
             [
                 'key' => 'ticketing_sla',
@@ -45,6 +47,18 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'ticketing:sla-run',
                 'execution_label' => 'ticketing:sla-run',
                 'tenant_scoped' => true,
+                'module' => 'ticketing',
+            ],
+            [
+                'key' => 'ticketing_auto_close',
+                'name' => 'Ticketing auto-close',
+                'description' => 'Close resolved tickets after the waiting period.',
+                'schedule' => 'hourly',
+                'cron_expression' => '0 * * * *',
+                'artisan' => 'ticketing:auto-close-resolved',
+                'execution_label' => 'ticketing:auto-close-resolved',
+                'tenant_scoped' => true,
+                'module' => 'ticketing',
             ],
             [
                 'key' => 'e_approval_reports',
@@ -55,6 +69,7 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'e-approval:reports-run-scheduled',
                 'execution_label' => 'e-approval:reports-run-scheduled',
                 'tenant_scoped' => true,
+                'module' => 'e_approval',
             ],
             [
                 'key' => 'audit_prune',
@@ -65,6 +80,7 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'workspace:audit-prune',
                 'execution_label' => 'workspace:audit-prune',
                 'tenant_scoped' => true,
+                'module' => null,
             ],
             [
                 'key' => 'exports_prune',
@@ -75,6 +91,29 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'e-approval:exports-prune',
                 'execution_label' => 'e-approval:exports-prune',
                 'tenant_scoped' => true,
+                'module' => 'e_approval',
+            ],
+            [
+                'key' => 'documents_expiry',
+                'name' => 'Document expiry',
+                'description' => 'Notify document controllers when a published controlled document is due for review in 90, 60, or 30 days.',
+                'schedule' => 'daily',
+                'cron_expression' => '0 7 * * *',
+                'artisan' => 'documents:expiry-notify',
+                'execution_label' => 'documents:expiry-notify',
+                'tenant_scoped' => true,
+                'module' => 'document_register',
+            ],
+            [
+                'key' => 'doc_extract_prune',
+                'name' => 'DocExtract cleanup',
+                'description' => 'Remove expired DocExtract working files.',
+                'schedule' => 'daily',
+                'cron_expression' => '25 3 * * *',
+                'artisan' => 'doc-extract:prune',
+                'execution_label' => 'doc-extract:prune',
+                'tenant_scoped' => true,
+                'module' => 'doc_extract',
             ],
             [
                 'key' => 'search_index_repair',
@@ -85,6 +124,7 @@ final class DynScheduledTaskCatalog
                 'artisan' => 'dyn:search-index-repair',
                 'execution_label' => 'dyn:search-index-repair',
                 'tenant_scoped' => true,
+                'module' => 'dynamic_entities',
             ],
         ];
     }
@@ -102,6 +142,26 @@ final class DynScheduledTaskCatalog
             ['value' => 'daily', 'label' => 'Daily', 'cron_expression' => '0 0 * * *'],
             ['value' => 'custom', 'label' => 'Custom cron', 'cron_expression' => ''],
         ];
+    }
+
+    /**
+     * A blank module runs in every environment. A named module runs only when that environment has it on.
+     *
+     * @param  list<string>  $enabledModules
+     */
+    public static function isRunnable(string $key, array $enabledModules): bool
+    {
+        $def = self::find($key);
+        if ($def === null) {
+            return true;
+        }
+
+        $module = $def['module'] ?? null;
+        if (! is_string($module) || $module === '') {
+            return true;
+        }
+
+        return in_array($module, $enabledModules, true);
     }
 
     /**

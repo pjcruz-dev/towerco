@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
-import { CircleHelp, CreditCard, LayoutGrid, Layers, LogIn, PlusCircle, Users } from "lucide-react";
+import { CalendarClock, CircleHelp, CreditCard, LayoutGrid, Layers, LogIn, PlusCircle, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
@@ -49,6 +49,12 @@ const navItems: NavItem[] = [
     href: "/platform/operators",
     icon: Users,
     permission: PLATFORM_PERMS.operatorsView,
+  },
+  {
+    title: "Schedules",
+    href: "/platform/scheduled-tasks",
+    icon: CalendarClock,
+    permission: PLATFORM_PERMS.tenantsView,
   },
   {
     title: "App Menu",

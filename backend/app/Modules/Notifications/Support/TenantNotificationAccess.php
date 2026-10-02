@@ -32,7 +32,10 @@ final class TenantNotificationAccess
             $modules[] = TenantNotificationModule::TICKETING;
         }
 
-        if (in_array('documents', $enabled, true) && $user->can('documents:view')) {
+        if (
+            (in_array('documents', $enabled, true) && $user->can('documents:view'))
+            || (in_array('document_register', $enabled, true) && $user->can('documents:controlled:view'))
+        ) {
             $modules[] = TenantNotificationModule::DOCUMENTS;
         }
 

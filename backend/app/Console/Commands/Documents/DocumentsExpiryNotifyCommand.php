@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands\Documents;
 
 use App\Models\Tenant;
+use App\Modules\Documents\Services\ControlledDocumentReviewNotificationService;
 use App\Modules\Documents\Services\DocumentExpiryNotificationService;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Console\Command;
@@ -16,10 +17,11 @@ class DocumentsExpiryNotifyCommand extends Command
         {--tenants=* : Tenant UUID(s)}
     ';
 
-    protected $description = 'Send in-app alerts for documents expiring in 90, 60, or 30 days.';
+    protected $description = 'Send in-app alerts when a published controlled document is due for review in 90, 60, or 30 days.';
 
     public function handle(
-        DocumentExpiryNotificationService $service,
+        ControlledDocumentReviewNotificationService $reviews,
+        DocumentExpiryNotificationService $leaseDocuments,
         TenantEnabledModulesResolver $modules,
     ): int {
         $tenantIds = $this->resolveTenantIds();
@@ -39,21 +41,32 @@ class DocumentsExpiryNotifyCommand extends Command
                 continue;
             }
 
-            $tenant->run(function () use ($service, $modules, $tenant, &$totalAlerts, &$totalDocuments): void {
-                if (! in_array('documents', $modules->resolveForCurrentTenant(), true)) {
-                    return;
+            $tenant->run(function () use ($reviews, $leaseDocuments, $modules, $tenant, &$totalAlerts, &$totalDocuments): void {
+                $enabled = $modules->resolveForCurrentTenant();
+                $alerts = 0;
+                $scanned = 0;
+
+                if (in_array('document_register', $enabled, true)) {
+                    $review = $reviews->run();
+                    $alerts += $review['alerts_sent'];
+                    $scanned += $review['documents_scanned'];
                 }
 
-                $result = $service->run();
-                $totalAlerts += $result['alerts_sent'];
-                $totalDocuments += $result['documents_scanned'];
+                if (in_array('documents', $enabled, true)) {
+                    $lease = $leaseDocuments->run();
+                    $alerts += $lease['alerts_sent'];
+                    $scanned += $lease['documents_scanned'];
+                }
 
-                if ($result['alerts_sent'] > 0) {
+                $totalAlerts += $alerts;
+                $totalDocuments += $scanned;
+
+                if ($alerts > 0) {
                     $this->line(sprintf(
                         'Tenant %s: %d alert(s) for %d document(s) scanned.',
                         $tenant->id,
-                        $result['alerts_sent'],
-                        $result['documents_scanned'],
+                        $alerts,
+                        $scanned,
                     ));
                 }
             });
