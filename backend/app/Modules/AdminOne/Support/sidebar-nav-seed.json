@@ -1431,7 +1431,7 @@
             "title": "Fields",
             "icon": null,
             "href": "/ticketing/fields",
-            "entity_slug": "helpdesk_ticket",
+            "entity_slug": null,
             "required_permissions": [
               "ticketing:fields:manage"
             ],

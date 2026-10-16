@@ -1,8 +1,6 @@
 import { Suspense } from "react";
 
-import { DynamicRecordDetailPageClient } from "@/app/(platform)/dynamic-entities/records/[id]/dynamic-record-detail-page-client";
-
-import { TicketingDynGate } from "../ticketing-dyn-gate";
+import { TicketingTicketDetailPageClient } from "./ticketing-ticket-detail-page-client";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -13,9 +11,7 @@ export default async function TicketingTicketDetailPage({ params }: PageProps) {
 
   return (
     <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading ticket…</p>}>
-      <TicketingDynGate>
-        <DynamicRecordDetailPageClient recordId={id} accessSlug="helpdesk_ticket" />
-      </TicketingDynGate>
+      <TicketingTicketDetailPageClient ticketId={id} />
     </Suspense>
   );
 }
