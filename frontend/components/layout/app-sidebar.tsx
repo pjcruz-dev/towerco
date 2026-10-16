@@ -256,12 +256,7 @@ export function AppSidebar() {
                                   dataHelp: "tk-nav-ticketing-new",
                                   tourNav: "/ticketing/tickets/new",
                                 }
-                              : pathOnly === "/ticketing/settings"
-                                ? {
-                                    dataHelp: "tk-nav-ticketing-settings",
-                                    tourNav: "/ticketing/settings",
-                                  }
-                                : null;
+                              : null;
                       const docExtractNav =
                         pathOnly === "/doc-extract"
                           ? { dataHelp: "dx-nav-doc-extract-batches", tourNav: "/doc-extract" }

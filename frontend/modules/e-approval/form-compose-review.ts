@@ -2,17 +2,68 @@ import {
   parseChecklistMatrixFieldOptions,
   parseChecklistMatrixState,
 } from "@/modules/e-approval/field-checklist-matrix";
-import { parseGridColumnDefs, parseGridValue } from "@/modules/e-approval/field-options";
+import { parseGridColumnDefs, parseGridValue, type GridColumnDef } from "@/modules/e-approval/field-options";
 import type { FormComposeStep } from "@/modules/e-approval/form-compose-steps";
 import { formatCurrencyGrouping } from "@/lib/format-currency-input";
+import { formatDisplayDate } from "@/lib/format-display-date";
 import { formatDateRangeDisplay } from "@/modules/e-approval/field-type-options";
 import { isComposeFillableFieldType } from "@/modules/e-approval/form-compose-structural";
+import { expenseColumnVisible, expenseLineVatParts } from "@/modules/e-approval/grid-row-formulas";
+import { parseSubmissionAmount } from "@/modules/e-approval/parent-submission-link";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
 export type ComposeReviewTable = {
   headers: string[];
   rows: string[][];
 };
+
+export type ComposeReviewTotal = {
+  label: string;
+  value: string;
+};
+
+/** Place money totals under the matching table columns. Leftovers sit on a following row, right-aligned. */
+export function placeReviewTotals(
+  headers: string[],
+  totals: ComposeReviewTotal[],
+): Array<Array<ComposeReviewTotal | null>> {
+  if (headers.length === 0 || totals.length === 0) {
+    return [];
+  }
+
+  const row: Array<ComposeReviewTotal | null> = headers.map(() => null);
+  const used = new Set<number>();
+
+  const take = (headerPattern: RegExp, labelPattern: RegExp) => {
+    const column = headers.findIndex((header) => headerPattern.test(header.trim()));
+    const index = totals.findIndex(
+      (total, totalIndex) => !used.has(totalIndex) && labelPattern.test(total.label.trim()),
+    );
+    if (column < 0 || index < 0 || row[column]) {
+      return;
+    }
+    row[column] = totals[index] ?? null;
+    used.add(index);
+  };
+
+  take(/^amount$/i, /requested amount|total expenses|total reimbursement|liquidation amount|^amount$/i);
+  take(/^vat$/i, /^vat$/i);
+  take(/^non-?vatable$/i, /^non-?vatable$/i);
+  take(/net of vat/i, /net of vat/i);
+
+  const rest = totals.filter((_, index) => !used.has(index));
+  if (rest.length === 0) {
+    return [row];
+  }
+
+  const extra: Array<ComposeReviewTotal | null> = headers.map(() => null);
+  const start = Math.max(headers.length - rest.length, 0);
+  rest.forEach((total, offset) => {
+    extra[start + offset] = total;
+  });
+
+  return [row, extra];
+}
 
 export type ComposeReviewSummaryRow = {
   fieldName: string;
@@ -22,7 +73,64 @@ export type ComposeReviewSummaryRow = {
   fieldType: string;
   /** When set, render as a table instead of a single-line value. */
   table?: ComposeReviewTable | null;
+  /** Money totals that belong under the grid, not in the answer list. */
+  totals?: ComposeReviewTotal[];
 };
+
+const GRID_MONEY_TOTAL_NAMES = new Set([
+  "requested_amount",
+  "total_reimbursement",
+  "vat_total",
+  "non_vatable_total",
+  "vatable_net",
+]);
+
+function fieldOptionsRecord(field: EApprovalFormFieldInput): Record<string, unknown> {
+  if (!field.options || typeof field.options !== "object" || Array.isArray(field.options)) {
+    return {};
+  }
+
+  return field.options;
+}
+
+/** Currency figures summed from a line grid (requested amount, VAT, and the VAT split). */
+export function isGridMoneyTotalField(field: EApprovalFormFieldInput): boolean {
+  if (field.type === "grid") {
+    return false;
+  }
+
+  const key = field.name.trim().toLowerCase();
+  if (GRID_MONEY_TOTAL_NAMES.has(key)) {
+    return true;
+  }
+
+  const options = fieldOptionsRecord(field);
+  const layout = options.layout;
+  if (layout && typeof layout === "object" && !Array.isArray(layout)) {
+    if (String((layout as { row_id?: unknown }).row_id ?? "") === "money_footer") {
+      return true;
+    }
+  }
+
+  const computed = options.computed_from;
+  if (computed && typeof computed === "object" && !Array.isArray(computed)) {
+    if (String((computed as { operation?: unknown }).operation ?? "") === "sum_grid_column") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function moneyTotalSourceField(field: EApprovalFormFieldInput): string | null {
+  const computed = fieldOptionsRecord(field).computed_from;
+  if (!computed || typeof computed !== "object" || Array.isArray(computed)) {
+    return null;
+  }
+
+  const source = String((computed as { source_field?: unknown }).source_field ?? "").trim();
+  return source !== "" ? source : null;
+}
 
 /** Prefer these fields at the top of the review summary when present. */
 const HIGHLIGHT_FIELD_NAMES = [
@@ -47,9 +155,92 @@ function tryParseJson(raw: string): unknown {
   }
 }
 
-function cellDisplay(value: string | undefined): string {
+function formatSiteStopDisplay(raw: string): string | null {
+  if (!raw.startsWith("{")) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const record = parsed as { site?: unknown; location?: unknown; fields?: unknown };
+  if (!("site" in record) && !("location" in record)) {
+    return null;
+  }
+
+  const site = String(record.site ?? "").trim();
+  const location = String(record.location ?? "").trim();
+  const extras: string[] = [];
+  if (record.fields && typeof record.fields === "object" && !Array.isArray(record.fields)) {
+    for (const value of Object.values(record.fields as Record<string, unknown>)) {
+      const text = String(value ?? "").trim();
+      if (text !== "" && text !== location && text !== site) {
+        extras.push(text);
+      }
+    }
+  }
+  if (site === "" && location === "" && extras.length === 0) {
+    return "—";
+  }
+  if (extras.length === 0) {
+    if (location === "") {
+      return site;
+    }
+    if (site === "") {
+      return location;
+    }
+    return `${site} — ${location}`;
+  }
+
+  const lines = [site, location, ...extras].filter((line) => line !== "");
+  return lines.join("\n");
+}
+
+function selectChoiceLabel(column: GridColumnDef, value: string): string | null {
+  const match = (column.choices ?? []).find((choice) => choice.value === value);
+  const label = match?.label?.trim() ?? "";
+  return label !== "" ? label : null;
+}
+
+function cellDisplay(value: string | undefined, column?: GridColumnDef): string {
   const trimmed = (value ?? "").trim();
-  return trimmed !== "" ? trimmed : "—";
+  if (trimmed === "") {
+    return "—";
+  }
+
+  if (trimmed.startsWith("{") && trimmed.includes('"from"')) {
+    const withTime = column?.type === "date_range" ? column.include_time !== false : true;
+    const formatted = formatDateRangeDisplay(trimmed, "", withTime);
+    if (formatted && !formatted.startsWith("{")) {
+      return formatted;
+    }
+  }
+
+  const siteStop = formatSiteStopDisplay(trimmed);
+  if (siteStop) {
+    return siteStop;
+  }
+
+  if (column?.type === "select") {
+    const label = selectChoiceLabel(column, trimmed);
+    if (label) {
+      return label;
+    }
+  }
+
+  if (column?.type === "currency") {
+    return formatCurrencyGrouping(trimmed) || trimmed;
+  }
+
+  return trimmed;
 }
 
 export function buildChecklistMatrixReviewTable(
@@ -102,11 +293,44 @@ export function buildGridReviewTable(
     return null;
   }
 
+  const visible = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column }) => expenseColumnVisible(columns, dataRows, column));
+  const headers = visible.map(({ column }) => column.label);
+  const rows = dataRows.map((row) =>
+    visible.map(({ column, index }) => cellDisplay(row[String(index)] ?? row[column.label], column)),
+  );
+  const withSplit = appendVatSplitReviewColumns(columns, dataRows, headers, rows);
+
+  return withSplit;
+}
+
+function moneyReviewCell(value: number): string {
+  return formatCurrencyGrouping(value.toFixed(2)) || value.toFixed(2);
+}
+
+/** Line columns for the two VAT totals, so each total sits under its own figures. */
+function appendVatSplitReviewColumns(
+  columns: GridColumnDef[],
+  dataRows: Array<Record<string, string>>,
+  headers: string[],
+  rows: string[][],
+): ComposeReviewTable {
+  const parts = dataRows.map((row) => expenseLineVatParts(columns, row));
+  if (parts.every((part) => part === null)) {
+    return { headers, rows };
+  }
+
   return {
-    headers: columns.map((column) => column.label),
-    rows: dataRows.map((row) =>
-      columns.map((_, index) => cellDisplay(row[String(index)] ?? row[columns[index]!.label])),
-    ),
+    headers: [...headers, "Non-VATable", "VATable, net of VAT"],
+    rows: rows.map((row, index) => {
+      const part = parts[index];
+      return [
+        ...row,
+        moneyReviewCell(part?.nonVatable ?? 0),
+        moneyReviewCell(part?.vatableNet ?? 0),
+      ];
+    }),
   };
 }
 
@@ -190,6 +414,10 @@ export function buildComposeReviewSummaryRow(
     return { ...base, value: formatDateRangeDisplay(value), table: null };
   }
 
+  if (field.type === "date" || field.type === "datetime") {
+    return { ...base, value: formatDisplayDate(value, field.type) ?? value, table: null };
+  }
+
   if (field.type === "checklist_matrix") {
     const summary = formatChecklistMatrixSummary(field, value);
     return { ...base, value: summary.text, table: summary.table };
@@ -253,9 +481,15 @@ export function buildComposeReviewSummaryRows(
 
   const highlighted: ComposeReviewSummaryRow[] = [];
   const rest: ComposeReviewSummaryRow[] = [];
+  const moneyTotals: Array<{ source: string | null; row: ComposeReviewSummaryRow }> = [];
 
   for (const field of fillable) {
     const row = buildComposeReviewSummaryRow(field, values[field.name], fileSelections);
+
+    if (isGridMoneyTotalField(field)) {
+      moneyTotals.push({ source: moneyTotalSourceField(field), row });
+      continue;
+    }
 
     if (row.highlight) {
       highlighted.push(row);
@@ -268,7 +502,94 @@ export function buildComposeReviewSummaryRows(
     (a, b) => (highlightRank.get(a.fieldName) ?? 0) - (highlightRank.get(b.fieldName) ?? 0),
   );
 
-  return [...highlighted, ...rest];
+  const rows = [...highlighted, ...rest];
+  const unmatchedNames = new Set(
+    bindMoneyTotalsToGrids(
+      rows,
+      moneyTotals.map((total) => ({
+        fieldName: total.row.fieldName,
+        source: total.source,
+        label: total.row.label,
+        value: total.row.value,
+      })),
+    ),
+  );
+  const unmatched = moneyTotals
+    .map((total) => total.row)
+    .filter((row) => unmatchedNames.has(row.fieldName));
+
+  return unmatched.length > 0 ? [...rows, ...unmatched] : rows;
+}
+
+/** Put money totals on the grid they were summed from. Returns field names that had no grid. */
+export function bindMoneyTotalsToGrids<
+  T extends { fieldName: string; table?: ComposeReviewTable | null; totals?: ComposeReviewTotal[] },
+>(
+  rows: T[],
+  moneyTotals: Array<{ fieldName: string; source: string | null; label: string; value: string }>,
+): string[] {
+  const gridRows = rows.filter((row) => row.table);
+  const unmatched: string[] = [];
+
+  for (const total of moneyTotals) {
+    const target =
+      (total.source ? gridRows.find((row) => row.fieldName === total.source) : undefined) ??
+      gridRows[gridRows.length - 1];
+    if (!target?.table) {
+      unmatched.push(total.fieldName);
+      continue;
+    }
+    target.totals = [...(target.totals ?? []), { label: total.label, value: total.value }];
+  }
+
+  for (const row of gridRows) {
+    appendMissingSplitTotals(row);
+  }
+
+  return unmatched;
+}
+
+const SPLIT_REVIEW_TOTALS: Array<{ header: RegExp; label: string }> = [
+  { header: /^vat$/i, label: "VAT" },
+  { header: /^non-?vatable$/i, label: "Non-VATable" },
+  { header: /net of vat/i, label: "VATable, net of VAT" },
+];
+
+function columnMoneySum(table: ComposeReviewTable, index: number): string {
+  let sum = 0;
+  for (const row of table.rows) {
+    sum += parseSubmissionAmount(row[index]) ?? 0;
+  }
+  const canonical = (Math.round(sum * 100) / 100).toFixed(2);
+  return formatCurrencyGrouping(canonical) || canonical;
+}
+
+/** Liquidation stores one amount total. VAT, Non-VATable, and net still come from the lines. */
+function appendMissingSplitTotals(row: {
+  table?: ComposeReviewTable | null;
+  totals?: ComposeReviewTotal[];
+}): void {
+  if (!row.table) {
+    return;
+  }
+
+  const totals = row.totals ?? [];
+  const extras: ComposeReviewTotal[] = [];
+  for (const spec of SPLIT_REVIEW_TOTALS) {
+    const already = totals.some((total) => spec.header.test(total.label.trim()));
+    if (already) {
+      continue;
+    }
+    const index = row.table.headers.findIndex((header) => spec.header.test(header.trim()));
+    if (index < 0) {
+      continue;
+    }
+    extras.push({ label: spec.label, value: columnMoneySum(row.table, index) });
+  }
+
+  if (extras.length > 0) {
+    row.totals = [...totals, ...extras];
+  }
 }
 
 export function isComposeReviewStepId(stepId: string): boolean {

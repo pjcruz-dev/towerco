@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Modules\DynamicEntities\Services\ManagedSeriesService;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -51,6 +52,7 @@ class TicketingTicket extends Model
         'sla_reminder_sent_at',
         'sla_escalated_at',
         'sla_status',
+        'custom_values_json',
     ];
 
     protected function casts(): array
@@ -62,6 +64,7 @@ class TicketingTicket extends Model
             'sla_due_at' => 'datetime',
             'sla_reminder_sent_at' => 'datetime',
             'sla_escalated_at' => 'datetime',
+            'custom_values_json' => 'array',
         ];
     }
 
@@ -92,6 +95,7 @@ class TicketingTicket extends Model
 
     public function displayNumber(): string
     {
-        return 'TKT-'.str_pad((string) $this->ticket_number, 5, '0', STR_PAD_LEFT);
+        return app(ManagedSeriesService::class)
+            ->formatTicket((int) $this->ticket_number);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Core\Support\AllowlistedSort;
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
 use App\Modules\EApproval\Models\EApprovalAuditLog;
 use App\Modules\EApproval\Models\EApprovalForm;
@@ -51,6 +52,8 @@ final class EApprovalSubmissionService
         private readonly EApprovalFieldComputedService $computedFields,
         private readonly EApprovalSubmissionWorkflowPreparer $workflowPreparer,
         private readonly ControlledDocumentEApprovalValuesService $controlledDocumentValues,
+        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
+        private readonly EApprovalFinanceStageService $financeStage,
     ) {}
 
     public function paginate(
@@ -172,8 +175,14 @@ final class EApprovalSubmissionService
     /**
      * @param  array<string, mixed>  $values
      */
-    public function create(string $formId, array $values, TenantUser $requestor, ?string $parentSubmissionId = null): EApprovalSubmission
-    {
+    public function create(
+        string $formId,
+        array $values,
+        TenantUser $requestor,
+        ?string $parentSubmissionId = null,
+        ?string $forceCurrentApproverId = null,
+        array $attachmentCountsByFieldName = [],
+    ): EApprovalSubmission {
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->find($formId);
         if ($form === null) {
             throw ValidationException::withMessages(['form_id' => [__('Form not found.')]]);
@@ -188,6 +197,7 @@ final class EApprovalSubmissionService
         }
 
         $this->assertViewerCanStartForm($form, $requestor);
+        $this->financeStage->assertCanSubmitCashAdvance($form, $requestor);
 
         $parentId = $this->resolveParentSubmissionId($parentSubmissionId, $requestor, $form, true);
         $values = $this->enrichValuesForParent($parentId, $form, $values);
@@ -200,9 +210,9 @@ final class EApprovalSubmissionService
         );
         $values = $controlled['values'];
 
-        $this->valuesValidator->validate($form, $values);
+        $this->valuesValidator->validate($form, $values, true, $attachmentCountsByFieldName);
 
-        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled) {
+        return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled, $forceCurrentApproverId) {
             $submissionId = (string) Str::uuid();
             $prepared = $this->workflowPreparer->prepare($form, $values, $submissionId);
             $documentNo = $controlled['document_no'];
@@ -223,7 +233,15 @@ final class EApprovalSubmissionService
             ]);
 
             $this->persistValues($submission, $form, $values);
-            $this->workflow->initiateWorkflow($submission, $form, $values, $prepared['steps']);
+            $this->workflow->initiateWorkflow(
+                $submission,
+                $form,
+                $values,
+                $prepared['steps'],
+                false,
+                'initial',
+                $forceCurrentApproverId,
+            );
             $this->workflow->notifyCompiledExclusiveSkips($submission, $prepared['skipped_steps']);
             $this->audit->log('submission_created', $submission->id, $documentNo, $requestor);
             if ($prepared['approval_policy_label'] !== null) {
@@ -238,6 +256,7 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $this->controlledDocumentHook->afterSubmissionOpened($fresh, $requestor);
 
             return $fresh;
         });
@@ -381,6 +400,11 @@ final class EApprovalSubmissionService
     ): EApprovalSubmission {
         $this->assertDraftOwner($submission, $requestor);
 
+        $formForGuard = EApprovalForm::query()->find($submission->form_id);
+        if ($formForGuard instanceof EApprovalForm) {
+            $this->financeStage->assertCanSubmitCashAdvance($formForGuard, $requestor);
+        }
+
         $previousParentId = $submission->parent_submission_id;
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->findOrFail($submission->form_id);
         $parentId = $this->resolveParentSubmissionId(
@@ -450,6 +474,7 @@ final class EApprovalSubmissionService
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $requestor);
 
             $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $this->controlledDocumentHook->afterSubmissionOpened($fresh, $requestor);
 
             return $fresh;
         });
@@ -521,6 +546,7 @@ final class EApprovalSubmissionService
         );
 
         $fresh = $submission->fresh(['form', 'requestor', 'values.field']);
+        $this->controlledDocumentHook->afterSubmissionClosed($fresh);
         $this->notifySubmissionCancelled($fresh, $actor, $pendingApproverIds);
 
         return $fresh;
@@ -694,7 +720,10 @@ final class EApprovalSubmissionService
             }
             $this->logOverspendPolicyAllowedIfNeeded($overspendWarning, (string) $submission->id, $actor);
 
-            return $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $fresh = $submission->fresh(['form', 'requestor', 'values.field', 'approvals.step', 'approvals.approver']);
+            $this->controlledDocumentHook->afterSubmissionOpened($fresh, $actor);
+
+            return $fresh;
         });
     }
 

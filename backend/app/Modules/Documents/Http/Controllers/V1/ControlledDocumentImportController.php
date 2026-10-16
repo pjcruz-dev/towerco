@@ -16,7 +16,7 @@ class ControlledDocumentImportController extends AbstractApiController
         abort_unless($request->user()?->can('documents:controlled:import'), 403);
 
         $data = $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:2048'],
+            'file' => ['required', 'file', 'extensions:csv,txt,xlsx', 'max:10240'],
         ]);
 
         return $this->ok($import->importCsv($data['file'], $request->user()));

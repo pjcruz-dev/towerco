@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/client";
+import type { RoleAiAccess } from "@/lib/rbac/role-ai-access";
 
 export type AdminRoleAssignedUser = {
   id: string;
@@ -38,21 +39,29 @@ export type FieldAccessLevel =
   | "form"
   | "hide";
 
+export type EntityAccessFlags = {
+  view?: boolean;
+  view_own?: boolean;
+  create?: boolean;
+  edit?: boolean;
+  delete?: boolean;
+  export?: boolean;
+  import?: boolean;
+  smart_scan?: boolean;
+  undo?: boolean;
+  truncate?: boolean;
+  duplicate?: boolean;
+  columns?: boolean;
+};
+
 export type RoleAccessMatrix = {
-  entities?: Record<
-    string,
-    {
-      view?: boolean;
-      view_own?: boolean;
-      create?: boolean;
-      edit?: boolean;
-      delete?: boolean;
-      export?: boolean;
-    }
-  >;
+  entities?: Record<string, EntityAccessFlags>;
   fields?: Record<string, Record<string, FieldAccessLevel>>;
   workflows?: Record<string, Record<string, boolean>>;
   filters?: Record<string, RoleDataFilterGroup>;
+  /** Allowed status values per entity slug. Missing slug means every status. */
+  statuses?: Record<string, string[]>;
+  ai?: RoleAiAccess;
 };
 
 export type AdminRoleRow = {

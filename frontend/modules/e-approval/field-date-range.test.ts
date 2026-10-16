@@ -34,6 +34,12 @@ describe("date range field helpers", () => {
     );
     expect(formatDateRangeDisplay("")).toBe("—");
     expect(formatDateRangeDisplay('{"from":"2026-09-22","to":""}')).toBe("2026-09-22 – —");
+    expect(
+      formatDateRangeDisplay('{"from":"2026-10-14T08:30","to":"2026-10-16T17:00"}'),
+    ).toBe("2026-10-14 08:30 – 2026-10-16 17:00");
+    expect(
+      formatDateRangeDisplay('{"from":"2026-10-14T08:30","to":"2026-10-16T17:00"}', "—", false),
+    ).toBe("2026-10-14 – 2026-10-16");
   });
 
   it("validates completeness and order", () => {
@@ -44,5 +50,14 @@ describe("date range field helpers", () => {
       /on or after/i,
     );
     expect(validateDateRangeValue('{"from":"2026-01-01","to":"2026-01-05"}', true, "Travel")).toBeNull();
+    expect(
+      validateDateRangeValue('{"from":"2026-10-14T08:30","to":"2026-10-16T17:00"}', true, "Travel"),
+    ).toBeNull();
+    expect(
+      validateDateRangeValue('{"from":"2026-10-14T18:00","to":"2026-10-14T08:00"}', false, "Travel"),
+    ).toMatch(/on or after/i);
+    expect(
+      validateDateRangeValue('{"from":"2026-10-14T08:00","to":"2026-10-14T18:00"}', true, "Travel"),
+    ).toBeNull();
   });
 });

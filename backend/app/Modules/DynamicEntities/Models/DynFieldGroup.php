@@ -24,6 +24,7 @@ class DynFieldGroup extends Model
         'applies_to_view',
         'start_collapsed',
         'sort_order',
+        'column_span',
     ];
 
     protected function casts(): array
@@ -33,6 +34,7 @@ class DynFieldGroup extends Model
             'applies_to_view' => 'boolean',
             'start_collapsed' => 'boolean',
             'sort_order' => 'integer',
+            'column_span' => 'integer',
         ];
     }
 

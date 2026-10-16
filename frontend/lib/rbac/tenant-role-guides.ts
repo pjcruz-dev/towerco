@@ -103,8 +103,8 @@ export const TENANT_ROLE_GUIDES: Record<string, TenantRoleGuide> = {
     assignWhen: "Operational users who need in-app help.",
   },
   ai_assistant_admin: {
-    summary: "Manage assistant knowledge sources and audit conversations.",
-    assignWhen: "Tenant process owners and knowledge admins.",
+    summary: "Audit assistant conversations.",
+    assignWhen: "Tenant process owners who review assistant activity.",
   },
   e_approval_viewer: {
     summary: "View submissions and status — no create or approve.",

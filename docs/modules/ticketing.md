@@ -97,6 +97,19 @@ After tenant deploy, run `php artisan tenants:migrate` for SLA columns (`sla_due
 | Category list filter | `GET /ticketing/tickets?category=` |
 | Manage triage | Ticket detail Manage panel edits priority + category (resyncs SLA) |
 
+## Custom fields
+
+Tickets are dynamic records on `helpdesk_ticket`, the same record list as site tickets, at `/ticketing/tickets`. Each record keeps a `ticketing_tickets` row so the SLA clock, resolve comment, reopen, and IT mailbox keep running. Existing tickets are copied the first time the schema loads.
+
+| Piece | Behavior |
+|-------|----------|
+| System fields | Ticket number, title, description, status, priority, category, requester, assignee, SLA, resolution notes, attachments. Rename, reorder, and show or hide in the table. They cannot be deleted. |
+| Extra fields | Added from **Ticketing → Fields** (`/ticketing/fields`, `ticketing:fields:manage`). Stored on the record. Shown on the ticket list when **In table** is on. |
+| Activity | Comments and internal notes are activity records on the ticket. |
+| Schema API | `GET /api/v1/ticketing/schema`. Field create, update, and delete under `/api/v1/ticketing/schema/fields`. |
+
+After deploy, run `php artisan tenants:migrate` for `custom_values_json`.
+
 ## Future enhancements (not scheduled)
 
 | Item | Scope |
@@ -117,6 +130,10 @@ After tenant deploy, run `php artisan tenants:migrate` for SLA columns (`sla_due
 | POST | `/api/v1/ticketing/settings/test-email` | `ticketing:settings:manage` |
 | POST | `/api/v1/ticketing/settings/test-webhook` | `ticketing:settings:manage` |
 | GET | `/api/v1/ticketing/metadata` | `ticketing:view` |
+| GET | `/api/v1/ticketing/schema` | `ticketing:view` (or create / fields manage) |
+| POST | `/api/v1/ticketing/schema/fields` | `ticketing:fields:manage` |
+| PATCH | `/api/v1/ticketing/schema/fields/{id}` | `ticketing:fields:manage` |
+| DELETE | `/api/v1/ticketing/schema/fields/{id}` | `ticketing:fields:manage` |
 | GET | `/api/v1/ticketing/tickets` | `ticketing:view` |
 | POST | `/api/v1/ticketing/tickets` | `ticketing:tickets:create` |
 | GET | `/api/v1/ticketing/tickets/{id}` | `ticketing:view` |

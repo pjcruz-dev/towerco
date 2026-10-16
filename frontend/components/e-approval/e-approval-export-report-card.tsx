@@ -18,6 +18,7 @@ import {
   fetchEApprovalSubmissionsExportColumns,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { statusToneClasses } from "@/components/ui/status-tone";
 import { cn } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
@@ -562,7 +563,7 @@ export function EApprovalExportReportCard({
       </div>
 
       {notice ? (
-        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400">
+        <p className={cn("mt-2 rounded-md border px-3 py-2 text-sm", statusToneClasses.warning.alert)}>
           {notice}
         </p>
       ) : null}

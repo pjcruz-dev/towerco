@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   createDynHtmlReport,
   deleteDynHtmlReport,
@@ -90,7 +91,6 @@ export function DynHtmlReportsManagerPageClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,12 +109,6 @@ export function DynHtmlReportsManagerPageClient() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 2400);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -145,6 +139,7 @@ export function DynHtmlReportsManagerPageClient() {
     setError(null);
     try {
       const created = await createDynHtmlReport({ name: name.trim() });
+      notify.success("Report created", created.name);
       router.push(`/dynamic-entities/html-reports/edit?id=${created.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -181,7 +176,7 @@ export function DynHtmlReportsManagerPageClient() {
     try {
       const parsed = await readClipboardPayload();
       await createFromPayload(parsed);
-      setToast("Pasted as new report");
+      notify.success("Report pasted", parsed.name);
     } catch (err) {
       setError(getErrorMessage(err) || "Clipboard does not contain a valid report JSON.");
     } finally {
@@ -209,7 +204,7 @@ export function DynHtmlReportsManagerPageClient() {
         builder_json: parsed.builder_json ?? null,
       });
       await load();
-      setToast(`Replaced “${row.name}”`);
+      notify.success("Report replaced", row.name);
     } catch (err) {
       setError(getErrorMessage(err) || "Clipboard does not contain a valid report JSON.");
     } finally {
@@ -223,7 +218,7 @@ export function DynHtmlReportsManagerPageClient() {
     try {
       const full = await fetchDynHtmlReport(row.id);
       await navigator.clipboard.writeText(JSON.stringify(toClipboardPayload(full), null, 2));
-      setToast(`Copied “${row.name}”`);
+      notify.success("Report copied", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -247,7 +242,7 @@ export function DynHtmlReportsManagerPageClient() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setToast(`Downloaded “${row.name}.json”`);
+      notify.success("Report downloaded", `${row.name}.json`);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -262,7 +257,7 @@ export function DynHtmlReportsManagerPageClient() {
       const text = await file.text();
       const parsed = parseReportJson(text);
       await createFromPayload(parsed);
-      setToast(`Imported “${parsed.name}”`);
+      notify.success("Report imported", parsed.name);
     } catch (err) {
       setError(getErrorMessage(err) || "Invalid report JSON file.");
     } finally {
@@ -276,6 +271,7 @@ export function DynHtmlReportsManagerPageClient() {
     setError(null);
     try {
       const copy = await duplicateDynHtmlReport(id);
+      notify.success("Report duplicated", copy.name);
       await load();
       router.push(editHref(copy));
     } catch (err) {
@@ -293,6 +289,7 @@ export function DynHtmlReportsManagerPageClient() {
       await deleteDynHtmlReport(row.id);
       if (selectedId === row.id) setSelectedId(null);
       await load();
+      notify.success("Report deleted", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -333,7 +330,7 @@ export function DynHtmlReportsManagerPageClient() {
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Manage HTML Reports"
           description={
             <>
@@ -380,12 +377,6 @@ export function DynHtmlReportsManagerPageClient() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
             {error}
-          </div>
-        ) : null}
-
-        {toast ? (
-          <div className="rounded-xl border border-border bg-muted/40 px-4 py-2 text-sm text-foreground">
-            {toast}
           </div>
         ) : null}
 

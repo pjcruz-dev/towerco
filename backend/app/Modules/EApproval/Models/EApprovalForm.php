@@ -174,6 +174,7 @@ class EApprovalForm extends Model
                 'step_order' => $s->step_order,
                 'type' => $s->approver_type,
                 'approverId' => $s->approver_id,
+                'label' => $s->label,
                 'condition' => $condition === [] ? new \stdClass : $condition,
             ];
 
@@ -186,6 +187,10 @@ class EApprovalForm extends Model
             $fallback = $condition['fallback_approver_id'] ?? null;
             if (is_string($fallback) && trim($fallback) !== '') {
                 $payload['fallback_approver_id'] = trim($fallback);
+            }
+
+            if (! empty($condition['confirm_settlement'])) {
+                $payload['confirm_settlement'] = true;
             }
 
             $mode = EApprovalParallelMode::fromCondition($condition);

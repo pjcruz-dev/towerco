@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Services\DynRecordService;
 use App\Modules\DynamicEntities\Services\DynRoleAccessService;
+use App\Modules\DynamicEntities\Support\DynSchemaAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +21,6 @@ final class DynRecordStoreController extends AbstractApiController
         DynRecordService $service,
         DynRoleAccessService $access,
     ): JsonResponse {
-        abort_unless($request->user()?->can('dynamic_entities:records:manage'), 403);
-
         $actor = $request->user();
         abort_unless($actor instanceof TenantUser, 403);
 
@@ -30,6 +29,9 @@ final class DynRecordStoreController extends AbstractApiController
                 $q->where('id', $entity)->orWhere('slug', $entity);
             })
             ->firstOrFail();
+
+        abort_if($model->slug === 'workspace_users', 403);
+        abort_unless(DynSchemaAccess::allowsModule($actor, $model, 'dynamic_entities:records:manage'), 403);
 
         abort_unless($access->canEntity($actor, (string) $model->slug, 'create'), 403, __('Your role does not allow creating records for this entity.'));
 

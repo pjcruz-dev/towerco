@@ -7,6 +7,7 @@ namespace App\Modules\AiAssistant\Services\Actions;
 use App\Modules\AiAssistant\DTOs\ActionExecutionResult;
 use App\Modules\AiAssistant\Models\AiAssistantProposedAction;
 use App\Modules\AiAssistant\Support\AssistantProposedActionStatus;
+use App\Modules\AiAssistant\Support\AssistantRolePolicy;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Workspace\Services\TenantActivityLogger;
@@ -25,6 +26,7 @@ final class AssistantActionService
         private readonly AssistantActionRouter $router,
         private readonly TenantEnabledModulesResolver $enabledModules,
         private readonly TenantActivityLogger $activity,
+        private readonly AssistantRolePolicy $rolePolicy,
     ) {}
 
     /**
@@ -67,6 +69,9 @@ final class AssistantActionService
         }
 
         $args = $match['args'];
+        if (in_array($match['action'], ['change_it_asset_status', 'reject_eapproval_submission'], true)) {
+            $args['conversation_id'] = $conversationId;
+        }
         if (is_string($moduleContext) && $moduleContext !== '' && ! isset($args['module_context'])) {
             $args['module_context'] = $moduleContext;
         }
@@ -90,6 +95,28 @@ final class AssistantActionService
         }
 
         return $this->asApiPayload($proposal);
+    }
+
+    /**
+     * Keep a pending role or report card alive when the catalog planner did not choose a new write.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function continuePending(
+        TenantUser $viewer,
+        string $question,
+        ?string $conversationId,
+        ?string $messageId,
+        ?string $preferredModel,
+    ): ?array {
+        return $this->maybeResurfacePendingUserRoles($viewer, $question, $conversationId)
+            ?? $this->maybeRefinePendingHtmlReport(
+                viewer: $viewer,
+                question: $question,
+                conversationId: $conversationId,
+                messageId: $messageId,
+                preferredModel: $preferredModel,
+            );
     }
 
     /**
@@ -242,6 +269,7 @@ final class AssistantActionService
         ?string $messageId = null,
     ): AiAssistantProposedAction {
         abort_unless($viewer->can('ai_assistant:tools:use'), 403);
+        abort_unless($this->rolePolicy->allowsAction($viewer, $actionName), 403, __('Your role does not allow that assistant action.'));
         abort_unless($this->registry->has($actionName), 422, __('Action is not allowlisted.'));
 
         $action = $this->registry->get($actionName);
@@ -299,6 +327,7 @@ final class AssistantActionService
 
         $proposal = AiAssistantProposedAction::query()->find($proposalId);
         abort_if($proposal === null, 404, __('Proposed action not found.'));
+        abort_unless($this->rolePolicy->allowsAction($viewer, (string) $proposal->action), 403, __('Your role does not allow that assistant action.'));
         abort_unless((string) $proposal->user_id === (string) $viewer->id, 403);
         abort_unless($proposal->status === AssistantProposedActionStatus::PENDING, 422, __('This action is no longer pending.'));
 

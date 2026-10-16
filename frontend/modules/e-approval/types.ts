@@ -29,6 +29,10 @@ export type EApprovalWorkflowStepInput = {
   when_logic?: "and" | "or";
   when?: EApprovalWorkflowCondition[];
   step_order?: number;
+  /** Shown on the submission badge, for example "Pending — Release cash". */
+  label?: string | null;
+  /** This approver must tick the surrender or payment line before Approve. */
+  confirm_settlement?: boolean;
   condition?: Record<string, unknown> | null;
 };
 
@@ -130,6 +134,7 @@ export type EApprovalSubmissionListRow = {
   id: string;
   document_no: string;
   status: string;
+  status_label?: string | null;
   current_step: number;
   step_count?: number | null;
   returned_from_step?: number | null;
@@ -139,6 +144,8 @@ export type EApprovalSubmissionListRow = {
   last_revision_routing_reason?: string | null;
   form_id: string;
   form_name?: string;
+  form_family?: string | null;
+  finance_stage?: string | null;
   subsidiary?: string | null;
   department?: string | null;
   workflow_steps?: Array<{
@@ -283,6 +290,7 @@ export type EApprovalApprovalRow = {
   signature?: string | null;
   acted_at: string | null;
   step_order: number | null;
+  finance_action?: string | null;
   /** Parallel band completion rule from the workflow step (when present). */
   parallel_mode?: "all" | "any" | "n_of_m" | null;
   parallel_quorum?: number | null;
@@ -452,6 +460,7 @@ export type EApprovalPrintGrid = {
 export type EApprovalPrintPayload = {
   document_no: string;
   form_name: string | null;
+  form_family?: string | null;
   status: string;
   requestor: string | null;
   requestor_signature?: string | null;

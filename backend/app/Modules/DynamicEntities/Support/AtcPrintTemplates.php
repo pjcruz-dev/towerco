@@ -434,6 +434,7 @@ final class AtcPrintTemplates
                 'currency_fields' => [],
                 'terms_paragraphs' => [],
             ],
+            'it_asset' => ItAssetPrintTemplate::settings(),
             'bir_form_2307_certificates' => [
                 'list_label' => 'BIR Form 2307',
                 'document_title' => 'CERTIFICATE OF CREDITABLE TAX WITHHELD AT SOURCE',

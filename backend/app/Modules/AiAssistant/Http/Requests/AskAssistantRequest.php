@@ -23,6 +23,8 @@ class AskAssistantRequest extends FormRequest
             'conversation_id' => ['sometimes', 'nullable', 'uuid'],
             'module_context' => ['sometimes', 'nullable', 'string', 'max:64'],
             'page_path' => ['sometimes', 'nullable', 'string', 'max:512'],
+            'plan_mode' => ['sometimes', 'boolean'],
+            'preferred_model' => ['sometimes', 'nullable', 'string', 'max:80'],
         ];
     }
 

@@ -24,128 +24,238 @@ export type WorkflowGroup = {
   actions: WorkflowAction[];
 };
 
-/** Global / system cards for the General System tab (order matters). */
-export const GENERAL_SYSTEM_PERMISSIONS: Array<{
+export type GeneralPermissionCard = {
   permission: string;
   title: string;
   description: string;
-}> = [
+  /** Destructive or wide-reaching. Shown with a warning mark. */
+  danger?: boolean;
+};
+
+export type GeneralPermissionGroup = {
+  id: string;
+  title: string;
+  description: string;
+  cards: GeneralPermissionCard[];
+};
+
+/**
+ * General System groups, in Cloudworkz order.
+ * Cards whose permission is not in the tenant catalog are hidden by the page.
+ */
+export const GENERAL_SYSTEM_GROUPS: GeneralPermissionGroup[] = [
   {
-    permission: "dashboard:view",
-    title: "View Dashboard",
-    description: "Open the workspace home and operational overview.",
+    id: "access",
+    title: "Access Control",
+    description: "Who administers the system and who can see other people's data.",
+    cards: [
+      {
+        permission: "user:manage",
+        title: "Manage Users",
+        description: "Create users, reset them and assign their roles.",
+      },
+      {
+        permission: "role:manage",
+        title: "Manage Roles",
+        description: "Define roles and assign the permissions on this page.",
+      },
+      {
+        permission: "organization:view",
+        title: "View Organization",
+        description: "Look up the organization directory without being able to change it.",
+      },
+      {
+        permission: "organization:manage",
+        title: "Manage Organization",
+        description: "Edit organization structure and who belongs where.",
+      },
+      {
+        permission: "user:impersonate",
+        title: "Impersonate Users",
+        description: "Sign in as another user for support. This is audited.",
+        danger: true,
+      },
+      {
+        permission: "dashboard:view",
+        title: "View Dashboard",
+        description: "Open the workspace home and operational overview.",
+      },
+    ],
   },
   {
-    permission: "user:manage",
-    title: "Manage Users",
-    description: "Invite, deactivate, and assign roles to users.",
+    id: "data_tools",
+    title: "Data Tools",
+    description: "Power tools that change many records at once. Grant these deliberately.",
+    cards: [
+      {
+        permission: "documents:controlled:import",
+        title: "Bulk Import (documents)",
+        description: "Upload a spreadsheet and create or update controlled documents in bulk.",
+        danger: true,
+      },
+      {
+        permission: "assets:import",
+        title: "Bulk Import (assets)",
+        description: "Upload a spreadsheet and create or update asset records in bulk.",
+        danger: true,
+      },
+      {
+        permission: "doc-extract:run",
+        title: "Smart Scan",
+        description: "Pull fields out of photos, PDFs and documents with DocExtract.",
+        danger: true,
+      },
+      {
+        permission: "ai_assistant:use",
+        title: "AI Assistant",
+        description: "Open the assistant. What it may do is set on the AI Assistant tab.",
+      },
+      {
+        permission: "ai_assistant:tools:use",
+        title: "AI Look-ups",
+        description: "Let the assistant read live records for this role.",
+      },
+      {
+        permission: "ai_assistant:actions:execute",
+        title: "AI Actions",
+        description: "Let the assistant create and update records when the AI Assistant tab allows it.",
+        danger: true,
+      },
+      {
+        permission: "workspace:audit:view",
+        title: "View Audit Logs",
+        description: "Read the audit trail of who changed what.",
+      },
+      {
+        permission: "ai_assistant:conversations:audit",
+        title: "Audit AI Conversations",
+        description: "Read assistant conversations in this workspace.",
+      },
+    ],
   },
   {
-    permission: "role:manage",
-    title: "Manage Roles",
-    description: "Create and edit custom roles and their permissions.",
+    id: "customization",
+    title: "Customization",
+    description: "Changing how the system is built, rather than what is in it.",
+    cards: [
+      {
+        permission: "dynamic_entities:entities:manage",
+        title: "Manage Entities",
+        description: "Add, rename and remove entities.",
+      },
+      {
+        permission: "dynamic_entities:fields:manage",
+        title: "Manage Fields",
+        description: "Add and configure the fields on an entity, and the form tools.",
+      },
+      {
+        permission: "sidebar:manage",
+        title: "Manage Sidebar",
+        description: "Decide what appears in the navigation menu.",
+      },
+      {
+        permission: "html_reports:manage",
+        title: "Manage Reports",
+        description: "Create and edit HTML reports and dashboards.",
+      },
+      {
+        permission: "printables:manage",
+        title: "Manage Printables",
+        description: "Design printable templates and letterheads.",
+      },
+      {
+        permission: "notifications:manage",
+        title: "Manage Notifications",
+        description: "Set up the rules that raise alerts automatically.",
+      },
+      {
+        permission: "workflows:manage",
+        title: "Manage Workflows",
+        description: "Create and manage workflow steps.",
+      },
+      {
+        permission: "email_templates:manage",
+        title: "Email Templates",
+        description: "Create and edit reusable email subject and body templates.",
+      },
+      {
+        permission: "ai_assistant:prompts:manage",
+        title: "AI System Prompts",
+        description: "Edit the prompt modules the assistant is assembled from.",
+      },
+    ],
   },
   {
-    permission: "tenant:manage",
-    title: "Tenant Settings",
-    description: "Manage organization settings, modules, and branding.",
+    id: "system",
+    title: "System Core",
+    description: "Settings and maintenance that affect the whole installation.",
+    cards: [
+      {
+        permission: "tenant:manage",
+        title: "System Settings",
+        description: "Organization settings, modules and branding.",
+        danger: true,
+      },
+      {
+        permission: "system:manage",
+        title: "Manage System",
+        description: "Branding, theme, localization, support and integrations.",
+        danger: true,
+      },
+      {
+        permission: "workspace:environments:switch",
+        title: "Switch Environments",
+        description: "Move between linked workspaces.",
+        danger: true,
+      },
+      {
+        permission: "billing:manage",
+        title: "Manage Billing",
+        description: "Change plans and billing settings.",
+        danger: true,
+      },
+      {
+        permission: "automation:manage",
+        title: "Automation & Cron Jobs",
+        description: "Manage scheduled tasks.",
+        danger: true,
+      },
+      {
+        permission: "entity_hooks:manage",
+        title: "Manage Entity Hooks",
+        description: "Configure lifecycle hooks for Dynamic Entities.",
+        danger: true,
+      },
+      {
+        permission: "api_keys:manage",
+        title: "Manage REST API",
+        description: "Mint and revoke integration API keys.",
+      },
+      {
+        permission: "search_index:manage",
+        title: "Search Index",
+        description: "Inspect and rebuild the workspace search index.",
+      },
+    ],
   },
   {
-    permission: "user:impersonate",
-    title: "Impersonate Users",
-    description: "Sign in as another user for support (audited).",
-  },
-  {
-    permission: "workspace:audit:view",
-    title: "View Audit Trail",
-    description: "Read workspace activity and security events.",
-  },
-  {
-    permission: "workspace:environments:switch",
-    title: "Switch Environments",
-    description: "Move between staging and production workspaces.",
-  },
-  {
-    permission: "sidebar:manage",
-    title: "Manage Sidebar",
-    description: "Allow user to manage the sidebar menu.",
-  },
-  {
-    permission: "notifications:manage",
-    title: "Manage Notifications",
-    description: "Manage automation rules for notifications.",
-  },
-  {
-    permission: "printables:manage",
-    title: "Manage Printables",
-    description: "Allow user to manage printable templates.",
-  },
-  {
-    permission: "api_keys:manage",
-    title: "Manage REST API",
-    description: "Mint and revoke integration API keys; view developer docs.",
-  },
-  {
-    permission: "system:manage",
-    title: "Manage System",
-    description: "Configure branding, theme, localization, support, and integrations.",
-  },
-  {
-    permission: "html_reports:manage",
-    title: "Manage HTML Reports",
-    description: "Create and edit dynamic HTML/CSS/JS reports.",
-  },
-  {
-    permission: "workflows:manage",
-    title: "Manage Workflows",
-    description: "Create and manage database-driven transactional workflow steps.",
-  },
-  {
-    permission: "email_templates:manage",
-    title: "Email Templates",
-    description: "Create and edit reusable email subject/body templates for workflows.",
-  },
-  {
-    permission: "automation:manage",
-    title: "Automation & Cron Jobs",
-    description: "Manage scheduled tasks and run Laravel artisan jobs on a cron.",
-  },
-  {
-    permission: "search_index:manage",
-    title: "Search Index",
-    description: "Inspect and rebuild the workspace search / filter index.",
-  },
-  {
-    permission: "entity_hooks:manage",
-    title: "Manage Entity Hooks",
-    description: "Configure declarative lifecycle hooks for Dynamic Entities (safe DSL).",
-  },
-  {
-    permission: "ai_assistant:prompts:manage",
-    title: "AI System Prompts",
-    description: "Edit modular AI system prompt modules assembled by intent.",
-  },
-  {
-    permission: "dynamic_entities:fields:manage",
-    title: "Manage Fields",
-    description: "Configure Dynamic Entity fields, groups, and form layout.",
-  },
-  {
-    permission: "dynamic_entities:entities:manage",
-    title: "Manage Entities",
-    description: "Create and configure Dynamic Entity definitions.",
-  },
-  {
-    permission: "billing:view",
-    title: "View Billing",
-    description: "See subscription and billing status.",
-  },
-  {
-    permission: "billing:manage",
-    title: "Manage Billing",
-    description: "Change plans and billing settings.",
+    id: "other",
+    title: "Other",
+    description: "Permissions delivered outside the groups above.",
+    cards: [
+      {
+        permission: "billing:view",
+        title: "View Billing",
+        description: "See subscription and billing status.",
+      },
+    ],
   },
 ];
+
+/** Flat list kept for callers that only need the permission names. */
+export const GENERAL_SYSTEM_PERMISSIONS: GeneralPermissionCard[] = GENERAL_SYSTEM_GROUPS.flatMap(
+  (group) => group.cards,
+);
 
 /** Module permissions shown on Data Access when Dynamic Entities is off. */
 export const MODULE_ACCESS_ROWS: Array<DataAccessRow & { module: string }> = [

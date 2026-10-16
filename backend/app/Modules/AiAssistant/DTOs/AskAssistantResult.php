@@ -12,6 +12,7 @@ final readonly class AskAssistantResult
      * @param  list<array{label: string, href: string}>  $relatedLinks
      * @param  array<string, mixed>|null  $proposedAction
      * @param  array<string, mixed>|null  $costEstimate
+     * @param  list<array{id: string, kind: string, title: string, detail: string|null, status: string}>  $activity
      */
     public function __construct(
         public string $conversationId,
@@ -29,6 +30,7 @@ final readonly class AskAssistantResult
         public ?int $promptTokens = null,
         public ?int $completionTokens = null,
         public ?array $costEstimate = null,
+        public array $activity = [],
     ) {}
 
     /**
@@ -52,6 +54,7 @@ final readonly class AskAssistantResult
             'prompt_tokens' => $this->promptTokens,
             'completion_tokens' => $this->completionTokens,
             'cost_estimate' => $this->costEstimate,
+            'activity' => $this->activity,
         ];
     }
 }

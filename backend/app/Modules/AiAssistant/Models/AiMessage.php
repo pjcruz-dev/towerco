@@ -20,6 +20,7 @@ class AiMessage extends Model
         'role',
         'content',
         'citations',
+        'activity',
         'model_name',
         'prompt_tokens',
         'completion_tokens',
@@ -31,6 +32,7 @@ class AiMessage extends Model
     {
         return [
             'citations' => 'array',
+            'activity' => 'array',
             'prompt_tokens' => 'integer',
             'completion_tokens' => 'integer',
             'latency_ms' => 'integer',

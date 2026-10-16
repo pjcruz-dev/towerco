@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   fetchSearchIndexStatus,
   runSearchIndexAction,
@@ -52,7 +53,6 @@ export function SearchIndexPageClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,7 +76,6 @@ export function SearchIndexPageClient() {
   ) {
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await runSearchIndexAction({
         action,
@@ -84,10 +83,9 @@ export function SearchIndexPageClient() {
       });
       setStatus(result.status);
       const rebuilt = result.records_rebuilt;
-      setNotice(
-        rebuilt != null
-          ? `Done — rebuilt ${formatCount(rebuilt)} record index(es).`
-          : "Metadata refreshed.",
+      notify.success(
+        rebuilt != null ? "Search index rebuilt" : "Metadata refreshed",
+        rebuilt != null ? `${formatCount(rebuilt)} records rebuilt.` : undefined,
       );
     } catch (err) {
       setError(getErrorMessage(err));
@@ -110,11 +108,6 @@ export function SearchIndexPageClient() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-            {notice}
           </div>
         ) : null}
 

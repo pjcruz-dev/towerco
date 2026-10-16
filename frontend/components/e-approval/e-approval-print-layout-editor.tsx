@@ -13,7 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { fetchEApprovalPdfLayout, updateEApprovalPdfLayout } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
-import { printableGridDesignFields, printableScalarDesignFields } from "@/lib/e-approval/e-approval-print-template-render";
+import {
+  defaultEApprovalDocumentDesignCss,
+  defaultEApprovalDocumentDesignHtml,
+  printableGridDesignFields,
+  printableScalarDesignFields,
+} from "@/lib/e-approval/e-approval-print-template-render";
 import { parseGridColumns } from "@/modules/e-approval/field-options";
 import {
   EAPPROVAL_DEFAULT_SUBSIDIARY_CODES,
@@ -69,28 +74,41 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
   });
 
   const prefersExpenseLandscape = useMemo(
-    () =>
-      formFamily === "liquidation" ||
-      formFamily === "reimbursement" ||
-      fields.some((field) => field.type === "grid" && field.name.toLowerCase().includes("expense")),
-    [formFamily, fields],
+    () => formFamily === "cash_advance" || formFamily === "liquidation" || formFamily === "reimbursement",
+    [formFamily],
   );
 
   useEffect(() => {
-    if (!layoutQuery.data?.template) {
+    if (!layoutQuery.isSuccess) {
       return;
     }
-    const next = asTemplate(layoutQuery.data.template);
+    const next = asTemplate(layoutQuery.data?.template);
 
     // Unsaved defaults: ensure expense forms open as landscape even if global default is portrait.
     if (!layoutQuery.data.layout_persisted && prefersExpenseLandscape && !next.orientation) {
       next.orientation = "landscape";
       next.page = { size: next.page?.size ?? "A4", marginMm: next.page?.marginMm ?? 8 };
     }
+    if (formFamily === "cash_advance" || formFamily === "liquidation" || formFamily === "reimbursement") {
+      const html = typeof next.template_html === "string" ? next.template_html.trim() : "";
+      const genericStarter = html === defaultEApprovalDocumentDesignHtml().trim();
+      const missingFamilyMarker =
+        (formFamily === "liquidation" && !html.includes("ea-lq-doc")) ||
+        (formFamily === "reimbursement" && !html.includes("ea-re-doc"));
+      if (!html || genericStarter || (formFamily !== "cash_advance" && missingFamilyMarker)) {
+        next.orientation = "landscape";
+        next.page = { size: next.page?.size ?? "A4", marginMm: 10 };
+        next.template_html = defaultEApprovalDocumentDesignHtml(undefined, [], formFamily);
+        next.template_css = defaultEApprovalDocumentDesignCss(
+          { size: next.page.size, marginMm: 10, orientation: "landscape" },
+          formFamily,
+        );
+      }
+    }
     setTemplate(next);
     // Only re-hydrate from the server when layout payload changes — not when `fields` identity
     // changes (that was wiping subsidiary logos right after upload).
-  }, [layoutQuery.data, prefersExpenseLandscape]);
+  }, [layoutQuery.data, layoutQuery.isSuccess, prefersExpenseLandscape, formFamily]);
 
   const designFields = useMemo(
     () =>
@@ -257,9 +275,9 @@ export function EApprovalPrintLayoutEditor({ formId, fields, formTitle, formFami
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Landscape is recommended for liquidation and reimbursement expense grids. Use{" "}
-          <code className="rounded bg-muted px-1">{"{{system.form_body}}"}</code> (Insert starter layout) so expense
-          columns print dynamically. Preview and browser print use these settings after you save.
+          {formFamily === "cash_advance"
+            ? "Cash advance prints landscape so the forecast lines stay on one page. Insert starter layout loads that document. Preview and browser print use these settings after you save."
+            : "Landscape is recommended for liquidation and reimbursement expense grids. Use {{system.form_body}} (Insert starter layout) so expense columns print dynamically. Preview and browser print use these settings after you save."}
         </p>
 
         <div className="space-y-3">

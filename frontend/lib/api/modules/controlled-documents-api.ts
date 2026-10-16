@@ -14,6 +14,10 @@ export type ControlledDocumentRow = {
   next_review_date: string | null;
   published_at: string | null;
   created_by_name: string | null;
+  has_file?: boolean;
+  incoming_revision?: number | null;
+  incoming_submission_id?: string | null;
+  incoming_document_no?: string | null;
 };
 
 export type ControlledDocumentRevision = {
@@ -35,10 +39,16 @@ export type ControlledDocumentDetail = ControlledDocumentRow & {
 };
 
 export type ControlledDocumentIndexPayload = {
-    kpis: {
+  kpis: {
     total: number;
+    pending: number;
     published: number;
     obsolete: number;
+    incoming: number;
+  };
+  facets: {
+    departments: string[];
+    document_types: string[];
   };
   documents: {
     data: ControlledDocumentRow[];
@@ -53,6 +63,38 @@ export type ControlledDocumentImportResult = {
   processed: number;
   skipped: number;
   errors: { row: number; message: string }[];
+};
+
+export type ControlledDocumentImportField = {
+  name: string;
+  label: string;
+  required: boolean;
+};
+
+export type ControlledDocumentImportAnalyzeResult = {
+  headers: string[];
+  suggested_map: Record<string, string>;
+  fields: ControlledDocumentImportField[];
+  row_count: number;
+};
+
+export type ControlledDocumentImportRow = {
+  row: number;
+  document_code: string;
+  outcome: string;
+  file_status: string;
+  matched_path: string | null;
+  message: string | null;
+};
+
+export type ControlledDocumentImportRunResult = {
+  written: boolean;
+  created: number;
+  updated: number;
+  skipped: number;
+  files_attached: number;
+  errors: { row: number; message: string }[];
+  rows: ControlledDocumentImportRow[];
 };
 
 export type ControlledDocumentLookupResult = {
@@ -104,6 +146,12 @@ export async function fetchControlledDocuments(params?: {
   department?: string;
   status?: string;
   document_type?: string;
+  review?: string;
+  file?: string;
+  effective_from?: string;
+  effective_to?: string;
+  published_from?: string;
+  published_to?: string;
   sort?: string;
 }): Promise<ControlledDocumentIndexPayload> {
   const response = await apiClient.get<{ data: ControlledDocumentIndexPayload }>(
@@ -111,6 +159,166 @@ export async function fetchControlledDocuments(params?: {
     { params },
   );
   return response.data.data;
+}
+
+export type ControlledDocumentChartPoint = {
+  key: string;
+  label: string;
+  value: number;
+};
+
+export type ControlledDocumentOverview = {
+  as_of: string;
+  published_from: string;
+  counts: {
+    total: number;
+    pending: number;
+    published: number;
+    obsolete: number;
+    published_last_30_days: number;
+    overdue: number;
+    due_30: number;
+    due_90: number;
+    no_review: number;
+  };
+  by_department: ControlledDocumentChartPoint[];
+  by_document_type: ControlledDocumentChartPoint[];
+  recent: Array<{
+    id: string;
+    document_code: string;
+    title: string;
+    department: string | null;
+    document_type: string | null;
+    status: string;
+    published_at: string | null;
+  }>;
+};
+
+export type ControlledDocumentReport = {
+  from: string;
+  to: string;
+  facets: { departments: string[]; document_types: string[] };
+  counts: { total: number; published: number; obsolete: number };
+  publications: ControlledDocumentChartPoint[];
+  by_department: ControlledDocumentChartPoint[];
+  by_document_type: ControlledDocumentChartPoint[];
+  review: ControlledDocumentChartPoint[];
+};
+
+export async function fetchControlledDocumentOverview(): Promise<ControlledDocumentOverview> {
+  const response = await apiClient.get<{ data: ControlledDocumentOverview }>(
+    "/documents/controlled/overview",
+  );
+  return response.data.data;
+}
+
+export async function fetchControlledDocumentReport(params: {
+  period?: number;
+  department?: string;
+  status?: string;
+  document_type?: string;
+  review?: string;
+  file?: string;
+}): Promise<ControlledDocumentReport> {
+  const response = await apiClient.get<{ data: ControlledDocumentReport }>(
+    "/documents/controlled/reports",
+    { params },
+  );
+  return response.data.data;
+}
+
+export async function downloadControlledDocumentReport(params: {
+  period?: number;
+  department?: string;
+  status?: string;
+  document_type?: string;
+  review?: string;
+  file?: string;
+}): Promise<Blob> {
+  const response = await apiClient.get<Blob>("/documents/controlled/reports/export", {
+    params,
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export type ControlledDocumentSavedReportFilters = {
+  period: number;
+  department: string | null;
+  document_type: string | null;
+  status: string | null;
+  review: string | null;
+  file: string | null;
+};
+
+export type ControlledDocumentSavedReportSchedule = {
+  enabled: boolean;
+  frequency: "daily" | "weekly";
+  hour: number;
+  day_of_week: number;
+  recipients: string[];
+};
+
+export type ControlledDocumentSavedReport = {
+  id: string;
+  name: string;
+  filters: ControlledDocumentSavedReportFilters;
+  schedule: ControlledDocumentSavedReportSchedule | null;
+  last_run_at: string | null;
+  has_file: boolean;
+  filename: string | null;
+};
+
+export async function fetchControlledDocumentSavedReports(): Promise<ControlledDocumentSavedReport[]> {
+  const response = await apiClient.get<{ data: ControlledDocumentSavedReport[] }>(
+    "/documents/controlled/reports/saved",
+  );
+  return response.data.data;
+}
+
+export async function createControlledDocumentSavedReport(body: {
+  name: string;
+  filters: Partial<ControlledDocumentSavedReportFilters>;
+  schedule?: Partial<ControlledDocumentSavedReportSchedule> | null;
+}): Promise<ControlledDocumentSavedReport> {
+  const response = await apiClient.post<{ data: ControlledDocumentSavedReport }>(
+    "/documents/controlled/reports/saved",
+    body,
+  );
+  return response.data.data;
+}
+
+export async function updateControlledDocumentSavedReport(
+  id: string,
+  body: {
+    name?: string;
+    filters?: Partial<ControlledDocumentSavedReportFilters>;
+    schedule?: Partial<ControlledDocumentSavedReportSchedule> | null;
+  },
+): Promise<ControlledDocumentSavedReport> {
+  const response = await apiClient.patch<{ data: ControlledDocumentSavedReport }>(
+    `/documents/controlled/reports/saved/${id}`,
+    body,
+  );
+  return response.data.data;
+}
+
+export async function deleteControlledDocumentSavedReport(id: string): Promise<void> {
+  await apiClient.delete(`/documents/controlled/reports/saved/${id}`);
+}
+
+export async function downloadControlledDocumentSavedReport(id: string): Promise<Blob> {
+  const response = await apiClient.get<Blob>(`/documents/controlled/reports/saved/${id}/run`, {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export async function downloadControlledDocumentSavedReportFile(id: string): Promise<Blob> {
+  const response = await apiClient.get<Blob>(`/documents/controlled/reports/saved/${id}/file`, {
+    responseType: "blob",
+  });
+  return response.data;
 }
 
 export async function fetchControlledDocument(id: string): Promise<ControlledDocumentDetail> {
@@ -122,6 +330,74 @@ export async function fetchControlledDocument(id: string): Promise<ControlledDoc
 
 export async function markControlledDocumentObsolete(id: string): Promise<void> {
   await apiClient.post(`/documents/controlled/${id}/obsolete`);
+}
+
+export async function downloadControlledDocumentImportTemplate(): Promise<Blob> {
+  const response = await apiClient.get<Blob>("/documents/controlled/import/template", {
+    responseType: "blob",
+  });
+  return response.data;
+}
+
+export async function analyzeControlledDocumentImport(
+  file: File,
+): Promise<ControlledDocumentImportAnalyzeResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await apiClient.post<{ data: ControlledDocumentImportAnalyzeResult }>(
+    "/documents/controlled/import/analyze",
+    formData,
+  );
+  return response.data.data;
+}
+
+export async function previewControlledDocumentImport(input: {
+  file: File;
+  columnMap: Record<string, string>;
+  availablePaths: string[];
+  archive?: File | null;
+}): Promise<ControlledDocumentImportRunResult> {
+  const response = await apiClient.post<{ data: ControlledDocumentImportRunResult }>(
+    "/documents/controlled/import/preview",
+    controlledDocumentImportForm(input),
+  );
+  return response.data.data;
+}
+
+export async function runControlledDocumentImport(input: {
+  file: File;
+  columnMap: Record<string, string>;
+  availablePaths: string[];
+  archive?: File | null;
+  files?: File[];
+  filePaths?: string[];
+}): Promise<ControlledDocumentImportRunResult> {
+  const formData = controlledDocumentImportForm(input);
+  input.files?.forEach((file) => formData.append("files[]", file));
+  if (input.filePaths) {
+    formData.append("file_paths", JSON.stringify(input.filePaths));
+  }
+  const response = await apiClient.post<{ data: ControlledDocumentImportRunResult }>(
+    "/documents/controlled/import/run",
+    formData,
+  );
+  return response.data.data;
+}
+
+function controlledDocumentImportForm(input: {
+  file: File;
+  columnMap: Record<string, string>;
+  availablePaths: string[];
+  archive?: File | null;
+}): FormData {
+  const formData = new FormData();
+  formData.append("file", input.file);
+  formData.append("column_map", JSON.stringify(input.columnMap));
+  formData.append("available_paths", JSON.stringify(input.availablePaths));
+  if (input.archive) {
+    formData.append("archive", input.archive);
+  }
+  return formData;
 }
 
 export async function importControlledDocumentsCsv(file: File): Promise<ControlledDocumentImportResult> {

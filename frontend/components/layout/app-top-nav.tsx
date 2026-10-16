@@ -70,9 +70,13 @@ function inferSection(itemTitle: string, sub: WorkspaceSubNavItem): string | und
   }
 
   if (itemTitle === "System Core") {
-    if (/field|printable|html report|report builder|email/i.test(sub.title)) return "Data & print";
-    if (/workflow|cron|ai prompt|automation/i.test(sub.title)) return "Automation";
     return "Platform";
+  }
+
+  if (itemTitle === "Dynamic Entities") {
+    if (/field|relation|printable|html report|report builder|email/i.test(sub.title)) return "Data & print";
+    if (/workflow|hook/i.test(sub.title)) return "Automation";
+    return "Schema";
   }
 
   return undefined;

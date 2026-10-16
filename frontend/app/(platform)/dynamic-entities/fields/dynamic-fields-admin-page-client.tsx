@@ -28,11 +28,32 @@ import {
   type DynEntitySummary,
   type DynField,
 } from "@/lib/api/modules/dynamic-entities-api";
+import { fetchAssetSchema } from "@/lib/api/modules/assets-api";
+import { fetchTicketingSchema } from "@/lib/api/modules/ticketing-api";
+import { dynFieldTypeLabel } from "@/lib/dynamic-entities/field-type-label";
 import { permissions } from "@/lib/rbac/permissions";
 import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 type QuickFilter = "all" | "required" | "in_table" | "has_rules" | "system";
+
+const LOCKED_FIELD_ADMIN: Record<
+  string,
+  { eyebrow: string; permissions: string[]; match: "any" | "all"; prepare: () => Promise<unknown> }
+> = {
+  it_asset: {
+    eyebrow: "Assets",
+    permissions: [permissions.assetsFieldsManage, permissions.dynamicEntitiesFieldsManage],
+    match: "any",
+    prepare: () => fetchAssetSchema(),
+  },
+  helpdesk_ticket: {
+    eyebrow: "Ticketing",
+    permissions: [permissions.ticketingFieldsManage, permissions.dynamicEntitiesFieldsManage],
+    match: "any",
+    prepare: () => fetchTicketingSchema(),
+  },
+};
 
 function fieldHasRules(field: DynField): boolean {
   const raw = field.conditional_rules;
@@ -44,12 +65,18 @@ function fieldHasRules(field: DynField): boolean {
 
 function typeLabel(type: string): string {
   if (type === "system" || type.startsWith("system")) return "System";
-  return type;
+  if (type === "child_list") return "Child list";
+  return dynFieldTypeLabel(type);
 }
 
 /** Metacoresoft-parity: these system fields open an editor (workflows has a dedicated modal). */
-function isEditableSystemField(name: string): boolean {
-  return name === "id" || name === "actions" || name === "print" || name === "workflows";
+function isEditableSystemField(name: string, entitySlug?: string): boolean {
+  if (name === "id" || name === "actions" || name === "print" || name === "workflows") {
+    return true;
+  }
+  return (
+    entitySlug === "helpdesk_ticket" && (name === "requester" || name === "assigned_to")
+  );
 }
 
 /** List chrome columns driven by show_in_table on the record list. */
@@ -102,14 +129,15 @@ function FlagCheck({
   );
 }
 
-export function DynamicFieldsAdminPageClient() {
+export function DynamicFieldsAdminPageClient({ lockedSlug }: { lockedSlug?: string } = {}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const initialSlug = searchParams.get("entity") ?? "";
+  const initialSlug = lockedSlug ?? searchParams.get("entity") ?? "";
+  const waitsForSchema = Boolean(lockedSlug && LOCKED_FIELD_ADMIN[lockedSlug]);
 
   const [entities, setEntities] = useState<DynEntitySummary[]>([]);
-  const [slug, setSlug] = useState(initialSlug);
+  const [slug, setSlug] = useState(waitsForSchema ? "" : initialSlug);
   const [detail, setDetail] = useState<DynEntityDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -132,6 +160,22 @@ export function DynamicFieldsAdminPageClient() {
   );
 
   useEffect(() => {
+    if (lockedSlug) {
+      let cancelled = false;
+      const prepare = LOCKED_FIELD_ADMIN[lockedSlug]?.prepare() ?? Promise.resolve();
+      prepare
+        .then(() => {
+          if (cancelled) return;
+          setError(null);
+          setSlug(lockedSlug);
+        })
+        .catch(() => {
+          if (!cancelled) setError("Unable to load entity schema.");
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     fetchDynEntities({ active_only: false })
       .then((rows) => {
         setEntities(rows);
@@ -139,7 +183,7 @@ export function DynamicFieldsAdminPageClient() {
       })
       .catch(() => setError("Unable to load entities."));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootstrap once
-  }, []);
+  }, [lockedSlug]);
 
   useEffect(() => {
     if (!slug) {
@@ -195,7 +239,12 @@ export function DynamicFieldsAdminPageClient() {
     key: "is_required" | "show_in_table" | "is_filterable",
     value: boolean,
   ) {
-    if (field.is_system_field && key === "is_required") return;
+    if (
+      key === "is_required" &&
+      (field.name === "id" || field.name === "actions" || field.name === "print" || field.name === "workflows")
+    ) {
+      return;
+    }
     setTogglingId(field.id);
     setError(null);
     try {
@@ -248,10 +297,17 @@ export function DynamicFieldsAdminPageClient() {
   ];
 
   return (
-    <PermissionGate requiredPermissions={[permissions.dynamicEntitiesFieldsManage]}>
+    <PermissionGate
+      requiredPermissions={
+        lockedSlug && LOCKED_FIELD_ADMIN[lockedSlug]
+          ? LOCKED_FIELD_ADMIN[lockedSlug].permissions
+          : [permissions.dynamicEntitiesFieldsManage]
+      }
+      match={lockedSlug && LOCKED_FIELD_ADMIN[lockedSlug] ? LOCKED_FIELD_ADMIN[lockedSlug].match : "all"}
+    >
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow={lockedSlug ? (LOCKED_FIELD_ADMIN[lockedSlug]?.eyebrow ?? "Dynamic Entities") : "Dynamic Entities"}
           title="Manage Fields"
           description="Everything a record can store — what it is called, where it sits, and when it appears."
           actions={
@@ -294,7 +350,8 @@ export function DynamicFieldsAdminPageClient() {
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         <div className="rounded-xl border border-border bg-card">
-          <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-3">
+          <div className={cn("grid gap-3 border-b border-border p-4", lockedSlug ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+            {lockedSlug ? null : (
             <label className="space-y-1 text-sm">
               <span className="text-xs font-medium text-muted-foreground">Entity</span>
               <Select
@@ -309,6 +366,7 @@ export function DynamicFieldsAdminPageClient() {
                 ))}
               </Select>
             </label>
+            )}
             <label className="space-y-1 text-sm">
               <span className="text-xs font-medium text-muted-foreground">Search</span>
               <Input
@@ -370,10 +428,13 @@ export function DynamicFieldsAdminPageClient() {
                 filteredFields.map((field) => {
                   const busy = togglingId === field.id;
                   const system = Boolean(field.is_system_field);
-                  const editableSystem = isEditableSystemField(field.name);
-                  const listChrome = isListChromeField(field.name);
-                  const canToggleTable = !system || listChrome || field.name === "id";
-                  const canToggleFilter = !system || field.name === "id";
+                  const editableSystem = isEditableSystemField(field.name, slug);
+                  const requiredLocked =
+                    field.name === "id" ||
+                    field.name === "actions" ||
+                    field.name === "print" ||
+                    field.name === "workflows";
+                  const canToggleFilter = field.name !== "actions" && field.name !== "print";
                   return (
                     <TableRow key={field.id}>
                       <TableCell className="whitespace-normal">
@@ -389,7 +450,7 @@ export function DynamicFieldsAdminPageClient() {
                               : "border-border bg-background text-foreground",
                           )}
                         >
-                          {system ? "System" : typeLabel(field.type)}
+                          {typeLabel(field.type)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -397,7 +458,7 @@ export function DynamicFieldsAdminPageClient() {
                           <FlagCheck
                             label="Required"
                             checked={field.is_required}
-                            disabled={busy || system}
+                            disabled={busy || requiredLocked}
                             onCheckedChange={(checked) =>
                               void toggleFlag(field, "is_required", checked)
                             }
@@ -405,7 +466,7 @@ export function DynamicFieldsAdminPageClient() {
                           <FlagCheck
                             label="Table"
                             checked={effectiveShowInTable(field)}
-                            disabled={busy || !canToggleTable}
+                            disabled={busy}
                             onCheckedChange={(checked) =>
                               void toggleFlag(field, "show_in_table", checked)
                             }
@@ -436,7 +497,7 @@ export function DynamicFieldsAdminPageClient() {
                                   ? "Configure ID column"
                                   : field.name === "print"
                                     ? "Configure print column"
-                                    : system
+                                    : system && !editableSystem
                                       ? "System fields are read-only here"
                                       : "Edit field"
                           }

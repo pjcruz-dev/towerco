@@ -16,6 +16,7 @@ import { EApprovalWorkflowPathDiagram } from "@/components/e-approval/e-approval
 import { EApprovalWorkflowPreviewFields } from "@/components/e-approval/e-approval-workflow-preview-fields";
 import { EApprovalWorkflowStepConditions } from "@/components/e-approval/e-approval-workflow-step-conditions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -36,17 +37,23 @@ import {
 } from "@/components/ui/sheet";
 import { getErrorMessage } from "@/lib/api/error";
 import { previewEApprovalFormWorkflow, testEApprovalManagerLookup } from "@/lib/api/modules/e-approval-api";
+import { parseSelectChoices } from "@/modules/e-approval/field-options";
 import { E_APPROVAL_STEP_TYPES } from "@/modules/e-approval/field-types";
 import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
 import {
+  addLadderValueCase,
   alignNearMissBranchThresholds,
+  applyValueMatchCases,
   branchGroupLabel,
   detectNearMissBranchPairs,
   insertIfElseBranchSteps,
   insertThresholdLadderSteps,
+  insertValueMatchSteps,
+  ladderCaseLabel,
   ladderGroupLabel,
-  parseThresholdBand,
-  thresholdBandLabel,
+  ladderMatchCases,
+  removeLadderValueCase,
+  retargetLadderField,
   toWorkflowEditorSegments,
   updateExclusiveBranchThreshold,
   updateExclusiveLadderThresholds,
@@ -86,8 +93,8 @@ import {
 import {
   getConditionFieldOptions,
   getFieldMapSourceOptions,
+  workflowFieldRoutingKind,
 } from "@/modules/e-approval/workflow-rules";
-import { parseSelectChoices } from "@/modules/e-approval/field-options";
 import { E_APPROVAL_WORKFLOW_SHELL_CLASS } from "@/modules/e-approval/form-layout";
 import { useNotificationStore } from "@/stores/notification-store";
 
@@ -97,6 +104,8 @@ type Props = {
   onStepsChange: (steps: EApprovalWorkflowStepInput[]) => void;
   approverOptions: { id: string; label: string }[];
   formId?: string;
+  /** Liquidation and reimbursement only. Other forms never show the settlement tick. */
+  formFamily?: string | null;
 };
 
 type StepCardProps = {
@@ -117,6 +126,7 @@ type StepCardProps = {
   compactHeader?: boolean;
   /** Hide free-form when editor (If/Else / ladder thresholds are edited at group level). */
   hideWhenEditor?: boolean;
+  settlementFamily?: "liquidation" | "reimbursement" | null;
 };
 
 function approverLabelForStep(
@@ -173,6 +183,7 @@ function WorkflowStepCard({
   footerOverride,
   compactHeader,
   hideWhenEditor = false,
+  settlementFamily = null,
 }: StepCardProps) {
   const alwaysRuns = stepRunsAlways(step);
   const nextStep = steps[index + 1];
@@ -258,8 +269,11 @@ function WorkflowStepCard({
                   parallel_mode: undefined,
                   parallel_quorum: undefined,
                 };
-              } else if (type === "user" && !step.approverId?.trim()) {
-                nextStep = { ...nextStep, approverId: approverOptions[0]?.id ?? "" };
+              } else if (type === "user") {
+                const knownUser = approverOptions.some((option) => option.id === step.approverId);
+                if (!knownUser) {
+                  nextStep = { ...nextStep, approverId: "" };
+                }
               }
               onUpdate(nextStep);
             }}
@@ -428,6 +442,36 @@ function WorkflowStepCard({
         </label>
       ) : null}
 
+      {settlementFamily ? (
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={step.confirm_settlement ?? step.condition?.confirm_settlement === true}
+            onCheckedChange={(checked) => {
+              const nextCondition = { ...(step.condition ?? {}) };
+              if (checked === true) {
+                nextCondition.confirm_settlement = true;
+              } else {
+                delete nextCondition.confirm_settlement;
+              }
+              onUpdate({
+                confirm_settlement: checked === true,
+                condition: nextCondition,
+              });
+            }}
+          />
+          <span>
+            <span className="font-medium">Require settlement confirmation</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {settlementFamily === "reimbursement"
+                ? "This approver must confirm the amount to pay the employee before Approve. Reimbursement has no cash advance and no forecast."
+                : "This approver must confirm the settlement before Approve. Below the cash released, the employee returns the difference. Above it, the company pays the employee."}{" "}
+              When no step has this on, the last approver who actually runs still has to tick it.
+            </span>
+          </span>
+        </label>
+      ) : null}
+
       {step.type === "field_map" ? (
         <div className="mt-3">
           <EApprovalWorkflowFieldMapEditor
@@ -532,7 +576,16 @@ function findSegmentForStepIndex(
   return null;
 }
 
-export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approverOptions, formId }: Props) {
+export function EApprovalWorkflowEditor({
+  fields,
+  steps,
+  onStepsChange,
+  approverOptions,
+  formId,
+  formFamily,
+}: Props) {
+  const settlementFamily =
+    formFamily === "liquidation" || formFamily === "reimbursement" ? formFamily : null;
   const push = useNotificationStore((s) => s.push);
   const [managerTestEmail, setManagerTestEmail] = useState("");
   const [managerTestResult, setManagerTestResult] = useState<string | null>(null);
@@ -551,12 +604,22 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
   const [parallelApproverIds, setParallelApproverIds] = useState<string[]>(["", ""]);
   const [parallelMode, setParallelMode] = useState<ParallelCompletionMode>("all");
   const [parallelQuorum, setParallelQuorum] = useState(2);
+  const [choiceApprovers, setChoiceApprovers] = useState<Record<string, string>>({});
 
   const hasManagerStep = steps.some((s) => s.type === "manager");
   const approverFieldOptions = useMemo(() => getApproverFieldOptions(fields), [fields]);
   const approverListFieldOptions = useMemo(() => getApproverListFieldOptions(fields), [fields]);
   const fieldMapSourceOptions = useMemo(() => getFieldMapSourceOptions(fields), [fields]);
   const conditionFieldOptions = useMemo(() => getConditionFieldOptions(fields), [fields]);
+  const branchFieldDef = useMemo(
+    () => fields.find((field) => field.name === branchField),
+    [fields, branchField],
+  );
+  const branchRouting = workflowFieldRoutingKind(branchFieldDef);
+  const branchChoices = useMemo(
+    () => (branchFieldDef ? parseSelectChoices(branchFieldDef) : []),
+    [branchFieldDef],
+  );
   const previewFieldNames = useMemo(
     () => collectWorkflowPreviewFieldNames(fields, steps),
     [fields, steps],
@@ -714,6 +777,73 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
       return;
     }
 
+    const branchFieldDef = fields.find((field) => field.name === branchField);
+    const branchRouting = workflowFieldRoutingKind(branchFieldDef);
+    const branchChoices = branchFieldDef ? parseSelectChoices(branchFieldDef) : [];
+
+    if (branchMode !== "parallel" && branchRouting === "choice") {
+      const cases = branchChoices
+        .map((choice) => ({
+          operator: "equals" as const,
+          value: choice.value,
+          approverId: (choiceApprovers[choice.value] ?? "").trim(),
+        }))
+        .filter((item) => item.approverId !== "");
+      if (cases.length < 2) {
+        push({
+          level: "warning",
+          title: "Branch incomplete",
+          message: "Assign an approver for at least two values.",
+        });
+        return;
+      }
+
+      onStepsChange(
+        insertValueMatchSteps(steps, { field: branchField, cases }, branchInsertAt ?? steps.length),
+      );
+      setBranchDialogOpen(false);
+      setBranchInsertAt(null);
+      push({
+        level: "success",
+        title: "If/Else branch added",
+        message: "Each value runs its own approver. Shared steps below still run after the match.",
+      });
+      return;
+    }
+
+    if (branchMode !== "parallel" && branchRouting === "value") {
+      if (!branchThreshold.trim()) {
+        push({ level: "warning", title: "Branch incomplete", message: "Enter the value to match." });
+        return;
+      }
+      if (!branchIfApproverId.trim() || !branchElseApproverId.trim()) {
+        push({ level: "warning", title: "Branch incomplete", message: "Choose approvers for both cases." });
+        return;
+      }
+
+      onStepsChange(
+        insertValueMatchSteps(
+          steps,
+          {
+            field: branchField,
+            cases: [
+              { operator: "equals", value: branchThreshold.trim(), approverId: branchIfApproverId },
+              { operator: "not_equals", value: branchThreshold.trim(), approverId: branchElseApproverId },
+            ],
+          },
+          branchInsertAt ?? steps.length,
+        ),
+      );
+      setBranchDialogOpen(false);
+      setBranchInsertAt(null);
+      push({
+        level: "success",
+        title: "If/Else branch added",
+        message: "One case matches the value. The other case is everything else.",
+      });
+      return;
+    }
+
     if (branchMode === "if_else") {
       if (!branchThreshold.trim()) {
         push({ level: "warning", title: "Branch incomplete", message: "Choose a threshold." });
@@ -849,6 +979,7 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
         footerOverride={options?.footerOverride}
         compactHeader={options?.compactHeader}
         hideWhenEditor={options?.hideWhenEditor}
+        settlementFamily={settlementFamily}
       />
     );
   };
@@ -1233,23 +1364,28 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Edit boundaries here — all case cards stay side-by-side. Editing a single step&apos;s
-                      conditions separately would break the exclusive group.
+                      {workflowFieldRoutingKind(fields.find((field) => field.name === selectedSegment.ladder.field)) ===
+                      "amount"
+                        ? "Edit the amount boundaries here. All case cards stay side-by-side."
+                        : "Each case matches a value of this field. All case cards stay side-by-side."}
                     </p>
                     <label className="block space-y-1">
                       <span className="text-xs font-medium text-muted-foreground">Field</span>
                       <Select
                         value={selectedSegment.ladder.field}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          const nextField = fields.find((field) => field.name === nextName);
                           onStepsChange(
-                            updateExclusiveLadderThresholds(
+                            retargetLadderField(
                               steps,
                               selectedSegment.ladder,
-                              e.target.value,
-                              selectedSegment.ladder.thresholds,
+                              nextName,
+                              workflowFieldRoutingKind(nextField),
+                              nextField ? parseSelectChoices(nextField).map((choice) => choice.value) : [],
                             ),
-                          )
-                        }
+                          );
+                        }}
                       >
                         {conditionFieldOptions.map((field) => (
                           <option key={field.id} value={field.id}>
@@ -1258,6 +1394,9 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
                         ))}
                       </Select>
                     </label>
+                    {workflowFieldRoutingKind(
+                      fields.find((field) => field.name === selectedSegment.ladder.field),
+                    ) === "amount" && selectedSegment.ladder.match !== "value" ? (
                     <div className="space-y-2">
                       <span className="text-xs font-medium text-muted-foreground">
                         Thresholds ({selectedSegment.ladder.thresholds.length} boundary
@@ -1290,12 +1429,134 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
                         />
                       ))}
                     </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-muted-foreground">Cases</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const ladderField = fields.find((field) => field.name === selectedSegment.ladder.field);
+                              const choices = ladderField ? parseSelectChoices(ladderField) : [];
+                              const current = ladderMatchCases(steps, selectedSegment.ladder.bandIndexes);
+                              const unused = choices.find(
+                                (choice) =>
+                                  !current.some((entry) => entry.operator === "equals" && entry.value === choice.value),
+                              );
+                              const hasElse = current.some((entry) => entry.operator === "not_equals");
+                              const item = unused
+                                ? { operator: "equals" as const, value: unused.value }
+                                : choices.length > 0 && !hasElse
+                                  ? { operator: "not_equals" as const, value: choices[0]?.value ?? "" }
+                                  : { operator: "equals" as const, value: "" };
+                              onStepsChange(addLadderValueCase(steps, selectedSegment.ladder, item));
+                            }}
+                          >
+                            <Plus className="mr-1 h-3.5 w-3.5" />
+                            Add case
+                          </Button>
+                        </div>
+                        {ladderMatchCases(steps, selectedSegment.ladder.bandIndexes).map((item, caseIndex) => {
+                          const ladderField = fields.find((field) => field.name === selectedSegment.ladder.field);
+                          const choices = ladderField ? parseSelectChoices(ladderField) : [];
+                          const selectValue = item.operator === "not_equals" ? "__else__" : item.value;
+                          const caseCount = selectedSegment.ladder.bandIndexes.length;
+                          return (
+                            <label key={`ladder-case-${selectedSegment.ladder.startIndex}-${caseIndex}`} className="block space-y-1">
+                              <span className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                Case {caseIndex + 1}
+                                {caseCount > 2 ? (
+                                  <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                      onStepsChange(
+                                        removeLadderValueCase(steps, selectedSegment.ladder, caseIndex),
+                                      )
+                                    }
+                                  >
+                                    Remove
+                                  </button>
+                                ) : null}
+                              </span>
+                              {choices.length > 0 ? (
+                                <Select
+                                  value={selectValue}
+                                  onChange={(e) => {
+                                    const picked = e.target.value;
+                                    const current = ladderMatchCases(steps, selectedSegment.ladder.bandIndexes);
+                                    const next = current.map((entry, index) => {
+                                      if (index !== caseIndex) {
+                                        return entry;
+                                      }
+                                      if (picked === "__else__") {
+                                        const other = current.find(
+                                          (candidate, candidateIndex) =>
+                                            candidateIndex !== caseIndex && candidate.operator === "equals" && candidate.value,
+                                        );
+                                        return {
+                                          operator: "not_equals" as const,
+                                          value: other?.value || entry.value,
+                                        };
+                                      }
+                                      return { operator: "equals" as const, value: picked };
+                                    });
+                                    onStepsChange(
+                                      applyValueMatchCases(
+                                        steps,
+                                        selectedSegment.ladder.bandIndexes,
+                                        selectedSegment.ladder.field,
+                                        next,
+                                      ),
+                                    );
+                                  }}
+                                >
+                                  {choices.map((choice) => (
+                                    <option key={choice.value} value={choice.value}>
+                                      {choice.label}
+                                    </option>
+                                  ))}
+                                  <option value="__else__">Anything else</option>
+                                </Select>
+                              ) : (
+                                <Input
+                                  key={`ladder-value-${selectedSegment.ladder.startIndex}-${caseIndex}-${item.value}`}
+                                  type={ladderField?.type === "date" ? "date" : "text"}
+                                  defaultValue={item.value}
+                                  placeholder={ladderField?.label?.trim() || "Value"}
+                                  onBlur={(e) => {
+                                    const nextValue = e.target.value.trim();
+                                    if (!nextValue || nextValue === item.value) {
+                                      e.target.value = item.value;
+                                      return;
+                                    }
+                                    const current = ladderMatchCases(steps, selectedSegment.ladder.bandIndexes);
+                                    const next = current.map((entry, index) =>
+                                      index === caseIndex ? { ...entry, value: nextValue } : entry,
+                                    );
+                                    onStepsChange(
+                                      applyValueMatchCases(
+                                        steps,
+                                        selectedSegment.ladder.bandIndexes,
+                                        selectedSegment.ladder.field,
+                                        next,
+                                      ),
+                                    );
+                                  }}
+                                />
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-1">
                       {selectedSegment.ladder.bandIndexes.map((bandIndex, bandOffset) => {
-                        const band = parseThresholdBand(steps[bandIndex]);
-                        const title = band
-                          ? thresholdBandLabel(band, fieldLabel(selectedSegment.ladder.field))
-                          : `Band ${bandOffset + 1}`;
+                        const title =
+                          ladderCaseLabel(steps[bandIndex], fieldLabel(selectedSegment.ladder.field)) ||
+                          `Band ${bandOffset + 1}`;
                         return (
                           <Button
                             key={`ladder-chip-${bandIndex}`}
@@ -1451,7 +1712,20 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
             {branchMode !== "parallel" ? (
             <label className="block space-y-1">
               <span className="text-xs font-medium text-muted-foreground">Condition field</span>
-              <Select value={branchField} onChange={(e) => setBranchField(e.target.value)}>
+              <Select
+                value={branchField}
+                onChange={(e) => {
+                  const nextName = e.target.value;
+                  setBranchField(nextName);
+                  const nextField = fields.find((field) => field.name === nextName);
+                  const choices = nextField ? parseSelectChoices(nextField) : [];
+                  const seeded: Record<string, string> = {};
+                  choices.forEach((choice, index) => {
+                    seeded[choice.value] = approverOptions[index]?.id ?? "";
+                  });
+                  setChoiceApprovers(seeded);
+                }}
+              >
                 <option value="" disabled>
                   Select field
                 </option>
@@ -1464,7 +1738,66 @@ export function EApprovalWorkflowEditor({ fields, steps, onStepsChange, approver
             </label>
             ) : null}
 
-            {branchMode === "parallel" ? (
+            {branchMode !== "parallel" && branchRouting === "choice" ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Each choice is its own case. Only the matching value runs.
+                </p>
+                {branchChoices.map((choice) => (
+                  <label key={choice.value} className="block space-y-1">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      When {branchFieldDef?.label?.trim() || branchField} is {choice.label}
+                    </span>
+                    <Select
+                      value={choiceApprovers[choice.value] ?? ""}
+                      onChange={(e) =>
+                        setChoiceApprovers((current) => ({ ...current, [choice.value]: e.target.value }))
+                      }
+                    >
+                      <option value="">Select user</option>
+                      {approverOptions.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ))}
+              </div>
+            ) : branchMode !== "parallel" && branchRouting === "value" ? (
+              <>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Match value</span>
+                  <Input
+                    value={branchThreshold}
+                    onChange={(e) => setBranchThreshold(e.target.value)}
+                    placeholder="Value to match"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Approver when it matches</span>
+                  <Select value={branchIfApproverId} onChange={(e) => setBranchIfApproverId(e.target.value)}>
+                    <option value="">Select user</option>
+                    {approverOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.label}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Approver for any other value</span>
+                  <Select value={branchElseApproverId} onChange={(e) => setBranchElseApproverId(e.target.value)}>
+                    <option value="">Select user</option>
+                    {approverOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.label}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </>
+            ) : branchMode === "parallel" ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-muted-foreground">Parallel approvers</span>

@@ -740,7 +740,7 @@ export function DynRelationshipStudioPageClient() {
     <PermissionGate requiredPermissions={[permissions.dynamicEntitiesFieldsManage]}>
       <div className={cn("flex w-full flex-col gap-4")}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Relationship Studio"
           description="Draw and edit Dynamic Entity relationships. Creating an edge adds a lookup field and syncs the inverse related tab on the target entity."
           actions={

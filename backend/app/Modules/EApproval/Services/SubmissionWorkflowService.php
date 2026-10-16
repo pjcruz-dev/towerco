@@ -50,6 +50,7 @@ final class SubmissionWorkflowService
         ?Collection $stepsOverride = null,
         bool $preserveHistoricalApprovals = false,
         string $notifyMode = 'initial',
+        ?string $forceCurrentApproverId = null,
     ): void {
         if ($preserveHistoricalApprovals) {
             EApprovalRequestApproval::query()
@@ -99,6 +100,11 @@ final class SubmissionWorkflowService
             }
 
             $approverId = $this->resolveApproverId($step, $values, $submission, $form);
+            $forceThisStep = $forceCurrentApproverId !== null
+                && ($currentOrder === null || (int) $step->step_order === (int) $currentOrder);
+            if ($forceThisStep) {
+                $approverId = $forceCurrentApproverId;
+            }
             if ($approverId === null) {
                 $unresolvedSteps[] = $this->describeUnresolvedStep($step);
                 $this->audit->log('skip_step', $submission->id, "No approver for step {$step->step_order}");

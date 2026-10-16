@@ -214,7 +214,6 @@ export function EApprovalDocumentDesignEditor({
 
   const widthMm = paperWidthMm(pageSize, resolvedOrientation);
   const heightMm = paperHeightMm(pageSize, resolvedOrientation);
-  const scale = zoom / 100;
   const previewCss = useMemo(
     () =>
       mergeEApprovalPrintCss(deferredCss || defaultEApprovalDocumentDesignCss(), {
@@ -350,8 +349,8 @@ export function EApprovalDocumentDesignEditor({
             <div>
               <p className="text-xs font-medium text-foreground">Live preview</p>
               <p className="text-[11px] text-muted-foreground">
-                {pageSize} · {resolvedOrientation === "landscape" ? "Landscape" : "Portrait"} · sample
-                data
+                {pageSize} · {resolvedOrientation === "landscape" ? "Landscape" : "Portrait"} ·{" "}
+                {Math.round(widthMm)} × {Math.round(heightMm)} mm · sample data
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -390,25 +389,27 @@ export function EApprovalDocumentDesignEditor({
 
           <div className="flex-1 overflow-auto p-4">
             <div
-              className="mx-auto"
+              className="mx-auto overflow-hidden bg-white shadow-md ring-1 ring-slate-200"
               style={{
-                width: `${widthMm * scale}mm`,
-                minHeight: `${heightMm * scale}mm`,
+                width: `${zoom}%`,
+                aspectRatio: `${widthMm} / ${heightMm}`,
+                containerType: "inline-size",
               }}
             >
               <div
-                className="bg-white shadow-md ring-1 ring-slate-200"
+                className="overflow-auto"
                 style={{
                   width: `${widthMm}mm`,
-                  minHeight: `${heightMm}mm`,
-                  transform: `scale(${scale})`,
+                  height: `${heightMm}mm`,
+                  transform: `scale(calc(100cqw / ${widthMm}mm))`,
                   transformOrigin: "top left",
                 }}
               >
                 {previewCss ? <style dangerouslySetInnerHTML={{ __html: previewCss }} /> : null}
                 {previewHtml ? (
                   <div
-                    className="eapproval-document-design-preview p-5"
+                    className="eapproval-document-design-preview box-border"
+                    style={{ padding: `${marginMm}mm` }}
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
                 ) : (

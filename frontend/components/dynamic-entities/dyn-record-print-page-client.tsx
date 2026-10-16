@@ -21,6 +21,7 @@ import {
   type DynResolvedRelation,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { renderDynPrintCss, renderDynPrintTemplate, buildSystemDateTokens } from "@/lib/dynamic-entities/dyn-print-template";
+import { formatDisplayDate } from "@/lib/format-display-date";
 import { resolvePrintTemplate } from "@/lib/dynamic-entities/dyn-print-templates";
 import { BIR_2307_PAGE } from "@/lib/dynamic-entities/bir-2307-field-map";
 import { permissions } from "@/lib/rbac/permissions";
@@ -1409,5 +1410,5 @@ function formatValue(
     }
   }
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  return formatDisplayDate(value) ?? String(value);
 }

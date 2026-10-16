@@ -97,6 +97,9 @@ class EApprovalRequestApproval extends Model
             'signature' => $this->signature,
             'acted_at' => $this->acted_at?->toIso8601String(),
             'step_order' => $this->step?->step_order,
+            'finance_action' => is_array($this->step?->condition)
+                ? ($this->step->condition['finance_action'] ?? null)
+                : null,
             'parallel_mode' => $this->parallelModeFromStep(),
             'parallel_quorum' => $this->parallelQuorumFromStep(),
             'approver' => $this->approver ? [

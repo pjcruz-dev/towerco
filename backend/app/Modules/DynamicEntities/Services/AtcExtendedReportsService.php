@@ -8,7 +8,7 @@ use App\Modules\DynamicEntities\Support\DynReportSupport;
 use Carbon\Carbon;
 
 /**
- * Metacoresoft-parity dashboards and operational / finance reports over dyn_records.
+ * Operational and finance reports over dyn_records.
  */
 final class AtcExtendedReportsService
 {
@@ -19,7 +19,6 @@ final class AtcExtendedReportsService
     public function build(string $report, array $filters = []): array
     {
         return match ($report) {
-            'cas-executive-dashboard' => $this->casExecutiveDashboard(),
             'ar-ap-aging' => $this->arApAging($filters),
             'stock-on-hand' => $this->stockOnHand($filters),
             'petty-cash' => $this->pettyCash($filters),
@@ -46,7 +45,6 @@ final class AtcExtendedReportsService
     public static function reportKeys(): array
     {
         return [
-            'cas-executive-dashboard',
             'ar-ap-aging',
             'stock-on-hand',
             'petty-cash',
@@ -64,96 +62,6 @@ final class AtcExtendedReportsService
             'monthly-management-accounts',
             'bir-compliance',
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function casExecutiveDashboard(): array
-    {
-        $salesMtd = 0.0;
-        $purchasesMtd = 0.0;
-        $cashIn = 0.0;
-        $cashOut = 0.0;
-        $bankBalance = 0.0;
-        $openAr = 0.0;
-        $openAp = 0.0;
-        $start = now()->startOfMonth();
-
-        foreach (DynReportSupport::recordsForSlug('sales_transactions') as $row) {
-            $values = $row->values_json ?? [];
-            $date = DynReportSupport::parseDate($values['transaction_date'] ?? null);
-            $amount = DynReportSupport::money($values['total_amount'] ?? $values['balance_due'] ?? 0);
-            $status = strtolower((string) ($row->status ?? $values['status'] ?? ''));
-            if ($date !== null && ! $date->lt($start)) {
-                $salesMtd += $amount;
-            }
-            if (! str_contains($status, 'paid') && ! str_contains($status, 'void') && ! str_contains($status, 'cancel')) {
-                $openAr += DynReportSupport::money($values['balance_due'] ?? $values['total_amount'] ?? 0);
-            }
-        }
-
-        foreach (DynReportSupport::recordsForSlug('purchase_transactions') as $row) {
-            $values = $row->values_json ?? [];
-            $date = DynReportSupport::parseDate($values['purchase_date'] ?? $values['transaction_date'] ?? null);
-            $amount = DynReportSupport::money($values['total_amount'] ?? $values['balance_due'] ?? 0);
-            $status = strtolower((string) ($row->status ?? $values['status'] ?? ''));
-            if ($date !== null && ! $date->lt($start)) {
-                $purchasesMtd += $amount;
-            }
-            if (! str_contains($status, 'paid') && ! str_contains($status, 'void') && ! str_contains($status, 'cancel')) {
-                $openAp += DynReportSupport::money($values['balance_due'] ?? $values['total_amount'] ?? 0);
-            }
-        }
-
-        foreach (DynReportSupport::recordsForSlug('payments_and_receipts') as $row) {
-            $values = $row->values_json ?? [];
-            $date = DynReportSupport::parseDate($values['payment_date'] ?? null);
-            if ($date === null || $date->lt($start)) {
-                continue;
-            }
-            $amount = DynReportSupport::money($values['amount'] ?? 0);
-            $type = strtolower((string) ($values['type'] ?? ''));
-            if (str_contains($type, 'receipt') || str_contains($type, 'collection')) {
-                $cashIn += $amount;
-            } else {
-                $cashOut += $amount;
-            }
-        }
-
-        foreach (DynReportSupport::recordsForSlug('bank_accounts') as $row) {
-            $bankBalance += DynReportSupport::money(($row->values_json ?? [])['current_balance'] ?? 0);
-        }
-
-        return $this->pack(
-            kpis: [
-                $this->kpi('sales_mtd', 'Sales MTD', $salesMtd, 'money'),
-                $this->kpi('purchases_mtd', 'Purchases MTD', $purchasesMtd, 'money'),
-                $this->kpi('open_ar', 'Open AR', $openAr, 'money'),
-                $this->kpi('open_ap', 'Open AP', $openAp, 'money'),
-                $this->kpi('cash_in', 'Cash in (MTD)', $cashIn, 'money'),
-                $this->kpi('cash_out', 'Cash out (MTD)', $cashOut, 'money'),
-                $this->kpi('bank_balance', 'Bank balances', $bankBalance, 'money'),
-                $this->kpi('net_cash_mtd', 'Net cash MTD', $cashIn - $cashOut, 'money'),
-            ],
-            charts: [
-                $this->chart('cash', 'Cash movement MTD', 'donut', [
-                    ['key' => 'in', 'label' => 'Receipts', 'value' => round($cashIn, 2)],
-                    ['key' => 'out', 'label' => 'Disbursements', 'value' => round($cashOut, 2)],
-                ], 'Amount'),
-                $this->chart('arap', 'Open AR vs AP', 'bar', [
-                    ['key' => 'ar', 'label' => 'Accounts receivable', 'value' => round($openAr, 2)],
-                    ['key' => 'ap', 'label' => 'Accounts payable', 'value' => round($openAp, 2)],
-                ], 'Amount'),
-            ],
-            tables: [],
-            links: [
-                ['label' => 'AR & AP Aging', 'href' => '/dynamic-entities/reports/ar-ap-aging'],
-                ['label' => 'Daily Sales', 'href' => '/dynamic-entities/reports/daily-sales'],
-                ['label' => 'Bank Reconciliation', 'href' => '/dynamic-entities/reports/bank-reconciliation'],
-                ['label' => 'Trial Balance', 'href' => '/dynamic-entities/reports/trial-balance'],
-            ],
-        );
     }
 
     /**
@@ -482,7 +390,6 @@ final class AtcExtendedReportsService
             ],
             links: [
                 ['label' => 'Construction Projects', 'href' => '/dynamic-entities/construction_projects'],
-                ['label' => 'Executive Dashboard', 'href' => '/dynamic-entities/executive-dashboard'],
             ],
         );
     }
@@ -1126,7 +1033,6 @@ final class AtcExtendedReportsService
             tables: [],
             links: [
                 ['label' => 'Income Statement', 'href' => '/dynamic-entities/reports/income-statement'],
-                ['label' => 'CAS Executive Dashboard', 'href' => '/dynamic-entities/reports/cas-executive-dashboard'],
             ],
             filterOptions: ['month' => $from->format('Y-m')],
         );

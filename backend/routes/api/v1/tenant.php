@@ -53,16 +53,7 @@ use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationIndexContro
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationShowController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantFeedbackStoreController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeArchiveController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeDestroyController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeIndexController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgePublishController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeReindexController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeShowController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeStoreController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantKnowledgeUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantMetaShowController;
-use App\Modules\AiAssistant\Http\Controllers\V1\AssistantRetrieveController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchExportController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchFieldsUpdateController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchIndexController;
@@ -77,15 +68,28 @@ use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateDestroyControll
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateIndexController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateStoreController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateUpdateController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportAnalyzeController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportPreviewController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportRunController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportTemplateController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentIndexController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentLookupController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentObsoleteController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentOverviewController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessShowController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessUpdateController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentReportController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentReportExportController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionDownloadController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionFileStoreController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRevisionStreamController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportDestroyController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportFileController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportIndexController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportRunController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportStoreController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentSavedReportUpdateController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentShowController;
 use App\Modules\Documents\Http\Controllers\V1\DocumentBinderTemplateResetController;
 use App\Modules\Documents\Http\Controllers\V1\DocumentBinderTemplateShowController;
@@ -116,6 +120,8 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalApprovalRerouteController
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalAssignableUsersController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalAttachmentDownloadController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalAuditIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalCashAdvanceCancelTripController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalCashAdvanceConfirmReturnController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalCashAdvanceOpenController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalDashboardController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalDelegationDestroyController;
@@ -271,7 +277,11 @@ use App\Modules\Ticketing\Http\Controllers\V1\TicketingAttachmentStoreController
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingCommentStoreController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingDashboardController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingDirectoryUsersController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingFieldDestroyController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingFieldStoreController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingFieldUpdateController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingMetadataController;
+use App\Modules\Ticketing\Http\Controllers\V1\TicketingSchemaShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsShowController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsTestEmailController;
 use App\Modules\Ticketing\Http\Controllers\V1\TicketingSettingsTestWebhookController;
@@ -394,9 +404,22 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     });
     Route::middleware('tenant.module:document_register')->group(function () {
         Route::get('documents/controlled', ControlledDocumentIndexController::class)->name('api.tenant.v1.documents.controlled.index');
+        Route::get('documents/controlled/overview', ControlledDocumentOverviewController::class)->name('api.tenant.v1.documents.controlled.overview');
+        Route::get('documents/controlled/reports', ControlledDocumentReportController::class)->name('api.tenant.v1.documents.controlled.reports');
+        Route::get('documents/controlled/reports/export', ControlledDocumentReportExportController::class)->name('api.tenant.v1.documents.controlled.reports.export');
+        Route::get('documents/controlled/reports/saved', ControlledDocumentSavedReportIndexController::class)->name('api.tenant.v1.documents.controlled.reports.saved.index');
+        Route::post('documents/controlled/reports/saved', ControlledDocumentSavedReportStoreController::class)->name('api.tenant.v1.documents.controlled.reports.saved.store');
+        Route::patch('documents/controlled/reports/saved/{report}', ControlledDocumentSavedReportUpdateController::class)->name('api.tenant.v1.documents.controlled.reports.saved.update');
+        Route::delete('documents/controlled/reports/saved/{report}', ControlledDocumentSavedReportDestroyController::class)->name('api.tenant.v1.documents.controlled.reports.saved.destroy');
+        Route::get('documents/controlled/reports/saved/{report}/run', ControlledDocumentSavedReportRunController::class)->name('api.tenant.v1.documents.controlled.reports.saved.run');
+        Route::get('documents/controlled/reports/saved/{report}/file', ControlledDocumentSavedReportFileController::class)->name('api.tenant.v1.documents.controlled.reports.saved.file');
         Route::get('documents/controlled/register-access', ControlledDocumentRegisterAccessShowController::class)->name('api.tenant.v1.documents.controlled.register_access.show');
         Route::put('documents/controlled/register-access', ControlledDocumentRegisterAccessUpdateController::class)->name('api.tenant.v1.documents.controlled.register_access.update');
         Route::get('documents/controlled/lookup', ControlledDocumentLookupController::class)->name('api.tenant.v1.documents.controlled.lookup');
+        Route::get('documents/controlled/import/template', ControlledDocumentImportTemplateController::class)->name('api.tenant.v1.documents.controlled.import.template');
+        Route::post('documents/controlled/import/analyze', ControlledDocumentImportAnalyzeController::class)->name('api.tenant.v1.documents.controlled.import.analyze');
+        Route::post('documents/controlled/import/preview', ControlledDocumentImportPreviewController::class)->name('api.tenant.v1.documents.controlled.import.preview');
+        Route::post('documents/controlled/import/run', ControlledDocumentImportRunController::class)->name('api.tenant.v1.documents.controlled.import.run');
         Route::post('documents/controlled/import', ControlledDocumentImportController::class)->name('api.tenant.v1.documents.controlled.import');
         Route::get('documents/controlled/{controlledDocument}', ControlledDocumentShowController::class)->name('api.tenant.v1.documents.controlled.show');
         Route::post('documents/controlled/{controlledDocument}/obsolete', ControlledDocumentObsoleteController::class)->name('api.tenant.v1.documents.controlled.obsolete');
@@ -420,7 +443,6 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::patch('assistant/prompt-modules/{module}', AiPromptModuleUpdateController::class)->name('api.tenant.v1.assistant.prompt_modules.update');
         Route::post('assistant/prompt-modules/{module}/reset', AiPromptModuleResetController::class)->name('api.tenant.v1.assistant.prompt_modules.reset');
         Route::post('assistant/ask', AssistantAskController::class)->name('api.tenant.v1.assistant.ask');
-        Route::post('assistant/retrieve', AssistantRetrieveController::class)->name('api.tenant.v1.assistant.retrieve');
         Route::get('assistant/conversations', AssistantConversationIndexController::class)->name('api.tenant.v1.assistant.conversations.index');
         Route::get('assistant/conversations/{conversation}/export', AssistantConversationExportController::class)->name('api.tenant.v1.assistant.conversations.export');
         Route::get('assistant/conversations/{conversation}', AssistantConversationShowController::class)->name('api.tenant.v1.assistant.conversations.show');
@@ -429,15 +451,6 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::post('assistant/feedback', AssistantFeedbackStoreController::class)->name('api.tenant.v1.assistant.feedback.store');
         Route::post('assistant/actions/confirm', AssistantActionConfirmController::class)->name('api.tenant.v1.assistant.actions.confirm');
         Route::post('assistant/actions/{proposal}/cancel', AssistantActionCancelController::class)->name('api.tenant.v1.assistant.actions.cancel');
-
-        Route::get('assistant/knowledge', AssistantKnowledgeIndexController::class)->name('api.tenant.v1.assistant.knowledge.index');
-        Route::post('assistant/knowledge', AssistantKnowledgeStoreController::class)->name('api.tenant.v1.assistant.knowledge.store');
-        Route::get('assistant/knowledge/{source}', AssistantKnowledgeShowController::class)->name('api.tenant.v1.assistant.knowledge.show');
-        Route::put('assistant/knowledge/{source}', AssistantKnowledgeUpdateController::class)->name('api.tenant.v1.assistant.knowledge.update');
-        Route::post('assistant/knowledge/{source}/publish', AssistantKnowledgePublishController::class)->name('api.tenant.v1.assistant.knowledge.publish');
-        Route::post('assistant/knowledge/{source}/archive', AssistantKnowledgeArchiveController::class)->name('api.tenant.v1.assistant.knowledge.archive');
-        Route::post('assistant/knowledge/{source}/reindex', AssistantKnowledgeReindexController::class)->name('api.tenant.v1.assistant.knowledge.reindex');
-        Route::delete('assistant/knowledge/{source}', AssistantKnowledgeDestroyController::class)->name('api.tenant.v1.assistant.knowledge.destroy');
     });
     Route::middleware(['tenant.module:doc_extract'])->group(function () {
         Route::get('doc-extract/templates', DocExtractTemplateIndexController::class)->name('api.tenant.v1.doc_extract.templates.index');
@@ -461,6 +474,10 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('ticketing/settings/test-email', TicketingSettingsTestEmailController::class)->name('api.tenant.v1.ticketing.settings.test_email');
     Route::post('ticketing/settings/test-webhook', TicketingSettingsTestWebhookController::class)->name('api.tenant.v1.ticketing.settings.test_webhook');
     Route::get('ticketing/metadata', TicketingMetadataController::class)->name('api.tenant.v1.ticketing.metadata');
+    Route::get('ticketing/schema', TicketingSchemaShowController::class)->name('api.tenant.v1.ticketing.schema.show');
+    Route::post('ticketing/schema/fields', TicketingFieldStoreController::class)->name('api.tenant.v1.ticketing.schema.fields.store');
+    Route::patch('ticketing/schema/fields/{field}', TicketingFieldUpdateController::class)->name('api.tenant.v1.ticketing.schema.fields.update');
+    Route::delete('ticketing/schema/fields/{field}', TicketingFieldDestroyController::class)->name('api.tenant.v1.ticketing.schema.fields.destroy');
     Route::get('ticketing/assignable-users', TicketingAssignableUsersController::class)->name('api.tenant.v1.ticketing.assignable_users');
     Route::get('ticketing/directory-users', TicketingDirectoryUsersController::class)->name('api.tenant.v1.ticketing.directory_users');
     Route::get('ticketing/tickets', TicketingTicketIndexController::class)->name('api.tenant.v1.ticketing.tickets.index');
@@ -560,6 +577,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::put('e-approval/submissions/{submission}/draft', EApprovalSubmissionDraftUpdateController::class)->name('api.tenant.v1.e_approval.submissions.draft.update');
     Route::post('e-approval/submissions/{submission}/submit', EApprovalSubmissionSubmitDraftController::class)->name('api.tenant.v1.e_approval.submissions.submit_draft');
     Route::post('e-approval/submissions/{submission}/cancel', EApprovalSubmissionCancelController::class)->name('api.tenant.v1.e_approval.submissions.cancel');
+    Route::post('e-approval/submissions/{submission}/cancel-trip', EApprovalCashAdvanceCancelTripController::class)->name('api.tenant.v1.e_approval.submissions.cancel_trip');
+    Route::post('e-approval/submissions/{submission}/confirm-return', EApprovalCashAdvanceConfirmReturnController::class)->name('api.tenant.v1.e_approval.submissions.confirm_return');
     Route::put('e-approval/submissions/{submission}/resubmit', EApprovalSubmissionResubmitController::class)->name('api.tenant.v1.e_approval.submissions.resubmit');
     Route::get('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentIndexController::class)->name('api.tenant.v1.e_approval.submissions.comments.index');
     Route::post('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentStoreController::class)->name('api.tenant.v1.e_approval.submissions.comments.store');
@@ -622,6 +641,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::post('auth/mfa/recovery-codes/regenerate', [TenantAuthController::class, 'mfaRecoveryCodesRegenerate'])->name('api.tenant.v1.auth.mfa.recovery_codes.regenerate');
 
     require __DIR__.'/dynamic-entities.php';
+    require __DIR__.'/assets.php';
     require __DIR__.'/automation.php';
 
     Route::prefix('admin')->group(function () {

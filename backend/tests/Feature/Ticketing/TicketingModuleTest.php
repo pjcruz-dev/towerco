@@ -72,6 +72,144 @@ final class TicketingModuleTest extends TestCase
             ]);
     }
 
+    public function test_dashboard_status_by_department_splits_top_two_requester_depts(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $ops = TenantUser::query()->create([
+            'name' => 'Ops Requester',
+            'email' => 'ops-dept@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Operations',
+        ]);
+        $eng = TenantUser::query()->create([
+            'name' => 'Eng Requester',
+            'email' => 'eng-dept@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Engineering',
+        ]);
+        TicketingTicket::query()->create([
+            'ticket_number' => 9101,
+            'title' => 'Ops open ticket',
+            'status' => TicketingTicket::STATUS_OPEN,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
+            'source_module' => 'ticketing',
+            'requester_id' => $ops->id,
+        ]);
+        TicketingTicket::query()->create([
+            'ticket_number' => 9102,
+            'title' => 'Eng closed ticket',
+            'status' => TicketingTicket::STATUS_CLOSED,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
+            'source_module' => 'ticketing',
+            'requester_id' => $eng->id,
+        ]);
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/dashboard')
+            ->assertOk();
+
+        $departments = $response->json('data.filter_options.departments');
+        $this->assertEqualsCanonicalizing(['Engineering', 'Operations'], $departments);
+
+        $split = $response->json('data.status_by_department');
+        $this->assertNotNull($split);
+        $this->assertCount(2, $split['departments']);
+        $keys = array_column($split['departments'], 'key');
+        $this->assertEqualsCanonicalizing(['Engineering', 'Operations'], $keys);
+
+        $byStatus = collect($split['rows'])->keyBy('status');
+        $this->assertSame(1, $byStatus['open']['total']);
+        $this->assertSame(1, $byStatus['open']['by_department']['Operations']);
+        $this->assertSame(1, $byStatus['closed']['total']);
+        $this->assertSame(1, $byStatus['closed']['by_department']['Engineering']);
+    }
+
+    public function test_dashboard_status_by_department_uses_rest_when_only_one_named_dept(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $ops = TenantUser::query()->create([
+            'name' => 'Ops Only',
+            'email' => 'ops-rest@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Operations',
+        ]);
+        $unassigned = TenantUser::query()->create([
+            'name' => 'No Dept',
+            'email' => 'no-dept@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => null,
+        ]);
+        TicketingTicket::query()->create([
+            'ticket_number' => 9103,
+            'title' => 'Ops remainder ticket',
+            'status' => TicketingTicket::STATUS_OPEN,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
+            'source_module' => 'ticketing',
+            'requester_id' => $ops->id,
+        ]);
+        TicketingTicket::query()->create([
+            'ticket_number' => 9104,
+            'title' => 'Unassigned remainder ticket',
+            'status' => TicketingTicket::STATUS_CLOSED,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
+            'source_module' => 'ticketing',
+            'requester_id' => $unassigned->id,
+        ]);
+        tenancy()->end();
+
+        $split = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/dashboard')
+            ->assertOk()
+            ->json('data.status_by_department');
+
+        $this->assertNotNull($split);
+        $this->assertSame('Operations', $split['departments'][0]['key']);
+        $this->assertSame('_rest', $split['departments'][1]['key']);
+        $this->assertSame('Rest', $split['departments'][1]['label']);
+
+        $byStatus = collect($split['rows'])->keyBy('status');
+        $this->assertSame(1, $byStatus['open']['by_department']['Operations']);
+        $this->assertSame(0, $byStatus['open']['by_department']['_rest']);
+        $this->assertSame(0, $byStatus['closed']['by_department']['Operations']);
+        $this->assertSame(1, $byStatus['closed']['by_department']['_rest']);
+    }
+
+    public function test_dashboard_status_by_department_stays_empty_when_every_ticket_is_one_dept(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $ops = TenantUser::query()->create([
+            'name' => 'Ops Solo',
+            'email' => 'ops-solo@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+            'department' => 'Operations',
+        ]);
+        TicketingTicket::query()->create([
+            'ticket_number' => 9105,
+            'title' => 'Only ops ticket',
+            'status' => TicketingTicket::STATUS_OPEN,
+            'priority' => TicketingTicket::PRIORITY_NORMAL,
+            'source_module' => 'ticketing',
+            'requester_id' => $ops->id,
+        ]);
+        tenancy()->end();
+
+        $split = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/dashboard')
+            ->assertOk()
+            ->json('data.status_by_department');
+
+        $this->assertNull($split);
+    }
+
     public function test_can_create_ticket_with_comment_flow(): void
     {
         $create = $this->actingAsTenantAdmin()
@@ -789,5 +927,108 @@ final class TicketingModuleTest extends TestCase
             ->getJson("/api/v1/ticketing/tickets/{$ticketId}")
             ->assertOk()
             ->assertJsonPath('data.attachments', []);
+    }
+
+    public function test_custom_fields_are_stored_on_the_ticket(): void
+    {
+        $schema = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/schema')
+            ->assertOk()
+            ->assertJsonPath('data.slug', 'helpdesk_ticket');
+
+        $system = collect($schema->json('data.fields'))->firstWhere('name', 'title');
+        $this->assertIsArray($system);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->deleteJson('/api/v1/ticketing/schema/fields/'.$system['id'])
+            ->assertStatus(422);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/schema/fields', [
+                'label' => 'Site code',
+                'name' => 'site_code',
+                'type' => 'text',
+                'is_required' => true,
+                'show_in_table' => true,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'site_code')
+            ->assertJsonPath('data.is_system_field', false);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Missing site code',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Unknown extra',
+                'custom_values' => ['not_a_field' => 'x'],
+            ])
+            ->assertStatus(422);
+
+        $created = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Gate reader down',
+                'custom_values' => ['site_code' => 'MNL-01'],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.custom_values.site_code', 'MNL-01');
+
+        $ticketId = (string) $created->json('data.id');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson("/api/v1/ticketing/tickets/{$ticketId}", [
+                'custom_values' => ['site_code' => 'MNL-02'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.custom_values.site_code', 'MNL-02');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/tickets?search=Gate%20reader')
+            ->assertOk()
+            ->assertJsonPath('data.0.custom_values.site_code', 'MNL-02');
+    }
+
+    public function test_contributor_can_read_schema_but_not_manage_fields(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $contributor = TenantUser::query()->create([
+            'name' => 'Field Contributor',
+            'email' => 'field-contributor@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $contributor->assignRole('ticketing_contributor');
+        tenancy()->end();
+
+        $this->actingAs($contributor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/schema')
+            ->assertOk()
+            ->assertJsonPath('data.slug', 'helpdesk_ticket');
+
+        $this->actingAs($contributor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/schema/fields', [
+                'label' => 'Cost center',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_ticket_schema_requires_authentication(): void
+    {
+        $this->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/ticketing/schema')
+            ->assertUnauthorized();
     }
 }

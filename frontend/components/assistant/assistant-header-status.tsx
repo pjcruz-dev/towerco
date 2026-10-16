@@ -27,10 +27,16 @@ export function AssistantHeaderStatus({
   planMode,
   onModelChange,
 }: Props) {
-  const models = meta?.models?.length ? meta.models : selectedModel ? [selectedModel] : [];
+  const listed = meta?.models?.length ? meta.models : selectedModel ? [selectedModel] : [];
+  const estimates = meta?.model_estimates ?? {};
+  const models = [...listed].sort(
+    (a, b) => (estimates[b]?.high ?? 0) - (estimates[a]?.high ?? 0) || a.localeCompare(b),
+  );
   const model = selectedModel ?? meta?.model_name ?? models[0] ?? null;
   const provider = providerDisplayName(meta?.llm_provider);
-  const chipLabel = provider && model ? `${provider} · ${modelLabel(model)}` : model ? modelLabel(model) : "Loading…";
+  const labelFor = (id: string) => meta?.model_labels?.[id]?.trim() || modelLabel(id);
+  const chipLabel = provider && model ? `${provider} · ${labelFor(model)}` : model ? labelFor(model) : "Loading…";
+  const shownEstimate = costEstimate ?? (model ? estimates[model] : null);
 
   const rateLimitLabel = rateLimit ? `${rateLimit.remaining} / ${rateLimit.limit} left` : null;
   const resetsLabel =
@@ -53,16 +59,21 @@ export function AssistantHeaderStatus({
       <div className="flex min-w-0 items-center gap-2">
         {showModelSelect ? (
           <Select
-            className="h-8 max-w-[260px] text-[11px]"
+            className="h-8 max-w-[340px] text-[11px]"
             value={model && models.includes(model) ? model : models[0]}
             onChange={(e) => onModelChange?.(e.target.value)}
             aria-label="Model"
           >
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {provider ? `${provider} · ${modelLabel(m)}` : modelLabel(m)}
-              </option>
-            ))}
+            {models.map((m) => {
+              const price = estimates[m]?.high;
+              const priceLabel =
+                typeof price === "number" ? ` · ₱${price.toFixed(2)}` : "";
+              return (
+                <option key={m} value={m}>
+                  {`${provider ? `${provider} · ${labelFor(m)}` : labelFor(m)}${priceLabel}`}
+                </option>
+              );
+            })}
           </Select>
         ) : (
           <span
@@ -115,19 +126,23 @@ export function AssistantHeaderStatus({
             {dailyLabel}
           </span>
         ) : null}
-        {costEstimate ? (
+        {shownEstimate ? (
           <span
             className={cn(
               "rounded-full px-2 py-1 text-[10px] font-semibold",
-              costEstimate.intensity === "high"
+              shownEstimate.intensity === "high"
                 ? "bg-amber-200 text-amber-950 dark:bg-amber-400/30 dark:text-amber-100"
-                : costEstimate.intensity === "medium"
+                : shownEstimate.intensity === "medium"
                   ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"
                   : "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100",
             )}
-            title="Rough estimate from token usage"
+            title={
+              costEstimate
+                ? "Rough PHP estimate from this reply"
+                : "Rough PHP for a short reply with the selected model. Highest price is at the top of the list."
+            }
           >
-            {costEstimate.label}
+            {shownEstimate.label}
           </span>
         ) : planMode ? (
           <span className="text-[10px] text-muted-foreground">Plan mode</span>

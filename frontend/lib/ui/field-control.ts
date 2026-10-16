@@ -14,7 +14,7 @@ export const fieldControlClassName = [
 ].join(" ");
 
 /** Toolbar / filter bar selects — match Input/Button height (h-9). */
-export const filterSelectClassName = `${fieldControlClassName} h-9 min-w-[10rem] pr-8`;
+export const filterSelectClassName = `${fieldControlClassName} h-9 w-auto min-w-[10rem] pr-8`;
 
 /** Field selects on mobile-heavy flows (rollouts, users filters). */
 export const touchFilterSelectClassName = `${fieldControlClassName} h-11 min-w-[10rem] pr-8 text-base sm:h-9 sm:text-sm`;

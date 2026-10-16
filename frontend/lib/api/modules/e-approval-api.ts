@@ -156,6 +156,8 @@ export type EApprovalWorkflowPreviewStep = {
   parallel_mode?: "all" | "any" | "n_of_m" | null;
   parallel_quorum?: number | null;
   used_fallback?: boolean;
+  /** When true, this approver must tick the surrender or payment line. */
+  confirm_settlement?: boolean;
   warning: string | null;
   runtime_status?: string | null;
   approval_id?: string | null;
@@ -547,9 +549,30 @@ export async function decideEApprovalApproval(
     signature?: string | null;
     signature_consent?: boolean;
     signature_storage_consent?: boolean;
+    release_reference?: string;
+    release_date?: string;
+    settlement_reference?: string;
   },
 ): Promise<void> {
   await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);
+}
+
+export async function cancelEApprovalCashAdvanceTrip(id: string): Promise<EApprovalSubmissionDetail> {
+  const response = await apiClient.post<{ data: EApprovalSubmissionDetail }>(
+    `/e-approval/submissions/${id}/cancel-trip`,
+  );
+  return response.data.data;
+}
+
+export async function confirmEApprovalCashAdvanceReturn(
+  id: string,
+  settlementReference: string,
+): Promise<EApprovalSubmissionDetail> {
+  const response = await apiClient.post<{ data: EApprovalSubmissionDetail }>(
+    `/e-approval/submissions/${id}/confirm-return`,
+    { settlement_reference: settlementReference },
+  );
+  return response.data.data;
 }
 
 export async function fetchEApprovalComments(submissionId: string): Promise<EApprovalCommentRow[]> {
@@ -1031,9 +1054,28 @@ export async function fetchEApprovalMetadata(): Promise<EApprovalMetadataRespons
   return response.data.data;
 }
 
-export async function fetchEApprovalMasterData(key: string): Promise<{ options: { value: string; label: string; code?: string }[] }> {
-  const response = await apiClient.get<{ data: { options: { value: string; label: string; code?: string }[] } }>(
+export type EApprovalMasterDataOption = {
+  value: string;
+  label: string;
+  code?: string;
+  subtitle?: string | null;
+  data?: {
+    address?: string;
+    name?: string;
+    vatable?: boolean;
+    per_diem?: boolean;
+    hotel?: boolean;
+    fields?: Record<string, string>;
+  };
+};
+
+export async function fetchEApprovalMasterData(
+  key: string,
+  params?: { q?: string; limit?: number; subsidiary?: string },
+): Promise<{ options: EApprovalMasterDataOption[] }> {
+  const response = await apiClient.get<{ data: { options: EApprovalMasterDataOption[] } }>(
     `/e-approval/master-data/${key}`,
+    { params },
   );
   return response.data.data;
 }
@@ -1073,13 +1115,42 @@ export async function sendEApprovalSettingsTestWebhook(): Promise<EApprovalTestW
   return response.data.data;
 }
 
+export type EApprovalMasterDataColumnDef = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "boolean";
+};
+
 export async function fetchEApprovalMasterDataSets(): Promise<
-  { id: string; key: string; name: string; status: string; row_count: number }[]
+  {
+    id: string;
+    key: string;
+    name: string;
+    status: string;
+    row_count: number;
+    config_json?: { columns?: EApprovalMasterDataColumnDef[] } | null;
+  }[]
 > {
   const response = await apiClient.get<{
-    data: { data: { id: string; key: string; name: string; status: string; row_count: number }[] };
+    data: {
+      data: {
+        id: string;
+        key: string;
+        name: string;
+        status: string;
+        row_count: number;
+        config_json?: { columns?: EApprovalMasterDataColumnDef[] } | null;
+      }[];
+    };
   }>("/e-approval/master-data-sets");
   return response.data.data.data;
+}
+
+export async function updateEApprovalMasterDataSet(
+  setId: string,
+  payload: { config_json: { columns: EApprovalMasterDataColumnDef[] } },
+): Promise<void> {
+  await apiClient.put(`/e-approval/master-data-sets/${setId}`, payload);
 }
 
 export async function createEApprovalMasterDataSet(payload: { key: string; name?: string }): Promise<void> {
@@ -1087,10 +1158,12 @@ export async function createEApprovalMasterDataSet(payload: { key: string; name?
 }
 
 export async function fetchEApprovalMasterDataRows(setId: string): Promise<
-  { id: string; code: string | null; label: string; is_active: boolean }[]
+  { id: string; code: string | null; label: string; data?: Record<string, unknown> | null; is_active: boolean }[]
 > {
   const response = await apiClient.get<{
-    data: { data: { id: string; code: string | null; label: string; is_active: boolean }[] };
+    data: {
+      data: { id: string; code: string | null; label: string; data?: Record<string, unknown> | null; is_active: boolean }[];
+    };
   }>(`/e-approval/master-data-sets/${setId}/rows`);
   return response.data.data.data;
 }
@@ -1163,13 +1236,34 @@ export async function revokeEApprovalSubmissionShareLink(shareLinkId: string): P
   await apiClient.post(`/e-approval/share-links/${shareLinkId}/revoke`);
 }
 
+export type EApprovalSiteSearchScope = "request" | "all" | "atc" | "adic";
+
+export function normalizeSiteSearchScope(value: unknown): EApprovalSiteSearchScope {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "all" || raw === "atc" || raw === "adic") return raw;
+  return "request";
+}
+
 export async function fetchEApprovalSettingsPublic(): Promise<{
   feature_delegation_ui: string;
+  per_diem_max_per_day: string;
+  hotel_accommodation_max: string;
+  site_search_scope: EApprovalSiteSearchScope;
 }> {
-  const response = await apiClient.get<{ data: { feature_delegation_ui: string } }>(
-    "/e-approval/settings/public",
-  );
-  return response.data.data;
+  const response = await apiClient.get<{
+    data: {
+      feature_delegation_ui: string;
+      per_diem_max_per_day?: string;
+      hotel_accommodation_max?: string;
+      site_search_scope?: string;
+    };
+  }>("/e-approval/settings/public");
+  return {
+    feature_delegation_ui: response.data.data.feature_delegation_ui,
+    per_diem_max_per_day: response.data.data.per_diem_max_per_day ?? "",
+    hotel_accommodation_max: response.data.data.hotel_accommodation_max ?? "",
+    site_search_scope: normalizeSiteSearchScope(response.data.data.site_search_scope),
+  };
 }
 
 export async function fetchEApprovalMeProfile(): Promise<EApprovalMeProfile> {
@@ -1379,7 +1473,7 @@ export async function deleteEApprovalFormOutboundFile(fileId: string): Promise<v
 
 export async function createEApprovalMasterDataRow(
   setId: string,
-  payload: { code?: string; label: string; sort_order?: number; is_active?: boolean },
+  payload: { code?: string; label: string; data?: Record<string, unknown>; sort_order?: number; is_active?: boolean },
 ): Promise<void> {
   await apiClient.post(`/e-approval/master-data-sets/${setId}/rows`, payload);
 }
@@ -1398,12 +1492,22 @@ export async function deleteEApprovalMasterDataRow(rowId: string): Promise<void>
 export async function bulkImportEApprovalMasterDataRows(
   setId: string,
   rows: Record<string, unknown>[],
-): Promise<{ created: number }> {
-  const response = await apiClient.post<{ data: { created: number } }>(
+  options?: { dryRun?: boolean; signal?: AbortSignal },
+): Promise<{ created: number; errors: { row: number; message: string }[] }> {
+  const response = await apiClient.post<{
+    data: { created: number; errors?: { row: number; message: string }[] };
+  }>(
     `/e-approval/master-data-sets/${setId}/rows/bulk`,
-    { rows },
+    {
+      rows,
+      dry_run: options?.dryRun === true,
+    },
+    { signal: options?.signal },
   );
-  return response.data.data;
+  return {
+    created: response.data.data.created ?? 0,
+    errors: response.data.data.errors ?? [],
+  };
 }
 
 export async function createEApprovalDocumentLink(

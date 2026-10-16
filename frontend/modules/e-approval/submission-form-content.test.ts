@@ -87,6 +87,88 @@ describe("submission form content", () => {
     ]);
   });
 
+  it("places forecast totals under the matching line columns", () => {
+    const groups = buildSubmissionFormContentGroups(
+      [
+        {
+          field_id: "g1",
+          field_name: "expense_lines",
+          field_type: "grid",
+          label: "Forecast lines",
+          value: JSON.stringify({
+            rows: [{ "0": "Land", "1": "6000.00", "2": "VATable", "3": "642.86" }],
+          }),
+        },
+        {
+          field_id: "t1",
+          field_name: "requested_amount",
+          field_type: "currency",
+          label: "Requested amount",
+          value: "6000.00",
+        },
+        {
+          field_id: "t2",
+          field_name: "vat_total",
+          field_type: "currency",
+          label: "VAT",
+          value: "642.86",
+        },
+        {
+          field_id: "t3",
+          field_name: "non_vatable_total",
+          field_type: "currency",
+          label: "Non-VATable",
+          value: "0.00",
+        },
+        {
+          field_id: "t4",
+          field_name: "vatable_net",
+          field_type: "currency",
+          label: "VATable, net of VAT",
+          value: "5357.14",
+        },
+      ],
+      [
+        {
+          id: "g1",
+          type: "grid",
+          name: "expense_lines",
+          label: "Forecast lines",
+          options: {
+            columns: [
+              { label: "Expense type", type: "text" },
+              { label: "Amount", type: "currency" },
+              { label: "VAT treatment", type: "select" },
+              { label: "VAT", type: "currency" },
+            ],
+          },
+        },
+        { id: "t1", type: "currency", name: "requested_amount", label: "Requested amount" },
+        { id: "t2", type: "currency", name: "vat_total", label: "VAT" },
+        { id: "t3", type: "currency", name: "non_vatable_total", label: "Non-VATable" },
+        { id: "t4", type: "currency", name: "vatable_net", label: "VATable, net of VAT" },
+      ],
+      [],
+    );
+
+    const items = groups.flatMap((group) => group.items);
+    expect(items.map((item) => item.value.field_name)).toEqual(["expense_lines"]);
+    expect(items[0]?.totals).toEqual([
+      { label: "Requested amount", value: "6,000.00" },
+      { label: "VAT", value: "642.86" },
+      { label: "Non-VATable", value: "0.00" },
+      { label: "VATable, net of VAT", value: "5,357.14" },
+    ]);
+    expect(items[0]?.table?.headers).toEqual([
+      "Expense type",
+      "Amount",
+      "VAT treatment",
+      "VAT",
+      "Non-VATable",
+      "VATable, net of VAT",
+    ]);
+  });
+
   it("hides file fields when attachments panel will show them", () => {
     expect(
       shouldHideSubmissionAttachmentFieldValue(

@@ -53,4 +53,12 @@ final class AssistantActionRegistry
     {
         return array_keys($this->actions);
     }
+
+    /**
+     * @return list<AssistantActionInterface>
+     */
+    public function all(): array
+    {
+        return array_values($this->actions);
+    }
 }

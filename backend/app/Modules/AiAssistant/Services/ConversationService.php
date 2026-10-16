@@ -112,6 +112,7 @@ final class ConversationService
 
     /**
      * @param  list<array<string, mixed>>|null  $citations
+     * @param  list<array<string, mixed>>|null  $activity
      */
     public function storeAssistantMessage(
         AiConversation $conversation,
@@ -122,6 +123,7 @@ final class ConversationService
         ?int $promptTokens = null,
         ?int $completionTokens = null,
         ?int $latencyMs = null,
+        ?array $activity = null,
     ): AiMessage {
         return $this->storeMessage(
             conversation: $conversation,
@@ -133,6 +135,7 @@ final class ConversationService
             promptTokens: $promptTokens,
             completionTokens: $completionTokens,
             latencyMs: $latencyMs,
+            activity: $activity,
         );
     }
 
@@ -354,6 +357,7 @@ final class ConversationService
             'role' => $message->role,
             'content' => $message->content,
             'citations' => $message->citations ?? [],
+            'activity' => is_array($message->activity) ? $message->activity : [],
             'model_name' => $message->model_name,
             'prompt_tokens' => $message->prompt_tokens,
             'completion_tokens' => $message->completion_tokens,
@@ -405,6 +409,7 @@ final class ConversationService
 
     /**
      * @param  list<array<string, mixed>>|null  $citations
+     * @param  list<array<string, mixed>>|null  $activity
      */
     private function storeMessage(
         AiConversation $conversation,
@@ -416,12 +421,14 @@ final class ConversationService
         ?int $promptTokens = null,
         ?int $completionTokens = null,
         ?int $latencyMs = null,
+        ?array $activity = null,
     ): AiMessage {
         return AiMessage::query()->create([
             'conversation_id' => $conversation->id,
             'role' => $role,
             'content' => $content,
             'citations' => $citations,
+            'activity' => $activity,
             'model_name' => $modelName,
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,

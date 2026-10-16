@@ -1,0 +1,281 @@
+<div class="container-fluid py-3 procurement-dash">
+    <!-- FORMAL PRINT HEADER -->
+    <div class="print-formal-header d-none">
+        <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+            <div>
+                <h4 class="fw-bold mb-0 text-dark">{{system.company_name}}</h4>
+                <div class="small text-muted">PROCUREMENT & APPROVAL PIPELINE DASHBOARD</div>
+            </div>
+            <div class="text-end small">
+                <div><strong>Generated:</strong> <span class="print-date"></span></div>
+                <div><strong>Currency:</strong> PHP (₱)</div>
+            </div>
+        </div>
+        <div class="small mt-2"><strong>Scope:</strong> Pending Approvals by Level and Process Stage</div>
+    </div>
+
+    <!-- HEADER & ACTION BAR -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3 no-print">
+        <div>
+            <h4 class="mb-0 fw-bold" style="color: #3a475c;">
+                <i class="fas fa-tasks text-primary me-2"></i>Procurement Dashboard
+            </h4>
+            <div class="text-muted small">
+                Multi-level approval queue & process stage tracking across Requisitions, Orders, SCM Sourcing, and Disbursements.
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn btn-outline-secondary btn-sm" id="btn-refresh" title="Reload live data">
+                <i class="fas fa-sync-alt me-1"></i> Refresh
+            </button>
+            <button class="btn btn-outline-success btn-sm fw-semibold" id="btn-export-csv" title="Export current view to CSV">
+                <i class="fas fa-file-excel me-1"></i> Export CSV
+            </button>
+            <button class="btn btn-primary btn-sm fw-semibold" onclick="window.print()" title="Print formal report">
+                <i class="fas fa-print me-1"></i> Print to PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- FILTER TOOLBAR -->
+    <div class="card border-0 shadow-sm mb-3 no-print filter-toolbar-box">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Company / Subsidiary</label>
+                    <select id="filter-subsidiary" class="form-select form-select-sm">
+                        <option value="ALL">All Subsidiaries</option>
+                        <option value="1">Alliance Towers Corporation (ATC)</option>
+                        <option value="2">Alliance Digital Infrastructure (ADIC)</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Department</label>
+                    <select id="filter-department" class="form-select form-select-sm">
+                        <option value="ALL">All Departments</option>
+                        <option value="1">Site Acquisition</option>
+                        <option value="2">Civil, Mechanical & Electrical</option>
+                        <option value="3">Power</option>
+                        <option value="4">Project Management Office</option>
+                        <option value="5">Supply Chain Management</option>
+                        <option value="6">Finance & Administration</option>
+                        <option value="7">Operations & Maintenance</option>
+                        <option value="8">Commercial / Sales</option>
+                        <option value="9">Information Technology</option>
+                        <option value="10">Executive Office</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Document Type</label>
+                    <select id="filter-doc-type" class="form-select form-select-sm">
+                        <option value="ALL">All Documents</option>
+                        <option value="PR">Purchase Requisitions (PRF)</option>
+                        <option value="PO">Purchase Orders (PO)</option>
+                        <option value="RFQ">Bid Evaluations (RFQ)</option>
+                        <option value="NTP">Notices to Proceed (NTP)</option>
+                        <option value="MB">Milestone Validation (MB)</option>
+                        <option value="APV">Vendor Bills (APV)</option>
+                        <option value="CDV">Payment Vouchers (CDV)</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-3">
+                    <label class="form-label small text-muted mb-1 fw-bold">Approval Level / Stage Gate</label>
+                    <select id="filter-level" class="form-select form-select-sm">
+                        <option value="ALL">All Levels & Stages</option>
+                        <option value="L1">Level 1: Dept Head / SCM Endorsement</option>
+                        <option value="L2">Level 2: CFO Budget & Financial Review</option>
+                        <option value="L3">Level 3: President & CEO Executive Sign-off</option>
+                        <option value="SCM">SCM Sourcing & Award Gates</option>
+                        <option value="PAY">Payables & Disbursements Authorization</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-3">
+                    <label class="form-label small text-muted mb-1 fw-bold">SLA / Ageing Status</label>
+                    <select id="filter-sla" class="form-select form-select-sm">
+                        <option value="ALL">All Ageing</option>
+                        <option value="CRITICAL">Overdue (> 7 Days)</option>
+                        <option value="WARNING">Attention (3 - 7 Days)</option>
+                        <option value="ONTRACK">Normal (< 3 Days)</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Date From</label>
+                    <input type="date" id="filter-date-from" class="form-control form-control-sm">
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Date To</label>
+                    <input type="date" id="filter-date-to" class="form-control form-control-sm">
+                </div>
+                <div class="col-12 col-md-12 col-lg-4">
+                    <label class="form-label small text-muted mb-1 fw-bold">Instant Search</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="search-input" class="form-control" placeholder="Search doc #, site, vendor, memo...">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEVEL-BY-LEVEL STAGE PIPELINE CARDS -->
+    <div class="row g-2 mb-3">
+        <div class="col-12 col-sm-6 col-lg-2">
+            <div class="stage-pipeline-card stage-card-l1 p-3 h-100 kpi-card" data-stage-filter="L1">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-level-1 fw-bold">Level 1 Gate</span>
+                    <i class="fas fa-user-check text-primary"></i>
+                </div>
+                <div class="small text-muted fw-bold">Dept Head & SCM Review</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-l1-count">0</h4>
+                <div class="text-primary small fw-semibold" id="stat-l1-val">₱0.00</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Initial technical & operational clearance</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-2">
+            <div class="stage-pipeline-card stage-card-l2 p-3 h-100 kpi-card" data-stage-filter="L2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-level-2 fw-bold">Level 2 Gate</span>
+                    <i class="fas fa-calculator" style="color: #8b5cf6;"></i>
+                </div>
+                <div class="small text-muted fw-bold">CFO Budget & Finance</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-l2-count">0</h4>
+                <div class="small fw-semibold" style="color: #6d28d9;" id="stat-l2-val">₱0.00</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Budget allocation & Capex verification</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="stage-pipeline-card stage-card-l3 p-3 h-100 kpi-card" data-stage-filter="L3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-level-3 fw-bold">Level 3 Gate</span>
+                    <i class="fas fa-signature" style="color: #ec4899;"></i>
+                </div>
+                <div class="small text-muted fw-bold">President & CEO Sign-off</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-l3-count">0</h4>
+                <div class="small fw-semibold" style="color: #be185d;" id="stat-l3-val">₱0.00</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">
+                    President (≤ ₱500K: <span id="stat-l3-pres">0</span>) | CEO (> ₱500K: <span id="stat-l3-ceo">0</span>)
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-2">
+            <div class="stage-pipeline-card stage-card-scm p-3 h-100 kpi-card" data-stage-filter="SCM">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-scm fw-bold">SCM Sourcing</span>
+                    <i class="fas fa-handshake" style="color: #f59e0b;"></i>
+                </div>
+                <div class="small text-muted fw-bold">Bids, NTPs & Verification</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-scm-count">0</h4>
+                <div class="small fw-semibold" style="color: #b45309;" id="stat-scm-val">₱0.00</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">RFQs, awards, direct awards, and milestone certs</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            <div class="stage-pipeline-card stage-card-ap p-3 h-100 kpi-card" data-stage-filter="ALL">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-dark text-white fw-bold">Total Pipeline</span>
+                    <span class="badge sla-overdue" id="stat-critical-count">0 Overdue</span>
+                </div>
+                <div class="small text-muted fw-bold">Total Pending Authorizations</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-total-count">0</h4>
+                <div class="text-success small fw-bold" id="stat-total-val">₱0.00</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">
+                    Click any card to filter by approval level
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISUAL ANALYTICS SECTION (CHARTS) -->
+    <div class="row g-3 mb-3 no-print">
+        <div class="col-12 col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2 border-0 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold small text-dark"><i class="fas fa-chart-bar text-primary me-2"></i>Pending Value by Approval Level (₱)</span>
+                    <small class="text-muted" id="chart-bar-sub">Grouped by Document Type</small>
+                </div>
+                <div class="card-body p-2">
+                    <div class="chart-container-box">
+                        <div style="position: relative; height: 300px; width: 100%;"><canvas id="chartApprovalLevels"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2 border-0 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold small text-dark"><i class="fas fa-chart-pie text-warning me-2"></i>Approval Ageing & SLA Bottlenecks</span>
+                    <small class="text-muted">Turnaround Tracking</small>
+                </div>
+                <div class="card-body p-2">
+                    <div class="chart-container-box">
+                        <div style="position: relative; height: 300px; width: 100%;"><canvas id="chartSlaAgeing"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE TABBED WORKSPACE -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom p-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <ul class="nav nav-pills nav-pills-custom gap-1" id="dash-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-tab-type="ALL" type="button"><i class="fas fa-layer-group me-1"></i> All Pending (<span id="tab-cnt-all">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-tab-type="PR" type="button"><i class="fas fa-file-invoice me-1"></i> Requisitions (<span id="tab-cnt-pr">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-tab-type="PO" type="button"><i class="fas fa-shopping-cart me-1"></i> Purchase Orders (<span id="tab-cnt-po">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-tab-type="SCM" type="button"><i class="fas fa-boxes-packing me-1"></i> SCM Sourcing & Awards (<span id="tab-cnt-scm">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-tab-type="PAY" type="button"><i class="fas fa-money-check-dollar me-1"></i> Payables & Checks (<span id="tab-cnt-pay">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link text-danger" data-tab-type="OVERDUE" type="button"><i class="fas fa-exclamation-triangle me-1"></i> Overdue SLA (<span id="tab-cnt-overdue">0</span>)</button>
+                </li>
+            </ul>
+            <div class="text-muted small pe-2 no-print" id="table-showing-text">
+                Showing 0 items
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-custom table-hover align-middle mb-0" id="approvalTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 130px;">Doc Number</th>
+                            <th style="width: 110px;">Doc Type</th>
+                            <th style="width: 170px;">Approval Level / Stage</th>
+                            <th>Description / Memo</th>
+                            <th>Tower Site / Location</th>
+                            <th>Requester / Vendor</th>
+                            <th class="text-end" style="width: 140px;">Amount (₱)</th>
+                            <th class="text-center" style="width: 120px;">Ageing & SLA</th>
+                            <th style="width: 180px;">Pending Authority / Role</th>
+                            <th class="text-center no-print" style="width: 90px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvalTableBody">
+                        <tr>
+                            <td colspan="10" class="text-center py-5 text-muted">
+                                <i class="fas fa-spinner fa-spin me-2 text-primary"></i> Loading procurement approval pipeline...
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr class="table-grand-total">
+                            <td colspan="6" class="fw-bold text-uppercase ps-3">Total Pending Pipeline</td>
+                            <td class="text-end fw-bold text-primary pe-3" id="table-grand-total">₱0.00</td>
+                            <td colspan="3" class="text-muted small text-center" id="table-grand-count">0 items</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

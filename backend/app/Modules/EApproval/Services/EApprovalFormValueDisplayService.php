@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalSiteStop;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Carbon;
@@ -226,7 +227,7 @@ final class EApprovalFormValueDisplayService
             $cells = [];
             foreach ($columns as $index => $columnLabel) {
                 $key = (string) $index;
-                $cell = trim((string) ($row[$key] ?? $row[$columnLabel] ?? ''));
+                $cell = EApprovalSiteStop::display(trim((string) ($row[$key] ?? $row[$columnLabel] ?? '')));
                 if ($cell !== '') {
                     $cells[] = $columnLabel.': '.$cell;
                 }
@@ -311,6 +312,7 @@ final class EApprovalFormValueDisplayService
                         continue;
                     }
                     $companionParts[] = $suffix !== '' ? $sizeLabel.' '.$suffix : $sizeLabel;
+
                     continue;
                 }
                 $companionParts[] = $suffix !== '' ? $companionValue.' '.$suffix : $companionValue;
@@ -599,10 +601,12 @@ final class EApprovalFormValueDisplayService
                     continue;
                 }
                 $lines[] = $rowLabel.': '.$text;
+
                 continue;
             }
             if (($entry['na'] ?? false) === true) {
                 $lines[] = $rowLabel.': NA';
+
                 continue;
             }
             $w = trim((string) ($entry['w'] ?? ''));
@@ -631,6 +635,26 @@ final class EApprovalFormValueDisplayService
         return $count === 1
             ? __('1 photo')
             : __(':count photos', ['count' => $count]);
+    }
+
+    public function formatStoredDateRange(string $raw): ?string
+    {
+        if (! str_starts_with(trim($raw), '{')) {
+            return null;
+        }
+
+        $display = $this->resolveDateRangeDisplay($raw);
+
+        return is_string($display) && $display !== '' && $display !== $raw ? $display : null;
+    }
+
+    private function resolveRangeEndpointDisplay(string $value): string
+    {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/', $value, $matches) === 1) {
+            return $matches[1].' '.$matches[2];
+        }
+
+        return $this->resolveDateDisplay($value) ?? $value;
     }
 
     private function resolveDateDisplay(?string $rawValue): ?string
@@ -676,8 +700,8 @@ final class EApprovalFormValueDisplayService
             return null;
         }
 
-        $fromDisplay = $from !== '' ? $this->resolveDateDisplay($from) : '—';
-        $toDisplay = $to !== '' ? $this->resolveDateDisplay($to) : '—';
+        $fromDisplay = $from !== '' ? $this->resolveRangeEndpointDisplay($from) : '—';
+        $toDisplay = $to !== '' ? $this->resolveRangeEndpointDisplay($to) : '—';
 
         return $fromDisplay.' – '.$toDisplay;
     }

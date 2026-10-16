@@ -7,10 +7,17 @@ namespace Tests\Feature\Documents;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Documents\Models\ControlledDocument;
+use App\Modules\Documents\Models\ControlledDocumentRevision;
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
+use App\Modules\Documents\Services\ControlledDocumentPendingImportService;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
+use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Models\EApprovalWorkflowStep;
+use App\Modules\EApproval\Models\EApprovalWorkflowTemplate;
 use App\Modules\EApproval\Services\EApprovalDocumentSequenceService;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -51,7 +58,7 @@ final class ControlledDocumentTest extends TestCase
 
     public function test_csv_import_creates_published_master_record(): void
     {
-        $csv = <<<CSV
+        $csv = <<<'CSV'
 document_code,title,document_type,department,revision_number,effective_date
 ATC-QMS-P-001,Quality Policy,Policies and Procedures,QMS,0,2025-05-20
 CSV;
@@ -99,12 +106,103 @@ CSV;
         tenancy()->end();
 
         tenancy()->initialize($this->testTenant);
-        app(\App\Modules\Documents\Services\ControlledDocumentEApprovalHookService::class)
+        app(ControlledDocumentEApprovalHookService::class)
             ->afterSubmissionMutation($submission->fresh(['form', 'values.field', 'attachments']), $this->testTenantAdmin);
         $document = ControlledDocument::query()->where('document_code', 'ATC-QMS-P-002')->first();
         $this->assertNotNull($document);
         $this->assertSame(0, $document->current_revision);
         $this->assertCount(1, $document->revisions);
+        tenancy()->end();
+    }
+
+    public function test_pending_submission_is_listed_until_it_is_approved_or_withdrawn(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'ISO Approval',
+            'status' => 'published',
+            'metadata_json' => json_encode([
+                'controlledDocumentSync' => ['enabled' => true],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $hook = app(ControlledDocumentEApprovalHookService::class);
+        $pending = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => 'ATC-QMS-P-020',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::PENDING,
+            'current_step' => 1,
+        ]);
+
+        $hook->afterSubmissionOpened($pending->fresh(['form']), $this->testTenantAdmin);
+        $document = ControlledDocument::query()->where('document_code', 'ATC-QMS-P-020')->first();
+        $this->assertNotNull($document);
+        $this->assertSame(ControlledDocumentStatus::PENDING, $document->status);
+        $this->assertNull($document->published_at);
+
+        $sourcePath = 'tenant/e-approval/'.$pending->id.'/sample.pdf';
+        Storage::disk('tenant_files')->put($sourcePath, 'pending-file');
+        EApprovalAttachment::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $pending->id,
+            'field_name' => 'attachments',
+            'file_path' => $sourcePath,
+            'file_name' => 'Sample.pdf',
+        ]);
+        $hook->afterAttachmentStored($pending->fresh(['form', 'attachments']));
+        $pendingRevision = $document->revisions()->first();
+        $this->assertNotNull($pendingRevision);
+        $this->assertSame('Sample.pdf', $pendingRevision->original_filename);
+        $this->assertNotSame('', (string) $pendingRevision->stored_path);
+
+        $published = ControlledDocument::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_code' => 'ATC-QMS-P-001',
+            'title' => 'Quality Policy',
+            'current_revision' => 0,
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'published_at' => now(),
+        ]);
+        $this->assertSame(ControlledDocumentStatus::PUBLISHED, $published->status);
+        $revisionRequest = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => 'ATC-QMS-P-001-R001',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::PENDING,
+            'current_step' => 1,
+        ]);
+        $hook->afterSubmissionOpened($revisionRequest->fresh(['form']), $this->testTenantAdmin);
+        $published->refresh();
+        $this->assertSame(ControlledDocumentStatus::PUBLISHED, $published->status);
+        $this->assertNull(ControlledDocument::query()->where('document_code', 'ATC-QMS-P-001-R001')->first());
+
+        $pending->status = EApprovalSubmissionStatus::APPROVED;
+        $pending->save();
+        $hook->afterSubmissionMutation($pending->fresh(['form', 'values.field', 'attachments']), $this->testTenantAdmin);
+        $document->refresh();
+        $this->assertSame(ControlledDocumentStatus::PUBLISHED, $document->status);
+        $this->assertNotNull($document->published_at);
+
+        $withdrawn = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => 'ATC-QMS-P-021',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::PENDING,
+            'current_step' => 1,
+        ]);
+        $hook->afterSubmissionOpened($withdrawn->fresh(['form']), $this->testTenantAdmin);
+        $this->assertNotNull(ControlledDocument::query()->where('document_code', 'ATC-QMS-P-021')->first());
+        $withdrawn->status = EApprovalSubmissionStatus::CANCELLED;
+        $withdrawn->save();
+        $hook->afterSubmissionClosed($withdrawn);
+        $this->assertNull(ControlledDocument::query()->where('document_code', 'ATC-QMS-P-021')->first());
+
         tenancy()->end();
     }
 
@@ -265,6 +363,126 @@ CSV;
         tenancy()->end();
     }
 
+    public function test_index_filters_by_review_file_effective_date_and_keeps_status_counts(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $overdue = $this->makeControlledDocument('ATC-QMS-P-100', 'Quality Policy', [
+            'department' => 'QMS',
+            'document_type' => 'Policy',
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'effective_date' => '2024-01-15',
+            'next_review_date' => now()->subDay()->toDateString(),
+        ]);
+        $this->makeRevision($overdue, storedPath: null);
+
+        $dueSoon = $this->makeControlledDocument('ATC-OMD-P-100', 'Leasing Procedure', [
+            'department' => 'OMD',
+            'document_type' => 'Procedure',
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'effective_date' => '2026-03-01',
+            'next_review_date' => now()->addDays(10)->toDateString(),
+        ]);
+        $this->makeRevision($dueSoon, storedPath: 'controlled/leasing.docx');
+
+        $obsolete = $this->makeControlledDocument('ATC-QMS-P-101', 'Retired Manual', [
+            'department' => 'QMS',
+            'document_type' => 'Manual',
+            'status' => ControlledDocumentStatus::OBSOLETE,
+            'effective_date' => '2020-06-01',
+            'next_review_date' => null,
+        ]);
+        $this->makeRevision($obsolete, storedPath: null);
+
+        tenancy()->end();
+
+        $headers = $this->tenantApiHeaders();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?review=overdue')
+            ->assertOk()
+            ->assertJsonPath('data.documents.total', 1)
+            ->assertJsonPath('data.documents.data.0.document_code', 'ATC-QMS-P-100')
+            ->assertJsonPath('data.documents.data.0.has_file', false);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?file=has')
+            ->assertOk()
+            ->assertJsonPath('data.documents.total', 1)
+            ->assertJsonPath('data.documents.data.0.document_code', 'ATC-OMD-P-100')
+            ->assertJsonPath('data.documents.data.0.has_file', true);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?file=missing&department=QMS')
+            ->assertOk()
+            ->assertJsonPath('data.documents.total', 2)
+            ->assertJsonPath('data.kpis.total', 2)
+            ->assertJsonPath('data.kpis.published', 1)
+            ->assertJsonPath('data.kpis.obsolete', 1);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?department=QMS&status=published')
+            ->assertOk()
+            ->assertJsonPath('data.documents.total', 1)
+            ->assertJsonPath('data.kpis.published', 1)
+            ->assertJsonPath('data.kpis.obsolete', 1)
+            ->assertJsonPath('data.facets.departments.0', 'OMD');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?effective_from=2026-01-01&effective_to=2026-12-31')
+            ->assertOk()
+            ->assertJsonPath('data.documents.total', 1)
+            ->assertJsonPath('data.documents.data.0.document_code', 'ATC-OMD-P-100');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($headers)
+            ->getJson('/api/v1/documents/controlled?review=nope')
+            ->assertUnprocessable();
+    }
+
+    public function test_incoming_filter_lists_published_rows_with_an_open_revision(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'ISO Approval',
+            'status' => 'published',
+        ]);
+        $incoming = $this->makeControlledDocument('ATC-QMS-P-200', 'Incoming Policy', [
+            'status' => ControlledDocumentStatus::PUBLISHED,
+        ]);
+        $this->makeControlledDocument('ATC-QMS-P-201', 'Quiet Policy', [
+            'status' => ControlledDocumentStatus::PUBLISHED,
+        ]);
+        EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => 'ATC-QMS-P-200-R001',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::PENDING,
+        ]);
+
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled?status=incoming')
+            ->assertOk()
+            ->assertJsonPath('data.kpis.incoming', 1)
+            ->assertJsonPath('data.kpis.published', 2)
+            ->assertJsonPath('data.documents.total', 1)
+            ->assertJsonPath('data.documents.data.0.document_code', 'ATC-QMS-P-200')
+            ->assertJsonPath('data.documents.data.0.status', ControlledDocumentStatus::PUBLISHED)
+            ->assertJsonPath('data.documents.data.0.incoming_revision', 1)
+            ->assertJsonPath('data.documents.data.0.id', (string) $incoming->id);
+    }
+
     public function test_controlled_document_index_requires_document_register_module(): void
     {
         config([
@@ -281,6 +499,112 @@ CSV;
             ->withHeaders($this->tenantApiHeaders())
             ->getJson('/api/v1/documents/controlled')
             ->assertForbidden();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function makeControlledDocument(string $code, string $title, array $attributes): ControlledDocument
+    {
+        return ControlledDocument::query()->create(array_merge([
+            'id' => (string) Str::uuid(),
+            'document_code' => $code,
+            'title' => $title,
+            'current_revision' => 0,
+            'status' => ControlledDocumentStatus::PUBLISHED,
+        ], $attributes));
+    }
+
+    private function makeRevision(ControlledDocument $document, ?string $storedPath): void
+    {
+        ControlledDocumentRevision::query()->create([
+            'id' => (string) Str::uuid(),
+            'controlled_document_id' => $document->id,
+            'revision_number' => (int) $document->current_revision,
+            'status' => 'published',
+            'stored_path' => $storedPath,
+            'original_filename' => $storedPath !== null ? 'file.docx' : null,
+        ]);
+    }
+
+    public function test_pending_import_opens_an_iso_approval_for_the_approver_email(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $approver = TenantUser::query()->create([
+            'name' => 'Pending Approver',
+            'email' => 'pending.approver@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'ISO Approval',
+            'status' => 'published',
+            'metadata_json' => [
+                'default_controlled_document_form' => true,
+                'controlledDocumentSync' => [
+                    'enabled' => true,
+                    'documentCodeField' => 'document_code',
+                    'fieldMap' => ['revision_number' => 'revision'],
+                ],
+            ],
+        ]);
+        $template = EApprovalWorkflowTemplate::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+        ]);
+        EApprovalWorkflowStep::query()->create([
+            'id' => (string) Str::uuid(),
+            'template_id' => $template->id,
+            'step_order' => 1,
+            'approver_type' => 'user',
+            'approver_id' => (string) $this->testTenantAdmin->id,
+        ]);
+
+        ControlledDocument::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_code' => 'ATC-QMS-P-030',
+            'title' => 'Published Policy',
+            'current_revision' => 0,
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'published_at' => now(),
+        ]);
+
+        $service = app(ControlledDocumentPendingImportService::class);
+        $created = $service->open([
+            'document_code' => 'ATC-QMS-P-031',
+            'title' => 'Waiting Policy',
+            'status' => 'pending',
+            'approver_email' => 'pending.approver@test.localhost',
+            'pending_since' => '2026-10-01',
+            'revision_number' => '0',
+        ], $this->testTenantAdmin, null);
+
+        $this->assertSame('created', $created);
+        $document = ControlledDocument::query()->where('document_code', 'ATC-QMS-P-031')->first();
+        $this->assertSame(ControlledDocumentStatus::PENDING, $document?->status);
+        $submission = EApprovalSubmission::query()->where('document_no', 'ATC-QMS-P-031')->first();
+        $this->assertNotNull($submission);
+        $approval = EApprovalRequestApproval::query()->where('submission_id', $submission->id)->first();
+        $this->assertSame((string) $approver->id, (string) $approval?->approver_id);
+
+        $revised = $service->open([
+            'document_code' => 'ATC-QMS-P-030',
+            'title' => 'Published Policy',
+            'status' => 'pending',
+            'approver_email' => 'pending.approver@test.localhost',
+        ], $this->testTenantAdmin, null);
+
+        $this->assertSame('updated', $revised);
+        $published = ControlledDocument::query()->where('document_code', 'ATC-QMS-P-030')->first();
+        $this->assertSame(ControlledDocumentStatus::PUBLISHED, $published?->status);
+        $this->assertNotNull(
+            EApprovalSubmission::query()->where('document_no', 'like', 'ATC-QMS-P-030-R%')->first(),
+        );
+
+        tenancy()->end();
     }
 
     private function createViewerUser(): TenantUser

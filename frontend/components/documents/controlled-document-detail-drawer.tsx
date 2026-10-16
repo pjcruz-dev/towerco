@@ -24,6 +24,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { StatusBadge } from "@/components/ui/status-badge";
+import { controlledDocumentStatusTone, statusToneClasses } from "@/components/ui/status-tone";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -40,6 +42,7 @@ import {
 } from "@/lib/api/modules/controlled-documents-api";
 import { apiClient } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
+import { formatDisplayDate } from "@/lib/format-display-date";
 import { controlledDocumentSubmissionUrl } from "@/modules/documents/controlled-document-submission-url";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
@@ -51,42 +54,24 @@ type Props = {
   onClose: () => void;
 };
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "obsolete") {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-        <Archive className="h-3 w-3" />
-        Obsolete
-      </span>
-    );
-  }
+function DocumentStatusChip({ status }: { status: string }) {
+  const Icon = status === "obsolete" ? Archive : status === "pending" ? Clock : CheckCircle2;
+  const label = status === "obsolete" ? "Obsolete" : status === "pending" ? "Pending" : "Published";
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-      <CheckCircle2 className="h-3 w-3" />
-      Published
-    </span>
+    <StatusBadge tone={controlledDocumentStatusTone(status)}>
+      <Icon className="h-3 w-3" />
+      {label}
+    </StatusBadge>
   );
 }
 
 function RevisionStatusPill({ status }: { status: string }) {
-  if (status === "superseded") {
-    return (
-      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-        Superseded
-      </span>
-    );
-  }
-  if (status === "published") {
-    return (
-      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-        Published
-      </span>
-    );
-  }
+  const tone = status === "published" ? "success" : "neutral";
+  const label = status === "superseded" ? "Superseded" : status === "published" ? "Published" : status;
   return (
-    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
-      {status}
-    </span>
+    <StatusBadge tone={tone} className="capitalize text-[10px]">
+      {label}
+    </StatusBadge>
   );
 }
 
@@ -184,7 +169,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                 <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
                   {doc?.document_code ?? "—"}
                 </code>
-                {doc ? <StatusBadge status={doc.status} /> : null}
+                {doc ? <DocumentStatusChip status={doc.status} /> : null}
               </SheetDescription>
             </div>
           </div>
@@ -211,12 +196,12 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                 <MetaRow
                   icon={CheckCircle2}
                   label="Status"
-                  value={<StatusBadge status={doc.status} />}
+                  value={<DocumentStatusChip status={doc.status} />}
                 />
                 <MetaRow
                   icon={CalendarDays}
                   label="Effective date"
-                  value={doc.effective_date ?? "—"}
+                  value={formatDisplayDate(doc.effective_date, "date") ?? doc.effective_date ?? "—"}
                 />
                 <MetaRow
                   icon={Clock}
@@ -226,10 +211,10 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                       <span
                         className={cn(
                           doc.next_review_date < new Date().toISOString().slice(0, 10) &&
-                            "text-amber-600 dark:text-amber-400",
+                            statusToneClasses.warning.icon,
                         )}
                       >
-                        {doc.next_review_date}
+                        {formatDisplayDate(doc.next_review_date, "date") ?? doc.next_review_date}
                       </span>
                     ) : (
                       "—"
@@ -237,6 +222,19 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                   }
                 />
               </div>
+
+              {doc.incoming_submission_id && doc.incoming_revision != null ? (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
+                  <p className="text-foreground">Revision {doc.incoming_revision} is in approval.</p>
+                  <Link
+                    href={`/e-approval/submissions/${doc.incoming_submission_id}`}
+                    className="mt-1 inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    {doc.incoming_document_no ?? "Open the request"}
+                    <ExternalLink className="size-3.5" />
+                  </Link>
+                </div>
+              ) : null}
 
               {/* Primary actions */}
               {!isObsolete ? (
@@ -315,7 +313,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                           </div>
                           {revision.approved_at ? (
                             <span className="text-[11px] text-muted-foreground">
-                              {new Date(revision.approved_at).toLocaleDateString()}
+                              {formatDisplayDate(revision.approved_at, "date") ?? revision.approved_at}
                             </span>
                           ) : null}
                         </div>
@@ -330,7 +328,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                         {/* Approved by */}
                         {revision.approved_by_name ? (
                           <p className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            <CheckCircle2 className={cn("h-3 w-3", statusToneClasses.success.icon)} />
                             Approved by {revision.approved_by_name}
                           </p>
                         ) : null}

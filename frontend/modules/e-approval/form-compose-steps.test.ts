@@ -66,6 +66,46 @@ describe("buildDisplayGroupsForComposeStep", () => {
     ]);
   });
 
+  it("keeps forecast expenses on the cash advance request step", () => {
+    const fields = [
+      makeField("section_request", "section", "Cash advance request"),
+      makeField("subsidiary", "select", "Subsidiary"),
+      makeField("needed_by", "date", "Funds needed by"),
+      makeField("purpose", "text", "Purpose"),
+      makeField("section_expenses", "section", "Forecast expenses"),
+      makeField("expense_lines", "grid", "Forecast lines"),
+      makeField("notes", "textarea", "Notes"),
+    ];
+
+    const steps = buildFormComposeSteps(fields, "sections");
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.label).toBe("Cash advance request");
+    expect(steps[0]?.fields.map((field) => field.name)).toEqual([
+      "section_request",
+      "subsidiary",
+      "needed_by",
+      "purpose",
+      "section_expenses",
+      "expense_lines",
+      "notes",
+    ]);
+  });
+
+  it("keeps actual expenses on the liquidation reference step", () => {
+    const fields = [
+      makeField("section_reference", "section", "Cash advance reference"),
+      makeField("cash_advance_document_no", "text", "Cash advance document no."),
+      makeField("section_expenses", "section", "Actual expenses"),
+      makeField("expense_lines", "grid", "Expense lines"),
+      makeField("section_approvers", "section", "Approvers"),
+      makeField("finance_approver", "approver", "Finance approver"),
+    ];
+
+    const steps = buildFormComposeSteps(fields, "sections");
+    expect(steps.map((step) => step.label)).toEqual(["Cash advance reference", "Approvers"]);
+    expect(steps[0]?.fields.map((field) => field.name)).toContain("expense_lines");
+  });
+
   it("hides empty section-only steps for requestor compose by default", () => {
     const fields = [
       makeField("section_a", "section", "A1"),

@@ -50,7 +50,7 @@ final class DynRecordBulkController extends AbstractApiController
         }
 
         if ($action === 'duplicate') {
-            abort_unless($access->canEntity($actor, (string) $model->slug, 'create'), 403, __('Your role does not allow duplicating records for this entity.'));
+            abort_unless($access->canEntity($actor, (string) $model->slug, 'duplicate'), 403, __('Your role does not allow duplicating records for this entity.'));
             $result = $service->bulkDuplicate($model, $ids, $actor);
 
             return $this->ok($result);

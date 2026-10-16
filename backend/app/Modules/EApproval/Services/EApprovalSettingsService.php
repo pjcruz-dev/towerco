@@ -38,6 +38,30 @@ final class EApprovalSettingsService
 
     public const LIQUIDATION_MAX_OVERSPEND_PERCENT = 'liquidation_max_overspend_percent';
 
+    public const LIQUIDATION_DUE_DAYS = 'liquidation_due_days';
+
+    public const LIQUIDATION_REMIND_DAYS = 'liquidation_remind_days';
+
+    public const BLOCK_NEW_CASH_ADVANCE = 'block_new_cash_advance';
+
+    public const VAT_RATE_PERCENT = 'vat_rate_percent';
+
+    public const VAT_AMOUNT_INCLUDES_VAT = 'vat_amount_includes_vat';
+
+    public const PER_DIEM_MAX_PER_DAY = 'per_diem_max_per_day';
+
+    public const HOTEL_ACCOMMODATION_MAX = 'hotel_accommodation_max';
+
+    public const SITE_SEARCH_SCOPE = 'site_search_scope';
+
+    public const FINANCE_ROLE = 'finance_role';
+
+    public const CFO_ROLE = 'cfo_role';
+
+    public const TREASURY_ROLE = 'treasury_role';
+
+    public const RELEASE_OFFICE = 'release_office';
+
     public function getString(string $key, ?string $default = null): ?string
     {
         $row = DB::connection('tenant')->table('e_approval_settings')->where('key', $key)->first();
@@ -68,6 +92,29 @@ final class EApprovalSettingsService
         return $n > 0 ? $n : $default;
     }
 
+    /**
+     * Like getInt, but keeps an explicit 0 (used for "off" day counts and empty caps).
+     */
+    public function getIntAllowingZero(string $key, int $default): int
+    {
+        $raw = $this->getString($key);
+        if ($raw === null || $raw === '') {
+            return $default;
+        }
+
+        return max(0, (int) $raw);
+    }
+
+    public function getOptionalAmount(string $key): ?float
+    {
+        $raw = trim((string) $this->getString($key, ''));
+        if ($raw === '' || ! is_numeric($raw)) {
+            return null;
+        }
+
+        return round((float) $raw, 2);
+    }
+
     public function getBool(string $key, bool $default): bool
     {
         $raw = $this->getString($key);
@@ -83,13 +130,26 @@ final class EApprovalSettingsService
         return $this->getBool(self::PROVISION_MANAGER_USERS, true);
     }
 
+    public function siteSearchScope(): string
+    {
+        $raw = strtolower(trim((string) $this->getString(self::SITE_SEARCH_SCOPE, 'request')));
+
+        return in_array($raw, ['request', 'all', 'atc', 'adic'], true) ? $raw : 'request';
+    }
+
     /**
      * @return array<string, string>
      */
     public function publicUiFlags(): array
     {
+        $perDiemMax = $this->getOptionalAmount(self::PER_DIEM_MAX_PER_DAY);
+        $hotelMax = $this->getOptionalAmount(self::HOTEL_ACCOMMODATION_MAX);
+
         return [
             self::FEATURE_DELEGATION_UI => $this->getString(self::FEATURE_DELEGATION_UI, 'false') === 'true' ? 'true' : 'false',
+            self::PER_DIEM_MAX_PER_DAY => $perDiemMax === null ? '' : number_format($perDiemMax, 2, '.', ''),
+            self::HOTEL_ACCOMMODATION_MAX => $hotelMax === null ? '' : number_format($hotelMax, 2, '.', ''),
+            self::SITE_SEARCH_SCOPE => $this->siteSearchScope(),
         ];
     }
 
@@ -114,13 +174,32 @@ final class EApprovalSettingsService
             self::LIQUIDATION_REQUIRES_PARENT,
             self::LIQUIDATION_OVERSPEND_MODE,
             self::LIQUIDATION_MAX_OVERSPEND_PERCENT,
+            self::LIQUIDATION_DUE_DAYS,
+            self::LIQUIDATION_REMIND_DAYS,
+            self::BLOCK_NEW_CASH_ADVANCE,
+            self::VAT_RATE_PERCENT,
+            self::VAT_AMOUNT_INCLUDES_VAT,
+            self::PER_DIEM_MAX_PER_DAY,
+            self::HOTEL_ACCOMMODATION_MAX,
+            self::SITE_SEARCH_SCOPE,
+            self::FINANCE_ROLE,
+            self::CFO_ROLE,
+            self::TREASURY_ROLE,
+            self::RELEASE_OFFICE,
         ];
 
         foreach ($allowed as $key) {
             if (! array_key_exists($key, $values)) {
                 continue;
             }
-            $this->setString($key, (string) $values[$key]);
+            $value = (string) $values[$key];
+            if ($key === self::SITE_SEARCH_SCOPE) {
+                $value = strtolower(trim($value));
+                if (! in_array($value, ['request', 'all', 'atc', 'adic'], true)) {
+                    $value = 'request';
+                }
+            }
+            $this->setString($key, $value);
         }
     }
 

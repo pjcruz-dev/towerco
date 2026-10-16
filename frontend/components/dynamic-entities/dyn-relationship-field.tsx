@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X } from "lucide-react";
 
@@ -37,6 +38,9 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<Array<{ id: string; title: string | null }>>([]);
   const [loading, setLoading] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuBox, setMenuBox] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const schemaFilters = useMemo(() => relationFiltersFromField(field), [field]);
   const filterParams = useMemo(
@@ -88,6 +92,35 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
     };
   }, [filterParams, open, slug, search]);
 
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setMenuBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (anchorRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   if (!slug) {
     return (
       <Input
@@ -120,7 +153,7 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
           </Button>
         </div>
       ) : null}
-      <div className="relative">
+      <div ref={anchorRef} className="relative">
         <Input
           value={open ? search : ""}
           placeholder={value ? "Change…" : `Search ${field.label.toLowerCase()}…`}
@@ -131,8 +164,13 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
           }}
           required={required && !value}
         />
-        {open ? (
-          <div className="absolute z-40 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-md">
+        {open && menuBox
+          ? createPortal(
+          <div
+            ref={menuRef}
+            style={{ position: "fixed", top: menuBox.top, left: menuBox.left, width: menuBox.width }}
+            className="z-[100] max-h-56 overflow-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-md"
+          >
             {schemaFilters.length > 0 ? (
               <p className="border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
                 Filtered by field rules ({schemaFilters.length})
@@ -169,8 +207,10 @@ export function DynRelationshipPicker({ field, value, onChange, required }: Pick
             >
               Close
             </button>
-          </div>
-        ) : null}
+          </div>,
+              document.body,
+            )
+          : null}
       </div>
     </div>
   );

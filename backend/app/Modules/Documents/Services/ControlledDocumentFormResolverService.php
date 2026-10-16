@@ -7,6 +7,8 @@ namespace App\Modules\Documents\Services;
 use App\Modules\Documents\Support\ControlledDocumentAccessPolicy;
 use App\Modules\Documents\Support\ControlledDocumentSyncConfig;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
+use App\Modules\Identity\Models\TenantUser;
 
 final class ControlledDocumentFormResolverService
 {
@@ -24,6 +26,24 @@ final class ControlledDocumentFormResolverService
                 }
 
                 return ($metadata['form_family'] ?? null) === 'iso_document_control';
+            });
+    }
+
+    public function resolvePublishedDefaultFormFor(TenantUser $actor): ?EApprovalForm
+    {
+        return EApprovalForm::query()
+            ->where('status', 'published')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->first(function (EApprovalForm $form) use ($actor): bool {
+                $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+                $isControlled = ($metadata['default_controlled_document_form'] ?? false) === true
+                    || ($metadata['form_family'] ?? null) === 'iso_document_control';
+                if (! $isControlled || ControlledDocumentSyncConfig::parse($metadata) === null) {
+                    return false;
+                }
+
+                return EApprovalFormRequestAccessSupport::viewerCanStart($actor, $metadata);
             });
     }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
+import { TicketingCustomFieldsEditor } from "@/components/ticketing/ticketing-custom-fields";
 import { TicketingSlaBadge } from "@/components/ticketing/ticketing-sla-badge";
 import { TicketingPageHeader } from "@/components/ticketing/ticketing-page-header";
 import { TicketingUserPicker } from "@/components/ticketing/ticketing-user-picker";
@@ -296,6 +297,15 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   </p>
                 </div>
               </section>
+              <TicketingCustomFieldsEditor
+                stored={ticket.custom_values}
+                disabled={!(canManage || ticket.requester?.id === user?.id)}
+                onSave={async (customValues) => {
+                  await updateTicketingTicket(ticketId, { custom_values: customValues });
+                  await queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+                  await queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
+                }}
+              />
               <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-sm font-medium text-foreground">Attachments</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">

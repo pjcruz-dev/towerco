@@ -175,6 +175,14 @@ function expandItemRows(html: string, items: Array<Record<string, unknown>>): st
   });
 }
 
+/** Turn editor field chips back into {{tokens}} before merge. */
+export function expandPrintFieldChips(html: string): string {
+  return html.replace(
+    /<span\b[^>]*\bdata-mp-token=(["'])([^"']*)\1[^>]*>[\s\S]*?<\/span>/gi,
+    (_match, _quote, token: string) => token.replace(/&quot;/g, '"').replace(/&amp;/g, "&"),
+  );
+}
+
 /**
  * Merge {{tokens}} into HTML. Supports:
  * - {{#if path}} / {{#unless path}} / {{else}} / {{/if}}
@@ -182,9 +190,10 @@ function expandItemRows(html: string, items: Array<Record<string, unknown>>): st
  * - {{record.field}} / {{record.relation.field}}
  * - {{item.field}} / [[item.field]] (with row expansion)
  * - P[{{record.amount}}] currency-style wrapper → peso-prefixed value
+ * Field chips (`data-mp-token`) are expanded to their token first.
  */
 export function renderDynPrintTemplate(html: string, ctx: DynPrintTemplateContext): string {
-  let out = ensurePrintableRoot(html);
+  let out = ensurePrintableRoot(expandPrintFieldChips(html));
   out = expandConditionals(out, ctx);
   out = expandItemRows(out, ctx.items ?? []);
 

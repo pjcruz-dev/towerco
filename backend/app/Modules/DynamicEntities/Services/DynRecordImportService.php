@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DynamicEntities\Services;
 
+use App\Modules\AiAssistant\Services\AssistantSchemaMapper;
 use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Models\DynField;
 use App\Modules\DynamicEntities\Models\DynRecord;
@@ -19,9 +20,13 @@ final class DynRecordImportService
 {
     private const IGNORE = '__ignore__';
 
+    /** Full entity exports include related rows under each parent. */
+    public const MAX_DATA_ROWS = 20000;
+
     public function __construct(
         private readonly DynRecordService $records,
         private readonly TenantActivityLogger $activity,
+        private readonly RecordActionHistoryService $history,
     ) {}
 
     /**
@@ -40,7 +45,7 @@ final class DynRecordImportService
 
         return $entity->fields
             ->filter(fn (DynField $f): bool => ! $f->is_system_field && ! $f->is_virtual)
-            ->filter(fn (DynField $f): bool => $f->type !== DynFieldType::FILE)
+            ->filter(fn (DynField $f): bool => ! in_array($f->type, [DynFieldType::FILE, DynFieldType::CHILD_LIST], true))
             ->filter(fn (DynField $f): bool => ! in_array($f->name, ['actions', 'workflows', 'print', 'id'], true))
             ->sortBy('field_order')
             ->values()
@@ -56,9 +61,76 @@ final class DynRecordImportService
     }
 
     /**
+     * @param  list<string>  $includeSlugs  related entity slugs whose headers follow a section marker
      * @return array{filename: string, headers: list<string>, csv: string}
      */
-    public function buildTemplate(DynEntity $entity): array
+    public function buildTemplate(DynEntity $entity, array $includeSlugs = []): array
+    {
+        $headers = $this->templateHeaders($entity);
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            throw ValidationException::withMessages(['file' => 'Unable to build template.']);
+        }
+        fputcsv($handle, $headers);
+
+        $tabsBySlug = [];
+        $tabs = is_array($entity->related_tabs_json) ? $entity->related_tabs_json : [];
+        foreach ($tabs as $tab) {
+            if (! is_array($tab)) {
+                continue;
+            }
+            $slug = trim((string) ($tab['entity_slug'] ?? ''));
+            if ($slug === '') {
+                continue;
+            }
+            $tabsBySlug[$slug] = $tab;
+        }
+        foreach ($includeSlugs as $slug) {
+            $tab = $tabsBySlug[$slug] ?? null;
+            if (! is_array($tab)) {
+                continue;
+            }
+            $child = DynEntity::query()->where('slug', $slug)->first();
+            if ($child === null) {
+                continue;
+            }
+            $label = trim((string) ($tab['label'] ?? ''));
+            if ($slug === 'telco_contracts') {
+                $label = 'Telco Contracts / Site Licences';
+            }
+            if ($label === '') {
+                $label = (string) $child->name;
+            }
+            fputcsv($handle, [self::sectionMarker($label)]);
+            fputcsv($handle, $this->templateHeaders($child));
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle) ?: '';
+        fclose($handle);
+
+        return [
+            'filename' => $entity->slug.'-import-template.csv',
+            'headers' => $headers,
+            'csv' => $csv,
+        ];
+    }
+
+    public static function sectionMarker(string $label): string
+    {
+        return '## '.trim($label).' ##';
+    }
+
+    public static function isSectionMarker(string $cell): bool
+    {
+        return preg_match('/^(?:##|---)\s+.+\s+(?:##|---)$/', trim($cell)) === 1;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function templateHeaders(DynEntity $entity): array
     {
         $fields = $this->importableFields($entity);
         $byName = [];
@@ -98,20 +170,7 @@ final class DynRecordImportService
             $headers = ['Title', 'Status'];
         }
 
-        $handle = fopen('php://temp', 'r+');
-        if ($handle === false) {
-            throw ValidationException::withMessages(['file' => 'Unable to build template.']);
-        }
-        fputcsv($handle, $headers);
-        rewind($handle);
-        $csv = stream_get_contents($handle) ?: '';
-        fclose($handle);
-
-        return [
-            'filename' => $entity->slug.'-import-template.csv',
-            'headers' => $headers,
-            'csv' => $csv,
-        ];
+        return $headers;
     }
 
     /**
@@ -123,7 +182,7 @@ final class DynRecordImportService
      *   row_count: int
      * }
      */
-    public function analyze(DynEntity $entity, UploadedFile $file): array
+    public function analyze(DynEntity $entity, UploadedFile $file, ?TenantUser $actor = null): array
     {
         [$headers, $rows] = $this->readCsv($file, 6);
         $fields = $this->importableFields($entity);
@@ -142,6 +201,11 @@ final class DynRecordImportService
         $rowCount = count($rows);
         if ($rowCount >= 5) {
             $rowCount = $this->countDataRows($file);
+        }
+
+        if ($actor instanceof TenantUser) {
+            $suggested = app(AssistantSchemaMapper::class)
+                ->fillColumnMap($actor, $headers, $fields, $suggested, $samples);
         }
 
         return [
@@ -176,9 +240,11 @@ final class DynRecordImportService
         TenantUser $actor,
         bool $dryRun = false,
     ): array {
-        [$headers, $rows] = $this->readCsv($file, 2001);
-        if (count($rows) > 2000) {
-            throw ValidationException::withMessages(['file' => 'Import supports up to 2,000 data rows per file.']);
+        [$headers, $blocks] = $this->readImportBlocks($file, self::MAX_DATA_ROWS + 1);
+        if (count($blocks) > self::MAX_DATA_ROWS) {
+            throw ValidationException::withMessages([
+                'file' => 'Import supports up to '.number_format(self::MAX_DATA_ROWS).' data rows per file.',
+            ]);
         }
 
         $fields = $this->importableFields($entity);
@@ -220,14 +286,21 @@ final class DynRecordImportService
 
         $created = 0;
         $updated = 0;
+        $createdIds = [];
+        $updateSnapshots = [];
         $skipped = 0;
         $wouldCreate = 0;
         $wouldUpdate = 0;
         $wouldSkip = 0;
         $errors = [];
+        $childWouldCreate = 0;
+        $childCreated = 0;
 
-        foreach ($rows as $offset => $row) {
+        foreach ($blocks as $offset => $block) {
+            $row = $block['row'];
             $rowNum = $offset + 2; // 1-based + header
+            $parentOk = false;
+            $parentId = null;
             try {
                 $parsed = $this->parseRow($normalizedMap, $headerIndex, $row, $fieldByName);
                 $values = $parsed['values'];
@@ -263,24 +336,36 @@ final class DynRecordImportService
                     } else {
                         $wouldCreate++;
                     }
-
-                    continue;
-                }
-
-                if ($isUpdate) {
+                    $parentOk = true;
+                    if ($isUpdate && $existing instanceof DynRecord) {
+                        $parentId = (string) $existing->id;
+                    }
+                } elseif ($isUpdate) {
+                    $before = RecordActionHistoryService::dynSnapshot($existing);
                     $this->records->update($existing, [
                         'title' => $title,
                         'status' => $status,
                         'values' => $values,
                     ], $actor, false);
+                    $existing->refresh();
+                    $updateSnapshots[] = [
+                        'id' => (string) $existing->id,
+                        'before' => $before,
+                        'after' => RecordActionHistoryService::dynSnapshot($existing),
+                    ];
                     $updated++;
+                    $parentId = (string) $existing->id;
+                    $parentOk = true;
                 } else {
-                    $this->records->create($entity, [
+                    $createdRecord = $this->records->create($entity, [
                         'title' => $title,
                         'status' => $status,
                         'values' => $values,
                     ], $actor, false);
+                    $createdIds[] = (string) $createdRecord->id;
                     $created++;
+                    $parentId = (string) $createdRecord->id;
+                    $parentOk = true;
                 }
             } catch (ValidationException $e) {
                 $msg = collect($e->errors())->flatten()->first() ?: 'Validation failed.';
@@ -298,12 +383,36 @@ final class DynRecordImportService
                     $skipped++;
                 }
             }
+            if ($parentOk && $block['sections'] !== []) {
+                $childStats = $this->importChildSections(
+                    $entity,
+                    $block['sections'],
+                    $parentId,
+                    $actor,
+                    $dryRun,
+                    $errors,
+                    $rowNum,
+                );
+                $childWouldCreate += $childStats['would_create'];
+                $childCreated += $childStats['created'];
+            }
         }
 
         $errorRows = count($errors);
         $validRows = $dryRun
             ? ($wouldCreate + $wouldUpdate)
             : ($created + $updated);
+
+        if (! $dryRun && ($created > 0 || $updated > 0)) {
+            $this->history->recordImport(
+                module: 'dynamic_entities',
+                slug: (string) $entity->slug,
+                label: (string) $entity->name,
+                actor: $actor,
+                createdIds: $createdIds,
+                updates: $updateSnapshots,
+            );
+        }
 
         if (! $dryRun && ($created > 0 || $updated > 0 || $errorRows > 0)) {
             $this->activity->record(
@@ -337,6 +446,8 @@ final class DynRecordImportService
             'valid_rows' => $validRows,
             'error_rows' => $errorRows,
             'errors' => array_slice($errors, 0, 50),
+            'child_would_create' => $childWouldCreate,
+            'child_created' => $childCreated,
         ];
     }
 
@@ -371,8 +482,14 @@ final class DynRecordImportService
         $used = [];
         $map = [];
         foreach ($headers as $header) {
-            $key = $this->norm($header);
-            $match = $metaByNorm[$key] ?? $aliases[$key] ?? null;
+            $match = null;
+            foreach ($this->headerKeys($header) as $key) {
+                $candidate = $metaByNorm[$key] ?? $aliases[$key] ?? null;
+                if ($candidate !== null) {
+                    $match = $candidate;
+                    break;
+                }
+            }
             if ($match !== null && ! isset($used[$match])) {
                 $map[$header] = $match;
                 $used[$match] = true;
@@ -391,6 +508,23 @@ final class DynRecordImportService
         $value = preg_replace('/[^a-z0-9]+/', '', $value) ?? $value;
 
         return $value;
+    }
+
+    /**
+     * Export headers sometimes append a hint, e.g. "MNO Anchor Site ID (Site ID)".
+     *
+     * @return list<string>
+     */
+    private function headerKeys(string $header): array
+    {
+        $keys = [$this->norm($header)];
+        $stripped = trim((string) preg_replace('/\s*\([^)]*\)/', '', $header));
+        $strippedKey = $this->norm($stripped);
+        if ($strippedKey !== '' && ! in_array($strippedKey, $keys, true)) {
+            $keys[] = $strippedKey;
+        }
+
+        return $keys;
     }
 
     /**
@@ -467,7 +601,7 @@ final class DynRecordImportService
      */
     private function parseAndValidateValue(string $raw, array $meta): mixed
     {
-        if ($raw === '') {
+        if ($raw === '' || $this->isBlankImportValue($raw, $meta['type'])) {
             return null;
         }
 
@@ -475,8 +609,7 @@ final class DynRecordImportService
         $type = $meta['type'];
 
         return match ($type) {
-            DynFieldType::NUMBER => $this->parseNumber($raw, $label, false),
-            DynFieldType::DECIMAL => $this->parseNumber($raw, $label, true),
+            DynFieldType::NUMBER, DynFieldType::DECIMAL => $this->parseNumber($raw, $label, true),
             DynFieldType::BOOLEAN => $this->parseBoolean($raw, $label),
             DynFieldType::DATE => $this->parseDate($raw, $label, false),
             DynFieldType::DATETIME => $this->parseDate($raw, $label, true),
@@ -527,6 +660,15 @@ final class DynRecordImportService
         throw ValidationException::withMessages([
             'value' => "{$label} must be true/false (or yes/no). Got “{$raw}”.",
         ]);
+    }
+
+    private function isBlankImportValue(string $raw, string $type): bool
+    {
+        if (! in_array($type, [DynFieldType::DATE, DynFieldType::DATETIME], true)) {
+            return false;
+        }
+
+        return preg_match('/^0{4}-0{2}-0{2}(?:[ T]00:00:00)?$/', trim($raw)) === 1;
     }
 
     private function parseDate(string $raw, string $label, bool $withTime): string
@@ -752,26 +894,7 @@ final class DynRecordImportService
             $headers[] = $name;
         }
 
-        $rows = [];
-        while (($line = fgetcsv($handle)) !== false) {
-            if (! is_array($line)) {
-                continue;
-            }
-            $allEmpty = true;
-            foreach ($line as $cell) {
-                if (trim((string) $cell) !== '') {
-                    $allEmpty = false;
-                    break;
-                }
-            }
-            if ($allEmpty) {
-                continue;
-            }
-            $rows[] = array_map(static fn ($c): string => (string) $c, $line);
-            if (count($rows) >= $maxRows) {
-                break;
-            }
-        }
+        $rows = $this->readParentRows($handle, count($headers), $maxRows);
         fclose($handle);
 
         return [$headers, $rows];
@@ -791,21 +914,439 @@ final class DynRecordImportService
         if ($bom !== "\xEF\xBB\xBF") {
             rewind($handle);
         }
-        fgetcsv($handle);
-        $count = 0;
-        while (($line = fgetcsv($handle)) !== false) {
-            if (! is_array($line)) {
-                continue;
-            }
-            foreach ($line as $cell) {
-                if (trim((string) $cell) !== '') {
-                    $count++;
-                    break;
-                }
-            }
-        }
+        $header = fgetcsv($handle);
+        $width = is_array($header) ? count($header) : 0;
+        $count = count($this->readParentRows($handle, $width, self::MAX_DATA_ROWS + 1));
         fclose($handle);
 
         return $count;
+    }
+
+    /**
+     * @return array{0: list<string>, 1: list<array{row: list<string>, sections: list<array{label: string, headers: list<string>, rows: list<list<string>>}>}>}
+     */
+    private function readImportBlocks(UploadedFile $file, int $maxRows): array
+    {
+        $path = $file->getRealPath();
+        if ($path === false) {
+            throw ValidationException::withMessages(['file' => 'Could not read upload.']);
+        }
+        $handle = fopen($path, 'r');
+        if ($handle === false) {
+            throw ValidationException::withMessages(['file' => 'Could not read upload.']);
+        }
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+        $header = fgetcsv($handle);
+        if (! is_array($header) || $header === []) {
+            fclose($handle);
+            throw ValidationException::withMessages(['file' => 'CSV header row is required.']);
+        }
+        $headers = [];
+        $seen = [];
+        foreach ($header as $col) {
+            $name = trim((string) preg_replace('/^\xEF\xBB\xBF/', '', (string) $col), " \t\n\r\0\x0B\"'");
+            if ($name === '') {
+                $name = 'Column_'.(count($headers) + 1);
+            }
+            $base = $name;
+            $n = 2;
+            while (isset($seen[strtolower($name)])) {
+                $name = $base.'_'.$n;
+                $n++;
+            }
+            $seen[strtolower($name)] = true;
+            $headers[] = $name;
+        }
+
+        $blocks = [];
+        $pending = null;
+        $current = null;
+        $parentWidth = count($headers);
+        while (count($blocks) < $maxRows) {
+            $line = $this->pullCsvLine($handle, $pending);
+            if ($line === null) {
+                break;
+            }
+            if ($this->lineIsBlank($line)) {
+                continue;
+            }
+            $marker = $this->sectionMarkerCell($line);
+            if ($marker !== null && str_starts_with($marker, '---')) {
+                $section = $this->readDashSection($handle, $pending, $parentWidth, $marker);
+                if ($current !== null) {
+                    $current['sections'][] = $section;
+                }
+
+                continue;
+            }
+            if ($marker !== null) {
+                $next = $this->pullCsvLine($handle, $pending);
+                if (is_array($next) && $this->sectionMarkerCell($next) !== null) {
+                    $pending = $next;
+                }
+
+                continue;
+            }
+            if ($current !== null) {
+                $blocks[] = $current;
+                if (count($blocks) >= $maxRows) {
+                    $current = null;
+                    break;
+                }
+            }
+            $current = [
+                'row' => array_map(static fn ($cell): string => (string) $cell, $line),
+                'sections' => [],
+            ];
+        }
+        if ($current !== null && count($blocks) < $maxRows) {
+            $blocks[] = $current;
+        }
+        fclose($handle);
+
+        return [$headers, $blocks];
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  list<string|null>|null  $pending
+     * @return array{label: string, headers: list<string>, rows: list<list<string>>}
+     */
+    private function readDashSection($handle, ?array &$pending, int $parentWidth, string $marker): array
+    {
+        $label = trim((string) preg_replace('/^---\s+|\s+---$/', '', $marker));
+        $headers = null;
+        $rows = [];
+        while (true) {
+            $line = $this->pullCsvLine($handle, $pending);
+            if ($line === null || $this->lineIsBlank($line)) {
+                break;
+            }
+            if ($this->sectionMarkerCell($line) !== null || ($parentWidth >= 8 && count($line) >= $parentWidth)) {
+                $pending = $line;
+                break;
+            }
+            $cells = array_map(static fn ($cell): string => (string) $cell, $line);
+            if ($headers === null) {
+                $headers = $cells;
+
+                continue;
+            }
+            $rows[] = $cells;
+        }
+
+        return [
+            'label' => $label,
+            'headers' => $headers ?? [],
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @param  list<array{label: string, headers: list<string>, rows: list<list<string>>}>  $sections
+     * @param  list<array{row: int, message: string}>  $errors
+     * @return array{would_create: int, created: int}
+     */
+    private function importChildSections(
+        DynEntity $parent,
+        array $sections,
+        ?string $parentId,
+        TenantUser $actor,
+        bool $dryRun,
+        array &$errors,
+        int $parentRowNum,
+    ): array {
+        $would = 0;
+        $created = 0;
+        foreach ($sections as $section) {
+            $target = $this->resolveChildTarget($parent, $section['label']);
+            if ($target === null || $section['headers'] === [] || $section['rows'] === []) {
+                continue;
+            }
+            /** @var DynEntity $child */
+            $child = $target['entity'];
+            $fields = $this->importableFields($child);
+            $map = $this->suggestMap($section['headers'], $fields, (string) $child->slug);
+            $fieldByName = [];
+            foreach ($fields as $field) {
+                $fieldByName[$field['name']] = $field;
+            }
+            $headerIndex = [];
+            foreach ($section['headers'] as $index => $header) {
+                $headerIndex[$header] = $index;
+            }
+            $foreign = $target['foreign_field'];
+            if ($foreign !== null) {
+                foreach ($map as $header => $targetField) {
+                    if ($targetField === $foreign) {
+                        $map[$header] = self::IGNORE;
+                    }
+                }
+            }
+            foreach ($section['rows'] as $row) {
+                try {
+                    $parsed = $this->parseRow($map, $headerIndex, $row, $fieldByName);
+                    if ($foreign !== null) {
+                        unset($parsed['values'][$foreign]);
+                    }
+                    $meaningful = array_filter(
+                        $parsed['values'],
+                        static fn ($value): bool => $value !== null && $value !== '',
+                    );
+                    if ($meaningful === [] && $parsed['title'] === null && $parsed['status'] === null) {
+                        continue;
+                    }
+                    if ($foreign !== null && $parentId !== null) {
+                        $parsed['values'][$foreign] = $parentId;
+                    } elseif ($foreign !== null && $dryRun) {
+                        $parsed['values'][$foreign] = 'pending-parent';
+                    }
+                    if ($dryRun || $parentId === null) {
+                        $this->assertRowRequired($fields, $parsed['values'], $this->childRequiredScope($map, $foreign));
+                        $would++;
+
+                        continue;
+                    }
+                    $this->records->create($child, [
+                        'title' => $parsed['title'],
+                        'status' => $parsed['status'],
+                        'values' => $parsed['values'],
+                        'parent_record_id' => $parentId,
+                    ], $actor, false, $this->childRequiredScope($map, $foreign));
+                    $created++;
+                    $would++;
+                } catch (ValidationException $e) {
+                    $msg = collect($e->errors())->flatten()->first() ?: 'Validation failed.';
+                    $errors[] = ['row' => $parentRowNum, 'message' => $section['label'].': '.$msg];
+                } catch (\Throwable $e) {
+                    $errors[] = ['row' => $parentRowNum, 'message' => $section['label'].': '.$e->getMessage()];
+                }
+            }
+        }
+
+        return ['would_create' => $would, 'created' => $created];
+    }
+
+    /**
+     * Child rows are required only for columns in the section, plus the parent
+     * link this importer fills. A required field with no column in the file
+     * does not fail the row.
+     *
+     * @param  array<string, string>  $map
+     * @return list<string>
+     */
+    private function childRequiredScope(array $map, ?string $foreign): array
+    {
+        $names = [];
+        foreach ($map as $target) {
+            if ($target === self::IGNORE || $target === '') {
+                continue;
+            }
+            $names[$target] = true;
+        }
+        if ($foreign !== null && $foreign !== '') {
+            $names[$foreign] = true;
+        }
+
+        return array_keys($names);
+    }
+
+    /**
+     * @return array{entity: DynEntity, foreign_field: string|null}|null
+     */
+    private function resolveChildTarget(DynEntity $parent, string $sectionLabel): ?array
+    {
+        $parent->loadMissing('fields');
+        foreach ($parent->fields as $field) {
+            if ($field->type !== DynFieldType::CHILD_LIST || ! $field->target_entity_id) {
+                continue;
+            }
+            $child = DynEntity::query()->whereKey($field->target_entity_id)->first();
+            if (! $child instanceof DynEntity) {
+                continue;
+            }
+            $names = [(string) $field->label, (string) $child->name];
+            foreach ($names as $name) {
+                if ($this->labelsMatch($sectionLabel, $name)) {
+                    return [
+                        'entity' => $child,
+                        'foreign_field' => $this->childForeignField($parent, $child),
+                    ];
+                }
+            }
+        }
+
+        $tabs = is_array($parent->related_tabs_json) ? $parent->related_tabs_json : [];
+        foreach ($tabs as $tab) {
+            if (! is_array($tab)) {
+                continue;
+            }
+            $label = trim((string) ($tab['label'] ?? ''));
+            $slug = trim((string) ($tab['entity_slug'] ?? ''));
+            if ($label === '' || ! $this->labelsMatch($sectionLabel, $label)) {
+                continue;
+            }
+            $child = $slug !== '' ? DynEntity::query()->where('slug', $slug)->first() : null;
+            if (! $child instanceof DynEntity) {
+                continue;
+            }
+
+            return [
+                'entity' => $child,
+                'foreign_field' => trim((string) ($tab['foreign_field'] ?? '')) ?: $this->childForeignField($parent, $child),
+            ];
+        }
+
+        return null;
+    }
+
+    private function childForeignField(DynEntity $parent, DynEntity $child): ?string
+    {
+        $tabs = is_array($parent->related_tabs_json) ? $parent->related_tabs_json : [];
+        foreach ($tabs as $tab) {
+            if (! is_array($tab) || (string) ($tab['entity_slug'] ?? '') !== (string) $child->slug) {
+                continue;
+            }
+            $foreign = trim((string) ($tab['foreign_field'] ?? ''));
+            if ($foreign !== '') {
+                return $foreign;
+            }
+        }
+        $child->loadMissing('fields');
+        foreach (['tower_site_id', 'parent_id'] as $name) {
+            if ($child->fields->firstWhere('name', $name) !== null) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function labelsMatch(string $section, string $candidate): bool
+    {
+        $left = $this->norm($section);
+        $right = $this->norm($candidate);
+        if ($left === '' || $right === '') {
+            return false;
+        }
+
+        return $left === $right || str_starts_with($right, $left) || str_starts_with($left, $right);
+    }
+
+    /**
+     * Parent rows only. `---` sections (legacy exports) include a header and child
+     * rows and run until a blank line, the next marker, or the next parent row.
+     * `##` sections (import templates) are the marker plus the child header row.
+     *
+     * @param  resource  $handle
+     * @return list<list<string>>
+     */
+    private function readParentRows($handle, int $parentWidth, int $maxRows): array
+    {
+        $rows = [];
+        $pending = null;
+        while (count($rows) < $maxRows) {
+            $line = $this->pullCsvLine($handle, $pending);
+            if ($line === null) {
+                break;
+            }
+            if ($this->lineIsBlank($line)) {
+                continue;
+            }
+            $marker = $this->sectionMarkerCell($line);
+            if ($marker !== null) {
+                if (str_starts_with($marker, '---')) {
+                    $this->skipDashSection($handle, $pending, $parentWidth);
+                } else {
+                    $next = $this->pullCsvLine($handle, $pending);
+                    if (is_array($next) && $this->sectionMarkerCell($next) !== null) {
+                        $pending = $next;
+                    }
+                }
+
+                continue;
+            }
+            $rows[] = array_map(static fn ($c): string => (string) $c, $line);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  list<string|null>|null  $pending
+     */
+    private function skipDashSection($handle, ?array &$pending, int $parentWidth): void
+    {
+        while (true) {
+            $line = $this->pullCsvLine($handle, $pending);
+            if ($line === null || $this->lineIsBlank($line)) {
+                return;
+            }
+            if ($this->sectionMarkerCell($line) !== null) {
+                $pending = $line;
+
+                return;
+            }
+            if ($parentWidth >= 8 && count($line) >= $parentWidth) {
+                $pending = $line;
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param  resource  $handle
+     * @param  list<string|null>|null  $pending
+     * @return list<string|null>|null
+     */
+    private function pullCsvLine($handle, ?array &$pending): ?array
+    {
+        if ($pending !== null) {
+            $line = $pending;
+            $pending = null;
+
+            return $line;
+        }
+        $line = fgetcsv($handle);
+
+        return is_array($line) ? $line : null;
+    }
+
+    /**
+     * @param  list<string|null>  $line
+     */
+    private function lineIsBlank(array $line): bool
+    {
+        foreach ($line as $cell) {
+            if (trim((string) $cell) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<string|null>  $line
+     */
+    private function sectionMarkerCell(array $line): ?string
+    {
+        $filled = [];
+        foreach ($line as $cell) {
+            $text = trim((string) $cell);
+            if ($text !== '') {
+                $filled[] = $text;
+            }
+        }
+        if (count($filled) !== 1 || ! self::isSectionMarker($filled[0])) {
+            return null;
+        }
+
+        return $filled[0];
     }
 }

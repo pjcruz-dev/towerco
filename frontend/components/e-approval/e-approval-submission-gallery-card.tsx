@@ -36,7 +36,7 @@ export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpAct
   return (
     <article
       className={cn(
-        "group flex h-full flex-col rounded-xl border border-border bg-card shadow-sm transition-colors",
+        "group flex h-full flex-col rounded-card border border-border bg-card shadow-surface transition-colors",
         "hover:border-primary/30 hover:shadow-md",
         submission.status === "returned" && "border-amber-300/70 bg-amber-50/40 dark:border-amber-900/60 dark:bg-amber-950/20",
       )}
@@ -58,7 +58,7 @@ export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpAct
             </div>
           </div>
           <span data-help={helpStatus ? "ea-submissions-status" : undefined}>
-            <EApprovalStatusBadge status={submission.status} kind="submission" />
+            <EApprovalStatusBadge status={submission.status} label={submission.status_label} kind="submission" />
           </span>
         </div>
 

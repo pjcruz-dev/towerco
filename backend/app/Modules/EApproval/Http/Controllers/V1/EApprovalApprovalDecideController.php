@@ -26,6 +26,9 @@ class EApprovalApprovalDecideController extends AbstractApiController
             'signature' => ['nullable', 'string', 'max:500000'],
             'signature_consent' => ['sometimes', 'boolean'],
             'signature_storage_consent' => ['sometimes', 'boolean'],
+            'release_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'release_date' => ['sometimes', 'nullable', 'date'],
+            'settlement_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
 
         if ($data['decision'] === 'approved') {
@@ -49,6 +52,11 @@ class EApprovalApprovalDecideController extends AbstractApiController
             $data['remarks'] ?? null,
             $data['signature'] ?? null,
             $request->user(),
+            [
+                'release_reference' => $data['release_reference'] ?? null,
+                'release_date' => $data['release_date'] ?? null,
+                'settlement_reference' => $data['settlement_reference'] ?? null,
+            ],
         );
 
         return $this->ok(['approval' => $updated->toListRow()]);

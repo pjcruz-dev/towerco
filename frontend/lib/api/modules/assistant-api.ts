@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api/client";
+import { apiClient, resolveApiBaseUrl, tenantApiRequestHeaders } from "@/lib/api/client";
 import type { PaginatedEnvelope, PaginatedMeta } from "@/lib/api/paginated";
 
 export type AssistantCitation = {
@@ -74,6 +74,21 @@ export type AssistantRateLimit = {
   daily?: AssistantDailyRateLimit | null;
 };
 
+export type AssistantActivityStep = {
+  id: string;
+  kind: string;
+  title: string;
+  detail?: string | null;
+  status: string;
+};
+
+export type AssistantStreamDelta = {
+  kind: "thinking" | "assistant" | "tool";
+  text: string;
+  name?: string;
+  status?: string;
+};
+
 export type AssistantAskResponse = {
   conversation_id: string;
   message_id: string;
@@ -96,13 +111,17 @@ export type AssistantAskResponse = {
   completion_tokens?: number | null;
   cost_estimate?: AssistantCostEstimate | null;
   rate_limit?: AssistantRateLimit | null;
+  activity?: AssistantActivityStep[];
 };
 
 export type AssistantMeta = {
   enabled: boolean;
+  assistant_mode?: "help" | "admin_builder";
   llm_provider: string;
   model_name: string;
   models: string[];
+  model_labels?: Record<string, string>;
+  model_estimates?: Record<string, AssistantCostEstimate>;
   supports_model_select: boolean;
   retrieval_enabled?: boolean;
   greeting: string;
@@ -147,6 +166,7 @@ export type AssistantConversationMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   citations: AssistantCitation[] | Record<string, unknown>[] | [];
+  activity?: AssistantActivityStep[];
   model_name: string | null;
   status: string;
   proposed_action?: AssistantProposedAction | null;
@@ -169,46 +189,130 @@ export type AskAssistantPayload = {
   page_path?: string | null;
   plan_mode?: boolean;
   preferred_model?: string | null;
-  use_retrieval?: boolean;
 };
 
-export type AssistantKnowledgeStatus = "draft" | "published" | "archived";
-
-export type AssistantKnowledgeRow = {
-  id: string;
-  slug: string | null;
-  scope: string;
-  title: string;
-  module_key: string | null;
-  source_type: string;
-  audience: string | null;
-  status: AssistantKnowledgeStatus | string;
-  version: number;
-  chunk_count: number;
-  published_at: string | null;
-  last_indexed_at: string | null;
-  updated_at: string | null;
-  created_at: string | null;
+type AssistantSseEvent = {
+  event: string;
+  data: string;
 };
 
-export type AssistantKnowledgeDetail = AssistantKnowledgeRow & {
-  body: string | null;
-  required_permissions: string[];
-  related_routes: string[];
-  content_checksum: string | null;
-  created_by: string | null;
-  updated_by: string | null;
-};
+function parseAssistantSseBlock(block: string): AssistantSseEvent | null {
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim();
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trim());
+    }
+  }
+  if (dataLines.length === 0) {
+    return null;
+  }
 
-export type AssistantKnowledgePayload = {
-  title: string;
-  body: string;
-  slug?: string | null;
-  module_key?: string | null;
-  audience?: string | null;
-  required_permissions?: string[];
-  related_routes?: string[];
-};
+  return { event, data: dataLines.join("\n") };
+}
+
+function isAssistantStreamAbort(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  if (error.name === "TimeoutError" || error.name === "AbortError") {
+    return true;
+  }
+  const message = error.message.toLowerCase();
+
+  return message.includes("bodystreambuffer") || message.includes("the operation was aborted");
+}
+
+export async function askAssistantLive(
+  payload: AskAssistantPayload,
+  onStep: (step: AssistantActivityStep) => void,
+  onDelta?: (delta: AssistantStreamDelta) => void,
+): Promise<AssistantAskResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${resolveApiBaseUrl()}/assistant/ask`, {
+      method: "POST",
+      headers: {
+        ...tenantApiRequestHeaders(),
+        Accept: "text/event-stream",
+      },
+      signal: AbortSignal.timeout(360_000),
+      body: JSON.stringify({
+        question: payload.question,
+        conversation_id: payload.conversation_id ?? undefined,
+        module_context: payload.module_context ?? undefined,
+        page_path: payload.page_path ?? undefined,
+        plan_mode: payload.plan_mode === true ? true : undefined,
+        preferred_model: payload.preferred_model ?? undefined,
+      }),
+    });
+  } catch (error) {
+    if (isAssistantStreamAbort(error)) {
+      throw new Error("The assistant took too long. Ask again.");
+    }
+    throw error;
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!response.ok || !contentType.includes("text/event-stream") || response.body === null) {
+    const json = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(json?.message?.trim() || "The assistant could not answer.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AssistantAskResponse | null = null;
+
+  while (true) {
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await reader.read();
+    } catch (error) {
+      if (isAssistantStreamAbort(error)) {
+        throw new Error("The assistant took too long. Ask again.");
+      }
+      throw error;
+    }
+    if (chunk.done) {
+      break;
+    }
+    buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n/g, "\n");
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      const parsed = parseAssistantSseBlock(block);
+      if (parsed === null) {
+        continue;
+      }
+      if (parsed.event === "step") {
+        onStep(JSON.parse(parsed.data) as AssistantActivityStep);
+        continue;
+      }
+      if (parsed.event === "delta") {
+        onDelta?.(JSON.parse(parsed.data) as AssistantStreamDelta);
+        continue;
+      }
+      if (parsed.event === "result") {
+        result = JSON.parse(parsed.data) as AssistantAskResponse;
+        continue;
+      }
+      if (parsed.event === "error") {
+        const body = JSON.parse(parsed.data) as { message?: string };
+        throw new Error(body.message?.trim() || "The assistant could not finish this question.");
+      }
+    }
+  }
+
+  if (result === null) {
+    throw new Error("The assistant stopped before it finished.");
+  }
+
+  return result;
+}
 
 export async function askAssistant(payload: AskAssistantPayload): Promise<AssistantAskResponse> {
   const response = await apiClient.post<{ data: AssistantAskResponse }>("/assistant/ask", {
@@ -327,82 +431,6 @@ export async function cancelAssistantAction(
   );
 
   return response.data.data;
-}
-
-export async function fetchAssistantKnowledgeIndex(params: {
-  page?: number;
-  per_page?: number;
-  search?: string;
-  status?: string;
-}): Promise<PaginatedEnvelope<AssistantKnowledgeRow>> {
-  const response = await apiClient.get<{ data: AssistantKnowledgeRow[]; meta: PaginatedMeta }>(
-    "/assistant/knowledge",
-    { params },
-  );
-
-  return { data: response.data.data, meta: response.data.meta };
-}
-
-export async function fetchAssistantKnowledge(id: string): Promise<AssistantKnowledgeDetail> {
-  const response = await apiClient.get<{ data: AssistantKnowledgeDetail }>(
-    `/assistant/knowledge/${id}`,
-  );
-
-  return response.data.data;
-}
-
-export async function createAssistantKnowledge(
-  payload: AssistantKnowledgePayload,
-): Promise<AssistantKnowledgeDetail> {
-  const response = await apiClient.post<{ data: AssistantKnowledgeDetail }>(
-    "/assistant/knowledge",
-    payload,
-  );
-
-  return response.data.data;
-}
-
-export async function updateAssistantKnowledge(
-  id: string,
-  payload: Partial<AssistantKnowledgePayload>,
-): Promise<AssistantKnowledgeDetail> {
-  const response = await apiClient.put<{ data: AssistantKnowledgeDetail }>(
-    `/assistant/knowledge/${id}`,
-    payload,
-  );
-
-  return response.data.data;
-}
-
-export async function publishAssistantKnowledge(id: string): Promise<AssistantKnowledgeDetail> {
-  const response = await apiClient.post<{ data: AssistantKnowledgeDetail }>(
-    `/assistant/knowledge/${id}/publish`,
-  );
-
-  return response.data.data;
-}
-
-export async function archiveAssistantKnowledge(id: string): Promise<AssistantKnowledgeDetail> {
-  const response = await apiClient.post<{ data: AssistantKnowledgeDetail }>(
-    `/assistant/knowledge/${id}/archive`,
-  );
-
-  return response.data.data;
-}
-
-export async function reindexAssistantKnowledge(id: string): Promise<{
-  ingest: Record<string, unknown>;
-  source: AssistantKnowledgeDetail;
-}> {
-  const response = await apiClient.post<{
-    data: { ingest: Record<string, unknown>; source: AssistantKnowledgeDetail };
-  }>(`/assistant/knowledge/${id}/reindex`);
-
-  return response.data.data;
-}
-
-export async function deleteAssistantKnowledge(id: string): Promise<void> {
-  await apiClient.delete(`/assistant/knowledge/${id}`);
 }
 
 export type AiPromptModuleListRow = {

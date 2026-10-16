@@ -1,9 +1,8 @@
 import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
 import {
   branchGroupLabel,
+  ladderCaseLabel,
   ladderGroupLabel,
-  parseThresholdBand,
-  thresholdBandLabel,
   toWorkflowEditorSegments,
 } from "@/modules/e-approval/workflow-branch-groups";
 import { compactWorkflowStepOrdersPreservingTies } from "@/modules/e-approval/workflow-parallel-groups";
@@ -142,10 +141,9 @@ export function buildWorkflowEditorDiagram(
       );
       const orderLabel = `${Math.min(...orders)}–${Math.max(...orders)}`;
       const nodes = ladder.bandIndexes.map((stepIndex) => {
-        const band = parseThresholdBand(steps[stepIndex]);
-        const caseLabel = band
-          ? thresholdBandLabel(band, fieldLabel(fields, ladder.field))
-          : whenSummary(steps[stepIndex], fields);
+        const caseLabel =
+          ladderCaseLabel(steps[stepIndex], fieldLabel(fields, ladder.field)) ||
+          whenSummary(steps[stepIndex], fields);
         return nodeFromStep(
           steps,
           fields,

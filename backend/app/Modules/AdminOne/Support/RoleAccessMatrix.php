@@ -7,7 +7,7 @@ namespace App\Modules\AdminOne\Support;
 /**
  * Metacoresoft-style per-entity / field / workflow ACL stored on tenant roles.
  *
- * @phpstan-type EntityAccess array{view?: bool, view_own?: bool, create?: bool, edit?: bool, delete?: bool, export?: bool}
+ * @phpstan-type EntityAccess array{view?: bool, view_own?: bool, create?: bool, edit?: bool, delete?: bool, export?: bool, import?: bool, smart_scan?: bool, undo?: bool, truncate?: bool, duplicate?: bool, columns?: bool}
  * @phpstan-type FieldAccess 'full'|'view'|'table_record'|'record'|'form'|'hide'
  * @phpstan-type WorkflowAccess array<string, bool>
  * @phpstan-type DataFilterRule array{field: string, operator: string, value?: string}
@@ -16,12 +16,37 @@ namespace App\Modules\AdminOne\Support;
  *   entities?: array<string, EntityAccess>,
  *   fields?: array<string, array<string, FieldAccess>>,
  *   workflows?: array<string, WorkflowAccess>,
- *   filters?: array<string, DataFilterGroup>
+ *   filters?: array<string, DataFilterGroup>,
+ *   statuses?: array<string, list<string>>,
+ *   ai?: array{preset: string, capabilities?: array<string, bool>, instructions?: string}
  * }
  */
 final class RoleAccessMatrix
 {
     public const FIELD_LEVELS = ['full', 'view', 'table_record', 'record', 'form', 'hide'];
+
+    /** Power columns. When a stored row omits the key, it follows the base action. */
+    public const POWER_FLAGS = [
+        'import' => 'create',
+        'smart_scan' => 'create',
+        'undo' => 'edit',
+        'truncate' => 'delete',
+        'duplicate' => 'create',
+        'columns' => 'view',
+    ];
+
+    public const AI_PRESETS = ['unrestricted', 'none', 'ask', 'ask_data', 'builder', 'full', 'custom'];
+
+    public const AI_CAPABILITIES = [
+        'ask_lookup',
+        'create_update',
+        'delete_records',
+        'build_reports',
+        'build_system',
+        'workflows',
+        'users_roles',
+        'read_code',
+    ];
 
     public const FILTER_OPERATORS = [
         'equals',
@@ -62,6 +87,11 @@ final class RoleAccessMatrix
                     'delete' => (bool) ($row['delete'] ?? false),
                     'export' => (bool) ($row['export'] ?? false),
                 ];
+                foreach (self::POWER_FLAGS as $flag => $_base) {
+                    if (array_key_exists($flag, $row)) {
+                        $entities[$slug][$flag] = (bool) $row[$flag];
+                    }
+                }
                 if ($entities[$slug]['view']) {
                     $entities[$slug]['view_own'] = false;
                 }
@@ -124,6 +154,16 @@ final class RoleAccessMatrix
             if ($filters !== []) {
                 $out['filters'] = $filters;
             }
+        }
+
+        $statuses = self::normalizeStatuses($raw['statuses'] ?? null);
+        if ($statuses !== []) {
+            $out['statuses'] = $statuses;
+        }
+
+        $ai = self::normalizeAi($raw['ai'] ?? null);
+        if ($ai !== null) {
+            $out['ai'] = $ai;
         }
 
         return $out;
@@ -197,6 +237,10 @@ final class RoleAccessMatrix
                 ];
                 foreach (['view', 'view_own', 'create', 'edit', 'delete', 'export'] as $key) {
                     $current[$key] = $current[$key] || (bool) ($row[$key] ?? false);
+                }
+                foreach (self::POWER_FLAGS as $flag => $base) {
+                    $explicit = array_key_exists($flag, $row) ? (bool) $row[$flag] : (bool) ($row[$base] ?? false);
+                    $current[$flag] = ($current[$flag] ?? false) || $explicit;
                 }
                 if ($current['view']) {
                     $current['view_own'] = false;
@@ -275,7 +319,119 @@ final class RoleAccessMatrix
             $out['filters'] = $filtersOut;
         }
 
+        $statuses = self::mergeStatuses($matrices);
+        if ($statuses !== []) {
+            $out['statuses'] = $statuses;
+        }
+
+        $ai = self::mergeAi($matrices);
+        if ($ai !== null) {
+            $out['ai'] = $ai;
+        }
+
         return $out;
+    }
+
+    /**
+     * A slug stays restricted only when every role lists it. Values are the union.
+     *
+     * @param  list<AccessMatrix>  $matrices
+     * @return array<string, list<string>>
+     */
+    private static function mergeStatuses(array $matrices): array
+    {
+        if ($matrices === []) {
+            return [];
+        }
+        $sets = [];
+        foreach ($matrices as $matrix) {
+            $statuses = $matrix['statuses'] ?? null;
+            if (! is_array($statuses) || $statuses === []) {
+                return [];
+            }
+            $sets[] = $statuses;
+        }
+        $slugs = array_keys($sets[0]);
+        foreach ($sets as $statuses) {
+            $slugs = array_values(array_intersect($slugs, array_keys($statuses)));
+        }
+        $out = [];
+        foreach ($slugs as $slug) {
+            $values = [];
+            foreach ($sets as $statuses) {
+                foreach ($statuses[$slug] as $value) {
+                    if (is_string($value) && $value !== '') {
+                        $values[$value] = $value;
+                    }
+                }
+            }
+            $out[$slug] = array_values($values);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Least restrictive wins. One unrestricted role drops the limit.
+     *
+     * @param  list<AccessMatrix>  $matrices
+     * @return array{preset: string, capabilities?: array<string, bool>, instructions?: string}|null
+     */
+    private static function mergeAi(array $matrices): ?array
+    {
+        $capabilities = array_fill_keys(self::AI_CAPABILITIES, false);
+        $notes = [];
+        $sawLimit = false;
+        foreach ($matrices as $matrix) {
+            $ai = $matrix['ai'] ?? null;
+            if (! is_array($ai) || ($ai['preset'] ?? 'unrestricted') === 'unrestricted') {
+                return null;
+            }
+            $sawLimit = true;
+            $resolved = self::capabilitiesForPreset((string) $ai['preset'], is_array($ai['capabilities'] ?? null) ? $ai['capabilities'] : []);
+            foreach (self::AI_CAPABILITIES as $cap) {
+                $capabilities[$cap] = $capabilities[$cap] || $resolved[$cap];
+            }
+            $note = trim((string) ($ai['instructions'] ?? ''));
+            if ($note !== '') {
+                $notes[$note] = $note;
+            }
+        }
+        if (! $sawLimit) {
+            return null;
+        }
+        $ai = [
+            'preset' => 'custom',
+            'capabilities' => $capabilities,
+        ];
+        if ($notes !== []) {
+            $ai['instructions'] = implode("\n", array_values($notes));
+        }
+
+        return $ai;
+    }
+
+    /**
+     * @param  array<string, bool>  $custom
+     * @return array<string, bool>
+     */
+    public static function capabilitiesForPreset(string $preset, array $custom = []): array
+    {
+        $all = array_fill_keys(self::AI_CAPABILITIES, true);
+        $none = array_fill_keys(self::AI_CAPABILITIES, false);
+
+        return match ($preset) {
+            'none' => $none,
+            'ask' => array_replace($none, ['ask_lookup' => true]),
+            'ask_data' => array_replace($none, ['ask_lookup' => true, 'create_update' => true]),
+            'builder' => array_replace($all, [
+                'delete_records' => false,
+                'users_roles' => false,
+                'read_code' => false,
+            ]),
+            'custom' => array_replace($none, array_intersect_key(array_map('boolval', $custom), $none)),
+            default => $all,
+        };
     }
 
     public static function stricterFieldLevel(string $a, string $b): string
@@ -302,7 +458,101 @@ final class RoleAccessMatrix
             return (bool) ($row['view'] ?? false) || (bool) ($row['view_own'] ?? false);
         }
 
+        if (isset(self::POWER_FLAGS[$action]) && ! array_key_exists($action, $row)) {
+            $base = self::POWER_FLAGS[$action];
+
+            return (bool) ($row[$base] ?? false);
+        }
+
         return (bool) ($row[$action] ?? false);
+    }
+
+    /**
+     * Allowed status values, or null when the role does not restrict this entity.
+     *
+     * @param  AccessMatrix  $matrix
+     * @return list<string>|null
+     */
+    public static function allowedStatuses(array $matrix, string $slug): ?array
+    {
+        $statuses = $matrix['statuses'] ?? null;
+        if (! is_array($statuses) || ! array_key_exists($slug, $statuses) || ! is_array($statuses[$slug])) {
+            return null;
+        }
+
+        return array_values(array_filter($statuses[$slug], static fn ($value): bool => is_string($value) && $value !== ''));
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private static function normalizeStatuses(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $slug => $values) {
+            if (! is_string($slug) || $slug === '' || ! is_array($values)) {
+                continue;
+            }
+            $clean = [];
+            foreach ($values as $value) {
+                if (! is_scalar($value)) {
+                    continue;
+                }
+                $text = trim((string) $value);
+                if ($text === '' || strlen($text) > 64) {
+                    continue;
+                }
+                $clean[$text] = $text;
+                if (count($clean) >= 100) {
+                    break;
+                }
+            }
+            $out[$slug] = array_values($clean);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array{preset: string, capabilities?: array<string, bool>, instructions?: string}|null
+     */
+    private static function normalizeAi(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+        $preset = trim((string) ($raw['preset'] ?? 'unrestricted'));
+        if (! in_array($preset, self::AI_PRESETS, true)) {
+            $preset = 'unrestricted';
+        }
+        $capabilities = [];
+        $rawCaps = $raw['capabilities'] ?? null;
+        if (is_array($rawCaps)) {
+            foreach (self::AI_CAPABILITIES as $cap) {
+                if (array_key_exists($cap, $rawCaps)) {
+                    $capabilities[$cap] = (bool) $rawCaps[$cap];
+                }
+            }
+        }
+        $instructions = trim((string) ($raw['instructions'] ?? ''));
+        if (strlen($instructions) > 2000) {
+            $instructions = substr($instructions, 0, 2000);
+        }
+        if ($preset === 'unrestricted' && $capabilities === [] && $instructions === '') {
+            return null;
+        }
+        $ai = ['preset' => $preset];
+        if ($capabilities !== []) {
+            $ai['capabilities'] = $capabilities;
+        }
+        if ($instructions !== '') {
+            $ai['instructions'] = $instructions;
+        }
+
+        return $ai;
     }
 
     /**
@@ -313,6 +563,26 @@ final class RoleAccessMatrix
         $level = $matrix['fields'][$slug][$field] ?? null;
 
         return is_string($level) && in_array($level, self::FIELD_LEVELS, true) ? $level : 'full';
+    }
+
+    /**
+     * form: full, view, form.
+     * table: full, view, table_record.
+     * record: full, view, table_record, record.
+     */
+    public static function visibleOn(string $level, string $surface): bool
+    {
+        return match ($surface) {
+            'form' => in_array($level, ['full', 'view', 'form'], true),
+            'table' => in_array($level, ['full', 'view', 'table_record'], true),
+            'record' => in_array($level, ['full', 'view', 'table_record', 'record'], true),
+            default => false,
+        };
+    }
+
+    public static function editableOnForm(string $level): bool
+    {
+        return $level === 'full' || $level === 'form';
     }
 
     /**

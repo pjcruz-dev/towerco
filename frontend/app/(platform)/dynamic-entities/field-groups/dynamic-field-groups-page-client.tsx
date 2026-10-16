@@ -19,6 +19,7 @@ import {
   type DynEntitySummary,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { notify } from "@/lib/ui/notify";
 import { adminPageShellClass } from "@/lib/ui/page-shell";
 
 export function DynamicFieldGroupsPageClient() {
@@ -75,9 +76,11 @@ export function DynamicFieldGroupsPageClient() {
     if (!slug || !groupName.trim()) return;
     setSaving(true);
     try {
-      await createDynFieldGroup(slug, { name: groupName.trim() });
+      const createdName = groupName.trim();
+      await createDynFieldGroup(slug, { name: createdName });
       setGroupName("");
       await refresh();
+      notify.success("Group created", createdName);
     } catch {
       setError("Unable to create group.");
     } finally {
@@ -101,7 +104,7 @@ export function DynamicFieldGroupsPageClient() {
     <PermissionGate requiredPermissions={[permissions.dynamicEntitiesFieldsManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Field Groups"
           description="Organize how fields appear on forms and record views. Fields left ungrouped render above groups — an entity with no groups is unaffected."
           actions={

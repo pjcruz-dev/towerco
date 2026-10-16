@@ -1,13 +1,14 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/components/ui/status-tone";
 import {
   authMethodLabel,
   mfaStatusLabel,
   resolveMfaDisplayStatus,
   type MfaDisplayStatus,
 } from "@/lib/admin/user-display";
-import { cn } from "@/lib/utils";
 
 export function UserAuthMethodBadge({ method }: { method: string }) {
   return (
@@ -31,10 +32,10 @@ export function UserAuthMethodsBadges({ methods }: { methods: string[] }) {
   );
 }
 
-const MFA_BADGE_CLASS: Record<MfaDisplayStatus, string> = {
-  enrolled: "border-success/30 bg-success/10 text-success",
-  required_not_enrolled: "border-warning/30 bg-warning/10 text-warning",
-  not_required: "text-muted-foreground",
+const MFA_TONE: Record<MfaDisplayStatus, StatusTone> = {
+  enrolled: "success",
+  required_not_enrolled: "warning",
+  not_required: "neutral",
 };
 
 export function UserMfaStatusBadge({
@@ -47,8 +48,8 @@ export function UserMfaStatusBadge({
   const status = resolveMfaDisplayStatus(mfaEnrolled, mfaRequired);
 
   return (
-    <Badge variant="secondary" className={cn("font-normal", MFA_BADGE_CLASS[status])}>
+    <StatusBadge tone={MFA_TONE[status]} className="font-normal">
       {mfaStatusLabel(status)}
-    </Badge>
+    </StatusBadge>
   );
 }

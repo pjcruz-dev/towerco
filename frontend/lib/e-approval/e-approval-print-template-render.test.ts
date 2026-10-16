@@ -12,6 +12,7 @@ import {
   printableDesignFields,
   renderEApprovalPrintTemplateHtml,
   shouldAppendPrintAttachments,
+  shouldUseFinancePrintStarter,
 } from "@/lib/e-approval/e-approval-print-template-render";
 import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
 
@@ -312,6 +313,126 @@ describe("form-style starter layout", () => {
     expect(css).toContain(".ea-form-letterhead");
     expect(css).toContain(".ea-form-grid");
     expect(css).toContain(".ea-print-table");
+  });
+
+  it("cash_advance starter is a landscape forecast document", () => {
+    const html = defaultEApprovalDocumentDesignHtml("Cash advance", [], "cash_advance");
+    const css = defaultEApprovalDocumentDesignCss({ marginMm: 10 }, "cash_advance");
+    expect(html).toContain("ea-ca-doc");
+    expect(html).toContain("{{field.purpose}}");
+    expect(html).toContain("{{field.needed_by}}");
+    expect(html).toContain("{{grid.expense_lines}}");
+    expect(html).not.toContain("ea-ca-totals");
+    expect(html).not.toContain("{{system.form_body}}");
+    expect(css).toContain("@page { size: A4 landscape; margin: 10mm; }");
+    expect(css).toContain(".ea-print-col-date");
+    expect(css).toContain(".ea-lq-doc .ea-print-col-date");
+    expect(css).toContain("width: 10%");
+
+    const rendered = renderEApprovalPrintTemplateHtml(html, samplePayload({
+      form_name: "Cash advance",
+      document_no: "ATC-X-CA-001",
+      requestor: "administrator",
+      fields: [
+        { key: "subsidiary", label: "Subsidiary", value: "ATC", field_type: "select" },
+        { key: "needed_by", label: "Funds needed by", value: "Oct 19, 2026", field_type: "date" },
+        { key: "purpose", label: "Purpose", value: "Site visit", field_type: "text" },
+        { key: "requested_amount", label: "Requested amount", value: "14050.00", field_type: "currency" },
+        { key: "vat_total", label: "VAT", value: "1505.36", field_type: "currency" },
+        { key: "non_vatable_total", label: "Non-VATable", value: "10000.00", field_type: "currency" },
+        { key: "vatable_net", label: "VATable, net of VAT", value: "2544.64", field_type: "currency" },
+        { key: "notes", label: "Notes", value: "", field_type: "textarea" },
+      ],
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Forecast lines",
+          columns: ["From date – To date", "From site / location", "Amount"],
+          rows: [["Oct 19, 2026, 8:00 AM – Oct 19, 2026, 5:00 PM", "ATC-MIN-0205 — Ct-Datu Unsay-Meta", "500.00"]],
+        },
+      ],
+    }));
+    expect(rendered).toContain("ATC-X-CA-001");
+    expect(rendered).toContain("Site visit");
+    expect(rendered).toContain("ATC-MIN-0205");
+    expect(rendered).toContain("ea-print-col-date");
+    expect(rendered).toContain("ea-print-col-money");
+    expect(rendered).toContain(">Totals<");
+    expect(rendered).not.toContain("Requested amount");
+    expect(rendered).toContain("Non-VATable");
+    expect(rendered).toContain("VATable, net of VAT");
+    expect(rendered).toContain("₱14,050.00");
+    expect(rendered).toContain("₱1,505.36");
+    expect(rendered).toContain("₱10,000.00");
+    expect(rendered).toContain("₱2,544.64");
+    expect(rendered).toContain("₱500.00");
+    expect(rendered).not.toContain("ea-ca-totals");
+    expect(rendered).not.toContain("ea-ca-summary");
+    expect(rendered).not.toContain("TOTAL EXPENSES");
+    expect(rendered).not.toContain("Request details");
+  });
+
+  it("liquidation starter follows the cash advance page and states the settlement", () => {
+    const html = defaultEApprovalDocumentDesignHtml("Liquidation", [], "liquidation");
+    expect(html).toContain("ea-lq-doc");
+    expect(html).toContain("Liquidation");
+    expect(html).toContain("{{field.cash_advance_document_no}}");
+    expect(html).toContain("{{field.settlement_summary}}");
+    expect(html).not.toContain("Actual expenses");
+    expect(html).toContain("{{grid.expense_lines}}");
+    expect(html).not.toContain("{{system.form_body}}");
+    const table = renderEApprovalPrintTemplateHtml("{{grid.expense_lines}}", samplePayload({
+      form_name: "Liquidation",
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Expense lines",
+          columns: ["From date – To date", "OR No", "Supplier/Payee", "Description", "Amount", "Forecast amount", "Variance reason"],
+          rows: [["Oct 19", "OR-1", "TEST", "Travel", "4000", "500", "Rate differed"]],
+        },
+      ],
+    }));
+    expect(table).toContain("ea-print-col-note");
+    expect(table).toContain("ea-print-col-party");
+    expect(table).toContain("Rate differed");
+    expect(shouldUseFinancePrintStarter(defaultEApprovalDocumentDesignHtml(), "liquidation")).toBe(true);
+    expect(shouldUseFinancePrintStarter(html, "liquidation")).toBe(false);
+  });
+
+  it("reimbursement starter is the liquidation page without a forecast or cash advance", () => {
+    const html = defaultEApprovalDocumentDesignHtml("Reimbursement", [], "reimbursement");
+    expect(html).toContain("ea-re-doc");
+    expect(html).not.toContain("Actual expenses");
+    expect(html).not.toContain("{{field.total_reimbursement}}");
+    expect(html).toContain("{{grid.expense_lines}}");
+    expect(html).not.toContain("cash_advance");
+    expect(html).not.toContain("Forecast");
+    expect(html).not.toContain("settlement_summary");
+    const table = renderEApprovalPrintTemplateHtml("{{grid.expense_lines}}", samplePayload({
+      form_name: "Reimbursement",
+      fields: [
+        { key: "total_reimbursement", label: "Total expenses", value: "6050.00", field_type: "currency" },
+        { key: "vat_total", label: "VAT", value: "610.70", field_type: "currency" },
+      ],
+      grids: [
+        {
+          key: "expense_lines",
+          label: "Expense lines",
+          columns: ["From date – To date", "OR No", "Expense type", "Amount", "VAT treatment", "VAT"],
+          rows: [["2026-10-16 – 2026-10-19", "TEST", "lodging", "1500.00", "vatable", "160.71"]],
+        },
+      ],
+    }));
+    expect(table).toContain(">Totals<");
+    expect(table).not.toContain("Total expenses");
+    expect(table).not.toContain("ea-print-total-kicker");
+    expect(table).toContain("₱6,050.00");
+    expect(table).toContain("₱1,500.00");
+    expect(table).toContain("Non-VATable");
+    expect(table).toContain("VATable, net of VAT");
+    expect(table).not.toContain("Requested amount");
+    expect(shouldUseFinancePrintStarter("<div>custom leave form</div>", null)).toBe(false);
+    expect(shouldUseFinancePrintStarter("<div>custom leave form</div>", "reimbursement")).toBe(true);
   });
 
   it("request_for_payment starter matches paper RFP layout", () => {

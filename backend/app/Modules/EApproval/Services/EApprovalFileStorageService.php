@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Models\EApprovalExportHistory;
 use App\Modules\EApproval\Models\EApprovalForm;
@@ -18,6 +19,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class EApprovalFileStorageService
 {
+    public function __construct(
+        private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
+    ) {}
+
     public function assertUploadAllowed(UploadedFile $file): void
     {
         $this->assertAllowedMime($file);
@@ -38,6 +43,8 @@ final class EApprovalFileStorageService
                 $existing->metadata = $metadata;
                 $existing->save();
             }
+
+            $this->controlledDocumentHook->afterAttachmentStored($submission);
 
             return $existing;
         }
@@ -64,7 +71,7 @@ final class EApprovalFileStorageService
             ]);
         }
 
-        return EApprovalAttachment::query()->create([
+        $attachment = EApprovalAttachment::query()->create([
             'id' => (string) Str::uuid(),
             'submission_id' => $submission->id,
             'field_name' => $fieldName,
@@ -72,6 +79,10 @@ final class EApprovalFileStorageService
             'file_name' => $file->getClientOriginalName(),
             'metadata' => $metadata,
         ]);
+
+        $this->controlledDocumentHook->afterAttachmentStored($submission);
+
+        return $attachment;
     }
 
     public function findExistingByOriginalName(

@@ -73,9 +73,35 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
       {
         title: "Document register",
         icon: ClipboardCheck,
-        href: "/documents/controlled",
         module: "document_register",
         permissions: ["documents:controlled:view"],
+        items: [
+          {
+            title: "Overview",
+            href: "/documents/controlled",
+            exact: true,
+            section: "Operate",
+            permissions: ["documents:controlled:view"],
+          },
+          {
+            title: "Register",
+            href: "/documents/controlled/register",
+            section: "Operate",
+            permissions: ["documents:controlled:view"],
+          },
+          {
+            title: "Reports",
+            href: "/documents/controlled/reports",
+            section: "Operate",
+            permissions: ["documents:controlled:view"],
+          },
+          {
+            title: "Access",
+            href: "/documents/controlled/access",
+            section: "Configure",
+            permissions: ["documents:controlled:manage"],
+          },
+        ],
       },
       {
         title: "Sites",
@@ -83,17 +109,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         module: "dynamic_entities",
         permissions: ["dynamic_entities:view"],
         items: [
-          {
-            title: "Executive Dashboard",
-            href: "/dynamic-entities/executive-dashboard",
-            exact: true,
-            permissions: ["dynamic_entities:view"],
-          },
-          {
-            title: "CAS Executive Dashboard",
-            href: "/dynamic-entities/reports/cas-executive-dashboard",
-            permissions: ["dynamic_entities:view"],
-          },
           {
             title: "Tower Sites",
             href: "/dynamic-entities/tower_sites",
@@ -298,11 +313,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         permissions: ["dynamic_entities:view"],
         items: [
           {
-            title: "CAS Executive Dashboard",
-            href: "/dynamic-entities/reports/cas-executive-dashboard",
-            permissions: ["dynamic_entities:view"],
-          },
-          {
             title: "AR & AP Aging",
             href: "/dynamic-entities/reports/ar-ap-aging",
             permissions: ["dynamic_entities:view"],
@@ -461,71 +471,102 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
       },
       {
         title: "System Core",
-        icon: Shapes,
-        module: "dynamic_entities",
-        permissions: ["dynamic_entities:fields:manage", "printables:manage", "sidebar:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "search_index:manage", "entity_hooks:manage", "ai_assistant:prompts:manage"],
+        icon: Settings,
+        permissions: ["system:manage", "search_index:manage", "ai_assistant:prompts:manage", "sidebar:manage", "api_keys:manage"],
         permissionsMatch: "any",
         items: [
           {
+            title: "Manage System",
+            href: "/admin/system",
+            section: "Platform",
+            permissions: ["system:manage"],
+          },
+          {
             title: "Search Index",
             href: "/admin/search-index",
+            section: "Platform",
             permissions: ["search_index:manage"],
           },
           {
             title: "AI System Prompts",
             href: "/admin/ai-prompts",
+            section: "Platform",
             permissions: ["ai_assistant:prompts:manage"],
           },
           {
+            title: "Manage Sidebar",
+            href: "/admin/sidebar",
+            section: "Platform",
+            permissions: ["sidebar:manage"],
+          },
+          {
+            title: "Manage REST API",
+            href: "/admin/api-keys",
+            section: "Platform",
+            permissions: ["api_keys:manage"],
+          },
+        ],
+      },
+      {
+        title: "Dynamic Entities",
+        icon: Shapes,
+        module: "dynamic_entities",
+        permissions: ["dynamic_entities:fields:manage", "printables:manage", "html_reports:manage", "workflows:manage", "email_templates:manage", "entity_hooks:manage"],
+        permissionsMatch: "any",
+        items: [
+          {
             title: "Manage Fields",
             href: "/dynamic-entities/fields",
+            section: "Data & print",
             permissions: ["dynamic_entities:fields:manage"],
           },
           {
             title: "Relation Visual",
             href: "/dynamic-entities/relationships",
+            section: "Data & print",
             permissions: ["dynamic_entities:fields:manage"],
-            module: "dynamic_entities",
           },
           {
             title: "Field Groups",
             href: "/dynamic-entities/field-groups",
+            section: "Data & print",
             permissions: ["dynamic_entities:fields:manage"],
           },
           {
             title: "Manage Printables",
             href: "/dynamic-entities/printables",
+            section: "Data & print",
             permissions: ["printables:manage"],
           },
           {
             title: "Manage HTML Reports",
             href: "/dynamic-entities/html-reports",
+            section: "Data & print",
             permissions: ["html_reports:manage"],
           },
           {
             title: "Report Builder",
             href: "/dynamic-entities/report-builder",
+            section: "Data & print",
             permissions: ["html_reports:manage"],
           },
           {
             title: "Email Templates",
             href: "/dynamic-entities/email-templates",
+            section: "Data & print",
             permissions: ["email_templates:manage"],
           },
           {
             title: "Manage Workflows",
             href: "/dynamic-entities/workflows",
+            section: "Automation",
             permissions: ["workflows:manage"],
           },
           {
             title: "Entity Hooks",
             href: "/dynamic-entities/hooks",
+            section: "Automation",
             permissions: ["entity_hooks:manage"],
-          },
-          {
-            title: "Manage Sidebar",
-            href: "/admin/sidebar",
-            permissions: ["sidebar:manage"],
           },
         ],
       },
@@ -576,6 +617,24 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             section: "Operate",
             permissions: ["ticketing:view"],
           },
+          {
+            title: "Fields",
+            href: "/ticketing/fields",
+            section: "Setup",
+            permissions: ["ticketing:fields:manage"],
+          },
+        ],
+      },
+      {
+        title: "Assets",
+        icon: Package,
+        module: "asset_management",
+        permissions: ["assets:view", "assets:self:view", "assets:manage"],
+        items: [
+          { title: "Inventory", href: "/assets", exact: true, section: "Operate", permissions: ["assets:view", "assets:self:view"], permissionsMatch: "any" },
+          { title: "Scan", href: "/assets/scan", section: "Operate", permissions: ["assets:view", "assets:manage"], permissionsMatch: "any" },
+          { title: "Offboarding", href: "/assets/offboarding", section: "Operate", permissions: ["assets:offboard"] },
+          { title: "Fields", href: "/assets/fields", section: "Setup", permissions: ["assets:fields:manage"] },
         ],
       },
       {
@@ -642,7 +701,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         permissions: [
           "tenant:manage",
           "e_approval:settings:manage",
-          "ticketing:settings:manage",
           // Personal module profile / exports — not Platform Overview.
           "e_approval:view",
           "doc-extract:view",
@@ -708,13 +766,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             section: "E-Forms",
             module: "e_approval",
             permissions: ["e_approval:settings:manage"],
-          },
-          {
-            title: "Ticketing settings",
-            href: "/ticketing/settings",
-            section: "Ticketing",
-            module: "ticketing",
-            permissions: ["ticketing:settings:manage"],
           },
         ],
       },

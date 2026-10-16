@@ -3,12 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { fetchEApprovalMasterDataSets } from "@/lib/api/modules/e-approval-api";
+import { fetchEApprovalMasterDataSets, type EApprovalMasterDataColumnDef } from "@/lib/api/modules/e-approval-api";
 import {
   GRID_COLUMN_PRESETS,
   type EApprovalGridColumnPresetId,
@@ -18,6 +20,45 @@ import {
   type GridColumnDef,
   type GridColumnType,
 } from "@/modules/e-approval/field-options";
+
+const BUILTIN_SITE_FIELDS: EApprovalMasterDataColumnDef[] = [
+  { key: "address", label: "Address", type: "text" },
+  { key: "name", label: "Name", type: "text" },
+];
+
+function siteFieldsForSet(
+  set: { config_json?: { columns?: EApprovalMasterDataColumnDef[] } | null } | undefined,
+): EApprovalMasterDataColumnDef[] {
+  const saved = Array.isArray(set?.config_json?.columns) ? set.config_json.columns : [];
+  const savedByKey = new Map(saved.filter((field) => field.key !== "").map((field) => [field.key, field]));
+  const seen = new Set<string>();
+  const fields: EApprovalMasterDataColumnDef[] = [];
+  const push = (field: EApprovalMasterDataColumnDef) => {
+    if (field.key === "" || seen.has(field.key)) {
+      return;
+    }
+    seen.add(field.key);
+    fields.push(field);
+  };
+  for (const builtin of BUILTIN_SITE_FIELDS) {
+    push(savedByKey.get(builtin.key) ?? builtin);
+    savedByKey.delete(builtin.key);
+  }
+  for (const field of savedByKey.values()) {
+    push(field);
+  }
+  return fields;
+}
+
+function toggleSiteField(current: string[], key: string, on: boolean): string[] {
+  const next = new Set(current);
+  if (on) {
+    next.add(key);
+  } else {
+    next.delete(key);
+  }
+  return [...next];
+}
 
 type Props = {
   columns: GridColumnDef[];
@@ -34,6 +75,30 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
     staleTime: 60_000,
   });
   const masterSets = setsQuery.data ?? [];
+  const siteSet = masterSets.find((set) => set.key === "sites");
+  const siteFieldKeys = siteFieldsForSet(siteSet).map((field) => field.key);
+
+  useEffect(() => {
+    if (!siteSet) {
+      return;
+    }
+    const allowed = new Set(siteFieldKeys);
+    let changed = false;
+    const next = columns.map((col) => {
+      if (col.master_data_key !== "sites" || !Array.isArray(col.show_fields)) {
+        return col;
+      }
+      const cleaned = col.show_fields.filter((key) => allowed.has(key));
+      if (cleaned.length === col.show_fields.length && cleaned.every((key, index) => key === col.show_fields?.[index])) {
+        return col;
+      }
+      changed = true;
+      return { ...col, show_fields: cleaned };
+    });
+    if (changed) {
+      onChange(next);
+    }
+  }, [columns, onChange, siteFieldKeys, siteSet]);
 
   const updateColumn = (index: number, patch: Partial<GridColumnDef>) => {
     const next = [...columns];
@@ -49,6 +114,12 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
     } else {
       delete merged.master_data_key;
       delete merged.choices;
+    }
+    if (merged.type !== "date_range") {
+      delete merged.include_time;
+    }
+    if (merged.type !== "select" || merged.master_data_key !== "sites") {
+      delete merged.show_fields;
     }
     next[index] = merged;
     onChange(next);
@@ -105,8 +176,9 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Presets: Liquidation (Land/Sea/Air, Lodging) and Reimbursement (Landfare, Airfare, Toll Fee). Both include
-          Date, OR No, Supplier/Payee, VAT, and Total. PO lines use Qty + Unit price.
+          Liquidation and reimbursement link an activity, then the cost columns. Date and site stay on the activity
+          report. Per diem uses those dates. VAT treatment and VAT show only for a VATable type. PO lines use Qty ×
+          unit price.
         </p>
       </div>
 
@@ -192,6 +264,18 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                 </div>
               </div>
 
+              {col.type === "date_range" ? (
+                <label className="flex items-center gap-2 border-t border-border/40 pt-2 text-sm">
+                  <Checkbox
+                    disabled={disabled}
+                    checked={col.include_time !== false}
+                    onCheckedChange={(checked) => updateColumn(index, { include_time: checked === true })}
+                    className="size-4"
+                  />
+                  Include time
+                </label>
+              ) : null}
+
               {col.type === "select" ? (
                 <div className="space-y-2 border-t border-border/40 pt-2">
                   <div className="space-y-1">
@@ -221,20 +305,48 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                   </div>
 
                   {"master_data_key" in col && col.master_data_key !== undefined ? (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Master data set</Label>
-                      <Select
-                        disabled={disabled || setsQuery.isLoading}
-                        value={col.master_data_key}
-                        onChange={(e) => updateColumn(index, { master_data_key: e.target.value })}
-                      >
-                        <option value="">Select set…</option>
-                        {masterSets.map((set) => (
-                          <option key={set.id} value={set.key}>
-                            {set.name} ({set.key})
-                          </option>
-                        ))}
-                      </Select>
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Master data set</Label>
+                        <Select
+                          disabled={disabled || setsQuery.isLoading}
+                          value={col.master_data_key}
+                          onChange={(e) => updateColumn(index, { master_data_key: e.target.value })}
+                        >
+                          <option value="">Select set…</option>
+                          {masterSets.map((set) => (
+                            <option key={set.id} value={set.key}>
+                              {set.name} ({set.key})
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                      {col.master_data_key === "sites" ? (
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-muted-foreground">Include on the line</p>
+                          {siteFieldsForSet(siteSet).map((field) => {
+                            const allowed = new Set(siteFieldKeys);
+                            const selected = (col.show_fields ?? (allowed.has("address") ? ["address"] : [])).filter(
+                              (key) => allowed.has(key),
+                            );
+                            return (
+                              <label key={field.key} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  disabled={disabled}
+                                  checked={selected.includes(field.key)}
+                                  onCheckedChange={(checked) =>
+                                    updateColumn(index, {
+                                      show_fields: toggleSiteField(selected, field.key, checked === true),
+                                    })
+                                  }
+                                  className="size-4"
+                                />
+                                {field.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="space-y-2">

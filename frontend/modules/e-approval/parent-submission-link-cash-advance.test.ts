@@ -34,11 +34,36 @@ describe("applyCashAdvanceParentSelection", () => {
     expect(next.cash_advance_amount).toBe("2500.50");
   });
 
+  it("replaces forecast lines when another cash advance is selected", () => {
+    const next = applyCashAdvanceParentSelection(
+      {
+        cash_advance_document_no: "CA-OLD",
+        expense_lines: "{\"rows\":[{\"0\":\"old\"}]}",
+        subsidiary: "ATC",
+        notes: "old note",
+      },
+      {
+        document_no: "CA-NEW",
+        requested_amount: 800,
+        prefill_values: {
+          expense_lines: "{\"rows\":[{\"0\":\"new\"}]}",
+          subsidiary: "ADIC",
+          notes: "new note",
+        },
+      },
+    );
+
+    expect(next.expense_lines).toBe("{\"rows\":[{\"0\":\"new\"}]}");
+    expect(next.subsidiary).toBe("ADIC");
+    expect(next.notes).toBe("new note");
+  });
+
   it("clears cash advance fields when selection is removed", () => {
     const next = applyCashAdvanceParentSelection(
       {
         cash_advance_document_no: "CA-2026-001",
         cash_advance_amount: "5000.00",
+        expense_lines: "{\"rows\":[{\"0\":\"trip\"}]}",
         area: "North",
       },
       null,
@@ -46,6 +71,7 @@ describe("applyCashAdvanceParentSelection", () => {
 
     expect(next.cash_advance_document_no).toBe("");
     expect(next.cash_advance_amount).toBe("");
+    expect(next.expense_lines).toBe("");
     expect(next.area).toBe("North");
   });
 });

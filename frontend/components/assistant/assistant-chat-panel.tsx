@@ -9,22 +9,26 @@ import {
   SendHorizontal,
 } from "lucide-react";
 
+import { AssistantActivity } from "@/components/assistant/assistant-activity";
+import { HelpMarkdown } from "@/components/help/help-markdown";
 import { AssistantHistoryPanel } from "@/components/assistant/assistant-history-panel";
 import { AssistantMessage, type AssistantChatMessage } from "@/components/assistant/assistant-message";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  askAssistant,
+  askAssistantLive,
   cancelAssistantAction,
   confirmAssistantAction,
   fetchAssistantConversation,
   submitAssistantFeedback,
+  type AssistantActivityStep,
   type AssistantAskResponse,
   type AssistantCitation,
   type AssistantConversationMessage,
   type AssistantCostEstimate,
   type AssistantMeta,
   type AssistantRateLimit,
+  type AssistantStreamDelta,
 } from "@/lib/api/modules/assistant-api";
 import { getErrorMessage } from "@/lib/api/error";
 import type { AssistantRouteContext } from "@/lib/assistant/route-context";
@@ -57,6 +61,9 @@ function toAssistantMessage(response: AssistantAskResponse): AssistantChatMessag
     relatedLinks: response.related_links,
     usedLiveData: response.used_live_data === true,
     proposedAction: response.proposed_action ?? null,
+    activity: response.activity ?? [],
+    workedMs: null,
+    modelName: response.model_name,
     actionResolved: false,
     feedback: null,
   };
@@ -84,6 +91,8 @@ function toRestoredMessage(message: AssistantConversationMessage): AssistantChat
     relatedLinks: [],
     usedLiveData: false,
     proposedAction,
+    activity: message.activity ?? [],
+    modelName: message.model_name,
     actionResolved: proposedAction ? proposedAction.status !== "pending" : false,
     feedback: null,
   };
@@ -106,6 +115,10 @@ export function AssistantChatPanel({
   const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isAsking, setIsAsking] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<AssistantActivityStep[]>([]);
+  const [liveThought, setLiveThought] = useState("");
+  const [liveAnswer, setLiveAnswer] = useState("");
+  const liveThoughtRef = useRef("");
   const [feedbackPendingId, setFeedbackPendingId] = useState<string | null>(null);
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +129,7 @@ export function AssistantChatPanel({
   );
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const askStartedRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -163,7 +177,7 @@ export function AssistantChatPanel({
       return;
     }
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, isAsking, open, historyOpen]);
+  }, [messages, isAsking, liveSteps, liveThought, liveAnswer, open, historyOpen]);
 
   useEffect(() => {
     if (open && !historyOpen) {
@@ -225,16 +239,84 @@ export function AssistantChatPanel({
       { id: tempUserId, role: "user", content: trimmed },
     ]);
     setIsAsking(true);
+    askStartedRef.current = Date.now();
+    liveThoughtRef.current = "";
+    setLiveThought("");
+    setLiveAnswer("");
+    setLiveSteps([
+      {
+        id: "question",
+        kind: "model",
+        title: "Asking the model",
+        status: "running",
+        detail: null,
+      },
+    ]);
 
     try {
-      const response = await askAssistant({
-        question: trimmed,
-        conversation_id: conversationId,
-        module_context: routeContext.moduleKey,
-        page_path: routeContext.pagePath,
-        plan_mode: planMode,
-        preferred_model: preferredModel,
-      });
+      const response = await askAssistantLive(
+        {
+          question: trimmed,
+          conversation_id: conversationId,
+          module_context: routeContext.moduleKey,
+          page_path: routeContext.pagePath,
+          plan_mode: planMode,
+          preferred_model: preferredModel,
+        },
+        (step) => {
+          setLiveSteps((current) => {
+            const without = current.filter((item) => item.id !== step.id);
+            return [...without, step];
+          });
+        },
+        (delta: AssistantStreamDelta) => {
+          if (delta.kind === "thinking") {
+            liveThoughtRef.current += delta.text;
+            setLiveThought(liveThoughtRef.current);
+            return;
+          }
+          if (delta.kind === "assistant") {
+            setLiveAnswer((current) => current + delta.text);
+            return;
+          }
+          const pendingThought = liveThoughtRef.current.trim();
+          if (pendingThought !== "") {
+            liveThoughtRef.current = "";
+            setLiveThought("");
+          }
+          const name = delta.name ?? "Tool";
+          setLiveSteps((current) => {
+            const next = [...current];
+            if (pendingThought !== "") {
+              next.push({
+                id: `thought-${next.length}`,
+                kind: "thought",
+                title: "Thinking",
+                detail: pendingThought,
+                status: "done",
+              });
+            }
+            const last = next[next.length - 1];
+            const status = delta.status === "completed" ? "done" : "running";
+            if (last?.kind === "tool" && last.title === name && last.status === "running") {
+              next[next.length - 1] = {
+                ...last,
+                detail: delta.text || last.detail,
+                status,
+              };
+              return next;
+            }
+            next.push({
+              id: `cursor-${name}-${next.length}`,
+              kind: "tool",
+              title: name,
+              detail: delta.text || null,
+              status,
+            });
+            return next;
+          });
+        },
+      );
 
       setConversationId(response.conversation_id);
       if (typeof window !== "undefined") {
@@ -248,6 +330,20 @@ export function AssistantChatPanel({
       }
 
       const assistantMsg = toAssistantMessage(response);
+      assistantMsg.workedMs = Math.max(0, Date.now() - askStartedRef.current);
+      const thought = liveThoughtRef.current.trim();
+      if (thought !== "" && !assistantMsg.activity?.some((step) => step.kind === "thought")) {
+        assistantMsg.activity = [
+          {
+            id: "thought",
+            kind: "thought",
+            title: "Thought",
+            detail: thought,
+            status: "done",
+          },
+          ...(assistantMsg.activity ?? []),
+        ];
+      }
       setMessages((current) => [...current, assistantMsg]);
 
       if (
@@ -266,6 +362,9 @@ export function AssistantChatPanel({
       setError(getErrorMessage(err));
     } finally {
       setIsAsking(false);
+      setLiveThought("");
+      setLiveAnswer("");
+      setLiveSteps([]);
     }
   };
 
@@ -377,21 +476,39 @@ export function AssistantChatPanel({
           </div>
         ) : (
           <>
-            {messages.map((message) => (
-              <AssistantMessage
-                key={message.id}
-                message={message}
-                onFeedback={message.role === "assistant" ? onFeedback : undefined}
-                feedbackPending={feedbackPendingId === message.id}
-                onConfirmAction={message.role === "assistant" ? onConfirmAction : undefined}
-                onCancelAction={message.role === "assistant" ? onCancelAction : undefined}
-                actionPending={actionPendingId === message.id}
-              />
-            ))}
+            {messages.map((message, index) => {
+              const intent =
+                message.role === "assistant"
+                  ? [...messages]
+                      .slice(0, index)
+                      .reverse()
+                      .find((item) => item.role === "user")?.content
+                  : null;
+              return (
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  intent={intent}
+                  onFeedback={message.role === "assistant" ? onFeedback : undefined}
+                  feedbackPending={feedbackPendingId === message.id}
+                  onConfirmAction={message.role === "assistant" ? onConfirmAction : undefined}
+                  onCancelAction={message.role === "assistant" ? onCancelAction : undefined}
+                  onRetry={message.role === "user" && !isAsking ? (content) => void sendQuestion(content) : undefined}
+                  actionPending={actionPendingId === message.id}
+                />
+              );
+            })}
             {isAsking ? (
-              <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Thinking…
+              <AssistantActivity
+                steps={liveSteps}
+                thought={liveThought}
+                live
+                intent={[...messages].reverse().find((item) => item.role === "user")?.content ?? null}
+              />
+            ) : null}
+            {isAsking && liveAnswer !== "" ? (
+              <div className="max-w-[92%] rounded-2xl rounded-bl-md bg-muted px-3.5 py-2.5 text-xs leading-relaxed text-foreground">
+                <HelpMarkdown variant="chat" content={liveAnswer} />
               </div>
             ) : null}
           </>

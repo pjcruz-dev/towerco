@@ -8,8 +8,8 @@ use App\Modules\AiAssistant\DTOs\ToolResult;
 use App\Modules\Identity\Models\TenantUser;
 
 /**
- * Allowlisted read-only assistant tool.
- * Implementations must call existing module services and never run LLM-supplied SQL.
+ * Allowlisted assistant tool.
+ * execute_sql is the one tool that runs a statement the model wrote, and only on the current tenant database.
  */
 interface AssistantToolInterface
 {

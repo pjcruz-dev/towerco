@@ -7,6 +7,7 @@ namespace App\Modules\DynamicEntities\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\DynamicEntities\Models\DynFieldGroup;
 use App\Modules\DynamicEntities\Services\DynEntityAdminService;
+use App\Modules\DynamicEntities\Support\DynSchemaAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,9 +16,8 @@ final class DynFieldGroupUpdateController extends AbstractApiController
 {
     public function __invoke(Request $request, string $group, DynEntityAdminService $service): JsonResponse
     {
-        abort_unless($request->user()?->can('dynamic_entities:fields:manage'), 403);
-
         $model = DynFieldGroup::query()->whereKey($group)->firstOrFail();
+        DynSchemaAccess::assertCanManageGroup($request->user(), $model);
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -27,6 +27,7 @@ final class DynFieldGroupUpdateController extends AbstractApiController
             'applies_to_view' => ['sometimes', 'boolean'],
             'start_collapsed' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
+            'column_span' => ['sometimes', 'integer', 'min:1', 'max:12'],
         ]);
 
         $actor = $request->user();
@@ -42,6 +43,7 @@ final class DynFieldGroupUpdateController extends AbstractApiController
             'applies_to_view' => $updated->applies_to_view,
             'start_collapsed' => $updated->start_collapsed,
             'sort_order' => $updated->sort_order,
+            'column_span' => (int) ($updated->column_span ?: 12),
         ]);
     }
 }

@@ -12,14 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SelectField } from "@/components/ui/select-field";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { normalizeSiteSearchScope, type EApprovalSiteSearchScope } from "@/lib/api/modules/e-approval-api";
 import {
   fetchEApprovalSettings,
   sendEApprovalSettingsTestWebhook,
   updateEApprovalSettings,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import { permissions } from "@/lib/rbac/permissions";
 type SettingsForm = {
   sla_reminder_minutes: number;
@@ -28,6 +30,14 @@ type SettingsForm = {
   liquidation_requires_parent: boolean;
   liquidation_overspend_mode: "block" | "warn";
   liquidation_max_overspend_percent: number;
+  liquidation_due_days: number;
+  liquidation_remind_days: number;
+  block_new_cash_advance: boolean;
+  vat_rate_percent: number;
+  vat_amount_includes_vat: boolean;
+  per_diem_max_per_day: string;
+  hotel_accommodation_max: string;
+  site_search_scope: EApprovalSiteSearchScope;
   notify_external_on_received: boolean;
   notify_external_on_approved: boolean;
   notify_external_on_rejected: boolean;
@@ -43,6 +53,14 @@ const defaultForm: SettingsForm = {
   liquidation_requires_parent: true,
   liquidation_overspend_mode: "block",
   liquidation_max_overspend_percent: 0,
+  liquidation_due_days: 0,
+  liquidation_remind_days: 0,
+  block_new_cash_advance: false,
+  vat_rate_percent: 12,
+  vat_amount_includes_vat: true,
+  per_diem_max_per_day: "",
+  hotel_accommodation_max: "",
+  site_search_scope: "request",
   notify_external_on_received: false,
   notify_external_on_approved: false,
   notify_external_on_rejected: false,
@@ -59,6 +77,14 @@ function parseSettings(data: Record<string, string | number | undefined>): Setti
     liquidation_requires_parent: toBool(data.liquidation_requires_parent, true),
     liquidation_overspend_mode: data.liquidation_overspend_mode === "warn" ? "warn" : "block",
     liquidation_max_overspend_percent: toInt(data.liquidation_max_overspend_percent, 0),
+    liquidation_due_days: toInt(data.liquidation_due_days, 0),
+    liquidation_remind_days: toInt(data.liquidation_remind_days, 0),
+    block_new_cash_advance: toBool(data.block_new_cash_advance, false),
+    vat_rate_percent: toInt(data.vat_rate_percent, 12),
+    vat_amount_includes_vat: toBool(data.vat_amount_includes_vat, true),
+    per_diem_max_per_day: data.per_diem_max_per_day == null ? "" : String(data.per_diem_max_per_day),
+    hotel_accommodation_max: data.hotel_accommodation_max == null ? "" : String(data.hotel_accommodation_max),
+    site_search_scope: normalizeSiteSearchScope(data.site_search_scope),
     notify_external_on_received: toBool(data.notify_external_on_received, false),
     notify_external_on_approved: toBool(data.notify_external_on_approved, false),
     notify_external_on_rejected: toBool(data.notify_external_on_rejected, false),
@@ -83,8 +109,6 @@ export function EApprovalSettingsPageClient() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<SettingsForm>(defaultForm);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [webhookMessage, setWebhookMessage] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["e-approval", "settings"],
@@ -106,6 +130,14 @@ export function EApprovalSettingsPageClient() {
         liquidation_requires_parent: form.liquidation_requires_parent ? "true" : "false",
         liquidation_overspend_mode: form.liquidation_overspend_mode,
         liquidation_max_overspend_percent: form.liquidation_max_overspend_percent,
+        liquidation_due_days: form.liquidation_due_days,
+        liquidation_remind_days: form.liquidation_remind_days,
+        block_new_cash_advance: form.block_new_cash_advance ? "true" : "false",
+        vat_rate_percent: form.vat_rate_percent,
+        vat_amount_includes_vat: form.vat_amount_includes_vat ? "true" : "false",
+        per_diem_max_per_day: form.per_diem_max_per_day.trim(),
+        hotel_accommodation_max: form.hotel_accommodation_max.trim(),
+        site_search_scope: form.site_search_scope,
         notify_external_on_received: form.notify_external_on_received ? "true" : "false",
         notify_external_on_approved: form.notify_external_on_approved ? "true" : "false",
         notify_external_on_rejected: form.notify_external_on_rejected ? "true" : "false",
@@ -115,8 +147,9 @@ export function EApprovalSettingsPageClient() {
       }),
     onSuccess: async () => {
       setError(null);
-      setSaved(true);
+      notify.success("Settings saved");
       await queryClient.invalidateQueries({ queryKey: ["e-approval", "settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["e-approval", "settings", "public"] });
       await queryClient.invalidateQueries({ queryKey: ["e-approval", "metadata"] });
     },
     onError: (mutationError) => setError(getErrorMessage(mutationError)),
@@ -125,11 +158,10 @@ export function EApprovalSettingsPageClient() {
   const testWebhookMutation = useMutation({
     mutationFn: sendEApprovalSettingsTestWebhook,
     onSuccess: (result) => {
-      setWebhookMessage(result.message);
       setError(null);
+      notify.success("Test webhook sent", result.message);
     },
     onError: (mutationError) => {
-      setWebhookMessage(null);
       setError(getErrorMessage(mutationError));
     },
   });
@@ -144,10 +176,7 @@ export function EApprovalSettingsPageClient() {
             <Button
               size="sm"
               type="button"
-              onClick={() => {
-                setSaved(false);
-                saveMutation.mutate();
-              }}
+              onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || isLoading}
             >
               Save changes
@@ -157,8 +186,6 @@ export function EApprovalSettingsPageClient() {
 
         {isError ? <p className="text-sm text-destructive">Could not load settings.</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {saved ? <p className="text-sm text-green-600 dark:text-green-400">Settings saved.</p> : null}
-        {webhookMessage ? <p className="text-sm text-green-600 dark:text-green-400">{webhookMessage}</p> : null}
         {isLoading && !data ? <p className="text-sm text-muted-foreground">Loading settings…</p> : null}
 
         <EApprovalSectionCard
@@ -224,7 +251,7 @@ export function EApprovalSettingsPageClient() {
 
         <EApprovalSectionCard
           title="Cash advance & liquidation"
-          description="Control whether liquidation must link to an approved cash advance and how over-balance totals are handled."
+          description="Deadline, VAT, and per diem. Approvers are set on each form's workflow."
         >
           <div className="space-y-5">
             <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-3">
@@ -244,46 +271,127 @@ export function EApprovalSettingsPageClient() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="liquidation_overspend_mode">Over-liquidation mode</Label>
-                <SelectField
-                  id="liquidation_overspend_mode"
-                  allowEmpty={false}
-                  value={form.liquidation_overspend_mode}
-                  onChange={(value) =>
+                <Label htmlFor="liquidation_due_days">Days to liquidate</Label>
+                <Input
+                  id="liquidation_due_days"
+                  type="number"
+                  min={0}
+                  value={form.liquidation_due_days}
+                  onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      liquidation_overspend_mode: value === "warn" ? "warn" : "block",
+                      liquidation_due_days: toInt(event.target.value, 0),
                     }))
                   }
-                  options={[
-                    { value: "block", label: "Block overspend" },
-                    { value: "warn", label: "Warn and allow (within percent)" },
-                  ]}
+                />
+                <p className="text-xs text-muted-foreground">0 turns the deadline off. Counted from the release date.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="liquidation_remind_days">Remind this many days before</Label>
+                <Input
+                  id="liquidation_remind_days"
+                  type="number"
+                  min={0}
+                  value={form.liquidation_remind_days}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      liquidation_remind_days: toInt(event.target.value, 0),
+                    }))
+                  }
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="liquidation_max_overspend_percent">Max overspend percent</Label>
-                <SelectField
-                  id="liquidation_max_overspend_percent"
-                  allowEmpty={false}
-                  disabled={form.liquidation_overspend_mode !== "warn"}
-                  value={String(form.liquidation_max_overspend_percent)}
-                  onChange={(value) =>
+                <Label htmlFor="vat_rate_percent">VAT rate (%)</Label>
+                <Input
+                  id="vat_rate_percent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.vat_rate_percent}
+                  onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      liquidation_max_overspend_percent: Number(value),
+                      vat_rate_percent: toInt(event.target.value, 12),
                     }))
                   }
-                  options={[
-                    { value: "0", label: "0%" },
-                    { value: "5", label: "5%" },
-                    { value: "10", label: "10%" },
-                    { value: "15", label: "15%" },
-                    { value: "20", label: "20%" },
-                    { value: "25", label: "25%" },
-                  ]}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="per_diem_max_per_day">Per diem max per day</Label>
+                <Input
+                  id="per_diem_max_per_day"
+                  inputMode="decimal"
+                  value={form.per_diem_max_per_day}
+                  placeholder="No cap"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, per_diem_max_per_day: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hotel_accommodation_max">Lodging max</Label>
+                <Input
+                  id="hotel_accommodation_max"
+                  inputMode="decimal"
+                  value={form.hotel_accommodation_max}
+                  placeholder="No cap"
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, hotel_accommodation_max: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="site_search_scope">Site ID search</Label>
+                <Select
+                  id="site_search_scope"
+                  value={form.site_search_scope}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      site_search_scope: normalizeSiteSearchScope(event.target.value),
+                    }))
+                  }
+                >
+                  <option value="request">Match the request</option>
+                  <option value="all">All subsidiaries</option>
+                  <option value="atc">ATC only</option>
+                  <option value="adic">ADIC only</option>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  From Site and To Site use this list. Match the request follows the subsidiary on the form.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-3">
+              <div>
+                <Label htmlFor="vat_amount_includes_vat">Amount includes VAT</Label>
+                <p className="text-xs text-muted-foreground">
+                  When on, VAT is taken out of the amount. When off, VAT is added on top.
+                </p>
+              </div>
+              <Switch
+                id="vat_amount_includes_vat"
+                checked={form.vat_amount_includes_vat}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, vat_amount_includes_vat: checked }))
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-3">
+              <div>
+                <Label htmlFor="block_new_cash_advance">Block a new cash advance</Label>
+                <p className="text-xs text-muted-foreground">
+                  While one is unliquidated or overdue, that person cannot file another.
+                </p>
+              </div>
+              <Switch
+                id="block_new_cash_advance"
+                checked={form.block_new_cash_advance}
+                onCheckedChange={(checked) =>
+                  setForm((current) => ({ ...current, block_new_cash_advance: checked }))
+                }
+              />
             </div>
           </div>
         </EApprovalSectionCard>

@@ -17,9 +17,10 @@ class EApprovalMasterDataRowBulkStoreController extends AbstractApiController
         abort_unless($request->user()?->can('e_approval:settings:manage'), 403);
 
         $data = $request->validate([
-            'rows' => ['required', 'array'],
+            'rows' => ['required', 'array', 'max:500'],
+            'dry_run' => ['sometimes', 'boolean'],
         ]);
 
-        return $this->ok($service->bulkImportRows($set, $data['rows']));
+        return $this->ok($service->bulkImportRows($set, $data['rows'], (bool) ($data['dry_run'] ?? false)));
     }
 }

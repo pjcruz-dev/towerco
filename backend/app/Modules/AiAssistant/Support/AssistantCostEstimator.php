@@ -28,6 +28,7 @@ final class AssistantCostEstimator
         ?int $completionTokens,
         ?string $promptText = null,
         ?string $answerText = null,
+        ?string $modelId = null,
     ): ?array {
         $in = $promptTokens;
         $out = $completionTokens;
@@ -51,27 +52,66 @@ final class AssistantCostEstimator
         }
 
         $phpPerUsd = (float) config('ai_assistant.cost.php_per_usd', 58);
-        $inputPerMTokUsd = (float) config('ai_assistant.cost.input_usd_per_mtok', 0.075);
-        $outputPerMTokUsd = (float) config('ai_assistant.cost.output_usd_per_mtok', 0.30);
+        [$inputPerMTokUsd, $outputPerMTokUsd] = $modelId !== null && trim($modelId) !== ''
+            ? AssistantModelPricing::usdPerMillion($modelId)
+            : [
+                (float) config('ai_assistant.cost.input_usd_per_mtok', 0.075),
+                (float) config('ai_assistant.cost.output_usd_per_mtok', 0.30),
+            ];
 
         $usd = ($in / 1_000_000) * $inputPerMTokUsd + ($out / 1_000_000) * $outputPerMTokUsd;
         $php = $usd * max(1.0, $phpPerUsd);
-
-        // Band for UI badge (Metacore-style range).
-        $low = max(0.01, round($php * 0.7, 2));
-        $high = max($low, round($php * 1.6, 2));
-
         $intensity = match (true) {
             $total >= 4000 => 'high',
             $total >= 1500 => 'medium',
             default => 'low',
         };
 
+        return self::band($in, $out, $php, $intensity);
+    }
+
+    /**
+     * @return array{
+     *   currency: string,
+     *   low: float,
+     *   high: float,
+     *   label: string,
+     *   intensity: 'low'|'medium'|'high',
+     *   prompt_tokens: int|null,
+     *   completion_tokens: int|null
+     * }
+     */
+    public static function fromTokens(string $modelId, int $promptTokens, int $completionTokens): array
+    {
+        $estimate = self::estimate($promptTokens, $completionTokens, null, null, $modelId);
+
+        return $estimate ?? self::band(0, 0, 0.0, 'low');
+    }
+
+    /**
+     * @return array{
+     *   currency: string,
+     *   low: float,
+     *   high: float,
+     *   label: string,
+     *   intensity: 'low'|'medium'|'high',
+     *   prompt_tokens: int|null,
+     *   completion_tokens: int|null
+     * }
+     */
+    /**
+     * @param  'low'|'medium'|'high'  $intensity
+     */
+    private static function band(int $in, int $out, float $php, string $intensity): array
+    {
         $intensityLabel = match ($intensity) {
             'high' => 'High',
             'medium' => 'Med',
             default => 'Low',
         };
+
+        $low = max(0.01, round($php * 0.7, 2));
+        $high = max($low, round($php * 1.6, 2));
 
         return [
             'currency' => 'PHP',

@@ -30,9 +30,14 @@ final class DynRecordImportTemplateController extends AbstractApiController
             })
             ->firstOrFail();
 
-        abort_unless($access->canEntity($user, (string) $model->slug, 'create'), 403);
+        abort_unless($access->canEntity($user, (string) $model->slug, 'import'), 403, __('Your role does not allow import for this entity.'));
 
-        $template = $import->buildTemplate($model);
+        $include = $request->query('include');
+        $slugs = is_string($include)
+            ? array_values(array_filter(array_map('trim', explode(',', $include))))
+            : [];
+
+        $template = $import->buildTemplate($model, $slugs);
 
         return response()->streamDownload(static function () use ($template): void {
             echo $template['csv'];

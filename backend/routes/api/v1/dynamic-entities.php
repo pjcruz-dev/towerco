@@ -9,7 +9,6 @@ use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavItemUpdateController;
 use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavReorderController;
 use App\Modules\AdminOne\Http\Controllers\V1\SidebarNavSeedController;
 use App\Modules\AdminOne\Http\Controllers\V1\WorkspaceSidebarShowController;
-use App\Modules\DynamicEntities\Http\Controllers\V1\AtcExecutiveDashboardController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\AtcTicketingBoardController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEmailTemplateIndexController;
@@ -26,6 +25,7 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityIndexController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityShowController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityStoreController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynEntityUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupStoreController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynFieldGroupUpdateController;
@@ -35,6 +35,7 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynFinanceReportsController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportDuplicateController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportQueryController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportRenderController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportShowController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynHtmlReportStoreController;
@@ -48,6 +49,7 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynPdfFormUpdateController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordBulkController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordDestroyController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordExportController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordExportWorkbookController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportAnalyzeController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynRecordImportTemplateController;
@@ -71,7 +73,15 @@ use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowIndexController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowShowController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowStoreController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\DynWorkflowUpdateController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\OfflineDataCatalogController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\OfflineDataDownloadController;
 use App\Modules\DynamicEntities\Http\Controllers\V1\PurchaseMonitoringReportController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryIndexController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryReapplyController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryRecentController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryRedoController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryRevertController;
+use App\Modules\DynamicEntities\Http\Controllers\V1\RecordActionHistoryUndoController;
 
 Route::get('workspace/sidebar', WorkspaceSidebarShowController::class)->name('api.tenant.v1.workspace.sidebar');
 
@@ -86,6 +96,8 @@ Route::middleware('tenant.module:dynamic_entities')->group(function () {
         ->name('api.tenant.v1.dynamic_entities.relationship_graph.edges.update');
     Route::delete('dynamic-entities/relationship-graph/edges/{field}', DynRelationshipEdgeDestroyController::class)
         ->name('api.tenant.v1.dynamic_entities.relationship_graph.edges.destroy');
+    Route::get('dynamic-entities/offline-data/catalog', OfflineDataCatalogController::class)->name('api.tenant.v1.dynamic_entities.offline_data.catalog');
+    Route::post('dynamic-entities/offline-data', OfflineDataDownloadController::class)->name('api.tenant.v1.dynamic_entities.offline_data.download');
     Route::get('dynamic-entities/entities', DynEntityIndexController::class)->name('api.tenant.v1.dynamic_entities.entities.index');
     Route::post('dynamic-entities/entities', DynEntityStoreController::class)->name('api.tenant.v1.dynamic_entities.entities.store');
     Route::get('dynamic-entities/entities/{entity}', DynEntityShowController::class)->name('api.tenant.v1.dynamic_entities.entities.show');
@@ -95,10 +107,9 @@ Route::middleware('tenant.module:dynamic_entities')->group(function () {
     Route::patch('dynamic-entities/field-groups/{group}', DynFieldGroupUpdateController::class)->name('api.tenant.v1.dynamic_entities.field_groups.update');
     Route::delete('dynamic-entities/field-groups/{group}', DynFieldGroupDestroyController::class)->name('api.tenant.v1.dynamic_entities.field_groups.destroy');
     Route::patch('dynamic-entities/fields/{field}', DynFieldUpdateController::class)->name('api.tenant.v1.dynamic_entities.fields.update');
+    Route::delete('dynamic-entities/fields/{field}', DynFieldDestroyController::class)->name('api.tenant.v1.dynamic_entities.fields.destroy');
     Route::get('dynamic-entities/reports/purchase-monitoring', PurchaseMonitoringReportController::class)
         ->name('api.tenant.v1.dynamic_entities.reports.purchase_monitoring');
-    Route::get('dynamic-entities/reports/executive-dashboard', AtcExecutiveDashboardController::class)
-        ->name('api.tenant.v1.dynamic_entities.reports.executive_dashboard');
     Route::get('dynamic-entities/reports/ticketing-board', AtcTicketingBoardController::class)
         ->name('api.tenant.v1.dynamic_entities.reports.ticketing_board');
     // One {report} route only — duplicate URIs overwrite each other in Laravel's route collection.
@@ -107,10 +118,23 @@ Route::middleware('tenant.module:dynamic_entities')->group(function () {
         ->name('api.tenant.v1.dynamic_entities.reports.show');
     Route::post('dynamic-entities/reports/aging-invoice-adjustments/adjust', DynInvoiceAgingAdjustController::class)
         ->name('api.tenant.v1.dynamic_entities.reports.aging_invoice.adjust');
+    Route::get('dynamic-entities/action-history', RecordActionHistoryRecentController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.recent');
+    Route::get('dynamic-entities/entities/{entity}/action-history', RecordActionHistoryIndexController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.index');
+    Route::post('dynamic-entities/entities/{entity}/action-history/undo', RecordActionHistoryUndoController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.undo');
+    Route::post('dynamic-entities/entities/{entity}/action-history/redo', RecordActionHistoryRedoController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.redo');
+    Route::post('dynamic-entities/entities/{entity}/action-history/{history}/revert', RecordActionHistoryRevertController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.revert');
+    Route::post('dynamic-entities/entities/{entity}/action-history/{history}/reapply', RecordActionHistoryReapplyController::class)
+        ->name('api.tenant.v1.dynamic_entities.action_history.reapply');
     Route::get('dynamic-entities/entities/{entity}/records', DynRecordIndexController::class)->name('api.tenant.v1.dynamic_entities.records.index');
     Route::post('dynamic-entities/entities/{entity}/records', DynRecordStoreController::class)->name('api.tenant.v1.dynamic_entities.records.store');
     Route::post('dynamic-entities/entities/{entity}/records/bulk', DynRecordBulkController::class)->name('api.tenant.v1.dynamic_entities.records.bulk');
     Route::get('dynamic-entities/entities/{entity}/records/export', DynRecordExportController::class)->name('api.tenant.v1.dynamic_entities.records.export');
+    Route::post('dynamic-entities/entities/{entity}/records/export-workbook', DynRecordExportWorkbookController::class)->name('api.tenant.v1.dynamic_entities.records.export_workbook');
     Route::get('dynamic-entities/entities/{entity}/records/import/template', DynRecordImportTemplateController::class)->name('api.tenant.v1.dynamic_entities.records.import.template');
     Route::post('dynamic-entities/entities/{entity}/records/import/analyze', DynRecordImportAnalyzeController::class)->name('api.tenant.v1.dynamic_entities.records.import.analyze');
     Route::post('dynamic-entities/entities/{entity}/records/import', DynRecordImportController::class)->name('api.tenant.v1.dynamic_entities.records.import');
@@ -125,6 +149,7 @@ Route::middleware('tenant.module:dynamic_entities')->group(function () {
     Route::delete('dynamic-entities/pdf-forms/{form}', DynPdfFormDestroyController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.destroy');
     Route::get('dynamic-entities/pdf-forms/{form}/file', DynPdfFormDownloadController::class)->name('api.tenant.v1.dynamic_entities.pdf_forms.file');
     Route::get('dynamic-entities/html-reports', DynHtmlReportIndexController::class)->name('api.tenant.v1.dynamic_entities.html_reports.index');
+    Route::post('dynamic-entities/html-reports/query', DynHtmlReportQueryController::class)->name('api.tenant.v1.dynamic_entities.html_reports.query');
     Route::post('dynamic-entities/html-reports', DynHtmlReportStoreController::class)->name('api.tenant.v1.dynamic_entities.html_reports.store');
     Route::get('dynamic-entities/html-reports/render/{slug}', DynHtmlReportRenderController::class)
         ->where('slug', '[A-Za-z0-9\-]+')

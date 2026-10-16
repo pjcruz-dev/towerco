@@ -99,6 +99,7 @@ export type EApprovalDateRangeValue = {
 };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?$/;
 
 export function isIsoDateString(value: string): boolean {
   if (!ISO_DATE_RE.test(value)) {
@@ -106,6 +107,49 @@ export function isIsoDateString(value: string): boolean {
   }
   const parsed = new Date(`${value}T00:00:00`);
   return !Number.isNaN(parsed.getTime());
+}
+
+/** Calendar day from `yyyy-MM-dd` or `yyyy-MM-ddTHH:mm`. */
+export function calendarDate(value: string): string {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  return match?.[1] ?? "";
+}
+
+/** Clock time from `yyyy-MM-ddTHH:mm`, or null when the value is a date only. */
+export function clockTime(value: string): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(value.trim());
+  return match?.[2] ?? null;
+}
+
+export function isIsoDateOrDateTimeString(value: string): boolean {
+  const match = ISO_DATE_TIME_RE.exec(value.trim());
+  if (!match?.[1] || !isIsoDateString(match[1])) {
+    return false;
+  }
+  const time = match[2];
+  if (!time) {
+    return true;
+  }
+  const [hour, minute] = time.split(":").map(Number);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
+/** Same calendar day is valid. A later day is valid. On one day, the end clock must not be earlier. */
+export function dateRangeEndsInOrder(from: string, to: string): boolean {
+  const fromDate = calendarDate(from);
+  const toDate = calendarDate(to);
+  if (!fromDate || !toDate || fromDate > toDate) {
+    return false;
+  }
+  if (fromDate < toDate) {
+    return true;
+  }
+  const fromTime = clockTime(from);
+  const toTime = clockTime(to);
+  if (!fromTime || !toTime) {
+    return true;
+  }
+  return fromTime <= toTime;
 }
 
 export function parseDateRangeValue(raw: string): EApprovalDateRangeValue {
@@ -154,7 +198,7 @@ export function dateRangeIsComplete(raw: string): boolean {
 }
 
 /** Human-readable date range for review, detail, and print (e.g. 2026-09-22 – 2026-10-20). */
-export function formatDateRangeDisplay(raw: string, empty = "—"): string {
+export function formatDateRangeDisplay(raw: string, empty = "—", withTime = true): string {
   const trimmed = raw.trim();
   if (!trimmed) {
     return empty;
@@ -165,9 +209,21 @@ export function formatDateRangeDisplay(raw: string, empty = "—"): string {
     return trimmed;
   }
 
-  const fromDisplay = from || empty;
-  const toDisplay = to || empty;
+  const fromDisplay = formatRangeEndpoint(from, empty, withTime);
+  const toDisplay = formatRangeEndpoint(to, empty, withTime);
   return `${fromDisplay} – ${toDisplay}`;
+}
+
+function formatRangeEndpoint(value: string, empty: string, withTime: boolean): string {
+  if (!value) {
+    return empty;
+  }
+  const date = calendarDate(value);
+  const time = clockTime(value);
+  if (!date) {
+    return value;
+  }
+  return withTime && time ? `${date} ${time}` : date;
 }
 
 export function validateDateRangeValue(raw: string, required: boolean, label: string): string | null {
@@ -186,11 +242,11 @@ export function validateDateRangeValue(raw: string, required: boolean, label: st
     return `${label} requires both start and end dates.`;
   }
 
-  if (!isIsoDateString(from) || !isIsoDateString(to)) {
+  if (!isIsoDateOrDateTimeString(from) || !isIsoDateOrDateTimeString(to)) {
     return `${label} must use valid dates.`;
   }
 
-  if (to < from) {
+  if (!dateRangeEndsInOrder(from, to)) {
     return `${label}: end date must be on or after the start date.`;
   }
 

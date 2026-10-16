@@ -17,6 +17,12 @@ export type SelectChoice = {
   help?: string | null;
   /** Checkbox-only: companion fields on the same row as the option. */
   inputs?: SelectChoiceCompanionInput[];
+  data?: {
+    address?: string;
+    vatable?: boolean;
+    per_diem?: boolean;
+    hotel?: boolean;
+  };
 };
 
 export type GridColumnType =
@@ -25,6 +31,7 @@ export type GridColumnType =
   | "number"
   | "currency"
   | "date"
+  | "date_range"
   | "select"
   | "email"
   | "phone"
@@ -35,6 +42,18 @@ export type GridColumnDef = {
   type: GridColumnType;
   master_data_key?: string;
   choices?: SelectChoice[];
+  /** Copy the paired column's site address into this cell. */
+  filled_from?: string;
+  /** Select options come from another grid on the same form (row number). */
+  linked_grid?: string;
+  /** Date range columns include a clock. Missing means on, so existing forms keep time. */
+  include_time?: boolean;
+  /**
+   * Site lookup columns to write onto the line. Missing means address only.
+   * An empty list keeps the site ID and nothing else.
+   */
+  show_fields?: string[];
+  locked?: boolean;
 };
 
 export const GRID_COLUMN_TYPE_LABELS: Record<GridColumnType, string> = {
@@ -43,6 +62,7 @@ export const GRID_COLUMN_TYPE_LABELS: Record<GridColumnType, string> = {
   number: "Number",
   currency: "Currency",
   date: "Date",
+  date_range: "Date range",
   select: "Dropdown list",
   email: "Email",
   phone: "Phone",
@@ -114,6 +134,7 @@ function parseChoiceEntry(entry: unknown): SelectChoice | null {
       subtitle?: unknown;
       help?: unknown;
       inputs?: unknown;
+      data?: unknown;
     };
     const value = String(row.value ?? "").trim();
     if (value === "") {
@@ -130,6 +151,25 @@ function parseChoiceEntry(entry: unknown): SelectChoice | null {
     const inputs = parseCompanionInputs(row.inputs);
     if (inputs) {
       choice.inputs = inputs;
+    }
+    if (row.data && typeof row.data === "object" && !Array.isArray(row.data)) {
+      const dataRecord = row.data as Record<string, unknown>;
+      const data: NonNullable<SelectChoice["data"]> = {};
+      if (typeof dataRecord.address === "string" && dataRecord.address.trim() !== "") {
+        data.address = dataRecord.address.trim();
+      }
+      if (typeof dataRecord.vatable === "boolean") {
+        data.vatable = dataRecord.vatable;
+      }
+      if (typeof dataRecord.per_diem === "boolean") {
+        data.per_diem = dataRecord.per_diem;
+      }
+      if (typeof dataRecord.hotel === "boolean") {
+        data.hotel = dataRecord.hotel;
+      }
+      if (Object.keys(data).length > 0) {
+        choice.data = data;
+      }
     }
 
     return choice;
@@ -242,7 +282,7 @@ function normalizeGridColumnDef(entry: unknown, index: number): GridColumnDef | 
 
   const typeRaw = String(record.type ?? "text").trim().toLowerCase();
   const type = (
-    ["text", "textarea", "number", "currency", "date", "select", "email", "phone", "boolean"] as const
+    ["text", "textarea", "number", "currency", "date", "date_range", "select", "email", "phone", "boolean"] as const
   ).includes(typeRaw as GridColumnType)
     ? (typeRaw as GridColumnType)
     : "text";
@@ -259,11 +299,24 @@ function normalizeGridColumnDef(entry: unknown, index: number): GridColumnDef | 
       .filter((c): c is SelectChoice => c !== null);
   }
 
+  const filledFrom = typeof record.filled_from === "string" ? record.filled_from.trim() : "";
+  const linkedGrid = typeof record.linked_grid === "string" ? record.linked_grid.trim() : "";
+  const showFields = Array.isArray(record.show_fields)
+    ? record.show_fields
+        .map((key) => (typeof key === "string" ? key.trim() : ""))
+        .filter((key) => key !== "")
+    : undefined;
+
   return {
     label,
     type,
     ...(master_data_key ? { master_data_key } : {}),
     ...(choices && choices.length > 0 ? { choices } : {}),
+    ...(filledFrom !== "" ? { filled_from: filledFrom } : {}),
+    ...(linkedGrid !== "" ? { linked_grid: linkedGrid } : {}),
+    ...(type === "date_range" && record.include_time === false ? { include_time: false } : {}),
+    ...(showFields ? { show_fields: showFields } : {}),
+    ...(record.locked === true || label.toLowerCase() === "vat" ? { locked: true } : {}),
   };
 }
 
@@ -301,6 +354,11 @@ export function setGridColumnDefs(columns: GridColumnDef[]): { columns: GridColu
         type: col.type,
         ...(col.master_data_key ? { master_data_key: col.master_data_key.trim() } : {}),
         ...(col.choices && col.choices.length > 0 ? { choices: col.choices } : {}),
+        ...(col.filled_from ? { filled_from: col.filled_from } : {}),
+        ...(col.linked_grid ? { linked_grid: col.linked_grid } : {}),
+        ...(col.type === "date_range" && col.include_time === false ? { include_time: false } : {}),
+        ...(col.show_fields ? { show_fields: col.show_fields } : {}),
+        ...(col.locked ? { locked: true } : {}),
       }))
       .filter((col) => col.label !== ""),
   };
@@ -313,7 +371,7 @@ export function setGridColumns(columns: string[]): string[] {
 
 /** Build a synthetic select field for grid column option loading. */
 export function gridColumnAsSelectField(column: GridColumnDef): EApprovalFormFieldInput {
-  if (column.master_data_key) {
+  if (column.master_data_key && !(column.choices && column.choices.length > 0)) {
     return {
       type: "select",
       name: "_grid_column",
@@ -367,7 +425,17 @@ export function parseGridValue(raw: string, columnCount: number, columnLabels: s
 
 function normalizeGridRow(row: unknown, columnCount: number, columnLabels: string[] = []): Record<string, string> {
   const base = emptyGridValue(columnCount).rows[0] ?? {};
-  if (!row || typeof row !== "object" || Array.isArray(row)) {
+  if (Array.isArray(row)) {
+    const next = { ...base };
+    for (let i = 0; i < columnCount; i += 1) {
+      const cell = row[i];
+      if (cell !== undefined && cell !== null) {
+        next[String(i)] = String(cell);
+      }
+    }
+    return next;
+  }
+  if (!row || typeof row !== "object") {
     return { ...base };
   }
 

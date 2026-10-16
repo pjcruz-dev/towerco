@@ -9,6 +9,7 @@ use App\Core\Support\ModuleListSearchDsl;
 use App\Models\TicketingComment;
 use App\Models\TicketingLink;
 use App\Models\TicketingTicket;
+use App\Modules\DynamicEntities\Services\ManagedSeriesService;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Ticketing\Support\TicketingCategoryCatalog;
 use App\Modules\Ticketing\Support\TicketingSourceCatalog;
@@ -16,6 +17,7 @@ use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -41,6 +43,7 @@ final class TicketingTicketService
         private readonly TicketingAssignmentService $assignment,
         private readonly TenantActivityLogger $activity,
         private readonly TicketingSettingsService $settings,
+        private readonly TicketingSchemaService $schema,
     ) {}
 
     /**
@@ -97,16 +100,23 @@ final class TicketingTicketService
             $requesterColumns[] = 'department';
         }
 
+        $customColumns = $this->schema->tableCustomFieldNames();
+
         return $this->filteredQuery($viewer, $query)
             ->with(['requester:'.implode(',', $requesterColumns), 'assignee:id,name,email'])
             ->orderByDesc('updated_at')
             ->limit($limit)
             ->get()
-            ->map(function (TicketingTicket $ticket): array {
+            ->map(function (TicketingTicket $ticket) use ($customColumns): array {
                 $row = $this->asListRow($ticket);
                 $department = is_string($ticket->requester?->department ?? null)
                     ? trim((string) $ticket->requester->department)
                     : '';
+                $custom = is_array($ticket->custom_values_json) ? $ticket->custom_values_json : [];
+                $extra = [];
+                foreach ($customColumns as $name) {
+                    $extra[$name] = TicketingSchemaService::stringify($custom[$name] ?? null);
+                }
 
                 return [
                     'ticket_number' => $row['ticket_number'],
@@ -121,6 +131,7 @@ final class TicketingTicketService
                     'created_at' => $row['created_at'] ?? '',
                     'updated_at' => $row['updated_at'] ?? '',
                     'sla_status' => $row['sla_status'] ?? '',
+                    ...$extra,
                 ];
             })
             ->values()
@@ -290,6 +301,7 @@ final class TicketingTicketService
             'updated_at' => $ticket->updated_at?->toIso8601String(),
             'sla_due_at' => $ticket->sla_due_at?->toIso8601String(),
             'sla_status' => $this->sla->statusFor($ticket),
+            'custom_values' => is_array($ticket->custom_values_json) ? $ticket->custom_values_json : [],
         ];
     }
 
@@ -401,6 +413,9 @@ final class TicketingTicketService
                 'source_label' => $data['source_label'] ?? null,
                 'requester_id' => $requester->id,
                 'assignee_id' => $assigneeId,
+                'custom_values_json' => $this->schema->valuesForCreate(
+                    is_array($data['custom_values'] ?? null) ? $data['custom_values'] : [],
+                ),
             ]);
 
             foreach ($data['links'] ?? [] as $link) {
@@ -615,6 +630,22 @@ final class TicketingTicketService
             }
         }
 
+        $customChanged = false;
+        if (array_key_exists('custom_values', $data) && ($canManage || $isRequester)) {
+            $incoming = $data['custom_values'];
+            if (! is_array($incoming)) {
+                throw ValidationException::withMessages([
+                    'custom_values' => [__('Custom fields must be an object.')],
+                ]);
+            }
+            $beforeCustom = is_array($ticket->custom_values_json) ? $ticket->custom_values_json : [];
+            $afterCustom = $this->schema->mergeForUpdate($beforeCustom, $incoming);
+            if ($afterCustom !== $beforeCustom) {
+                $updates['custom_values_json'] = $afterCustom;
+                $customChanged = true;
+            }
+        }
+
         if ($updates !== []) {
             $ticket->update($updates);
             $ticket = $ticket->fresh();
@@ -637,6 +668,13 @@ final class TicketingTicketService
                 ],
                 ['status', 'priority', 'assignee_id'],
             );
+
+            if ($customChanged) {
+                $changes['custom_values'] = [
+                    'from' => null,
+                    'to' => 'updated',
+                ];
+            }
 
             if ($changes !== []) {
                 $action = match ($lifecycleEvent) {
@@ -719,7 +757,7 @@ final class TicketingTicketService
         return $isRequester;
     }
 
-    public function reopenUntil(TicketingTicket $ticket): ?\Illuminate\Support\Carbon
+    public function reopenUntil(TicketingTicket $ticket): ?Carbon
     {
         if ((string) $ticket->status !== TicketingTicket::STATUS_RESOLVED || $ticket->resolved_at === null) {
             return null;
@@ -780,8 +818,6 @@ final class TicketingTicketService
 
     private function nextTicketNumber(): int
     {
-        $max = (int) TicketingTicket::query()->max('ticket_number');
-
-        return $max + 1;
+        return app(ManagedSeriesService::class)->issueTicketNumber();
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Models;
 
+use App\Modules\EApproval\Services\EApprovalFinanceStageService;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -45,6 +46,7 @@ class EApprovalSubmission extends Model
         'workflow_version_id',
         'approval_policy_version_id',
         'approval_policy_label',
+        'finance_json',
     ];
 
     protected function casts(): array
@@ -54,6 +56,7 @@ class EApprovalSubmission extends Model
             'returned_from_step' => 'integer',
             'force_full_restart' => 'boolean',
             'approval_cycle' => 'integer',
+            'finance_json' => 'array',
             'external_upload_token_expires_at' => 'datetime',
             'external_resubmit_token_expires_at' => 'datetime',
         ];
@@ -158,6 +161,7 @@ class EApprovalSubmission extends Model
             'id' => (string) $this->id,
             'document_no' => $this->document_no,
             'status' => $this->status,
+            'status_label' => app(EApprovalFinanceStageService::class)->label($this),
             'current_step' => $this->current_step,
             'step_count' => $this->resolvedStepCount(),
             'returned_from_step' => $this->returned_from_step,
@@ -167,8 +171,12 @@ class EApprovalSubmission extends Model
             'last_revision_routing_reason' => $this->last_revision_routing_reason,
             'form_id' => (string) $this->form_id,
             'form_name' => $this->form?->name,
+            'form_family' => is_array($this->form?->metadata_json)
+                ? ($this->form->metadata_json['form_family'] ?? null)
+                : null,
+            'finance_stage' => is_array($this->finance_json) ? ($this->finance_json['stage'] ?? null) : null,
             'subsidiary' => $this->scalarFieldValue('subsidiary'),
-            'department' => $this->scalarFieldValue('department'),
+            'department' => $this->scalarFieldValue('department') ?: $this->requestor?->department,
             'workflow_steps' => $this->workflowStepsSummary(),
             'submission_source' => $this->submission_source ?? 'internal',
             'requestor' => $requestorLabel,

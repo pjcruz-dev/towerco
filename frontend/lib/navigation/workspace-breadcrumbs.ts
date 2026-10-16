@@ -41,12 +41,15 @@ const SEGMENT_LABELS: Record<string, string> = {
   "doc-extract": "DocExtract",
   fields: "Manage Fields",
   "field-groups": "Field Groups",
-  "executive-dashboard": "Executive Dashboard",
   "ticketing-board": "Ticketing Board",
 };
 
 const NEW_SEGMENT_LABELS: Record<string, string> = {
   "e-approval/submissions/new": "New request",
+};
+
+const PATH_LABELS: Record<string, string> = {
+  "documents/controlled/reports": "Reports",
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,6 +62,10 @@ function formatSegment(segment: string): string {
 }
 
 function labelForSegment(segment: string, pathPrefix: string, isLast: boolean): string {
+  if (PATH_LABELS[pathPrefix]) {
+    return PATH_LABELS[pathPrefix];
+  }
+
   if (segment === "new" && isLast) {
     return NEW_SEGMENT_LABELS[pathPrefix] ?? "New";
   }

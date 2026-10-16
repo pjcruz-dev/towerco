@@ -40,6 +40,15 @@ export type ExclusiveThresholdLadder = {
   field: string;
   bandIndexes: number[];
   thresholds: string[];
+  /** Amount bands use ≤ / >. Value bands match a choice or text exactly. */
+  match?: "amount" | "value";
+};
+
+export type ValueMatchOperator = "equals" | "not_equals";
+
+export type ValueMatchCase = {
+  operator: ValueMatchOperator;
+  value: string;
 };
 
 export type WorkflowEditorSegment =
@@ -78,6 +87,12 @@ function isLowOperator(operator: EApprovalWorkflowConditionOperator): operator i
 
 function isHighOperator(operator: EApprovalWorkflowConditionOperator): operator is BranchThresholdOperatorHigh {
   return operator === "gt" || operator === "gte";
+}
+
+/** True when a boundary is a number, so the band is an amount comparison. */
+export function isAmountBoundary(value: string): boolean {
+  const trimmed = value.trim().replace(/,/g, "");
+  return trimmed !== "" && /^-?\d+(\.\d+)?$/.test(trimmed);
 }
 
 function numericSortThresholds(values: string[]): string[] {
@@ -509,7 +524,14 @@ export function updateExclusiveLadderThresholds(
 export function toWorkflowEditorSegments(
   steps: EApprovalWorkflowStepInput[],
 ): WorkflowEditorSegment[] {
-  const ladders = detectExclusiveThresholdLadders(steps);
+  const valueLadders = detectValueMatchLadders(steps);
+  const coveredByValue = new Set(valueLadders.flatMap((ladder) => ladder.bandIndexes));
+  const ladders = [
+    ...valueLadders,
+    ...detectExclusiveThresholdLadders(steps).filter((ladder) =>
+      ladder.bandIndexes.every((index) => !coveredByValue.has(index)),
+    ),
+  ];
   const ladderByStart = new Map(ladders.map((ladder) => [ladder.startIndex, ladder]));
   const coveredByLadder = new Set(ladders.flatMap((ladder) => ladder.bandIndexes));
 
@@ -687,6 +709,14 @@ export function branchGroupLabel(
   fieldLabel?: string,
 ): { ifLabel: string; elseLabel: string; header: string } {
   const field = fieldLabel?.trim() || group.field;
+  if (!isAmountBoundary(group.threshold)) {
+    return {
+      ifLabel: `${field} is ${group.threshold}`,
+      elseLabel: `${field} is not ${group.threshold}`,
+      header: `If / Else — ${field}`,
+    };
+  }
+
   const lowSymbol = group.lowOperator === "lte" ? "≤" : "<";
   const highSymbol = group.highOperator === "gt" ? ">" : "≥";
 
@@ -699,6 +729,13 @@ export function branchGroupLabel(
 
 export function thresholdBandLabel(band: ThresholdBand, fieldLabel?: string): string {
   const field = fieldLabel?.trim() || band.field;
+  if (band.upper && !band.lower && !isAmountBoundary(band.upper.value)) {
+    return `${field} is ${band.upper.value}`;
+  }
+  if (band.lower && !band.upper && !isAmountBoundary(band.lower.value)) {
+    return `${field} is not ${band.lower.value}`;
+  }
+
   const lowSymbol = (operator: BranchThresholdOperatorHigh) => (operator === "gt" ? ">" : "≥");
   const highSymbol = (operator: BranchThresholdOperatorLow) => (operator === "lte" ? "≤" : "<");
 
@@ -719,9 +756,317 @@ export function ladderGroupLabel(
   fieldLabel?: string,
 ): { header: string; bandLabels: string[]; thresholdsLabel: string } {
   const field = fieldLabel?.trim() || ladder.field;
+  const valueMatch = ladder.match === "value";
   return {
-    header: ladder.bandIndexes.length === 2 ? `If / Else — ${field}` : `Threshold ladder — ${field}`,
+    header:
+      ladder.bandIndexes.length === 2
+        ? `If / Else — ${field}`
+        : valueMatch
+          ? `Match — ${field}`
+          : `Threshold ladder — ${field}`,
     bandLabels: [],
     thresholdsLabel: ladder.thresholds.join(" / "),
   };
+}
+
+/** One equals / is-not condition, used when the field is a choice or plain text. */
+export function parseValueMatchBand(
+  step: EApprovalWorkflowStepInput,
+): (ValueMatchCase & { field: string }) | null {
+  const when = parseStepWhen(step);
+  if (when.length !== 1) {
+    return null;
+  }
+
+  const operator = when[0].operator;
+  if (operator !== "equals" && operator !== "not_equals") {
+    return null;
+  }
+
+  const field = when[0].field.trim();
+  if (!field) {
+    return null;
+  }
+
+  return { field, operator, value: normalizeThreshold(when[0].value) };
+}
+
+export function ladderCaseLabel(step: EApprovalWorkflowStepInput, fieldLabel?: string): string {
+  const amountBand = parseThresholdBand(step);
+  if (amountBand) {
+    return thresholdBandLabel(amountBand, fieldLabel);
+  }
+
+  const match = parseValueMatchBand(step);
+  if (!match) {
+    return fieldLabel?.trim() || "";
+  }
+
+  const field = fieldLabel?.trim() || match.field;
+  const value = match.value.trim() === "" ? "…" : match.value;
+  return match.operator === "not_equals" ? `${field} is not ${value}` : `${field} is ${value}`;
+}
+
+/** Cases currently stored on a ladder, including an amount ladder used as a value match. */
+export function ladderMatchCases(
+  steps: EApprovalWorkflowStepInput[],
+  bandIndexes: number[],
+): ValueMatchCase[] {
+  return bandIndexes.map((index) => {
+    const step = steps[index];
+    const match = step ? parseValueMatchBand(step) : null;
+    if (match) {
+      return { operator: match.operator, value: match.value };
+    }
+
+    const band = step ? parseThresholdBand(step) : null;
+    if (band?.upper && !band.lower) {
+      return { operator: "equals", value: band.upper.value };
+    }
+    if (band?.lower && !band.upper) {
+      return { operator: "not_equals", value: band.lower.value };
+    }
+
+    return { operator: "equals", value: "" };
+  });
+}
+
+/** Adjacent steps that each match one value of the same field. */
+export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): ExclusiveThresholdLadder[] {
+  const ladders: ExclusiveThresholdLadder[] = [];
+  let index = 0;
+
+  while (index < steps.length) {
+    const first = parseValueMatchBand(steps[index]);
+    if (!first) {
+      index += 1;
+      continue;
+    }
+
+    const bandIndexes = [index];
+    let cursor = index + 1;
+    while (cursor < steps.length) {
+      const next = parseValueMatchBand(steps[cursor]);
+      if (!next || next.field !== first.field) {
+        break;
+      }
+      bandIndexes.push(cursor);
+      cursor += 1;
+    }
+
+    if (bandIndexes.length >= 2) {
+      const cases = bandIndexes.map((bandIndex) => parseValueMatchBand(steps[bandIndex])!);
+      ladders.push({
+        startIndex: bandIndexes[0],
+        endIndex: bandIndexes[bandIndexes.length - 1],
+        field: first.field,
+        bandIndexes,
+        thresholds: cases.map((item) => item.value),
+        match: "value",
+      });
+      index = cursor;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return ladders;
+}
+
+export function applyValueMatchCases(
+  steps: EApprovalWorkflowStepInput[],
+  bandIndexes: number[],
+  field: string,
+  cases: ValueMatchCase[],
+): EApprovalWorkflowStepInput[] {
+  const trimmedField = field.trim();
+  if (!trimmedField || cases.length !== bandIndexes.length) {
+    return steps;
+  }
+
+  return steps.map((step, index) => {
+    const offset = bandIndexes.indexOf(index);
+    if (offset < 0) {
+      return step;
+    }
+
+    const item = cases[offset];
+    return patchStepWhen(step, [
+      { field: trimmedField, operator: item.operator, value: item.value.trim() },
+    ]);
+  });
+}
+
+/**
+ * Replace the steps in a ladder, adding or dropping bands so the count matches `whens`.
+ * New bands copy the last step and clear the approver.
+ */
+export function replaceLadderConditions(
+  steps: EApprovalWorkflowStepInput[],
+  bandIndexes: number[],
+  whens: EApprovalWorkflowCondition[][],
+): EApprovalWorkflowStepInput[] {
+  if (bandIndexes.length === 0 || whens.length < 2) {
+    return steps;
+  }
+
+  const start = bandIndexes[0];
+  const end = bandIndexes[bandIndexes.length - 1];
+  if (end - start + 1 !== bandIndexes.length || end >= steps.length) {
+    return steps;
+  }
+
+  const existing = bandIndexes.map((index) => steps[index]);
+  const before = compactWorkflowStepOrdersPreservingTies(steps.slice(0, start));
+  const afterSource = steps.slice(end + 1);
+  const baseOrder =
+    before.length > 0 ? Math.max(...before.map((step, index) => step.step_order ?? index + 1)) : 0;
+
+  const nextBands = whens.map((when, offset) => {
+    const source = existing[offset] ?? existing[existing.length - 1];
+    const base = existing[offset]
+      ? source
+      : (() => {
+          const { id: _id, ...rest } = source;
+          return { ...rest, approverId: "" };
+        })();
+
+    return patchStepWhen(
+      { ...base, step_order: baseOrder + offset + 1 },
+      when,
+    );
+  });
+
+  const after = compactWorkflowStepOrdersPreservingTies(afterSource).map((step, index) => ({
+    ...step,
+    step_order: (step.step_order ?? index + 1) + baseOrder + whens.length,
+  }));
+
+  return [...before, ...nextBands, ...after];
+}
+
+/** Point an existing ladder at another field and rebuild cases for that field's kind. */
+export function retargetLadderField(
+  steps: EApprovalWorkflowStepInput[],
+  ladder: ExclusiveThresholdLadder,
+  field: string,
+  kind: "amount" | "choice" | "value",
+  choiceValues: string[] = [],
+): EApprovalWorkflowStepInput[] {
+  const trimmedField = field.trim();
+  if (!trimmedField) {
+    return steps;
+  }
+
+  if (kind === "amount") {
+    const reusable =
+      ladder.thresholds.length === ladder.bandIndexes.length - 1 &&
+      ladder.thresholds.every((value) => isAmountBoundary(value))
+        ? ladder.thresholds
+        : Array.from({ length: Math.max(1, ladder.bandIndexes.length - 1) }, (_, index) =>
+            String((index + 1) * 1000),
+          );
+    return replaceLadderConditions(
+      steps,
+      ladder.bandIndexes,
+      createThresholdLadderWhens(trimmedField, reusable),
+    );
+  }
+
+  if (kind === "choice" && choiceValues.length >= 2) {
+    return replaceLadderConditions(
+      steps,
+      ladder.bandIndexes,
+      choiceValues.map((value) => [{ field: trimmedField, operator: "equals", value }]),
+    );
+  }
+
+  const count = Math.max(2, ladder.bandIndexes.length);
+  const cases = Array.from({ length: count }, (_, index) => ({
+    operator: (count === 2 && index === 1 ? "not_equals" : "equals") as ValueMatchOperator,
+    value: "",
+  }));
+
+  return replaceLadderConditions(
+    steps,
+    ladder.bandIndexes,
+    cases.map((item) => [{ field: trimmedField, operator: item.operator, value: item.value }]),
+  );
+}
+
+export function addLadderValueCase(
+  steps: EApprovalWorkflowStepInput[],
+  ladder: ExclusiveThresholdLadder,
+  item: ValueMatchCase,
+): EApprovalWorkflowStepInput[] {
+  const current = ladderMatchCases(steps, ladder.bandIndexes);
+  return replaceLadderConditions(
+    steps,
+    ladder.bandIndexes,
+    [...current, item].map((entry) => [
+      { field: ladder.field, operator: entry.operator, value: entry.value },
+    ]),
+  );
+}
+
+export function removeLadderValueCase(
+  steps: EApprovalWorkflowStepInput[],
+  ladder: ExclusiveThresholdLadder,
+  caseIndex: number,
+): EApprovalWorkflowStepInput[] {
+  const current = ladderMatchCases(steps, ladder.bandIndexes);
+  if (current.length <= 2 || caseIndex < 0 || caseIndex >= current.length) {
+    return steps;
+  }
+
+  return replaceLadderConditions(
+    steps,
+    ladder.bandIndexes,
+    current
+      .filter((_, index) => index !== caseIndex)
+      .map((entry) => [{ field: ladder.field, operator: entry.operator, value: entry.value }]),
+  );
+}
+
+export type ValueMatchStepInput = {
+  field: string;
+  cases: Array<ValueMatchCase & { approverId: string }>;
+};
+
+/** Insert one fixed-user step per value case. Only the matching case runs. */
+export function insertValueMatchSteps(
+  steps: EApprovalWorkflowStepInput[],
+  input: ValueMatchStepInput,
+  atIndex?: number,
+): EApprovalWorkflowStepInput[] {
+  const trimmedField = input.field.trim();
+  const cases = input.cases.filter((item) => item.value.trim() !== "" && item.approverId.trim() !== "");
+  if (!trimmedField || cases.length < 2) {
+    return steps;
+  }
+
+  const insertAt = Math.max(0, Math.min(atIndex ?? steps.length, steps.length));
+  const before = compactWorkflowStepOrdersPreservingTies(steps.slice(0, insertAt));
+  const afterSource = steps.slice(insertAt);
+  const baseOrder =
+    before.length > 0 ? Math.max(...before.map((step, index) => step.step_order ?? index + 1)) : 0;
+
+  const matchSteps = cases.map((item, offset) =>
+    patchStepWhen(
+      {
+        type: "user",
+        approverId: item.approverId.trim(),
+        step_order: baseOrder + offset + 1,
+      },
+      [{ field: trimmedField, operator: item.operator, value: item.value.trim() }],
+    ),
+  );
+
+  const after = compactWorkflowStepOrdersPreservingTies(afterSource).map((step, index) => ({
+    ...step,
+    step_order: (step.step_order ?? index + 1) + baseOrder + cases.length,
+  }));
+
+  return [...before, ...matchSteps, ...after];
 }

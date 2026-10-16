@@ -152,7 +152,12 @@ export function shouldUseSteppedCompose(config: FormComposeConfig, fields: EAppr
     return false;
   }
 
-  return buildFormComposeSteps(fields, config.stepSource).length >= 2;
+  const contentCount = buildFormComposeSteps(fields, config.stepSource).length;
+  if (contentCount >= 2) {
+    return true;
+  }
+
+  return config.includeReviewStep && contentCount >= 1;
 }
 
 export type FormComposeReadiness = {
@@ -178,7 +183,8 @@ export function formComposeReadiness(
   settings: FormComposeEditorSettings,
   fields: EApprovalFormFieldInput[],
 ): FormComposeReadiness {
-  const stepCount = buildFormComposeSteps(fields, settings.stepSource).length;
+  const contentCount = buildFormComposeSteps(fields, settings.stepSource).length;
+  const stepCount = contentCount + (settings.includeReviewStep && contentCount > 0 ? 1 : 0);
 
   if (settings.mode !== "stepped") {
     return { ready: true, stepCount };

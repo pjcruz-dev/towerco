@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { RecordActionHistoryNavButton } from "@/components/dynamic-entities/record-action-history";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
@@ -78,7 +79,7 @@ function RecentRow({
 
 /**
  * Metacoresoft-style left utilities on the dark module strip:
- * History (recent) · Favorites · Home — compact type.
+ * History (recent) · Favorites · Home · Action History — compact type.
  */
 export function AppTopNavUtilities() {
   const pathname = usePathname();
@@ -267,6 +268,7 @@ export function AppTopNavUtilities() {
       >
         <Home className="size-3.5" aria-hidden />
       </Link>
+      <RecordActionHistoryNavButton />
     </div>
   );
 }

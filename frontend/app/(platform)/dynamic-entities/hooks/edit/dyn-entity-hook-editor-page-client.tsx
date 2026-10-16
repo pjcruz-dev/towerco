@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   createDynEntityHook,
   fetchDynEntities,
@@ -151,6 +152,7 @@ function DynEntityHookEditorInner() {
           description: description.trim() || null,
         });
       }
+      notify.success(isNew ? "Hook created" : "Hook saved", name.trim() || "Hook");
       router.push("/dynamic-entities/hooks");
     } catch (err) {
       setError(getErrorMessage(err));
@@ -163,7 +165,7 @@ function DynEntityHookEditorInner() {
     <PermissionGate requiredPermissions={[permissions.entityHooksManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title={isNew ? "Create Hook" : "Edit Hook"}
           description="Build declarative rules that run on entity lifecycle events. The Code tab shows the stored DSL JSON."
           actions={

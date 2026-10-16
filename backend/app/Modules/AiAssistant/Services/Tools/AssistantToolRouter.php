@@ -145,6 +145,12 @@ final class AssistantToolRouter
             $calls[] = new ToolCallRequest('list_my_open_tickets');
         }
 
+        if ($assetQuery = $this->extractAssetIdentifier($question)) {
+            $calls[] = new ToolCallRequest('find_it_asset', [
+                'query' => $assetQuery,
+            ]);
+        }
+
         // Ambiguous "status/find of CODE" with no known prefix → workspace search across modules.
         if ($calls === [] && $this->looksLikeEntityStatusLookup($q) && ($entityQuery = $this->extractEntityQuery($question)) !== null) {
             $calls[] = new ToolCallRequest('search_workspace_entities', [
@@ -185,6 +191,7 @@ final class AssistantToolRouter
                     'list_my_open_tickets',
                     'list_expiring_documents',
                     'search_workspace_entities',
+                    'find_it_asset',
                 ], true)) {
                     $alreadySpecific = true;
                     break;
@@ -295,6 +302,14 @@ final class AssistantToolRouter
             return null;
         }
 
+        // Document numbers that contain a repeated hyphen, such as ATC-DOC-EAPPROVAL--X-004.
+        if (preg_match('/\b([A-Z][A-Z0-9]*(?:-+[A-Z0-9]+)+)\b/i', $question, $m) === 1) {
+            $code = strtoupper($m[1]);
+            if (str_contains($code, '--') || str_contains($code, 'EAPPROVAL')) {
+                return $code;
+            }
+        }
+
         // Explicit submission / request language.
         if (preg_match('/\b(?:submission|request|document\s*no\.?|doc\s*no\.?)\s+[:=]?\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b/i', $question, $m) === 1) {
             return strtoupper($m[1]);
@@ -357,6 +372,19 @@ final class AssistantToolRouter
         }
 
         return $candidate;
+    }
+
+    private function extractAssetIdentifier(string $question): ?string
+    {
+        if (preg_match('/\b(SN-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b/i', $question, $m) === 1) {
+            return strtoupper($m[1]);
+        }
+
+        if (preg_match('/\b(ATC-(?:LAP|DSK|MON|DOC|PHN|PER)-\d+)\b/i', $question, $m) === 1) {
+            return strtoupper($m[1]);
+        }
+
+        return null;
     }
 
     private function looksLikeEntityStatusLookup(string $q): bool

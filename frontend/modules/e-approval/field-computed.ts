@@ -1,5 +1,5 @@
 import { fieldOptionsToRecord, parseGridColumnDefs, parseGridValue } from "@/modules/e-approval/field-options";
-import { applyGridRowFormulasToValues } from "@/modules/e-approval/grid-row-formulas";
+import { applyGridRowFormulasToValues, expenseLineMoney } from "@/modules/e-approval/grid-row-formulas";
 import { formatComputedFieldAmount, parseSubmissionAmount } from "@/modules/e-approval/parent-submission-link";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
@@ -76,6 +76,14 @@ const CONVENTION_RULES: ConventionRule[] = [
     },
   },
   {
+    totalField: "settlement_amount",
+    config: {
+      operation: "subtract_fields",
+      left_field: "total_reimbursement",
+      right_field: "cash_advance_amount",
+    },
+  },
+  {
     totalField: "estimated_total",
     config: {
       operation: "sum_grid_lines",
@@ -118,7 +126,7 @@ const CONVENTION_RULES: ConventionRule[] = [
   },
 ];
 
-function expenseLinesSumColumn(fields: EApprovalFormFieldInput[]): "Total" | "Amount" {
+function expenseLinesSumColumn(fields: EApprovalFormFieldInput[]): "Total" | "Amount" | "Rate" {
   const grid = fields.find((field) => field.name === "expense_lines" && field.type === "grid");
   const options = grid ? fieldOptionsToRecord(grid) : {};
   const columns = Array.isArray(options.columns) ? options.columns : [];
@@ -137,6 +145,9 @@ function expenseLinesSumColumn(fields: EApprovalFormFieldInput[]): "Total" | "Am
   }
   if (labels.includes("amount")) {
     return "Amount";
+  }
+  if (labels.includes("rate")) {
+    return "Rate";
   }
   return "Amount";
 }
@@ -332,6 +343,8 @@ function computeGridSumColumn(
   gridField: EApprovalFormFieldInput,
   gridRaw: string,
   config: GridSumColumnOperation,
+  fields: EApprovalFormFieldInput[],
+  values: Record<string, string>,
 ): number {
   const columns = parseGridColumnDefs(gridField);
   const explicit =
@@ -358,7 +371,14 @@ function computeGridSumColumn(
     columns.length,
     columns.map((column) => column.label),
   );
-  return grid.rows.reduce((sum, row) => sum + parseNumericCell(row[String(columnIndex)]), 0);
+  const summed = columns[columnIndex];
+  const extendPerDiem = gridField.name === "expense_lines" && /^amount$/i.test(summed?.label.trim() ?? "");
+  return grid.rows.reduce((sum, row) => {
+    if (extendPerDiem) {
+      return sum + expenseLineMoney(columns, row);
+    }
+    return sum + parseNumericCell(row[String(columnIndex)]);
+  }, 0);
 }
 
 function computeGridLineTotals(
@@ -432,7 +452,7 @@ function computeFromConfig(
 
     const gridRaw = values[config.source_field] ?? "";
     if (config.operation === "sum_grid_column") {
-      return computeGridSumColumn(gridField, gridRaw, config);
+      return computeGridSumColumn(gridField, gridRaw, config, fields, values);
     }
     if (config.operation === "sum_grid_lines_net") {
       return computeGridLineNetTotals(gridField, gridRaw, config);
@@ -505,7 +525,38 @@ export function applyComputedFieldValues(
     }
   }
 
-  return next;
+  return applySettlementSummary(fields, next);
+}
+
+/** Actual expenses minus cash released. Positive pays the employee. Negative is a surrender. */
+function applySettlementSummary(
+  fields: EApprovalFormFieldInput[],
+  values: Record<string, string>,
+): Record<string, string> {
+  const hasSummary = fields.some((field) => field.name === "settlement_summary");
+  if (!hasSummary) {
+    return values;
+  }
+  const hasTotal = fields.some((field) => field.name === "total_reimbursement");
+  const hasReleased = fields.some((field) => field.name === "cash_advance_amount");
+  if (!hasTotal || !hasReleased) {
+    return values;
+  }
+
+  const delta = Math.round(
+    (readNumericField(values, "total_reimbursement") - readNumericField(values, "cash_advance_amount")) * 100,
+  ) / 100;
+  const summary =
+    Math.abs(delta) < 0.005
+      ? "Settled. No cash to move."
+      : delta > 0
+        ? `Amount to pay the employee: ${formatComputedFieldAmount(delta)}`
+        : `Amount to surrender: ${formatComputedFieldAmount(Math.abs(delta))}`;
+  if (values.settlement_summary === summary) {
+    return values;
+  }
+
+  return { ...values, settlement_summary: summary };
 }
 
 export function computedFieldHelpText(field: EApprovalFormFieldInput, fields: EApprovalFormFieldInput[]): string | undefined {

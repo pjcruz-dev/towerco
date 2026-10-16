@@ -1,6 +1,13 @@
+import { placeReviewTotals } from "@/modules/e-approval/form-compose-review";
 import { resolvePrintAssetUrl } from "@/modules/e-approval/print-utils";
 import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
 import type { EApprovalPrintTemplate } from "@/modules/e-approval/print-template-types";
+import {
+  defaultCashAdvanceDocumentDesignCss,
+  defaultCashAdvanceDocumentDesignHtml,
+  defaultLiquidationDocumentDesignHtml,
+  defaultReimbursementDocumentDesignHtml,
+} from "@/lib/e-approval/e-approval-cash-advance-print-template";
 import {
   defaultRequestForPaymentDocumentDesignCss,
   defaultRequestForPaymentDocumentDesignHtml,
@@ -176,6 +183,15 @@ export function formatPrintNumericTotal(value: number): string {
   })}`;
 }
 
+/** Currency fields print with the same peso format as an Amount cell. */
+export function formatPrintCurrencyField(value: string): string {
+  const parsed = parsePrintNumericCell(value);
+  if (parsed === null) {
+    return value.trim();
+  }
+  return formatPrintNumericTotal(parsed);
+}
+
 const SUMMABLE_COLUMN_LABEL =
   /personal|official|total|amount|price|cost|qty|quantity|sum|subtotal|debit|credit|balance|hours|days|transport|gasoline|lodging|diem|vat|land|sea|air/i;
 
@@ -252,7 +268,12 @@ ${scalarRows.join("\n")}
   return parts.join("\n");
 }
 
+function printGridTotalLabel(label: string): string {
+  return /forecast/i.test(label) ? "TOTAL FORECAST" : "TOTAL EXPENSES";
+}
+
 function renderPrintGridTotalsFooterHtml(grid: {
+  label?: string;
   columns: string[];
   rows: string[][];
 }): string {
@@ -273,7 +294,7 @@ function renderPrintGridTotalsFooterHtml(grid: {
   labelSpan = Math.max(labelSpan, 1);
 
   const cells: string[] = [
-    `<td class="ea-print-table-total-label" colspan="${labelSpan}"><strong>TOTAL EXPENSES</strong></td>`,
+    `<td class="ea-print-table-total-label" colspan="${labelSpan}"><strong>${printGridTotalLabel(grid.label ?? "")}</strong></td>`,
   ];
 
   for (let index = labelSpan; index < columns.length; index += 1) {
@@ -294,29 +315,190 @@ function renderPrintGridTotalsFooterHtml(grid: {
   return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
 }
 
-export function renderPrintGridTableHtml(grid: {
-  key: string;
-  label: string;
-  columns: string[];
-  rows: string[][];
-}): string {
-  const columns = grid.columns.length > 0 ? grid.columns : ["Value"];
+function isCashAdvanceForecastGrid(
+  grid: { key: string; columns: string[] },
+  formName: string,
+): boolean {
+  const form = formName.trim().toLowerCase();
+  if (form === "reimbursement" || form === "liquidation") {
+    return false;
+  }
+  if (form === "cash advance" && grid.key === "expense_lines") {
+    return true;
+  }
+  const columns = grid.columns.map((column) => column.trim().toLowerCase());
+  const forecast =
+    columns.some((column) => column.startsWith("from date")) && columns.includes("amount");
+  const actuals = columns.some(
+    (column) =>
+      column === "quantity" ||
+      column === "rate" ||
+      column === "forecast amount" ||
+      column === "or no",
+  );
+  return forecast && !actuals;
+}
+
+function appendCashAdvanceSplitColumns(
+  columns: string[],
+  rows: string[][],
+): { columns: string[]; rows: string[][] } {
+  const nextColumns = [...columns];
+  const needNon = !nextColumns.some((column) => /^non-?vatable$/i.test(column.trim()));
+  const needNet = !nextColumns.some((column) => /net of vat/i.test(column.trim()));
+  if (!needNon && !needNet) {
+    return { columns, rows };
+  }
+  if (needNon) nextColumns.push("Non-VATable");
+  if (needNet) nextColumns.push("VATable, net of VAT");
+
+  const amountIndex = columns.findIndex((column) => column.trim().toLowerCase() === "amount");
+  const treatmentIndex = columns.findIndex((column) => column.trim().toLowerCase() === "vat treatment");
+  const vatIndex = columns.findIndex((column) => column.trim().toLowerCase() === "vat");
+  const nextRows = rows.map((row) => {
+    const amount = amountIndex >= 0 ? (parsePrintNumericCell(row[amountIndex] ?? "") ?? 0) : 0;
+    const treatment = treatmentIndex >= 0 ? (row[treatmentIndex] ?? "").toLowerCase() : "";
+    const nonVatable = /non/.test(treatment);
+    const vat = vatIndex >= 0 ? (parsePrintNumericCell(row[vatIndex] ?? "") ?? 0) : 0;
+    const net = nonVatable ? 0 : Math.max(0, Math.round((amount - vat) * 100) / 100);
+    const extra: string[] = [];
+    if (needNon) extra.push(formatPrintNumericTotal(nonVatable ? amount : 0));
+    if (needNet) extra.push(formatPrintNumericTotal(net));
+    return [...row, ...extra];
+  });
+
+  return { columns: nextColumns, rows: nextRows };
+}
+
+function expenseGridWantsVatSplit(columns: string[]): boolean {
+  const labels = columns.map((column) => column.trim().toLowerCase());
+  const hasSplit = labels.some((label) => label === "expense type" || label === "vat treatment");
+  const hasMoney = labels.some((label) => label === "amount" || label === "rate");
+  return hasSplit && hasMoney;
+}
+
+/** Totals sit under Amount, VAT, Non-VATable, and VATable net, same as the request table. */
+function renderCashAdvanceReviewFooter(
+  columns: string[],
+  fields: EApprovalPrintPayload["fields"],
+): string {
+  const fieldByKey = (key: string) => (fields ?? []).find((field) => field.key === key);
+  const money = (value: string) => formatPrintCurrencyField(value) || "₱0.00";
+  const amountField = fieldByKey("total_reimbursement") ?? fieldByKey("requested_amount");
+  const placed = placeReviewTotals(columns, [
+    {
+      label: amountField?.label?.trim() || (fieldByKey("total_reimbursement") ? "Total expenses" : "Requested amount"),
+      value: money(amountField?.value ?? ""),
+    },
+    { label: "VAT", value: money(fieldByKey("vat_total")?.value ?? "") },
+    { label: "Non-VATable", value: money(fieldByKey("non_vatable_total")?.value ?? "") },
+    { label: "VATable, net of VAT", value: money(fieldByKey("vatable_net")?.value ?? "") },
+  ]);
+  if (placed.length === 0) {
+    return "";
+  }
+
+  const rows = placed.map((totalRow, rowIndex) => {
+    const cells = totalRow.map((total, cellIndex) => {
+      if (total) {
+        const classes = [printGridColumnClass(columns[cellIndex] ?? ""), "ea-print-table-total-value"]
+          .filter(Boolean)
+          .join(" ");
+        return `<td class="${classes}" style="text-align:right;vertical-align:bottom;"><strong style="display:block;white-space:nowrap;font-variant-numeric:tabular-nums;">${escapeHtml(total.value)}</strong></td>`;
+      }
+      if (rowIndex === 0 && cellIndex === 0) {
+        return `<td class="ea-print-table-total-label" style="text-align:left;vertical-align:bottom;"><strong>Totals</strong></td>`;
+      }
+      return `<td></td>`;
+    });
+    return `<tr class="ea-print-table-totals">${cells.join("")}</tr>`;
+  });
+
+  return `<tfoot>${rows.join("")}</tfoot>`;
+}
+
+/** Width hints so a landscape cash-advance forecast table can keep every value visible. */
+export function printGridColumnClass(column: string): string {
+  const label = column.trim().toLowerCase();
+  if (label === "date" || label.startsWith("from date") || label === "date range") {
+    return "ea-print-col-date";
+  }
+  if (label.startsWith("from site") || label.startsWith("to site")) {
+    return "ea-print-col-site";
+  }
+  if (label === "expense type") {
+    return "ea-print-col-type";
+  }
+  if (label === "amount" || label === "rate" || label === "forecast amount") {
+    return "ea-print-col-money";
+  }
+  if (label === "vat" || label === "non-vatable" || /net of vat/.test(label)) {
+    return "ea-print-col-vat";
+  }
+  if (label === "vat treatment") {
+    return "ea-print-col-treatment";
+  }
+  if (label === "quantity" || label === "qty") {
+    return "ea-print-col-qty";
+  }
+  if (label === "or no" || label === "or number") {
+    return "ea-print-col-ref";
+  }
+  if (label === "supplier/payee" || label === "supplier" || label === "payee") {
+    return "ea-print-col-party";
+  }
+  if (label === "description" || label === "variance reason") {
+    return "ea-print-col-note";
+  }
+
+  return "";
+}
+
+export function renderPrintGridTableHtml(
+  grid: {
+    key: string;
+    label: string;
+    columns: string[];
+    rows: string[][];
+  },
+  options?: {
+    formName?: string;
+    fields?: EApprovalPrintPayload["fields"];
+  },
+): string {
+  const visible = hideLiquidationForecastCompanionColumns(grid.columns, grid.rows);
+  const cashAdvanceGrid = isCashAdvanceForecastGrid(
+    { ...grid, columns: visible.columns, rows: visible.rows },
+    options?.formName ?? "",
+  );
+  const wantsVatSplit = cashAdvanceGrid || expenseGridWantsVatSplit(visible.columns);
+  const expanded = wantsVatSplit
+    ? appendCashAdvanceSplitColumns(visible.columns.length > 0 ? visible.columns : ["Value"], visible.rows)
+    : null;
+  const columns = expanded?.columns ?? (visible.columns.length > 0 ? visible.columns : ["Value"]);
+  const sourceRows = expanded?.rows ?? visible.rows;
   const head = columns
     .map((column) => {
       const isTotalCol = /^total$/i.test(column);
-      return `<th class="${isTotalCol ? "ea-print-table-total-col" : ""}">${escapeHtml(column)}</th>`;
+      const classes = [printGridColumnClass(column), isTotalCol ? "ea-print-table-total-col" : ""]
+        .filter(Boolean)
+        .join(" ");
+      return `<th class="${classes}">${escapeHtml(column)}</th>`;
     })
     .join("");
   const body =
-    grid.rows.length > 0
-      ? grid.rows
+    sourceRows.length > 0
+      ? sourceRows
           .map((row) => {
             const cells = columns.map((column, index) => {
               const cell = row[index] ?? "";
               const isTotalCol = /^total$/i.test(column);
+              const classes = [printGridColumnClass(column), isTotalCol ? "ea-print-table-total-col" : ""]
+                .filter(Boolean)
+                .join(" ");
               const isMoney = shouldSumPrintGridColumn(
                 column,
-                grid.rows.map((r) => r[index] ?? ""),
+                sourceRows.map((r) => r[index] ?? ""),
               );
               let display = cell.trim() !== "" ? cell : isMoney ? "₱0.00" : "—";
               if (isMoney && cell.trim() !== "") {
@@ -325,13 +507,15 @@ export function renderPrintGridTableHtml(grid: {
                   display = formatPrintNumericTotal(parsed);
                 }
               }
-              return `<td class="${isTotalCol ? "ea-print-table-total-col" : ""}">${escapeHtml(display)}</td>`;
+              return `<td class="${classes}">${escapeHtml(display)}</td>`;
             });
             return `<tr>${cells.join("")}</tr>`;
           })
           .join("")
       : `<tr><td colspan="${columns.length}">No line items</td></tr>`;
-  const foot = renderPrintGridTotalsFooterHtml({ columns, rows: grid.rows });
+  const foot = wantsVatSplit
+    ? renderCashAdvanceReviewFooter(columns, options?.fields)
+    : renderPrintGridTotalsFooterHtml({ label: grid.label, columns, rows: sourceRows });
 
   return `<section class="ea-form-section ea-form-grid-section" data-grid-key="${escapeHtml(grid.key)}">
   <h2 class="ea-form-section-title">${escapeHtml(grid.label || grid.key)}</h2>
@@ -345,6 +529,28 @@ export function renderPrintGridTableHtml(grid: {
 </section>`;
 }
 
+/** Quantity and Rate do not price a liquidation line once Forecast amount is on the table. */
+function hideLiquidationForecastCompanionColumns(
+  columns: string[],
+  rows: string[][],
+): { columns: string[]; rows: string[][] } {
+  const labels = columns.map((column) => column.trim().toLowerCase());
+  const has = (name: string) => labels.includes(name);
+  const dropQtyRate =
+    has("forecast amount") ||
+    (has("or no") && has("expense type") && has("amount") && has("quantity") && has("rate"));
+  if (!dropQtyRate) {
+    return { columns, rows };
+  }
+  const kept = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column }) => !/^(quantity|rate)$/i.test(column.trim()));
+  return {
+    columns: kept.map(({ column }) => column),
+    rows: rows.map((row) => kept.map(({ index }) => row[index] ?? "")),
+  };
+}
+
 function renderDynamicGridsHtml(payload: EApprovalPrintPayload, onlyKey?: string): string {
   const grids = (payload.grids ?? []).filter((grid) =>
     onlyKey ? grid.key === onlyKey : true,
@@ -354,7 +560,14 @@ function renderDynamicGridsHtml(payload: EApprovalPrintPayload, onlyKey?: string
       ? `<p class="ea-form-hint">No rows for ${escapeHtml(onlyKey)}.</p>`
       : "";
   }
-  return grids.map((grid) => renderPrintGridTableHtml(grid)).join("\n");
+  return grids
+    .map((grid) =>
+      renderPrintGridTableHtml(grid, {
+        formName: payload.form_name,
+        fields: payload.fields,
+      }),
+    )
+    .join("\n");
 }
 
 function renderDynamicFormBodyHtml(payload: EApprovalPrintPayload): string {
@@ -415,8 +628,12 @@ export function renderEApprovalPrintTemplateHtml(
       const key = token.slice("field.".length);
       const meta = fieldsByKey.get(key);
       const raw = fields[key] ?? "";
-      if ((meta?.field_type ?? "").toLowerCase() === "checklist_matrix") {
+      const type = (meta?.field_type ?? "").toLowerCase();
+      if (type === "checklist_matrix") {
         return renderRfpCostApplicationPrintHtml(raw);
+      }
+      if (type === "currency") {
+        return escapeHtml(formatPrintCurrencyField(raw));
       }
       return escapeHtml(raw);
     }
@@ -432,6 +649,36 @@ export function renderEApprovalPrintTemplateHtml(
     }
     return "";
   });
+}
+
+export type FinancePrintFamily = "cash_advance" | "liquidation" | "reimbursement";
+
+export function financePrintFamily(data: {
+  form_family?: string | null;
+  form_name?: string | null;
+}): FinancePrintFamily | null {
+  const family = String(data.form_family ?? "").trim();
+  if (family === "cash_advance" || family === "liquidation" || family === "reimbursement") {
+    return family;
+  }
+  const name = String(data.form_name ?? "").trim();
+  if (/^cash advance$/i.test(name)) return "cash_advance";
+  if (/^liquidation$/i.test(name)) return "liquidation";
+  if (/^reimbursement$/i.test(name)) return "reimbursement";
+  return null;
+}
+
+/** Empty or generic letterhead designs pick up the finance page. A saved family design is left as written. */
+export function shouldUseFinancePrintStarter(
+  savedHtml: string,
+  family: FinancePrintFamily | null,
+): boolean {
+  if (!family) return false;
+  const html = savedHtml.trim();
+  const generic = !html || html === defaultEApprovalDocumentDesignHtml().trim();
+  if (family === "cash_advance") return generic;
+  if (family === "liquidation") return generic || !html.includes("ea-lq-doc");
+  return generic || !html.includes("ea-re-doc");
 }
 
 export function hasCustomPrintDocumentDesign(
@@ -506,6 +753,18 @@ export function defaultEApprovalDocumentDesignHtml(
     return defaultRequestForPaymentDocumentDesignHtml();
   }
 
+  if (formFamily === "cash_advance") {
+    return defaultCashAdvanceDocumentDesignHtml();
+  }
+
+  if (formFamily === "liquidation") {
+    return defaultLiquidationDocumentDesignHtml();
+  }
+
+  if (formFamily === "reimbursement") {
+    return defaultReimbursementDocumentDesignHtml();
+  }
+
   return `<div class="eapproval-printable ea-form-doc">
   <header class="ea-form-letterhead">
     <div class="ea-form-brand">
@@ -567,6 +826,14 @@ export function defaultEApprovalDocumentDesignCss(
 ): string {
   if (formFamily === "request_for_payment") {
     return defaultRequestForPaymentDocumentDesignCss(options);
+  }
+
+  if (formFamily === "cash_advance" || formFamily === "liquidation" || formFamily === "reimbursement") {
+    return defaultCashAdvanceDocumentDesignCss({
+      size: options?.size,
+      marginMm: options?.marginMm,
+      orientation: options?.orientation ?? "landscape",
+    });
   }
 
   return `${buildEApprovalPrintPageCss(options)}
@@ -879,7 +1146,12 @@ export function documentDesignPreviewRecommendations(
       "Re-insert starter layout to switch to {{system.form_body}} — expense line grids and new columns print automatically without editing HTML.",
     );
   }
-  if (documentDesignEmbedsGrids(trimmedHtml) && !/\{\{\s*system\.form_body\s*\}\}/i.test(trimmedHtml) && !/\{\{\s*system\.form_grids\s*\}\}/i.test(trimmedHtml)) {
+  if (
+    documentDesignEmbedsGrids(trimmedHtml) &&
+    !/\{\{\s*system\.form_body\s*\}\}/i.test(trimmedHtml) &&
+    !/\{\{\s*system\.form_grids\s*\}\}/i.test(trimmedHtml) &&
+    !/\{\{\s*grid\./i.test(trimmedHtml)
+  ) {
     tips.push(
       "Prefer {{system.form_body}} so expense columns stay dynamic when you edit the grid in the form builder.",
     );

@@ -6,9 +6,11 @@ import { AppHeaderSearchTrigger } from "@/components/layout/app-header-search-tr
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { UserProfileMenu } from "@/components/layout/user-profile-menu";
 import { WorkspaceBreadcrumbs } from "@/components/layout/workspace-breadcrumbs";
+import { OfflineDataSyncButton } from "@/components/layout/offline-data-sync-button";
 import { TenantNotificationBell } from "@/components/notifications/tenant-notification-bell";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { hasPermission, permissions } from "@/lib/rbac/permissions";
+import { WorkspaceActionHistoryButton } from "@/components/dynamic-entities/record-action-history";
+import { hasAnyPermission, hasPermission, permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
 /**
@@ -38,6 +40,15 @@ export function AppHeader({
     () => hasPermission(scopedUser, [permissions.eApprovalView]),
     [scopedUser],
   );
+  const canViewHistory = useMemo(
+    () =>
+      hasAnyPermission(scopedUser, [
+        permissions.dynamicEntitiesView,
+        permissions.assetsView,
+        permissions.ticketingView,
+      ]),
+    [scopedUser],
+  );
 
   return (
     <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card px-4 sm:gap-3 sm:px-6 md:px-8 print:hidden">
@@ -55,6 +66,8 @@ export function AppHeader({
       <WorkspaceBreadcrumbs />
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <AppHeaderSearchTrigger />
+        <OfflineDataSyncButton />
+        {canViewHistory ? <WorkspaceActionHistoryButton /> : null}
         {canViewNotifications ? <TenantNotificationBell /> : null}
         <Suspense fallback={null}>
           <UserProfileMenu />

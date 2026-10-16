@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -27,6 +27,7 @@ import {
   FileSpreadsheet,
   GripVertical,
   Pencil,
+  Pin,
   Printer,
   Trash2,
 } from "lucide-react";
@@ -36,10 +37,26 @@ import {
   useDynTableColumnPrefs,
   type DynTableColumnOption,
 } from "@/components/dynamic-entities/dyn-table-columns-control";
+import {
+  RoleFieldAccessMenuItems,
+  RoleFieldAccessProvider,
+  RoleRowActionsMenuItems,
+  useRoleFieldAccessContext,
+} from "@/components/dynamic-entities/dyn-role-field-access";
 import { DynRecordImportDialog } from "@/components/dynamic-entities/dyn-record-import-dialog";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
+import Pagination1 from "@/components/ui/pagination-01";
+import { TablePageFooter } from "@/components/ui/table-page-footer";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage, isCanceledRequestError, isForbiddenApiError } from "@/lib/api/error";
@@ -63,9 +80,11 @@ import {
 import { permissions } from "@/lib/rbac/permissions";
 import {
   canEntityAction,
+  fieldAccessLevel,
   isFieldHiddenForRole,
   notifyDynPermissionDenied,
 } from "@/lib/rbac/entity-access";
+import { fieldVisibleOnSurface } from "@/lib/rbac/field-surface-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import {
@@ -77,16 +96,57 @@ import {
   dynSelectChoiceLabel,
 } from "@/lib/dynamic-entities/select-choices";
 
+const LIST_CHROME = new Set(["id", "actions", "print"]);
+
+function pinCellStyle(left: number | undefined, edge: boolean): CSSProperties | undefined {
+  if (left == null) return undefined;
+  return {
+    position: "sticky",
+    left,
+    zIndex: 3,
+    boxShadow: edge ? "4px 0 6px -4px rgba(0,0,0,0.35)" : undefined,
+  };
+}
+
 export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
+  return (
+    <RoleFieldAccessProvider entitySlug={slug}>
+      <DynamicEntityRecordsPageBody slug={slug} />
+    </RoleFieldAccessProvider>
+  );
+}
+
+function DynamicEntityRecordsPageBody({ slug }: { slug: string }) {
   const canManageRecords = usePermission([permissions.dynamicEntitiesRecordsManage]);
-  const canManageFields = usePermission([permissions.dynamicEntitiesFieldsManage]);
   const canManagePrintables = usePermission([permissions.printablesManage]);
   const accessMatrix = useAuthStore((state) => state.user?.accessMatrix);
-  const canCreate = canManageRecords && canEntityAction(accessMatrix, slug, "create");
-  const canEdit = canManageRecords && canEntityAction(accessMatrix, slug, "edit");
-  const canDelete = canManageRecords && canEntityAction(accessMatrix, slug, "delete");
-  const canExport = canEntityAction(accessMatrix, slug, "export");
-  const canView = canEntityAction(accessMatrix, slug, "view");
+  const preview = useRoleFieldAccessContext();
+  const previewing = Boolean(preview?.selected);
+  const effectiveMatrix = previewing ? preview?.selected?.access_matrix : accessMatrix;
+  const canCreate = previewing
+    ? Boolean(preview?.entityAllows("create"))
+    : canManageRecords && canEntityAction(accessMatrix, slug, "create");
+  const canImport = previewing
+    ? Boolean(preview?.entityAllows("import"))
+    : canManageRecords && canEntityAction(accessMatrix, slug, "import");
+  const canArrangeColumns = previewing
+    ? Boolean(preview?.entityAllows("columns"))
+    : canEntityAction(accessMatrix, slug, "columns");
+  const canEdit = previewing
+    ? Boolean(preview?.entityAllows("edit"))
+    : canManageRecords && canEntityAction(accessMatrix, slug, "edit");
+  const canDelete = previewing
+    ? Boolean(preview?.entityAllows("delete"))
+    : canManageRecords && canEntityAction(accessMatrix, slug, "delete");
+  const canClone = previewing
+    ? Boolean(preview?.entityAllows("duplicate"))
+    : canManageRecords && canEntityAction(accessMatrix, slug, "duplicate");
+  const canExport = previewing
+    ? Boolean(preview?.entityAllows("export"))
+    : canEntityAction(accessMatrix, slug, "export");
+  const canView = previewing
+    ? Boolean(preview?.entityAllows("view"))
+    : canEntityAction(accessMatrix, slug, "view");
   const [entity, setEntity] = useState<DynEntityDetail | null>(null);
   const [rows, setRows] = useState<DynRecordListRow[]>([]);
   const [meta, setMeta] = useState<{
@@ -171,6 +231,16 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
     return <ArrowUpDown className="ml-1 inline size-3.5 opacity-40" />;
   }
 
+  const printTemplates = useMemo(
+    () => listPrintTemplates(entity?.print_settings, entity?.name ?? slug),
+    [entity, slug],
+  );
+  const defaultPrint = useMemo(
+    () => resolvePrintTemplate(entity?.print_settings, null, entity?.name ?? slug),
+    [entity, slug],
+  );
+  const printLabel = defaultPrint.list_label?.trim() || "Print";
+
   const fieldByName = useMemo(() => {
     const map = new Map<string, DynField>();
     for (const f of entity?.fields ?? []) {
@@ -183,6 +253,27 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   }, [entity]);
 
   const columnOptions = useMemo((): DynTableColumnOption[] => {
+    const byName = new Map((entity?.fields ?? []).map((f) => [f.name, f]));
+    const chrome: DynTableColumnOption[] = [
+      {
+        id: "id",
+        label: byName.get("id")?.label?.trim() || "ID",
+        defaultVisible: isListChromeVisible(byName.get("id")),
+      },
+      {
+        id: "actions",
+        label: byName.get("actions")?.label?.trim() || "Actions",
+        defaultVisible: isListChromeVisible(byName.get("actions")),
+      },
+    ];
+    if (canManagePrintables) {
+      const printField = byName.get("print");
+      chrome.push({
+        id: "print",
+        label: printField?.label?.trim() || (printTemplates.length > 1 ? "Print" : printLabel),
+        defaultVisible: isListChromeVisible(printField),
+      });
+    }
     const fields = [...(entity?.fields ?? [])]
       .filter(
         (f) =>
@@ -193,6 +284,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
       .sort((a, b) => a.field_order - b.field_order);
 
     return [
+      ...chrome,
       { id: "status", label: "Status", defaultVisible: true },
       { id: "title", label: "Title", defaultVisible: true },
       ...fields.map((f) => ({
@@ -201,7 +293,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
         defaultVisible: Boolean(f.show_in_table),
       })),
     ];
-  }, [entity, accessMatrix, slug]);
+  }, [accessMatrix, canManagePrintables, entity, printLabel, printTemplates.length, slug]);
 
   const {
     prefs: columnPrefs,
@@ -213,6 +305,49 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
     columnOptions,
   );
 
+  const shownColumns = useMemo(() => {
+    const matrix = previewing ? effectiveMatrix : accessMatrix;
+    return visibleColumns.filter((col) =>
+      fieldVisibleOnSurface(fieldAccessLevel(matrix, slug, col.id), "table"),
+    );
+  }, [accessMatrix, effectiveMatrix, previewing, slug, visibleColumns]);
+
+  const pinKey = entity ? `toweros.table.pins.dynamic-entities.${slug}` : null;
+  const [pinned, setPinned] = useState<string[]>([]);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [pinLeft, setPinLeft] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!pinKey) return;
+    try {
+      const raw = window.localStorage.getItem(pinKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      setPinned(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+    } catch {
+      setPinned([]);
+    }
+  }, [pinKey]);
+
+  const orderedColumns = useMemo(() => {
+    const byId = new Map(shownColumns.map((column) => [column.id, column]));
+    const head = pinned.flatMap((id) => {
+      const column = byId.get(id);
+      return column ? [column] : [];
+    });
+    const headIds = new Set(head.map((column) => column.id));
+    return [...head, ...shownColumns.filter((column) => !headIds.has(column.id))];
+  }, [pinned, shownColumns]);
+  const pinEdgeId = orderedColumns.find((column) => pinned.includes(column.id))
+    ? [...orderedColumns].reverse().find((column) => pinned.includes(column.id))?.id ?? null
+    : null;
+
+  function toggleColumnPin(id: string) {
+    setPinned((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [id, ...current];
+      if (pinKey) window.localStorage.setItem(pinKey, JSON.stringify(next));
+      return next;
+    });
+  }
+
   const columnSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
@@ -220,8 +355,52 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   function onColumnDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    reorderVisible(String(active.id), String(over.id));
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (pinned.includes(activeId) && pinned.includes(overId)) {
+      setPinned((current) => {
+        const next = [...current];
+        const from = next.indexOf(activeId);
+        const to = next.indexOf(overId);
+        if (from < 0 || to < 0) return current;
+        next.splice(from, 1);
+        next.splice(to, 0, activeId);
+        if (pinKey) window.localStorage.setItem(pinKey, JSON.stringify(next));
+        return next;
+      });
+      return;
+    }
+    reorderVisible(activeId, overId);
   }
+
+  const pinMeasureKey = orderedColumns
+    .filter((column) => pinned.includes(column.id))
+    .map((column) => column.id)
+    .join("\0");
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    const pinnedIds = pinMeasureKey ? pinMeasureKey.split("\0") : [];
+    if (!table || pinnedIds.length === 0) {
+      setPinLeft((current) => (Object.keys(current).length === 0 ? current : {}));
+      return;
+    }
+    const ids = ["__select", ...pinnedIds];
+    let left = 0;
+    const next: Record<string, number> = {};
+    for (const id of ids) {
+      const cell = table.querySelector<HTMLElement>(`thead [data-pin-id="${globalThis.CSS.escape(id)}"]`);
+      if (!cell) continue;
+      next[id] = left;
+      left += Math.round(cell.getBoundingClientRect().width);
+    }
+    setPinLeft((current) => {
+      const keys = Object.keys(next);
+      if (keys.length === Object.keys(current).length && keys.every((key) => current[key] === next[key])) {
+        return current;
+      }
+      return next;
+    });
+  }, [pinMeasureKey, rows.length]);
 
   const totalFields = useMemo(
     () => (entity?.fields ?? []).filter((f) => f.calculate_totals),
@@ -229,39 +408,15 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   );
   const visibleTotalFieldNames = useMemo(() => {
     const names = new Set(totalFields.map((f) => f.name));
-    return visibleColumns.filter((c) => names.has(c.id)).map((c) => c.id);
-  }, [totalFields, visibleColumns]);
+    return orderedColumns.filter((c) => names.has(c.id)).map((c) => c.id);
+  }, [orderedColumns, totalFields]);
   const showColumnTotals = visibleTotalFieldNames.length > 0 && meta != null;
 
-  const printTemplates = useMemo(
-    () => listPrintTemplates(entity?.print_settings, entity?.name ?? slug),
-    [entity, slug],
-  );
-  const defaultPrint = useMemo(
-    () => resolvePrintTemplate(entity?.print_settings, null, entity?.name ?? slug),
-    [entity, slug],
-  );
-  const printLabel = defaultPrint.list_label?.trim() || "Print";
-  const listChrome = useMemo(() => {
-    const byName = new Map((entity?.fields ?? []).map((f) => [f.name, f]));
-    const idField = byName.get("id");
-    const actionsField = byName.get("actions");
-    const printField = byName.get("print");
-    return {
-      showId: isListChromeVisible(idField),
-      showActions: isListChromeVisible(actionsField),
-      showPrint: canManagePrintables && isListChromeVisible(printField),
-      idLabel: idField?.label?.trim() || "ID",
-      actionsLabel: actionsField?.label?.trim() || "Actions",
-      printHeader: printField?.label?.trim() || (printTemplates.length > 1 ? "Print" : printLabel),
-    };
-  }, [canManagePrintables, entity, printLabel, printTemplates.length]);
   const pageIds = rows.map((r) => r.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   const selectedCount = selectAllMatching ? (meta?.total ?? selected.size) : selected.size;
-  const chromeColCount =
-    (listChrome.showId ? 1 : 0) + (listChrome.showActions ? 1 : 0) + (listChrome.showPrint ? 1 : 0);
-  const dataColSpan = 1 + chromeColCount + visibleColumns.length;
+  const dataColSpan = 1 + orderedColumns.length;
+  const totalLead = orderedColumns.findIndex((c) => visibleTotalFieldNames.includes(c.id));
 
   function toggleRow(id: string) {
     setSelectAllMatching(false);
@@ -316,7 +471,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   }
 
   async function onClone(row: DynRecordListRow) {
-    if (!canCreate) {
+    if (!canClone) {
       notifyDynPermissionDenied({ action: "clone", entityLabel: entity?.name ?? slug });
       return;
     }
@@ -372,7 +527,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
   }
 
   async function onBulkDuplicate() {
-    if (!canCreate) {
+    if (!canClone) {
       notifyDynPermissionDenied({ action: "clone", entityLabel: entity?.name ?? slug });
       return;
     }
@@ -493,27 +648,22 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canManageFields ? (
-              <Button variant="outline" size="sm" render={<Link href={`/dynamic-entities/fields?entity=${slug}`} />}>
-                Manage Fields
+            {canImport ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setImportOpen(true)}
+              >
+                <FileSpreadsheet className="size-3.5 text-emerald-600" />
+                Import
               </Button>
             ) : null}
             {canCreate ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setImportOpen(true)}
-                >
-                  <FileSpreadsheet className="size-3.5 text-emerald-600" />
-                  Import
-                </Button>
-                <Button size="sm" render={<Link href={`/dynamic-entities/${slug}/new`} />}>
-                  + Add New
-                </Button>
-              </>
+              <Button size="sm" render={<Link href={`/dynamic-entities/${slug}/new`} />}>
+                + Add New
+              </Button>
             ) : null}
           </div>
         </header>
@@ -542,11 +692,13 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
           <Button type="submit" size="sm" variant="secondary">
             Search
           </Button>
-          <DynTableColumnsControl
-            options={columnOptions}
-            prefs={columnPrefs}
-            onSave={savePrefs}
-          />
+          {canArrangeColumns ? (
+            <DynTableColumnsControl
+              options={columnOptions}
+              prefs={columnPrefs}
+              onSave={savePrefs}
+            />
+          ) : null}
           {meta ? (
             <span className="ml-auto text-xs text-muted-foreground">
               {meta.total.toLocaleString()} record{meta.total === 1 ? "" : "s"}
@@ -628,7 +780,7 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
                   Edit
                 </Button>
               ) : null}
-              {canCreate ? (
+              {canClone ? (
                 <Button
                   type="button"
                   size="sm"
@@ -717,39 +869,52 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         {!loading && !error ? (
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="rounded-xl border border-border bg-card">
+            <div className="overflow-x-auto">
             <DndContext sensors={columnSensors} collisionDetection={closestCenter} onDragEnd={onColumnDragEnd}>
-              <table className="min-w-full text-[13px]">
-                <thead className="sticky top-0 bg-muted/60 text-left text-xs font-medium text-muted-foreground">
+              <table ref={tableRef} className="min-w-full text-[13px]">
+                <thead className="sticky top-0 z-10 bg-muted text-left text-xs font-medium text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2 w-10">
+                    <th
+                      data-pin-id="__select"
+                      style={pinCellStyle(pinned.length > 0 ? pinLeft.__select : undefined, false)}
+                      className={cn("px-3 py-2 w-10", pinned.length > 0 && "bg-muted")}
+                    >
                       <Checkbox
                         checked={allPageSelected}
                         onCheckedChange={() => togglePage()}
                         aria-label="Select all on page"
                       />
                     </th>
-                    {listChrome.showId ? <th className="px-3 py-2">{listChrome.idLabel}</th> : null}
-                    {listChrome.showActions ? (
-                      <th className="px-3 py-2">{listChrome.actionsLabel}</th>
-                    ) : null}
-                    {listChrome.showPrint ? (
-                      <th className="px-3 py-2">{listChrome.printHeader}</th>
-                    ) : null}
                     <SortableContext
-                      items={visibleColumns.map((c) => c.id)}
+                      items={orderedColumns.map((c) => c.id)}
                       strategy={horizontalListSortingStrategy}
                     >
-                      {visibleColumns.map((col) => (
-                        <SortableColumnHeader
-                          key={col.id}
-                          id={col.id}
-                          label={col.label}
-                          sortActive={sort === col.id || sort === `-${col.id}`}
-                          sortIcon={<SortIcon column={col.id} />}
-                          onSort={() => toggleSort(col.id)}
-                        />
-                      ))}
+                      {orderedColumns.map((col) => {
+                        const chrome = LIST_CHROME.has(col.id);
+                        const frozen = pinned.includes(col.id);
+                        return (
+                          <SortableColumnHeader
+                            key={col.id}
+                            id={col.id}
+                            label={col.label}
+                            columns={columnOptions}
+                            pinned={frozen}
+                            pinStyle={pinCellStyle(frozen ? pinLeft[col.id] : undefined, col.id === pinEdgeId)}
+                            sortActive={!chrome && (sort === col.id || sort === `-${col.id}`)}
+                            sortIcon={chrome ? null : <SortIcon column={col.id} />}
+                            onSort={chrome ? undefined : () => toggleSort(col.id)}
+                            onPin={() => toggleColumnPin(col.id)}
+                            onHide={() => {
+                              if (columnPrefs.hidden.includes(col.id)) return;
+                              savePrefs({
+                                ...columnPrefs,
+                                hidden: [...columnPrefs.hidden, col.id],
+                              });
+                            }}
+                          />
+                        );
+                      })}
                     </SortableContext>
                   </tr>
                 </thead>
@@ -763,89 +928,127 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
                         (selected.has(row.id) || selectAllMatching) && "bg-sky-500/5",
                       )}
                     >
-                      <td className="px-3 py-2">
+                      <td
+                        style={pinCellStyle(pinned.length > 0 ? pinLeft.__select : undefined, false)}
+                        className={cn("px-3 py-2", pinned.length > 0 && "bg-card")}
+                      >
                         <Checkbox
                           checked={selectAllMatching || selected.has(row.id)}
                           onCheckedChange={() => toggleRow(row.id)}
                           aria-label={`Select ${row.title || row.id}`}
                         />
                       </td>
-                      {listChrome.showId ? (
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                          {row.source_external_id ?? row.id.slice(0, 8)}
-                        </td>
-                      ) : null}
-                      {listChrome.showActions ? (
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <Link
-                              href={`/dynamic-entities/records/${row.id}`}
-                              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                              title="View"
+                      {orderedColumns.map((col) => {
+                        const frozen = pinned.includes(col.id);
+                        const cellPin = pinCellStyle(frozen ? pinLeft[col.id] : undefined, col.id === pinEdgeId);
+                        const pinClass = frozen ? "bg-card" : "";
+                        if (col.id === "id") {
+                          return (
+                            <FieldCellMenu
+                              key={col.id}
+                              fieldName={col.id}
+                              fieldLabel={col.label}
+                              columns={columnOptions}
+                              pinStyle={cellPin}
+                              className={cn("px-3 py-2 font-mono text-xs text-muted-foreground", pinClass)}
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Link>
-                            {canEdit ? (
-                              <Link
-                                href={`/dynamic-entities/records/${row.id}?edit=1`}
-                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                title="Edit"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Link>
-                            ) : null}
-                            {canCreate ? (
-                              <button
-                                type="button"
-                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                                title="Clone"
-                                disabled={busyId === row.id}
-                                onClick={() => void onClone(row)}
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
-                            ) : null}
-                            {canDelete ? (
-                              <button
-                                type="button"
-                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-50"
-                                title="Delete"
-                                disabled={busyId === row.id}
-                                onClick={() => void onDelete(row)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      ) : null}
-                      {listChrome.showPrint ? (
-                        <td className="px-3 py-2 align-middle">
-                          <div className="flex min-w-[9rem] flex-col items-center gap-1">
-                            {printTemplates.map((t) => {
-                              const label = templateDisplayName(t);
-                              return (
-                                <Link
-                                  key={t.id}
-                                  href={`/dynamic-entities/records/${row.id}/print?template=${encodeURIComponent(t.id)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex max-w-[11rem] items-center justify-center gap-1 rounded-full bg-sky-700 px-2.5 py-1 text-center text-[10px] font-medium leading-tight text-white hover:bg-sky-800"
-                                  title={label}
-                                >
-                                  <Printer className="size-2.5 shrink-0" />
-                                  <span className="truncate">{label}</span>
-                                </Link>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      ) : null}
-                      {visibleColumns.map((col) => (
-                        <td key={col.id} className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                          {renderDataCell(col.id, row, fieldByName.get(col.id))}
-                        </td>
-                      ))}
+                              {row.source_external_id ?? row.id.slice(0, 8)}
+                            </FieldCellMenu>
+                          );
+                        }
+                        if (col.id === "actions") {
+                          return (
+                            <td key={col.id} style={cellPin} className={cn("px-3 py-2", pinClass)}>
+                              <ContextMenu>
+                                <ContextMenuTrigger className="inline-flex" render={<div />}>
+                                  <RowActionsMenu
+                                    label={`Actions for ${row.title || "record"}`}
+                                    items={[
+                                      {
+                                        key: "view",
+                                        label: "View",
+                                        href: `/dynamic-entities/records/${row.id}`,
+                                        icon: <Eye className="size-4" />,
+                                        hidden: !canView,
+                                      },
+                                      {
+                                        key: "edit",
+                                        label: "Edit",
+                                        href: `/dynamic-entities/records/${row.id}?edit=1`,
+                                        icon: <Pencil className="size-4" />,
+                                        hidden: !canEdit,
+                                      },
+                                      {
+                                        key: "clone",
+                                        label: "Clone",
+                                        icon: <Copy className="size-4" />,
+                                        hidden: !canClone,
+                                        disabled: busyId === row.id,
+                                        onSelect: () => void onClone(row),
+                                      },
+                                      {
+                                        key: "delete",
+                                        label: "Delete",
+                                        icon: <Trash2 className="size-4" />,
+                                        hidden: !canDelete,
+                                        destructive: true,
+                                        disabled: busyId === row.id,
+                                        onSelect: () => void onDelete(row),
+                                      },
+                                    ]}
+                                  />
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="min-w-[14rem]">
+                                  <RoleRowActionsMenuItems columns={columnOptions} />
+                                </ContextMenuContent>
+                              </ContextMenu>
+                            </td>
+                          );
+                        }
+                        if (col.id === "print") {
+                          return (
+                            <FieldCellMenu
+                              key={col.id}
+                              fieldName={col.id}
+                              fieldLabel={col.label}
+                              columns={columnOptions}
+                              pinStyle={cellPin}
+                              className={cn("px-3 py-2 align-middle", pinClass)}
+                            >
+                              <div className="flex min-w-[9rem] flex-col items-center gap-1">
+                                {printTemplates.map((t) => {
+                                  const label = templateDisplayName(t);
+                                  return (
+                                    <Link
+                                      key={t.id}
+                                      href={`/dynamic-entities/records/${row.id}/print?template=${encodeURIComponent(t.id)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex max-w-[11rem] items-center justify-center gap-1 rounded-full bg-sky-700 px-2.5 py-1 text-center text-[10px] font-medium leading-tight text-white hover:bg-sky-800"
+                                      title={label}
+                                    >
+                                      <Printer className="size-2.5 shrink-0" />
+                                      <span className="truncate">{label}</span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            </FieldCellMenu>
+                          );
+                        }
+                        return (
+                          <FieldCellMenu
+                            key={col.id}
+                            fieldName={col.id}
+                            fieldLabel={col.label}
+                            columns={columnOptions}
+                            pinStyle={cellPin}
+                            className={cn("px-3 py-2 text-muted-foreground whitespace-nowrap", pinClass)}
+                          >
+                            {renderDataCell(col.id, row, fieldByName.get(col.id))}
+                          </FieldCellMenu>
+                        );
+                      })}
                     </tr>
                   ))}
                   {rows.length === 0 ? (
@@ -857,18 +1060,18 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
                   ) : null}
                 </tbody>
                 {showColumnTotals && meta ? (
-                  <tfoot className="sticky bottom-0 z-[1]">
+                  <tfoot>
                     <tr className="border-t border-slate-700 bg-slate-900 text-slate-50 dark:bg-slate-950">
                       <td
                         className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-slate-300"
-                        colSpan={1 + chromeColCount}
+                        colSpan={1 + Math.max(totalLead, 0)}
                       >
                         Totals
                         <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
                           ({meta.total.toLocaleString()} matching)
                         </span>
                       </td>
-                      {visibleColumns.map((col) => {
+                      {orderedColumns.slice(Math.max(totalLead, 0)).map((col) => {
                         const field = fieldByName.get(col.id);
                         const isTotalCol = Boolean(field?.calculate_totals);
                         if (!isTotalCol) {
@@ -892,40 +1095,21 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
                 ) : null}
               </table>
             </DndContext>
-          </div>
-        ) : null}
-
-        {meta && meta.last_page > 1 ? (
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page <= 1}
-                onClick={() => {
-                  const next = page - 1;
-                  setPage(next);
-                  void load(next, search, sort);
-                }}
-              >
-                Prev
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page >= meta.last_page}
-                onClick={() => {
-                  const next = page + 1;
-                  setPage(next);
-                  void load(next, search, sort);
-                }}
-              >
-                Next
-              </Button>
             </div>
-            <span>
-              Page {meta.current_page} of {meta.last_page} ({meta.total.toLocaleString()} records)
-            </span>
+            {meta && meta.total > 0 ? (
+              <TablePageFooter>
+                <Pagination1
+                  className="mx-0 w-auto justify-end py-0"
+                  page={meta.current_page}
+                  pageCount={meta.last_page}
+                  disabled={loading}
+                  onPageChange={(next) => {
+                    setPage(next);
+                    void load(next, search, sort);
+                  }}
+                />
+              </TablePageFooter>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -936,14 +1120,24 @@ export function DynamicEntityRecordsPageClient({ slug }: { slug: string }) {
 function SortableColumnHeader({
   id,
   label,
+  columns,
+  pinned = false,
+  pinStyle,
   sortIcon,
   onSort,
+  onPin,
+  onHide,
 }: {
   id: string;
   label: string;
+  columns: ReadonlyArray<{ id: string; label: string }>;
+  pinned?: boolean;
+  pinStyle?: CSSProperties;
   sortActive?: boolean;
   sortIcon: ReactNode;
-  onSort: () => void;
+  onSort?: () => void;
+  onPin: () => void;
+  onHide: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -952,38 +1146,90 @@ function SortableColumnHeader({
   return (
     <th
       ref={setNodeRef}
+      data-pin-id={id}
       style={{
-        transform: CSS.Translate.toString(transform),
+        ...(isDragging
+          ? { transform: CSS.Translate.toString(transform), zIndex: 20 }
+          : pinStyle),
         transition,
         opacity: isDragging ? 0.55 : undefined,
-        zIndex: isDragging ? 20 : undefined,
       }}
       className={cn(
         "group px-2 py-2 whitespace-nowrap",
         isDragging && "bg-sky-500/10 shadow-sm ring-1 ring-sky-500/30",
+        pinStyle && !isDragging && "bg-muted",
       )}
     >
-      <div
-        className="inline-flex cursor-grab items-center gap-0.5 rounded-md px-1 py-0.5 hover:bg-muted/80 active:cursor-grabbing"
-        title="Drag left or right to reorder · click label to sort"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-3.5 shrink-0 text-muted-foreground opacity-40 group-hover:opacity-100" />
-        <button
-          type="button"
-          className="inline-flex cursor-pointer items-center font-medium hover:text-foreground"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSort();
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
+      <ContextMenu>
+        <ContextMenuTrigger
+          className="inline-flex cursor-grab items-center gap-0.5 rounded-md px-1 py-0.5 hover:bg-muted/80 active:cursor-grabbing"
+          title={
+            onSort
+              ? "Drag left or right to reorder · click label to sort · right-click for role access"
+              : "Drag left or right to reorder · right-click for role access"
+          }
+          render={<div />}
+          {...attributes}
+          {...listeners}
         >
-          {label}
-          {sortIcon}
-        </button>
-      </div>
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground opacity-40 group-hover:opacity-100" />
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center font-medium hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSort?.();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {label}
+            {sortIcon}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-[14rem]">
+          <ContextMenuItem onClick={onPin}>
+            <Pin className="size-4" />
+            {pinned ? "Unpin column" : "Pin column"}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={onHide}>Hide column</ContextMenuItem>
+          <ContextMenuSeparator />
+          {id === "actions" ? (
+            <RoleRowActionsMenuItems columns={columns} />
+          ) : (
+            <RoleFieldAccessMenuItems fieldName={id} fieldLabel={label} columns={columns} />
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
     </th>
+  );
+}
+
+function FieldCellMenu({
+  fieldName,
+  fieldLabel,
+  columns,
+  pinStyle,
+  className,
+  children,
+}: {
+  fieldName: string;
+  fieldLabel: string;
+  columns: ReadonlyArray<{ id: string; label: string }>;
+  pinStyle?: CSSProperties;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <td className={className} style={pinStyle}>
+      <ContextMenu>
+        <ContextMenuTrigger className="block min-h-5" render={<div />}>
+          {children}
+        </ContextMenuTrigger>
+        <ContextMenuContent className="min-w-[14rem]">
+          <RoleFieldAccessMenuItems fieldName={fieldName} fieldLabel={fieldLabel} columns={columns} />
+        </ContextMenuContent>
+      </ContextMenu>
+    </td>
   );
 }
 

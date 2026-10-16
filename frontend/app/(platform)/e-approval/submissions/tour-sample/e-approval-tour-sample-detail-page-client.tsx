@@ -167,7 +167,7 @@ function TourSampleDetailInner() {
       <header data-help="ea-detail-header" className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <p className="font-mono text-sm text-muted-foreground">{E_APPROVAL_TOUR_SAMPLE_DOCUMENT_NO}</p>
-          <h1 className="text-2xl font-semibold text-foreground">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</h1>
+          <h1 className="text-[20px] font-semibold leading-7 tracking-tight text-foreground">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</h1>
         </div>
         <EApprovalStatusBadge status="pending" kind="submission" />
       </header>

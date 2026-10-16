@@ -188,6 +188,7 @@ export function WorkspaceAuditPageClient() {
               <option value="documents">Documents</option>
               <option value="team_access">Team &amp; access</option>
               <option value="ticketing">Ticketing</option>
+              <option value="asset_management">Assets</option>
               <option value="doc_extract">DocExtract</option>
               <option value="ai_assistant">AI Assistant</option>
             </Select>

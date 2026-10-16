@@ -36,6 +36,7 @@ final class ApprovalDecisionService
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalCommentService $comments,
         private readonly EApprovalExternalPackageService $externalPackages,
+        private readonly EApprovalFinanceStageService $financeStage,
     ) {}
 
     public function paginate(
@@ -132,12 +133,16 @@ final class ApprovalDecisionService
             ->where('approval_rank', '=', 1);
     }
 
+    /**
+     * @param  array<string, mixed>  $financeInput
+     */
     public function decide(
         EApprovalRequestApproval $approval,
         string $decision,
         ?string $remarks,
         ?string $signature,
         TenantUser $actor,
+        array $financeInput = [],
     ): EApprovalRequestApproval {
         if ($approval->status !== EApprovalApprovalStatus::PENDING) {
             throw ValidationException::withMessages([
@@ -180,17 +185,23 @@ final class ApprovalDecisionService
             return $this->reject($approval, $submission, $remarks, $actor);
         }
 
-        return $this->approve($approval, $submission, $remarks, $signature, $actor);
+        return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput);
     }
 
+    /**
+     * @param  array<string, mixed>  $financeInput
+     */
     private function approve(
         EApprovalRequestApproval $approval,
         EApprovalSubmission $submission,
         ?string $remarks,
         ?string $signature,
         TenantUser $actor,
+        array $financeInput = [],
     ): EApprovalRequestApproval {
-        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor) {
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput) {
+            $this->financeStage->captureOnApprove($submission, $approval->step, $financeInput);
+
             $previousApprovalStatus = (string) $approval->status;
             $previousSubmissionStatus = (string) $submission->status;
 
@@ -300,6 +311,7 @@ final class ApprovalDecisionService
 
             $submission->status = EApprovalSubmissionStatus::REJECTED;
             $submission->save();
+            $this->controlledDocumentHook->afterSubmissionClosed($submission);
 
             $this->inApp->notify(
                 (string) $submission->requestor_id,

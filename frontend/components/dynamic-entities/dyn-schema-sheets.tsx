@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DYN_FIELD_TYPE_OPTIONS, dynFieldTypeLabel } from "@/lib/dynamic-entities/field-type-label";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +33,7 @@ import {
   type DynRelationFilter,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { fetchAdminRoleCatalog } from "@/lib/api/modules/admin-roles-api";
+import { getErrorMessage } from "@/lib/api/error";
 import { DynWorkflowButtonsEditor } from "@/components/dynamic-entities/dyn-workflow-buttons-editor";
 import {
   dynWorkflowActionsForEntity,
@@ -68,22 +70,7 @@ import {
   type DynAutomaticIdOptionsConfig,
 } from "@/lib/dynamic-entities/automatic-id-options";
 
-const FIELD_TYPE_OPTIONS = [
-  { value: "text", label: "Text" },
-  { value: "textarea", label: "Long text" },
-  { value: "number", label: "Number" },
-  { value: "decimal", label: "Decimal" },
-  { value: "date", label: "Date" },
-  { value: "datetime", label: "Date & time" },
-  { value: "select", label: "Dropdown" },
-  { value: "multiselect", label: "Multi-select" },
-  { value: "boolean", label: "Yes / No" },
-  { value: "email", label: "Email" },
-  { value: "phone", label: "Phone" },
-  { value: "relationship", label: "Link to another Record" },
-  { value: "automatic_id", label: "Automatic ID" },
-  { value: "file", label: "File" },
-] as const;
+const FIELD_TYPE_OPTIONS = DYN_FIELD_TYPE_OPTIONS;
 
 const WIDTH_OPTIONS = [
   { value: 3, label: "3 of 12 — Quarter" },
@@ -199,7 +186,7 @@ export function DynSchemaSheets({
 }
 
 function typeLabel(type: string): string {
-  return FIELD_TYPE_OPTIONS.find((t) => t.value === type)?.label ?? type;
+  return dynFieldTypeLabel(type);
 }
 
 function WorkflowFieldEditorForm({
@@ -464,6 +451,16 @@ function normalizeRules(raw: DynField["conditional_rules"]): DynConditionalRule[
   return [];
 }
 
+function defaultGroupIdFor(
+  entitySlug: string,
+  groups: DynEntityDetail["field_groups"],
+  explicit?: string | null,
+): string {
+  if (explicit) return explicit;
+  if (entitySlug !== "it_asset") return "";
+  return groups.find((group) => group.name === "Identification")?.id ?? groups[0]?.id ?? "";
+}
+
 function FieldEditorForm({
   mode,
   entitySlug,
@@ -495,7 +492,9 @@ function FieldEditorForm({
   const [calculateTotals, setCalculateTotals] = useState(Boolean(field?.calculate_totals));
   const [filterable, setFilterable] = useState(field?.is_filterable ?? true);
   const [columnSpan, setColumnSpan] = useState(String(field?.column_span || 6));
-  const [groupId, setGroupId] = useState(field?.form_group_id ?? defaultGroupId ?? "");
+  const [groupId, setGroupId] = useState(
+    field?.form_group_id ?? defaultGroupIdFor(entitySlug, groups, defaultGroupId),
+  );
   const [fieldOrder, setFieldOrder] = useState(String(field?.field_order ?? 10));
   const [selectOptions, setSelectOptions] = useState<DynSelectOptionsConfig>(() =>
     parseDynSelectOptions(field?.options),
@@ -522,6 +521,7 @@ function FieldEditorForm({
   const isSystemField = Boolean(field?.is_system_field);
   const isListChrome =
     field?.name === "id" || field?.name === "actions" || field?.name === "print";
+  const typeLocked = isListChrome || field?.name === "workflows";
   const isDataSystemField = isSystemField && field?.name === "id";
 
   useEffect(() => {
@@ -562,9 +562,9 @@ function FieldEditorForm({
 
   useEffect(() => {
     if (mode === "create") {
-      setGroupId(defaultGroupId ?? "");
+      setGroupId(defaultGroupIdFor(entitySlug, groups, defaultGroupId));
     }
-  }, [defaultGroupId, mode]);
+  }, [defaultGroupId, entitySlug, groups, mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -645,7 +645,7 @@ function FieldEditorForm({
     try {
       const payload = {
         label: label.trim(),
-        type: isSystemField && field ? field.type : type,
+        type: typeLocked && field ? field.type : type,
         is_required: isListChrome ? false : required,
         is_key: isListChrome ? false : isKey,
         show_in_table: showInTable,
@@ -682,13 +682,14 @@ function FieldEditorForm({
             type !== "multiselect" &&
             type !== "text" &&
             type !== "textarea" &&
-            type !== "email"
+            type !== "email" &&
+            type !== "relationship"
           ) {
             return field?.options ?? null;
           }
           return buildOptionsJson();
-        })(),        target_entity_id:
-          isSystemField || type !== "relationship" ? null : targetEntityId || null,
+        })(),
+        target_entity_id: type === "relationship" || type === "child_list" ? targetEntityId || null : null,
         conditional_rules_json: isListChrome ? null : rules.length > 0 ? rules : null,
       };
 
@@ -699,8 +700,11 @@ function FieldEditorForm({
       }
       await onSaved();
       onClose();
-    } catch {
-      setError(mode === "edit" ? "Unable to save field." : "Unable to create field.");
+    } catch (saveError) {
+      setError(
+        getErrorMessage(saveError) ||
+          (mode === "edit" ? "Unable to save field." : "Unable to create field."),
+      );
     } finally {
       setSaving(false);
     }
@@ -747,7 +751,9 @@ function FieldEditorForm({
                     ? "System Actions column — drives View / Edit / Clone / Delete on the record list. Not a data field."
                     : field?.name === "print"
                       ? "System Print column — drives the print button on the record list. Not a data field."
-                      : "System field — type and system name stay fixed."}
+                      : typeLocked
+                        ? "System field — type and system name stay fixed."
+                        : "System field — the system name stays fixed. Type, label, and options can be changed."}
               </div>
             ) : null}
             <Section title="What is this field?">
@@ -760,7 +766,7 @@ function FieldEditorForm({
                 <Select
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-70"
                   value={type}
-                  disabled={isSystemField}
+                  disabled={typeLocked}
                   onChange={(e) => setType(e.target.value)}
                 >
                   {FIELD_TYPE_OPTIONS.map((t) => (
@@ -840,7 +846,7 @@ function FieldEditorForm({
                     value={groupId}
                     onChange={(e) => setGroupId(e.target.value)}
                   >
-                    <option value="">Ungrouped</option>
+                    {entitySlug === "it_asset" ? null : <option value="">Ungrouped</option>}
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.name}
@@ -917,7 +923,27 @@ function FieldEditorForm({
           </TabsContent>
 
           <TabsContent value="options" className="mt-0 space-y-5">
-            {type === "relationship" ? (
+            {type === "child_list" ? (
+              <Section title="Link configuration">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Which entity does this field link to?
+                  </span>
+                  <Select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={targetEntityId}
+                    onChange={(e) => setTargetEntityId(e.target.value)}
+                  >
+                    <option value="">Select entity…</option>
+                    {entities.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </Section>
+            ) : type === "relationship" ? (
               <Section title="Link configuration">
                 <label className="space-y-1.5">
                   <span className="text-xs font-medium text-muted-foreground">

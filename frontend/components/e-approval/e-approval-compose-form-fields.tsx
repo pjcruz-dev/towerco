@@ -109,7 +109,7 @@ export function EApprovalComposeFormFields({
     [fields, composeConfig.stepSource],
   );
   const steps = useMemo(() => {
-    if (!composeConfig.includeReviewStep || contentSteps.length < 2) {
+    if (!composeConfig.includeReviewStep || contentSteps.length === 0) {
       return contentSteps;
     }
     return appendComposeReviewStep(contentSteps);
@@ -331,6 +331,7 @@ export function EApprovalComposeFormFields({
       ) : (
         <EApprovalFormFieldsLayout
           fields={stepped && activeStep ? visibleFields : fields}
+          catalogFields={fields}
           values={values}
           onChange={handleFieldChange}
           approverOptions={approverOptions}

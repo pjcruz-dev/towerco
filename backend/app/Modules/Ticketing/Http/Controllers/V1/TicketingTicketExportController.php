@@ -23,6 +23,7 @@ class TicketingTicketExportController extends AbstractApiController
         Request $request,
         TicketingTicketService $service,
         TicketingPlanFeaturesService $planFeatures,
+        TicketingSchemaService $schema,
         ModuleListExportService $asyncExports,
     ): Response|JsonResponse {
         abort_unless($request->user()?->can('ticketing:view'), 403);
@@ -75,6 +76,7 @@ class TicketingTicketExportController extends AbstractApiController
             'created_at',
             'updated_at',
             'sla_status',
+            ...$schema->tableCustomFieldNames(),
         ];
         $requested = $validated['columns'] ?? null;
         if (is_array($requested) && $requested !== []) {

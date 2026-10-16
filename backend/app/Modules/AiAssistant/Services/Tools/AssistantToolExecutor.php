@@ -6,6 +6,7 @@ namespace App\Modules\AiAssistant\Services\Tools;
 
 use App\Modules\AiAssistant\DTOs\ToolCallRequest;
 use App\Modules\AiAssistant\DTOs\ToolResult;
+use App\Modules\AiAssistant\Support\AssistantRolePolicy;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use App\Modules\Workspace\Services\TenantActivityLogger;
@@ -23,6 +24,7 @@ final class AssistantToolExecutor
         private readonly AssistantToolRegistry $registry,
         private readonly TenantEnabledModulesResolver $enabledModules,
         private readonly TenantActivityLogger $activity,
+        private readonly AssistantRolePolicy $rolePolicy,
     ) {}
 
     /**
@@ -76,6 +78,18 @@ final class AssistantToolExecutor
 
                 return $denied;
             }
+        }
+
+        if (! $this->rolePolicy->allowsTool($viewer, $tool->name(), $call->args)) {
+            $denied = new ToolResult(
+                tool: $tool->name(),
+                ok: false,
+                error: 'This role does not allow that assistant tool.',
+                moduleKey: $module,
+            );
+            $this->audit($viewer, $denied, 'role_policy_denied');
+
+            return $denied;
         }
 
         foreach ($tool->requiredPermissions() as $permission) {

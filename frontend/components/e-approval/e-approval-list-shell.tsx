@@ -14,7 +14,7 @@ type Props = {
 /** Shared bordered list container for E-Forms table and gallery views. */
 export function EApprovalListShell({ toolbar, children, footer, error, className }: Props) {
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}>
+    <div className={cn("overflow-hidden rounded-card border border-border bg-card shadow-surface", className)}>
       {toolbar != null ? <div className="border-b border-border px-4 py-3">{toolbar}</div> : null}
       {error}
       {children}

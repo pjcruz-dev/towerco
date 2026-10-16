@@ -43,7 +43,7 @@ export function AssistantActionConfirmCard({
       <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3">
         <p className="text-xs font-medium text-foreground">Action completed</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {resultLabel ? `${resultLabel} was created.` : "The confirmed action finished successfully."}
+          {resultLabel ?? "The confirmed action finished successfully."}
         </p>
         {resultHref ? (
           <Link

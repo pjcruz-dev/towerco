@@ -48,7 +48,7 @@ final class ControlledDocumentEApprovalValuesService
      *   document_no  = {registryCode}-R{seq:3}
      *
      * @param  array<string, mixed>  $values
-     * @param  \Closure(): string    $allocateDocumentNo
+     * @param  \Closure(): string  $allocateDocumentNo
      * @return array{values: array<string, mixed>, document_no: string}
      */
     public function prepareForSubmit(EApprovalForm $form, array $values, \Closure $allocateDocumentNo): array
@@ -70,6 +70,17 @@ final class ControlledDocumentEApprovalValuesService
             $registryCode = $allocateDocumentNo();
             $values[$config->documentCodeField] = $registryCode;
 
+            $values = $this->applyAutoRevision($config, $values, $registryCode);
+
+            return [
+                'values' => $values,
+                'document_no' => $registryCode,
+            ];
+        }
+
+        if ($registryCode !== '' && ! ControlledDocument::query()->where('document_code', $registryCode)->exists()) {
+            // The sheet already named a code that is not on the register. Keep that
+            // code. Do not mint the next series number and do not turn it into a revision.
             $values = $this->applyAutoRevision($config, $values, $registryCode);
 
             return [

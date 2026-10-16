@@ -14,11 +14,13 @@ return [
 
     'vector_store' => env('AI_ASSISTANT_VECTOR_STORE', 'database'),
 
-    // Prefer Gemini when an AI Studio key is present and provider is not explicitly set.
+    // A Cursor key wins when the provider is not set, then a Gemini key. The chat model is always an API.
     'llm_provider' => env('AI_ASSISTANT_LLM_PROVIDER') ?: (
-        filled(env('AI_ASSISTANT_GOOGLE_AI_API_KEY', env('GOOGLE_AI_API_KEY', '')))
-            ? 'gemini'
-            : 'local'
+        filled(env('AI_ASSISTANT_CURSOR_API_KEY', env('CURSOR_API_KEY', '')))
+            ? 'cursor'
+            : (filled(env('AI_ASSISTANT_GOOGLE_AI_API_KEY', env('GOOGLE_AI_API_KEY', '')))
+                ? 'gemini'
+                : 'cursor')
     ),
 
     'chunking' => [
@@ -77,7 +79,7 @@ return [
         'api_key' => env('AI_ASSISTANT_CURSOR_API_KEY', env('CURSOR_API_KEY', '')),
         'base_url' => env('AI_ASSISTANT_CURSOR_BASE_URL', 'https://api.cursor.com/v1'),
         'model' => env('AI_ASSISTANT_CURSOR_MODEL', 'composer-2.5'),
-        // Comma-separated allowlist — must match Cursor API model ids for the key (see GET /v1/models).
+        // Used only when GET /v1/models cannot be reached. The picker otherwise lists that catalog.
         'chat_models' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env(

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
+import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -95,6 +96,42 @@ function ContextMenuLabel({ className, ...props }: React.ComponentProps<"div">) 
   );
 }
 
+function ContextMenuSub({
+  label,
+  children,
+  className,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <ContextMenuPrimitive.SubmenuRoot>
+      <ContextMenuPrimitive.SubmenuTrigger
+        className={cn(
+          "flex cursor-default items-center gap-2 px-3 py-2 text-sm text-foreground outline-none select-none",
+          "data-highlighted:bg-muted data-popup-open:bg-muted",
+        )}
+      >
+        {label}
+        <ChevronRight className="ml-auto size-3.5 text-muted-foreground" aria-hidden />
+      </ContextMenuPrimitive.SubmenuTrigger>
+      <ContextMenuPrimitive.Portal>
+        <ContextMenuPrimitive.Positioner align="start" side="right" sideOffset={4} className="isolate z-[110]">
+          <ContextMenuPrimitive.Popup
+            className={cn(
+              "z-[110] max-h-72 min-w-[12rem] origin-(--transform-origin) overflow-y-auto rounded-lg border border-border bg-popover py-1 text-popover-foreground shadow-lg outline-none",
+              className,
+            )}
+          >
+            {children}
+          </ContextMenuPrimitive.Popup>
+        </ContextMenuPrimitive.Positioner>
+      </ContextMenuPrimitive.Portal>
+    </ContextMenuPrimitive.SubmenuRoot>
+  );
+}
+
 function ContextMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
@@ -113,4 +150,5 @@ export {
   ContextMenuSeparator,
   ContextMenuLabel,
   ContextMenuShortcut,
+  ContextMenuSub,
 };

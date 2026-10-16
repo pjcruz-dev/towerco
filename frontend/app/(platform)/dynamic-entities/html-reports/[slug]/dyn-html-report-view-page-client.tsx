@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 import { getErrorMessage } from "@/lib/api/error";
-import { renderDynHtmlReport } from "@/lib/api/modules/dynamic-entities-api";
+import { queryDynHtmlReport, renderDynHtmlReport } from "@/lib/api/modules/dynamic-entities-api";
 import { hasPermission, permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -44,6 +44,7 @@ export function DynHtmlReportViewPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const frameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (!permissionsReady) return;
@@ -84,8 +85,33 @@ export function DynHtmlReportViewPageClient() {
     function onMessage(event: MessageEvent) {
       const data = event.data;
       if (!data || typeof data !== "object") return;
-      if ((data as { type?: string }).type !== "toweros-html-report-refresh") return;
-      setReloadNonce((n) => n + 1);
+      if (event.source !== frameRef.current?.contentWindow) return;
+      const type = (data as { type?: string }).type;
+      if (type === "toweros-html-report-refresh") {
+        setReloadNonce((n) => n + 1);
+        return;
+      }
+      if (type !== "toweros-html-report-sql") return;
+      const id = String((data as { id?: string }).id ?? "");
+      const sql = String((data as { sql?: string }).sql ?? "");
+      const source = event.source;
+      if (!source || !("postMessage" in source)) return;
+      const target = source as Window;
+      void queryDynHtmlReport(sql)
+        .then((rows) => {
+          target.postMessage({ type: "toweros-html-report-sql-result", id, rows }, "*");
+        })
+        .catch((err: unknown) => {
+          target.postMessage(
+            {
+              type: "toweros-html-report-sql-result",
+              id,
+              rows: [],
+              error: getErrorMessage(err),
+            },
+            "*",
+          );
+        });
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -143,7 +169,7 @@ export function DynHtmlReportViewPageClient() {
       {loading ? (
         <p className="py-16 text-center text-sm text-muted-foreground">Loading report…</p>
       ) : doc ? (
-        <iframe title={title} srcDoc={doc} className="min-h-0 w-full flex-1 border-0 bg-white" />
+        <iframe ref={frameRef} title={title} srcDoc={doc} className="min-h-0 w-full flex-1 border-0 bg-white" />
       ) : null}
     </div>
   );

@@ -34,9 +34,10 @@ final class DynEntityIndexController extends AbstractApiController
             $query->where('is_active', true);
         }
 
-        $rows = $query->get()->map(function (DynEntity $entity) use ($service): array {
+        $withPrint = $request->boolean('print_bodies');
+        $rows = $query->get()->map(function (DynEntity $entity) use ($service, $withPrint): array {
             try {
-                return $service->presentEntity($entity);
+                return $service->presentEntity($entity, $withPrint);
             } catch (\Throwable) {
                 return $service->presentEntityListRow($entity);
             }

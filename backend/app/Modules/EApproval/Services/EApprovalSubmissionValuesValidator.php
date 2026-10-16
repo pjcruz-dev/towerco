@@ -7,6 +7,8 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalPerDiemDays;
+use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use Illuminate\Validation\ValidationException;
 
 final class EApprovalSubmissionValuesValidator
@@ -14,6 +16,7 @@ final class EApprovalSubmissionValuesValidator
     public function __construct(
         private readonly EApprovalFieldVisibilityEvaluator $visibility,
         private readonly EApprovalApprovalPolicyRequiredApproverFields $policyRequiredApprovers,
+        private readonly EApprovalFinanceProcurementPolicyService $procurementPolicy,
     ) {}
 
     /**
@@ -107,6 +110,17 @@ final class EApprovalSubmissionValuesValidator
                     $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
                 }
 
+                $capError = $this->perDiemCapError($form, $values, $field, $raw)
+                    ?? $this->hotelAccommodationCapError($field, $raw);
+                if ($capError !== null) {
+                    $errors["values.{$name}"] = [$capError];
+                }
+
+                $lineError = $this->activityExpenseLineError($field, $raw);
+                if ($lineError !== null) {
+                    $errors["values.{$name}"] = [$lineError];
+                }
+
                 continue;
             }
 
@@ -162,6 +176,7 @@ final class EApprovalSubmissionValuesValidator
                     $selected = $state['selected'];
                     if ($requireRequired && $isRequired && $selected === []) {
                         $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
+
                         continue;
                     }
 
@@ -171,6 +186,7 @@ final class EApprovalSubmissionValuesValidator
                         foreach ($selected as $choiceValue) {
                             if (! in_array($choiceValue, $allowed, true)) {
                                 $errors["values.{$name}"] = [__(':label contains an invalid option.', ['label' => $label])];
+
                                 continue 2;
                             }
                         }
@@ -205,7 +221,7 @@ final class EApprovalSubmissionValuesValidator
             }
 
             if ($type === 'approver_list') {
-                $ids = \App\Modules\EApproval\Support\EApprovalUserListValueParser::parse($raw);
+                $ids = EApprovalUserListValueParser::parse($raw);
                 if ($requireRequired && $isRequired && $ids === []) {
                     $errors["values.{$name}"] = [__(':label is required.', ['label' => $label])];
 
@@ -405,11 +421,11 @@ final class EApprovalSubmissionValuesValidator
             return null;
         }
 
-        if (! $this->isIsoDate($from) || ! $this->isIsoDate($to)) {
+        if (! $this->isIsoDateOrDateTime($from) || ! $this->isIsoDateOrDateTime($to)) {
             return __(':label must use valid dates.', ['label' => $label]);
         }
 
-        if ($to < $from) {
+        if (! $this->dateRangeEndsInOrder($from, $to)) {
             return __(':label: end date must be on or after the start date.', ['label' => $label]);
         }
 
@@ -428,6 +444,43 @@ final class EApprovalSubmissionValuesValidator
         }
 
         return checkdate((int) $parts[1], (int) $parts[2], (int) $parts[0]);
+    }
+
+    private function isIsoDateOrDateTime(string $value): bool
+    {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?$/', $value, $matches) !== 1) {
+            return false;
+        }
+        if (! $this->isIsoDate($matches[1])) {
+            return false;
+        }
+        if (! isset($matches[2]) || $matches[2] === '') {
+            return true;
+        }
+        $parts = explode(':', $matches[2]);
+        $hour = (int) ($parts[0] ?? -1);
+        $minute = (int) ($parts[1] ?? -1);
+
+        return $hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59;
+    }
+
+    private function dateRangeEndsInOrder(string $from, string $to): bool
+    {
+        $fromDate = substr($from, 0, 10);
+        $toDate = substr($to, 0, 10);
+        if ($fromDate > $toDate) {
+            return false;
+        }
+        if ($fromDate < $toDate) {
+            return true;
+        }
+        $fromTime = strlen($from) >= 16 ? substr($from, 11, 5) : null;
+        $toTime = strlen($to) >= 16 ? substr($to, 11, 5) : null;
+        if ($fromTime === null || $toTime === null || ! str_contains($from, 'T') || ! str_contains($to, 'T')) {
+            return true;
+        }
+
+        return $fromTime <= $toTime;
     }
 
     private function isValidTags(string $value, bool $required): bool
@@ -461,6 +514,223 @@ final class EApprovalSubmissionValuesValidator
         }
 
         return strlen($trimmed) <= 5000;
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function perDiemCapError(EApprovalForm $form, array $values, EApprovalFormField $field, mixed $raw): ?string
+    {
+        if ((string) $field->name !== 'expense_lines') {
+            return null;
+        }
+
+        $max = $this->procurementPolicy->perDiemMaxPerDay();
+        if ($max === null) {
+            return null;
+        }
+
+        $labels = EApprovalFieldOptionsParser::gridColumns(is_array($field->options) ? $field->options : []);
+        $typeIndex = $this->columnIndex($labels, 'Expense type');
+        $dateIndex = EApprovalPerDiemDays::dateLabelIndex($labels);
+        $typedActual = $this->columnIndex($labels, 'Forecast amount') !== null
+            || $this->reimbursementTypesActualAmount($labels);
+        $amountIndex = $this->columnIndex($labels, 'Amount');
+        $dailyIndex = $typedActual
+            ? $amountIndex
+            : ($this->columnIndex($labels, 'Rate') ?? $amountIndex);
+        if ($typeIndex === null || $dailyIndex === null) {
+            return null;
+        }
+
+        foreach ($this->gridRows($raw) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $type = strtolower(trim((string) ($row[(string) $typeIndex] ?? $row[$typeIndex] ?? '')));
+            if ($type !== 'per_diem' && $type !== 'per diem') {
+                continue;
+            }
+            $daily = $this->cellAmount($row, $dailyIndex);
+            if ($daily <= 0) {
+                continue;
+            }
+            $days = EApprovalPerDiemDays::forRow($row, $dateIndex);
+            if ($days === null || $days < 1) {
+                return __('Per diem needs the date on the line.');
+            }
+            if ($typedActual && $days > 0) {
+                $daily = $daily / $days;
+            }
+            if ($daily > $max + 0.001) {
+                return __('Per diem cannot exceed :rate per day.', [
+                    'rate' => number_format($max, 2, '.', ''),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function hotelAccommodationCapError(EApprovalFormField $field, mixed $raw): ?string
+    {
+        if ((string) $field->name !== 'expense_lines') {
+            return null;
+        }
+
+        $max = $this->procurementPolicy->hotelAccommodationMax();
+        if ($max === null) {
+            return null;
+        }
+
+        $labels = EApprovalFieldOptionsParser::gridColumns(is_array($field->options) ? $field->options : []);
+        $typeIndex = $this->columnIndex($labels, 'Expense type');
+        $typedActual = $this->columnIndex($labels, 'Forecast amount') !== null
+            || $this->reimbursementTypesActualAmount($labels);
+        $amountIndex = $this->columnIndex($labels, 'Amount');
+        $rateIndex = $typedActual
+            ? $amountIndex
+            : ($this->columnIndex($labels, 'Rate') ?? $amountIndex);
+        if ($typeIndex === null || $rateIndex === null) {
+            return null;
+        }
+
+        foreach ($this->gridRows($raw) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $type = strtolower(trim((string) ($row[(string) $typeIndex] ?? $row[$typeIndex] ?? '')));
+            if (! $this->isHotelAccommodationType($type)) {
+                continue;
+            }
+            $rate = $this->cellAmount($row, $rateIndex);
+            if ($rate <= 0) {
+                continue;
+            }
+            if ($typedActual) {
+                $nights = EApprovalPerDiemDays::lodgingNightsForRow($row, EApprovalPerDiemDays::dateLabelIndex($labels));
+                if ($nights === null || $nights < 1) {
+                    return __('Lodging needs the date on the line.');
+                }
+                $rate = $rate / $nights;
+            }
+            if ($rate > $max + 0.001) {
+                return __('Lodging cannot exceed :rate.', [
+                    'rate' => number_format($max, 2, '.', ''),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function isHotelAccommodationType(string $type): bool
+    {
+        $type = strtolower(trim($type));
+
+        return in_array($type, [
+            'lodging',
+            'hotel_accommodation',
+            'hotel & accommodation',
+            'hotel & accomodation',
+            'hotel and accommodation',
+        ], true);
+    }
+
+    private function activityExpenseLineError(EApprovalFormField $field, mixed $raw): ?string
+    {
+        $labels = EApprovalFieldOptionsParser::gridColumns(is_array($field->options) ? $field->options : []);
+        $name = (string) $field->name;
+
+        if ($name === 'expense_lines') {
+            $forecastIndex = $this->columnIndex($labels, 'Forecast amount');
+            $amountIndex = $this->columnIndex($labels, 'Amount');
+            $reasonIndex = $this->columnIndex($labels, 'Variance reason');
+            if ($forecastIndex === null || $amountIndex === null || $reasonIndex === null) {
+                return null;
+            }
+
+            foreach ($this->gridRows($raw) as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $forecast = $this->cellAmount($row, $forecastIndex);
+                $amount = $this->cellAmount($row, $amountIndex);
+                $reason = trim((string) ($row[(string) $reasonIndex] ?? $row[$reasonIndex] ?? ''));
+                $forecastBlank = trim((string) ($row[(string) $forecastIndex] ?? $row[$forecastIndex] ?? '')) === '';
+                $changed = $forecastBlank ? $amount > 0 : abs($amount - $forecast) >= 0.01;
+                if ($changed && $reason === '') {
+                    return __('A variance reason is required when an expense differs from the forecast.');
+                }
+            }
+        }
+
+        if ($name === 'activity_lines') {
+            $fromIndex = $this->columnIndex($labels, 'From forecast');
+            $reasonIndex = $this->columnIndex($labels, 'Justification');
+            $natureIndex = $this->columnIndex($labels, 'Nature of activity');
+            if ($fromIndex === null || $reasonIndex === null) {
+                return null;
+            }
+
+            foreach ($this->gridRows($raw) as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $fromForecast = strtolower(trim((string) ($row[(string) $fromIndex] ?? $row[$fromIndex] ?? '')));
+                if (in_array($fromForecast, ['yes', 'true', '1'], true)) {
+                    continue;
+                }
+                $nature = $natureIndex === null
+                    ? ''
+                    : trim((string) ($row[(string) $natureIndex] ?? $row[$natureIndex] ?? ''));
+                $justification = trim((string) ($row[(string) $reasonIndex] ?? $row[$reasonIndex] ?? ''));
+                if ($nature !== '' && $justification === '') {
+                    return __('An additional activity needs a justification.');
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private function reimbursementTypesActualAmount(array $labels): bool
+    {
+        $normalized = array_map(static fn (string $label): string => strtolower(trim($label)), $labels);
+
+        return in_array('or no', $normalized, true)
+            && in_array('expense type', $normalized, true)
+            && in_array('amount', $normalized, true);
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private function columnIndex(array $labels, string $needle): ?int
+    {
+        foreach ($labels as $index => $label) {
+            if (strcasecmp(trim($label), $needle) === 0) {
+                return (int) $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<mixed>  $row
+     */
+    private function cellAmount(array $row, int $index): float
+    {
+        $raw = trim(str_replace(',', '', (string) ($row[(string) $index] ?? $row[$index] ?? '')));
+        if ($raw === '' || ! is_numeric($raw)) {
+            return 0.0;
+        }
+
+        return (float) $raw;
     }
 
     private function gridHasContent(mixed $raw, EApprovalFormField $field): bool

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { AuditIpCompact } from "@/components/governance/audit-ip-location";
 import { AuditDeviceCompact } from "@/components/governance/audit-device-detail";
 import {
@@ -14,11 +15,10 @@ import type { WorkspaceAuditRow } from "@/lib/api/modules/workspace-audit-api";
 import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
 import {
   auditCategoryLabel,
-  auditSeverityClassName,
   auditSeverityLabel,
+  auditSeverityTone,
 } from "@/lib/workspace/audit-display";
 import { formatAuditUserAgent } from "@/lib/workspace/audit-user-agent";
-import { cn } from "@/lib/utils";
 
 function moduleLabel(module: string): string {
   return TENANT_MODULE_LABELS[module] ?? module.replace(/_/g, " ");
@@ -56,9 +56,9 @@ export function createWorkspaceAuditTableColumns(
       "severity",
       "Severity",
       (row) => (
-        <Badge variant="outline" className={cn("font-normal", auditSeverityClassName(row.severity))}>
+        <StatusBadge tone={auditSeverityTone(row.severity)} className="font-normal">
           {auditSeverityLabel(row.severity)}
-        </Badge>
+        </StatusBadge>
       ),
       {
         enableSorting: true,

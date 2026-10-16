@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\DynamicEntities\Models\DynRecord;
 use App\Modules\DynamicEntities\Services\DynRecordService;
 use App\Modules\DynamicEntities\Services\DynRoleAccessService;
+use App\Modules\DynamicEntities\Support\DynSchemaAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +21,6 @@ final class DynRecordUpdateController extends AbstractApiController
         DynRecordService $service,
         DynRoleAccessService $access,
     ): JsonResponse {
-        abort_unless($request->user()?->can('dynamic_entities:records:manage'), 403);
-
         $actor = $request->user();
         abort_unless($actor instanceof TenantUser, 403);
 
@@ -33,6 +32,7 @@ final class DynRecordUpdateController extends AbstractApiController
 
         $entity = $model->entity;
         abort_unless($entity !== null, 404);
+        abort_unless(DynSchemaAccess::allowsModule($actor, $entity, 'dynamic_entities:records:manage'), 403);
         abort_unless($access->canEntity($actor, (string) $entity->slug, 'edit'), 403, __('Your role does not allow editing records for this entity.'));
 
         $data = $request->validate([
@@ -42,6 +42,18 @@ final class DynRecordUpdateController extends AbstractApiController
             'parent_record_id' => ['nullable', 'uuid'],
             'assigned_user_id' => ['nullable', 'uuid'],
         ]);
+
+        $nextStatus = array_key_exists('status', $data) ? (is_string($data['status']) ? $data['status'] : null) : null;
+        if (isset($data['values']['status']) && is_scalar($data['values']['status'])) {
+            $nextStatus = (string) $data['values']['status'];
+        }
+        if ($nextStatus !== null) {
+            abort_unless(
+                $access->statusAllowed($actor, (string) $entity->slug, $nextStatus),
+                403,
+                __('Your role cannot set that status.'),
+            );
+        }
 
         $updated = $service->update($model, $data, $actor);
 

@@ -17,10 +17,17 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
-import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  accessModeTone,
+  environmentStatusTone,
+  moduleStatusTone,
+  planTierTone,
+  statusToneClasses,
+} from "@/components/ui/status-tone";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import type { PlatformTenantRow } from "@/lib/api/modules/platform-api";
-import { formatTenantModuleBadges, moduleBadgeClass } from "@/lib/platform/tenant-directory-utils";
+import { formatTenantModuleBadges } from "@/lib/platform/tenant-directory-utils";
 import { tenantLoginUrl } from "@/lib/tenant/resolve-tenant-domain";
 import { cn } from "@/lib/utils";
 
@@ -42,25 +49,12 @@ function shortTenantId(id: string): string {
   return id.length > 12 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
 }
 
-const accessBadgeClass: Record<string, string> = {
-  full: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  grace: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  read_only: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  blocked: "bg-destructive/10 text-destructive",
-};
-
 function formatAccessLabel(mode: string | null | undefined): string {
   if (!mode || mode === "full") {
     return "Full";
   }
   return mode.replace(/_/g, " ");
 }
-
-const planBadgeClass: Record<string, string> = {
-  starter: "bg-muted text-muted-foreground",
-  professional: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-400",
-  enterprise: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-};
 
 function TenantRowActionsMenu({
   row,
@@ -208,14 +202,12 @@ export function createTenantDirectoryTableColumns(options: {
               >
                 {tenant.slug ?? shortTenantId(tenant.id)}
               </Link>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                  environmentBadgeClass(tenant.environment),
-                )}
+              <StatusBadge
+                tone={environmentStatusTone(tenant.environment)}
+                className="px-2 py-0.5 text-[10px] capitalize"
               >
                 {tenant.environment ?? "production"}
-              </span>
+              </StatusBadge>
               {isChild ? (
                 <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
                   Linked
@@ -238,15 +230,9 @@ export function createTenantDirectoryTableColumns(options: {
         return (
           <div className="flex flex-wrap gap-1">
             {moduleBadges.map((badge) => (
-              <span
-                key={badge}
-                className={cn(
-                  "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium",
-                  moduleBadgeClass(badge),
-                )}
-              >
+              <StatusBadge key={badge} tone={moduleStatusTone(badge)} className="px-2 py-0.5 text-[10px]">
                 {badge}
-              </span>
+              </StatusBadge>
             ))}
           </div>
         );
@@ -272,14 +258,12 @@ export function createTenantDirectoryTableColumns(options: {
         const tenant = row.original;
         return (
           <div className="space-y-0.5">
-            <span
-              className={cn(
-                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                planBadgeClass[tenant.plan_tier ?? "starter"] ?? planBadgeClass.starter,
-              )}
+            <StatusBadge
+              tone={planTierTone(tenant.plan_tier)}
+              className="px-2 py-0.5 text-[10px] capitalize"
             >
               {tenant.plan_tier ?? "starter"}
-            </span>
+            </StatusBadge>
             <p className="text-[11px] tabular-nums text-muted-foreground">
               {tenant.effective_seat_limit ?? tenant.seat_limit ?? "-"} seats
               {tenant.effective_rfi_limit != null
@@ -298,14 +282,12 @@ export function createTenantDirectoryTableColumns(options: {
         const tenant = row.original;
         return (
           <>
-            <span
-              className={cn(
-                "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
-                accessBadgeClass[tenant.access_mode ?? "full"] ?? accessBadgeClass.full,
-              )}
+            <StatusBadge
+              tone={accessModeTone(tenant.access_mode)}
+              className="px-2 py-0.5 text-[11px] capitalize"
             >
               {formatAccessLabel(tenant.access_mode)}
-            </span>
+            </StatusBadge>
             {tenant.operator_access_mode ? (
               <p className="mt-1 text-[10px] text-muted-foreground">
                 Op: {formatAccessLabel(tenant.operator_access_mode)}
@@ -332,7 +314,7 @@ export function createTenantDirectoryTableColumns(options: {
             className={cn(
               "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors",
               tenant.mfa_required
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
+                ? statusToneClasses.success.badge
                 : "border-border bg-background text-muted-foreground hover:bg-muted/50",
             )}
           >

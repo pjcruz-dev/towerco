@@ -100,7 +100,15 @@ final class DynReportBuilderService
         if ($existing) {
             $report = $htmlService->update($existing, $payload, $actor);
         } else {
-            $report = $htmlService->create($payload, $actor);
+            try {
+                $report = $htmlService->create($payload, $actor);
+            } catch (ValidationException $e) {
+                if (! array_key_exists('slug', $e->errors())) {
+                    throw $e;
+                }
+                $payload['slug'] = $this->nextSlug(Str::slug($title));
+                $report = $htmlService->create($payload, $actor);
+            }
         }
 
         // Persist saved_slug onto builder_json after slug is known.
@@ -120,6 +128,18 @@ final class DynReportBuilderService
         }
 
         return $report;
+    }
+
+    private function nextSlug(string $base): string
+    {
+        $base = $base !== '' ? $base : 'html-report';
+        $suffix = 2;
+        do {
+            $candidate = $base.'-'.$suffix;
+            $suffix++;
+        } while (DynHtmlReport::query()->where('slug', $candidate)->exists() && $suffix < 50);
+
+        return $candidate;
     }
 
     /**

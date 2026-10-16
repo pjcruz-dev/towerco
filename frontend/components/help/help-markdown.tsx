@@ -5,34 +5,37 @@ import { useMemo, type ReactNode } from "react";
 type HelpMarkdownProps = {
   content: string;
   className?: string;
+  /** Page is the help guide. Chat is the assistant drawer. */
+  variant?: "page" | "chat";
 };
 
 /**
  * Lightweight markdown renderer for user guides (no extra dependency).
  * Supports headings, paragraphs, lists, tables, bold, inline code, and links.
  */
-export function HelpMarkdown({ content, className }: HelpMarkdownProps) {
+export function HelpMarkdown({ content, className, variant = "page" }: HelpMarkdownProps) {
   const blocks = useMemo(() => parseBlocks(content), [content]);
+  const chat = variant === "chat";
 
   return (
-    <div className={className ?? "space-y-3 text-sm leading-relaxed text-foreground"}>
+    <div className={className ?? (chat ? "space-y-1.5 text-xs leading-relaxed text-foreground" : "space-y-3 text-sm leading-relaxed text-foreground")}>
       {blocks.map((block, index) => {
         switch (block.type) {
           case "h1":
             return (
-              <h1 key={index} className="text-2xl font-semibold tracking-tight text-foreground">
+              <h1 key={index} className={chat ? "text-xs font-medium text-foreground" : "text-2xl font-semibold tracking-tight text-foreground"}>
                 {renderInline(block.text)}
               </h1>
             );
           case "h2":
             return (
-              <h2 key={index} className="mt-6 text-xl font-semibold text-foreground">
+              <h2 key={index} className={chat ? "mt-2 text-xs font-medium text-foreground" : "mt-6 text-xl font-semibold text-foreground"}>
                 {renderInline(block.text)}
               </h2>
             );
           case "h3":
             return (
-              <h3 key={index} className="mt-4 text-base font-medium text-foreground">
+              <h3 key={index} className={chat ? "mt-1.5 text-xs font-medium text-foreground" : "mt-4 text-base font-medium text-foreground"}>
                 {renderInline(block.text)}
               </h3>
             );
@@ -59,7 +62,7 @@ export function HelpMarkdown({ content, className }: HelpMarkdownProps) {
           case "table":
             return (
               <div key={index} className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
+                <table className={chat ? "w-full border-collapse text-left text-xs" : "w-full min-w-[28rem] border-collapse text-left text-sm"}>
                   <thead className="bg-muted/40">
                     <tr>
                       {block.headers.map((header, i) => (
@@ -88,7 +91,7 @@ export function HelpMarkdown({ content, className }: HelpMarkdownProps) {
           case "p":
           default:
             return (
-              <p key={index} className="text-muted-foreground">
+              <p key={index} className={chat ? "text-foreground" : "text-muted-foreground"}>
                 {renderInline(block.text)}
               </p>
             );
@@ -230,14 +233,20 @@ function renderInline(text: string): ReactNode[] {
     } else {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
+        const href = linkMatch[2] ?? "";
+        const safe = href.startsWith("/") || href.startsWith("https://") || href.startsWith("http://");
         nodes.push(
-          <a
-            key={key++}
-            href={linkMatch[2]}
-            className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
-          >
-            {linkMatch[1]}
-          </a>,
+          safe ? (
+            <a
+              key={key++}
+              href={href}
+              className="text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+            >
+              {linkMatch[1]}
+            </a>
+          ) : (
+            <span key={key++}>{linkMatch[1]}</span>
+          ),
         );
       }
     }

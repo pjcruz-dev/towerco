@@ -59,8 +59,7 @@ final class EApprovalLiquidationPolicyTest extends TestCase
                     'total_reimbursement' => '5600',
                 ],
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertCreated();
     }
 
     public function test_liquidation_parent_not_required_when_tenant_policy_disabled(): void
@@ -88,9 +87,10 @@ final class EApprovalLiquidationPolicyTest extends TestCase
             ->withHeaders($this->tenantApiHeaders())
             ->getJson('/api/v1/e-approval/settings')
             ->assertOk()
-            ->assertJsonPath('data.finance_procurement_policy.liquidation_requires_parent', true)
-            ->assertJsonPath('data.finance_procurement_policy.liquidation_overspend_mode', 'warn')
-            ->assertJsonPath('data.finance_procurement_policy.liquidation_max_overspend_percent', 5);
+            ->assertJsonPath('data.liquidation_requires_parent', 'true')
+            ->assertJsonPath('data.liquidation_overspend_mode', 'allow')
+            ->assertJsonPath('data.vat_rate_percent', 12)
+            ->assertJsonPath('data.liquidation_due_days', 0);
     }
 
     private function setLiquidationPolicy(bool $requiresParent, string $mode, int $percent): void

@@ -24,6 +24,7 @@ import {
   type TenantEnvironment,
 } from "@/lib/tenant/recommended-tenant-domain";
 import { resolveDevAppPort } from "@/lib/tenant/resolve-tenant-domain";
+import { environmentStatusTone, statusToneClasses } from "@/components/ui/status-tone";
 
 const ENVIRONMENT_OPTIONS = [
   { value: "local", label: "Local" },
@@ -302,15 +303,7 @@ export function TenantEnvironmentSheet({
   );
 }
 
+/** Badge class for callers that still spread a className. Prefer <StatusBadge>. */
 export function environmentBadgeClass(environment: string | null | undefined): string {
-  switch (environment) {
-    case "production":
-      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100";
-    case "staging":
-      return "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100";
-    case "test":
-      return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100";
-    default:
-      return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200";
-  }
+  return statusToneClasses[environmentStatusTone(environment)].badge;
 }

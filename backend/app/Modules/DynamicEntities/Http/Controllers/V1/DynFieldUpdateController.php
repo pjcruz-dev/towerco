@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\DynamicEntities\Models\DynField;
 use App\Modules\DynamicEntities\Services\DynEntityAdminService;
 use App\Modules\DynamicEntities\Support\DynFieldType;
+use App\Modules\DynamicEntities\Support\DynSchemaAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,9 +17,8 @@ final class DynFieldUpdateController extends AbstractApiController
 {
     public function __invoke(Request $request, string $field, DynEntityAdminService $service): JsonResponse
     {
-        abort_unless($request->user()?->can('dynamic_entities:fields:manage'), 403);
-
         $model = DynField::query()->whereKey($field)->firstOrFail();
+        DynSchemaAccess::assertCanManageField($request->user(), $model);
 
         $data = $request->validate([
             'label' => ['sometimes', 'string', 'max:255'],

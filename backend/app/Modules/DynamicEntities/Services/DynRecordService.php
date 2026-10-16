@@ -8,10 +8,12 @@ use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Models\DynField;
 use App\Modules\DynamicEntities\Models\DynRecord;
 use App\Modules\DynamicEntities\Models\DynRecordIndex;
+use App\Modules\DynamicEntities\Support\DocumentSeriesPack;
 use App\Modules\DynamicEntities\Support\DynEntityWorkflowActions;
 use App\Modules\DynamicEntities\Support\DynFieldType;
 use App\Modules\DynamicEntities\Support\DynRoleDataFilterApplier;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Ticketing\Services\TicketingHelpdeskRecordSync;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -25,7 +27,11 @@ final class DynRecordService
         private readonly DynEntityAdminService $entityAdmin,
         private readonly TenantActivityLogger $activity,
         private readonly DynAutomaticIdService $automaticIds,
+        private readonly RecordActionHistoryService $history,
     ) {}
+
+    /** @var array<string, string> */
+    private array $relatedTitleCache = [];
 
     /**
      * @param  array<string, mixed>  $filters
@@ -133,9 +139,24 @@ final class DynRecordService
 
         if (! empty($filters['search'])) {
             $search = trim((string) $filters['search']);
-            $query->where(function ($q) use ($search): void {
+            $filterableNames = $entity->fields()
+                ->where('is_filterable', true)
+                ->pluck('name')
+                ->all();
+            $query->where(function ($q) use ($entity, $search, $filterableNames): void {
                 $q->where('title', 'like', '%'.$search.'%')
                     ->orWhere('source_external_id', 'like', '%'.$search.'%');
+                if ($filterableNames === []) {
+                    return;
+                }
+                $q->orWhereExists(function ($sub) use ($entity, $search, $filterableNames): void {
+                    $sub->selectRaw('1')
+                        ->from('dyn_record_indexes')
+                        ->whereColumn('dyn_record_indexes.record_id', 'dyn_records.id')
+                        ->where('dyn_record_indexes.entity_id', $entity->id)
+                        ->whereIn('dyn_record_indexes.field_name', $filterableNames)
+                        ->where('dyn_record_indexes.value_string', 'like', '%'.$search.'%');
+                });
             });
         }
 
@@ -183,16 +204,30 @@ final class DynRecordService
             });
         }
 
+        if (! empty($filters['allowed_statuses']) && is_array($filters['allowed_statuses'])) {
+            $allowed = array_values(array_filter(
+                $filters['allowed_statuses'],
+                static fn ($value): bool => is_string($value) && $value !== '',
+            ));
+            if ($allowed !== []) {
+                $query->where(function ($q) use ($allowed): void {
+                    $q->whereIn('status', $allowed)->orWhereNull('status')->orWhere('status', '');
+                });
+            }
+        }
+
         return $query;
     }
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<string>|null  $requiredOnly  When set, only these fields are required-checked.
      */
-    public function create(DynEntity $entity, array $data, TenantUser $actor, bool $audit = true): DynRecord
+    public function create(DynEntity $entity, array $data, TenantUser $actor, bool $audit = true, ?array $requiredOnly = null): DynRecord
     {
-        $record = DB::transaction(function () use ($entity, $data, $actor): DynRecord {
+        $record = DB::transaction(function () use ($entity, $data, $actor, $requiredOnly): DynRecord {
             $values = $this->normalizeValues($entity, $data['values'] ?? []);
+            $values = app(DynRoleAccessService::class)->onlyEditable($actor, (string) $entity->slug, $values);
             $values = $this->automaticIds->assignOnCreate($entity, $values);
             try {
                 $values = app(DynEntityHookRunner::class)->applyBefore(
@@ -204,7 +239,8 @@ final class DynRecordService
             } catch (\Throwable) {
                 // Before hooks must not block create on unexpected errors.
             }
-            $this->assertRequired($entity, $values);
+            app(TicketingHelpdeskRecordSync::class)->guard($entity, null, $values, $actor);
+            $this->assertRequired($entity, $values, $requiredOnly);
             $this->assertUniqueFieldValues($entity, $values, null);
 
             $record = DynRecord::query()->create([
@@ -238,6 +274,7 @@ final class DynRecordService
                     'title' => ['from' => null, 'to' => $record->title],
                 ]),
             );
+            $this->history->recordDynCreated($entity, $record, $actor);
         }
 
         try {
@@ -251,6 +288,8 @@ final class DynRecordService
         } catch (\Throwable) {
             // Entity hooks must not block create.
         }
+
+        app(TicketingHelpdeskRecordSync::class)->sync($entity, $record, null, $actor);
 
         return $record;
     }
@@ -266,6 +305,7 @@ final class DynRecordService
         $beforeTitle = $record->title;
         $beforeStatus = $record->status;
         $beforeValues = $record->values_json ?? [];
+        $beforeSnap = RecordActionHistoryService::dynSnapshot($record);
 
         $updated = DB::transaction(function () use ($record, $entity, $data, $actor): DynRecord {
             $existing = $record->values_json ?? [];
@@ -275,6 +315,7 @@ final class DynRecordService
                     $entity,
                     $this->normalizeValues($entity, $data['values']),
                 );
+                $incoming = app(DynRoleAccessService::class)->onlyEditable($actor, (string) $entity->slug, $incoming);
             }
             $values = array_merge($existing, $incoming);
             try {
@@ -289,6 +330,7 @@ final class DynRecordService
             } catch (\Throwable) {
                 // Before hooks must not block update on unexpected errors.
             }
+            app(TicketingHelpdeskRecordSync::class)->guard($entity, $record, $values, $actor);
             // On update, only enforce required for fields included in this patch
             // (avoids 422 when new schema fields are empty on older records).
             $this->assertRequired($entity, $values, array_keys($incoming));
@@ -346,6 +388,7 @@ final class DynRecordService
                     'title' => ['from' => $beforeTitle, 'to' => $updated->title],
                 ], $valueChanges)),
             );
+            $this->history->recordDynUpdated($entity, $updated, $actor, $beforeSnap);
         }
 
         try {
@@ -363,6 +406,15 @@ final class DynRecordService
             );
         } catch (\Throwable) {
             // Entity hooks must not block update.
+        }
+
+        app(TicketingHelpdeskRecordSync::class)->sync($entity, $updated, is_array($beforeValues) ? $beforeValues : null, $actor);
+
+        if ($entity->slug === DocumentSeriesPack::SERIES && (string) $updated->source_external_id === DocumentSeriesPack::TICKET_KEY) {
+            app(ManagedSeriesService::class)->afterTicketSeriesSaved(
+                $updated,
+                is_array($beforeValues) ? $beforeValues : [],
+            );
         }
 
         return $updated;
@@ -391,12 +443,17 @@ final class DynRecordService
             }
         }
 
+        $beforeSnap = $entity instanceof DynEntity ? RecordActionHistoryService::dynSnapshot($record) : null;
+
         $record->is_deleted = true;
         $record->deleted_at = now();
         $record->updated_by = $actor->id;
         $record->save();
 
         if ($audit && $entity instanceof DynEntity) {
+            if (is_array($beforeSnap)) {
+                $this->history->recordDynDeleted($entity, $actor, $beforeSnap);
+            }
             $this->logRecordActivity(
                 action: 'dyn_record.deleted',
                 entity: $entity,
@@ -473,11 +530,20 @@ final class DynRecordService
         $entity->loadMissing('fields');
         $values = $record->values_json ?? [];
         $columns = [];
+        $thread = $entity->slug === 'helpdesk_ticket_activities';
         foreach ($entity->fields as $field) {
-            if ($field->is_system_field || in_array($field->name, ['actions', 'workflows', 'print', 'id', 'status'], true)) {
+            if (in_array($field->name, ['actions', 'workflows', 'print', 'id', 'status'], true)) {
                 continue;
             }
-            $columns[$field->name] = $values[$field->name] ?? null;
+            if ($field->is_system_field && ! $thread) {
+                continue;
+            }
+            $raw = $values[$field->name] ?? null;
+            if ($field->type === DynFieldType::RELATIONSHIP && is_string($raw) && $raw !== '') {
+                $columns[$field->name] = $this->relatedRecordTitle($raw);
+            } else {
+                $columns[$field->name] = $raw;
+            }
         }
 
         return [
@@ -491,6 +557,85 @@ final class DynRecordService
             'columns' => $columns,
             'updated_at' => $record->updated_at?->toIso8601String(),
             'created_at' => $record->created_at?->toIso8601String(),
+        ];
+    }
+
+    private function relatedRecordTitle(string $id): string
+    {
+        if (! array_key_exists($id, $this->relatedTitleCache)) {
+            $title = DynRecord::query()->whereKey($id)->where('is_deleted', false)->value('title');
+            $this->relatedTitleCache[$id] = is_string($title) && $title !== '' ? $title : $id;
+        }
+
+        return $this->relatedTitleCache[$id];
+    }
+
+    public function paginateWorkspaceUsers(DynEntity $entity, mixed $search, int $perPage): LengthAwarePaginator
+    {
+        $perPage = max(1, min($perPage, 100));
+        $term = is_string($search) ? trim($search) : '';
+        $query = TenantUser::query()->where('is_active', true)->orderBy('name');
+        if ($term !== '') {
+            $like = '%'.addcslashes($term, '%_\\').'%';
+            $query->where(function ($inner) use ($like): void {
+                $inner->where('name', 'like', $like)->orWhere('email', 'like', $like);
+            });
+        }
+
+        $page = $query->paginate($perPage, ['id', 'name', 'email']);
+        $rows = $page->getCollection()->map(function (TenantUser $user) use ($entity): array {
+            return [
+                'id' => (string) $user->id,
+                'entity_id' => (string) $entity->id,
+                'entity_slug' => 'workspace_users',
+                'status' => null,
+                'title' => $user->name,
+                'parent_record_id' => null,
+                'columns' => [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+                'updated_at' => null,
+                'created_at' => null,
+            ];
+        })->values();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $rows,
+            $page->total(),
+            $page->perPage(),
+            $page->currentPage(),
+            ['path' => $page->path()],
+        );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function presentWorkspaceUser(string $id): ?array
+    {
+        $user = TenantUser::query()->whereKey($id)->where('is_active', true)->first(['id', 'name', 'email']);
+        if (! $user instanceof TenantUser) {
+            return null;
+        }
+        $entity = DynEntity::query()->where('slug', 'workspace_users')->first();
+        if (! $entity instanceof DynEntity) {
+            return null;
+        }
+
+        return [
+            'id' => (string) $user->id,
+            'entity' => $this->entityAdmin->presentEntity($entity, true),
+            'status' => null,
+            'title' => $user->name,
+            'values' => [
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+            'resolved_relations' => [],
+            'parent_record_id' => null,
+            'created_at' => null,
+            'updated_at' => null,
         ];
     }
 
@@ -583,9 +728,14 @@ final class DynRecordService
             $target = $targetEntities->get($targetEntityId);
             foreach ($pairs as $pair) {
                 $related = $records->get($pair['id']);
+                $title = $related?->title;
+                if ($title === null && $target?->slug === 'workspace_users') {
+                    $person = TenantUser::query()->whereKey($pair['id'])->first(['id', 'name']);
+                    $title = $person instanceof TenantUser ? $person->name : null;
+                }
                 $out[$pair['field']] = [
                     'id' => $pair['id'],
-                    'title' => $related?->title,
+                    'title' => $title,
                     'entity_slug' => $target?->slug,
                 ];
             }
@@ -728,6 +878,19 @@ final class DynRecordService
             return trim($explicit);
         }
 
+        $entity->loadMissing('fields');
+        $keyField = $entity->fields
+            ->filter(static fn (DynField $field): bool => (bool) $field->is_key)
+            ->sortBy('field_order')
+            ->first(function (DynField $field) use ($values): bool {
+                $value = $values[$field->name] ?? null;
+
+                return $value !== null && $value !== '' && is_scalar($value);
+            });
+        if ($keyField instanceof DynField) {
+            return substr((string) $values[$keyField->name], 0, 255);
+        }
+
         foreach (['site_name', 'project_name', 'name', 'title', 'site_code', 'project_number', 'code'] as $candidate) {
             if (! empty($values[$candidate]) && is_scalar($values[$candidate])) {
                 return substr((string) $values[$candidate], 0, 255);
@@ -753,7 +916,8 @@ final class DynRecordService
         abort_unless(count($ids) <= 500, 422, 'Select at most 500 records.');
 
         $deleted = 0;
-        DB::transaction(function () use ($entity, $ids, $actor, &$deleted): void {
+        $snapshots = [];
+        DB::transaction(function () use ($entity, $ids, $actor, &$deleted, &$snapshots): void {
             $records = DynRecord::query()
                 ->where('entity_id', $entity->id)
                 ->where('is_deleted', false)
@@ -761,10 +925,12 @@ final class DynRecordService
                 ->get();
 
             foreach ($records as $record) {
+                $snapshots[] = RecordActionHistoryService::dynSnapshot($record);
                 $this->softDelete($record, $actor, false);
                 $deleted++;
             }
         });
+        $this->history->recordDynBulkDeleted($entity, $actor, $snapshots);
 
         if ($deleted > 0) {
             $this->activity->record(

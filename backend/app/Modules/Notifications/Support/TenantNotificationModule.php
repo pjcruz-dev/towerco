@@ -12,6 +12,8 @@ final class TenantNotificationModule
 
     public const DOCUMENTS = 'documents';
 
+    public const ASSETS = 'asset_management';
+
     /**
      * @return list<string>
      */
@@ -21,6 +23,7 @@ final class TenantNotificationModule
             self::E_APPROVAL,
             self::TICKETING,
             self::DOCUMENTS,
+            self::ASSETS,
         ];
     }
 }

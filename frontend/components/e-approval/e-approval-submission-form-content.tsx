@@ -1,5 +1,6 @@
 "use client";
 
+import { EApprovalLineItemsTable } from "@/components/e-approval/e-approval-compose-review-summary";
 import { EApprovalSubmissionFieldDisplay } from "@/components/e-approval/e-approval-submission-field-display";
 import { getDuplicateApproverIds } from "@/modules/e-approval/display";
 import {
@@ -9,7 +10,6 @@ import {
   type SubmissionFormFieldSnapshot,
   type SubmissionFormValueRow,
 } from "@/modules/e-approval/submission-form-content";
-import type { ComposeReviewTable } from "@/modules/e-approval/form-compose-review";
 import { cn } from "@/lib/utils";
 import { useMemo } from "react";
 
@@ -19,51 +19,6 @@ type Props = {
   attachments?: SubmissionFormAttachment[];
   className?: string;
 };
-
-function ContentTable({ table }: { table: ComposeReviewTable }) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
-        <thead>
-          <tr className="bg-slate-700 text-white dark:bg-slate-800">
-            {table.headers.map((header) => (
-              <th
-                key={header}
-                scope="col"
-                className="px-3 py-2 text-xs font-medium whitespace-nowrap"
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {table.rows.map((row, rowIndex) => (
-            <tr
-              key={`content-row-${rowIndex}`}
-              className={cn(
-                "border-t border-border",
-                rowIndex % 2 === 1 ? "bg-muted/20" : "bg-card",
-              )}
-            >
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={`content-cell-${rowIndex}-${cellIndex}`}
-                  className={cn(
-                    "px-3 py-2 align-top break-words",
-                    cell === "—" && "text-muted-foreground",
-                  )}
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 function ContentItem({
   item,
@@ -79,7 +34,11 @@ function ContentItem({
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1">
         {item.table ? (
-          <ContentTable table={item.table} />
+          <EApprovalLineItemsTable
+            table={item.table}
+            totals={item.totals}
+            printLayout={item.formField?.name === "expense_lines" || item.value.field_name === "expense_lines"}
+          />
         ) : (
           <EApprovalSubmissionFieldDisplay
             field={item.value}

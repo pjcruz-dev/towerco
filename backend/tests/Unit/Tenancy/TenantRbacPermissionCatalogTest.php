@@ -111,7 +111,7 @@ class TenantRbacPermissionCatalogTest extends TestCase
         $this->assertContains('ai_assistant:use', $enabled);
         $this->assertContains('ai_assistant:tools:use', $enabled);
         $this->assertContains('ai_assistant:actions:execute', $enabled);
-        $this->assertContains('ai_assistant:knowledge:manage', $enabled);
+        $this->assertNotContains('ai_assistant:knowledge:manage', $enabled);
         $this->assertContains('ai_assistant:conversations:audit', $enabled);
         $this->assertArrayHasKey('ai_assistant', $groups);
         $this->assertSame('AI Assistant', $groups['ai_assistant']['label']);

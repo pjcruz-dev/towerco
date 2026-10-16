@@ -178,6 +178,15 @@ export function omitRedundantExpenseTotalScalars(
     if (field.type === "grid") {
       return true;
     }
+    if (
+      key === "requested_amount" ||
+      key === "total_reimbursement" ||
+      key === "vat_total" ||
+      key === "non_vatable_total" ||
+      key === "vatable_net"
+    ) {
+      return true;
+    }
     // Keep cash overage / advance — only omit document total scalars mirrored by the footer.
     if (key.includes("overage") || key.includes("shortage") || key.includes("cash_advance")) {
       return true;

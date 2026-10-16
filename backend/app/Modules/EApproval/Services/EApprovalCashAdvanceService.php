@@ -1,51 +1,33 @@
 <?php
 
-
-
 declare(strict_types=1);
 
-
-
 namespace App\Modules\EApproval\Services;
-
-
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\DB;
 
-
-
 final class EApprovalCashAdvanceService
-
 {
-
     /**
-
      * Open cash advances for the requestor (approved parents with remaining balance).
 
      *
 
      * @return list<array<string, mixed>>
-
      */
-
     public function openForUser(TenantUser $user): array
-
     {
 
-        $rows = $this->parentBalanceRows((string) $user->id, null, null, true);
-
-
+        $rows = $this->liquidatableRows((string) $user->id);
 
         return array_map(static function ($row): array {
 
             $requested = (float) ($row->requested_amount ?? 0);
 
             $reimbursed = (float) ($row->reimbursed_amount ?? 0);
-
-
 
             return [
 
@@ -71,14 +53,9 @@ final class EApprovalCashAdvanceService
 
     }
 
-
-
     /**
-
      * Remaining balance on an approved cash-advance parent submission.
-
      */
-
     public function countOpenTenantWide(): int
     {
         return count($this->parentBalanceRows(null, null, null, true));
@@ -92,6 +69,64 @@ final class EApprovalCashAdvanceService
             $rows,
             static fn ($row): bool => (float) ($row->reimbursed_amount ?? 0) <= 0,
         ));
+    }
+
+    public function hasLiveLiquidation(string $parentSubmissionId, ?string $excludeChildSubmissionId = null): bool
+    {
+        $query = EApprovalSubmission::query()
+            ->where('parent_submission_id', $parentSubmissionId)
+            ->whereNotIn('status', [
+                EApprovalSubmissionStatus::REJECTED,
+                EApprovalSubmissionStatus::CANCELLED,
+            ]);
+
+        if ($excludeChildSubmissionId !== null && $excludeChildSubmissionId !== '') {
+            $query->where('id', '<>', $excludeChildSubmissionId);
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * @return list<object>
+     */
+    private function liquidatableRows(?string $requestorId): array
+    {
+        $rows = $this->parentBalanceRows($requestorId, null, null, false);
+        if ($rows === []) {
+            return [];
+        }
+
+        $ids = array_map(static fn ($row): string => (string) $row->id, $rows);
+        $parents = EApprovalSubmission::query()
+            ->whereIn('id', $ids)
+            ->get(['id', 'finance_json'])
+            ->keyBy(static fn (EApprovalSubmission $submission): string => (string) $submission->id);
+
+        $liveParents = EApprovalSubmission::query()
+            ->whereIn('parent_submission_id', $ids)
+            ->whereNotIn('status', [
+                EApprovalSubmissionStatus::REJECTED,
+                EApprovalSubmissionStatus::CANCELLED,
+            ])
+            ->pluck('parent_submission_id')
+            ->map(static fn ($id): string => (string) $id)
+            ->all();
+
+        return array_values(array_filter($rows, static function ($row) use ($parents, $liveParents): bool {
+            $id = (string) $row->id;
+            if (in_array($id, $liveParents, true)) {
+                return false;
+            }
+
+            $parent = $parents->get($id);
+            $finance = $parent instanceof EApprovalSubmission && is_array($parent->finance_json)
+                ? $parent->finance_json
+                : [];
+            $stage = strtolower(trim((string) ($finance['stage'] ?? '')));
+
+            return ! in_array($stage, ['for_return', 'funds_returned'], true);
+        }));
     }
 
     public function openBalanceForParent(string $parentSubmissionId, ?string $excludeChildSubmissionId = null): ?float
@@ -167,14 +202,9 @@ final class EApprovalCashAdvanceService
         return null;
     }
 
-
-
     /**
-
      * @return list<object>
-
      */
-
     private function parentBalanceRows(
 
         ?string $requestorId,
@@ -201,8 +231,6 @@ final class EApprovalCashAdvanceService
 
         ];
 
-
-
         if ($requestorId !== null) {
 
             $filters[] = 'p.requestor_id = ?';
@@ -211,8 +239,6 @@ final class EApprovalCashAdvanceService
 
         }
 
-
-
         if ($parentSubmissionId !== null) {
 
             $filters[] = 'p.id = ?';
@@ -220,8 +246,6 @@ final class EApprovalCashAdvanceService
             $bindings[] = $parentSubmissionId;
 
         }
-
-
 
         $childJoin = 'LEFT JOIN e_approval_submissions c ON c.parent_submission_id = p.id';
 
@@ -233,19 +257,13 @@ final class EApprovalCashAdvanceService
 
         }
 
-
-
         $having = $onlyPositiveBalance
 
             ? "HAVING CAST(req.value AS DECIMAL(14,2)) - IFNULL(SUM(CASE WHEN c.status <> 'rejected' THEN CAST(tr.value AS DECIMAL(14,2)) ELSE 0 END), 0) > 0"
 
             : '';
 
-
-
         $where = implode(' AND ', $filters);
-
-
 
         return DB::connection('tenant')->select(
 
@@ -310,6 +328,4 @@ final class EApprovalCashAdvanceService
         );
 
     }
-
 }
-

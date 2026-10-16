@@ -44,6 +44,8 @@ export type DynPrintSettings = {
   /** All printables for this entity (Metacoresoft multi-template). */
   templates?: Array<DynPrintSettings & { id: string; name: string; updated_at?: string | null }>;
   default_template_id?: string | null;
+  /** Catalog templates already offered. A deleted id stays here so it is not re-seeded. */
+  seeded_template_ids?: string[];
 };
 
 export type DynEntitySummary = {
@@ -116,6 +118,7 @@ export type DynEntityDetail = DynEntitySummary & {
     applies_to_view: boolean;
     start_collapsed?: boolean;
     sort_order: number;
+    column_span?: number;
   }>;
   record_count?: number;
 };
@@ -129,6 +132,8 @@ export type DynRecordListRow = {
   parent_record_id: string | null;
   source_external_id?: string | null;
   columns: Record<string, unknown>;
+  created_by?: string | null;
+  created_by_name?: string | null;
   updated_at: string | null;
   created_at: string | null;
 };
@@ -160,6 +165,7 @@ export type DynRecordDetail = {
 export async function fetchDynEntities(params?: {
   module_pack?: string;
   active_only?: boolean;
+  print_bodies?: boolean;
 }): Promise<DynEntitySummary[]> {
   const response = await apiClient.get<{ data: DynEntitySummary[] }>("/dynamic-entities/entities", {
     params,
@@ -167,6 +173,35 @@ export async function fetchDynEntities(params?: {
   });
   const rows = response.data.data;
   return Array.isArray(rows) ? rows : [];
+}
+
+export type OfflineDataCatalogRow = {
+  slug: string;
+  name: string;
+  rows: number;
+  bytes: number;
+  size: string;
+};
+
+export async function fetchOfflineDataCatalog(): Promise<OfflineDataCatalogRow[]> {
+  const response = await apiClient.get<{ data: OfflineDataCatalogRow[] }>(
+    "/dynamic-entities/offline-data/catalog",
+  );
+  const rows = response.data.data;
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function downloadOfflineData(entities: string[]): Promise<{
+  exported_at: string;
+  entities: Array<{ slug: string; name: string; row_count: number; truncated: boolean; rows: unknown[] }>;
+}> {
+  const response = await apiClient.post<{
+    data: {
+      exported_at: string;
+      entities: Array<{ slug: string; name: string; row_count: number; truncated: boolean; rows: unknown[] }>;
+    };
+  }>("/dynamic-entities/offline-data", { entities }, { timeout: 120_000 });
+  return response.data.data;
 }
 
 export type DynRelationshipGraphNode = {
@@ -279,8 +314,14 @@ export async function deleteDynRelationshipEdge(
   return response.data.data;
 }
 
-export async function fetchDynEntity(entity: string): Promise<DynEntityDetail> {
-  const response = await apiClient.get<{ data: DynEntityDetail }>(`/dynamic-entities/entities/${entity}`);
+export async function fetchDynEntity(
+  entity: string,
+  signal?: AbortSignal,
+): Promise<DynEntityDetail> {
+  const response = await apiClient.get<{ data: DynEntityDetail }>(
+    `/dynamic-entities/entities/${entity}`,
+    { signal },
+  );
   return response.data.data;
 }
 
@@ -353,13 +394,29 @@ export async function fetchDynRecords(
     status?: string;
     /** Simple equals/contains map, or nested ops: filter[field][eq]=x */
     filter?: Record<string, string | Record<string, string>>;
+    signal?: AbortSignal;
   },
 ): Promise<PaginatedEnvelope<DynRecordListRow>> {
+  const { signal, ...query } = params ?? {};
   const response = await apiClient.get<{ data: DynRecordListRow[]; meta: PaginatedMeta }>(
     `/dynamic-entities/entities/${entity}/records`,
-    { params },
+    { params: query, signal },
   );
   return { data: response.data.data, meta: response.data.meta };
+}
+
+export async function downloadDynExportWorkbook(
+  entity: string,
+  rows: string[][],
+  filename: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await apiClient.post<Blob>(
+    `/dynamic-entities/entities/${entity}/records/export-workbook`,
+    { rows, filename },
+    { responseType: "blob", signal },
+  );
+  return response.data;
 }
 
 export async function fetchDynRecord(recordId: string): Promise<DynRecordDetail> {
@@ -416,10 +473,11 @@ export async function bulkDynRecords(
     status?: string | null;
     values?: Record<string, unknown>;
   },
+  signal?: AbortSignal,
 ): Promise<{ deleted?: number; duplicated?: number; updated?: number; ids?: string[] }> {
   const response = await apiClient.post<{
     data: { deleted?: number; duplicated?: number; updated?: number; ids?: string[] };
-  }>(`/dynamic-entities/entities/${entity}/records/bulk`, payload);
+  }>(`/dynamic-entities/entities/${entity}/records/bulk`, payload, { signal });
   return response.data.data;
 }
 
@@ -466,22 +524,35 @@ export type DynImportResult = {
   valid_rows?: number;
   error_rows?: number;
   errors: Array<{ row: number; message: string }>;
+  child_would_create?: number;
+  child_created?: number;
 };
 
-export async function downloadDynImportTemplate(entity: string): Promise<Blob> {
+export async function downloadDynImportTemplate(
+  entity: string,
+  include?: string[],
+): Promise<Blob> {
   const response = await apiClient.get<Blob>(
     `/dynamic-entities/entities/${entity}/records/import/template`,
-    { responseType: "blob" },
+    {
+      responseType: "blob",
+      params: include && include.length > 0 ? { include: include.join(",") } : undefined,
+    },
   );
   return response.data;
 }
 
-export async function analyzeDynImport(entity: string, file: File): Promise<DynImportAnalyzeResult> {
+export async function analyzeDynImport(
+  entity: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<DynImportAnalyzeResult> {
   const form = new FormData();
   form.append("file", file);
   const response = await apiClient.post<{ data: DynImportAnalyzeResult }>(
     `/dynamic-entities/entities/${entity}/records/import/analyze`,
     form,
+    { signal },
   );
   return response.data.data;
 }
@@ -491,7 +562,7 @@ export async function runDynImport(
   file: File,
   columnMap: Record<string, string>,
   upsertField?: string | null,
-  options?: { dryRun?: boolean },
+  options?: { dryRun?: boolean; signal?: AbortSignal },
 ): Promise<DynImportResult> {
   const form = new FormData();
   form.append("file", file);
@@ -501,6 +572,7 @@ export async function runDynImport(
   const response = await apiClient.post<{ data: DynImportResult }>(
     `/dynamic-entities/entities/${entity}/records/import`,
     form,
+    { signal: options?.signal },
   );
   return response.data.data;
 }
@@ -545,6 +617,73 @@ export async function updateDynField(
   return response.data.data;
 }
 
+export type RecordActionHistoryRow = {
+  id: string;
+  entity_slug?: string;
+  module?: string;
+  kind: "created" | "updated" | "deleted" | "imported" | string;
+  status: "applied" | "reverted" | string;
+  title: string;
+  detail: string;
+  actor_name: string;
+  created_at: string | null;
+  reversible: boolean;
+  blocked_reason: string | null;
+};
+
+export async function listWorkspaceActionHistory(
+  scope: "mine" | "everyone",
+): Promise<RecordActionHistoryRow[]> {
+  const response = await apiClient.get<{ data: RecordActionHistoryRow[] }>(
+    "/dynamic-entities/action-history",
+    { params: { scope } },
+  );
+  return response.data.data;
+}
+
+export async function deleteDynField(fieldId: string): Promise<void> {
+  await apiClient.delete(`/dynamic-entities/fields/${fieldId}`);
+}
+
+export async function listRecordActionHistory(
+  entity: string,
+  scope: "mine" | "everyone",
+): Promise<RecordActionHistoryRow[]> {
+  const response = await apiClient.get<{ data: RecordActionHistoryRow[] }>(
+    `/dynamic-entities/entities/${entity}/action-history`,
+    { params: { scope } },
+  );
+  return response.data.data;
+}
+
+export async function revertRecordAction(entity: string, id: string): Promise<RecordActionHistoryRow> {
+  const response = await apiClient.post<{ data: RecordActionHistoryRow }>(
+    `/dynamic-entities/entities/${entity}/action-history/${id}/revert`,
+  );
+  return response.data.data;
+}
+
+export async function reapplyRecordAction(entity: string, id: string): Promise<RecordActionHistoryRow> {
+  const response = await apiClient.post<{ data: RecordActionHistoryRow }>(
+    `/dynamic-entities/entities/${entity}/action-history/${id}/reapply`,
+  );
+  return response.data.data;
+}
+
+export async function undoRecordAction(entity: string): Promise<RecordActionHistoryRow> {
+  const response = await apiClient.post<{ data: RecordActionHistoryRow }>(
+    `/dynamic-entities/entities/${entity}/action-history/undo`,
+  );
+  return response.data.data;
+}
+
+export async function redoRecordAction(entity: string): Promise<RecordActionHistoryRow> {
+  const response = await apiClient.post<{ data: RecordActionHistoryRow }>(
+    `/dynamic-entities/entities/${entity}/action-history/redo`,
+  );
+  return response.data.data;
+}
+
 export async function createDynFieldGroup(
   entity: string,
   payload: {
@@ -565,6 +704,7 @@ export async function createDynFieldGroup(
   applies_to_view?: boolean;
   start_collapsed?: boolean;
   sort_order?: number;
+  column_span?: number;
 }> {
   const response = await apiClient.post<{
     data: {
@@ -576,6 +716,7 @@ export async function createDynFieldGroup(
       applies_to_view?: boolean;
       start_collapsed?: boolean;
       sort_order?: number;
+      column_span?: number;
     };
   }>(`/dynamic-entities/entities/${entity}/field-groups`, payload);
   return response.data.data;
@@ -591,6 +732,7 @@ export async function updateDynFieldGroup(
     applies_to_view: boolean;
     start_collapsed: boolean;
     sort_order: number;
+    column_span: number;
   }>,
 ): Promise<{
   id: string;
@@ -601,6 +743,7 @@ export async function updateDynFieldGroup(
   applies_to_view: boolean;
   start_collapsed: boolean;
   sort_order: number;
+  column_span: number;
 }> {
   const response = await apiClient.patch<{
     data: {
@@ -612,6 +755,7 @@ export async function updateDynFieldGroup(
       applies_to_view: boolean;
       start_collapsed: boolean;
       sort_order: number;
+      column_span: number;
     };
   }>(`/dynamic-entities/field-groups/${groupId}`, payload);
   return response.data.data;
@@ -672,7 +816,6 @@ export async function fetchDynFinanceReport<T = Record<string, unknown>>(
 }
 
 export type DynExtendedReportKey =
-  | "cas-executive-dashboard"
   | "ar-ap-aging"
   | "stock-on-hand"
   | "petty-cash"
@@ -719,61 +862,6 @@ export async function fetchDynExtendedReport(
   const response = await apiClient.get<{ data: DynExtendedReport }>(`/dynamic-entities/reports/${report}`, {
     params,
   });
-  return response.data.data;
-}
-
-export type AtcExecutiveDashboard = {
-  message: string | null;
-  generated_at: string;
-  kpis: {
-    sites_total: number;
-    sites_wip: number;
-    sites_rfti_ready: number;
-    construction_active: number;
-    construction_completed: number;
-    open_procurement_requests: number;
-    purchases_mtd: number;
-    capex_booked: number;
-    opex_ytd: number;
-    sales_mtd: number;
-  };
-  portfolio: {
-    by_region: Array<{ key: string; label: string; value: number }>;
-    by_project_type: Array<{ key: string; label: string; value: number }>;
-    by_site_status: Array<{ key: string; label: string; value: number }>;
-    by_milestone: Array<{ key: string; label: string; value: number }>;
-  };
-  rfti_pipeline: {
-    aging: Array<{ key: string; label: string; value: number }>;
-    by_milestone: Array<{ key: string; label: string; value: number }>;
-  };
-  construction: {
-    active: number;
-    completed: number;
-    total_budget: number;
-    total_actual: number;
-    by_status: Array<{ key: string; label: string; value: number }>;
-  };
-  procurement: {
-    open_requests: number;
-    purchases_mtd: number;
-    purchase_count_mtd: number;
-    suppliers_active: number;
-  };
-  finance: {
-    capex: number;
-    opex: number;
-    sales_mtd: number;
-    sales_count_mtd: number;
-  };
-  attention: Array<{ headline: string; detail: string; href: string; tone: string }>;
-  quick_links: Array<{ label: string; href: string }>;
-};
-
-export async function fetchAtcExecutiveDashboard(): Promise<AtcExecutiveDashboard> {
-  const response = await apiClient.get<{ data: AtcExecutiveDashboard }>(
-    "/dynamic-entities/reports/executive-dashboard",
-  );
   return response.data.data;
 }
 
@@ -1086,6 +1174,14 @@ export async function renderDynHtmlReport(slug: string): Promise<{
     data: { id: string; name: string; slug: string; document_html: string };
   }>(`/dynamic-entities/html-reports/render/${slug}`);
   return response.data.data;
+}
+
+export async function queryDynHtmlReport(sql: string): Promise<Array<Record<string, unknown>>> {
+  const response = await apiClient.post<{ data: { rows: Array<Record<string, unknown>> } }>(
+    "/dynamic-entities/html-reports/query",
+    { sql },
+  );
+  return response.data.data.rows ?? [];
 }
 
 export async function previewDynReportBuilder(

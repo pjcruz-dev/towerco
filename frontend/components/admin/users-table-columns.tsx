@@ -8,6 +8,7 @@ import {
   UserMfaStatusBadge,
 } from "@/components/admin/admin-user-security-badges";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { createRowSelectionColumn } from "@/components/ui/data-table-row-selection";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
@@ -28,14 +29,10 @@ function roleLabel(name: string): string {
 }
 
 export function UserStatusBadge({ active }: { active: boolean }) {
-  return active ? (
-    <Badge variant="secondary" className="border-success/30 bg-success/10 text-success">
-      Active
-    </Badge>
-  ) : (
-    <Badge variant="secondary" className="text-muted-foreground">
-      Inactive
-    </Badge>
+  return (
+    <StatusBadge tone={active ? "success" : "neutral"}>
+      {active ? "Active" : "Inactive"}
+    </StatusBadge>
   );
 }
 

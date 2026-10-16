@@ -1,21 +1,45 @@
 import type { FieldAccessLevel, RoleAccessMatrix } from "@/lib/api/modules/admin-roles-api";
 import {
+  fieldEditableOnForm,
+  fieldVisibleOnSurface,
+  type FieldSurface,
+} from "@/lib/rbac/field-surface-access";
+import {
   getErrorMessage,
   isApiTimeoutError,
   isCanceledRequestError,
   isForbiddenApiError,
   isNetworkApiError,
 } from "@/lib/api/error";
-import { useNotificationStore } from "@/stores/notification-store";
+import { notify } from "@/lib/ui/notify";
 
-export type EntityAccessAction = "view" | "view_own" | "create" | "edit" | "delete" | "export";
+export type EntityAccessAction =
+  | "view"
+  | "view_own"
+  | "create"
+  | "edit"
+  | "delete"
+  | "export"
+  | "import"
+  | "smart_scan"
+  | "undo"
+  | "truncate"
+  | "duplicate"
+  | "columns";
+
+const POWER_FALLBACK: Partial<Record<EntityAccessAction, EntityAccessAction>> = {
+  import: "create",
+  smart_scan: "create",
+  undo: "edit",
+  truncate: "delete",
+  duplicate: "create",
+};
 
 /** Nav hrefs that are not a single entity table (hidden when entity ACL is restricted). */
 const DYN_NON_ENTITY_SEGMENTS = new Set([
   "fields",
   "field-groups",
   "reports",
-  "executive-dashboard",
   "ticketing-board",
 ]);
 
@@ -31,6 +55,12 @@ const ACTION_LABELS: Record<EntityAccessAction | "clone" | "manage_fields", stri
   edit: "edit",
   delete: "delete",
   export: "export",
+  import: "import",
+  smart_scan: "smart scan",
+  undo: "undo",
+  truncate: "truncate",
+  duplicate: "duplicate",
+  columns: "table view",
   clone: "duplicate",
   manage_fields: "manage fields for",
 };
@@ -66,6 +96,13 @@ export function canEntityAction(
   if (action === "view" || action === "view_own") {
     return Boolean(row.view || row.view_own);
   }
+  if (action === "columns" && row.columns === undefined) {
+    return true;
+  }
+  const fallback = POWER_FALLBACK[action];
+  if (fallback && row[action] === undefined) {
+    return Boolean(row[fallback]);
+  }
   return Boolean(row[action]);
 }
 
@@ -94,6 +131,15 @@ export function fieldAccessLevel(
   return level ?? "full";
 }
 
+export function isFieldHiddenOnSurface(
+  matrix: RoleAccessMatrix | null | undefined,
+  slug: string,
+  field: string,
+  surface: FieldSurface,
+): boolean {
+  return !fieldVisibleOnSurface(fieldAccessLevel(matrix, slug, field), surface);
+}
+
 export function isFieldHiddenForRole(
   matrix: RoleAccessMatrix | null | undefined,
   slug: string,
@@ -107,8 +153,7 @@ export function isFieldReadOnlyForRole(
   slug: string,
   field: string,
 ): boolean {
-  const level = fieldAccessLevel(matrix, slug, field);
-  return level === "view" || level === "table_record" || level === "record" || level === "form";
+  return !fieldEditableOnForm(fieldAccessLevel(matrix, slug, field));
 }
 
 /**
@@ -185,20 +230,15 @@ export function notifyDynPermissionDenied(options: {
     options.error !== undefined &&
     (isApiTimeoutError(options.error) || isNetworkApiError(options.error))
   ) {
-    useNotificationStore.getState().push({
-      level: "error",
-      title: isApiTimeoutError(options.error) ? "Request timed out" : "Could not reach the API",
-      message: getErrorMessage(options.error),
-    });
+    notify.error(
+      isApiTimeoutError(options.error) ? "Request timed out" : "Could not reach the API",
+      getErrorMessage(options.error),
+    );
     return;
   }
 
   if (options.error !== undefined && !isForbiddenApiError(options.error)) {
-    useNotificationStore.getState().push({
-      level: "error",
-      title: "Could not complete request",
-      message: getErrorMessage(options.error),
-    });
+    notify.error("Could not complete request", getErrorMessage(options.error));
     return;
   }
 
@@ -216,9 +256,5 @@ export function notifyDynPermissionDenied(options: {
     }
   }
 
-  useNotificationStore.getState().push({
-    level: "warning",
-    title: "Access denied",
-    message,
-  });
+  notify.warning("Access denied", message);
 }

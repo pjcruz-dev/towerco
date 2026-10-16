@@ -1,3 +1,4 @@
+import { moduleStatusTone, statusToneClasses } from "@/components/ui/status-tone";
 import type { PlatformTenantRow } from "@/lib/api/modules/platform-api";
 import {
   PLATFORM_TENANT_MODULE_BADGE_ORDER,
@@ -34,17 +35,9 @@ export function formatModulesLabel(row: PlatformTenantRow): string {
   return formatTenantModuleBadges(row).join(" · ");
 }
 
-const MODULE_BADGE_CLASSES: Record<string, string> = {
-  "E-Forms": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  Ticketing: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-  Documents: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
-  "Document register": "bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  DocExtract: "bg-teal-500/10 text-teal-800 dark:text-teal-300",
-  Core: "bg-muted text-muted-foreground",
-};
-
+/** Badge class for callers that still spread a className. Prefer <StatusBadge>. */
 export function moduleBadgeClass(module: string): string {
-  return MODULE_BADGE_CLASSES[module] ?? "bg-muted text-muted-foreground";
+  return statusToneClasses[moduleStatusTone(module)].badge;
 }
 
 export function escapeCsvField(value: string): string {

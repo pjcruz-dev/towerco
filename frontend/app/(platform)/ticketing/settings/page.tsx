@@ -1,5 +1,5 @@
-import { TicketingSettingsPageClient } from "./ticketing-settings-page-client";
+import { redirect } from "next/navigation";
 
 export default function TicketingSettingsPage() {
-  return <TicketingSettingsPageClient />;
+  redirect("/ticketing");
 }

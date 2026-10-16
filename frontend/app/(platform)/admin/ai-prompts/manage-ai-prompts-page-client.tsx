@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   getAiPromptModule,
   listAiPromptModules,
@@ -36,8 +37,6 @@ export function ManageAiPromptsPageClient() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
   const loadList = useCallback(async () => {
     setLoadingList(true);
     setError(null);
@@ -62,7 +61,6 @@ export function ManageAiPromptsPageClient() {
     async function run() {
       setLoadingDetail(true);
       setError(null);
-      setNotice(null);
       try {
         const mod = await getAiPromptModule(selectedId!);
         if (cancelled) return;
@@ -100,7 +98,6 @@ export function ManageAiPromptsPageClient() {
     if (!selectedId) return;
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const updated = await updateAiPromptModule(selectedId, {
         name,
@@ -110,7 +107,7 @@ export function ManageAiPromptsPageClient() {
       });
       setDetail(updated);
       setBody(updated.body);
-      setNotice("Module saved.");
+      notify.success("Prompt saved", updated.name);
       await loadList();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -126,7 +123,6 @@ export function ManageAiPromptsPageClient() {
     }
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const updated = await resetAiPromptModule(selectedId);
       setDetail(updated);
@@ -134,7 +130,7 @@ export function ManageAiPromptsPageClient() {
       setName(updated.name);
       setDescription(updated.description ?? "");
       setEnabled(updated.is_enabled);
-      setNotice("Reset to catalog default.");
+      notify.success("Prompt reset", updated.name);
       await loadList();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -162,11 +158,6 @@ export function ManageAiPromptsPageClient() {
         {error ? (
           <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-            {notice}
           </div>
         ) : null}
 

@@ -17,7 +17,6 @@ const HIDDEN_NAMES = new Set(["actions", "workflows", "print", "id"]);
 
 export function isArrangeableField(field: DynField): boolean {
   if (HIDDEN_NAMES.has(field.name)) return false;
-  if (field.is_system_field && field.name !== "status") return false;
   return true;
 }
 

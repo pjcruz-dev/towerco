@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Loader2, Search } from "lucide-react";
 
+import { StatusBadge } from "@/components/ui/status-badge";
+import { statusToneClasses, type StatusTone } from "@/components/ui/status-tone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -28,30 +30,25 @@ function statusLabel(status: string): string {
   return status;
 }
 
-function statusTone(status: string): string {
-  if (status === "ready") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-400";
-  }
-  if (status === "failed") {
-    return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400";
-  }
-  if (status === "processing" || status === "pending") {
-    return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-400";
-  }
-  return "border-border bg-muted text-muted-foreground";
+function scanStatusTone(status: string): StatusTone {
+  if (status === "ready") return "success";
+  if (status === "failed") return "danger";
+  if (status === "processing" || status === "pending") return "info";
+  return "neutral";
 }
 
 function StatusIcon({ status }: { status: string }) {
+  const iconClass = cn("size-3.5 shrink-0", statusToneClasses[scanStatusTone(status)].icon);
   if (status === "ready") {
-    return <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />;
+    return <CheckCircle2 className={iconClass} />;
   }
   if (status === "failed") {
-    return <AlertCircle className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />;
+    return <AlertCircle className={iconClass} />;
   }
   if (status === "processing") {
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />;
+    return <Loader2 className={cn(iconClass, "animate-spin")} />;
   }
-  return <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />;
+  return <Clock3 className={iconClass} />;
 }
 
 function matchesFilter(status: string, filter: ScanFilter): boolean {
@@ -140,9 +137,9 @@ export function DocExtractScanProgressPanel({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold text-foreground">Scan progress</h2>
             {isBatchActive ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-400">
+              <StatusBadge tone="info">
                 <Spinner className="size-3" /> Live
-              </span>
+              </StatusBadge>
             ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -179,17 +176,17 @@ export function DocExtractScanProgressPanel({
             {counts.queued > 0 ? ` · ${counts.queued} queued` : ""}
           </span>
           {counts.failed > 0 ? (
-            <span className="tabular-nums text-red-600 dark:text-red-400">{counts.failed} failed</span>
+            <span className={cn("tabular-nums", statusToneClasses.danger.icon)}>{counts.failed} failed</span>
           ) : null}
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div className="flex h-full w-full">
             <div
-              className="h-full bg-emerald-500 transition-[width] duration-500"
+              className="h-full bg-success transition-[width] duration-500"
               style={{ width: `${readyPct}%` }}
             />
             <div
-              className="h-full bg-red-500 transition-[width] duration-500"
+              className="h-full bg-danger transition-[width] duration-500"
               style={{ width: `${failedPct}%` }}
             />
           </div>
@@ -244,14 +241,9 @@ export function DocExtractScanProgressPanel({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-medium text-foreground">{document.original_filename}</p>
-                    <span
-                      className={cn(
-                        "rounded-md border px-1.5 py-0.5 text-[11px] font-medium capitalize",
-                        statusTone(document.status),
-                      )}
-                    >
+                    <StatusBadge tone={scanStatusTone(document.status)} className="text-[11px]">
                       {statusLabel(document.status)}
-                    </span>
+                    </StatusBadge>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {[pages, document.scan_engine].filter(Boolean).join(" · ") || "Waiting for scan…"}

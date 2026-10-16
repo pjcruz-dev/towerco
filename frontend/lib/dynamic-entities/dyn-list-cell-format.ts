@@ -1,4 +1,5 @@
 import type { DynField } from "@/lib/api/modules/dynamic-entities-api";
+import { formatDisplayDate } from "@/lib/format-display-date";
 import { formatDynNumberValue } from "@/lib/dynamic-entities/number-options";
 
 const CURRENCY_NAME_RE =
@@ -35,6 +36,10 @@ export function formatDynListCell(
     const formatted = formatDynNumberValue(value, field.options, isCurrencyField(field));
     if (formatted !== null) return formatted;
   }
+
+  const dateKind = field?.type === "date" || field?.type === "datetime" ? field.type : undefined;
+  const friendlyDate = formatDisplayDate(value, dateKind);
+  if (friendlyDate) return friendlyDate;
 
   return String(value);
 }

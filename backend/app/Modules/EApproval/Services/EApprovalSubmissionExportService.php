@@ -590,7 +590,7 @@ final class EApprovalSubmissionExportService
             'form_id' => (string) $submission->form_id,
             'form_name' => (string) ($submission->form?->name ?? ''),
             'subsidiary' => $this->namedFieldValue($submission, 'subsidiary'),
-            'department' => $this->namedFieldValue($submission, 'department'),
+            'department' => $this->namedFieldValue($submission, 'department') ?: (string) ($submission->requestor?->department ?? ''),
             'requestor_id' => (string) $submission->requestor_id,
             'requestor_name' => (string) ($submission->requestor?->name ?? ''),
             'requestor_email' => (string) ($submission->requestor?->email ?? ''),

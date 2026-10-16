@@ -15,11 +15,13 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Workspace\Models\TenantActivityLog;
 use Illuminate\Support\Str;
+use Tests\Support\AiAssistant\BindsDeterministicAssistantLlm;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
 final class AssistantAskTest extends TestCase
 {
+    use BindsDeterministicAssistantLlm;
     use InteractsWithInMemoryTenantApi;
 
     protected function setUp(): void
@@ -38,11 +40,10 @@ final class AssistantAskTest extends TestCase
                 'ai_assistant',
             ],
             'ai_assistant.enabled' => true,
-            'ai_assistant.llm_provider' => 'local',
-            'ai_assistant.embedding_provider' => 'local',
-            'ai_assistant.vector_store' => 'database',
+            'ai_assistant.llm_provider' => 'cursor',
         ]);
 
+        $this->bindDeterministicAssistantLlm();
         $this->bootInMemoryTenantApi();
     }
 
@@ -57,7 +58,7 @@ final class AssistantAskTest extends TestCase
             ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.status', 'insufficient_context')
+            ->assertJsonPath('data.status', AssistantAskStatus::COMPLETED)
             ->assertJsonPath('data.citations', [])
             ->assertJsonStructure([
                 'data' => [
@@ -72,7 +73,7 @@ final class AssistantAskTest extends TestCase
                 ],
             ]);
 
-        $this->assertStringContainsString('enough approved help content', $response->json('data.answer'));
+        $this->assertNotSame('', $response->json('data.answer'));
 
         $conversationId = $response->json('data.conversation_id');
         $messageId = $response->json('data.message_id');
@@ -90,7 +91,7 @@ final class AssistantAskTest extends TestCase
 
         $assistant = AiMessage::query()->findOrFail($messageId);
         $this->assertSame(AssistantMessageRole::ASSISTANT, $assistant->role);
-        $this->assertSame(AssistantAskStatus::INSUFFICIENT_CONTEXT, $assistant->status);
+        $this->assertSame(AssistantAskStatus::COMPLETED, $assistant->status);
 
         $this->assertTrue(
             TenantActivityLog::query()
@@ -170,7 +171,7 @@ final class AssistantAskTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_ask_forbidden_when_module_disabled(): void
+    public function test_ask_stays_available_when_config_omits_the_assistant(): void
     {
         config([
             'toweros.tenant_modules.enabled' => [
@@ -179,16 +180,12 @@ final class AssistantAskTest extends TestCase
             ],
         ]);
 
-        tenancy()->initialize($this->testTenant);
-        app(TenantRbacBaselineService::class)->ensure();
-        tenancy()->end();
-
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/assistant/ask', [
                 'question' => 'How do I create a site?',
             ])
-            ->assertForbidden();
+            ->assertOk();
     }
 
     public function test_conversations_index_and_show_enforce_ownership(): void

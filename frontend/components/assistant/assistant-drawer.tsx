@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AssistantChatPanel } from "@/components/assistant/assistant-chat-panel";
 import { AssistantHeaderStatus } from "@/components/assistant/assistant-header-status";
 import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAssistantDrawer } from "@/hooks/use-assistant-drawer";
@@ -116,6 +117,7 @@ export function AssistantDrawer() {
 
   function onModelChange(model: string) {
     setPreferredModel(model);
+    setCostEstimate(null);
     window.localStorage.setItem(MODEL_KEY, model);
   }
 
@@ -147,10 +149,21 @@ export function AssistantDrawer() {
                 <TowerOsAssistantMark className="size-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="assistant-chat-title" className="truncate text-sm font-semibold tracking-tight text-foreground">
-                  AI Assistant
-                </h2>
-                <p className="truncate text-[11px] text-muted-foreground">Always online</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <h2 id="assistant-chat-title" className="truncate text-sm font-semibold tracking-tight text-foreground">
+                    AI Assistant
+                  </h2>
+                  {meta?.assistant_mode === "admin_builder" ? (
+                    <Badge variant="outline" title="You are signed in as a tenant admin.">
+                      Admin builder
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  {meta?.assistant_mode === "admin_builder"
+                    ? "Tenant admin. A matching change is saved when you ask."
+                    : "Always online"}
+                </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -211,7 +224,11 @@ export function AssistantDrawer() {
           <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-border pt-2.5">
             <label
               className="flex items-center gap-2 text-xs font-medium text-foreground"
-              title="When On, proposed write actions are confirmed automatically (requires action permission)."
+              title={
+                meta?.assistant_mode === "admin_builder"
+                  ? "Admin builder saves a matching change when you ask. Plan mode still does not save."
+                  : "When On, proposed write actions are confirmed automatically (requires action permission)."
+              }
             >
               Auto-Pilot
               <Switch

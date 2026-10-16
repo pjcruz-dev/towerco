@@ -9,6 +9,7 @@ export const TENANT_MODULE_LABELS: Record<string, string> = {
   doc_extract: "DocExtract",
   dynamic_entities: "Dynamic Entities",
   ai_assistant: "AI Assistant",
+  asset_management: "Asset management",
 };
 
 export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
@@ -19,6 +20,7 @@ export const TENANT_MODULE_DESCRIPTIONS: Record<string, string> = {
   doc_extract: "Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.",
   dynamic_entities: "Dynamic entity packs, records, fields, reports, and workflows.",
   ai_assistant: "In-app assistant for workflows, permissions, and how-to guidance.",
+  asset_management: "IT asset inventory, assignment, repair, and offboarding.",
 };
 
 /** Optional modules superadmins can enable per tenant (must stay aligned with backend TOGGLEABLE_MODULES). */
@@ -29,6 +31,7 @@ export const TOGGLEABLE_WORKSPACE_MODULES = [
   "doc_extract",
   "dynamic_entities",
   "ai_assistant",
+  "asset_management",
 ] as const;
 
 type WorkspaceModulesCatalog = {
@@ -64,6 +67,7 @@ export const PLATFORM_TENANT_MODULE_BADGE_ORDER = [
   "doc_extract",
   "dynamic_entities",
   "ai_assistant",
+  "asset_management",
 ] as const;
 
 export function resolveEnabledModulesForUser(
@@ -98,5 +102,9 @@ export function isTenantModuleEnabled(
 }
 
 export function notificationsModuleEnabled(enabledModules: string[]): boolean {
-  return enabledModules.includes("e_approval") || enabledModules.includes("ticketing");
+  return (
+    enabledModules.includes("e_approval") ||
+    enabledModules.includes("ticketing") ||
+    enabledModules.includes("asset_management")
+  );
 }

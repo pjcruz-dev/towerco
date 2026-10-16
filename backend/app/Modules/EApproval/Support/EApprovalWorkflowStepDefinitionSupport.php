@@ -153,6 +153,10 @@ final class EApprovalWorkflowStepDefinitionSupport
             }
         }
 
+        if (self::confirmSettlementEnabled($condition)) {
+            $definition['confirm_settlement'] = true;
+        }
+
         return $definition;
     }
 
@@ -218,7 +222,30 @@ final class EApprovalWorkflowStepDefinitionSupport
             }
         }
 
+        if (self::confirmSettlementEnabled($step)) {
+            $definition['confirm_settlement'] = true;
+        }
+
         return $definition;
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     */
+    public static function confirmSettlementEnabled(array $source): bool
+    {
+        if (array_key_exists('confirm_settlement', $source)) {
+            return self::confirmSettlementTruthy($source['confirm_settlement']);
+        }
+
+        $condition = is_array($source['condition'] ?? null) ? $source['condition'] : [];
+
+        return self::confirmSettlementTruthy($condition['confirm_settlement'] ?? false);
+    }
+
+    private static function confirmSettlementTruthy(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1' || $value === 'true';
     }
 
     /**
@@ -309,6 +336,14 @@ final class EApprovalWorkflowStepDefinitionSupport
             }
         } else {
             unset($condition['when'], $condition['when_logic']);
+        }
+
+        if (array_key_exists('confirm_settlement', $step) || array_key_exists('confirm_settlement', $condition)) {
+            if (self::confirmSettlementEnabled($step)) {
+                $condition['confirm_settlement'] = true;
+            } else {
+                unset($condition['confirm_settlement']);
+            }
         }
 
         return $condition === [] ? null : $condition;

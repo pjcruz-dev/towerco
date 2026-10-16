@@ -26,6 +26,9 @@ final class DynFieldType
 
     public const RELATIONSHIP = 'relationship';
 
+    /** One parent record, many rows on another entity. */
+    public const CHILD_LIST = 'child_list';
+
     public const FILE = 'file';
 
     public const EMAIL = 'email';
@@ -51,6 +54,7 @@ final class DynFieldType
             self::MULTISELECT,
             self::BOOLEAN,
             self::RELATIONSHIP,
+            self::CHILD_LIST,
             self::FILE,
             self::EMAIL,
             self::PHONE,

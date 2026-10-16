@@ -40,6 +40,14 @@ class EApprovalSettingsShowController extends AbstractApiController
             'liquidation_requires_parent' => $policy['liquidation_requires_parent'] ? 'true' : 'false',
             'liquidation_overspend_mode' => $policy['liquidation_overspend_mode'],
             'liquidation_max_overspend_percent' => $policy['liquidation_max_overspend_percent'],
+            'liquidation_due_days' => $policy['liquidation_due_days'],
+            'liquidation_remind_days' => $policy['liquidation_remind_days'],
+            'block_new_cash_advance' => $policy['block_new_cash_advance'] ? 'true' : 'false',
+            'vat_rate_percent' => $policy['vat_rate_percent'],
+            'vat_amount_includes_vat' => $policy['vat_amount_includes_vat'] ? 'true' : 'false',
+            'per_diem_max_per_day' => $policy['per_diem_max_per_day'] ?? '',
+            'hotel_accommodation_max' => $policy['hotel_accommodation_max'] ?? '',
+            'site_search_scope' => $settings->siteSearchScope(),
         ]);
     }
 }

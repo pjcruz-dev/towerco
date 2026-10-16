@@ -65,6 +65,52 @@ final class EApprovalFieldComputedServiceTest extends TestCase
         $this->assertSame('369639.00', $values['total_reimbursement']);
     }
 
+    public function test_expense_lines_split_inclusive_vat_and_settlement(): void
+    {
+        $form = new EApprovalForm(['id' => 'form-vat']);
+        $form->setRelation('fields', collect([
+            $this->gridField('expense_lines', [
+                ['label' => 'Expense type', 'type' => 'select'],
+                ['label' => 'Amount', 'type' => 'currency'],
+                ['label' => 'VAT treatment', 'type' => 'select'],
+                ['label' => 'VAT', 'type' => 'currency'],
+            ]),
+            $this->currencyField('total_reimbursement'),
+            $this->currencyField('cash_advance_amount'),
+            new EApprovalFormField([
+                'name' => 'settlement_summary',
+                'label' => 'Settlement',
+                'type' => 'text',
+                'options' => null,
+            ]),
+            new EApprovalFormField([
+                'name' => 'non_vatable_total',
+                'label' => 'Non-VATable',
+                'type' => 'currency',
+                'options' => null,
+            ]),
+        ]));
+
+        $service = new EApprovalFieldComputedService;
+        $values = $service->apply($form, [
+            'expense_lines' => json_encode([
+                'rows' => [
+                    ['0' => 'lodging', '1' => '112', '2' => 'vatable', '3' => ''],
+                    ['0' => 'per_diem', '1' => '50', '2' => 'non_vatable', '3' => ''],
+                ],
+            ], JSON_THROW_ON_ERROR),
+            'total_reimbursement' => '0',
+            'cash_advance_amount' => '200.00',
+        ]);
+
+        $grid = json_decode((string) $values['expense_lines'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('12.00', $grid['rows'][0]['3']);
+        $this->assertSame('0.00', $grid['rows'][1]['3']);
+        $this->assertSame('162.00', $values['total_reimbursement']);
+        $this->assertSame('50.00', $values['non_vatable_total']);
+        $this->assertSame('Amount to surrender: 38.00', $values['settlement_summary']);
+    }
+
     public function test_purchase_requisition_total_sums_qty_times_unit_price(): void
     {
         $form = new EApprovalForm(['id' => 'form-2']);

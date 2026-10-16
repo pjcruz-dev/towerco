@@ -7,6 +7,8 @@ namespace App\Modules\AiAssistant\Support;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\LlmCompletionResult;
 use App\Modules\AiAssistant\DTOs\LlmPrompt;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -29,17 +31,43 @@ final class CursorLlmProvider implements LlmProviderInterface
         private readonly int $requestTimeoutSeconds = 30,
     ) {}
 
+    /** @var list<array{id: string, label: string}>|null */
+    private ?array $catalog = null;
+
+    /** @var (callable(string): void)|null */
+    private $waitListener = null;
+
+    /** @var (callable(array{kind: string, text: string, name?: string, status?: string}): void)|null */
+    private $deltaListener = null;
+
+    /**
+     * Called with the Cursor run status while a reply is still in progress.
+     *
+     * @param  (callable(string): void)|null  $listener
+     */
+    public function listenWhileWaiting(?callable $listener): void
+    {
+        $this->waitListener = $listener;
+    }
+
+    /**
+     * @param  (callable(array{kind: string, text: string, name?: string, status?: string}): void)|null  $listener
+     */
+    public function listenToDeltas(?callable $listener): void
+    {
+        $this->deltaListener = $listener;
+    }
+
     public function complete(LlmPrompt $prompt): LlmCompletionResult
     {
         $this->assertConfigured();
+        $this->notifyWaiting('CREATING');
 
         $model = $this->resolveModel($prompt->modelOverride);
         $started = hrtime(true);
         $endpoint = rtrim($this->baseUrl, '/').'/agents';
 
-        $createResponse = Http::withToken($this->apiKey)
-            ->acceptJson()
-            ->timeout($this->requestTimeoutSeconds)
+        $createResponse = $this->cursorHttp($this->requestTimeoutSeconds)
             ->post($endpoint, [
                 'prompt' => [
                     'text' => $this->buildPromptText($prompt),
@@ -63,7 +91,7 @@ final class CursorLlmProvider implements LlmProviderInterface
         }
 
         try {
-            $answer = $this->pollRunResult($agentId, $runId);
+            $answer = $this->streamRunResult($agentId, $runId) ?? $this->pollRunResult($agentId, $runId);
         } finally {
             $this->archiveAgentQuietly($agentId);
         }
@@ -93,12 +121,26 @@ final class CursorLlmProvider implements LlmProviderInterface
      */
     public function allowedModels(): array
     {
-        $models = $this->allowedModels !== [] ? $this->allowedModels : [$this->modelId];
+        $live = array_column($this->catalog(), 'id');
+        $models = $live !== [] ? $live : ($this->allowedModels !== [] ? $this->allowedModels : [$this->modelId]);
         if (! in_array($this->modelId, $models, true)) {
             array_unshift($models, $this->modelId);
         }
 
         return array_values(array_unique($models));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function modelLabels(): array
+    {
+        $labels = [];
+        foreach ($this->catalog() as $row) {
+            $labels[$row['id']] = $row['label'];
+        }
+
+        return $labels;
     }
 
     private function resolveModel(?string $override): string
@@ -122,6 +164,69 @@ final class CursorLlmProvider implements LlmProviderInterface
         return $candidate;
     }
 
+    /**
+     * @return list<array{id: string, label: string}>
+     */
+    private function catalog(): array
+    {
+        if ($this->catalog !== null) {
+            return $this->catalog;
+        }
+
+        if (trim($this->apiKey) === '') {
+            return $this->catalog = [];
+        }
+
+        $cacheKey = 'ai_assistant.cursor.models.'.hash('sha256', $this->apiKey.'|'.$this->baseUrl);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && $cached !== []) {
+            return $this->catalog = $this->normalizeCatalog($cached);
+        }
+
+        try {
+            $response = $this->cursorHttp(min(20, $this->requestTimeoutSeconds), retry: false)
+                ->get(rtrim($this->baseUrl, '/').'/models');
+        } catch (\Throwable) {
+            return $this->catalog = [];
+        }
+
+        if (! $response->successful()) {
+            return $this->catalog = [];
+        }
+
+        $rows = $this->normalizeCatalog($response->json('items'));
+        if ($rows !== []) {
+            Cache::put($cacheKey, $rows, 600);
+        }
+
+        return $this->catalog = $rows;
+    }
+
+    /**
+     * @return list<array{id: string, label: string}>
+     */
+    private function normalizeCatalog(mixed $items): array
+    {
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $id = trim((string) ($item['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $label = trim((string) ($item['label'] ?? $item['displayName'] ?? ''));
+            $rows[] = ['id' => $id, 'label' => $label !== '' ? $label : $id];
+        }
+
+        return $rows;
+    }
+
     private function assertConfigured(): void
     {
         if (trim($this->apiKey) === '') {
@@ -136,15 +241,181 @@ final class CursorLlmProvider implements LlmProviderInterface
         return trim($prompt->system)."\n\n---\n\n".trim($prompt->user);
     }
 
+    private function streamRunResult(string $agentId, string $runId): ?string
+    {
+        $url = rtrim($this->baseUrl, '/').'/agents/'.$agentId.'/runs/'.$runId.'/stream';
+
+        try {
+            $response = $this->cursorHttp(max(10, $this->maxWaitSeconds), retry: false)
+                ->accept('text/event-stream')
+                ->withOptions(['stream' => true])
+                ->get($url);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $contentType = strtolower((string) $response->header('Content-Type'));
+        if (! str_contains($contentType, 'text/event-stream')) {
+            return null;
+        }
+
+        $body = $response->toPsrResponse()->getBody();
+        $buffer = '';
+        $event = 'message';
+        $dataLines = [];
+        $assistant = '';
+        $final = null;
+
+        $flush = function () use (&$event, &$dataLines, &$assistant, &$final): void {
+            $parsed = $this->consumeStreamEvent($event, implode("\n", $dataLines), $assistant);
+            $event = 'message';
+            $dataLines = [];
+            if ($parsed !== null) {
+                $final = $parsed;
+            }
+        };
+
+        while (! $body->eof()) {
+            $chunk = $body->read(2048);
+            if ($chunk === '') {
+                break;
+            }
+            $buffer .= $chunk;
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = rtrim(substr($buffer, 0, $pos), "\r");
+                $buffer = substr($buffer, $pos + 1);
+                if ($line === '') {
+                    $flush();
+                    if (is_string($final) && $final !== '') {
+                        return $final;
+                    }
+
+                    continue;
+                }
+                if (str_starts_with($line, ':')) {
+                    continue;
+                }
+                if (str_starts_with($line, 'event:')) {
+                    $event = trim(substr($line, 6));
+                } elseif (str_starts_with($line, 'data:')) {
+                    $dataLines[] = ltrim(substr($line, 5));
+                }
+            }
+        }
+
+        if ($dataLines !== []) {
+            $flush();
+        }
+
+        if (is_string($final) && $final !== '') {
+            return $final;
+        }
+
+        $assistant = trim($assistant);
+
+        return $assistant !== '' ? $assistant : null;
+    }
+
+    private function consumeStreamEvent(string $event, string $data, string &$assistant): ?string
+    {
+        $payload = json_decode($data, true);
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        if ($event === 'status') {
+            $status = is_string($payload['status'] ?? null) ? strtoupper($payload['status']) : '';
+            if ($status !== '') {
+                $this->notifyWaiting($status);
+            }
+            if (in_array($status, ['ERROR', 'CANCELLED', 'EXPIRED'], true)) {
+                throw new RuntimeException('Cursor agent run ended with status '.$status.'.');
+            }
+
+            return null;
+        }
+
+        if ($event === 'thinking') {
+            $text = is_string($payload['text'] ?? null) ? $payload['text'] : '';
+            if ($text !== '') {
+                $this->emitDelta(['kind' => 'thinking', 'text' => $text]);
+            }
+
+            return null;
+        }
+
+        if ($event === 'assistant') {
+            $text = is_string($payload['text'] ?? null) ? $payload['text'] : '';
+            if ($text !== '') {
+                $assistant .= $text;
+                $this->emitDelta(['kind' => 'assistant', 'text' => $text]);
+            }
+
+            return null;
+        }
+
+        if ($event === 'tool_call') {
+            $name = is_string($payload['name'] ?? null) ? $payload['name'] : 'tool';
+            $status = is_string($payload['status'] ?? null) ? $payload['status'] : 'running';
+            $detail = is_string($payload['result'] ?? null) ? mb_substr($payload['result'], 0, 500) : '';
+            $this->emitDelta([
+                'kind' => 'tool',
+                'text' => $detail,
+                'name' => $name,
+                'status' => $status,
+            ]);
+
+            return null;
+        }
+
+        if ($event === 'error') {
+            $message = is_string($payload['message'] ?? null) ? trim($payload['message']) : '';
+            throw new RuntimeException($message !== '' ? $message : 'Cursor agent stream failed.');
+        }
+
+        if ($event === 'result') {
+            $status = is_string($payload['status'] ?? null) ? strtoupper($payload['status']) : '';
+            if (in_array($status, ['ERROR', 'CANCELLED', 'EXPIRED'], true)) {
+                throw new RuntimeException('Cursor agent run ended with status '.$status.'.');
+            }
+            $text = trim((string) ($payload['text'] ?? ''));
+            if ($text === '') {
+                $text = trim($assistant);
+            }
+            if ($text === '') {
+                throw new RuntimeException('Cursor agent run finished without a result message.');
+            }
+            $this->notifyWaiting('FINISHED');
+
+            return $text;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{kind: string, text: string, name?: string, status?: string}  $delta
+     */
+    private function emitDelta(array $delta): void
+    {
+        if ($this->deltaListener === null) {
+            return;
+        }
+
+        ($this->deltaListener)($delta);
+    }
+
     private function pollRunResult(string $agentId, string $runId): string
     {
         $deadline = time() + max(10, $this->maxWaitSeconds);
         $url = rtrim($this->baseUrl, '/').'/agents/'.$agentId.'/runs/'.$runId;
 
         while (time() < $deadline) {
-            $response = Http::withToken($this->apiKey)
-                ->acceptJson()
-                ->timeout($this->requestTimeoutSeconds)
+            $response = $this->cursorHttp($this->requestTimeoutSeconds, retry: false)
                 ->get($url);
 
             if (! $response->successful()) {
@@ -154,6 +425,7 @@ final class CursorLlmProvider implements LlmProviderInterface
             /** @var array<string, mixed> $run */
             $run = $response->json() ?? [];
             $status = is_string($run['status'] ?? null) ? strtoupper($run['status']) : '';
+            $this->notifyWaiting($status !== '' ? $status : 'RUNNING');
 
             if ($status === 'FINISHED') {
                 $result = trim((string) ($run['result'] ?? ''));
@@ -174,16 +446,43 @@ final class CursorLlmProvider implements LlmProviderInterface
         throw new RuntimeException('Cursor agent run timed out after '.$this->maxWaitSeconds.' seconds.');
     }
 
+    private function notifyWaiting(string $status): void
+    {
+        if ($this->waitListener === null) {
+            return;
+        }
+
+        ($this->waitListener)($status);
+    }
+
     private function archiveAgentQuietly(string $agentId): void
     {
         try {
-            Http::withToken($this->apiKey)
-                ->acceptJson()
-                ->timeout($this->requestTimeoutSeconds)
+            $this->cursorHttp($this->requestTimeoutSeconds, retry: false)
                 ->post(rtrim($this->baseUrl, '/').'/agents/'.$agentId.'/archive');
         } catch (\Throwable) {
             // Best-effort cleanup; do not fail the user answer.
         }
+    }
+
+    private function cursorHttp(int $timeoutSeconds, bool $retry = true): PendingRequest
+    {
+        $curl = [];
+        if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
+            $curl[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+        }
+
+        $pending = Http::withToken($this->apiKey)
+            ->acceptJson()
+            ->connectTimeout(25)
+            ->timeout(max(1, $timeoutSeconds))
+            ->withOptions($curl === [] ? [] : ['curl' => $curl]);
+
+        if ($retry) {
+            $pending = $pending->retry(2, 1000);
+        }
+
+        return $pending;
     }
 
     private function throwForFailedResponse(string $operation, int $status, string $body): void

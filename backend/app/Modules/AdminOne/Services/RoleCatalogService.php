@@ -37,6 +37,7 @@ class RoleCatalogService
         'ai_assistant_' => 'ai_assistant',
         'doc_extract_' => 'doc_extract',
         'dynamic_entities_' => 'dynamic_entities',
+        'assets_' => 'asset_management',
     ];
 
     public function __construct(
@@ -197,15 +198,30 @@ class RoleCatalogService
         array $permissions,
         ?array $accessMatrix = null,
     ): TenantRole {
-        if (TenantRbacSystemRoles::isSystem($role->name)) {
+        $systemRole = TenantRbacSystemRoles::isSystem($role->name);
+        if (
+            $systemRole
+            && (
+                $role->name === TenantRbacSystemRoles::FULL_ADMIN
+                || TenantRbacSystemRoles::isOwnerAlias((string) $role->name)
+            )
+        ) {
             throw ValidationException::withMessages([
-                'role' => [__('System roles cannot be modified from the console.')],
+                'role' => [__('The workspace owner role stays unrestricted.')],
             ]);
         }
 
-        $this->assertPermissionsExist($permissions);
+        if ($systemRole && $accessMatrix === null) {
+            throw ValidationException::withMessages([
+                'role' => [__('System role permissions stay fixed. Field access can still be set.')],
+            ]);
+        }
+
         $beforeCount = $role->permissions()->count();
-        $role->syncPermissions($permissions);
+        if (! $systemRole) {
+            $this->assertPermissionsExist($permissions);
+            $role->syncPermissions($permissions);
+        }
 
         if ($accessMatrix !== null && Schema::connection('tenant')->hasColumn('roles', 'access_matrix_json')) {
             $role->access_matrix_json = RoleAccessMatrix::normalize($accessMatrix);
@@ -219,7 +235,7 @@ class RoleCatalogService
         $this->activity->record(
             module: 'team_access',
             action: 'rbac.role_permissions_updated',
-            summary: 'Role permissions updated · '.$role->name,
+            summary: ($systemRole ? 'Field access updated · ' : 'Role permissions updated · ').$role->name,
             entityType: 'role',
             entityId: (string) $role->id,
             entityLabel: (string) $role->name,

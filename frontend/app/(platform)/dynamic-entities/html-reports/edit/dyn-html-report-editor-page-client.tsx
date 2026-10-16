@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   fetchDynHtmlReport,
   updateDynHtmlReport,
@@ -122,6 +123,7 @@ export function DynHtmlReportEditorPageClient() {
       });
       setReport(saved);
       setSlug(saved.slug);
+      notify.success("Report saved", saved.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -133,7 +135,7 @@ export function DynHtmlReportEditorPageClient() {
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
       <div className={cn(adminPageShellClass, "h-[calc(100vh-4rem)] gap-3")}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title={report?.name || "Edit report"}
           description="Edit HTML, CSS, and JavaScript for this report."
           actions={
@@ -239,8 +241,8 @@ export function DynHtmlReportEditorPageClient() {
                   <code>{"{{report.name}}"}</code>.
                 </p>
                 <p className="mt-1">
-                  From JS, call TowerOS session APIs or integration keys under{" "}
-                  <code>/api/v1/integration/dynamic-entities/…</code>.
+                  From JS, <code>AppFramework.ExecuteSQL(sql)</code> runs one SELECT on this tenant.
+                  jQuery, Bootstrap, Font Awesome, and Chart.js are already on the page.
                 </p>
               </div>
 

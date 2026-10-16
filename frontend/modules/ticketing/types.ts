@@ -27,6 +27,7 @@ export type TicketingTicketListRow = {
   updated_at: string | null;
   sla_due_at?: string | null;
   sla_status?: "on_track" | "at_risk" | "breached" | null;
+  custom_values?: Record<string, unknown>;
 };
 
 export type TicketingCommentRow = {
@@ -173,4 +174,25 @@ export type CreateTicketingTicketInput = {
   requester_id?: string;
   assignee_id?: string;
   links?: TicketingLinkInput[];
+  custom_values?: Record<string, unknown>;
+};
+
+export type TicketingSchemaField = {
+  id: string;
+  name: string;
+  label: string;
+  type: string;
+  is_required: boolean;
+  is_system_field: boolean;
+  show_in_table: boolean;
+  field_order: number;
+  options: unknown;
+};
+
+export type TicketingSchema = {
+  id: string;
+  slug: string;
+  name: string;
+  manage_fields_href: string;
+  fields: TicketingSchemaField[];
 };

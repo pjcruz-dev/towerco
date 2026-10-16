@@ -6,6 +6,8 @@ namespace App\Modules\Documents\Support;
 
 final class ControlledDocumentRevisionStatus
 {
+    public const PENDING = 'pending';
+
     public const PUBLISHED = 'published';
 
     public const SUPERSEDED = 'superseded';
@@ -15,6 +17,6 @@ final class ControlledDocumentRevisionStatus
      */
     public static function all(): array
     {
-        return [self::PUBLISHED, self::SUPERSEDED];
+        return [self::PENDING, self::PUBLISHED, self::SUPERSEDED];
     }
 }

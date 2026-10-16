@@ -51,6 +51,7 @@ final class TenantRbacPermissionCatalog
             'ticketing:tickets:create',
             'ticketing:tickets:manage',
             'ticketing:settings:manage',
+            'ticketing:fields:manage',
         ],
         'documents' => [
             'documents:view',
@@ -69,7 +70,6 @@ final class TenantRbacPermissionCatalog
             'ai_assistant:use',
             'ai_assistant:tools:use',
             'ai_assistant:actions:execute',
-            'ai_assistant:knowledge:manage',
             'ai_assistant:prompts:manage',
             'ai_assistant:conversations:audit',
         ],
@@ -78,6 +78,21 @@ final class TenantRbacPermissionCatalog
             'doc-extract:run',
             'doc-extract:templates:manage',
             'doc-extract:export',
+        ],
+        'asset_management' => [
+            'assets:view',
+            'assets:self:view',
+            'assets:manage',
+            'assets:assign',
+            'assets:transfer',
+            'assets:repair',
+            'assets:offboard',
+            'assets:dispose',
+            'assets:import',
+            'assets:export',
+            'assets:fields:manage',
+            'assets:settings:manage',
+            'assets:accountability:sign',
         ],
         'dynamic_entities' => [
             'dynamic_entities:view',
@@ -106,6 +121,7 @@ final class TenantRbacPermissionCatalog
         'ai_assistant' => 'AI Assistant',
         'doc_extract' => 'DocExtract',
         'dynamic_entities' => 'Dynamic Entities',
+        'asset_management' => 'Asset management',
     ];
 
     /**

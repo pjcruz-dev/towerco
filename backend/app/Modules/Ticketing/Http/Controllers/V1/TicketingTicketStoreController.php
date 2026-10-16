@@ -40,6 +40,7 @@ class TicketingTicketStoreController extends AbstractApiController
             'links.*.link_type' => ['required_with:links', 'string', 'max:128'],
             'links.*.link_id' => ['required_with:links', 'string', 'max:36'],
             'links.*.link_label' => ['nullable', 'string', 'max:255'],
+            'custom_values' => ['sometimes', 'array'],
         ]);
 
         if (! $request->user()->can('ticketing:tickets:manage')) {

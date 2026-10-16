@@ -275,21 +275,13 @@ final class EApprovalPdfLayoutService
     {
         $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
         $family = strtolower(trim((string) ($metadata['form_family'] ?? '')));
-        if (in_array($family, ['liquidation', 'reimbursement'], true)) {
+        if (in_array($family, ['cash_advance', 'liquidation', 'reimbursement'], true)) {
             return true;
         }
 
         $orientationHint = strtolower(trim((string) ($metadata['print_default_orientation'] ?? '')));
-        if ($orientationHint === 'landscape') {
-            return true;
-        }
 
-        $form->loadMissing('fields');
-
-        return $form->fields->contains(
-            static fn ($field): bool => (string) $field->type === 'grid'
-                && str_contains(strtolower((string) $field->name), 'expense'),
-        );
+        return $orientationHint === 'landscape';
     }
 
     /**
@@ -684,7 +676,8 @@ final class EApprovalPdfLayoutService
         $template['subsidiary_codes'] = $this->resolveSubsidiaryCodesForPersist(
             ['subsidiary_codes' => $codes, 'subsidiary_logos' => $logos],
             [$code],
-        );        if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
+        );
+        if (! isset($template['subsidiary_logo_field']) || trim((string) $template['subsidiary_logo_field']) === '') {
             $template['subsidiary_logo_field'] = 'subsidiary';
         }
         $stored['template'] = $this->sanitizeTemplate($template);

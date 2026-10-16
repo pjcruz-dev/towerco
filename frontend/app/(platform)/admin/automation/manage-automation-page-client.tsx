@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage, isApiTimeoutError } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   createScheduledTask,
   deleteScheduledTask,
@@ -113,7 +114,6 @@ export function ManageAutomationPageClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -165,7 +165,6 @@ export function ManageAutomationPageClient() {
     setEditingId(null);
     setForm(emptyForm(meta));
     setShowForm(true);
-    setNotice(null);
   }
 
   function openEdit(row: ScheduledTaskRow) {
@@ -178,7 +177,6 @@ export function ManageAutomationPageClient() {
       cron_expression: row.cron_expression,
     });
     setShowForm(true);
-    setNotice(null);
   }
 
   async function onSync() {
@@ -186,7 +184,7 @@ export function ManageAutomationPageClient() {
     setError(null);
     try {
       const result = await syncScheduledTasks();
-      setNotice(`Cron sync complete — ${result.synced} task(s) updated.`);
+      notify.success("Cron synced", `${result.synced} task(s) updated.`);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -200,7 +198,7 @@ export function ManageAutomationPageClient() {
     setError(null);
     try {
       await runScheduledTask(row.id);
-      setNotice(`Ran “${row.name}”.`);
+      notify.success("Task ran", row.name);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -214,7 +212,7 @@ export function ManageAutomationPageClient() {
     setError(null);
     try {
       const updated = await toggleScheduledTask(row.id);
-      setNotice(updated.is_active ? `Resumed “${row.name}”.` : `Paused “${row.name}”.`);
+      notify.success(updated.is_active ? "Task resumed" : "Task paused", row.name);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -257,7 +255,7 @@ export function ManageAutomationPageClient() {
           schedule: form.schedule,
           cron_expression: form.cron_expression.trim() || null,
         });
-        setNotice("Task updated.");
+        notify.success("Task updated", form.name.trim());
       } else {
         await createScheduledTask({
           name: form.name.trim(),
@@ -266,7 +264,7 @@ export function ManageAutomationPageClient() {
           schedule: form.schedule,
           cron_expression: form.cron_expression.trim() || null,
         });
-        setNotice("Task created.");
+        notify.success("Task created", form.name.trim());
       }
       setShowForm(false);
       setEditingId(null);
@@ -307,9 +305,6 @@ export function ManageAutomationPageClient() {
               Retry
             </Button>
           </div>
-        ) : null}
-        {notice ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground">{notice}</div>
         ) : null}
 
         {showForm ? (

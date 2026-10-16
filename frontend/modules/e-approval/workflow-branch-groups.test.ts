@@ -7,16 +7,20 @@ import type {
 import {
   alignNearMissBranchThresholds,
   appendIfElseBranchSteps,
+  applyValueMatchCases,
   branchGroupLabel,
   createComplementaryIfElseConditions,
   createThresholdLadderWhens,
   detectExclusiveBranchGroups,
   detectExclusiveThresholdLadders,
   detectNearMissBranchPairs,
+  detectValueMatchLadders,
+  retargetLadderField,
   getExclusiveThresholdCondition,
   insertIfElseBranchSteps,
   insertThresholdLadderSteps,
   isCanonicalThresholdLadder,
+  ladderCaseLabel,
   parseThresholdBand,
   toWorkflowEditorSegments,
   updateExclusiveBranchThreshold,
@@ -271,6 +275,71 @@ describe("workflow branch groups", () => {
     expect(labels.header).toBe("If / Else — Requested amount");
     expect(labels.ifLabel).toBe("Requested amount ≤ 5000");
     expect(labels.elseLabel).toBe("Requested amount > 5000");
+  });
+
+  it("labels a non-numeric boundary as a value match", () => {
+    const labels = branchGroupLabel(
+      {
+        startIndex: 0,
+        lowIndex: 0,
+        highIndex: 1,
+        field: "subsidiary",
+        threshold: "ATC",
+        lowOperator: "lte",
+        highOperator: "gt",
+      },
+      "Subsidiary",
+    );
+
+    expect(labels.ifLabel).toBe("Subsidiary is ATC");
+    expect(labels.elseLabel).toBe("Subsidiary is not ATC");
+  });
+
+  it("groups choice matches and rewrites a case to another value", () => {
+    const steps = [
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "a"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ADIC" }], "b"),
+    ];
+    const ladder = detectValueMatchLadders(steps)[0];
+    expect(ladder?.match).toBe("value");
+    expect(toWorkflowEditorSegments(steps).map((segment) => segment.type)).toEqual(["ladder"]);
+
+    const next = applyValueMatchCases(steps, ladder.bandIndexes, "subsidiary", [
+      { operator: "equals", value: "ATC" },
+      { operator: "not_equals", value: "ATC" },
+    ]);
+    expect(parseStepWhen(next[1])).toEqual([{ field: "subsidiary", operator: "not_equals", value: "ATC" }]);
+    expect(ladderCaseLabel(next[0], "Subsidiary")).toBe("Subsidiary is ATC");
+    expect(ladderCaseLabel(next[1], "Subsidiary")).toBe("Subsidiary is not ATC");
+  });
+
+  it("retargets a ladder to the selected field", () => {
+    const steps = [
+      stepWithWhen([{ field: "subsidiary", operator: "lte", value: "ATC" }], "a"),
+      stepWithWhen([{ field: "subsidiary", operator: "gt", value: "ATC" }], "b"),
+      stepWithWhen([], "c"),
+    ];
+    const ladder = toWorkflowEditorSegments(steps).find((segment) => segment.type === "ladder");
+    if (ladder?.type !== "ladder") {
+      throw new Error("expected a ladder");
+    }
+
+    const asPurpose = retargetLadderField(steps, ladder.ladder, "purpose", "value");
+    expect(parseStepWhen(asPurpose[0])).toEqual([{ field: "purpose", operator: "equals", value: "" }]);
+    expect(parseStepWhen(asPurpose[1])).toEqual([{ field: "purpose", operator: "not_equals", value: "" }]);
+    expect(asPurpose[2]?.approverId).toBe("c");
+
+    const asAmount = retargetLadderField(steps, ladder.ladder, "requested_amount", "amount");
+    expect(parseStepWhen(asAmount[0])).toEqual([
+      { field: "requested_amount", operator: "lte", value: "1000" },
+    ]);
+    expect(parseStepWhen(asAmount[1])).toEqual([
+      { field: "requested_amount", operator: "gt", value: "1000" },
+    ]);
+
+    const asChoices = retargetLadderField(steps, ladder.ladder, "subsidiary", "choice", ["ATC", "ADIC"]);
+    expect(parseStepWhen(asChoices[0])).toEqual([{ field: "subsidiary", operator: "equals", value: "ATC" }]);
+    expect(parseStepWhen(asChoices[1])).toEqual([{ field: "subsidiary", operator: "equals", value: "ADIC" }]);
   });
 
   it("updates both If/Else sides when the shared threshold changes", () => {

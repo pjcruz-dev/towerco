@@ -41,11 +41,30 @@ final class DynRoleAccessService
 
     public function canEntity(TenantUser $user, string $slug, string $action): bool
     {
-        $moduleOk = match ($action) {
-            'view', 'export' => $user->can('dynamic_entities:view'),
-            'create', 'edit', 'delete' => $user->can('dynamic_entities:records:manage'),
+        $writes = ['create', 'edit', 'delete', 'import', 'smart_scan', 'undo', 'truncate', 'duplicate'];
+        $moduleOk = match (true) {
+            in_array($action, ['view', 'export'], true) => $user->can('dynamic_entities:view'),
+            in_array($action, $writes, true) => $user->can('dynamic_entities:records:manage'),
             default => false,
         };
+        if (! $moduleOk && $slug === 'workspace_users' && in_array($action, ['view', 'export'], true)) {
+            $moduleOk = $user->can('ticketing:view')
+                || $user->can('ticketing:tickets:create')
+                || $user->can('ticketing:tickets:manage')
+                || $user->can('ticketing:fields:manage');
+        }
+        if (! $moduleOk && in_array($slug, ['helpdesk_ticket', 'helpdesk_ticket_activities'], true)) {
+            $moduleOk = match ($action) {
+                'view', 'export' => $user->can('ticketing:view')
+                    || $user->can('ticketing:tickets:create')
+                    || $user->can('ticketing:tickets:manage'),
+                'create', 'edit' => $user->can('ticketing:view')
+                    || $user->can('ticketing:tickets:create')
+                    || $user->can('ticketing:tickets:manage'),
+                'delete' => $user->can('ticketing:tickets:manage'),
+                default => false,
+            };
+        }
         if (! $moduleOk) {
             return false;
         }
@@ -55,9 +74,55 @@ final class DynRoleAccessService
         return $allowed ?? true;
     }
 
+    /**
+     * Null means every status is allowed.
+     *
+     * @return list<string>|null
+     */
+    public function allowedStatuses(TenantUser $user, string $slug): ?array
+    {
+        return RoleAccessMatrix::allowedStatuses($this->matrixFor($user), $slug);
+    }
+
+    public function statusAllowed(TenantUser $user, string $slug, ?string $status): bool
+    {
+        $allowed = $this->allowedStatuses($user, $slug);
+        if ($allowed === null) {
+            return true;
+        }
+        $status = trim((string) $status);
+        if ($status === '') {
+            return true;
+        }
+
+        return in_array($status, $allowed, true);
+    }
+
     public function fieldLevel(TenantUser $user, string $slug, string $field): string
     {
         return RoleAccessMatrix::fieldLevel($this->matrixFor($user), $slug, $field);
+    }
+
+    /**
+     * Drop values the role cannot fill in. Full access and form-only stay.
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    public function onlyEditable(TenantUser $user, string $slug, array $values): array
+    {
+        $matrix = $this->matrixFor($user);
+        $out = [];
+        foreach ($values as $field => $value) {
+            if (! is_string($field)) {
+                continue;
+            }
+            if (RoleAccessMatrix::editableOnForm(RoleAccessMatrix::fieldLevel($matrix, $slug, $field))) {
+                $out[$field] = $value;
+            }
+        }
+
+        return $out;
     }
 
     public function canWorkflow(TenantUser $user, string $slug, string $action): bool

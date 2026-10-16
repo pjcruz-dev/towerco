@@ -635,6 +635,7 @@
                 "Status": "status",
                 "TCO Site ID": "site_code",
                 "MNO Anchor Site ID": "mno_anchor_site_id",
+                "MNO Anchor Site ID (Site ID)": "mno_anchor_site_id",
                 "Sales Order Category": "sales_order_category",
                 "Subsidiary": "subsidiary",
                 "SAQ Tagging Project": "saq_tagging_project",

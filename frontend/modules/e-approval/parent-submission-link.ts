@@ -111,6 +111,21 @@ export function applyParentPrefillValues(
   return next;
 }
 
+/** Fields a selected cash advance replaces on the liquidation form. */
+const CASH_ADVANCE_PREFILL_KEYS = [
+  "cash_advance_document_no",
+  "cash_advance_amount",
+  "subsidiary",
+  "purpose",
+  "notes",
+  "liquidation_date",
+  "expense_lines",
+  "activity_lines",
+  "vat_total",
+  "non_vatable_total",
+  "vatable_net",
+] as const;
+
 /** Apply / clear Cash Advance parent selection on a liquidation form. */
 export function applyCashAdvanceParentSelection(
   currentValues: Record<string, string>,
@@ -121,11 +136,13 @@ export function applyCashAdvanceParentSelection(
   } | null,
 ): Record<string, string> {
   if (!item) {
-    return {
-      ...currentValues,
-      cash_advance_document_no: "",
-      cash_advance_amount: "",
-    };
+    const cleared = { ...currentValues };
+    for (const key of CASH_ADVANCE_PREFILL_KEYS) {
+      if (key in cleared) {
+        cleared[key] = "";
+      }
+    }
+    return cleared;
   }
 
   const amount = formatComputedFieldAmount(item.requested_amount);
@@ -136,7 +153,7 @@ export function applyCashAdvanceParentSelection(
       cash_advance_document_no: item.document_no,
       cash_advance_amount: amount,
     },
-    { overwriteKeys: ["cash_advance_document_no", "cash_advance_amount"] },
+    { overwriteKeys: [...CASH_ADVANCE_PREFILL_KEYS] },
   );
   next.cash_advance_document_no = item.document_no;
   next.cash_advance_amount = amount;

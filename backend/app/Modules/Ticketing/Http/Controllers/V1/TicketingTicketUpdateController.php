@@ -45,6 +45,7 @@ class TicketingTicketUpdateController extends AbstractApiController
             ])],
             'assignee_id' => ['nullable', 'uuid', 'exists:users,id'],
             'resolution_comment' => ['nullable', 'string', 'max:10000'],
+            'custom_values' => ['sometimes', 'array'],
         ]);
 
         $result = $service->update($ticket, $request->user(), $data);

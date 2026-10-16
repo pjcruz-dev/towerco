@@ -1092,6 +1092,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
               onStepsChange={setSteps}
               approverOptions={approverOptions}
               formId={formId}
+              formFamily={typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null}
             />
             <EApprovalFormRevisionSettingsCard
               value={revisionSettings}

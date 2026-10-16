@@ -271,4 +271,386 @@ final class DynRecordImportValidationTest extends TestCase
         );
         $this->assertGreaterThanOrEqual(37, count(AtcMetacoresoftExportMap::entitySlugs()));
     }
+
+    #[Test]
+    public function import_accepts_more_than_two_thousand_rows(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites',
+            'module_pack' => 'pm',
+        ], $this->actor);
+
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+
+        $lines = ['site_name'];
+        for ($i = 1; $i <= 2500; $i++) {
+            $lines[] = 'Site '.$i;
+        }
+        $file = UploadedFile::fake()->createWithContent('tower_sites.csv', implode("\n", $lines));
+
+        $result = $import->import(
+            $entity->fresh(['fields']),
+            $file,
+            ['site_name' => 'site_name'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(2500, $result['would_create']);
+        $this->assertSame(0, $result['error_rows']);
+    }
+
+    #[Test]
+    public function template_separates_child_headers_with_markers_and_import_skips_them(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $child = $admin->createEntity([
+            'name' => 'SAQ Trackers',
+            'slug' => 'saq_trackers',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($child, [
+            'label' => 'SAQ Status',
+            'name' => 'saq_status',
+            'type' => 'text',
+            'show_in_table' => true,
+        ]);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites_tpl',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $entity->related_tabs_json = [[
+            'entity_slug' => 'saq_trackers',
+            'label' => 'SAQ Trackers',
+        ]];
+        $entity->save();
+
+        $fresh = $entity->fresh(['fields']);
+        $template = $import->buildTemplate($fresh, ['saq_trackers']);
+        $this->assertStringContainsString('Site Name', $template['csv']);
+        $this->assertStringContainsString(DynRecordImportService::sectionMarker('SAQ Trackers'), $template['csv']);
+        $this->assertStringContainsString('SAQ Status', $template['csv']);
+
+        $csv = $template['csv']."North Site\n";
+        $file = UploadedFile::fake()->createWithContent('tower_sites_tpl.csv', $csv);
+
+        $result = $import->import(
+            $fresh,
+            $file,
+            ['Site Name' => 'site_name'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(1, $result['would_create']);
+        $this->assertSame(0, $result['error_rows']);
+    }
+
+    #[Test]
+    public function legacy_child_sections_are_not_validated_as_parent_rows(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites_sections',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'Date Endorsed by MNO',
+            'name' => 'date_endorsed_by_mno',
+            'type' => 'date',
+            'show_in_table' => true,
+        ]);
+
+        $csv = implode("\n", [
+            'Actions,Print,ID,Site Name,Status,Date Endorsed by MNO',
+            ',,1001,North Site,Site Acquisition,2026-01-15',
+            ',--- Telco Contracts ---',
+            ',Actions,Print,ID,Contract Number,Status,Site License Status,Tower Site,Telco Operator',
+            ',x,x,705,,,,706,GLOBE',
+            '',
+            ',,1002,South Site,Site Acquisition,2026-02-02',
+            ',--- SAQ Trackers ---',
+            ',ID,Actions,Print,Overall Status,Tower Site',
+            ',700,x,x,OG Site Acquisition,1002',
+        ]);
+        $file = UploadedFile::fake()->createWithContent('tower_sites_export.csv', $csv);
+
+        $result = $import->import(
+            $entity->fresh(['fields']),
+            $file,
+            [
+                'Site Name' => 'site_name',
+                'Date Endorsed by MNO' => 'date_endorsed_by_mno',
+            ],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(2, $result['would_create']);
+        $this->assertSame(0, $result['error_rows']);
+        $this->assertSame([], $result['errors']);
+    }
+
+    #[Test]
+    public function tower_site_export_headers_map_to_manage_fields_and_blank_dates_pass(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'MNO Anchor Site ID',
+            'name' => 'mno_anchor_site_id',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'RFTI Forecast',
+            'name' => 'rfti_forecast',
+            'type' => 'date',
+            'show_in_table' => true,
+        ]);
+
+        $csv = "Site Name,MNO Anchor Site ID (Site ID),RFTI Forecast\nNorth Site,NS-1,0000-00-00\n";
+        $file = UploadedFile::fake()->createWithContent('tower_sites.csv', $csv);
+        $fresh = $entity->fresh(['fields']);
+
+        $analyze = $import->analyze($fresh, $file);
+        $this->assertSame('mno_anchor_site_id', $analyze['suggested_map']['MNO Anchor Site ID (Site ID)'] ?? null);
+        $this->assertSame('site_name', $analyze['suggested_map']['Site Name'] ?? null);
+
+        $result = $import->import(
+            $fresh,
+            $file,
+            $analyze['suggested_map'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(1, $result['would_create']);
+        $this->assertSame(0, $result['error_rows']);
+    }
+
+    #[Test]
+    public function child_list_sections_create_rows_on_the_linked_entity(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $saq = $admin->createEntity([
+            'name' => 'SAQ Trackers',
+            'slug' => 'saq_trackers',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($saq, [
+            'label' => 'Overall Status',
+            'name' => 'overall_status',
+            'type' => 'text',
+            'show_in_table' => true,
+        ]);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites_children',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'SAQ Trackers',
+            'name' => 'saq_tracker_list',
+            'type' => 'child_list',
+            'target_entity_id' => $saq->id,
+            'show_in_table' => false,
+        ]);
+
+        $csv = implode("\n", [
+            'Site Name',
+            'North Site',
+            ',--- SAQ Trackers ---',
+            ',Overall Status',
+            ',OG Site Acquisition',
+            '',
+            'South Site',
+            ',--- Telco Contracts ---',
+            ',Telco Operator',
+            ',GLOBE',
+        ]);
+        $file = UploadedFile::fake()->createWithContent('tower_sites.csv', $csv);
+
+        $preview = $import->import(
+            $entity->fresh(['fields']),
+            $file,
+            ['Site Name' => 'site_name'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(2, $preview['would_create']);
+        $this->assertSame(1, $preview['child_would_create']);
+        $this->assertSame(0, $preview['error_rows']);
+    }
+
+    #[Test]
+    public function number_fields_accept_decimal_coordinates(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites_coords',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'Latitude',
+            'name' => 'latitude',
+            'type' => 'number',
+            'show_in_table' => true,
+        ]);
+
+        $csv = "Site Name,Latitude\nNorth Site,14.555413\n";
+        $file = UploadedFile::fake()->createWithContent('tower_sites.csv', $csv);
+
+        $preview = $import->import(
+            $entity->fresh(['fields']),
+            $file,
+            ['Site Name' => 'site_name', 'Latitude' => 'latitude'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(1, $preview['would_create']);
+        $this->assertSame(0, $preview['error_rows']);
+    }
+
+    #[Test]
+    public function child_rows_ignore_required_fields_missing_from_the_section(): void
+    {
+        $admin = app(DynEntityAdminService::class);
+        $import = app(DynRecordImportService::class);
+
+        $saq = $admin->createEntity([
+            'name' => 'SAQ Trackers',
+            'slug' => 'saq_trackers_required',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($saq, [
+            'label' => 'Overall Status',
+            'name' => 'overall_status',
+            'type' => 'text',
+            'show_in_table' => true,
+        ]);
+        $admin->createField($saq, [
+            'label' => 'bbhbh',
+            'name' => 'bbhbh',
+            'type' => 'number',
+            'is_required' => true,
+            'show_in_table' => false,
+        ]);
+
+        $entity = $admin->createEntity([
+            'name' => 'Tower Sites',
+            'slug' => 'tower_sites_saq_required',
+            'module_pack' => 'pm',
+        ], $this->actor);
+        $admin->createField($entity, [
+            'label' => 'Site Name',
+            'name' => 'site_name',
+            'type' => 'text',
+            'is_required' => true,
+            'show_in_table' => true,
+        ]);
+        $admin->createField($entity, [
+            'label' => 'SAQ Trackers',
+            'name' => 'saq_tracker_list',
+            'type' => 'child_list',
+            'target_entity_id' => $saq->id,
+            'show_in_table' => false,
+        ]);
+
+        $csv = implode("\n", [
+            'Site Name',
+            'North Site',
+            ',--- SAQ Trackers ---',
+            ',Overall Status',
+            ',OG Site Acquisition',
+            '',
+        ]);
+        $file = UploadedFile::fake()->createWithContent('tower_sites.csv', $csv);
+
+        $preview = $import->import(
+            $entity->fresh(['fields']),
+            $file,
+            ['Site Name' => 'site_name'],
+            null,
+            $this->actor,
+            true,
+        );
+
+        $this->assertSame(1, $preview['would_create']);
+        $this->assertSame(1, $preview['child_would_create']);
+        $this->assertSame(0, $preview['error_rows']);
+    }
 }

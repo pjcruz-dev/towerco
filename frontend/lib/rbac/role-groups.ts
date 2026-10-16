@@ -50,6 +50,7 @@ export const ATC_OPERATIONAL_ROLE_ORDER: string[] = [
  */
 const MODULE_GROUP_ORDER: { id: string; label: string; prefix: string }[] = [
   { id: "ticketing", label: "Ticketing", prefix: "ticketing_" },
+  { id: "asset_management", label: "Assets", prefix: "assets_" },
   { id: "documents", label: "Documents", prefix: "documents_" },
   { id: "document_register", label: "Document register", prefix: "dcf_" },
   { id: "e_approval", label: "E-Forms", prefix: "e_approval_" },

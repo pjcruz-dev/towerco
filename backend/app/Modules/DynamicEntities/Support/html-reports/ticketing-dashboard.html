@@ -1,0 +1,216 @@
+<div class="container-fluid py-3 ticket-dash">
+    <div class="print-formal-header d-none">
+        <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+            <div>
+                <h4 class="fw-bold mb-0 text-dark">{{system.company_name}}</h4>
+                <div class="small text-muted">TICKETING DASHBOARD</div>
+            </div>
+            <div class="text-end small">
+                <div><strong>Generated:</strong> <span class="print-date"></span></div>
+                <div><strong>Queue:</strong> Helpdesk tickets</div>
+            </div>
+        </div>
+        <div class="small mt-2"><strong>Scope:</strong> Open work, assignment, and SLA ageing</div>
+    </div>
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3 no-print">
+        <div>
+            <h4 class="mb-0 fw-bold" style="color: #3a475c;">
+                <i class="fas fa-ticket text-primary me-2"></i>Ticketing Dashboard
+            </h4>
+            <div class="text-muted small">Open tickets, who they are with, and which ones are past SLA.</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn btn-outline-secondary btn-sm" id="btn-refresh" title="Reload live data" type="button">
+                <i class="fas fa-sync-alt me-1"></i> Refresh
+            </button>
+            <button class="btn btn-outline-success btn-sm fw-semibold" id="btn-export-csv" title="Export current view to CSV" type="button">
+                <i class="fas fa-file-excel me-1"></i> Export CSV
+            </button>
+            <button class="btn btn-primary btn-sm fw-semibold" onclick="window.print()" title="Print formal report" type="button">
+                <i class="fas fa-print me-1"></i> Print to PDF
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3 no-print filter-toolbar-box">
+        <div class="card-body p-3">
+            <div class="row g-2 align-items-center">
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Status</label>
+                    <select id="filter-status" class="form-select form-select-sm">
+                        <option value="ALL">All statuses</option>
+                        <option value="open">Open</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Priority</label>
+                    <select id="filter-priority" class="form-select form-select-sm">
+                        <option value="ALL">All priorities</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="high">High</option>
+                        <option value="normal">Normal</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Category</label>
+                    <select id="filter-category" class="form-select form-select-sm">
+                        <option value="ALL">All categories</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">SLA</label>
+                    <select id="filter-sla" class="form-select form-select-sm">
+                        <option value="ALL">All ageing</option>
+                        <option value="CRITICAL">Overdue</option>
+                        <option value="WARNING">Due soon</option>
+                        <option value="ONTRACK">On track</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Opened from</label>
+                    <input type="date" id="filter-date-from" class="form-control form-control-sm">
+                </div>
+                <div class="col-12 col-md-3 col-lg-2">
+                    <label class="form-label small text-muted mb-1 fw-bold">Opened to</label>
+                    <input type="date" id="filter-date-to" class="form-control form-control-sm">
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="form-label small text-muted mb-1 fw-bold">Search</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="search-input" class="form-control" placeholder="Ticket, title, requester, assignee">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stage-pipeline-card stage-card-open p-3 h-100 kpi-card" data-status-filter="open">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-open fw-bold">Open</span>
+                    <i class="fas fa-inbox text-primary"></i>
+                </div>
+                <div class="small text-muted fw-bold">Waiting to start</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-open-count">0</h4>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Not yet in progress</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stage-pipeline-card stage-card-progress p-3 h-100 kpi-card" data-status-filter="in_progress">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-progress fw-bold">In progress</span>
+                    <i class="fas fa-spinner" style="color: #8b5cf6;"></i>
+                </div>
+                <div class="small text-muted fw-bold">Being worked</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-progress-count">0</h4>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Assignee is on it</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stage-pipeline-card stage-card-unassigned p-3 h-100 kpi-card" data-status-filter="UNASSIGNED">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge badge-priority-high fw-bold">Unassigned</span>
+                    <i class="fas fa-user-clock" style="color: #f59e0b;"></i>
+                </div>
+                <div class="small text-muted fw-bold">No assignee</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-unassigned-count">0</h4>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Open or in progress</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stage-pipeline-card stage-card-overdue p-3 h-100 kpi-card" data-status-filter="OVERDUE">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge sla-overdue fw-bold">SLA overdue</span>
+                    <i class="fas fa-exclamation-triangle text-danger"></i>
+                </div>
+                <div class="small text-muted fw-bold">Past the due time</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-overdue-count">0</h4>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Still open or in progress</div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-lg">
+            <div class="stage-pipeline-card stage-card-total p-3 h-100 kpi-card" data-status-filter="ALL">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-dark text-white fw-bold">In view</span>
+                    <i class="fas fa-layer-group text-success"></i>
+                </div>
+                <div class="small text-muted fw-bold">Matching tickets</div>
+                <h4 class="fw-bold my-1 text-dark" id="stat-total-count">0</h4>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Click a card to filter</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3 no-print">
+        <div class="col-12 col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2 border-0">
+                    <span class="fw-bold small text-dark"><i class="fas fa-chart-bar text-primary me-2"></i>Tickets by status</span>
+                </div>
+                <div class="card-body p-2">
+                    <div class="chart-container-box">
+                        <div style="position: relative; height: 280px; width: 100%;"><canvas id="chartStatus"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-2 border-0">
+                    <span class="fw-bold small text-dark"><i class="fas fa-chart-pie text-warning me-2"></i>SLA ageing</span>
+                </div>
+                <div class="card-body p-2">
+                    <div class="chart-container-box">
+                        <div style="position: relative; height: 280px; width: 100%;"><canvas id="chartSla"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom p-2 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <ul class="nav nav-pills nav-pills-custom gap-1" id="dash-tabs">
+                <li class="nav-item"><button class="nav-link active" data-tab-type="ALL" type="button">All (<span id="tab-cnt-all">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab-type="open" type="button">Open (<span id="tab-cnt-open">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab-type="in_progress" type="button">In progress (<span id="tab-cnt-progress">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab-type="UNASSIGNED" type="button">Unassigned (<span id="tab-cnt-unassigned">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link text-danger" data-tab-type="OVERDUE" type="button">Overdue (<span id="tab-cnt-overdue">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link" data-tab-type="resolved" type="button">Resolved (<span id="tab-cnt-resolved">0</span>)</button></li>
+            </ul>
+            <div class="text-muted small pe-2 no-print" id="table-showing-text">Showing 0 tickets</div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-custom table-hover align-middle mb-0" id="ticketTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">Ticket</th>
+                            <th>Title</th>
+                            <th style="width: 120px;">Status</th>
+                            <th style="width: 110px;">Priority</th>
+                            <th>Requester</th>
+                            <th>Assignee</th>
+                            <th class="text-center" style="width: 130px;">SLA</th>
+                            <th class="text-center no-print" style="width: 90px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ticketTableBody">
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <i class="fas fa-spinner fa-spin me-2 text-primary"></i> Loading tickets...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

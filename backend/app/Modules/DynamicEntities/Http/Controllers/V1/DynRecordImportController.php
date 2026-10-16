@@ -30,10 +30,10 @@ final class DynRecordImportController extends AbstractApiController
             })
             ->firstOrFail();
 
-        abort_unless($access->canEntity($user, (string) $model->slug, 'create'), 403);
+        abort_unless($access->canEntity($user, (string) $model->slug, 'import'), 403, __('Your role does not allow import for this entity.'));
 
         $data = $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
             'column_map' => ['required', 'string'],
             'upsert_field' => ['nullable', 'string', 'max:64'],
             'dry_run' => ['sometimes', 'boolean'],

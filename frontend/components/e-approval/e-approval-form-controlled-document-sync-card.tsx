@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -191,8 +192,11 @@ export function EApprovalFormControlledDocumentSyncCard({ value, onChange, field
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Configure who can see which register rows under{" "}
-            <strong className="font-medium text-foreground">Documents → Controlled Document Register → Register access</strong>.
+            Configure who can see which register rows on{" "}
+            <Link href="/documents/controlled/access" className="font-medium text-foreground underline-offset-2 hover:underline">
+              Register access
+            </Link>
+            .
           </p>
 
           {readiness.warnings.length > 0 ? (

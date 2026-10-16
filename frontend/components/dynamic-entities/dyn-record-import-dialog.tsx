@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, Download, FileSpreadsheet, ShieldCheck, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Check, Download, FileSpreadsheet, Info, ShieldCheck, Upload } from "lucide-react";
 
+import { JobProgressCard } from "@/components/dynamic-entities/job-progress-card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
 import {
   Dialog,
@@ -22,9 +24,29 @@ import {
   type DynImportAnalyzeResult,
   type DynImportResult,
 } from "@/lib/api/modules/dynamic-entities-api";
+import { getErrorMessage, isCanceledRequestError } from "@/lib/api/error";
+import {
+  csvFileFromBlocks,
+  csvFileFromRows,
+  IMPORT_BATCH_SIZE,
+  importBlocksFromCsv,
+  parentRowsFromCsv,
+} from "@/lib/dynamic-entities/dyn-import-csv";
+import { relationsForExport, type DynExportRelation } from "@/lib/dynamic-entities/dyn-record-export";
 import { cn } from "@/lib/utils";
 
 const IGNORE = "__ignore__";
+
+export type DynRecordImportClient = {
+  downloadTemplate: (include?: string[]) => Promise<Blob>;
+  analyze: (file: File, signal?: AbortSignal) => Promise<DynImportAnalyzeResult>;
+  run: (
+    file: File,
+    columnMap: Record<string, string>,
+    upsertField: string | null,
+    options?: { dryRun?: boolean; signal?: AbortSignal },
+  ) => Promise<DynImportResult>;
+};
 
 type Props = {
   open: boolean;
@@ -32,9 +54,18 @@ type Props = {
   entitySlug: string;
   entityName: string;
   onImported: () => void;
+  relatedTabs?: Array<Record<string, unknown>>;
+  client?: DynRecordImportClient;
 };
 
 type Step = "upload" | "map" | "preview" | "done";
+
+type ImportProgress = {
+  title: string;
+  done: number;
+  total: number;
+  label: string;
+};
 
 export function DynRecordImportDialog({
   open,
@@ -42,7 +73,16 @@ export function DynRecordImportDialog({
   entitySlug,
   entityName,
   onImported,
+  relatedTabs,
+  client,
 }: Props) {
+  const relations = useMemo(() => relationsForExport(relatedTabs), [relatedTabs]);
+  const api: DynRecordImportClient = client ?? {
+    downloadTemplate: (include) => downloadDynImportTemplate(entitySlug, include),
+    analyze: (next, signal) => analyzeDynImport(entitySlug, next, signal),
+    run: (next, columnMap, upsertField, options) =>
+      runDynImport(entitySlug, next, columnMap, upsertField, options),
+  };
   const fileInputId = "dyn-import-file";
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -54,19 +94,35 @@ export function DynRecordImportDialog({
   const [preview, setPreview] = useState<DynImportResult | null>(null);
   const [result, setResult] = useState<DynImportResult | null>(null);
   const [templatePromptOpen, setTemplatePromptOpen] = useState(false);
+  const [templateInclude, setTemplateInclude] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setStep("upload");
+      setFile(null);
+      setBusy(false);
+      setError(null);
+      setAnalyze(null);
+      setColumnMap({});
+      setUpsertField("");
+      setPreview(null);
+      setResult(null);
+      setTemplatePromptOpen(false);
+      setTemplateInclude(new Set());
+      setProgress(null);
+    } else {
+      setProgress(null);
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
-    if (!open) return;
-    setStep("upload");
-    setFile(null);
-    setBusy(false);
-    setError(null);
-    setAnalyze(null);
-    setColumnMap({});
-    setUpsertField("");
-    setPreview(null);
-    setResult(null);
-    setTemplatePromptOpen(false);
+    if (open) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
   }, [open]);
 
   const mappedTargets = useMemo(() => {
@@ -83,12 +139,20 @@ export function DynRecordImportDialog({
   const previewHasErrors = (preview?.error_rows ?? preview?.errors.length ?? 0) > 0;
   const previewValid = preview?.valid_rows ?? 0;
 
+  function toggleTemplateInclude(slug: string, checked: boolean) {
+    setTemplateInclude((current) => {
+      const next = new Set(current);
+      if (checked) next.add(slug);
+      else next.delete(slug);
+      return next;
+    });
+  }
+
   async function onDownloadTemplate() {
     setTemplatePromptOpen(false);
-    setBusy(true);
     setError(null);
     try {
-      const blob = await downloadDynImportTemplate(entitySlug);
+      const blob = await api.downloadTemplate([...templateInclude]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -97,9 +161,24 @@ export function DynRecordImportDialog({
       URL.revokeObjectURL(url);
     } catch {
       setError("Unable to download template.");
-    } finally {
-      setBusy(false);
     }
+  }
+
+  function startProgress(title: string): AbortController {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setError(null);
+    setProgress({ title, done: 0, total: 0, label: "Preparing import…" });
+    return controller;
+  }
+
+  function cancelProgress() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setProgress(null);
+    setBusy(false);
   }
 
   async function onAnalyze() {
@@ -107,36 +186,63 @@ export function DynRecordImportDialog({
       setError("Select a CSV file first.");
       return;
     }
-    setBusy(true);
-    setError(null);
+    const controller = startProgress("Analyzing data");
     try {
-      const data = await analyzeDynImport(entitySlug, file);
-      setAnalyze(data);
+      const text = await file.text();
+      if (controller.signal.aborted) return;
+      const parsed = parentRowsFromCsv(text);
+      const total = parsed.rows.length;
+      setProgress({
+        title: "Analyzing data",
+        done: 0,
+        total,
+        label: `Processing 0 of ${total.toLocaleString()} records...`,
+      });
+      const sample = csvFileFromRows(parsed.headers, parsed.rows.slice(0, 6), file.name);
+      const data = await api.analyze(sample, controller.signal);
+      if (controller.signal.aborted) return;
+      setAnalyze({ ...data, row_count: total });
       setColumnMap({ ...data.suggested_map });
       setUpsertField("");
       setPreview(null);
       setStep("map");
-    } catch {
-      setError("Unable to analyze CSV. Check the file format and try again.");
+      setProgress({
+        title: "Analyzing data",
+        done: total,
+        total,
+        label: `Processing ${total.toLocaleString()} of ${total.toLocaleString()} records...`,
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+    } catch (err) {
+      if (controller.signal.aborted || isCanceledRequestError(err)) return;
+      setError(getErrorMessage(err));
     } finally {
-      setBusy(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setProgress(null);
+        setBusy(false);
+      }
     }
   }
 
   async function onValidate() {
     if (!file || !analyze) return;
-    setBusy(true);
-    setError(null);
+    const controller = startProgress("Validating data");
     try {
-      const data = await runDynImport(entitySlug, file, columnMap, upsertField || null, {
-        dryRun: true,
-      });
+      const data = await runInBatches(file, true, controller);
+      if (controller.signal.aborted || !data) return;
       setPreview(data);
       setStep("preview");
-    } catch {
-      setError("Validation failed. Review mappings and required fields, then try again.");
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+    } catch (err) {
+      if (controller.signal.aborted || isCanceledRequestError(err)) return;
+      setError(getErrorMessage(err) || "Validation failed. Review mappings and required fields, then try again.");
     } finally {
-      setBusy(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setProgress(null);
+        setBusy(false);
+      }
     }
   }
 
@@ -146,18 +252,65 @@ export function DynRecordImportDialog({
       setError("Fix validation errors before importing, or choose “Import valid rows only”.");
       return;
     }
-    setBusy(true);
-    setError(null);
+    const controller = startProgress("Importing data");
     try {
-      const data = await runDynImport(entitySlug, file, columnMap, upsertField || null);
+      const data = await runInBatches(file, false, controller);
+      if (!data) return;
+      if (controller.signal.aborted && data.created === 0 && data.updated === 0) return;
       setResult(data);
       setStep("done");
-      onImported();
-    } catch {
-      setError("Import failed. Review mappings and required fields, then try again.");
+      if (data.created > 0 || data.updated > 0) onImported();
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
+    } catch (err) {
+      if (controller.signal.aborted || isCanceledRequestError(err)) return;
+      setError(getErrorMessage(err) || "Import failed. Review mappings and required fields, then try again.");
     } finally {
-      setBusy(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setProgress(null);
+        setBusy(false);
+      }
     }
+  }
+
+  async function runInBatches(
+    source: File,
+    dryRun: boolean,
+    controller: AbortController,
+  ): Promise<DynImportResult | null> {
+    const parsed = importBlocksFromCsv(await source.text());
+    if (controller.signal.aborted) return null;
+    const total = parsed.blocks.length;
+    const title = dryRun ? "Validating data" : "Importing data";
+    const totals = emptyImportResult(dryRun);
+    if (total === 0) {
+      setProgress({
+        title,
+        done: 0,
+        total: 0,
+        label: "Processing 0 of 0 records...",
+      });
+      return totals;
+    }
+    for (let start = 0; start < total; start += IMPORT_BATCH_SIZE) {
+      if (controller.signal.aborted) return dryRun ? null : totals;
+      const slice = parsed.blocks.slice(start, start + IMPORT_BATCH_SIZE);
+      const chunk = csvFileFromBlocks(parsed.headers, slice, source.name);
+      const part = await api.run(chunk, columnMap, upsertField || null, {
+        dryRun,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return dryRun ? null : totals;
+      addImportResult(totals, part, start);
+      const done = Math.min(start + slice.length, total);
+      setProgress({
+        title,
+        done,
+        total,
+        label: `Processing ${done.toLocaleString()} of ${total.toLocaleString()} records...`,
+      });
+    }
+    return totals;
   }
 
   return (
@@ -187,8 +340,10 @@ export function DynRecordImportDialog({
             {step === "upload" ? (
               <>
                 <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-                  Step 1: Select a CSV file to begin. Headers are analyzed and field mappings are
-                  suggested for your review.
+                  <p className="font-medium">Step 1: Select a CSV file to begin.</p>
+                  <p className="mt-1">
+                    The AI will analyze the headers and suggest field mappings for your review.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground" htmlFor={fileInputId}>
@@ -210,15 +365,22 @@ export function DynRecordImportDialog({
                     </p>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
-                  disabled={busy}
-                  onClick={() => setTemplatePromptOpen(true)}
-                >
-                  <Download className="size-3.5" />
-                  Download CSV Data Template
-                </button>
+                <div className="flex flex-col items-center gap-2 pt-2">
+                  <p className="text-sm text-muted-foreground">Don&apos;t have a template?</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled={busy}
+                    onClick={() => {
+                      setTemplateInclude(new Set());
+                      setTemplatePromptOpen(true);
+                    }}
+                  >
+                    <Download className="size-3.5" />
+                    Download CSV Data Template
+                  </Button>
+                </div>
               </>
             ) : null}
 
@@ -252,8 +414,12 @@ export function DynRecordImportDialog({
                           }
                         >
                           <option value={IGNORE}>Ignore this column</option>
-                          <option value="title">Title (title)</option>
-                          <option value="status">Status (status)</option>
+                          {client ? null : (
+                            <>
+                              <option value="title">Title (title)</option>
+                              <option value="status">Status (status)</option>
+                            </>
+                          )}
                           {analyze.fields.map((f) => {
                             const taken =
                               mappedTargets.has(f.name) && columnMap[header] !== f.name;
@@ -312,6 +478,12 @@ export function DynRecordImportDialog({
                   <Stat label="Would update" value={preview.would_update ?? 0} tone="info" />
                   <Stat label="Invalid / skip" value={preview.would_skip ?? 0} tone="muted" />
                 </div>
+                {(preview.child_would_create ?? 0) > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Child lists: {(preview.child_would_create ?? 0).toLocaleString()} records ready
+                    under the matching sites.
+                  </p>
+                ) : null}
                 {preview.errors.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
                     <ul className="divide-y divide-border text-sm">
@@ -437,16 +609,43 @@ export function DynRecordImportDialog({
       </Dialog>
 
       <Dialog open={templatePromptOpen} onOpenChange={setTemplatePromptOpen}>
-        <DialogContent className="w-[min(calc(100vw-2rem),420px)]" showCloseButton>
+        <DialogContent className="w-[min(calc(100vw-2rem),480px)]" showCloseButton>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="size-4 text-muted-foreground" />
               Import Template Options
             </DialogTitle>
             <DialogDescription>
-              No related lists available for this entity. Proceed with standard template?
+              {relations.length > 0
+                ? "Select which related items you want to include in your import template:"
+                : "No related lists available for this entity. Proceed with the standard template?"}
             </DialogDescription>
           </DialogHeader>
+          <DialogBody className="space-y-3">
+            {relations.length > 0 ? (
+              <ul className="space-y-2">
+                {relations.map((relation: DynExportRelation) => {
+                  const checkboxId = `template-include-${relation.entity_slug}`;
+                  return (
+                    <li key={relation.entity_slug} className="flex items-center gap-2">
+                      <Checkbox
+                        id={checkboxId}
+                        checked={templateInclude.has(relation.entity_slug)}
+                        onCheckedChange={(value) => toggleTemplateInclude(relation.entity_slug, value === true)}
+                      />
+                      <label htmlFor={checkboxId} className="text-sm">
+                        Include {relation.label}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            <div className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+              <Info className="mt-0.5 size-4 shrink-0" />
+              <p>The template will include parent headers and child headers separated by markers.</p>
+            </div>
+          </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setTemplatePromptOpen(false)}>
               Cancel
@@ -458,8 +657,51 @@ export function DynRecordImportDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {progress ? (
+        <JobProgressCard
+          title={progress.title}
+          label={progress.label}
+          done={progress.done}
+          total={progress.total}
+          onCancel={cancelProgress}
+        />
+      ) : null}
     </>
   );
+}
+
+function emptyImportResult(dryRun: boolean): DynImportResult {
+  return {
+    dry_run: dryRun,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    would_create: 0,
+    would_update: 0,
+    would_skip: 0,
+    valid_rows: 0,
+    error_rows: 0,
+    errors: [],
+    child_would_create: 0,
+    child_created: 0,
+  };
+}
+
+function addImportResult(totals: DynImportResult, part: DynImportResult, batchStart: number) {
+  totals.created += part.created ?? 0;
+  totals.updated += part.updated ?? 0;
+  totals.skipped += part.skipped ?? 0;
+  totals.would_create = (totals.would_create ?? 0) + (part.would_create ?? 0);
+  totals.would_update = (totals.would_update ?? 0) + (part.would_update ?? 0);
+  totals.would_skip = (totals.would_skip ?? 0) + (part.would_skip ?? 0);
+  totals.valid_rows = (totals.valid_rows ?? 0) + (part.valid_rows ?? 0);
+  totals.error_rows = (totals.error_rows ?? 0) + (part.error_rows ?? part.errors.length);
+  totals.child_would_create = (totals.child_would_create ?? 0) + (part.child_would_create ?? 0);
+  totals.child_created = (totals.child_created ?? 0) + (part.child_created ?? 0);
+  for (const err of part.errors) {
+    totals.errors.push({ row: batchStart + err.row, message: err.message });
+  }
 }
 
 function Stat({

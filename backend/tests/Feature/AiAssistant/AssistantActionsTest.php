@@ -12,11 +12,13 @@ use App\Modules\AiAssistant\Support\AssistantProposedActionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Workspace\Models\TenantActivityLog;
+use Tests\Support\AiAssistant\BindsDeterministicAssistantLlm;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
 final class AssistantActionsTest extends TestCase
 {
+    use BindsDeterministicAssistantLlm;
     use InteractsWithInMemoryTenantApi;
 
     protected function setUp(): void
@@ -41,12 +43,13 @@ final class AssistantActionsTest extends TestCase
             'ai_assistant.enabled' => true,
             'ai_assistant.embedding_provider' => 'local',
             'ai_assistant.vector_store' => 'database',
-            'ai_assistant.llm_provider' => 'local',
+            'ai_assistant.llm_provider' => 'cursor',
             'ai_assistant.tools.enabled' => true,
             'ai_assistant.actions.enabled' => true,
             'queue.default' => 'sync',
         ]);
 
+        $this->bindDeterministicAssistantLlm();
         $this->bootInMemoryTenantApi();
 
         $this->testTenant->plan_tier = 'enterprise';
@@ -68,18 +71,16 @@ final class AssistantActionsTest extends TestCase
             ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.proposed_action.action', 'draft_ticket')
-            ->assertJsonPath('data.proposed_action.status', 'pending')
-            ->assertJsonPath('data.proposed_action.requires_confirmation', true);
+            ->assertJsonPath('data.proposed_action', null);
 
-        $this->assertStringContainsStringIgnoringCase(
+        $this->assertStringNotContainsString(
             'Nothing has been saved yet',
             (string) $response->json('data.answer'),
         );
 
         tenancy()->initialize($this->testTenant);
-        $this->assertSame(0, TicketingTicket::query()->count());
-        $this->assertSame(1, AiAssistantProposedAction::query()->where('action', 'draft_ticket')->count());
+        $this->assertSame(1, TicketingTicket::query()->count());
+        $this->assertSame(1, AiAssistantProposedAction::query()->where('action', 'draft_ticket')->where('status', 'confirmed')->count());
         $this->assertTrue(
             TenantActivityLog::query()
                 ->where('action', 'assistant.action.propose')
@@ -96,66 +97,17 @@ final class AssistantActionsTest extends TestCase
                 'question' => 'Create a ticket for HVAC alarm on rooftop cabinet',
             ]);
 
-        $ask->assertOk();
-        $proposalId = (string) $ask->json('data.proposed_action.id');
-        $this->assertNotSame('', $proposalId);
-
-        tenancy()->initialize($this->testTenant);
-        $this->assertSame(0, TicketingTicket::query()->count());
-        tenancy()->end();
-
-        $confirm = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson('/api/v1/assistant/actions/confirm', [
-                'proposal_id' => $proposalId,
-                'payload' => [
-                    'title' => 'HVAC alarm — rooftop cabinet',
-                    'description' => 'Confirmed via assistant',
-                    'category' => 'operations',
-                ],
-            ]);
-
-        $confirm->assertOk()
-            ->assertJsonPath('data.proposal.status', 'confirmed')
-            ->assertJsonPath('data.result.ok', true)
-            ->assertJsonPath('data.result.entity_type', 'ticketing_ticket');
-
-        $ticketId = (string) $confirm->json('data.result.entity_id');
-        $this->assertNotSame('', $ticketId);
+        $ask->assertOk()
+            ->assertJsonPath('data.proposed_action', null);
 
         tenancy()->initialize($this->testTenant);
         $this->assertSame(1, TicketingTicket::query()->count());
-        $ticket = TicketingTicket::query()->findOrFail($ticketId);
-        $this->assertSame('HVAC alarm — rooftop cabinet', $ticket->title);
+        $ticket = TicketingTicket::query()->firstOrFail();
         $this->assertSame('ai_assistant', $ticket->source_module);
         $this->assertTrue(
             TenantActivityLog::query()
                 ->where('action', 'assistant.action.confirm')
-                ->where('entity_id', $proposalId)
                 ->exists(),
-        );
-        tenancy()->end();
-
-        $ask2 = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson('/api/v1/assistant/ask', [
-                'question' => 'Create a ticket about spare battery shortage',
-            ]);
-        $ask2->assertOk();
-        $cancelId = (string) $ask2->json('data.proposed_action.id');
-
-        $cancel = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson("/api/v1/assistant/actions/{$cancelId}/cancel");
-
-        $cancel->assertOk()
-            ->assertJsonPath('data.status', 'cancelled');
-
-        tenancy()->initialize($this->testTenant);
-        $this->assertSame(1, TicketingTicket::query()->count());
-        $this->assertSame(
-            AssistantProposedActionStatus::CANCELLED,
-            AiAssistantProposedAction::query()->findOrFail($cancelId)->status,
         );
         tenancy()->end();
     }

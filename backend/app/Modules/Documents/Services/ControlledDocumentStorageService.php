@@ -88,6 +88,15 @@ final class ControlledDocumentStorageService
         ];
     }
 
+    public function deleteStoredFile(?string $path): void
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+
+        Storage::disk($this->disk())->delete($path);
+    }
+
     public function streamDownload(ControlledDocumentRevision $revision): StreamedResponse
     {
         $path = (string) $revision->stored_path;
@@ -124,7 +133,7 @@ final class ControlledDocumentStorageService
             $minutes = (int) config('toweros.tenant_files.signed_url_minutes', 60);
 
             return [
-                'url'    => Storage::disk($disk)->temporaryUrl($path, now()->addMinutes($minutes)),
+                'url' => Storage::disk($disk)->temporaryUrl($path, now()->addMinutes($minutes)),
                 'stream' => false,
             ];
         }

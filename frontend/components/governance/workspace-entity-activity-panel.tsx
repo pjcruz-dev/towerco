@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { formatTimestamp } from "@/lib/admin/user-display";
 import { fetchWorkspaceAuditForEntity } from "@/lib/api/modules/workspace-audit-api";
 import {
   auditCategoryLabel,
-  auditSeverityClassName,
   auditSeverityLabel,
+  auditSeverityTone,
 } from "@/lib/workspace/audit-display";
 import { cn } from "@/lib/utils";
 import { permissions } from "@/lib/rbac/permissions";
@@ -90,9 +91,9 @@ export function WorkspaceEntityActivityPanel({
                   </Badge>
                 ) : null}
                 {row.severity ? (
-                  <Badge variant="outline" className={cn("font-normal", auditSeverityClassName(row.severity))}>
+                  <StatusBadge tone={auditSeverityTone(row.severity)} className="font-normal">
                     {auditSeverityLabel(row.severity)}
-                  </Badge>
+                  </StatusBadge>
                 ) : null}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

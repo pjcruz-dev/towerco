@@ -493,7 +493,9 @@ sudo systemctl enable --now toweros-worker
 
 ## 7. HTTPS + Route 53
 
-**Option A — ALB + ACM (recommended):** target groups → EC2 `:80` (web) and `:8000` (API), or single Nginx on EC2 routing `/api` → API.
+**Option A — ALB + ACM (recommended):** target groups → EC2 `:80` (web) and `:8000` (API), or single Nginx on EC2 routing `/api` → API. Set the API target group idle timeout to **180 seconds**. The default 60 seconds cuts an assistant ask before the model returns.
+
+`api.alliancetowers.com` is served through CloudFront. Set that distribution’s origin response timeout to **180 seconds** as well. The default is 30 seconds, and the account quota often stops at 60 until AWS raises it. CloudFront cuts the ask before nginx or the load balancer.
 
 **Option B — Nginx on EC2:**
 
@@ -508,6 +510,8 @@ server {
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
     }
 
     location / {

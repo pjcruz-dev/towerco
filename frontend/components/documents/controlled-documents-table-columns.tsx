@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import {
@@ -49,8 +50,18 @@ export function createControlledDocumentsTableColumns(options: {
       "status",
       "Status",
       (row) => (
-        <span className={statusToneClassName(controlledDocumentStatusTone(row.status))}>
-          {row.status}
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className={statusToneClassName(controlledDocumentStatusTone(row.status))}>
+            {row.status}
+          </span>
+          {row.incoming_submission_id && row.incoming_revision != null ? (
+            <Link
+              href={`/e-approval/submissions/${row.incoming_submission_id}`}
+              className={statusToneClassName("warning")}
+            >
+              Rev {row.incoming_revision} incoming
+            </Link>
+          ) : null}
         </span>
       ),
       { enableSorting: true },
@@ -59,6 +70,19 @@ export function createControlledDocumentsTableColumns(options: {
       className: "text-muted-foreground",
       enableSorting: true,
     }),
+    createTextColumn("next_review_date", "Next review", (row) => row.next_review_date ?? "—", {
+      className: "text-muted-foreground tabular-nums",
+      enableSorting: true,
+    }),
+    createTextColumn(
+      "has_file",
+      "File",
+      (row) => (
+        <span className={statusToneClassName(row.has_file ? "success" : "neutral")}>
+          {row.has_file ? "Has file" : "Missing file"}
+        </span>
+      ),
+    ),
     createActionsColumn("Actions", (row) => {
       const canRevise =
         options.canCreate &&

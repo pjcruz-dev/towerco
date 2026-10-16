@@ -4,7 +4,6 @@ import { DynExtendedReportPageClient } from "../dyn-extended-report-page-client"
 import type { DynExtendedReportKey } from "@/lib/api/modules/dynamic-entities-api";
 
 const EXTENDED_REPORTS = new Set<DynExtendedReportKey>([
-  "cas-executive-dashboard",
   "ar-ap-aging",
   "stock-on-hand",
   "petty-cash",

@@ -6,6 +6,9 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalPerDiemDays;
+use App\Modules\EApproval\Support\EApprovalSiteStop;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Validation\ValidationException;
@@ -120,10 +123,23 @@ final class EApprovalSubmissionParentLinkService
             if ((string) $parent->status !== EApprovalSubmissionStatus::APPROVED) {
 
                 throw ValidationException::withMessages([
-                    'parent_submission_id' => [__('Cash advance must be approved before it can be liquidated.')],
+                    'parent_submission_id' => [__('Cash advance must be released before it can be liquidated.')],
 
                 ]);
 
+            }
+
+            $stage = $this->financeStage($parent);
+            if (in_array($stage, ['for_return', 'funds_returned'], true)) {
+                throw ValidationException::withMessages([
+                    'parent_submission_id' => [__('This cash advance is being returned and cannot be liquidated.')],
+                ]);
+            }
+
+            if ($this->cashAdvances->hasLiveLiquidation($parentId, $excludeChildSubmissionId)) {
+                throw ValidationException::withMessages([
+                    'parent_submission_id' => [__('This cash advance already has a liquidation.')],
+                ]);
             }
 
             $openBalance = $this->cashAdvances->openBalanceForParent($parentId, $excludeChildSubmissionId);
@@ -132,15 +148,6 @@ final class EApprovalSubmissionParentLinkService
 
                 throw ValidationException::withMessages([
                     'parent_submission_id' => [__('Cash advance does not have a valid requested amount.')],
-
-                ]);
-
-            }
-
-            if ($openBalance <= 0) {
-
-                throw ValidationException::withMessages([
-                    'parent_submission_id' => [__('Cash advance has no remaining balance to liquidate.')],
 
                 ]);
 
@@ -464,11 +471,34 @@ final class EApprovalSubmissionParentLinkService
             $prefill['liquidation_date'] = now()->toDateString();
         }
 
+        $parent->loadMissing('form.fields');
+        $childForm->loadMissing('fields');
+
+        foreach (['expense_lines', 'activity_lines'] as $gridField) {
+            if (! $this->childHasField($childForm, $gridField)) {
+                continue;
+            }
+            $raw = $parentValues[$gridField] ?? null;
+            if ($this->isEmptyChildValue($raw)) {
+                continue;
+            }
+            $prefill[$gridField] = $this->remapGridOntoChild(
+                trim((string) $raw),
+                $this->gridColumnLabels($parent->form?->fields?->firstWhere('name', $gridField)?->options),
+                $this->gridColumnLabels($childForm->fields->firstWhere('name', $gridField)?->options),
+                $gridField,
+            );
+        }
+
         foreach ([
-            'purpose' => 'notes',
+            'purpose' => 'purpose',
             'department' => 'department',
             'currency' => 'currency',
             'subsidiary' => 'subsidiary',
+            'notes' => 'notes',
+            'vat_total' => 'vat_total',
+            'non_vatable_total' => 'non_vatable_total',
+            'vatable_net' => 'vatable_net',
         ] as $parentField => $childField) {
             if (! $this->childHasField($childForm, $childField)) {
                 continue;
@@ -509,9 +539,111 @@ final class EApprovalSubmissionParentLinkService
         return $out;
     }
 
+    private function financeStage(EApprovalSubmission $submission): string
+    {
+        $finance = is_array($submission->finance_json) ? $submission->finance_json : [];
+
+        return strtolower(trim((string) ($finance['stage'] ?? '')));
+    }
+
     private function childHasField(EApprovalForm $form, string $name): bool
     {
         return $form->fields->contains(static fn ($field): bool => (string) $field->name === $name);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gridColumnLabels(mixed $options): array
+    {
+        return EApprovalFieldOptionsParser::gridColumns(is_array($options) ? $options : null);
+    }
+
+    /**
+     * Copy a cash-advance grid onto the liquidation columns by header, so extra
+     * liquidation columns do not shift the forecast values.
+     *
+     * @param  list<string>  $sourceLabels
+     * @param  list<string>  $targetLabels
+     */
+    private function remapGridOntoChild(string $raw, array $sourceLabels, array $targetLabels, string $gridField): string
+    {
+        if ($sourceLabels === [] || $targetLabels === []) {
+            return $raw;
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $raw;
+        }
+
+        $rows = is_array($decoded['rows'] ?? null) ? $decoded['rows'] : (is_array($decoded) ? $decoded : []);
+        $nextRows = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $byLabel = [];
+            foreach ($sourceLabels as $index => $label) {
+                $byLabel[strtolower(trim($label))] = trim((string) ($row[(string) $index] ?? $row[$index] ?? ''));
+            }
+            $type = strtolower(trim((string) ($byLabel['expense type'] ?? '')));
+            $perDiem = $gridField === 'expense_lines' && ($type === 'per_diem' || $type === 'per diem');
+            $dailyRaw = trim((string) ($byLabel['rate'] ?? ''));
+            if ($dailyRaw === '') {
+                $dailyRaw = trim((string) ($byLabel['amount'] ?? ''));
+            }
+            $daily = is_numeric(str_replace(',', '', $dailyRaw)) ? (float) str_replace(',', '', $dailyRaw) : 0.0;
+            $lodging = in_array($type, [
+                'lodging',
+                'hotel_accommodation',
+                'hotel & accommodation',
+                'hotel & accomodation',
+                'hotel and accommodation',
+            ], true);
+            $dateValue = (string) ($byLabel['date'] ?? '');
+            if ($dateValue === '') {
+                foreach ($byLabel as $labelKey => $labelValue) {
+                    if (str_starts_with((string) $labelKey, 'from date')) {
+                        $dateValue = (string) $labelValue;
+                        break;
+                    }
+                }
+            }
+            $lineDays = $perDiem
+                ? EApprovalPerDiemDays::forDateValue($dateValue)
+                : ($lodging ? EApprovalPerDiemDays::lodgingNightsForDateValue($dateValue) : null);
+            $perDiemLine = number_format(EApprovalPerDiemDays::lineTotal($daily, $lineDays), 2, '.', '');
+            $next = [];
+            foreach ($targetLabels as $index => $label) {
+                $key = strtolower(trim($label));
+                $value = $byLabel[$key] ?? '';
+                if ($value === '' && $key === 'from site / location') {
+                    $value = EApprovalSiteStop::pack((string) ($byLabel['from site'] ?? ''), (string) ($byLabel['from location'] ?? ''));
+                }
+                if ($value === '' && $key === 'to site / location') {
+                    $value = EApprovalSiteStop::pack((string) ($byLabel['to site'] ?? ''), (string) ($byLabel['to location'] ?? ''));
+                }
+                if ($perDiem && $key === 'rate' && trim((string) ($byLabel['rate'] ?? '')) === '') {
+                    $value = $dailyRaw;
+                }
+                if (($perDiem || $lodging) && ($key === 'amount' || $key === 'forecast amount')) {
+                    $value = $perDiemLine;
+                }
+                if ($gridField === 'expense_lines' && $key === 'forecast amount' && ! $perDiem && ! $lodging) {
+                    $fromAmount = trim((string) ($byLabel['amount'] ?? ''));
+                    $value = $fromAmount !== '' ? $fromAmount : ($byLabel['rate'] ?? '');
+                }
+                if ($gridField === 'activity_lines' && $key === 'from forecast') {
+                    $value = 'Yes';
+                }
+                $next[(string) $index] = $value;
+            }
+            $nextRows[] = $next;
+        }
+
+        return json_encode(['rows' => $nextRows], JSON_THROW_ON_ERROR);
     }
 
     private function isEmptyChildValue(mixed $raw): bool

@@ -34,6 +34,7 @@ class TenantEnabledModulesResolverTest extends TestCase
             'doc_extract',
             'dynamic_entities',
             'ai_assistant',
+            'asset_management',
         ], $resolver->toggleableModules());
     }
 

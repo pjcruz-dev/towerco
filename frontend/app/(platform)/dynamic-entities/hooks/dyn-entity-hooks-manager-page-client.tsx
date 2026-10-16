@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   deleteDynEntityHook,
   listDynEntityHooks,
@@ -89,6 +90,7 @@ export function DynEntityHooksManagerPageClient() {
     try {
       await toggleDynEntityHook(row.id);
       await load();
+      notify.success(row.is_active ? "Hook paused" : "Hook enabled", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -103,6 +105,7 @@ export function DynEntityHooksManagerPageClient() {
     try {
       await deleteDynEntityHook(row.id);
       await load();
+      notify.success("Hook deleted", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -122,7 +125,7 @@ export function DynEntityHooksManagerPageClient() {
     <PermissionGate requiredPermissions={[permissions.entityHooksManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Entity Hooks"
           description="Declarative lifecycle hooks for Dynamic Entities (safe DSL — no PHP). Use for mirroring columns, setting defaults, and reacting before or after saves."
           actions={

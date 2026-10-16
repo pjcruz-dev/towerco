@@ -18,11 +18,13 @@ use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use App\Modules\Workspace\Models\TenantActivityLog;
 use Illuminate\Support\Str;
+use Tests\Support\AiAssistant\BindsDeterministicAssistantLlm;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
 final class AssistantToolsTest extends TestCase
 {
+    use BindsDeterministicAssistantLlm;
     use InteractsWithInMemoryTenantApi;
 
     protected function setUp(): void
@@ -48,13 +50,14 @@ final class AssistantToolsTest extends TestCase
             'ai_assistant.enabled' => true,
             'ai_assistant.embedding_provider' => 'local',
             'ai_assistant.vector_store' => 'database',
-            'ai_assistant.llm_provider' => 'local',
+            'ai_assistant.llm_provider' => 'cursor',
             'ai_assistant.tools.enabled' => true,
             'ai_assistant.tools.max_per_request' => 2,
             'ai_assistant.tools.max_rows' => 10,
             'queue.default' => 'sync',
         ]);
 
+        $this->bindDeterministicAssistantLlm();
         $this->bootInMemoryTenantApi();
     }
 
@@ -125,6 +128,18 @@ final class AssistantToolsTest extends TestCase
         );
     }
 
+    public function test_router_reads_a_double_hyphen_eapproval_document_number(): void
+    {
+        $plan = app(AssistantToolRouter::class)->plan('ATC-DOC-EAPPROVAL--X-004 Can you reject the request?');
+
+        $this->assertTrue(
+            collect($plan->calls)->contains(
+                fn (ToolCallRequest $call): bool => $call->tool === 'get_eapproval_submission_by_document_no'
+                    && ($call->args['document_no'] ?? null) === 'ATC-DOC-EAPPROVAL--X-004',
+            ),
+        );
+    }
+
     public function test_router_selects_ticket_tool_for_tkt_status_not_document_register(): void
     {
         $plan = app(AssistantToolRouter::class)->plan('What is the status of TKT-00004?');
@@ -139,6 +154,23 @@ final class AssistantToolsTest extends TestCase
         $this->assertFalse(
             collect($plan->calls)->contains(
                 fn (ToolCallRequest $call): bool => $call->tool === 'get_controlled_document_by_code',
+            ),
+        );
+    }
+
+    public function test_router_looks_up_an_it_asset_serial_instead_of_workspace_search(): void
+    {
+        $plan = app(AssistantToolRouter::class)->plan('SN-IMPORT-1002 change the status value of it');
+
+        $this->assertTrue(
+            collect($plan->calls)->contains(
+                fn (ToolCallRequest $call): bool => $call->tool === 'find_it_asset'
+                    && ($call->args['query'] ?? null) === 'SN-IMPORT-1002',
+            ),
+        );
+        $this->assertFalse(
+            collect($plan->calls)->contains(
+                fn (ToolCallRequest $call): bool => $call->tool === 'search_workspace_entities',
             ),
         );
     }

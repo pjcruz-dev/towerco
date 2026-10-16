@@ -31,6 +31,7 @@ final class TenantRbacModuleRoleTemplates
             self::controlledDocumentsRoles(),
             self::docExtractRoles(),
             self::dynamicEntitiesRoles(),
+            self::assetRoles(),
             self::aiAssistantRoles(),
             self::legacyAliases(),
         );
@@ -119,6 +120,7 @@ final class TenantRbacModuleRoleTemplates
                 'ticketing:tickets:create',
                 'ticketing:tickets:manage',
                 'ticketing:settings:manage',
+                'ticketing:fields:manage',
                 'automation:manage',
             ],
         ];
@@ -291,6 +293,47 @@ final class TenantRbacModuleRoleTemplates
     }
 
     /** @return array<string, list<string>> */
+    private static function assetRoles(): array
+    {
+        return [
+            'assets_employee' => [
+                'dashboard:view',
+                'assets:self:view',
+                'assets:accountability:sign',
+            ],
+            'assets_viewer' => [
+                'dashboard:view',
+                'assets:view',
+                'assets:export',
+            ],
+            'assets_operator' => [
+                'dashboard:view',
+                'assets:view',
+                'assets:manage',
+                'assets:assign',
+                'assets:transfer',
+                'assets:repair',
+                'assets:offboard',
+                'assets:export',
+            ],
+            'assets_admin' => [
+                'dashboard:view',
+                'assets:view',
+                'assets:manage',
+                'assets:assign',
+                'assets:transfer',
+                'assets:repair',
+                'assets:offboard',
+                'assets:dispose',
+                'assets:import',
+                'assets:export',
+                'assets:fields:manage',
+                'assets:settings:manage',
+            ],
+        ];
+    }
+
+    /** @return array<string, list<string>> */
     private static function aiAssistantRoles(): array
     {
         return [
@@ -305,7 +348,6 @@ final class TenantRbacModuleRoleTemplates
                 'ai_assistant:use',
                 'ai_assistant:tools:use',
                 'ai_assistant:actions:execute',
-                'ai_assistant:knowledge:manage',
                 'ai_assistant:conversations:audit',
             ],
         ];

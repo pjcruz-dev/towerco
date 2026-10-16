@@ -56,7 +56,10 @@ final class SidebarNavService
     {
         if (! $force && SidebarNavItem::query()->exists()) {
             $this->syncMissingSeedNodes(SidebarNavSeedCatalog::tree(), null);
+            $this->relocateDynamicEntityAdmin();
             $this->relocateManageCronJobs();
+            $this->retireTicketingSettingsPage();
+            $this->retireDynamicEntityDashboards();
 
             return;
         }
@@ -80,6 +83,46 @@ final class SidebarNavService
 
         foreach (SidebarNavSeedCatalog::tree() as $node) {
             $this->insertSeedNode($node, null);
+        }
+
+        $this->relocateDynamicEntityAdmin();
+    }
+
+    /**
+     * Schema tools belong under Dynamic Entities. System Core stays admin settings
+     * (search, prompts, sidebar, API, system) and is not gated by the dynamic entities module.
+     * A custom (non-system) item with the same key is left where an admin put it.
+     */
+    private function relocateDynamicEntityAdmin(): void
+    {
+        $header = SidebarNavItem::query()->where('key', 'group.operations.dynamic-entities')->first();
+        if ($header === null || ! $header->is_system) {
+            return;
+        }
+
+        $keys = [
+            'group.operations.system-core.manage-fields',
+            'group.operations.system-core.relationship-studio',
+            'group.operations.system-core.field-groups',
+            'group.operations.system-core.manage-printables',
+            'group.operations.system-core.manage-html-reports',
+            'group.operations.system-core.report-builder',
+            'group.operations.system-core.email-templates',
+            'group.operations.system-core.manage-workflows',
+            'group.operations.system-core.entity-hooks',
+        ];
+
+        foreach ($keys as $index => $key) {
+            $item = SidebarNavItem::query()->where('key', $key)->first();
+            if ($item === null || ! $item->is_system) {
+                continue;
+            }
+            if ((string) $item->parent_id === (string) $header->id && (int) $item->sort_order === $index) {
+                continue;
+            }
+            $item->parent_id = $header->id;
+            $item->sort_order = $index;
+            $item->save();
         }
     }
 
@@ -115,6 +158,42 @@ final class SidebarNavService
         $current->permission_key = 'automation:manage';
         $current->sort_order = 3;
         $current->save();
+    }
+
+    /**
+     * Ticket categories and fields live on the helpdesk ticket. The old module settings page is retired.
+     * A custom (non-system) item with the same key is left where an admin put it.
+     */
+    private function retireTicketingSettingsPage(): void
+    {
+        $item = SidebarNavItem::query()->where('key', 'group.administration.settings.ticketing-settings')->first();
+        if ($item === null || ! $item->is_system) {
+            return;
+        }
+
+        $this->destroy($item);
+    }
+
+    /**
+     * Executive and CAS dashboards are no longer part of Dynamic Entities.
+     * A custom (non-system) item with the same key is left where an admin put it.
+     */
+    private function retireDynamicEntityDashboards(): void
+    {
+        $keys = [
+            'group.operations.sites.executive-dashboard',
+            'group.operations.sites.cas-executive-dashboard',
+            'group.operations.finance.cas-executive-dashboard',
+        ];
+
+        foreach ($keys as $key) {
+            $item = SidebarNavItem::query()->where('key', $key)->first();
+            if ($item === null || ! $item->is_system) {
+                continue;
+            }
+
+            $this->destroy($item);
+        }
     }
 
     /**
@@ -388,7 +467,6 @@ final class SidebarNavService
             '/e-approval',
             '/settings',
             '/help',
-            '/dynamic-entities/executive-dashboard',
             '/dynamic-entities/ticketing-board',
         ];
 
@@ -463,6 +541,20 @@ final class SidebarNavService
      */
     private function insertSeedNode(array $node, ?string $parentId): void
     {
+        $key = isset($node['key']) ? trim((string) $node['key']) : '';
+        if ($key !== '') {
+            $existing = SidebarNavItem::query()->where('key', $key)->first();
+            if ($existing instanceof SidebarNavItem) {
+                foreach ($node['children'] ?? [] as $child) {
+                    if (is_array($child)) {
+                        $this->insertSeedNode($child, (string) $existing->id);
+                    }
+                }
+
+                return;
+            }
+        }
+
         $perms = array_values(array_filter(array_map('strval', $node['required_permissions'] ?? [])));
         $item = SidebarNavItem::query()->create([
             'id' => (string) Str::uuid(),

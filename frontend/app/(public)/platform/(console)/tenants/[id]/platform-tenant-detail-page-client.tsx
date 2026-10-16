@@ -13,8 +13,15 @@ import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
 import { EnvironmentCloneProgress } from "@/components/platform/environment-clone-progress";
-import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  accessModeTone,
+  environmentStatusTone,
+  moduleStatusTone,
+  planTierTone,
+  subscriptionStatusTone,
+} from "@/components/ui/status-tone";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardContentSkeleton, PageHeaderSkeleton } from "@/components/ui/page-skeletons";
@@ -35,7 +42,6 @@ import {
 import {
   formatModulesLabel,
   formatTenantModuleBadges,
-  moduleBadgeClass,
   tenantUsesPlatformModuleDefault,
 } from "@/lib/platform/tenant-directory-utils";
 import { formatAuditChangeSummary } from "@/lib/platform/platform-audit-utils";
@@ -398,24 +404,22 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
             {tenant.slug ?? primaryDomain ?? tenant.id}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[11px] font-medium capitalize",
-                environmentBadgeClass(tenant.environment),
-              )}
+            <StatusBadge
+              tone={environmentStatusTone(tenant.environment)}
+              className="px-2 py-0.5 text-[11px] capitalize"
             >
               {tenant.environment ?? "production"}
-            </span>
-            <Badge variant="secondary" className="capitalize">
+            </StatusBadge>
+            <StatusBadge tone={planTierTone(tenant.plan_tier)} className="capitalize">
               {tenant.plan_tier ?? "starter"}
-            </Badge>
-            <Badge variant="outline" className="capitalize">
+            </StatusBadge>
+            <StatusBadge tone={subscriptionStatusTone(tenant.subscription_status ?? "active")} className="capitalize">
               {tenant.subscription_status ?? "active"}
-            </Badge>
+            </StatusBadge>
             {tenant.access_mode && tenant.access_mode !== "full" ? (
-              <Badge variant="outline" className="border-amber-300 text-amber-800">
+              <StatusBadge tone={accessModeTone(tenant.access_mode)} className="capitalize">
                 {tenant.access_mode.replace("_", " ")}
-              </Badge>
+              </StatusBadge>
             ) : null}
           </div>
         </div>
@@ -513,15 +517,9 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
             <CardContent className="space-y-3 text-sm">
               <div className="flex flex-wrap gap-1.5">
                 {moduleBadges.map((badge) => (
-                  <span
-                    key={badge}
-                    className={cn(
-                      "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
-                      moduleBadgeClass(badge),
-                    )}
-                  >
+                  <StatusBadge key={badge} tone={moduleStatusTone(badge)} className="px-2 py-0.5 text-[11px]">
                     {badge}
-                  </span>
+                  </StatusBadge>
                 ))}
               </div>
               <p className="text-muted-foreground">{formatModulesLabel(tenant)}</p>
@@ -643,15 +641,9 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
             <p className="text-muted-foreground">{formatModulesLabel(tenant)}</p>
             <div className="flex flex-wrap gap-2">
               {moduleBadges.map((badge) => (
-                <span
-                  key={badge}
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                    moduleBadgeClass(badge),
-                  )}
-                >
+                <StatusBadge key={badge} tone={moduleStatusTone(badge)} className="px-2.5 py-0.5 text-xs">
                   {badge}
-                </span>
+                </StatusBadge>
               ))}
             </div>
             {tenantUsesPlatformModuleDefault(tenant) ? (

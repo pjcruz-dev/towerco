@@ -41,36 +41,6 @@
         "sort_order": 1,
         "children": [
           {
-            "key": "group.operations.sites.executive-dashboard",
-            "type": "internal_page",
-            "title": "Executive Dashboard",
-            "icon": null,
-            "href": "/dynamic-entities/executive-dashboard",
-            "entity_slug": null,
-            "required_permissions": [
-              "dynamic_entities:view"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 0,
-            "children": []
-          },
-          {
-            "key": "group.operations.sites.cas-executive-dashboard",
-            "type": "internal_page",
-            "title": "CAS Executive Dashboard",
-            "icon": null,
-            "href": "/dynamic-entities/reports/cas-executive-dashboard",
-            "entity_slug": null,
-            "required_permissions": [
-              "dynamic_entities:view"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 1,
-            "children": []
-          },
-          {
             "key": "group.operations.sites.tower-sites",
             "type": "entity_link",
             "title": "Tower Sites",
@@ -645,21 +615,6 @@
         "sort_order": 5,
         "children": [
           {
-            "key": "group.operations.finance.cas-executive-dashboard",
-            "type": "internal_page",
-            "title": "CAS Executive Dashboard",
-            "icon": null,
-            "href": "/dynamic-entities/reports/cas-executive-dashboard",
-            "entity_slug": null,
-            "required_permissions": [
-              "dynamic_entities:view"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 0,
-            "children": []
-          },
-          {
             "key": "group.operations.finance.ar-ap-aging",
             "type": "internal_page",
             "title": "AR & AP Aging",
@@ -1147,24 +1102,18 @@
         "key": "group.operations.system-core",
         "type": "header",
         "title": "System Core",
-        "icon": "Shapes",
+        "icon": "Settings",
         "href": null,
         "entity_slug": null,
         "required_permissions": [
-          "dynamic_entities:fields:manage",
-          "printables:manage",
-          "sidebar:manage",
-          "api_keys:manage",
           "system:manage",
-          "html_reports:manage",
-          "workflows:manage",
-          "email_templates:manage",
           "search_index:manage",
-          "entity_hooks:manage",
-          "ai_assistant:prompts:manage"
+          "ai_assistant:prompts:manage",
+          "sidebar:manage",
+          "api_keys:manage"
         ],
         "permissions_match": "any",
-        "module": "dynamic_entities",
+        "module": null,
         "sort_order": 8,
         "children": [
           {
@@ -1213,6 +1162,57 @@
             "children": []
           },
           {
+            "key": "group.operations.system-core.manage-sidebar",
+            "type": "internal_page",
+            "title": "Manage Sidebar",
+            "icon": "Shapes",
+            "href": "/admin/sidebar",
+            "entity_slug": null,
+            "required_permissions": [
+              "sidebar:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 9,
+            "children": []
+          },
+          {
+            "key": "group.operations.system-core.manage-rest-api",
+            "type": "internal_page",
+            "title": "Manage REST API",
+            "icon": null,
+            "href": "/admin/api-keys",
+            "entity_slug": null,
+            "required_permissions": [
+              "api_keys:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 10,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.dynamic-entities",
+        "type": "header",
+        "title": "Dynamic Entities",
+        "icon": "Shapes",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "dynamic_entities:fields:manage",
+          "printables:manage",
+          "html_reports:manage",
+          "workflows:manage",
+          "email_templates:manage",
+          "entity_hooks:manage"
+        ],
+        "permissions_match": "any",
+        "module": "dynamic_entities",
+        "sort_order": 9,
+        "children": [
+          {
             "key": "group.operations.system-core.manage-fields",
             "type": "entity_link",
             "title": "Manage Fields",
@@ -1224,7 +1224,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 3,
+            "sort_order": 0,
             "children": []
           },
           {
@@ -1239,7 +1239,7 @@
             ],
             "permissions_match": "all",
             "module": "dynamic_entities",
-            "sort_order": 3,
+            "sort_order": 1,
             "children": []
           },
           {
@@ -1254,7 +1254,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 4,
+            "sort_order": 2,
             "children": []
           },
           {
@@ -1329,7 +1329,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 8,
+            "sort_order": 7,
             "children": []
           },
           {
@@ -1344,37 +1344,7 @@
             ],
             "permissions_match": "all",
             "module": null,
-            "sort_order": 9,
-            "children": []
-          },
-          {
-            "key": "group.operations.system-core.manage-sidebar",
-            "type": "internal_page",
-            "title": "Manage Sidebar",
-            "icon": "Shapes",
-            "href": "/admin/sidebar",
-            "entity_slug": null,
-            "required_permissions": [
-              "sidebar:manage"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 9,
-            "children": []
-          },
-          {
-            "key": "group.operations.system-core.manage-rest-api",
-            "type": "internal_page",
-            "title": "Manage REST API",
-            "icon": null,
-            "href": "/admin/api-keys",
-            "entity_slug": null,
-            "required_permissions": [
-              "api_keys:manage"
-            ],
-            "permissions_match": "all",
-            "module": null,
-            "sort_order": 10,
+            "sort_order": 8,
             "children": []
           }
         ]
@@ -1451,6 +1421,100 @@
               "ticketing:view"
             ],
             "permissions_match": "all",
+            "module": null,
+            "sort_order": 3,
+            "children": []
+          },
+          {
+            "key": "group.operations.ticketing.fields",
+            "type": "internal_page",
+            "title": "Fields",
+            "icon": null,
+            "href": "/ticketing/fields",
+            "entity_slug": "helpdesk_ticket",
+            "required_permissions": [
+              "ticketing:fields:manage"
+            ],
+            "permissions_match": "all",
+            "module": null,
+            "sort_order": 4,
+            "children": []
+          }
+        ]
+      },
+      {
+        "key": "group.operations.assets",
+        "type": "header",
+        "title": "Assets",
+        "icon": "Package",
+        "href": null,
+        "entity_slug": null,
+        "required_permissions": [
+          "assets:view",
+          "assets:self:view"
+        ],
+        "permissions_match": "any",
+        "module": "asset_management",
+        "sort_order": 8,
+        "children": [
+          {
+            "key": "group.operations.assets.inventory",
+            "type": "internal_page",
+            "title": "Inventory",
+            "icon": null,
+            "href": "/assets",
+            "entity_slug": null,
+            "required_permissions": [
+              "assets:view",
+              "assets:self:view"
+            ],
+            "permissions_match": "any",
+            "module": null,
+            "sort_order": 0,
+            "children": []
+          },
+          {
+            "key": "group.operations.assets.scan",
+            "type": "internal_page",
+            "title": "Scan",
+            "icon": null,
+            "href": "/assets/scan",
+            "entity_slug": null,
+            "required_permissions": [
+              "assets:view",
+              "assets:manage"
+            ],
+            "permissions_match": "any",
+            "module": null,
+            "sort_order": 1,
+            "children": []
+          },
+          {
+            "key": "group.operations.assets.offboarding",
+            "type": "internal_page",
+            "title": "Offboarding",
+            "icon": null,
+            "href": "/assets/offboarding",
+            "entity_slug": null,
+            "required_permissions": [
+              "assets:offboard"
+            ],
+            "permissions_match": "any",
+            "module": null,
+            "sort_order": 2,
+            "children": []
+          },
+          {
+            "key": "group.operations.assets.fields",
+            "type": "internal_page",
+            "title": "Fields",
+            "icon": null,
+            "href": "/assets/fields",
+            "entity_slug": null,
+            "required_permissions": [
+              "assets:fields:manage"
+            ],
+            "permissions_match": "any",
             "module": null,
             "sort_order": 3,
             "children": []
@@ -1689,7 +1753,6 @@
         "required_permissions": [
           "tenant:manage",
           "e_approval:settings:manage",
-          "ticketing:settings:manage",
           "e_approval:view",
           "automation:manage"
         ],
@@ -1832,21 +1895,6 @@
             "permissions_match": "all",
             "module": "e_approval",
             "sort_order": 8,
-            "children": []
-          },
-          {
-            "key": "group.administration.settings.ticketing-settings",
-            "type": "internal_page",
-            "title": "Ticketing settings",
-            "icon": null,
-            "href": "/ticketing/settings",
-            "entity_slug": null,
-            "required_permissions": [
-              "ticketing:settings:manage"
-            ],
-            "permissions_match": "all",
-            "module": "ticketing",
-            "sort_order": 9,
             "children": []
           }
         ]

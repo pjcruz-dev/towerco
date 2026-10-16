@@ -6,7 +6,6 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\Identity\Models\TenantUser;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 final class EApprovalFormImportExportService
@@ -191,10 +190,12 @@ final class EApprovalFormImportExportService
                 $condition = null;
             }
 
+            $label = trim((string) ($step['label'] ?? ''));
             $normalized[] = [
                 'type' => $type,
                 'step_order' => (int) ($step['step_order'] ?? $index + 1),
                 'approverId' => $approverId !== null ? (string) $approverId : null,
+                'label' => $label !== '' ? $label : null,
                 'condition' => is_array($condition) ? $condition : null,
             ];
         }

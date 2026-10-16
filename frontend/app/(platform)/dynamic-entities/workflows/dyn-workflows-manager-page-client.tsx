@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   deleteDynWorkflow,
   listDynWorkflows,
@@ -78,6 +79,7 @@ export function DynWorkflowsManagerPageClient() {
     try {
       await deleteDynWorkflow(row.id);
       await load();
+      notify.success("Workflow deleted", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -89,7 +91,7 @@ export function DynWorkflowsManagerPageClient() {
     <PermissionGate requiredPermissions={[permissions.workflowsManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Manage Workflows"
           description="Create and manage database-driven transactional steps and status transitions."
           actions={

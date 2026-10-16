@@ -1,5 +1,5 @@
-import { AtcExecutiveDashboardPageClient } from "./atc-executive-dashboard-page-client";
+import { notFound } from "next/navigation";
 
-export default function AtcExecutiveDashboardPage() {
-  return <AtcExecutiveDashboardPageClient />;
+export default function RemovedExecutiveDashboardPage() {
+  notFound();
 }

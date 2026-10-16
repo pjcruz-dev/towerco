@@ -13,10 +13,8 @@ import { FilterSelect } from "@/components/forms/filter-select";
 import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entry-actions";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { TicketingTourSampleNotice } from "@/components/help/ticketing-tour-fixtures";
-import {
-  createTicketingTicketsTableColumns,
-  ticketingTicketsTableColumns,
-} from "@/components/ticketing/ticketing-tickets-table-columns";
+import { createTicketingTicketsTableColumns } from "@/components/ticketing/ticketing-tickets-table-columns";
+import { useTicketingSchema } from "@/components/ticketing/ticketing-custom-fields";
 import { ModuleListToolbar } from "@/components/registry/module-list-toolbar";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
@@ -183,14 +181,25 @@ export function TicketingTicketsPageClient() {
     }
     return [ticketingTourSampleListRow, ...rows];
   }, [query.data?.data, tourActive]);
+  const { data: schema } = useTicketingSchema();
   const columns = useMemo(
-    () => [
-      createRowSelectionColumn<TicketingTicketListRow>(),
-      ...(tourActive
-        ? createTicketingTicketsTableColumns({ tourQuery: searchParams.toString() })
-        : ticketingTicketsTableColumns),
-    ],
-    [searchParams, tourActive],
+    () => {
+      const customFields = (schema?.fields ?? [])
+        .filter((field) => !field.is_system_field && field.show_in_table)
+        .sort((a, b) => a.field_order - b.field_order);
+      const hiddenColumns = (schema?.fields ?? [])
+        .filter((field) => field.is_system_field && !field.show_in_table)
+        .map((field) => field.name);
+      return [
+        createRowSelectionColumn<TicketingTicketListRow>(),
+        ...createTicketingTicketsTableColumns({
+          tourQuery: tourActive ? searchParams.toString() : undefined,
+          customFields,
+          hiddenColumns,
+        }),
+      ];
+    },
+    [schema?.fields, searchParams, tourActive],
   );
   const meta = query.data?.meta;
   const statusOptions = useMemo(() => metadata?.statuses ?? [], [metadata]);

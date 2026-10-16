@@ -9,15 +9,19 @@ import {
   createTextColumn,
 } from "@/components/ui/data-table-column-helpers";
 import { TICKETING_TOUR_SAMPLE_TICKET_ID } from "@/lib/help/ticketing-tour-fixtures";
+import { formatTicketingCustomValue } from "@/components/ticketing/ticketing-custom-fields";
 import type { TicketingTicketListRow } from "@/modules/ticketing/types";
 
 export function createTicketingTicketsTableColumns(options?: {
   /** Preserve live-tour query when opening a ticket mid-tour. */
   tourQuery?: string;
+  customFields?: Array<{ name: string; label: string }>;
+  hiddenColumns?: string[];
 }): ColumnDef<TicketingTicketListRow>[] {
   const suffix = options?.tourQuery ? `?${options.tourQuery}` : "";
 
-  return [
+  const hidden = new Set(options?.hiddenColumns ?? []);
+  const columns: ColumnDef<TicketingTicketListRow>[] = [
     createLinkColumn("ticket_number", "Ticket", {
       href: (row) => `/ticketing/tickets/${row.id}${suffix}`,
       label: (row) => row.ticket_number,
@@ -51,7 +55,18 @@ export function createTicketingTicketsTableColumns(options?: {
       className: "text-xs text-muted-foreground",
       enableSorting: true,
     }),
+    ...(options?.customFields ?? []).map((field) =>
+      createTextColumn<TicketingTicketListRow>(
+        field.name,
+        field.label,
+        (row) => (
+          <span className="text-muted-foreground">{formatTicketingCustomValue(row.custom_values?.[field.name])}</span>
+        ),
+      ),
+    ),
   ];
+
+  return columns.filter((column) => !hidden.has(String(column.id)));
 }
 
 export const ticketingTicketsTableColumns = createTicketingTicketsTableColumns();

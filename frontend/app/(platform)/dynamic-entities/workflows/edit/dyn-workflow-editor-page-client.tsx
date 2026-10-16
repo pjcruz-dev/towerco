@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import { fetchAdminRoleCatalog } from "@/lib/api/modules/admin-roles-api";
 import {
   fetchDynEntities,
@@ -186,6 +187,7 @@ function DynWorkflowEditorInner() {
         is_active: isActive,
         definition_json,
       });
+      notify.success("Workflow saved", name.trim() || "Workflow");
       router.push("/dynamic-entities/workflows");
     } catch (err) {
       setError(getErrorMessage(err));
@@ -198,7 +200,7 @@ function DynWorkflowEditorInner() {
     <PermissionGate requiredPermissions={[permissions.workflowsManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Edit Workflow"
           description="Configure trigger constraints and THEN steps (updates, creates, emails)."
           actions={

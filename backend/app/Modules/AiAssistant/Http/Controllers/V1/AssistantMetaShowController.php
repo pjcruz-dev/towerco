@@ -6,6 +6,8 @@ namespace App\Modules\AiAssistant\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
+use App\Modules\AiAssistant\Support\AssistantAudience;
+use App\Modules\AiAssistant\Support\AssistantModelPricing;
 use App\Modules\AiAssistant\Support\AssistantRateLimitReporter;
 use App\Modules\AiAssistant\Support\CursorLlmProvider;
 use App\Modules\AiAssistant\Support\GeminiLlmProvider;
@@ -20,17 +22,23 @@ class AssistantMetaShowController extends AbstractApiController
         abort_unless($request->user()?->can('ai_assistant:use'), 403);
         abort_unless((bool) config('ai_assistant.enabled', true), 503, __('AI Assistant is disabled.'));
 
-        $provider = strtolower((string) config('ai_assistant.llm_provider', 'local'));
-        $models = $this->selectableModels($llm);
+        $provider = strtolower((string) config('ai_assistant.llm_provider', 'cursor'));
+        $models = AssistantModelPricing::sortHighestFirst($this->selectableModels($llm));
+        $adminBuilder = AssistantAudience::isTenantAdmin($request->user());
 
         return $this->ok([
             'enabled' => true,
+            'assistant_mode' => $adminBuilder ? 'admin_builder' : 'help',
             'llm_provider' => $provider,
             'model_name' => $llm->modelName(),
             'models' => $models,
+            'model_labels' => $llm instanceof CursorLlmProvider ? $llm->modelLabels() : [],
+            'model_estimates' => AssistantModelPricing::previews($models),
             'supports_model_select' => count($models) > 1,
-            'retrieval_enabled' => (bool) config('ai_assistant.retrieval.enabled', false),
-            'greeting' => 'Hey! What are we building or fixing today?',
+            'retrieval_enabled' => false,
+            'greeting' => $adminBuilder
+                ? 'What should we change in this workspace?'
+                : 'Hey! What are we building or fixing today?',
             'rate_limit' => AssistantRateLimitReporter::forRequest($request),
         ]);
     }

@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { AuditIpDetail } from "@/components/governance/audit-ip-location";
 import { AuditDeviceDetail } from "@/components/governance/audit-device-detail";
 import {
@@ -20,8 +21,8 @@ import type { WorkspaceAuditChange, WorkspaceAuditRow } from "@/lib/api/modules/
 import { TENANT_MODULE_LABELS } from "@/lib/tenant/enabled-modules";
 import {
   auditCategoryLabel,
-  auditSeverityClassName,
   auditSeverityLabel,
+  auditSeverityTone,
 } from "@/lib/workspace/audit-display";
 import { cn } from "@/lib/utils";
 
@@ -155,9 +156,9 @@ export function WorkspaceAuditDetailDrawer({ row, open, onOpenChange }: Props) {
               <Badge variant="outline">{auditCategoryLabel(row.category)}</Badge>
             ) : null}
             {row.severity ? (
-              <Badge variant="outline" className={auditSeverityClassName(row.severity)}>
+              <StatusBadge tone={auditSeverityTone(row.severity)}>
                 {auditSeverityLabel(row.severity)}
-              </Badge>
+              </StatusBadge>
             ) : null}
             {changes ? <Badge variant="outline">{Object.keys(changes).length} change(s)</Badge> : null}
           </div>

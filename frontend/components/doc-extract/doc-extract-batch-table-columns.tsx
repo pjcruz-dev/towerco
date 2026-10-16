@@ -18,19 +18,19 @@ import {
   createTextColumn,
 } from "@/components/ui/data-table-column-helpers";
 import type { DocExtractBatchListRow } from "@/modules/doc-extract/types";
+import { statusToneClasses, type StatusTone } from "@/components/ui/status-tone";
 import { cn } from "@/lib/utils";
 
 function statusTone(status: string): string {
-  if (status === "ready") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-400";
-  }
-  if (status === "failed") {
-    return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400";
-  }
-  if (status === "processing" || status === "pending") {
-    return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/40 dark:text-sky-400";
-  }
-  return "border-border bg-muted text-muted-foreground";
+  const tone: StatusTone =
+    status === "ready"
+      ? "success"
+      : status === "failed"
+        ? "danger"
+        : status === "processing" || status === "pending"
+          ? "info"
+          : "neutral";
+  return statusToneClasses[tone].badge;
 }
 
 function statusLabel(status: string): string {

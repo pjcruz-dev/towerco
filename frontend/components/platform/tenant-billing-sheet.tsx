@@ -11,8 +11,10 @@ import {
 import { computeTenantBillingEstimate } from "@/lib/billing/tenant-billing-estimate";
 import { PlatformBillingFormSection } from "@/components/platform/platform-billing-form-section";
 import { FormInput } from "@/components/forms/form-input";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { statusToneClasses } from "@/components/ui/status-tone";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -603,9 +605,9 @@ export function TenantBillingSheet({
 
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Badge variant={stripePayments?.operational ? "default" : "secondary"}>
+              <StatusBadge tone={stripePayments?.operational ? "success" : "neutral"}>
                 {stripePayments?.operational ? "Stripe on" : "Manual billing"}
-              </Badge>
+              </StatusBadge>
               <p className="text-xs text-muted-foreground">
                 {stripePayments?.operational
                   ? "Tenants can self-serve on /billing"
@@ -746,14 +748,14 @@ export function TenantBillingSheet({
           ) : null}
 
           {isDowngradeSelection && downgradeWarnings.length === 0 ? (
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+            <p className={cn("text-xs", statusToneClasses.warning.icon)}>
               Downgrading may block E-Forms forms that use file fields. Save once to see
               warnings, then confirm if required.
             </p>
           ) : null}
 
           {downgradeWarnings.length > 0 ? (
-            <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+            <div className={cn("space-y-3 rounded-lg border p-3", statusToneClasses.warning.alert)}>
               <p className="text-sm font-medium text-foreground">Confirm plan downgrade</p>
               <ul className="list-inside list-disc space-y-1 text-xs text-muted-foreground">
                 {downgradeWarnings.map((warning) => (

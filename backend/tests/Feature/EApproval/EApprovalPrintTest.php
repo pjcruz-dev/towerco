@@ -212,11 +212,72 @@ final class EApprovalPrintTest extends TestCase
         $fields = collect($response->json('data.fields'))->keyBy('key');
         $this->assertSame('PHP', $fields->get('currency')['value']);
         $this->assertSame('2026-07-15', $fields->get('needed_by')['value']);
-        $this->assertSame('2500.00', $fields->get('estimated_total')['value']);
+        $this->assertSame('2,500.00', $fields->get('estimated_total')['value']);
 
         $grid = collect($response->json('data.grids'))->firstWhere('key', 'line_items');
         $this->assertNotNull($grid);
         $this->assertSame(['Paper', '10', '250', '2500.00'], $grid['rows'][0]);
+    }
+
+    public function test_print_reads_wrapped_forecast_grid_rows(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $form = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cash advance',
+            'status' => 'published',
+        ]);
+
+        $gridField = EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'grid',
+            'name' => 'expense_lines',
+            'label' => 'Forecast lines',
+            'options' => ['columns' => [
+                ['label' => 'From date – To date', 'type' => 'date_range'],
+                ['label' => 'From site / location', 'type' => 'text'],
+                ['label' => 'Amount', 'type' => 'currency'],
+            ]],
+        ]);
+
+        $submission = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => 'ATC-X-CA-001',
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => 'pending',
+            'current_step' => 1,
+        ]);
+
+        EApprovalFormValue::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $submission->id,
+            'field_id' => $gridField->id,
+            'value' => json_encode([
+                'rows' => [[
+                    json_encode(['from' => '2026-09-04', 'to' => '2026-09-06'], JSON_THROW_ON_ERROR),
+                    json_encode(['site' => 'ATC', 'location' => 'Manila'], JSON_THROW_ON_ERROR),
+                    '6000.00',
+                ]],
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$submission->id}/print");
+
+        $response->assertOk();
+
+        $grid = collect($response->json('data.grids'))->firstWhere('key', 'expense_lines');
+        $this->assertNotNull($grid);
+        $this->assertSame(
+            ['2026-09-04 – 2026-09-06', 'ATC — Manila', '6000.00'],
+            $grid['rows'][0],
+        );
     }
 
     public function test_pdf_layout_save_requires_one_visible_field(): void

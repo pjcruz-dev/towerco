@@ -159,10 +159,12 @@ final class EApprovalFormSyncService
             }
             $approverId = $approverId === '' ? null : $approverId;
 
+            $label = trim((string) ($step['label'] ?? ''));
             $attributes = [
                 'step_order' => (int) ($step['step_order'] ?? $index + 1),
                 'approver_type' => $type,
                 'approver_id' => $approverId,
+                'label' => $label !== '' ? $label : null,
                 'condition' => EApprovalWorkflowStepDefinitionSupport::buildStoredCondition($step, $type),
             ];
 

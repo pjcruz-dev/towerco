@@ -16,6 +16,7 @@ import {
 import { EApprovalApprovalSignatureField, validateApprovalSignature, validateApprovalSignatureConsent } from "@/components/e-approval/e-approval-approval-signature-field";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { EApprovalSettlementVerdict } from "@/components/e-approval/e-approval-settlement-verdict";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { EApprovalRelatedSubmissionsPanel } from "@/components/e-approval/e-approval-related-submissions-panel";
 import { EApprovalSubmissionSharePanel } from "@/components/e-approval/e-approval-submission-share-panel";
@@ -42,7 +43,9 @@ import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  cancelEApprovalCashAdvanceTrip,
   cancelEApprovalSubmission,
+  confirmEApprovalCashAdvanceReturn,
   createEApprovalDocumentLink,
   decideEApprovalApproval,
   dcfResubmitEApprovalSubmission,
@@ -66,6 +69,11 @@ import { EApprovalSubmissionFormContent } from "@/components/e-approval/e-approv
 import { EApprovalSubmissionWorkflowPathPanel } from "@/components/e-approval/e-approval-submission-workflow-path-panel";
 import { EApprovalWaitingOnPanel } from "@/components/e-approval/e-approval-waiting-on-panel";
 import { getDuplicateApproverIds } from "@/modules/e-approval/display";
+import {
+  approverMustConfirmSettlement,
+  reimbursementPayVerdict,
+  settlementVerdictFromValues,
+} from "@/modules/e-approval/settlement-verdict";
 import { shouldHideSubmissionAttachmentFieldValue } from "@/modules/e-approval/submission-form-content";
 import {
   describeResubmitRoutingOutlook,
@@ -127,6 +135,11 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const [comment, setComment] = useState("");
   const [decisionRemarks, setDecisionRemarks] = useState("");
+  const [releaseReference, setReleaseReference] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
+  const [settlementReference, setSettlementReference] = useState("");
+  const [settlementSeen, setSettlementSeen] = useState(false);
+  const [returnReference, setReturnReference] = useState("");
   const [forceFullRestart, setForceFullRestart] = useState(false);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
@@ -184,6 +197,25 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const commentsQuery = useQuery({
     queryKey: ["e-approval", "submission", submissionId, "comments"],
     queryFn: () => fetchEApprovalComments(submissionId),
+  });
+
+  const cancelTripMutation = useMutation({
+    mutationFn: () => cancelEApprovalCashAdvanceTrip(submissionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId] });
+      push({ level: "success", title: "Trip marked for return" });
+    },
+    onError: (e) => push({ level: "error", title: "Cancel trip failed", message: getErrorMessage(e) }),
+  });
+
+  const confirmReturnMutation = useMutation({
+    mutationFn: () => confirmEApprovalCashAdvanceReturn(submissionId, returnReference.trim()),
+    onSuccess: () => {
+      setReturnReference("");
+      queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId] });
+      push({ level: "success", title: "Funds returned" });
+    },
+    onError: (e) => push({ level: "error", title: "Return failed", message: getErrorMessage(e) }),
   });
 
   const cancelMutation = useMutation({
@@ -262,6 +294,29 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     return data.approvals.find((approval) => approval.id === data.viewer_pending_approval_id);
   }, [data]);
 
+  const settlementVerdict = useMemo(() => {
+    if (!data?.values) {
+      return null;
+    }
+    if (data.form_family === "liquidation") {
+      return settlementVerdictFromValues(data.values);
+    }
+    if (data.form_family === "reimbursement") {
+      return reimbursementPayVerdict(data.values);
+    }
+    return null;
+  }, [data?.form_family, data?.values]);
+  const settlementNeedsConfirm = approverMustConfirmSettlement({
+    direction: settlementVerdict?.direction ?? null,
+    pendingStepOrder: pendingApproval?.step_order ?? null,
+    steps:
+      (workflowPreviewQuery.data?.resolved_steps?.length ?? 0) > 0
+        ? (workflowPreviewQuery.data?.resolved_steps ?? [])
+        : data?.step_count && data.step_count > 0
+          ? [{ step_order: data.step_count }]
+          : [],
+  });
+
   const rerouteMutation = useMutation({
     mutationFn: () =>
       rerouteEApprovalApproval(pendingApproval!.id, { new_approver_id: rerouteUserId, reason: rerouteReason }),
@@ -309,6 +364,9 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         signature: decision === "approved" ? signature : undefined,
         signature_consent: decision === "approved" ? true : undefined,
         signature_storage_consent: decision === "approved" ? true : undefined,
+        release_reference: releaseReference.trim() || undefined,
+        release_date: releaseDate || undefined,
+        settlement_reference: settlementReference.trim() || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["e-approval"] });
@@ -316,6 +374,9 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
       push({ level: "success", title: "Decision recorded" });
       setDecisionRemarks("");
+      setReleaseReference("");
+      setReleaseDate("");
+      setSettlementReference("");
       setApprovalSignature(null);
       setApprovalSignatureError(null);
       setSignatureConsentAccepted(false);
@@ -434,7 +495,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">{data.document_no}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{data.form_name}</p>
             </div>
-            <EApprovalStatusBadge status={data.status} kind="submission" />
+            <EApprovalStatusBadge status={data.status} label={data.status_label} kind="submission" />
           </header>
         ) : null}
 
@@ -691,11 +752,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     ))}
                   </div>
                 ) : (
-                  <EApprovalSubmissionFormContent
-                    values={data.values}
-                    formFields={data.form_fields}
-                    attachments={data.attachments}
-                  />
+                  <>
+                    <EApprovalSettlementVerdict values={data.values} className="mt-4" />
+                    <EApprovalSubmissionFormContent
+                      values={data.values}
+                      formFields={data.form_fields}
+                      attachments={data.attachments}
+                    />
+                  </>
                 )}
 
                 {(data.attachments ?? []).length > 0 ? (
@@ -713,6 +777,27 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                   </div>
                 )}
               </EApprovalSectionCard>
+
+              {data.form_family === "cash_advance" && data.status === "approved" ? (
+                <CashAdvanceReturnCard
+                  stage={data.finance_stage}
+                  canCancel={
+                    (data.viewer_is_requestor || canManage) &&
+                    data.finance_stage !== "for_return" &&
+                    data.finance_stage !== "funds_returned" &&
+                    !(data.related_submissions?.children ?? []).some(
+                      (child) => child.status !== "rejected" && child.status !== "cancelled",
+                    )
+                  }
+                  canConfirm={canApprove || canManage}
+                  returnReference={returnReference}
+                  onReturnReference={setReturnReference}
+                  cancelling={cancelTripMutation.isPending}
+                  confirming={confirmReturnMutation.isPending}
+                  onCancel={() => cancelTripMutation.mutate()}
+                  onConfirm={() => confirmReturnMutation.mutate()}
+                />
+              ) : null}
 
               {data.status === "approved" && (data.viewer_is_requestor || canManage) ? (
                 <EApprovalSubmissionSharePanel submissionId={submissionId} />
@@ -821,6 +906,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             {showDecideTab ? (
             <TabsContent value="decide" className="mt-4">
               <div className="space-y-4">
+                {settlementVerdict ? <EApprovalSettlementVerdict values={data.values} /> : null}
                 {data.status === "awaiting_dcf" ? (
                   <EApprovalSectionCard title="Document control" description="Update fields and submit for processing.">
                     <div className="space-y-3">
@@ -893,6 +979,22 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     description="Sign to approve. Remarks are optional for approve, required for reject or revision."
                   >
                     <div className="mt-4 space-y-4">
+                      {settlementNeedsConfirm && settlementVerdict ? (
+                        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
+                          <Checkbox
+                            className="mt-0.5"
+                            checked={settlementSeen}
+                            onCheckedChange={(checked) => setSettlementSeen(checked === true)}
+                            disabled={decideMutation.isPending || revisionMutation.isPending}
+                          />
+                          <span>
+                            <span className="font-medium">{settlementVerdict.title}</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              Tick this before Approve. The request stays pending until you decide.
+                            </span>
+                          </span>
+                        </label>
+                      ) : null}
                       <EApprovalApprovalSignatureField
                         value={approvalSignature}
                         onChange={setApprovalSignature}
@@ -909,6 +1011,59 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         onErrorChange={setApprovalSignatureError}
                       />
 
+                      {pendingApproval.finance_action === "release" ? (
+                        <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="release-reference">Release reference</Label>
+                            <Input
+                              id="release-reference"
+                              value={releaseReference}
+                              onChange={(event) => setReleaseReference(event.target.value)}
+                              disabled={decideMutation.isPending || revisionMutation.isPending}
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="release-date">Date released</Label>
+                            <Input
+                              id="release-date"
+                              type="date"
+                              value={releaseDate}
+                              onChange={(event) => setReleaseDate(event.target.value)}
+                              disabled={decideMutation.isPending || revisionMutation.isPending}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                      {pendingApproval.finance_action === "settlement" ||
+                      pendingApproval.finance_action === "payment" ? (
+                        <div className="space-y-3 border-t border-border pt-4">
+                          <EApprovalSettlementVerdict values={data.values} />
+                          <div className="space-y-1.5">
+                          <Label htmlFor="settlement-reference">
+                            {pendingApproval.finance_action === "payment" ||
+                            settlementVerdictFromValues(data.values)?.direction === "payment"
+                              ? "Payment reference"
+                              : settlementVerdictFromValues(data.values)?.direction === "surrender"
+                                ? "Surrender reference"
+                                : "Settlement reference"}
+                          </Label>
+                          <Input
+                            id="settlement-reference"
+                            value={settlementReference}
+                            onChange={(event) => setSettlementReference(event.target.value)}
+                            disabled={decideMutation.isPending || revisionMutation.isPending}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {settlementVerdictFromValues(data.values)?.direction === "surrender"
+                              ? "Enter the reference for the cash the employee returned."
+                              : settlementVerdictFromValues(data.values)?.direction === "payment" ||
+                                  pendingApproval.finance_action === "payment"
+                                ? "Enter the reference for the payment to the employee."
+                                : "Leave blank only when the totals match and no cash moves."}
+                          </p>
+                          </div>
+                        </div>
+                      ) : null}
                       <div data-help="ea-decide-remarks" className="space-y-1.5 border-t border-border pt-4">
                         <Label htmlFor="decision-remarks">Remarks</Label>
                         <Textarea
@@ -946,9 +1101,10 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           <Button
                             size="sm"
                             className={
-                              !signatureConsentAccepted &&
-                              !decideMutation.isPending &&
-                              !revisionMutation.isPending
+                              ((!signatureConsentAccepted &&
+                                !decideMutation.isPending &&
+                                !revisionMutation.isPending) ||
+                                (settlementNeedsConfirm && !settlementSeen))
                                 ? "opacity-50"
                                 : undefined
                             }
@@ -975,6 +1131,25 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               if (consentError) {
                                 setHighlightSignatureConsents(true);
                                 setApprovalSignatureError(consentError);
+                                return;
+                              }
+                              if (settlementNeedsConfirm && !settlementSeen) {
+                                push({
+                                  level: "error",
+                                  title: "Confirm the settlement",
+                                  message: settlementVerdict?.title ?? "Read the settlement before approving.",
+                                });
+                                return;
+                              }
+                              if (
+                                pendingApproval.finance_action === "release" &&
+                                (releaseReference.trim() === "" || releaseDate === "")
+                              ) {
+                                push({
+                                  level: "error",
+                                  title: "Release details required",
+                                  message: "Enter the release reference and the date the cash was handed over.",
+                                });
                                 return;
                               }
                               submitDecision({
@@ -1157,5 +1332,66 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         ) : null}
       </div>
     </PermissionGate>
+  );
+}
+
+function CashAdvanceReturnCard({
+  stage,
+  canCancel,
+  canConfirm,
+  returnReference,
+  onReturnReference,
+  cancelling,
+  confirming,
+  onCancel,
+  onConfirm,
+}: {
+  stage?: string | null;
+  canCancel: boolean;
+  canConfirm: boolean;
+  returnReference: string;
+  onReturnReference: (value: string) => void;
+  cancelling: boolean;
+  confirming: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!canCancel && stage !== "for_return" && stage !== "funds_returned") {
+    return null;
+  }
+
+  return (
+    <EApprovalSectionCard
+      title="Trip"
+      description={
+        stage === "funds_returned"
+          ? "The full cash advance came back. This request is closed."
+          : stage === "for_return"
+            ? "The trip was cancelled. Finance or Treasury records the cash that came back."
+            : "Cancel the trip only when no liquidation has been filed. The full amount must come back."
+      }
+    >
+      {canCancel ? (
+        <Button size="sm" variant="outline" onClick={onCancel} disabled={cancelling}>
+          Cancel trip
+        </Button>
+      ) : null}
+      {stage === "for_return" && canConfirm ? (
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="return-reference">Cash received reference</Label>
+            <Input
+              id="return-reference"
+              value={returnReference}
+              onChange={(event) => onReturnReference(event.target.value)}
+              disabled={confirming}
+            />
+          </div>
+          <Button size="sm" onClick={onConfirm} disabled={confirming || returnReference.trim() === ""}>
+            Confirm funds returned
+          </Button>
+        </div>
+      ) : null}
+    </EApprovalSectionCard>
   );
 }

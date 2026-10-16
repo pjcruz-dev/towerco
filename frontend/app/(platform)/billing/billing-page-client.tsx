@@ -12,7 +12,8 @@ import { PlanTierComparisonTable } from "@/components/billing/plan-tier-comparis
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { subscriptionStatusTone } from "@/components/ui/status-tone";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { BillingPageSkeleton, KpiStripSkeleton } from "@/components/ui/page-skeletons";
 import {
@@ -30,13 +31,6 @@ const planLabels: Record<string, string> = {
   starter: "Starter",
   professional: "Professional",
   enterprise: "Enterprise",
-};
-
-const statusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-  if (status === "active") return "default";
-  if (status === "trial") return "secondary";
-  if (status === "past_due" || status === "canceled") return "destructive";
-  return "outline";
 };
 
 function utilizationTone(percent: number): "default" | "warning" | "danger" {
@@ -210,14 +204,14 @@ export function BillingPageClient() {
                 label="Subscription"
                 value={
                   <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant={statusVariant(snapshot.subscription_status)} className="capitalize">
+                    <StatusBadge tone={subscriptionStatusTone(snapshot.subscription_status)} className="capitalize">
                       {snapshot.subscription_status.replace(/_/g, " ")}
-                    </Badge>
+                    </StatusBadge>
                     {snapshot.subscription?.access_mode === "grace" ? (
-                      <Badge variant="outline">Grace</Badge>
+                      <StatusBadge tone="warning">Grace</StatusBadge>
                     ) : null}
                     {snapshot.subscription?.access_mode === "blocked" ? (
-                      <Badge variant="destructive">Suspended</Badge>
+                      <StatusBadge tone="danger">Suspended</StatusBadge>
                     ) : null}
                   </span>
                 }

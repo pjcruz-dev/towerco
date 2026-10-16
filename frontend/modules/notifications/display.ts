@@ -2,7 +2,7 @@ import type { TenantNotificationRow } from "@/modules/notifications/types";
 
 export type NotificationTab = "action" | "update" | "all";
 
-export type NotificationModuleFilter = "all" | "e_approval" | "ticketing" | "documents";
+export type NotificationModuleFilter = "all" | "e_approval" | "ticketing" | "documents" | "asset_management";
 
 const E_APPROVAL_ACTION_TYPES = new Set([
   "approval_assigned",
@@ -19,6 +19,8 @@ export function notificationModuleLabel(module: string): string {
       return "E-Forms";
     case "ticketing":
       return "Ticketing";
+    case "asset_management":
+      return "Assets";
     case "documents":
       return "Documents";
     default:
@@ -59,6 +61,9 @@ export function resolveNotificationHref(notification: TenantNotificationRow): st
 
   if (notification.module === "ticketing") {
     return "/ticketing";
+  }
+  if (notification.module === "asset_management") {
+    return "/assets";
   }
 
   return notification.module === "e_approval" ? "/e-approval" : "/dashboard";

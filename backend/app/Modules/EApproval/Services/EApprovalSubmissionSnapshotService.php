@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
+
 final class EApprovalSubmissionSnapshotService
 {
     /**
@@ -41,6 +42,7 @@ final class EApprovalSubmissionSnapshotService
                 'step_order' => $s->step_order,
                 'approver_type' => $s->approver_type,
                 'approver_id' => $s->approver_id,
+                'label' => $s->label,
                 'condition' => $s->condition,
             ])->values()->all(),
         ];

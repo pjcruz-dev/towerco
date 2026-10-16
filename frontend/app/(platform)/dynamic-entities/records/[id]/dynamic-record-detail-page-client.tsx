@@ -10,16 +10,18 @@ import {
   DynRelationshipView,
 } from "@/components/dynamic-entities/dyn-relationship-field";
 import { DynRelatedRecordsPanel } from "@/components/dynamic-entities/dyn-related-records-panel";
+import { DynTicketThread } from "@/components/dynamic-entities/dyn-ticket-thread";
 import {
   DynSchemaSheets,
   type DynSchemaMode,
 } from "@/components/dynamic-entities/dyn-schema-sheets";
 import { DynStructuredLayout } from "@/components/dynamic-entities/dyn-structured-layout";
+import { RecordActionHistoryButton } from "@/components/dynamic-entities/record-action-history";
+import { HelpdeskAttachmentsField } from "@/components/ticketing/helpdesk-attachments-field";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,11 +35,16 @@ import {
   type DynRecordDetail,
 } from "@/lib/api/modules/dynamic-entities-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { formatDisplayDate } from "@/lib/format-display-date";
+import {
+  RequiredFieldsAlert,
+  useRequiredFields,
+} from "@/components/dynamic-entities/required-fields-alert";
 import { permissions } from "@/lib/rbac/permissions";
 import {
   canEntityAction,
   canWorkflowAction,
-  isFieldHiddenForRole,
+  isFieldHiddenOnSurface,
   isFieldReadOnlyForRole,
   notifyDynPermissionDenied,
 } from "@/lib/rbac/entity-access";
@@ -47,13 +54,14 @@ import {
   dynSelectChoiceLabel,
   parseDynSelectOptions,
 } from "@/lib/dynamic-entities/select-choices";
+import { dynListPath, dynRecordPath } from "@/lib/dynamic-entities/helpdesk-paths";
 import { dynStatusTone } from "@/lib/dynamic-entities/dyn-list-cell-format";
 import {
   listPrintTemplates,
   templateDisplayName,
 } from "@/lib/dynamic-entities/dyn-print-templates";
 import { useAuthStore } from "@/stores/auth-store";
-import { useNotificationStore } from "@/stores/notification-store";
+import { notify } from "@/lib/ui/notify";
 import { cn } from "@/lib/utils";
 
 type RelatedTab = {
@@ -62,18 +70,22 @@ type RelatedTab = {
   label?: string;
 };
 
-export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }) {
+export function DynamicRecordDetailPageClient({
+  recordId,
+  accessSlug,
+}: {
+  recordId: string;
+  accessSlug?: string;
+}) {
   const searchParams = useSearchParams();
   const editMode = searchParams.get("edit") === "1";
   const canManageRecords = usePermission([permissions.dynamicEntitiesRecordsManage]);
   const canManageSchema = usePermission([permissions.dynamicEntitiesFieldsManage]);
   const canManagePrintables = usePermission([permissions.printablesManage]);
   const accessMatrix = useAuthStore((state) => state.user?.accessMatrix);
-  const notify = useNotificationStore((state) => state.push);
   const [record, setRecord] = useState<DynRecordDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("fields");
   const [tabCounts, setTabCounts] = useState<Record<string, number>>({});
@@ -99,7 +111,6 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
   async function reloadRecord() {
     const row = await fetchDynRecord(recordId);
     setRecord(row);
-    setStatus(row.status ?? "");
     const next: Record<string, string> = {};
     for (const [k, v] of Object.entries(row.values ?? {})) {
       next[k] = v === null || v === undefined ? "" : String(v);
@@ -114,7 +125,6 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
       .then((row) => {
         if (cancelled) return;
         setRecord(row);
-        setStatus(row.status ?? "");
         const next: Record<string, string> = {};
         for (const [k, v] of Object.entries(row.values ?? {})) {
           next[k] = v === null || v === undefined ? "" : String(v);
@@ -192,14 +202,20 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
   );
   const fields = useMemo(
     () =>
-      [...(record?.entity.fields ?? [])].filter(
-        (f) =>
-          !f.is_system_field &&
-          !["actions", "workflows", "print", "id"].includes(f.name) &&
-          !isFieldHiddenForRole(accessMatrix, entitySlug, f.name),
-      ),
-    [record, accessMatrix, entitySlug],
+      [...(record?.entity.fields ?? [])].filter((f) => {
+        if (["actions", "workflows", "print", "id"].includes(f.name)) {
+          return false;
+        }
+        if (f.is_system_field && entitySlug !== "helpdesk_ticket") {
+          return false;
+        }
+        if (canManageSchema) return true;
+        const surface = isEditing ? "form" : "record";
+        return !isFieldHiddenOnSurface(accessMatrix, entitySlug, f.name, surface);
+      }),
+    [record, accessMatrix, entitySlug, canManageSchema, isEditing],
   );
+  const required = useRequiredFields(fields, draft);
 
   const subtitle = useMemo(() => {
     if (!record) return null;
@@ -232,7 +248,6 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
     try {
       const updated = await runDynWorkflowAction(record.id, actionId);
       setRecord(updated);
-      setStatus(updated.status ?? "");
       const next: Record<string, string> = {};
       for (const [k, v] of Object.entries(updated.values ?? {})) {
         next[k] = v === null || v === undefined ? "" : String(v);
@@ -267,6 +282,7 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
       });
       return;
     }
+    if (required.blockIfMissing()) return;
     setSaving(true);
     try {
       const values: Record<string, unknown> = {};
@@ -277,16 +293,15 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
         const raw = draft[field.name];
         if (raw === undefined) continue;
         if (raw === "") {
-          // Skip empty required fields so older records aren't blocked by new blank fields.
-          if (field.is_required) continue;
           values[field.name] = null;
           continue;
         }
+        if (field.type === "file") continue;
         if (field.type === "number" || field.type === "decimal") values[field.name] = Number(raw);
         else if (field.type === "boolean") values[field.name] = raw === "true" || raw === "1";
         else values[field.name] = raw;
       }
-      const updated = await updateDynRecord(record.id, { status: status || undefined, values });
+      const updated = await updateDynRecord(record.id, { values });
       setRecord(updated);
       setError(null);
       notify({
@@ -320,6 +335,9 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
   }
 
   function renderViewField(field: DynField) {
+    if (field.name === "attachment_names" && record) {
+      return <HelpdeskAttachmentsField ticketId={record.id} />;
+    }
     if (field.type === "relationship") {
       return (
         <DynRelationshipView
@@ -336,10 +354,13 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
     ) {
       return <StatusValue value={record?.values[field.name]} field={field} />;
     }
-    return formatValue(record?.values[field.name]);
+    return formatValue(record?.values[field.name], field.type);
   }
 
   function renderEditField(field: DynField) {
+    if (field.name === "attachment_names" && record) {
+      return <HelpdeskAttachmentsField ticketId={record.id} />;
+    }
     if (isFieldReadOnlyForRole(accessMatrix, entitySlug, field.name)) {
       return renderViewField(field);
     }
@@ -424,10 +445,18 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
     );
   }
 
-  const listHref = record ? `/dynamic-entities/${record.entity.slug}` : "/dynamic-entities";
+  const listHref = record ? dynListPath(record.entity.slug) : "/dynamic-entities";
+  const helpdeskRecord = accessSlug === "helpdesk_ticket" || record?.entity.slug === "helpdesk_ticket";
 
   return (
-    <PermissionGate requiredPermissions={[permissions.dynamicEntitiesView]}>
+    <PermissionGate
+      requiredPermissions={
+        helpdeskRecord
+          ? [permissions.dynamicEntitiesView, permissions.ticketingView]
+          : [permissions.dynamicEntitiesView]
+      }
+      match={helpdeskRecord ? "any" : "all"}
+    >
       <div className="w-full space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -437,6 +466,14 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
             {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
           </div>
           <div className="flex flex-wrap gap-2">
+            {record ? (
+              <RecordActionHistoryButton
+                entitySlug={record.entity.slug}
+                entityLabel={record.entity.name}
+                canRevert={canManageRecords}
+                onChanged={() => void reloadRecord()}
+              />
+            ) : null}
             <Button size="sm" variant="outline" render={<Link href={listHref} />}>
               <ArrowLeft className="size-3.5" />
               Back
@@ -505,7 +542,7 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
             ) : canEdit ? (
               <Button
                 size="sm"
-                render={<Link href={`/dynamic-entities/records/${recordId}?edit=1`} />}
+                render={<Link href={`${record ? dynRecordPath(record.entity.slug, recordId) : `/dynamic-entities/records/${recordId}`}?edit=1`} />}
               >
                 Edit
               </Button>
@@ -514,6 +551,7 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
         </header>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <RequiredFieldsAlert fields={required.missing} pulse={required.pulse} />
 
         <div className="flex items-center gap-1 border-b border-border">
           <Button
@@ -570,28 +608,19 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
           </Button>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4">
             {activeTab === "fields" && record ? (
               <>
-                {isEditing ? (
-                  <Card className="rounded-xl">
-                    <CardHeader>
-                      <CardTitle className="text-base font-medium">Status</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Input value={status} onChange={(e) => setStatus(e.target.value)} />
-                    </CardContent>
-                  </Card>
-                ) : null}
-
                 <DynStructuredLayout
                   groups={groups}
                   fields={fields}
+                  entitySlug={entitySlug}
                   canManageSchema={canManageSchema}
                   layoutEditing={isEditing || layoutEditing}
+                  allowWidthAdjust={!isEditing}
                   mode={isEditing || layoutEditing ? "form" : "view"}
                   renderFieldValue={isEditing ? renderEditField : renderViewField}
+                  invalidFieldNames={isEditing ? required.invalidNames : undefined}
                   onSchemaAction={setSchemaMode}
                   onLayoutChanged={async () => {
                     await reloadRecord();
@@ -612,7 +641,25 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
               </>
             ) : null}
 
-            {activeTab !== "fields" && record && activeRelated?.entity_slug ? (
+            {activeTab !== "fields" && record && activeRelated?.entity_slug === "helpdesk_ticket_activities" ? (
+              <DynTicketThread
+                parentRecordId={record.id}
+                foreignField={activeRelated.foreign_field}
+                canCreate={
+                  canManageRecords &&
+                  canEntityAction(accessMatrix, activeRelated.entity_slug, "create")
+                }
+                onCountChange={(count) =>
+                  setTabCounts((prev) =>
+                    prev[activeRelated.entity_slug!] === count
+                      ? prev
+                      : { ...prev, [activeRelated.entity_slug!]: count },
+                  )
+                }
+              />
+            ) : null}
+
+            {activeTab !== "fields" && record && activeRelated?.entity_slug && activeRelated.entity_slug !== "helpdesk_ticket_activities" ? (
               <DynRelatedRecordsPanel
                 parentRecordId={record.id}
                 entitySlug={activeRelated.entity_slug}
@@ -632,57 +679,17 @@ export function DynamicRecordDetailPageClient({ recordId }: { recordId: string }
                 }
                 returnTo={`/dynamic-entities/records/${record.id}`}
                 onCountChange={(count) =>
-                  setTabCounts((prev) => ({
-                    ...prev,
-                    [activeRelated.entity_slug!]: count,
-                  }))
+                  setTabCounts((prev) =>
+                    prev[activeRelated.entity_slug!] === count
+                      ? prev
+                      : { ...prev, [activeRelated.entity_slug!]: count },
+                  )
                 }
               />
             ) : null}
-          </div>
-
-          {record && !isEditing ? (
-            <aside className="xl:sticky xl:top-6 xl:self-start">
-              <HistoryAuditPanel record={record} />
-            </aside>
-          ) : null}
         </div>
       </div>
     </PermissionGate>
-  );
-}
-
-function HistoryAuditPanel({ record }: { record: DynRecordDetail }) {
-  return (
-    <Card className="rounded-xl">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-medium">History & Audit</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ol className="relative space-y-5 border-l border-border pl-4">
-          <li className="relative">
-            <span className="absolute -left-[1.3rem] top-1 size-2.5 rounded-full bg-emerald-500 ring-4 ring-background" />
-            <p className="text-sm font-medium text-foreground">Created record</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {record.created_by_name || "System"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {record.created_at ? new Date(record.created_at).toLocaleString() : "N/A"}
-            </p>
-          </li>
-          <li className="relative">
-            <span className="absolute -left-[1.3rem] top-1 size-2.5 rounded-full bg-sky-500 ring-4 ring-background" />
-            <p className="text-sm font-medium text-foreground">Last updated</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {record.updated_by_name || record.created_by_name || "System"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {record.updated_at ? new Date(record.updated_at).toLocaleString() : "N/A"}
-            </p>
-          </li>
-        </ol>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -710,10 +717,11 @@ function TabButton({
   );
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown, fieldType?: string): string {
   if (value === null || value === undefined || value === "") return "N/A";
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+  const kind = fieldType === "date" || fieldType === "datetime" ? fieldType : undefined;
+  return formatDisplayDate(value, kind) ?? String(value);
 }
 
 function StatusValue({ value, field }: { value: unknown; field?: DynField }) {

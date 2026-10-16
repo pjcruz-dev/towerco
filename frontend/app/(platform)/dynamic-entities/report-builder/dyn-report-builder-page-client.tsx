@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   fetchDynEntities,
   fetchDynEntity,
@@ -264,7 +265,7 @@ export function DynReportBuilderPageClient() {
     try {
       const saved = await saveDynReportBuilder(def);
       setDef((prev) => ({ ...prev, id: saved.id, slug: saved.slug, saved_slug: saved.slug }));
-      setNotice(`Saved “${saved.name}”.`);
+      notify.success("Report saved", saved.name);
       const reports = await listDynHtmlReports();
       setExisting(reports.rows);
       if (openAfter) {
@@ -309,7 +310,7 @@ export function DynReportBuilderPageClient() {
     <PermissionGate requiredPermissions={[permissions.htmlReportsManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Report Builder"
           description="Build summary, detail, or matrix reports from dynamic entities. Saves as an HTML report with a live definition."
           actions={

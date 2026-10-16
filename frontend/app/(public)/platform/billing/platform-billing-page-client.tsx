@@ -6,13 +6,14 @@ import { useQuery } from "@tanstack/react-query";
 import { PlatformBillingCatalogPanel } from "@/components/platform/platform-billing-catalog-panel";
 import { PlatformDataTable } from "@/components/platform/platform-data-table";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { subscriptionStatusTone } from "@/components/ui/status-tone";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshingHint } from "@/components/ui/refreshing-hint";
 import { formatMoney } from "@/lib/billing/format-money";
 import { platformFetchBillingInsights } from "@/lib/api/modules/platform-api";
 import { PlatformBillingPageSkeleton } from "@/components/ui/page-skeletons";
-import { cn } from "@/lib/utils";
 
 export function PlatformBillingPageClient() {
   const query = useQuery({
@@ -174,16 +175,9 @@ export function PlatformBillingPageClient() {
                   id: "status",
                   header: "Status",
                   cell: (row) => (
-                    <span
-                      className={cn(
-                        "text-xs font-medium capitalize",
-                        row.subscription_status === "active"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-amber-600 dark:text-amber-400",
-                      )}
-                    >
+                    <StatusBadge tone={subscriptionStatusTone(row.subscription_status)} className="capitalize">
                       {row.subscription_status.replace(/_/g, " ")}
-                    </span>
+                    </StatusBadge>
                   ),
                 },
                 {

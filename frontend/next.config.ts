@@ -77,6 +77,10 @@ const nextConfig: NextConfig = {
   experimental: {
     // Tree-shake large barrel imports so pages only bundle the icons/charts they use.
     optimizePackageImports: ["lucide-react", "recharts"],
+    // Next 16 turns this on by default and never caps it. On this app the
+    // Turbopack dev cache grew past 100GB of .sst files, then compaction failed
+    // and it kept appending. Dev compiles stay in memory for the session.
+    turbopackFileSystemCacheForDev: false,
   },
 };
 

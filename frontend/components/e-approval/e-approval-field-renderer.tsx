@@ -82,6 +82,11 @@ type Props = {
   /** All form fields — required for computed/read-only currency fields. */
   allFields?: EApprovalFormFieldInput[];
   allValues?: Record<string, string>;
+  /** Money totals placed under the matching expense-grid columns. */
+  gridSummary?: {
+    totals: Array<{ label: string; value: string; required?: boolean }>;
+    errors: string[];
+  };
 };
 
 function SelectFieldControl({
@@ -403,6 +408,8 @@ export function EApprovalFieldRenderer({
   allowRemoteLookups = true,
   helpTextOverride,
   allFields = [],
+  allValues = {},
+  gridSummary,
 }: Props) {
   const hookPlan = useEApprovalPlanFeatures();
   const features = planFeaturesOverride ?? hookPlan;
@@ -799,6 +806,10 @@ export function EApprovalFieldRenderer({
             disabled={disabled}
             density={density}
             allowRemoteLookups={allowRemoteLookups}
+            allFields={allFields}
+            allValues={allValues}
+            summaryTotals={gridSummary?.totals}
+            summaryErrors={gridSummary?.errors}
           />
         </div>
       );

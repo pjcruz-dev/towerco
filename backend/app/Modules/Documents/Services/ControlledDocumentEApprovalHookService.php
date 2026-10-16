@@ -20,12 +20,46 @@ final class ControlledDocumentEApprovalHookService
         private readonly ControlledDocumentSyncService $sync,
     ) {}
 
+    public function afterSubmissionOpened(EApprovalSubmission $submission, ?TenantUser $actor = null): void
+    {
+        if ((string) $submission->status !== EApprovalSubmissionStatus::PENDING) {
+            return;
+        }
+
+        $this->runSync($submission, function () use ($submission, $actor): void {
+            $submission->loadMissing(['form', 'values.field', 'attachments']);
+            $this->sync->openPending($submission, $actor);
+        });
+    }
+
+    public function afterAttachmentStored(EApprovalSubmission $submission): void
+    {
+        $this->runSync($submission, function () use ($submission): void {
+            $this->sync->attachPendingFile($submission);
+        });
+    }
+
+    public function afterSubmissionClosed(EApprovalSubmission $submission): void
+    {
+        $this->runSync($submission, function () use ($submission): void {
+            $this->sync->releasePending($submission);
+        });
+    }
+
     public function afterSubmissionMutation(EApprovalSubmission $submission, ?TenantUser $actor = null): void
     {
         if ((string) $submission->status !== EApprovalSubmissionStatus::APPROVED) {
             return;
         }
 
+        $this->runSync($submission, function () use ($submission, $actor): void {
+            $submission->loadMissing(['form', 'values.field', 'attachments']);
+            $this->sync->syncApprovedSubmission($submission, $actor);
+        });
+    }
+
+    private function runSync(EApprovalSubmission $submission, \Closure $callback): void
+    {
         if (! Schema::connection('tenant')->hasTable('controlled_document_revisions')
             || ! Schema::connection('tenant')->hasTable('controlled_documents')) {
             Log::warning('Controlled document sync skipped: registry tables missing', [
@@ -36,13 +70,11 @@ final class ControlledDocumentEApprovalHookService
         }
 
         try {
-            $submission->loadMissing(['form', 'values.field', 'attachments']);
-            $this->sync->syncApprovedSubmission($submission, $actor);
+            $callback();
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
-            // Never roll back a successful E-Forms approval for registry sync failures.
-            Log::error('Controlled document sync failed after approval', [
+            Log::error('Controlled document sync failed', [
                 'submission_id' => (string) $submission->id,
                 'message' => $exception->getMessage(),
             ]);

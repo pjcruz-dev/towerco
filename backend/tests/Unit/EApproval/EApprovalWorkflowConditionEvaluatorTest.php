@@ -65,4 +65,17 @@ final class EApprovalWorkflowConditionEvaluatorTest extends TestCase
         $this->assertTrue($this->evaluator->matches($lte, ['non_po' => '5000']));
         $this->assertTrue($this->evaluator->matches($gt, ['non_po' => '5001']));
     }
+
+    public function test_choice_boundary_matches_the_value_instead_of_an_amount(): void
+    {
+        $isAtc = ['field' => 'subsidiary', 'operator' => 'lte', 'value' => 'ATC'];
+        $isNotAtc = ['field' => 'subsidiary', 'operator' => 'gt', 'value' => 'ATC'];
+
+        $this->assertTrue($this->evaluator->matches($isAtc, ['subsidiary' => 'ATC']));
+        $this->assertFalse($this->evaluator->matches($isAtc, ['subsidiary' => 'ADIC']));
+        $this->assertTrue($this->evaluator->matches($isNotAtc, ['subsidiary' => 'ADIC']));
+        $this->assertFalse($this->evaluator->matches($isNotAtc, ['subsidiary' => 'ATC']));
+        $this->assertFalse($this->evaluator->matches($isAtc, ['subsidiary' => '']));
+        $this->assertFalse($this->evaluator->matches($isNotAtc, ['subsidiary' => '']));
+    }
 }

@@ -7,7 +7,8 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { StatusTone } from "@/components/ui/status-tone";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -20,7 +21,6 @@ import {
   fetchModuleListExports,
   type ModuleListExportRow,
 } from "@/lib/api/modules/module-list-exports-api";
-import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 import { usePermission } from "@/hooks/use-permission";
 import { permissions } from "@/lib/rbac/permissions";
@@ -31,17 +31,11 @@ function moduleLabel(module: string): string {
   return module;
 }
 
-function statusClass(status: string): string {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200";
-  }
-  if (status === "failed") {
-    return "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200";
-  }
-  if (status === "processing" || status === "queued") {
-    return "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200";
-  }
-  return "";
+function exportStatusTone(status: string): StatusTone {
+  if (status === "completed") return "success";
+  if (status === "failed") return "danger";
+  if (status === "processing" || status === "queued") return "info";
+  return "neutral";
 }
 
 export function ModuleListExportsPageClient() {
@@ -86,9 +80,9 @@ export function ModuleListExportsPageClient() {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant="outline" className={cn("capitalize", statusClass(row.original.status))}>
+          <StatusBadge tone={exportStatusTone(row.original.status)} className="capitalize">
             {row.original.status}
-          </Badge>
+          </StatusBadge>
         ),
       },
       {
@@ -163,9 +157,9 @@ export function ModuleListExportsPageClient() {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => (
-          <Badge variant="outline" className={cn("capitalize", statusClass(row.original.status))}>
+          <StatusBadge tone={exportStatusTone(row.original.status)} className="capitalize">
             {row.original.status}
-          </Badge>
+          </StatusBadge>
         ),
       },
       {

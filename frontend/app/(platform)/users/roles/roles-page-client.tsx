@@ -3,11 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Shield, Trash2, Users } from "lucide-react";
+import { AlertTriangle, Plus, Shield, Trash2, Users } from "lucide-react";
 
 import { RoleAccessMatrixPanels } from "@/components/admin/role-access-matrix-panels";
+import { RoleAiAccessPanel } from "@/components/admin/role-ai-access-panel";
 import { RoleModuleAccessGrid } from "@/components/admin/role-module-access-grid";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -37,12 +39,13 @@ import {
 } from "@/lib/api/modules/dynamic-entities-api";
 import { permissions } from "@/lib/rbac/permissions";
 import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
-import { GENERAL_SYSTEM_PERMISSIONS } from "@/lib/rbac/role-management-layout";
+import { GENERAL_SYSTEM_GROUPS } from "@/lib/rbac/role-management-layout";
+import type { RoleAiAccess } from "@/lib/rbac/role-ai-access";
 import { ATC_OPERATIONAL_ROLE_ORDER, filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
-type PermTab = "general" | "data" | "fields" | "workflow";
+type PermTab = "general" | "data" | "fields" | "workflow" | "status" | "ai";
 
 function roleLabel(name: string): string {
   return roleDisplayLabel(name);
@@ -81,6 +84,8 @@ export function RolesPageClient() {
   const [draftMatrix, setDraftMatrix] = useState<RoleAccessMatrix>({});
   const [permTab, setPermTab] = useState<PermTab>("general");
   const [permFilter, setPermFilter] = useState("");
+  const [entityGroup, setEntityGroup] = useState("all");
+  const [groupByPack, setGroupByPack] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
@@ -109,7 +114,7 @@ export function RolesPageClient() {
   }, [roles, selectedRoleId]);
 
   useEffect(() => {
-    if (!dynEnabled && (permTab === "fields" || permTab === "workflow")) {
+    if (!dynEnabled && (permTab === "fields" || permTab === "workflow" || permTab === "status")) {
       setPermTab("data");
     }
   }, [dynEnabled, permTab]);
@@ -240,6 +245,26 @@ export function RolesPageClient() {
     persistPermissions(next);
   }
 
+  function setGroupPermissions(names: string[], grant: boolean) {
+    if (!canEditSelected || updateMutation.isPending) return;
+    const next = new Set(draftPermissions);
+    for (const name of names) {
+      if (!permissionSet.has(name)) continue;
+      if (grant) next.add(name);
+      else next.delete(name);
+    }
+    const list = [...next];
+    if (list.length === 0) {
+      notify({
+        level: "warning",
+        title: "Keep one permission",
+        message: "A role needs at least one permission.",
+      });
+      return;
+    }
+    persistPermissions(list);
+  }
+
   function confirmDelete(role: AdminRoleRow) {
     if (role.is_system || role.is_baseline) {
       notify({
@@ -264,14 +289,23 @@ export function RolesPageClient() {
 
   const filterNeedle = permFilter.trim().toLowerCase();
 
-  const generalCards = useMemo(() => {
-    return GENERAL_SYSTEM_PERMISSIONS.filter((card) => permissionSet.has(card.permission)).filter(
-      (card) =>
-        !filterNeedle ||
-        card.title.toLowerCase().includes(filterNeedle) ||
-        card.permission.toLowerCase().includes(filterNeedle),
-    );
+  const generalGroups = useMemo(() => {
+    return GENERAL_SYSTEM_GROUPS.map((group) => ({
+      ...group,
+      cards: group.cards.filter((card) => permissionSet.has(card.permission)).filter(
+        (card) =>
+          !filterNeedle ||
+          card.title.toLowerCase().includes(filterNeedle) ||
+          card.permission.toLowerCase().includes(filterNeedle) ||
+          group.title.toLowerCase().includes(filterNeedle),
+      ),
+    })).filter((group) => group.cards.length > 0);
   }, [permissionSet, filterNeedle]);
+
+  const entityPacks = useMemo(() => {
+    const packs = new Set(dynEntities.map((entity) => entity.module_pack).filter(Boolean));
+    return [...packs].sort();
+  }, [dynEntities]);
 
   const tabs: Array<{ id: PermTab; label: string }> = [
     { id: "general", label: "General System" },
@@ -280,37 +314,37 @@ export function RolesPageClient() {
       ? [
           { id: "fields" as const, label: "Field Level Security" },
           { id: "workflow" as const, label: "Workflow Approvals" },
+          { id: "status" as const, label: "Status Monitoring" },
         ]
       : []),
+    { id: "ai", label: "AI Assistant" },
   ];
 
   return (
     <PermissionGate requiredPermissions={[permissions.roleManage]}>
-      <div className="space-y-4">
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Role Management</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Define permissions and access controls for system roles.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" render={<Link href="/users" prefetch={false} />}>
-              Back to users
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                setCreateName("");
-                setCreateOpen(true);
-              }}
-            >
-              <Plus className="size-3.5" />
-              Create New Role
-            </Button>
-          </div>
-        </header>
+      <div className="flex h-[calc(100dvh-9.5rem)] min-h-[28rem] flex-col gap-4 lg:h-[calc(100dvh-10.5rem)]">
+        <WorkspacePageHeader
+          title="Role Management"
+          description="Define permissions and access controls for system roles."
+          actions={
+            <>
+              <Button type="button" size="sm" variant="outline" render={<Link href="/users" prefetch={false} />}>
+                Back to users
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setCreateName("");
+                  setCreateOpen(true);
+                }}
+              >
+                <Plus className="size-3.5" />
+                Create New Role
+              </Button>
+            </>
+          }
+        />
 
         {catalogQuery.isError ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
@@ -330,14 +364,14 @@ export function RolesPageClient() {
           </div>
         ) : null}
 
-        <div className="grid min-h-[34rem] overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:grid-cols-[minmax(16rem,20rem)_1fr]">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(11rem,14rem)_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:grid-cols-[16rem_minmax(0,1fr)] lg:grid-rows-1">
           {/* Available roles */}
-          <aside className="flex flex-col border-b border-border lg:border-b-0 lg:border-r">
+          <aside className="flex min-h-0 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
             <div className="flex items-center gap-2 border-b border-border px-4 py-3">
               <Users className="size-4 text-muted-foreground" />
               <h2 className="text-sm font-medium text-foreground">Available Roles</h2>
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {catalogQuery.isLoading ? (
                 <p className="px-2 py-6 text-center text-sm text-muted-foreground">Loading roles…</p>
               ) : catalogQuery.isError ? (
@@ -410,124 +444,188 @@ export function RolesPageClient() {
           </aside>
 
           {/* Permissions pane */}
-          <section className="flex min-w-0 flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-              <div>
-                <h2 className="text-sm font-medium text-foreground">
-                  Permissions for{" "}
-                  <span className="capitalize">{selectedRole ? roleLabel(selectedRole.name) : "…"}</span>
-                </h2>
-                {selectedRole?.is_system ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Protected system role — clone to customize permissions.
-                  </p>
-                ) : (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Changes save automatically when you toggle a permission.
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  value={permFilter}
-                  onChange={(e) => setPermFilter(e.target.value)}
-                  placeholder="Filter permissions…"
-                  className="h-8 w-48 text-xs"
-                />
-                {selectedRole?.is_system ? (
+          <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+            <div className="shrink-0 border-b border-border px-4 py-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-medium text-foreground">
+                    Permissions for{" "}
+                    <span className="capitalize">{selectedRole ? roleLabel(selectedRole.name) : "…"}</span>
+                  </h2>
+                  {selectedRole?.is_system ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Protected system role — clone to customize permissions.
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Changes save automatically when you toggle a permission.
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {selectedRole?.is_system ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!selectedRole || cloneMutation.isPending}
+                      onClick={() => {
+                        if (!selectedRole) return;
+                        cloneMutation.mutate({
+                          roleId: selectedRole.id,
+                          roleName: suggestRoleCloneName(selectedRole.name),
+                        });
+                      }}
+                    >
+                      Clone role
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={!selectedRole || cloneMutation.isPending}
+                    disabled={!canEditSelected || updateMutation.isPending || !selectedRole}
                     onClick={() => {
                       if (!selectedRole) return;
-                      cloneMutation.mutate({
-                        roleId: selectedRole.id,
-                        roleName: suggestRoleCloneName(selectedRole.name),
-                      });
+                      persist(draftPermissions, draftMatrix);
                     }}
                   >
-                    Clone role
+                    {updateMutation.isPending ? "Saving…" : "Save"}
                   </Button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {dynEnabled && permTab !== "general" && permTab !== "ai" ? (
+                  <>
+                    <select
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      value={entityGroup}
+                      aria-label="Entity group"
+                      onChange={(event) => setEntityGroup(event.target.value)}
+                    >
+                      <option value="all">All entity groups</option>
+                      {entityPacks.map((pack) => (
+                        <option key={pack} value={pack}>
+                          {pack.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={groupByPack ? "secondary" : "outline"}
+                      onClick={() => setGroupByPack((current) => !current)}
+                    >
+                      Groups
+                    </Button>
+                  </>
                 ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!canEditSelected || updateMutation.isPending || !selectedRole}
-                  onClick={() => {
-                    if (!selectedRole) return;
-                    persist(draftPermissions, draftMatrix);
-                  }}
-                >
-                  {updateMutation.isPending ? "Saving…" : "Save"}
-                </Button>
+                <Input
+                  value={permFilter}
+                  onChange={(e) => setPermFilter(e.target.value)}
+                  placeholder="Filter permissions…"
+                  className="h-8 w-full max-w-xs text-xs"
+                />
               </div>
             </div>
 
             <Tabs
               value={permTab}
               onValueChange={(value) => setPermTab(value as PermTab)}
-              className="border-b border-border px-4 pt-2"
+              className="shrink-0 border-b border-border px-2"
             >
-              <TabsList variant="line" className="h-auto w-full justify-start gap-0 rounded-none bg-transparent p-0">
+              <TabsList
+                variant="line"
+                className="h-auto w-full flex-wrap justify-start gap-x-0 gap-y-0 rounded-none bg-transparent p-0 group-data-horizontal/tabs:h-auto"
+              >
                 {tabs.map((tab) => (
-                  <TabsTrigger key={tab.id} value={tab.id} className="flex-none px-3 py-2 text-xs">
+                  <TabsTrigger key={tab.id} value={tab.id} className="h-9 flex-none px-3 py-2 text-xs">
                     {tab.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </Tabs>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
               {!selectedRole ? (
                 <p className="text-sm text-muted-foreground">Select a role to manage permissions.</p>
               ) : null}
 
               {selectedRole && permTab === "general" ? (
-                <div className="space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Global permissions
-                  </p>
-                  {generalCards.length === 0 ? (
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+                  {generalGroups.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No matching permissions.</p>
                   ) : (
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                      {generalCards.map((card) => {
-                        const checked = draftPermissions.includes(card.permission);
-                        return (
-                          <label
-                            key={card.permission}
-                            className={cn(
-                              "flex cursor-pointer gap-3 rounded-lg border border-border p-3 transition-colors",
-                              checked
-                                ? "border-foreground/20 bg-muted/50"
-                                : "bg-card hover:bg-muted/40",
-                              !canEditSelected && "cursor-default opacity-80",
-                            )}
-                          >
-                            <Checkbox
-                              checked={checked}
-                              disabled={!canEditSelected}
-                              onCheckedChange={() => togglePermission(card.permission)}
-                              className="mt-0.5"
-                            />
-                            <span className="min-w-0">
-                              <span className="block text-sm font-medium text-foreground">{card.title}</span>
-                              <span className="mt-0.5 block text-xs text-muted-foreground">
-                                {card.description}
+                    generalGroups.map((group) => {
+                      const granted = group.cards.filter((card) => draftPermissions.includes(card.permission)).length;
+                      return (
+                        <section key={group.id} className="rounded-xl border border-border bg-card">
+                          <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-3 py-2.5">
+                            <div>
+                              <h3 className="text-sm font-medium text-foreground">{group.title}</h3>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{group.description}</p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="tabular-nums text-muted-foreground">
+                                {granted} of {group.cards.length}
                               </span>
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                              <button
+                                type="button"
+                                className="font-medium text-foreground hover:underline disabled:opacity-50"
+                                disabled={!canEditSelected || updateMutation.isPending}
+                                onClick={() => setGroupPermissions(group.cards.map((card) => card.permission), true)}
+                              >
+                                Grant all
+                              </button>
+                              <button
+                                type="button"
+                                className="text-muted-foreground hover:underline disabled:opacity-50"
+                                disabled={!canEditSelected || updateMutation.isPending}
+                                onClick={() => setGroupPermissions(group.cards.map((card) => card.permission), false)}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid gap-1 p-2 sm:grid-cols-2">
+                            {group.cards.map((card) => {
+                              const checked = draftPermissions.includes(card.permission);
+                              return (
+                                <label
+                                  key={card.permission}
+                                  className={cn(
+                                    "flex cursor-pointer gap-3 rounded-lg px-2 py-2 hover:bg-muted/40",
+                                    !canEditSelected && "cursor-default",
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    disabled={!canEditSelected}
+                                    onCheckedChange={() => togglePermission(card.permission)}
+                                    className="mt-0.5"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                                      {card.title}
+                                      {card.danger ? (
+                                        <AlertTriangle className="size-3.5 text-warning" aria-label="Wide-reaching permission" />
+                                      ) : null}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">{card.description}</span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })
                   )}
                 </div>
               ) : null}
 
               {selectedRole && permTab === "data" && !dynEnabled ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
                 <RoleModuleAccessGrid
                   enabledModules={enabledModules}
                   granted={draftPermissions}
@@ -535,9 +633,10 @@ export function RolesPageClient() {
                   disabled={!canEditSelected || updateMutation.isPending}
                   onToggle={togglePermission}
                 />
+                </div>
               ) : null}
 
-              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && entitiesQuery.isError ? (
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow" || permTab === "status") && entitiesQuery.isError ? (
                 <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                   <p className="min-w-0 flex-1 text-sm text-destructive">
                     Could not load Dynamic Entities. {getErrorMessage(entitiesQuery.error)}
@@ -555,11 +654,11 @@ export function RolesPageClient() {
                 </div>
               ) : null}
 
-              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && entitiesQuery.isLoading ? (
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow" || permTab === "status") && entitiesQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading entities…</p>
               ) : null}
 
-              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow") && !entitiesQuery.isLoading ? (
+              {selectedRole && dynEnabled && (permTab === "data" || permTab === "fields" || permTab === "workflow" || permTab === "status") && !entitiesQuery.isLoading ? (
                 <RoleAccessMatrixPanels
                   tab={permTab}
                   roleName={selectedRole.name}
@@ -568,9 +667,22 @@ export function RolesPageClient() {
                   loadEntityDetail={loadEntityDetail}
                   matrix={draftMatrix}
                   filter={permFilter}
+                  entityGroup={entityGroup}
+                  groupByPack={groupByPack}
                   disabled={!canEditSelected || updateMutation.isPending}
                   onChange={persistMatrix}
                 />
+              ) : null}
+
+              {selectedRole && permTab === "ai" ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                <RoleAiAccessPanel
+                  value={draftMatrix.ai}
+                  disabled={!canEditSelected || updateMutation.isPending}
+                  saving={updateMutation.isPending}
+                  onSave={(next: RoleAiAccess) => persistMatrix({ ...draftMatrix, ai: next })}
+                />
+                </div>
               ) : null}
             </div>
           </section>

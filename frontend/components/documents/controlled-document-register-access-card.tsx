@@ -23,10 +23,10 @@ import { getErrorMessage } from "@/lib/api/error";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
 
-export function ControlledDocumentRegisterAccessCard() {
+export function ControlledDocumentRegisterAccessCard({ startOpen = false }: { startOpen?: boolean }) {
   const push = useNotificationStore((s) => s.push);
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [editor, setEditor] = useState<ControlledDocumentRegisterAccessEditor>(DEFAULT_REGISTER_ACCESS_EDITOR);
   const [dirty, setDirty] = useState(false);
 

@@ -2,8 +2,10 @@
 
 import {
   buildComposeReviewSummaryRows,
+  placeReviewTotals,
   type ComposeReviewSummaryRow,
   type ComposeReviewTable,
+  type ComposeReviewTotal,
 } from "@/modules/e-approval/form-compose-review";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
@@ -16,17 +18,47 @@ type Props = {
   className?: string;
 };
 
-function ReviewTable({ table }: { table: ComposeReviewTable }) {
+function isReviewMoneyColumn(header: string): boolean {
+  const label = header.trim();
+  return /^amount$/i.test(label) || /^vat$/i.test(label) || /^non-?vatable$/i.test(label) || /net of vat/i.test(label);
+}
+
+function ReviewTotalCell({ total }: { total: ComposeReviewTotal }) {
   return (
-    <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
+    <div className="text-right">
+      <div className="text-[10px] font-normal leading-tight text-muted-foreground">{total.label}</div>
+      <div className="text-sm font-medium whitespace-nowrap tabular-nums text-foreground">{total.value}</div>
+    </div>
+  );
+}
+
+export function EApprovalLineItemsTable({
+  table,
+  totals,
+  printLayout = false,
+}: {
+  table: ComposeReviewTable;
+  totals?: ComposeReviewTotal[];
+  /** Expense lines on the request page use the print table: numbers under the column, no repeated names. */
+  printLayout?: boolean;
+}) {
+  const totalRows = placeReviewTotals(table.headers, totals ?? []);
+  const moneyColumns = table.headers.map((header) => isReviewMoneyColumn(header));
+
+  return (
+    <div className="mt-2 overflow-x-auto rounded-md border border-border">
+      <table className={cn("w-full min-w-[20rem] border-collapse text-left", printLayout ? "text-[11px]" : "text-sm")}>
         <thead>
-          <tr className="bg-slate-700 text-white dark:bg-slate-800">
-            {table.headers.map((header) => (
+          <tr className={cn(printLayout ? "bg-muted text-foreground" : "bg-slate-700 text-white dark:bg-slate-800")}>
+            {table.headers.map((header, headerIndex) => (
               <th
                 key={header}
                 scope="col"
-                className="px-3 py-2 text-xs font-medium whitespace-nowrap"
+                className={cn(
+                  "border border-border px-2 py-1.5 font-medium",
+                  printLayout ? "text-center text-[10px] leading-tight whitespace-normal" : "px-3 py-2 text-xs whitespace-nowrap",
+                  moneyColumns[headerIndex] && "min-w-[5.5rem] text-right",
+                )}
               >
                 {header}
               </th>
@@ -39,14 +71,16 @@ function ReviewTable({ table }: { table: ComposeReviewTable }) {
               key={`review-row-${rowIndex}`}
               className={cn(
                 "border-t border-border",
-                rowIndex % 2 === 1 ? "bg-muted/20" : "bg-card",
+                rowIndex % 2 === 1 ? "bg-muted/30" : "bg-card",
               )}
             >
               {row.map((cell, cellIndex) => (
                 <td
                   key={`review-cell-${rowIndex}-${cellIndex}`}
                   className={cn(
-                    "px-3 py-2 align-top break-words",
+                    "border border-border align-top break-words",
+                    printLayout ? "px-2 py-1" : "px-3 py-2 whitespace-pre-line",
+                    moneyColumns[cellIndex] && "min-w-[5.5rem] text-right whitespace-nowrap tabular-nums",
                     cell === "—" && "text-muted-foreground",
                   )}
                 >
@@ -56,6 +90,36 @@ function ReviewTable({ table }: { table: ComposeReviewTable }) {
             </tr>
           ))}
         </tbody>
+        {totalRows.length > 0 ? (
+          <tfoot>
+            {totalRows.map((totalRow, rowIndex) => (
+              <tr key={`review-total-${rowIndex}`} className="border-t border-border bg-muted/50 font-bold">
+                {totalRow.map((total, cellIndex) => (
+                  <td
+                    key={`review-total-${rowIndex}-${cellIndex}`}
+                    className={cn(
+                      "border border-border align-bottom",
+                      printLayout ? "px-2 py-1" : "px-3 py-2",
+                      moneyColumns[cellIndex] && "min-w-[5.5rem] text-right",
+                    )}
+                  >
+                    {total ? (
+                      printLayout && rowIndex === 0 ? (
+                        <span className="whitespace-nowrap tabular-nums">{total.value}</span>
+                      ) : (
+                        <ReviewTotalCell total={total} />
+                      )
+                    ) : rowIndex === 0 && cellIndex === 0 ? (
+                      <span className="text-[10px] tracking-wide text-foreground uppercase">
+                        Totals
+                      </span>
+                    ) : null}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tfoot>
+        ) : null}
       </table>
     </div>
   );
@@ -86,7 +150,11 @@ function SummaryRow({
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">{row.value}</p>
-        <ReviewTable table={row.table} />
+        <EApprovalLineItemsTable
+          table={row.table}
+          totals={row.totals}
+          printLayout={row.fieldName === "expense_lines"}
+        />
       </div>
     );
   }

@@ -25,7 +25,7 @@ function buildSectionComposeSteps(
   const includeEmptySteps = options?.includeEmptySteps === true;
   const groups = buildFieldDisplayGroups(fields);
 
-  return groups
+  const steps = groups
     .map((group, stepIndex) => {
       const fieldIndices: number[] = [];
       if (group.header) {
@@ -59,6 +59,37 @@ function buildSectionComposeSteps(
       };
     })
     .filter((step): step is FormComposeStep => step !== null);
+
+  return mergeContinuedSections(steps);
+}
+
+/** Expense lines stay on the request step for cash advance and liquidation. */
+function sectionStaysOnPreviousStep(field: EApprovalFormFieldInput | undefined): boolean {
+  if (field?.type !== "section") {
+    return false;
+  }
+  const label = field.label.trim().toLowerCase();
+  return label === "forecast expenses" || label === "actual expenses";
+}
+
+function mergeContinuedSections(steps: FormComposeStep[]): FormComposeStep[] {
+  const merged: FormComposeStep[] = [];
+
+  for (const step of steps) {
+    const previous = merged[merged.length - 1];
+    if (previous && sectionStaysOnPreviousStep(step.fields[0])) {
+      previous.fieldIndices.push(...step.fieldIndices);
+      previous.fields.push(...step.fields);
+      continue;
+    }
+    merged.push(step);
+  }
+
+  return merged.map((step, stepIndex) => ({
+    ...step,
+    id: `ea-compose-step-${stepIndex}`,
+    stepIndex,
+  }));
 }
 
 function defaultPageBreakStepLabel(stepIndex: number): string {

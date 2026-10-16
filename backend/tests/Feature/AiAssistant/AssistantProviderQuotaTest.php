@@ -6,7 +6,6 @@ namespace Tests\Feature\AiAssistant;
 
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
-use App\Modules\AiAssistant\Contracts\EmbeddingProviderInterface;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\LlmCompletionResult;
 use App\Modules\AiAssistant\DTOs\LlmPrompt;
@@ -71,47 +70,5 @@ final class AssistantProviderQuotaTest extends TestCase
             ->assertJsonPath('data.provider_notice.title', 'OpenAI quota exceeded');
 
         $this->assertStringContainsString('OpenAI quota exceeded', (string) $response->json('data.answer'));
-    }
-
-    public function test_ask_returns_quota_exceeded_notice_when_openai_embeddings_fail(): void
-    {
-        $this->app->instance(EmbeddingProviderInterface::class, new readonly class implements EmbeddingProviderInterface
-        {
-            public function embed(string $text): array
-            {
-                throw new AssistantProviderQuotaExceededException(
-                    provider: 'openai',
-                    message: 'OpenAI embeddings failed (HTTP 429): insufficient_quota',
-                );
-            }
-
-            public function embedMany(array $texts): array
-            {
-                return array_map(fn (): array => $this->embed('x'), $texts);
-            }
-
-            public function modelName(): string
-            {
-                return 'text-embedding-3-small';
-            }
-
-            public function dimensions(): int
-            {
-                return 1536;
-            }
-        });
-
-        $response = $this->actingAsTenantAdmin()
-            ->withHeaders($this->tenantApiHeaders())
-            ->postJson('/api/v1/assistant/ask', [
-                'question' => 'How do I create an E-Forms request?',
-            ])
-            ->assertOk();
-
-        $response
-            ->assertJsonPath('data.status', AssistantAskStatus::PROVIDER_QUOTA_EXCEEDED)
-            ->assertJsonPath('data.error_code', AssistantProviderErrorClassifier::OPENAI_QUOTA_EXCEEDED);
-
-        $this->assertStringContainsString('billing limit', (string) $response->json('data.answer'));
     }
 }

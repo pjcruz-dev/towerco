@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Lock, Pencil } from "lucide-react";
 
 import { EApprovalFieldRenderer } from "@/components/e-approval/e-approval-field-renderer";
@@ -17,14 +17,81 @@ import {
   layoutWidthTailwindClass,
   normalizeFormFieldLayouts,
   parseFieldLayout,
+  type EApprovalLayoutClusterNode,
   type EApprovalLayoutRowColumns,
 } from "@/modules/e-approval/field-layout";
+import { formatGridCurrencyDisplay } from "@/modules/e-approval/grid-row-formulas";
 import type { EApprovalPlanFeatures } from "@/hooks/use-e-approval-plan-features";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
+import type { EApprovalFieldListEntry } from "@/modules/e-approval/form-field-groups";
+
+const EXPENSE_SUMMARY_RANK: Record<string, number> = {
+  requested_amount: 0,
+  total_reimbursement: 0,
+  vat_total: 1,
+  non_vatable_total: 2,
+  vatable_net: 3,
+};
+
+function expenseSummaryEntries(node: EApprovalLayoutClusterNode): EApprovalFieldListEntry[] | null {
+  if (node.kind === "row" && isExpenseSummaryRow(node)) {
+    return node.entries;
+  }
+  if (node.kind === "field" && node.entry.field.name in EXPENSE_SUMMARY_RANK) {
+    return [node.entry];
+  }
+  return null;
+}
+
+function followingExpenseSummary(nodes: EApprovalLayoutClusterNode[], from: number): EApprovalFieldListEntry[] {
+  const collected: EApprovalFieldListEntry[] = [];
+  for (let look = from + 1; look < nodes.length; look += 1) {
+    const candidate = nodes[look];
+    if (!candidate) {
+      break;
+    }
+    const entries = expenseSummaryEntries(candidate);
+    if (!entries) {
+      break;
+    }
+    collected.push(...entries);
+  }
+  return collected;
+}
+
+function expenseSummarySkip(nodes: EApprovalLayoutClusterNode[], from: number): number {
+  let skip = 0;
+  for (let look = from + 1; look < nodes.length; look += 1) {
+    const candidate = nodes[look];
+    if (!candidate || !expenseSummaryEntries(candidate)) {
+      break;
+    }
+    skip += 1;
+  }
+  return skip;
+}
+
+function isExpenseSummaryRow(node: EApprovalLayoutClusterNode): node is Extract<EApprovalLayoutClusterNode, { kind: "row" }> {
+  return (
+    node.kind === "row" &&
+    node.entries.length > 0 &&
+    node.entries.every((entry) => entry.field.name in EXPENSE_SUMMARY_RANK)
+  );
+}
+
+function fieldIsRequired(field: EApprovalFormFieldInput): boolean {
+  const validation = field.validation;
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) {
+    return false;
+  }
+  return validation.required === true;
+}
 
 type Props = {
   fields: EApprovalFormFieldInput[];
+  /** Full form, including fields on other steps. Linked grids need this. */
+  catalogFields?: EApprovalFormFieldInput[];
   values: Record<string, string>;
   onChange: (fieldName: string, value: string) => void;
   onFileChange?: (fieldName: string, files: File[]) => void;
@@ -55,6 +122,7 @@ type Props = {
 
 export function EApprovalFormFieldsLayout({
   fields,
+  catalogFields,
   values,
   onChange,
   approverOptions,
@@ -83,10 +151,18 @@ export function EApprovalFormFieldsLayout({
     setUnlockedFields((prev) => new Set([...prev, name]));
   const layoutRows = parseBuilderLayoutRows(formMetadata);
   const layoutFields = normalizeFormFieldLayouts(fields, layoutRows);
+  const fieldCatalog = catalogFields && catalogFields.length > 0 ? catalogFields : layoutFields;
   const displayFields = visibleFormFields(layoutFields, values);
   const groups = buildFieldDisplayGroups(displayFields);
 
-  const renderField = (field: EApprovalFormFieldInput, index: number) => {
+  const renderField = (
+    field: EApprovalFormFieldInput,
+    index: number,
+    gridSummary?: {
+      totals: Array<{ label: string; value: string; required?: boolean }>;
+      errors: string[];
+    },
+  ) => {
     const message = fieldErrors?.[field.name];
     const isPrefilled =
       prefillReadOnlyFields?.has(field.name) && !unlockedFields.has(field.name);
@@ -138,7 +214,7 @@ export function EApprovalFormFieldsLayout({
         <EApprovalFieldRenderer
           key={fieldInstanceKey(field, index)}
           field={field}
-          allFields={layoutFields}
+          allFields={fieldCatalog}
           value={values[field.name] ?? ""}
           onChange={(next) => onChange(field.name, next)}
           onFileChange={onFileChange ? (files) => onFileChange(field.name, files) : undefined}
@@ -161,13 +237,53 @@ export function EApprovalFormFieldsLayout({
           allowRemoteLookups={allowRemoteLookups}
           helpTextOverride={fieldHelpOverrides?.[field.name]}
           allValues={values}
+          gridSummary={gridSummary}
         />
       </div>
     );
   };
 
-  const renderCluster = (nodes: ReturnType<typeof clusterEntriesByLayoutRow>, keyPrefix: string) =>
-    nodes.map((node, ni) => {
+  const renderCluster = (nodes: EApprovalLayoutClusterNode[], keyPrefix: string) => {
+    const rendered: ReactNode[] = [];
+    for (let ni = 0; ni < nodes.length; ni += 1) {
+      const node = nodes[ni];
+      if (!node) {
+        continue;
+      }
+      const summary =
+        node.kind === "field" && node.entry.field.type === "grid" && node.entry.field.name === "expense_lines"
+          ? followingExpenseSummary(nodes, ni)
+          : [];
+      if (node.kind === "field" && summary.length > 0) {
+        rendered.push(
+          <div key={`${keyPrefix}-summary-${ni}`}>
+            {renderField(node.entry.field, node.entry.index, {
+              totals: [...summary]
+                .sort(
+                  (left, right) =>
+                    (EXPENSE_SUMMARY_RANK[left.field.name] ?? 9) -
+                    (EXPENSE_SUMMARY_RANK[right.field.name] ?? 9),
+                )
+                .map((entry) => ({
+                  label: entry.field.label,
+                  value: formatGridCurrencyDisplay(values[entry.field.name] ?? ""),
+                  required: fieldIsRequired(entry.field),
+                })),
+              errors: summary
+                .map((entry) => fieldErrors?.[entry.field.name])
+                .filter((message): message is string => Boolean(message)),
+            })}
+          </div>,
+        );
+        ni += summary.length > 0 ? expenseSummarySkip(nodes, ni) : 0;
+        continue;
+      }
+      rendered.push(renderClusterNode(node, ni, keyPrefix));
+    }
+    return rendered;
+  };
+
+  const renderClusterNode = (node: EApprovalLayoutClusterNode, ni: number, keyPrefix: string) => {
       if (node.kind === "field") {
         const field = node.entry.field;
         if (field.type === "section" || field.type === "divider") {
@@ -198,7 +314,7 @@ export function EApprovalFormFieldsLayout({
           ))}
         </div>
       );
-    });
+  };
 
   return (
     <div className="space-y-8">

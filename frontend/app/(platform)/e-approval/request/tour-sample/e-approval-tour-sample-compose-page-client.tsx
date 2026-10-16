@@ -35,7 +35,7 @@ function TourSampleComposeInner() {
       <LiveProductTourHost />
       <EApprovalTourSampleNotice />
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-foreground">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</h1>
+        <h1 className="text-[20px] font-semibold leading-7 tracking-tight text-foreground">{E_APPROVAL_TOUR_SAMPLE_FORM_NAME}</h1>
         <p className="text-sm text-muted-foreground">
           Title, Approver 1–3, and Attachments only. Sample compose for the tour — nothing is saved.
         </p>

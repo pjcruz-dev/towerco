@@ -158,4 +158,61 @@ describe("expense line computed totals", () => {
 
     expect(values.total_reimbursement).toBe("112.00");
   });
+
+  it("settles actual expenses against the cash released", () => {
+    const fields: EApprovalFormFieldInput[] = [
+      {
+        type: "grid",
+        name: "expense_lines",
+        label: "Expense lines",
+        options: {
+          columns: [
+            { label: "Expense type", type: "select" },
+            { label: "Amount", type: "currency" },
+          ],
+        },
+      },
+      {
+        type: "currency",
+        name: "total_reimbursement",
+        label: "Total expenses",
+        options: { read_only: true },
+      },
+      { type: "currency", name: "cash_advance_amount", label: "Cash released" },
+      {
+        type: "currency",
+        name: "settlement_amount",
+        label: "Settlement amount",
+        options: { read_only: true },
+      },
+      { type: "text", name: "settlement_summary", label: "Settlement", options: { read_only: true } },
+    ];
+
+    const over = applyComputedFieldValues(fields, {
+      expense_lines: JSON.stringify({
+        rows: [{ "0": "land", "1": "17050" }],
+      }),
+      cash_advance_amount: "14050.00",
+      total_reimbursement: "",
+      settlement_amount: "",
+      settlement_summary: "",
+    });
+
+    expect(over.total_reimbursement).toBe("17050.00");
+    expect(over.settlement_amount).toBe("3000.00");
+    expect(over.settlement_summary).toBe("Amount to pay the employee: 3000.00");
+
+    const under = applyComputedFieldValues(fields, {
+      expense_lines: JSON.stringify({
+        rows: [{ "0": "land", "1": "10000" }],
+      }),
+      cash_advance_amount: "14050.00",
+      total_reimbursement: "",
+      settlement_amount: "",
+      settlement_summary: "",
+    });
+
+    expect(under.settlement_amount).toBe("-4050.00");
+    expect(under.settlement_summary).toBe("Amount to surrender: 4050.00");
+  });
 });

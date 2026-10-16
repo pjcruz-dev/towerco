@@ -9,6 +9,7 @@ import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   deleteDynPdfForm,
   downloadDynPdfFormBlob,
@@ -78,6 +79,7 @@ export function DynPdfFormsManagerPageClient() {
       setUploadCode("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
+      notify.success("PDF uploaded", file.name);
     } catch (e) {
       setError(getErrorMessage(e) || "Upload failed.");
     } finally {
@@ -114,6 +116,7 @@ export function DynPdfFormsManagerPageClient() {
       setRenamingId(null);
       setRenameValue("");
       await load();
+      notify.success("PDF renamed", renameValue.trim());
     } catch (e) {
       setError(getErrorMessage(e) || "Rename failed.");
     } finally {
@@ -131,6 +134,7 @@ export function DynPdfFormsManagerPageClient() {
     try {
       await deleteDynPdfForm(form.id);
       await load();
+      notify.success("PDF deleted", form.code);
     } catch (e) {
       setError(getErrorMessage(e) || "Delete failed.");
     } finally {
@@ -142,7 +146,7 @@ export function DynPdfFormsManagerPageClient() {
     <PermissionGate requiredPermissions={[permissions.printablesManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="PDF Forms Manager"
           description="Upload, rename, or delete PDF form templates used for overlays."
           actions={

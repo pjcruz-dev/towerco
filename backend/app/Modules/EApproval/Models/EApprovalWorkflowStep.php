@@ -22,6 +22,7 @@ class EApprovalWorkflowStep extends Model
         'step_order',
         'approver_type',
         'approver_id',
+        'label',
         'condition',
         'compiled_for_submission_id',
     ];

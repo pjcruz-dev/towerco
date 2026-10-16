@@ -184,6 +184,23 @@ export function createEmptyWorkflowRule(priority = 100): EApprovalWorkflowRule {
   };
 }
 
+/** How an If/Else should branch for this field. */
+export function workflowFieldRoutingKind(
+  field: EApprovalFormFieldInput | undefined,
+): "amount" | "choice" | "value" {
+  if (!field) {
+    return "value";
+  }
+  if (field.type === "number" || field.type === "currency") {
+    return "amount";
+  }
+  if (parseSelectChoices(field).length > 0) {
+    return "choice";
+  }
+
+  return "value";
+}
+
 export function getConditionFieldOptions(fields: EApprovalFormFieldInput[]): { id: string; label: string }[] {
   return fields
     .filter((field) => !["section", "divider", "grid", "file", "signature"].includes(field.type))

@@ -17,6 +17,7 @@ final class EApprovalFormTemplateService
     public function __construct(
         private readonly EApprovalSettingsService $settings,
         private readonly EApprovalFormSyncService $sync,
+        private readonly EApprovalFinanceCatalogService $financeCatalog,
     ) {}
 
     /**
@@ -41,6 +42,10 @@ final class EApprovalFormTemplateService
             throw ValidationException::withMessages([
                 'template_id' => [__('Form template not found.')],
             ]);
+        }
+
+        if (in_array($templateId, ['cash_advance', 'liquidation', 'reimbursement'], true)) {
+            $this->financeCatalog->seed();
         }
 
         $metadata = is_array($definition['metadata_json'] ?? null) ? $definition['metadata_json'] : [];
@@ -298,6 +303,8 @@ final class EApprovalFormTemplateService
         if ($upgradedByFamily !== []) {
             $this->wireRelatedFormIds($upgradedByFamily);
         }
+
+        $this->financeCatalog->seed();
 
         return $count;
     }

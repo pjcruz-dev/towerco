@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import { apiClient } from "@/lib/api/client";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
@@ -81,8 +82,6 @@ export function InvoiceAgingWorkbenchPageClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -161,7 +160,6 @@ export function InvoiceAgingWorkbenchPageClient() {
     }
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       await apiClient.post("/dynamic-entities/reports/aging-invoice-adjustments/adjust", {
         record_id: selected.id,
@@ -170,7 +168,7 @@ export function InvoiceAgingWorkbenchPageClient() {
       });
       setAdjAmount("");
       setAdjNote("");
-      setNotice(`Adjustment posted on ${selected.invoice_number}.`);
+      notify.success("Adjustment posted", selected.invoice_number);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -213,11 +211,6 @@ export function InvoiceAgingWorkbenchPageClient() {
         {error ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-            {notice}
           </div>
         ) : null}
         {data?.message ? (

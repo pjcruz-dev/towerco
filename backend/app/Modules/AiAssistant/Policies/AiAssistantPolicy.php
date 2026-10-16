@@ -10,18 +10,13 @@ use App\Modules\Identity\Models\TenantUser;
  * Capability checks for the tenant AI Assistant module.
  *
  * Controllers also call $user->can(...) directly (INFRA SUITE convention); this policy
- * centralizes the same checks for future conversation/knowledge authorization.
+ * centralizes the same checks for conversation authorization.
  */
 final class AiAssistantPolicy
 {
     public function ask(TenantUser $user): bool
     {
         return $user->can('ai_assistant:use');
-    }
-
-    public function manageKnowledge(TenantUser $user): bool
-    {
-        return $user->can('ai_assistant:knowledge:manage');
     }
 
     public function auditConversations(TenantUser $user): bool

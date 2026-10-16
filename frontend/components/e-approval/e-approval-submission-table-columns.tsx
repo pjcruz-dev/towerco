@@ -27,7 +27,7 @@ export const eApprovalSubmissionTableColumns: ColumnDef<EApprovalSubmissionListR
   createTextColumn(
     "status",
     "Status",
-    (row) => <EApprovalStatusBadge status={row.status} kind="submission" />,
+    (row) => <EApprovalStatusBadge status={row.status} label={row.status_label} kind="submission" />,
     { enableSorting: true },
   ),
   createTextColumn("requestor", "Requestor", (row) => row.requestor?.name ?? "—"),

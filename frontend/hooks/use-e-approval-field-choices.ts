@@ -36,6 +36,7 @@ export function useEApprovalFieldChoices(
       value: String(row.value ?? row.code ?? row.label),
       label: String(row.label),
       subtitle: row.subtitle ? String(row.subtitle) : null,
+      data: row.data,
     })) ?? [];
 
   return {

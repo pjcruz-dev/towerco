@@ -84,17 +84,21 @@ function clampMax(n: unknown): number {
   return Math.min(ABS_MAX, Math.max(1, Math.round(num)));
 }
 
-export function mergePrefs(options: DynTableColumnOption[], prefs: DynTableColumnPrefs): DynTableColumnPrefs {
+export function mergePrefs(
+  options: DynTableColumnOption[],
+  prefs: DynTableColumnPrefs,
+  pinFirst: readonly string[] = [],
+): DynTableColumnPrefs {
   const known = new Set(options.map((o) => o.id));
   const order: string[] = [];
   for (const id of prefs.order) {
     if (known.has(id) && !order.includes(id)) order.push(id);
   }
-  for (const opt of options) {
-    if (!order.includes(opt.id)) order.push(opt.id);
-  }
+  const missing = options.map((o) => o.id).filter((id) => !order.includes(id));
+  const pin = pinFirst.filter((id) => missing.includes(id));
+  const rest = missing.filter((id) => !pin.includes(id));
   return {
-    order,
+    order: [...pin, ...order, ...rest],
     hidden: prefs.hidden.filter((id) => known.has(id)),
     maxColumns: clampMax(prefs.maxColumns ?? DEFAULT_MAX),
   };
@@ -125,29 +129,39 @@ export function resolveDynTableColumns(
   return visible.slice(0, merged.maxColumns);
 }
 
-export function useDynTableColumnPrefs(storageKey: string | null, options: DynTableColumnOption[]) {
+export function useDynTableColumnPrefs(
+  storageKey: string | null,
+  options: DynTableColumnOption[],
+  pinFirst: readonly string[] = [],
+) {
   const defaults = useMemo(() => defaultPrefs(options), [options]);
   const [raw, setRaw] = useLocalStorageJsonState<DynTableColumnPrefs>(
     storageKey,
     defaults,
     isColumnPrefs,
   );
+  const pinKey = pinFirst.join("\0");
 
-  const prefs = useMemo(() => mergePrefs(options, { ...raw, maxColumns: raw.maxColumns ?? DEFAULT_MAX }), [
-    options,
-    raw,
-  ]);
+  const prefs = useMemo(
+    () =>
+      mergePrefs(
+        options,
+        { ...raw, maxColumns: raw.maxColumns ?? DEFAULT_MAX },
+        pinKey ? pinKey.split("\0") : [],
+      ),
+    [options, raw, pinKey],
+  );
   const visible = useMemo(() => resolveDynTableColumns(options, prefs), [options, prefs]);
 
   function savePrefs(next: DynTableColumnPrefs) {
-    setRaw(mergePrefs(options, next));
+    setRaw(mergePrefs(options, next, pinFirst));
   }
 
   /** Reorder visible columns (e.g. drag header left/right in the table). */
   function reorderVisible(activeId: string, overId: string) {
     if (activeId === overId) return;
     setRaw((prev) => {
-      const merged = mergePrefs(options, { ...prev, maxColumns: prev.maxColumns ?? DEFAULT_MAX });
+      const merged = mergePrefs(options, { ...prev, maxColumns: prev.maxColumns ?? DEFAULT_MAX }, pinFirst);
       const hidden = new Set(merged.hidden);
       const visibleIds = merged.order.filter((id) => !hidden.has(id)).slice(0, merged.maxColumns);
       const oldIndex = visibleIds.indexOf(activeId);

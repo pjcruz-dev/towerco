@@ -24,6 +24,11 @@ class RoleUpdateController extends AbstractApiController
             'access_matrix.fields' => ['sometimes', 'array'],
             'access_matrix.workflows' => ['sometimes', 'array'],
             'access_matrix.filters' => ['sometimes', 'array'],
+            'access_matrix.statuses' => ['sometimes', 'array'],
+            'access_matrix.ai' => ['sometimes', 'nullable', 'array'],
+            'access_matrix.ai.preset' => ['sometimes', 'string', 'max:32'],
+            'access_matrix.ai.instructions' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'access_matrix.ai.capabilities' => ['sometimes', 'array'],
         ]);
 
         $updated = $service->updateCustomRolePermissions(

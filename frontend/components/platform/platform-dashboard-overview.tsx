@@ -10,8 +10,9 @@ import { ActionableWidgets } from "@/components/dashboard/actionable-widgets";
 import { KpiStrip } from "@/components/dashboard/kpi-strip";
 import { DashboardContentSkeleton } from "@/components/ui/page-skeletons";
 import { PlatformProvisioningChart } from "@/components/platform/platform-provisioning-chart";
-import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { environmentStatusTone, subscriptionStatusTone } from "@/components/ui/status-tone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshingHint } from "@/components/ui/refreshing-hint";
 import { usePlatformDashboard, platformDashboardEmptyState } from "@/hooks/use-platform-dashboard";
@@ -27,18 +28,6 @@ function formatCreatedAt(iso: string | null | undefined): string {
   } catch {
     return iso;
   }
-}
-
-function subscriptionTone(status: string): string {
-  const normalized = status.toLowerCase();
-  if (normalized === "active") {
-    return "text-emerald-600 dark:text-emerald-400";
-  }
-  if (normalized === "past_due" || normalized === "trial") {
-    return "text-amber-600 dark:text-amber-400";
-  }
-
-  return "text-red-600 dark:text-red-400";
 }
 
 type Props = {
@@ -163,9 +152,7 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         {row.over_limit ? (
-                          <Badge variant="outline" className="border-red-300 text-red-700">
-                            Over limit
-                          </Badge>
+                          <StatusBadge tone="danger">Over limit</StatusBadge>
                         ) : null}
                         <span
                           className={cn(
@@ -205,13 +192,9 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                 <p className="mb-2 text-xs font-medium text-muted-foreground">By environment</p>
                 <div className="flex flex-wrap gap-2">
                   {environmentEntries.map(([env, count]) => (
-                    <Badge
-                      key={env}
-                      variant="outline"
-                      className={cn("font-normal", environmentBadgeClass(env))}
-                    >
+                    <StatusBadge key={env} tone={environmentStatusTone(env)} className="font-normal">
                       {env}: {count}
-                    </Badge>
+                    </StatusBadge>
                   ))}
                 </div>
               </CardContent>
@@ -299,9 +282,12 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                       {alert.plan_tier} · {alert.environment ?? "—"}
                     </p>
                   </div>
-                  <span className={cn("text-xs font-medium uppercase", subscriptionTone(alert.subscription_status))}>
+                  <StatusBadge
+                    tone={subscriptionStatusTone(alert.subscription_status)}
+                    className="text-xs uppercase"
+                  >
                     {alert.subscription_status.replace(/_/g, " ")}
-                  </span>
+                  </StatusBadge>
                 </li>
               ))}
             </ul>
@@ -382,9 +368,9 @@ export function PlatformDashboardOverview({ enabled, beforeRecentActivity }: Pro
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {tenant.environment ? (
-                      <Badge variant="outline" className={environmentBadgeClass(tenant.environment)}>
+                      <StatusBadge tone={environmentStatusTone(tenant.environment)}>
                         {tenant.environment}
-                      </Badge>
+                      </StatusBadge>
                     ) : null}
                     {tenant.mfa_required ? <Badge variant="outline">MFA</Badge> : null}
                   </div>

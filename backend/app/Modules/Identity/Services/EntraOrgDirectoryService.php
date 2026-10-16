@@ -9,6 +9,7 @@ use App\Modules\Identity\Support\EntraDirectoryPerson;
 use App\Modules\Identity\Support\EntraLicenseCatalog;
 use App\Modules\Identity\Support\EntraManagerLookupResult;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -417,6 +418,10 @@ final class EntraOrgDirectoryService
                 ? $this->clip($person->department, 180)
                 : null;
         }
+        if ($this->hasNamePartColumns()) {
+            $user->given_name = $person->givenName !== null ? $this->clip($person->givenName, 120) : null;
+            $user->surname = $person->surname !== null ? $this->clip($person->surname, 120) : null;
+        }
         if (trim((string) $user->name) === '' || $user->name === $user->email) {
             $user->name = $this->clip($person->displayName, 255) ?? $person->email;
         }
@@ -571,6 +576,12 @@ final class EntraOrgDirectoryService
         return Schema::connection('tenant')->hasColumn('users', 'department');
     }
 
+    private function hasNamePartColumns(): bool
+    {
+        return Schema::connection('tenant')->hasColumn('users', 'given_name')
+            && Schema::connection('tenant')->hasColumn('users', 'surname');
+    }
+
     private function hasManagerDepartmentColumn(): bool
     {
         return Schema::connection('tenant')->hasColumn('users', 'entra_manager_department');
@@ -668,7 +679,7 @@ final class EntraOrgDirectoryService
      * Organization chart: licensed Microsoft 365 users only.
      * After any org sync, never-synced local/test accounts are hidden too.
      */
-    private function constrainLicensedOrgUsers(\Illuminate\Database\Eloquent\Builder $query): void
+    private function constrainLicensedOrgUsers(Builder $query): void
     {
         if (! $this->hasLicenseColumns()) {
             return;

@@ -31,10 +31,21 @@ final class ControlledDocumentSyncService
             return null;
         }
 
-        if (ControlledDocumentRevision::query()->where('e_approval_submission_id', $submission->id)->exists()) {
-            return ControlledDocument::query()
-                ->whereHas('revisions', static fn ($q) => $q->where('e_approval_submission_id', $submission->id))
-                ->first();
+        $linked = ControlledDocumentRevision::query()
+            ->where('e_approval_submission_id', $submission->id)
+            ->first();
+        if ($linked instanceof ControlledDocumentRevision) {
+            $linked->loadMissing('document');
+            $existingDocument = $linked->document;
+            if (
+                $existingDocument instanceof ControlledDocument
+                && $existingDocument->status === ControlledDocumentStatus::PENDING
+                && $linked->status === ControlledDocumentRevisionStatus::PENDING
+            ) {
+                return $this->publishPending($existingDocument, $linked, $submission, $actor);
+            }
+
+            return $existingDocument;
         }
 
         $submission->loadMissing(['form', 'values.field', 'attachments']);
@@ -156,6 +167,228 @@ final class ControlledDocumentSyncService
         });
     }
 
+    public function openPending(EApprovalSubmission $submission, ?TenantUser $actor = null): ?ControlledDocument
+    {
+        if ((string) $submission->status !== EApprovalSubmissionStatus::PENDING) {
+            return null;
+        }
+
+        $submission->loadMissing(['form', 'values.field']);
+        $form = $submission->form;
+        if (! $form instanceof EApprovalForm) {
+            return null;
+        }
+
+        $config = $this->resolveConfig($form);
+        if ($config === null) {
+            return null;
+        }
+
+        $values = $this->valuesMap($submission);
+        $documentCode = $this->resolveRegistryDocumentCode($config, $values, $submission);
+        if ($documentCode === '') {
+            return null;
+        }
+
+        if (! ControlledDocument::query()->where('document_code', $documentCode)->exists()
+            && preg_match('/^(.+)-R\d+$/i', $documentCode, $matches) === 1) {
+            $baseCode = $matches[1];
+            if (! ControlledDocument::query()->where('document_code', $baseCode)->exists()) {
+                return null;
+            }
+            $documentCode = $baseCode;
+        }
+
+        return DB::connection('tenant')->transaction(function () use ($submission, $form, $config, $values, $documentCode, $actor): ?ControlledDocument {
+            /** @var ControlledDocument|null $existing */
+            $existing = ControlledDocument::query()
+                ->where('document_code', $documentCode)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing instanceof ControlledDocument && $existing->status !== ControlledDocumentStatus::PENDING) {
+                return $existing;
+            }
+
+            $revisionFromField = $this->fieldValue($values, $config->fieldMap, 'revision_number');
+            $revisionNumber = $this->parseRevisionNumber(
+                $revisionFromField,
+                $existing !== null ? ((int) $existing->current_revision + 1) : 0,
+            );
+            $title = $this->fieldValue($values, $config->fieldMap, 'title') ?: $documentCode;
+            $requestorId = (string) ($submission->requestor_id ?? '');
+            $authorId = $requestorId !== '' ? $requestorId : ($actor !== null ? (string) $actor->id : null);
+
+            if ($existing === null) {
+                $existing = ControlledDocument::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'document_code' => $documentCode,
+                    'title' => $title,
+                    'document_type' => $this->fieldValue($values, $config->fieldMap, 'document_type'),
+                    'department' => $this->fieldValue($values, $config->fieldMap, 'department'),
+                    'current_revision' => $revisionNumber,
+                    'status' => ControlledDocumentStatus::PENDING,
+                    'effective_date' => $this->parseDate($this->fieldValue($values, $config->fieldMap, 'effective_date')),
+                    'next_review_date' => $this->parseDate($this->fieldValue($values, $config->fieldMap, 'next_review_date')),
+                    'e_approval_form_id' => $form->id,
+                    'created_by_id' => $authorId,
+                ]);
+            } else {
+                $existing->fill([
+                    'title' => $title,
+                    'document_type' => $this->fieldValue($values, $config->fieldMap, 'document_type') ?: $existing->document_type,
+                    'department' => $this->fieldValue($values, $config->fieldMap, 'department') ?: $existing->department,
+                    'current_revision' => $revisionNumber,
+                    'effective_date' => $this->parseDate($this->fieldValue($values, $config->fieldMap, 'effective_date')) ?? $existing->effective_date,
+                    'next_review_date' => $this->parseDate($this->fieldValue($values, $config->fieldMap, 'next_review_date')) ?? $existing->next_review_date,
+                ]);
+                $existing->save();
+            }
+
+            $revision = $existing->revisions()->where('e_approval_submission_id', $submission->id)->first();
+            if (! $revision instanceof ControlledDocumentRevision) {
+                $revision = $existing->revisions()->where('revision_number', $revisionNumber)->first();
+            }
+            if ($revision instanceof ControlledDocumentRevision && $revision->status !== ControlledDocumentRevisionStatus::PENDING) {
+                return $existing;
+            }
+
+            if (! $revision instanceof ControlledDocumentRevision) {
+                ControlledDocumentRevision::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'controlled_document_id' => $existing->id,
+                    'revision_number' => $revisionNumber,
+                    'change_summary' => $this->fieldValue($values, $config->fieldMap, 'change_summary'),
+                    'e_approval_submission_id' => $submission->id,
+                    'status' => ControlledDocumentRevisionStatus::PENDING,
+                    'effective_date' => $this->parseDate($this->fieldValue($values, $config->fieldMap, 'effective_date')),
+                    'created_by_id' => $authorId,
+                ]);
+            }
+
+            $this->attachPendingFile($submission);
+
+            return $existing->fresh(['revisions']);
+        });
+    }
+
+    public function attachPendingFile(EApprovalSubmission $submission): void
+    {
+        $revision = ControlledDocumentRevision::query()
+            ->where('e_approval_submission_id', $submission->id)
+            ->first();
+        if (! $revision instanceof ControlledDocumentRevision || $revision->status !== ControlledDocumentRevisionStatus::PENDING) {
+            return;
+        }
+        if ($revision->stored_path !== null && $revision->stored_path !== '') {
+            return;
+        }
+
+        $revision->loadMissing('document');
+        $document = $revision->document;
+        if (! $document instanceof ControlledDocument || $document->status !== ControlledDocumentStatus::PENDING) {
+            return;
+        }
+
+        $submission->load(['form', 'attachments']);
+        $form = $submission->form;
+        $config = $form instanceof EApprovalForm ? $this->resolveConfig($form) : null;
+        if ($config === null) {
+            return;
+        }
+
+        $attachment = $this->primaryAttachment($submission, $config->attachmentField);
+        if (! $attachment instanceof EApprovalAttachment) {
+            return;
+        }
+
+        try {
+            $copied = $this->storage->copyFromEApprovalPath(
+                $document,
+                $revision,
+                (string) $attachment->file_path,
+                (string) $attachment->file_name,
+            );
+            $revision->fill($copied);
+            $revision->save();
+        } catch (\Throwable $exception) {
+            Log::warning('Controlled document pending file was not copied', [
+                'submission_id' => (string) $submission->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    public function releasePending(EApprovalSubmission $submission): void
+    {
+        $revision = ControlledDocumentRevision::query()
+            ->where('e_approval_submission_id', $submission->id)
+            ->first();
+        if (! $revision instanceof ControlledDocumentRevision || $revision->status !== ControlledDocumentRevisionStatus::PENDING) {
+            return;
+        }
+
+        $revision->loadMissing('document');
+        $document = $revision->document;
+        if (! $document instanceof ControlledDocument || $document->status !== ControlledDocumentStatus::PENDING) {
+            return;
+        }
+
+        $this->storage->deleteStoredFile($revision->stored_path);
+        $document->delete();
+    }
+
+    private function publishPending(
+        ControlledDocument $document,
+        ControlledDocumentRevision $revision,
+        EApprovalSubmission $submission,
+        ?TenantUser $actor,
+    ): ControlledDocument {
+        $submission->loadMissing(['form', 'values.field', 'attachments']);
+        $form = $submission->form;
+        $config = $form instanceof EApprovalForm ? $this->resolveConfig($form) : null;
+        $values = $this->valuesMap($submission);
+        $fieldMap = $config?->fieldMap ?? [];
+
+        $document->fill([
+            'title' => $this->fieldValue($values, $fieldMap, 'title') ?: $document->title,
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'published_at' => now(),
+            'effective_date' => $this->parseDate($this->fieldValue($values, $fieldMap, 'effective_date')) ?? $document->effective_date,
+            'next_review_date' => $this->parseDate($this->fieldValue($values, $fieldMap, 'next_review_date')) ?? $document->next_review_date,
+        ]);
+        $document->save();
+
+        $revision->fill([
+            'status' => ControlledDocumentRevisionStatus::PUBLISHED,
+            'change_summary' => $this->fieldValue($values, $fieldMap, 'change_summary') ?? $revision->change_summary,
+            'approved_by_id' => $actor?->id,
+            'approved_at' => now(),
+        ]);
+        $revision->save();
+
+        if ($config !== null) {
+            $attachment = $this->primaryAttachment($submission, $config->attachmentField);
+            if ($attachment instanceof EApprovalAttachment && ($revision->stored_path === null || $revision->stored_path === '')) {
+                $copied = $this->storage->copyFromEApprovalPath(
+                    $document,
+                    $revision,
+                    (string) $attachment->file_path,
+                    (string) $attachment->file_name,
+                );
+                $revision->fill($copied);
+                $revision->save();
+            }
+        }
+
+        $document->revisions()
+            ->where('status', ControlledDocumentRevisionStatus::PUBLISHED)
+            ->where('revision_number', '<', (int) $revision->revision_number)
+            ->update(['status' => ControlledDocumentRevisionStatus::SUPERSEDED]);
+
+        return $document->fresh(['revisions']);
+    }
+
     public function resolveConfig(EApprovalForm $form): ?ControlledDocumentSyncConfig
     {
         $meta = $form->metadata_json;
@@ -215,7 +448,7 @@ final class ControlledDocumentSyncService
         return null;
     }
 
-  /**
+    /**
      * @return array<string, string>
      */
     private function valuesMap(EApprovalSubmission $submission): array
@@ -233,14 +466,17 @@ final class ControlledDocumentSyncService
 
     private function primaryAttachment(EApprovalSubmission $submission, string $fieldName): ?EApprovalAttachment
     {
-        $scoped = $submission->attachments
-            ->first(static fn (EApprovalAttachment $a): bool => (string) $a->field_name === $fieldName);
+        $attachments = $submission->attachments->sortBy(
+            static fn (EApprovalAttachment $attachment): int => $attachment->created_at?->getTimestamp() ?? 0,
+        );
+        $scoped = $attachments
+            ->first(static fn (EApprovalAttachment $attachment): bool => (string) $attachment->field_name === $fieldName);
 
         if ($scoped instanceof EApprovalAttachment) {
             return $scoped;
         }
 
-        return $submission->attachments->first();
+        return $attachments->first();
     }
 
     private function parseRevisionNumber(?string $raw, int $fallback): int

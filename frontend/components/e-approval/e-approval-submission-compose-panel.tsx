@@ -70,8 +70,6 @@ import {
   formatSubmissionAmount,
   parentSubmissionLinkLabel,
   parentSubmissionLinkTitle,
-  parseSubmissionAmount,
-  validateLiquidationAmountAgainstOpenBalance,
 } from "@/modules/e-approval/parent-submission-link";
 import {
   clearLocalComposeDraft,
@@ -625,6 +623,37 @@ export function EApprovalSubmissionComposePanel({
     return counts;
   }, [activeSubmissionAttachments]);
 
+  const revisionStillNeeded = useMemo(() => {
+    if (!controlledDocumentSync || controlledDocumentRequestMode !== "revision") {
+      return [];
+    }
+
+    const effectiveName = controlledDocumentSync.fieldMap.effective_date ?? "effective_date";
+    const changeName = controlledDocumentSync.fieldMap.change_summary ?? "change_summary";
+    const attachmentName = controlledDocumentSync.attachmentField || "attachments";
+    const needed: string[] = [];
+    if ((values[effectiveName] ?? "").trim() === "") {
+      needed.push("Effective date");
+    }
+    if ((values[changeName] ?? "").trim() === "") {
+      needed.push("Details of change");
+    }
+    const attached =
+      (attachmentFiles[attachmentName]?.length ?? 0) > 0 ||
+      (draftExistingAttachmentCounts[attachmentName] ?? 0) > 0;
+    if (!attached) {
+      needed.push("File attachment");
+    }
+
+    return needed;
+  }, [
+    attachmentFiles,
+    controlledDocumentRequestMode,
+    controlledDocumentSync,
+    draftExistingAttachmentCounts,
+    values,
+  ]);
+
   const draftExistingAttachmentsByField = useMemo(
     () => groupSavedAttachmentsByField(activeSubmissionAttachments),
     [activeSubmissionAttachments],
@@ -644,16 +673,7 @@ export function EApprovalSubmissionComposePanel({
 
   const selectedParentOpenBalance = selectedCashAdvance?.open_balance;
 
-  const balanceError = useMemo(() => {
-    if (usesCashAdvancePicker) {
-      return validateLiquidationAmountAgainstOpenBalance(
-        parseSubmissionAmount(computedValues.total_reimbursement),
-        selectedParentOpenBalance,
-      );
-    }
-
-    return null;
-  }, [selectedParentOpenBalance, computedValues.total_reimbursement, usesCashAdvancePicker]);
+  const balanceError: string | null = null;
 
   const balanceFieldName = usesCashAdvancePicker ? "total_reimbursement" : null;
 
@@ -699,7 +719,7 @@ export function EApprovalSubmissionComposePanel({
     }
 
     if (selectedParentOpenBalance != null && balanceFieldName === "total_reimbursement") {
-      overrides.total_reimbursement = `Maximum liquidation amount for this cash advance: ${formatSubmissionAmount(selectedParentOpenBalance)}.`;
+      overrides.total_reimbursement = `Released on this cash advance: ${formatSubmissionAmount(selectedParentOpenBalance)}. A higher total is paid to the employee; a lower total is surrendered.`;
     }
 
     return Object.keys(overrides).length > 0 ? overrides : undefined;
@@ -1177,10 +1197,12 @@ export function EApprovalSubmissionComposePanel({
                       <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                       Pre-filled from registry
                     </span>
-                    <span className="flex items-center gap-1 font-medium text-foreground">
-                      <AlertCircle className="h-3 w-3 text-amber-500" />
-                      Please fill: Effective date · Details of change · File attachment
-                    </span>
+                    {revisionStillNeeded.length > 0 ? (
+                      <span className="flex items-center gap-1 font-medium text-foreground">
+                        <AlertCircle className="h-3 w-3 text-amber-500" />
+                        Please fill: {revisionStillNeeded.join(" · ")}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>

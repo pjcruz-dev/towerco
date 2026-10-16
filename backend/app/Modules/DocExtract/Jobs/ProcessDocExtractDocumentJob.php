@@ -6,6 +6,7 @@ namespace App\Modules\DocExtract\Jobs;
 
 use App\Core\Jobs\AbstractQueuedJob;
 use App\Models\Tenant;
+use App\Modules\AiAssistant\Services\AssistantSchemaMapper;
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
 use App\Modules\DocExtract\Models\DocExtractTemplate;
@@ -14,6 +15,7 @@ use App\Modules\DocExtract\Services\DocExtractFieldMapper;
 use App\Modules\DocExtract\Services\DocExtractFileStorageService;
 use App\Modules\DocExtract\Services\DocExtractScanClient;
 use App\Modules\DocExtract\Support\DocExtractDocumentStatus;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\Log;
 
 final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
@@ -108,6 +110,13 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
                 $mapped = $result['field_values'] ?? [];
                 if ((! is_array($mapped) || $mapped === []) && $fields !== []) {
                     $mapped = $mapper->map($fields, $extractedText);
+                }
+                if (is_array($mapped) && $fields !== [] && $batch?->created_by_id) {
+                    $owner = TenantUser::query()->find($batch->created_by_id);
+                    if ($owner instanceof TenantUser) {
+                        $mapped = app(AssistantSchemaMapper::class)
+                            ->fillExtractedFields($owner, $fields, $extractedText, $mapped);
+                    }
                 }
 
                 $discoveredFields = is_array($result['discovered_fields'] ?? null)

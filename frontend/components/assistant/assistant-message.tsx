@@ -1,15 +1,20 @@
 "use client";
 
-import { ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { Bug, Copy, RotateCcw, ThumbsDown, ThumbsUp, TriangleAlert } from "lucide-react";
 
 import { AssistantActionConfirmCard } from "@/components/assistant/assistant-action-confirm-card";
+import { AssistantActivity } from "@/components/assistant/assistant-activity";
+import { HelpMarkdown } from "@/components/help/help-markdown";
 import { Button } from "@/components/ui/button";
 import type {
+  AssistantActivityStep,
   AssistantCitation,
   AssistantProposedAction,
   AssistantProviderNotice,
   AssistantRelatedLink,
 } from "@/lib/api/modules/assistant-api";
+import { visibleWorkSteps } from "@/lib/assistant/work-log";
 import { cn } from "@/lib/utils";
 
 export type AssistantChatMessage = {
@@ -23,6 +28,9 @@ export type AssistantChatMessage = {
   relatedLinks?: AssistantRelatedLink[];
   usedLiveData?: boolean;
   proposedAction?: AssistantProposedAction | null;
+  activity?: AssistantActivityStep[];
+  workedMs?: number | null;
+  modelName?: string | null;
   actionResolved?: boolean;
   actionResultHref?: string | null;
   actionResultLabel?: string | null;
@@ -35,7 +43,9 @@ type Props = {
   feedbackPending?: boolean;
   onConfirmAction?: (messageId: string, proposalId: string, payload: Record<string, unknown>) => void;
   onCancelAction?: (messageId: string, proposalId: string) => void;
+  onRetry?: (content: string) => void;
   actionPending?: boolean;
+  intent?: string | null;
 };
 
 export function AssistantMessage({
@@ -44,8 +54,12 @@ export function AssistantMessage({
   feedbackPending,
   onConfirmAction,
   onCancelAction,
+  onRetry,
   actionPending,
+  intent = null,
 }: Props) {
+  const [workOpen, setWorkOpen] = useState(true);
+  const [copied, setCopied] = useState<"user" | "answer" | null>(null);
   const isUser = message.role === "user";
   const isQuotaExceeded =
     message.status === "provider_quota_exceeded" ||
@@ -55,11 +69,35 @@ export function AssistantMessage({
     message.usedLiveData === true ||
     (message.citations ?? []).some((c) => c.type === "live_data" || c.scope === "live");
 
+  const activity = message.activity ?? [];
+  const hasWork = !isUser && visibleWorkSteps(activity, "", false).length > 0;
+
+  async function copyText(text: string, which: "user" | "answer") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      window.setTimeout(() => setCopied((current) => (current === which ? null : current)), 1500);
+    } catch {
+      setCopied(null);
+    }
+  }
+
   return (
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("flex max-w-[92%] flex-col gap-2", isUser ? "items-end" : "w-full")}>
+      {!isUser ? (
+        <AssistantActivity
+          steps={activity}
+          workedMs={message.workedMs}
+          intent={intent}
+          open={workOpen}
+          onOpenChange={setWorkOpen}
+        />
+      ) : null}
       <div
         className={cn(
-          "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+          "rounded-2xl px-3.5 py-2.5 leading-relaxed",
+          isUser ? "text-sm" : "text-xs",
           isUser
             ? "rounded-br-md bg-foreground text-background"
             : "rounded-bl-md bg-muted text-foreground",
@@ -97,7 +135,11 @@ export function AssistantMessage({
             Used live data
           </span>
         ) : null}
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        ) : (
+          <HelpMarkdown variant="chat" content={message.content.replace(/^\s*\[V\]\s*/, "")} />
+        )}
 
         {!isUser && message.proposedAction ? (
           <AssistantActionConfirmCard
@@ -113,37 +155,88 @@ export function AssistantMessage({
           />
         ) : null}
 
-        {!isUser ? (
-          <>
-            {onFeedback && !isQuotaExceeded ? (
-              <div className="mt-3 flex items-center gap-1 border-t border-border/50 pt-2">
-                <span className="mr-1 text-xs text-muted-foreground">Was this helpful?</span>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  disabled={feedbackPending || message.feedback === "up"}
-                  aria-label="Helpful"
-                  onClick={() => onFeedback(message.id, "up")}
-                  className={cn(message.feedback === "up" && "text-foreground")}
-                >
-                  <ThumbsUp className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  disabled={feedbackPending || message.feedback === "down"}
-                  aria-label="Not helpful"
-                  onClick={() => onFeedback(message.id, "down")}
-                  className={cn(message.feedback === "down" && "text-foreground")}
-                >
-                  <ThumbsDown className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            ) : null}
-          </>
-        ) : null}
+      </div>
+      {isUser ? (
+        <div className="flex items-center gap-1 px-1">
+          {onRetry ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => onRetry(message.content)}
+            >
+              <RotateCcw className="size-3.5" />
+              Retry
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => void copyText(message.content, "user")}
+          >
+            <Copy className="size-3.5" />
+            {copied === "user" ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex w-full flex-wrap items-center gap-1 px-1">
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => void copyText(message.content, "answer")}
+          >
+            <Copy className="size-3.5" />
+            {copied === "answer" ? "Copied" : "Copy"}
+          </Button>
+          {hasWork ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="text-muted-foreground"
+              aria-expanded={workOpen}
+              onClick={() => setWorkOpen(true)}
+            >
+              <Bug className="size-3.5" />
+              Debug
+            </Button>
+          ) : null}
+          {onFeedback && !isQuotaExceeded ? (
+            <>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={feedbackPending || message.feedback === "up"}
+                aria-label="Helpful"
+                onClick={() => onFeedback(message.id, "up")}
+                className={cn("text-muted-foreground", message.feedback === "up" && "text-foreground")}
+              >
+                <ThumbsUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={feedbackPending || message.feedback === "down"}
+                aria-label="Not helpful"
+                onClick={() => onFeedback(message.id, "down")}
+                className={cn("text-muted-foreground", message.feedback === "down" && "text-foreground")}
+              >
+                <ThumbsDown className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : null}
+          {message.modelName ? (
+            <span className="ms-auto truncate text-[11px] text-muted-foreground">{message.modelName}</span>
+          ) : null}
+        </div>
+      )}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ export {
   fieldAccessLevel,
   hasEntityAccessRules,
   isFieldHiddenForRole,
+  isFieldHiddenOnSurface,
   isFieldReadOnlyForRole,
   notifyDynPermissionDenied,
   type EntityAccessAction,

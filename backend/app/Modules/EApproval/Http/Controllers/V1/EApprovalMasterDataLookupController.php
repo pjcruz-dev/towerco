@@ -19,6 +19,17 @@ class EApprovalMasterDataLookupController extends AbstractApiController
             403,
         );
 
-        return $this->ok($service->lookupByKey($key));
+        $data = $request->validate([
+            'q' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:10'],
+            'subsidiary' => ['sometimes', 'nullable', 'string', 'max:40'],
+        ]);
+
+        return $this->ok($service->lookupByKey(
+            $key,
+            isset($data['q']) ? (string) $data['q'] : null,
+            (int) ($data['limit'] ?? 10),
+            isset($data['subsidiary']) ? (string) $data['subsidiary'] : null,
+        ));
     }
 }

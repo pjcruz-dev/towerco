@@ -7,6 +7,8 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
+use App\Modules\EApproval\Support\EApprovalUserListValueParser;
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
 
 final class EApprovalFormWorkflowStepPreviewResolver
@@ -98,6 +100,7 @@ final class EApprovalFormWorkflowStepPreviewResolver
             'parallel_mode' => $parallelMode,
             'parallel_quorum' => $parallelQuorum,
             'used_fallback' => $usedFallback,
+            'confirm_settlement' => EApprovalWorkflowStepDefinitionSupport::confirmSettlementEnabled($definition),
             'warning' => $this->warningForStep($type, $approverId, $user, $definition, $values, $form, $requestorEmail, $usedFallback),
         ];
     }
@@ -298,7 +301,7 @@ final class EApprovalFormWorkflowStepPreviewResolver
                 return __('Dynamic approver list step is missing its source field.');
             }
 
-            $ids = \App\Modules\EApproval\Support\EApprovalUserListValueParser::parse($values[$fieldName] ?? null);
+            $ids = EApprovalUserListValueParser::parse($values[$fieldName] ?? null);
             if ($ids === []) {
                 return __('Approver list is empty in the preview sample. Select one or more stakeholders.');
             }

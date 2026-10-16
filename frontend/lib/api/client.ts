@@ -79,6 +79,12 @@ function isApiSameHostnameAsPage(): boolean {
   }
 }
 
+function isLocalDevHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+
+  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
+}
+
 function resolveApiTimeoutMs(): number {
   const fromEnv = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS);
   if (Number.isFinite(fromEnv) && fromEnv > 0) {
@@ -86,6 +92,10 @@ function resolveApiTimeoutMs(): number {
   }
 
   if (process.env.NEXT_PUBLIC_APP_ENV === "local") {
+    return 90_000;
+  }
+
+  if (typeof window !== "undefined" && isLocalDevHost(window.location.hostname)) {
     return 90_000;
   }
 
@@ -147,6 +157,12 @@ export const apiClient = axios.create({
 if (typeof window !== "undefined") {
   apiClient.interceptors.request.use((config) => {
     config.baseURL = resolveApiBaseUrl();
+    if (isLocalDevHost(window.location.hostname)) {
+      const timeout = config.timeout ?? 0;
+      if (timeout > 0 && timeout <= 20_000) {
+        config.timeout = 90_000;
+      }
+    }
     return config;
   });
 }
@@ -302,3 +318,22 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/** Same auth and tenant headers the axios client sends, for fetch streams. */
+export function tenantApiRequestHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+  const token = resolveAuthAccessToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  applyTenantContextHeaders(headers);
+  const sessionId = resolveAuthSessionId();
+  if (sessionId) {
+    headers["X-Session-Id"] = sessionId;
+  }
+
+  return headers;
+}

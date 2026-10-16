@@ -52,12 +52,22 @@ final class AssistantToolFallbackPlanner
                 return $modulePlan;
             }
 
-            if ($this->registry->has('search_workspace_entities')) {
+            if ($this->registry->has('search_workspace_entities') || $this->registry->has('find_it_asset')) {
                 $query = $this->extractSearchNeedle($question, $history);
                 if ($query !== null && mb_strlen($query) >= 2) {
-                    return new ToolPlan(ToolPlan::MODE_TOOLS, [
-                        new ToolCallRequest('search_workspace_entities', ['query' => $query]),
-                    ]);
+                    $assetQuery = preg_match('/\b(SN-[A-Z0-9]+(?:-[A-Z0-9]+)*|ATC-(?:LAP|DSK|MON|DOC|PHN|PER)-\d+)\b/i', $query, $asset) === 1
+                        ? strtoupper($asset[1])
+                        : null;
+                    if ($assetQuery !== null && $this->registry->has('find_it_asset')) {
+                        return new ToolPlan(ToolPlan::MODE_TOOLS, [
+                            new ToolCallRequest('find_it_asset', ['query' => $assetQuery]),
+                        ]);
+                    }
+                    if ($this->registry->has('search_workspace_entities')) {
+                        return new ToolPlan(ToolPlan::MODE_TOOLS, [
+                            new ToolCallRequest('search_workspace_entities', ['query' => $query]),
+                        ]);
+                    }
                 }
             }
         }
@@ -92,6 +102,10 @@ final class AssistantToolFallbackPlanner
         $blob = '';
         foreach (array_reverse($history) as $turn) {
             $blob .= ' '.$turn->content;
+            $fromTurn = $this->planEntityInText($turn->content);
+            if ($fromTurn !== null) {
+                return $fromTurn;
+            }
         }
 
         if (preg_match('/\b(TKT-\d+)\b/i', $blob, $m) === 1 && $this->registry->has('get_ticket_by_number')) {
@@ -131,6 +145,41 @@ final class AssistantToolFallbackPlanner
         }
 
         return null;
+    }
+
+    private function planEntityInText(string $content): ?ToolPlan
+    {
+        $hits = [];
+        if ($this->registry->has('get_ticket_by_number')
+            && preg_match('/\b(TKT-\d+)\b/i', $content, $ticket, PREG_OFFSET_CAPTURE) === 1) {
+            $hits[] = [
+                'at' => (int) $ticket[0][1],
+                'plan' => new ToolPlan(ToolPlan::MODE_TOOLS, [
+                    new ToolCallRequest('get_ticket_by_number', [
+                        'ticket_number' => strtoupper($ticket[1][0]),
+                    ]),
+                ]),
+            ];
+        }
+        if ($this->registry->has('find_it_asset')
+            && preg_match('/\b(SN-[A-Z0-9]+(?:-[A-Z0-9]+)*|ATC-(?:LAP|DSK|MON|DOC|PHN|PER)-\d+)\b/i', $content, $asset, PREG_OFFSET_CAPTURE) === 1) {
+            $hits[] = [
+                'at' => (int) $asset[0][1],
+                'plan' => new ToolPlan(ToolPlan::MODE_TOOLS, [
+                    new ToolCallRequest('find_it_asset', [
+                        'query' => strtoupper($asset[1][0]),
+                    ]),
+                ]),
+            ];
+        }
+
+        if ($hits === []) {
+            return null;
+        }
+
+        usort($hits, static fn (array $a, array $b): int => $a['at'] <=> $b['at']);
+
+        return $hits[0]['plan'];
     }
 
     private function planFromModuleContext(string $q, ?string $moduleContext): ?ToolPlan

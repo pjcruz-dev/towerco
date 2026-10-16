@@ -5,24 +5,31 @@ declare(strict_types=1);
 namespace App\Modules\DynamicEntities\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Modules\AssetManagement\Services\AssetSchemaService;
 use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Services\DynEntityAdminService;
 use App\Modules\DynamicEntities\Support\DynFieldType;
+use App\Modules\DynamicEntities\Support\DynSchemaAccess;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Ticketing\Services\TicketingSchemaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class DynFieldStoreController extends AbstractApiController
 {
-    public function __invoke(Request $request, string $entity, DynEntityAdminService $service): JsonResponse
-    {
-        abort_unless($request->user()?->can('dynamic_entities:fields:manage'), 403);
-
+    public function __invoke(
+        Request $request,
+        string $entity,
+        DynEntityAdminService $service,
+        AssetSchemaService $assets,
+        TicketingSchemaService $tickets,
+    ): JsonResponse {
         $model = DynEntity::query()
             ->where(function ($q) use ($entity): void {
                 $q->where('id', $entity)->orWhere('slug', $entity);
             })
             ->firstOrFail();
+        DynSchemaAccess::assertCanManage($request->user(), $model);
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:128'],
@@ -46,6 +53,25 @@ final class DynFieldStoreController extends AbstractApiController
             'conditional_rules_json' => ['nullable', 'array'],
             'is_virtual' => ['sometimes', 'boolean'],
         ]);
+
+        if (
+            $model->slug === AssetSchemaService::SLUG
+            && $model->source_linked_table === 'it_assets'
+            && empty($data['form_group_id'])
+        ) {
+            $data = $assets->assignDefaultGroup($data);
+        }
+
+        if (
+            $model->slug === TicketingSchemaService::SLUG
+            && $model->source_linked_table === 'ticketing_tickets'
+        ) {
+            $data['is_system_field'] = false;
+            $data['system_column'] = null;
+            if (empty($data['form_group_id'])) {
+                $data = $tickets->assignDefaultGroup($data);
+            }
+        }
 
         $actor = $request->user();
         $field = $service->createField($model, $data, $actor instanceof TenantUser ? $actor : null);

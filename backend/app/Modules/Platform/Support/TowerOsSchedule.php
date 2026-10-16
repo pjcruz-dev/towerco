@@ -34,6 +34,8 @@ final class TowerOsSchedule
             self::job('tenants:backup-schedule', 'Platform', 'Tenant database backup', 'Daily at '.$backupTime),
             self::job('tenants:backup-prune', 'Platform', 'Backup cleanup', 'Daily at 03:50'),
             self::job('dyn:run-scheduled-tasks', 'Platform', 'Saved cron jobs', 'Every minute'),
+            self::job('assets:accountability-reminders', 'Asset management', 'Unsigned accountability reminders', 'Daily at 08:00'),
+            self::job('e-approval:liquidation-reminders', 'E-Forms', 'Cash advance liquidation reminders', 'Daily at 08:15'),
         ];
     }
 
@@ -52,6 +54,8 @@ final class TowerOsSchedule
         $schedule->command('tenants:backup-schedule')->dailyAt($backupTime)->withoutOverlapping();
         $schedule->command('tenants:backup-prune')->dailyAt('03:50')->withoutOverlapping();
         $schedule->command('dyn:run-scheduled-tasks')->everyMinute()->withoutOverlapping();
+        $schedule->command('assets:accountability-reminders')->dailyAt('08:00')->withoutOverlapping();
+        $schedule->command('e-approval:liquidation-reminders')->dailyAt('08:15')->withoutOverlapping();
     }
 
     /**

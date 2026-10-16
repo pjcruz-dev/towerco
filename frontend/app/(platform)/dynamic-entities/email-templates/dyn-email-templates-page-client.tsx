@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   createDynEmailTemplate,
   deleteDynEmailTemplate,
@@ -64,7 +65,6 @@ export function DynEmailTemplatesPageClient() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -100,13 +100,11 @@ export function DynEmailTemplatesPageClient() {
   function resetForm() {
     setEditingId(null);
     setForm(emptyForm());
-    setNotice(null);
   }
 
   async function onEdit(row: DynEmailTemplateRow) {
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const full = await fetchDynEmailTemplate(row.id);
       setEditingId(full.id);
@@ -132,7 +130,6 @@ export function DynEmailTemplatesPageClient() {
     }
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       if (editingId) {
         await updateDynEmailTemplate(editingId, {
@@ -141,7 +138,7 @@ export function DynEmailTemplatesPageClient() {
           body_html: form.body_html,
           default_to: form.default_to.trim() || null,
         });
-        setNotice("Template updated.");
+        notify.success("Template updated", name);
       } else {
         await createDynEmailTemplate({
           name,
@@ -149,7 +146,7 @@ export function DynEmailTemplatesPageClient() {
           body_html: form.body_html,
           default_to: form.default_to.trim() || null,
         });
-        setNotice("Template created.");
+        notify.success("Template created", name);
       }
       resetForm();
       await load();
@@ -168,6 +165,7 @@ export function DynEmailTemplatesPageClient() {
       await deleteDynEmailTemplate(row.id);
       if (editingId === row.id) resetForm();
       await load();
+      notify.success("Template deleted", row.name);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -179,7 +177,7 @@ export function DynEmailTemplatesPageClient() {
     <PermissionGate requiredPermissions={[permissions.emailTemplatesManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Email Templates"
           description={
             <>
@@ -192,11 +190,6 @@ export function DynEmailTemplatesPageClient() {
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-            {notice}
           </div>
         ) : null}
 

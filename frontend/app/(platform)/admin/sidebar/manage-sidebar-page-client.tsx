@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/error";
+import { notify } from "@/lib/ui/notify";
 import {
   createSidebarNavItem,
   deleteSidebarNavItem,
@@ -211,6 +212,7 @@ export function ManageSidebarPageClient() {
       });
       await load();
       await refreshWorkspaceNav();
+      notify.success("Sidebar reordered");
     } catch (e) {
       setError(getErrorMessage(e) || "Reorder failed.");
     } finally {
@@ -226,6 +228,7 @@ export function ManageSidebarPageClient() {
       await deleteSidebarNavItem(item.id);
       await load();
       await refreshWorkspaceNav();
+      notify.success("Menu item deleted", item.title);
     } catch (e) {
       setError(getErrorMessage(e) || "Delete failed.");
     } finally {
@@ -245,6 +248,7 @@ export function ManageSidebarPageClient() {
       setRoles(data.roles);
       setCollapsed(new Set());
       await refreshWorkspaceNav();
+      notify.success(force ? "Sidebar reset" : "Sidebar seeded");
     } catch (e) {
       setError(getErrorMessage(e) || "Seed failed.");
     } finally {
@@ -398,6 +402,7 @@ export function ManageSidebarPageClient() {
                     ...payload,
                   });
                 }
+                notify.success(editing ? "Menu item saved" : "Menu item created", payload.title || "New item");
                 setEditing(null);
                 setIsCreating(false);
                 await load();

@@ -21,12 +21,12 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
   {
     id: "expense_lines_total",
     label: "Total + liquidation expense lines",
-    description: "Currency total auto-sums the Total column (Land/Sea/Air, lodging, etc.).",
+    description: "Currency total auto-sums the Amount column. Expense type is a dropdown.",
   },
   {
     id: "reimbursement_expense_lines_total",
     label: "Total + reimbursement expense lines",
-    description: "Currency total auto-sums the Total column (Landfare, Airfare, Toll Fee, etc.).",
+    description: "Currency total auto-sums the Amount column, including OR number.",
   },
   {
     id: "po_line_items_total",
@@ -35,41 +35,43 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
   },
 ];
 
+const VAT_TREATMENT_CHOICES = [
+  { value: "vatable", label: "VATable" },
+  { value: "non_vatable", label: "Non-VATable" },
+];
+
+function expenseLineColumns(kind: "liquidation" | "reimbursement"): GridColumnDef[] {
+  const columns: GridColumnDef[] = [
+    { label: "From date – To date", type: "date_range" },
+    { label: "From site / location", type: "select", master_data_key: "sites" },
+    { label: "To site / location", type: "select", master_data_key: "sites" },
+    { label: "OR No", type: "text" },
+    { label: "Supplier/Payee", type: "text" },
+    { label: "Description", type: "textarea" },
+    { label: "Expense type", type: "select", master_data_key: "expense_types" },
+  ];
+  columns.push({ label: "Amount", type: "currency" });
+  if (kind === "liquidation") {
+    columns.push({ label: "Forecast amount", type: "currency", locked: true });
+  }
+  columns.push(
+    { label: "VAT treatment", type: "select", choices: VAT_TREATMENT_CHOICES },
+    { label: "VAT", type: "currency", locked: true },
+  );
+  if (kind === "liquidation") {
+    columns.push({ label: "Variance reason", type: "textarea" });
+  }
+  return columns;
+}
+
 export const GRID_COLUMN_PRESETS: Record<EApprovalGridColumnPresetId, { label: string; columns: GridColumnDef[] }> = {
   expense_lines_liquidation: {
     label: "Expense lines of Liquidation",
-    columns: [
-      { label: "Date", type: "date" },
-      { label: "OR No", type: "text" },
-      { label: "Supplier/Payee", type: "text" },
-      { label: "Description", type: "textarea" },
-      { label: "Project Site No.", type: "text" },
-      { label: "Transportation - Land", type: "currency" },
-      { label: "Transportation - Sea", type: "currency" },
-      { label: "Transportation - Air", type: "currency" },
-      { label: "Gasoline", type: "currency" },
-      { label: "Lodging", type: "currency" },
-      { label: "Per Diem", type: "currency" },
-      { label: "VAT", type: "currency" },
-      { label: "Total", type: "currency" },
-    ],
+    columns: expenseLineColumns("liquidation"),
   },
   expense_lines_reimbursement: {
     label: "Expense lines of Reimbursement",
-    columns: [
-      { label: "Date", type: "date" },
-      { label: "OR No", type: "text" },
-      { label: "Supplier/Payee", type: "text" },
-      { label: "Description", type: "textarea" },
-      { label: "Project Site No.", type: "text" },
-      { label: "Landfare", type: "currency" },
-      { label: "Airfare", type: "currency" },
-      { label: "Gasoline", type: "currency" },
-      { label: "Toll Fee", type: "currency" },
-      { label: "Per Diem", type: "currency" },
-      { label: "VAT", type: "currency" },
-      { label: "Total", type: "currency" },
-    ],
+    columns: expenseLineColumns("reimbursement"),
   },
   po_line_items: {
     label: "PO line items",
@@ -108,7 +110,7 @@ export function buildFormFieldBundle(
       {
         type: "currency",
         name: totalName,
-        label: isReimbursement ? "Total reimbursement amount" : "Total liquidation amount",
+        label: isReimbursement ? "Total expenses" : "Total liquidation amount",
         step_order: startIndex + 1,
         validation: { required: true, help_text: "Auto-calculated from expense lines." },
         options: {
@@ -116,7 +118,7 @@ export function buildFormFieldBundle(
           computed_from: {
             operation: "sum_grid_column",
             source_field: gridName,
-            column: "Total",
+            column: "Amount",
           },
         },
       },

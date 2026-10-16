@@ -1,0 +1,448 @@
+{
+    "format": "atc-form-export",
+    "formatVersion": 1,
+    "form": {
+        "name": "Cash advance",
+        "description": "Request a cash advance with a forecast and an activity report. Department Head, Finance, and the CFO approve every request. Finance or Treasury then releases the full amount.",
+        "category": "finance",
+        "status": "draft",
+        "owner_code": "GEN",
+        "doc_type_code": "CA",
+        "metadata_json": {
+            "form_family": "cash_advance",
+            "related_template_ids": [
+                "liquidation",
+                "reimbursement"
+            ],
+            "compose": {
+                "mode": "stepped",
+                "step_source": "sections",
+                "show_progress": true,
+                "validate_on_next": true,
+                "allow_back": true,
+                "include_review_step": true
+            },
+            "print_dynamic_form_body": true
+        },
+        "fields": [
+            {
+                "type": "section",
+                "name": "section_request",
+                "label": "Cash advance request",
+                "step_order": 1
+            },
+            {
+                "type": "select",
+                "name": "subsidiary",
+                "label": "Subsidiary",
+                "step_order": 2,
+                "validation": {
+                    "required": true,
+                    "help_text": "Chooses the letterhead logo for this subsidiary when printing."
+                },
+                "options": {
+                    "choices": [
+                        {
+                            "value": "ATC",
+                            "label": "ATC"
+                        },
+                        {
+                            "value": "ADIC",
+                            "label": "ADIC"
+                        }
+                    ],
+                    "layout": {
+                        "width": "half",
+                        "row_id": "ca_org",
+                        "slot": 0
+                    }
+                }
+            },
+            {
+                "type": "date",
+                "name": "needed_by",
+                "label": "Funds needed by",
+                "step_order": 3,
+                "validation": {
+                    "required": true
+                },
+                "options": {
+                    "layout": {
+                        "width": "half",
+                        "row_id": "ca_org",
+                        "slot": 1
+                    }
+                }
+            },
+            {
+                "type": "select",
+                "name": "department",
+                "label": "Department",
+                "step_order": 4,
+                "validation": {
+                    "required": true
+                },
+                "options": {
+                    "choices": [
+                        {
+                            "value": "operations",
+                            "label": "Operations"
+                        },
+                        {
+                            "value": "finance",
+                            "label": "Finance"
+                        },
+                        {
+                            "value": "engineering",
+                            "label": "Engineering"
+                        },
+                        {
+                            "value": "hr",
+                            "label": "Human resources"
+                        }
+                    ],
+                    "layout": {
+                        "width": "half",
+                        "row_id": "ca_dept",
+                        "slot": 0
+                    }
+                }
+            },
+            {
+                "type": "text",
+                "name": "purpose",
+                "label": "Purpose",
+                "step_order": 5,
+                "validation": {
+                    "required": true,
+                    "placeholder": "Why the advance is needed"
+                },
+                "options": {
+                    "layout": {
+                        "width": "half",
+                        "row_id": "ca_dept",
+                        "slot": 1
+                    }
+                }
+            },
+            {
+                "type": "section",
+                "name": "section_activities",
+                "label": "Activities",
+                "step_order": 6
+            },
+            {
+                "type": "grid",
+                "name": "activity_lines",
+                "label": "Activity report",
+                "step_order": 7,
+                "validation": {
+                    "required": true
+                },
+                "options": {
+                    "columns": [
+                        {
+                            "label": "Date",
+                            "type": "date_range"
+                        },
+                        {
+                            "label": "From site",
+                            "type": "select",
+                            "choices": [
+                                {
+                                    "value": "MNL-ATC-01",
+                                    "label": "MNL-ATC-01 — Makati",
+                                    "data": {
+                                        "address": "32nd Street, Bonifacio Global City, Taguig"
+                                    }
+                                },
+                                {
+                                    "value": "CEB-ATC-02",
+                                    "label": "CEB-ATC-02 — Cebu IT Park",
+                                    "data": {
+                                        "address": "Jose Maria del Mar, Cebu City"
+                                    }
+                                },
+                                {
+                                    "value": "DVO-ATC-03",
+                                    "label": "DVO-ATC-03 — Davao Lanang",
+                                    "data": {
+                                        "address": "J.P. Laurel Avenue, Davao City"
+                                    }
+                                },
+                                {
+                                    "value": "BCD-ATC-04",
+                                    "label": "BCD-ATC-04 — Bacolod",
+                                    "data": {
+                                        "address": "Lacson Street, Bacolod City"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "label": "From location",
+                            "type": "text",
+                            "filled_from": "From site",
+                            "locked": true
+                        },
+                        {
+                            "label": "To site",
+                            "type": "select",
+                            "choices": [
+                                {
+                                    "value": "MNL-ATC-01",
+                                    "label": "MNL-ATC-01 — Makati",
+                                    "data": {
+                                        "address": "32nd Street, Bonifacio Global City, Taguig"
+                                    }
+                                },
+                                {
+                                    "value": "CEB-ATC-02",
+                                    "label": "CEB-ATC-02 — Cebu IT Park",
+                                    "data": {
+                                        "address": "Jose Maria del Mar, Cebu City"
+                                    }
+                                },
+                                {
+                                    "value": "DVO-ATC-03",
+                                    "label": "DVO-ATC-03 — Davao Lanang",
+                                    "data": {
+                                        "address": "J.P. Laurel Avenue, Davao City"
+                                    }
+                                },
+                                {
+                                    "value": "BCD-ATC-04",
+                                    "label": "BCD-ATC-04 — Bacolod",
+                                    "data": {
+                                        "address": "Lacson Street, Bacolod City"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "label": "To location",
+                            "type": "text",
+                            "filled_from": "To site",
+                            "locked": true
+                        },
+                        {
+                            "label": "Nature of activity",
+                            "type": "textarea"
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "section",
+                "name": "section_expenses",
+                "label": "Forecast expenses",
+                "step_order": 8
+            },
+            {
+                "type": "grid",
+                "name": "expense_lines",
+                "label": "Forecast lines",
+                "step_order": 9,
+                "validation": {
+                    "required": true
+                },
+                "options": {
+                    "columns": [
+                        {
+                            "label": "Activity",
+                            "type": "select",
+                            "linked_grid": "activity_lines"
+                        },
+                        {
+                            "label": "Expense type",
+                            "type": "select",
+                            "choices": [
+                                {
+                                    "value": "land",
+                                    "label": "Transportation - Land",
+                                    "data": {
+                                        "vatable": true
+                                    }
+                                },
+                                {
+                                    "value": "sea",
+                                    "label": "Transportation - Sea",
+                                    "data": {
+                                        "vatable": true
+                                    }
+                                },
+                                {
+                                    "value": "air",
+                                    "label": "Transportation - Air",
+                                    "data": {
+                                        "vatable": true
+                                    }
+                                },
+                                {
+                                    "value": "gasoline",
+                                    "label": "Gasoline",
+                                    "data": {
+                                        "vatable": true
+                                    }
+                                },
+                                {
+                                    "value": "lodging",
+                                    "label": "Lodging",
+                                    "data": {
+                                        "vatable": true
+                                    }
+                                },
+                                {
+                                    "value": "per_diem",
+                                    "label": "Per Diem",
+                                    "data": {
+                                        "vatable": false,
+                                        "per_diem": true
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "label": "Amount",
+                            "type": "currency"
+                        },
+                        {
+                            "label": "VAT treatment",
+                            "type": "select",
+                            "choices": [
+                                {
+                                    "value": "vatable",
+                                    "label": "VATable"
+                                },
+                                {
+                                    "value": "non_vatable",
+                                    "label": "Non-VATable"
+                                }
+                            ]
+                        },
+                        {
+                            "label": "Days",
+                            "type": "number"
+                        },
+                        {
+                            "label": "VAT",
+                            "type": "currency",
+                            "locked": true
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "currency",
+                "name": "requested_amount",
+                "label": "Requested amount",
+                "step_order": 10,
+                "validation": {
+                    "required": true,
+                    "help_text": "Total of the Amount column. VAT is calculated from the rate in E-Forms settings."
+                },
+                "options": {
+                    "read_only": true,
+                    "computed_from": {
+                        "operation": "sum_grid_column",
+                        "source_field": "expense_lines",
+                        "column": "Amount"
+                    },
+                    "layout": {
+                        "width": "quarter",
+                        "row_id": "money_footer",
+                        "slot": 0
+                    }
+                }
+            },
+            {
+                "type": "currency",
+                "name": "vat_total",
+                "label": "VAT",
+                "step_order": 11,
+                "options": {
+                    "read_only": true,
+                    "layout": {
+                        "width": "quarter",
+                        "row_id": "money_footer",
+                        "slot": 1
+                    }
+                }
+            },
+            {
+                "type": "currency",
+                "name": "non_vatable_total",
+                "label": "Non-VATable",
+                "step_order": 12,
+                "options": {
+                    "read_only": true,
+                    "layout": {
+                        "width": "quarter",
+                        "row_id": "money_footer",
+                        "slot": 2
+                    }
+                }
+            },
+            {
+                "type": "currency",
+                "name": "vatable_net",
+                "label": "VATable, net of VAT",
+                "step_order": 13,
+                "options": {
+                    "read_only": true,
+                    "layout": {
+                        "width": "quarter",
+                        "row_id": "money_footer",
+                        "slot": 3
+                    }
+                }
+            },
+            {
+                "type": "file",
+                "name": "supporting_documents",
+                "label": "Supporting documents",
+                "step_order": 15
+            },
+            {
+                "type": "textarea",
+                "name": "notes",
+                "label": "Notes",
+                "step_order": 16
+            }
+        ],
+        "steps": [
+            {
+                "type": "manager",
+                "step_order": 1,
+                "label": "Department Head"
+            },
+            {
+                "type": "role",
+                "approverId": "finance",
+                "step_order": 2,
+                "label": "Finance",
+                "condition": {
+                    "finance_action": "review"
+                }
+            },
+            {
+                "type": "role",
+                "approverId": "cfo",
+                "step_order": 3,
+                "label": "CFO",
+                "condition": {
+                    "finance_action": "cfo"
+                }
+            },
+            {
+                "type": "role",
+                "approverId": "finance",
+                "step_order": 4,
+                "label": "Release cash",
+                "condition": {
+                    "finance_action": "release"
+                }
+            }
+        ]
+    }
+}

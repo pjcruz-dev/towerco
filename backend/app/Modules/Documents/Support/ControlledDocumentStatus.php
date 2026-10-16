@@ -6,6 +6,8 @@ namespace App\Modules\Documents\Support;
 
 final class ControlledDocumentStatus
 {
+    public const PENDING = 'pending';
+
     public const PUBLISHED = 'published';
 
     public const OBSOLETE = 'obsolete';
@@ -15,6 +17,6 @@ final class ControlledDocumentStatus
      */
     public static function all(): array
     {
-        return [self::PUBLISHED, self::OBSOLETE];
+        return [self::PENDING, self::PUBLISHED, self::OBSOLETE];
     }
 }

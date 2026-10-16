@@ -12,8 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class EApprovalSettingsUpdateController extends AbstractApiController
 {
-    public function __invoke(Request $request, EApprovalSettingsService $settings): JsonResponse
-    {
+    public function __invoke(
+        Request $request,
+        EApprovalSettingsService $settings,
+    ): JsonResponse {
         abort_unless($request->user()?->can('e_approval:settings:manage'), 403);
 
         $data = $request->validate([
@@ -26,6 +28,14 @@ class EApprovalSettingsUpdateController extends AbstractApiController
             'liquidation_requires_parent' => ['sometimes', 'in:true,false'],
             'liquidation_overspend_mode' => ['sometimes', 'in:block,warn'],
             'liquidation_max_overspend_percent' => ['sometimes', 'integer', 'min:0', 'max:25'],
+            'liquidation_due_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
+            'liquidation_remind_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
+            'block_new_cash_advance' => ['sometimes', 'in:true,false'],
+            'vat_rate_percent' => ['sometimes', 'integer', 'min:0', 'max:100'],
+            'vat_amount_includes_vat' => ['sometimes', 'in:true,false'],
+            'per_diem_max_per_day' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'hotel_accommodation_max' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'site_search_scope' => ['sometimes', 'in:request,all,atc,adic'],
             'notify_external_on_received' => ['sometimes', 'in:true,false'],
             'notify_external_on_approved' => ['sometimes', 'in:true,false'],
             'notify_external_on_rejected' => ['sometimes', 'in:true,false'],
@@ -48,6 +58,12 @@ class EApprovalSettingsUpdateController extends AbstractApiController
         foreach ($data as $key => $value) {
             $payload[$key] = (string) $value;
         }
+        foreach (['per_diem_max_per_day', 'hotel_accommodation_max'] as $amountKey) {
+            if (array_key_exists($amountKey, $payload)) {
+                $payload[$amountKey] = trim((string) $payload[$amountKey]);
+            }
+        }
+
         $settings->updateAdminSettings($payload);
 
         return $this->ok(['ok' => true]);

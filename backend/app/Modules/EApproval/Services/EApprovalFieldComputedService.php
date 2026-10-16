@@ -7,9 +7,14 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalPerDiemDays;
 
 final class EApprovalFieldComputedService
 {
+    public function __construct(
+        private readonly ?EApprovalFinanceProcurementPolicyService $policy = null,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
@@ -19,6 +24,7 @@ final class EApprovalFieldComputedService
         $form->loadMissing('fields');
         $fields = $form->fields->all();
         $values = $this->applyGridRowAmountFormulas($fields, $values);
+        $values = $this->applyExpenseVat($fields, $values);
 
         for ($pass = 0; $pass < 12; $pass++) {
             $changed = false;
@@ -50,7 +56,7 @@ final class EApprovalFieldComputedService
             }
         }
 
-        return $values;
+        return $this->applySettlementSummary($fields, $values);
     }
 
     /**
@@ -81,6 +87,210 @@ final class EApprovalFieldComputedService
         return $values;
     }
 
+    /**
+     * @param  list<EApprovalFormField>  $fields
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function applyExpenseVat(array $fields, array $values): array
+    {
+        foreach ($fields as $field) {
+            if ((string) $field->name !== 'expense_lines' || (string) $field->type !== 'grid') {
+                continue;
+            }
+
+            $name = (string) $field->name;
+            $raw = $values[$name] ?? '';
+            $gridRaw = is_scalar($raw) ? trim((string) $raw) : '';
+            if ($gridRaw === '') {
+                continue;
+            }
+
+            $columns = $this->gridColumnDefs($field);
+            $keepsTypedAmount = $this->gridKeepsTypedAmount($columns);
+            $amountIndex = $this->resolveColumnIndex($columns, 'Amount', null);
+            $vatIndex = $this->resolveColumnIndex($columns, 'VAT', null);
+            $treatmentIndex = $this->resolveColumnIndex($columns, 'VAT treatment', null);
+            $qtyIndex = $this->resolveColumnIndex($columns, 'Quantity', null);
+            $rateIndex = $this->resolveColumnIndex($columns, 'Rate', null);
+            $lineIndex = $amountIndex ?? $rateIndex;
+            if ($lineIndex === null || $vatIndex === null) {
+                continue;
+            }
+
+            $rate = $this->policy?->vatRatePercent() ?? 12;
+            $inclusive = $this->policy?->amountIncludesVat() ?? true;
+            $rows = $this->parseGridRows($gridRaw, count($columns));
+            $typeIndex = $this->resolveColumnIndex($columns, 'Expense type', null);
+            $dateIndex = $this->resolveDateColumnIndex($columns);
+            $nonVatable = 0.0;
+            $vatableNet = 0.0;
+
+            foreach ($rows as &$row) {
+                $perDiem = $this->rowIsPerDiem($row, $typeIndex);
+                $lodging = $this->rowIsLodging($row, $typeIndex);
+                $extend = $perDiem || $lodging;
+                $days = $perDiem
+                    ? EApprovalPerDiemDays::forRow($row, $dateIndex)
+                    : ($lodging ? EApprovalPerDiemDays::lodgingNightsForRow($row, $dateIndex) : null);
+                if (! $keepsTypedAmount && $amountIndex !== null && $qtyIndex !== null && $rateIndex !== null && ! $extend) {
+                    $qtyRaw = trim((string) ($row[(string) $qtyIndex] ?? ''));
+                    $rateRaw = trim((string) ($row[(string) $rateIndex] ?? ''));
+                    if ($qtyRaw !== '' || $rateRaw !== '') {
+                        $line = max(0, $this->parseAmount($qtyRaw) * $this->parseAmount($rateRaw));
+                        $row[(string) $amountIndex] = number_format($line, 2, '.', '');
+                    }
+                }
+                if (! $keepsTypedAmount && $extend && $amountIndex !== null && $rateIndex !== null) {
+                    $daily = $this->parseAmount($row[(string) $rateIndex] ?? '');
+                    $row[(string) $amountIndex] = number_format(EApprovalPerDiemDays::lineTotal($daily, $days), 2, '.', '');
+                }
+                $amount = $this->expenseLineMoney(
+                    $row,
+                    $amountIndex,
+                    $keepsTypedAmount ? null : $rateIndex,
+                    $keepsTypedAmount ? false : $extend,
+                    $days,
+                );
+                $treatment = '';
+                if ($treatmentIndex !== null) {
+                    $treatment = strtolower(trim($row[(string) $treatmentIndex] ?? ''));
+                }
+                $vatable = ! $perDiem && ! in_array($treatment, ['non_vatable', 'non-vatable'], true);
+                if (! $vatable || $rate <= 0) {
+                    $vat = 0.0;
+                    $nonVatable += $amount;
+                } elseif ($inclusive) {
+                    $vat = round($amount * $rate / (100 + $rate), 2);
+                    $vatableNet += round($amount - $vat, 2);
+                } else {
+                    $vat = round($amount * $rate / 100, 2);
+                    $vatableNet += $amount;
+                }
+                $row[(string) $vatIndex] = number_format($vat, 2, '.', '');
+            }
+            unset($row);
+
+            $values[$name] = json_encode(['rows' => $rows], JSON_THROW_ON_ERROR);
+            if ($this->fieldExists($fields, 'non_vatable_total')) {
+                $values['non_vatable_total'] = number_format($nonVatable, 2, '.', '');
+            }
+            if ($this->fieldExists($fields, 'vatable_net')) {
+                $values['vatable_net'] = number_format($vatableNet, 2, '.', '');
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param  list<EApprovalFormField>  $fields
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function applyExclusiveGross(array $fields, array $values): array
+    {
+        if ($this->policy === null || $this->policy->amountIncludesVat()) {
+            return $values;
+        }
+
+        $vat = $this->readAmount($values, 'vat_total');
+        foreach (['requested_amount', 'total_reimbursement'] as $name) {
+            if (! $this->fieldExists($fields, $name)) {
+                continue;
+            }
+            $values[$name] = number_format($this->readAmount($values, $name) + $vat, 2, '.', '');
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param  list<EApprovalFormField>  $fields
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function applySettlementSummary(array $fields, array $values): array
+    {
+        $values = $this->applyExclusiveGross($fields, $values);
+        if (! $this->fieldExists($fields, 'settlement_summary')) {
+            return $values;
+        }
+        if (! $this->fieldsExist($fields, ['total_reimbursement', 'cash_advance_amount'])) {
+            return $values;
+        }
+
+        $delta = round(
+            $this->readAmount($values, 'total_reimbursement') - $this->readAmount($values, 'cash_advance_amount'),
+            2,
+        );
+        if (abs($delta) < 0.005) {
+            $values['settlement_summary'] = 'Settled. No cash to move.';
+        } elseif ($delta > 0) {
+            $values['settlement_summary'] = 'Amount to pay the employee: '.number_format($delta, 2, '.', '');
+        } else {
+            $values['settlement_summary'] = 'Amount to surrender: '.number_format(abs($delta), 2, '.', '');
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     */
+    private function expenseLineMoney(array $row, ?int $amountIndex, ?int $rateIndex, bool $perDiem, ?int $days): float
+    {
+        $read = function (?int $index) use ($row): float {
+            if ($index === null) {
+                return 0.0;
+            }
+
+            return max(0, $this->parseAmount($row[(string) $index] ?? ''));
+        };
+
+        if (! $perDiem) {
+            return round($read($amountIndex ?? $rateIndex), 2);
+        }
+
+        $daily = $rateIndex !== null ? $read($rateIndex) : $read($amountIndex);
+
+        return EApprovalPerDiemDays::lineTotal($daily, $days);
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     */
+    private function rowIsPerDiem(array $row, ?int $typeIndex): bool
+    {
+        if ($typeIndex === null) {
+            return false;
+        }
+
+        $type = strtolower(trim((string) ($row[(string) $typeIndex] ?? '')));
+
+        return $type === 'per_diem' || $type === 'per diem';
+    }
+
+    /**
+     * @param  array<string, string>  $row
+     */
+    private function rowIsLodging(array $row, ?int $typeIndex): bool
+    {
+        if ($typeIndex === null) {
+            return false;
+        }
+
+        $type = strtolower(trim((string) ($row[(string) $typeIndex] ?? '')));
+
+        return in_array($type, [
+            'lodging',
+            'hotel_accommodation',
+            'hotel & accommodation',
+            'hotel & accomodation',
+            'hotel and accommodation',
+        ], true);
+    }
+
     private function patchGridAmountColumn(EApprovalFormField $gridField, string $gridRaw): string
     {
         $columns = $this->gridColumnDefs($gridField);
@@ -90,7 +300,7 @@ final class EApprovalFieldComputedService
         $discountIndex = $this->findColumnIndexByLabel($labels, ['discount']);
         $amountIndex = $this->findColumnIndexByLabel($labels, ['amount', 'line total']);
 
-        if ($qtyIndex === null || $unitIndex === null || $amountIndex === null) {
+        if ($this->gridKeepsTypedAmount($columns) || $qtyIndex === null || $unitIndex === null || $amountIndex === null) {
             return $gridRaw;
         }
 
@@ -137,6 +347,27 @@ final class EApprovalFieldComputedService
         }
 
         return match ((string) $field->name) {
+            'requested_amount' => $this->hasGridField($fields, 'expense_lines')
+                ? [
+                    'operation' => 'sum_grid_column',
+                    'source_field' => 'expense_lines',
+                    'column' => 'Amount',
+                ]
+                : null,
+            'vat_total' => $this->hasGridField($fields, 'expense_lines')
+                ? [
+                    'operation' => 'sum_grid_column',
+                    'source_field' => 'expense_lines',
+                    'column' => 'VAT',
+                ]
+                : null,
+            'settlement_amount' => $this->fieldsExist($fields, ['total_reimbursement', 'cash_advance_amount'])
+                ? [
+                    'operation' => 'subtract_fields',
+                    'left_field' => 'total_reimbursement',
+                    'right_field' => 'cash_advance_amount',
+                ]
+                : null,
             'total_reimbursement' => $this->hasGridField($fields, 'expense_lines')
                 ? [
                     'operation' => 'sum_grid_column',
@@ -224,6 +455,9 @@ final class EApprovalFieldComputedService
             }
             if (in_array('amount', $labels, true)) {
                 return 'Amount';
+            }
+            if (in_array('rate', $labels, true)) {
+                return 'Rate';
             }
         }
 
@@ -326,7 +560,7 @@ final class EApprovalFieldComputedService
         return match ($operation) {
             'sum_grid_lines' => $this->sumGridLines($gridField, $gridRaw, $config),
             'sum_grid_lines_net' => $this->sumGridLinesNet($gridField, $gridRaw, $config),
-            default => $this->sumGridColumn($gridField, $gridRaw, $config),
+            default => $this->sumGridColumn($gridField, $gridRaw, $config, $fields, $values),
         };
     }
 
@@ -373,8 +607,10 @@ final class EApprovalFieldComputedService
 
     /**
      * @param  array<string, mixed>  $config
+     * @param  list<EApprovalFormField>  $fields
+     * @param  array<string, mixed>  $values
      */
-    private function sumGridColumn(EApprovalFormField $gridField, string $gridRaw, array $config): float
+    private function sumGridColumn(EApprovalFormField $gridField, string $gridRaw, array $config, array $fields, array $values): float
     {
         $columns = $this->gridColumnDefs($gridField);
         $columnIndex = $this->resolveColumnIndex(
@@ -403,8 +639,24 @@ final class EApprovalFieldComputedService
         }
 
         $rows = $this->parseGridRows($gridRaw, count($columns));
+        $extendPerDiem = (string) $gridField->name === 'expense_lines'
+            && ! $this->gridKeepsTypedAmount($columns)
+            && strcasecmp(trim((string) ($columns[$columnIndex]['label'] ?? '')), 'Amount') === 0;
+        $typeIndex = $extendPerDiem ? $this->resolveColumnIndex($columns, 'Expense type', null) : null;
+        $rateIndex = $extendPerDiem ? $this->resolveColumnIndex($columns, 'Rate', null) : null;
+        $dateIndex = $extendPerDiem ? $this->resolveDateColumnIndex($columns) : null;
         $total = 0.0;
         foreach ($rows as $row) {
+            if ($extendPerDiem) {
+                $perDiem = $this->rowIsPerDiem($row, $typeIndex);
+                $lodging = $this->rowIsLodging($row, $typeIndex);
+                $days = $perDiem
+                    ? EApprovalPerDiemDays::forRow($row, $dateIndex)
+                    : ($lodging ? EApprovalPerDiemDays::lodgingNightsForRow($row, $dateIndex) : null);
+                $total += $this->expenseLineMoney($row, $columnIndex, $rateIndex, $perDiem || $lodging, $days);
+
+                continue;
+            }
             $total += $this->parseAmount($row[(string) $columnIndex] ?? '');
         }
 
@@ -498,6 +750,40 @@ final class EApprovalFieldComputedService
     /**
      * @param  list<array{label: string, type: string}>  $columns
      */
+    private function gridKeepsTypedAmount(array $columns): bool
+    {
+        $labels = [];
+        foreach ($columns as $column) {
+            $label = strtolower(trim((string) ($column['label'] ?? '')));
+            if ($label === 'forecast amount') {
+                return true;
+            }
+            $labels[] = $label;
+        }
+
+        return in_array('or no', $labels, true)
+            && in_array('expense type', $labels, true)
+            && in_array('amount', $labels, true);
+    }
+
+    /**
+     * @param  list<array{label: string, type: string}>  $columns
+     */
+    private function resolveDateColumnIndex(array $columns): ?int
+    {
+        foreach ($columns as $index => $column) {
+            if (($column['type'] ?? '') === 'date_range') {
+                return $index;
+            }
+            $label = strtolower(trim((string) ($column['label'] ?? '')));
+            if ($label === 'date' || str_starts_with($label, 'from date')) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
     private function resolveColumnIndex(array $columns, ?string $label, ?int $index): ?int
     {
         if ($index !== null && $index >= 0 && $index < count($columns)) {

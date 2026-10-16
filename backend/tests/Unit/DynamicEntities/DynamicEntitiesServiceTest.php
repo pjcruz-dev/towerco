@@ -6,7 +6,6 @@ namespace Tests\Unit\DynamicEntities;
 
 use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Services\AtcDataImportService;
-use App\Modules\DynamicEntities\Services\AtcExecutiveDashboardService;
 use App\Modules\DynamicEntities\Services\AtcExtendedReportsService;
 use App\Modules\DynamicEntities\Services\AtcImportVerifyService;
 use App\Modules\DynamicEntities\Services\AtcMetaImportService;
@@ -320,57 +319,7 @@ SQL);
     }
 
     #[Test]
-    public function executive_dashboard_aggregates_site_portfolio_kpis(): void
-    {
-        $admin = app(DynEntityAdminService::class);
-        $sites = $admin->createEntity([
-            'name' => 'Tower Sites',
-            'slug' => 'tower_sites',
-            'module_pack' => 'pm',
-        ], $this->actor);
-        foreach (['site_name', 'region', 'project_type', 'milestone', 'days_to_rfti'] as $name) {
-            $admin->createField($sites, [
-                'label' => $name,
-                'name' => $name,
-                'type' => $name === 'days_to_rfti' ? 'number' : 'text',
-            ]);
-        }
-
-        app(DynRecordService::class)->create($sites, [
-            'status' => 'WIP',
-            'values' => [
-                'site_name' => 'Site North',
-                'region' => 'NCR',
-                'project_type' => 'GBT',
-                'milestone' => 'Site Acquisition',
-                'days_to_rfti' => -5,
-            ],
-        ], $this->actor);
-        app(DynRecordService::class)->create($sites, [
-            'status' => 'RFTI Ready',
-            'values' => [
-                'site_name' => 'Site South',
-                'region' => 'Visayas',
-                'project_type' => 'RTP',
-                'milestone' => 'RFTI',
-                'days_to_rfti' => 45,
-            ],
-        ], $this->actor);
-
-        $dashboard = app(AtcExecutiveDashboardService::class)->build();
-
-        $this->assertNull($dashboard['message']);
-        $this->assertSame(2, $dashboard['kpis']['sites_total']);
-        $this->assertGreaterThanOrEqual(1, $dashboard['kpis']['sites_wip']);
-        $this->assertGreaterThanOrEqual(1, $dashboard['kpis']['sites_rfti_ready']);
-        $this->assertSame(1, $dashboard['rfti_pipeline']['aging'][2]['value']); // overdue
-        $this->assertNotEmpty($dashboard['portfolio']['by_region']);
-        $this->assertNotEmpty($dashboard['quick_links']);
-        $this->assertNotEmpty($dashboard['attention']);
-    }
-
-    #[Test]
-    public function builds_extended_cas_and_stock_reports(): void
+    public function builds_stock_on_hand_report(): void
     {
         $admin = app(DynEntityAdminService::class);
         $records = app(DynRecordService::class);
@@ -406,26 +355,11 @@ SQL);
             ],
         ], $this->actor);
 
-        $sales = $admin->createEntity(['name' => 'Sales', 'slug' => 'sales_transactions', 'module_pack' => 'finance'], $this->actor);
-        $admin->createField($sales, ['label' => 'Amount', 'name' => 'total_amount', 'type' => 'number']);
-        $admin->createField($sales, ['label' => 'Date', 'name' => 'transaction_date', 'type' => 'date']);
-        $records->create($sales, [
-            'status' => 'Open',
-            'values' => [
-                'total_amount' => 5000,
-                'transaction_date' => now()->toDateString(),
-            ],
-        ], $this->actor);
-
         $service = app(AtcExtendedReportsService::class);
         $stock = $service->build('stock-on-hand');
         $this->assertNull($stock['message']);
         $this->assertSame(1, $stock['kpis'][0]['value']);
         $this->assertSame(7.0, $stock['kpis'][1]['value']);
-
-        $cas = $service->build('cas-executive-dashboard');
-        $this->assertGreaterThan(0, $cas['kpis'][0]['value']);
-        $this->assertNotEmpty($cas['charts']);
     }
 
     #[Test]

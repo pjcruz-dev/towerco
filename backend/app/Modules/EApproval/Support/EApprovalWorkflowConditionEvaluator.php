@@ -120,12 +120,12 @@ final class EApprovalWorkflowConditionEvaluator
                 strtolower($actual),
                 strtolower(trim((string) $expected)),
             ),
-            // Empty / non-numeric values must not satisfy numeric bands (avoids
-            // empty amount matching "lte 5000" via the non-numeric fallback).
-            'gt', '>' => $actual !== '' && is_numeric($actual) && $this->numericCompare($actual, $expected) === 1,
-            'gte', '>=' => $actual !== '' && is_numeric($actual) && $this->numericCompare($actual, $expected) >= 0,
-            'lt', '<' => $actual !== '' && is_numeric($actual) && $this->numericCompare($actual, $expected) === -1,
-            'lte', '<=' => $actual !== '' && is_numeric($actual) && $this->numericCompare($actual, $expected) <= 0,
+            // Empty values never match a band. A non-numeric boundary (a choice
+            // such as ATC) is an exact match: ≤ means "is", > means "is not".
+            'gt', '>' => $this->compareBound($actual, $expected, 'gt'),
+            'gte', '>=' => $this->compareBound($actual, $expected, 'gte'),
+            'lt', '<' => $this->compareBound($actual, $expected, 'lt'),
+            'lte', '<=' => $this->compareBound($actual, $expected, 'lte'),
             'is_empty' => $actual === '',
             'is_not_empty' => $actual !== '',
             'in' => $this->valueInList($actual, $expected),
@@ -140,6 +140,31 @@ final class EApprovalWorkflowConditionEvaluator
         }
 
         return strtolower($actual) === strtolower(trim((string) $expected));
+    }
+
+    /**
+     * Amount boundaries stay numeric. Any other boundary matches the value itself.
+     */
+    private function compareBound(string $actual, mixed $expected, string $operator): bool
+    {
+        if ($actual === '') {
+            return false;
+        }
+
+        if (! is_numeric($actual) || ! is_numeric($expected)) {
+            $same = $this->compareEquals($actual, $expected);
+
+            return $operator === 'gt' || $operator === 'gte' ? ! $same : $same;
+        }
+
+        $compared = $this->numericCompare($actual, $expected);
+
+        return match ($operator) {
+            'gt' => $compared === 1,
+            'gte' => $compared >= 0,
+            'lt' => $compared === -1,
+            default => $compared <= 0,
+        };
     }
 
     private function numericCompare(string $actual, mixed $expected): int

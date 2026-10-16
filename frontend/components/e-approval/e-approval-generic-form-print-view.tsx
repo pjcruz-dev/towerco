@@ -7,8 +7,11 @@ import {
   defaultEApprovalDocumentDesignCss,
   defaultEApprovalDocumentDesignHtml,
   documentDesignEmbedsGrids,
+  financePrintFamily,
   hasCustomPrintDocumentDesign,
   mergeEApprovalPrintCss,
+  shouldUseFinancePrintStarter,
+  normalizePrintOrientation,
   renderEApprovalPrintTemplateHtml,
   renderPrintGridTableHtml,
 } from "@/lib/e-approval/e-approval-print-template-render";
@@ -66,13 +69,15 @@ export function EApprovalGenericFormPrintView({
   );
 
   const title = template.header?.title?.trim() || hydratedData.form_name?.trim() || "Submission";
+  const fallbackFamily = financePrintFamily(hydratedData);
 
   const sourceHtml = useMemo(() => {
-    if (hasCustomPrintDocumentDesign(template)) {
-      return String(template.template_html ?? "");
+    const saved = hasCustomPrintDocumentDesign(template) ? String(template.template_html ?? "") : "";
+    if (saved && !shouldUseFinancePrintStarter(saved, fallbackFamily)) {
+      return saved;
     }
-    return defaultEApprovalDocumentDesignHtml(title);
-  }, [template, title]);
+    return defaultEApprovalDocumentDesignHtml(title, [], fallbackFamily);
+  }, [template, title, fallbackFamily]);
 
   const documentHtml = useMemo(
     () => renderEApprovalPrintTemplateHtml(sourceHtml, hydratedData),
@@ -85,20 +90,39 @@ export function EApprovalGenericFormPrintView({
   );
 
   const documentCss = useMemo(() => {
+    const savedHtml = hasCustomPrintDocumentDesign(template) ? String(template.template_html ?? "") : "";
+    const usingFamilyStarter = shouldUseFinancePrintStarter(savedHtml, fallbackFamily);
     const saved = typeof template.template_css === "string" ? template.template_css.trim() : "";
-    const base = saved || defaultEApprovalDocumentDesignCss();
-    return mergeEApprovalPrintCss(base, {
+    const pageOptions = {
       size: template.page?.size,
       marginMm: template.page?.marginMm,
-      orientation: template.orientation,
-    });
-  }, [template]);
+      orientation: template.orientation ?? (fallbackFamily ? "landscape" : undefined),
+    };
+    const savedHasExpenseColumnFix =
+      fallbackFamily !== "liquidation" && fallbackFamily !== "reimbursement"
+        ? true
+        : saved.includes(`.${fallbackFamily === "liquidation" ? "ea-lq-doc" : "ea-re-doc"} .ea-print-col-date`);
+    const base =
+      saved && !usingFamilyStarter && savedHasExpenseColumnFix
+        ? saved
+        : defaultEApprovalDocumentDesignCss(pageOptions, fallbackFamily);
+    return mergeEApprovalPrintCss(base, pageOptions);
+  }, [template, fallbackFamily]);
+
+  const landscape = normalizePrintOrientation(template.orientation) === "landscape"
+    || (!template.orientation && fallbackFamily !== null);
 
   return (
     <>
       {documentCss ? <style dangerouslySetInnerHTML={{ __html: documentCss }} /> : null}
       <div className="eapproval-generic-form-print min-h-screen bg-slate-100 print:bg-white">
-        <div className="mx-auto max-w-[210mm] bg-white px-6 py-8 shadow-sm print:max-w-none print:px-8 print:py-6 print:shadow-none">
+        <div
+          className={
+            landscape
+              ? "mx-auto max-w-[297mm] bg-white px-6 py-8 shadow-sm print:max-w-none print:px-0 print:py-0 print:shadow-none"
+              : "mx-auto max-w-[210mm] bg-white px-6 py-8 shadow-sm print:max-w-none print:px-8 print:py-6 print:shadow-none"
+          }
+        >
           {documentHtml ? (
             <section
               data-help={fieldsDataHelp}
@@ -112,7 +136,12 @@ export function EApprovalGenericFormPrintView({
                 <div
                   key={grid.key}
                   className="mt-6"
-                  dangerouslySetInnerHTML={{ __html: renderPrintGridTableHtml(grid) }}
+                  dangerouslySetInnerHTML={{
+                    __html: renderPrintGridTableHtml(grid, {
+                      formName: hydratedData.form_name,
+                      fields: hydratedData.fields,
+                    }),
+                  }}
                 />
               ))
             : null}

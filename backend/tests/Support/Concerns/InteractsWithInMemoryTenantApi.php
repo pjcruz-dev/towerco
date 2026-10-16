@@ -7,6 +7,7 @@ namespace Tests\Support\Concerns;
 use App\Models\Tenant;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -60,6 +61,11 @@ trait InteractsWithInMemoryTenantApi
             $this->testTenant = Tenant::query()->create(['id' => (string) Str::uuid()]);
             $this->testTenant->domains()->create(['domain' => 'test.localhost']);
         });
+
+        Migrator::withoutMigrations([
+            '2026_09_04_140000_widen_e_approval_document_sequence_prefix',
+            '2026_09_09_060000_widen_e_approval_signature_columns',
+        ]);
 
         (new CreateDatabase($this->testTenant))->handle(app(DatabaseManager::class));
         (new MigrateDatabase($this->testTenant))->handle();

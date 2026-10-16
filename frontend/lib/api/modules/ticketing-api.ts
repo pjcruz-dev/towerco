@@ -3,6 +3,7 @@ import type {
   CreateTicketingTicketInput,
   TicketingDashboardResponse,
   TicketingMetadata,
+  TicketingSchema,
   TicketingSettings,
   TicketingTicketDetail,
   TicketingTicketListRow,
@@ -111,6 +112,11 @@ export async function downloadTicketingTicketsExport(
     validateStatus: (status) => (status >= 200 && status < 300) || status === 202,
   });
   return parseModuleListExportResponse(response);
+}
+
+export async function fetchTicketingSchema(): Promise<TicketingSchema> {
+  const response = await apiClient.get<{ data: TicketingSchema }>("/ticketing/schema");
+  return response.data.data;
 }
 
 export async function fetchTicketingTicket(ticketId: string): Promise<TicketingTicketDetail> {

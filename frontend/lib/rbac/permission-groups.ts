@@ -16,6 +16,7 @@ const MODULE_GROUP_LABELS: Record<string, string> = {
   gis: "GIS",
   e_approval: "E-Forms",
   ticketing: "Ticketing",
+  assets: "Assets",
   ai_assistant: "AI Assistant",
 };
 
@@ -26,6 +27,7 @@ const GROUP_ORDER = [
   "Documents",
   "E-Forms",
   "Ticketing",
+  "Assets",
   "AI Assistant",
   "GIS",
   "Other",

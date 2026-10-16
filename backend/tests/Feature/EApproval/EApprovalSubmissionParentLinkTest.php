@@ -1,42 +1,23 @@
 <?php
 
-
-
 declare(strict_types=1);
-
-
 
 namespace Tests\Feature\EApproval;
 
-
-
 use App\Core\Http\Middleware\EnsureActiveSession;
-
 use App\Core\Http\Middleware\EnsureMfaVerified;
-
 use App\Modules\Identity\Models\TenantUser;
-
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
-
 use Tests\TestCase;
 
-
-
 final class EApprovalSubmissionParentLinkTest extends TestCase
-
 {
-
     use InteractsWithInMemoryTenantApi;
 
-
-
     protected function setUp(): void
-
     {
 
         parent::setUp();
-
-
 
         $this->withoutMiddleware([
 
@@ -46,16 +27,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         ]);
 
-
-
         $this->bootInMemoryTenantApi();
 
     }
 
-
-
     public function test_liquidation_submission_links_to_cash_advance_parent(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -74,8 +50,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -85,8 +59,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -108,8 +80,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $liqRes = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
@@ -128,13 +98,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $liqRes->assertCreated();
 
         $liqRes->assertJsonPath('data.parent_submission_id', $caSubmissionId);
-
-
 
         $caDocumentNo = $this->actingAsTenantAdmin()
 
@@ -144,13 +110,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->json('data.document_no');
 
-
-
         $caRef = collect($liqRes->json('data.values'))
 
             ->firstWhere('field_name', 'cash_advance_document_no');
-
-
 
         $this->assertSame($caDocumentNo, $caRef['value'] ?? null);
 
@@ -168,10 +130,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_open_cash_advances_include_prefill_values_for_child_form(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -190,8 +149,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '2500',
@@ -201,8 +158,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -224,8 +179,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caDocumentNo = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
@@ -234,15 +187,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->json('data.document_no');
 
-
-
         $response = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
 
             ->getJson("/api/v1/e-approval/cash-advances/open?for_form_id={$liqFormId}");
-
-
 
         $response->assertOk();
 
@@ -252,16 +201,13 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         $response->assertJsonPath('data.items.0.prefill_values.cash_advance_amount', '2500.00');
 
-        $response->assertJsonPath('data.items.0.prefill_values.notes', 'Field kit replenishment');
+        $this->assertNull($response->json('data.items.0.prefill_values.notes'));
 
         $this->assertNotEmpty($response->json('data.items.0.prefill_values.liquidation_date'));
 
     }
 
-
-
-    public function test_draft_update_rejects_amount_over_open_balance(): void
-
+    public function test_draft_update_allows_amount_over_released_cash(): void
     {
 
         $caFormId = $this->createPublishedForm(
@@ -278,8 +224,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -287,8 +231,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -303,8 +245,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $draftRes = $this->actingAsTenantAdmin()
 
@@ -326,13 +266,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $draftRes->assertCreated();
 
         $draftId = (string) $draftRes->json('data.id');
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -350,16 +286,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ])
 
-            ->assertUnprocessable()
-
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertOk();
 
     }
 
-
-
-    public function test_resubmit_rejects_amount_over_open_balance(): void
-
+    public function test_resubmit_allows_amount_over_released_cash(): void
     {
 
         $caFormId = $this->createPublishedForm(
@@ -376,8 +307,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -385,8 +314,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -401,8 +328,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $liqRes = $this->actingAsTenantAdmin()
 
@@ -422,15 +347,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $liqRes->assertCreated();
 
         $liqSubmissionId = (string) $liqRes->json('data.id');
 
         $this->rejectSubmission($liqSubmissionId);
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -446,16 +367,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ])
 
-            ->assertUnprocessable()
-
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertOk();
 
     }
 
-
-
     public function test_submission_detail_includes_related_parent_and_children(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -472,8 +388,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -481,8 +395,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -497,8 +409,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $liqRes = $this->actingAsTenantAdmin()
 
@@ -518,21 +428,15 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $liqRes->assertCreated();
 
         $liqSubmissionId = (string) $liqRes->json('data.id');
-
-
 
         $childDetail = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
 
             ->getJson("/api/v1/e-approval/submissions/{$liqSubmissionId}");
-
-
 
         $childDetail->assertOk();
 
@@ -544,15 +448,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         $childDetail->assertJsonPath('data.related_submissions.children', []);
 
-
-
         $parentDetail = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
 
             ->getJson("/api/v1/e-approval/submissions/{$caSubmissionId}");
-
-
 
         $parentDetail->assertOk();
 
@@ -566,10 +466,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_liquidation_requires_parent_submission(): void
-
     {
 
         $liqFormId = $this->createPublishedForm(
@@ -585,8 +482,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -610,10 +505,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_liquidation_rejects_pending_cash_advance_parent(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -630,15 +522,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
 
         ]);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -653,8 +541,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -680,10 +566,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
-    public function test_liquidation_rejects_amount_over_open_balance(): void
-
+    public function test_liquidation_allows_amount_over_released_cash(): void
     {
 
         $caFormId = $this->createPublishedForm(
@@ -700,8 +583,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -709,8 +590,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -725,8 +604,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -746,16 +623,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ])
 
-            ->assertUnprocessable()
-
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertCreated();
 
     }
 
-
-
-    public function test_liquidation_respects_cumulative_open_balance(): void
-
+    public function test_second_liquidation_is_rejected_while_one_is_live(): void
     {
 
         $caFormId = $this->createPublishedForm(
@@ -772,8 +644,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -781,8 +651,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -797,8 +665,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -820,8 +686,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->assertCreated();
 
-
-
         $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
@@ -842,14 +706,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->assertUnprocessable()
 
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertJsonValidationErrors(['parent_submission_id']);
 
     }
 
-
-
     public function test_parent_link_rejects_different_requestor(): void
-
     {
 
         tenancy()->initialize($this->testTenant);
@@ -868,8 +729,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         tenancy()->end();
 
-
-
         $caFormId = $this->createPublishedForm(
 
             'Cash advance',
@@ -884,15 +743,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '1000',
 
         ], $otherUser);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -907,8 +762,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -934,10 +787,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_parent_link_rejects_wrong_parent_form_family(): void
-
     {
 
         $genericFormId = $this->createPublishedForm(
@@ -954,15 +804,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $parentId = $this->createSubmission($genericFormId, [
 
             'summary' => 'Not a cash advance',
 
         ]);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -977,8 +823,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1004,10 +848,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_open_cash_advances_lists_approved_parents_with_positive_balance(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1024,8 +865,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -1034,15 +873,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         $this->approveSubmission($caSubmissionId);
 
-
-
         $response = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
 
             ->getJson('/api/v1/e-approval/cash-advances/open');
-
-
 
         $response->assertOk();
 
@@ -1052,10 +887,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_exact_open_balance_liquidation_is_allowed(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1072,8 +904,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -1081,8 +911,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -1097,8 +925,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1122,10 +948,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_open_balance_reflects_pending_liquidations(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1142,8 +965,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -1151,8 +972,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -1167,8 +986,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1190,28 +1007,19 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->assertCreated();
 
-
-
         $response = $this->actingAsTenantAdmin()
 
             ->withHeaders($this->tenantApiHeaders())
 
             ->getJson('/api/v1/e-approval/cash-advances/open');
 
-
-
         $response->assertOk();
 
-        $response->assertJsonPath('data.items.0.id', $caSubmissionId);
-
-        $response->assertJsonPath('data.items.0.open_balance', 3000);
+        $response->assertJsonCount(0, 'data.items');
 
     }
 
-
-
     public function test_rejected_liquidation_restores_open_balance_for_subsequent_liquidation(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1228,8 +1036,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -1237,8 +1043,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -1253,8 +1057,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $firstLiqRes = $this->actingAsTenantAdmin()
 
@@ -1274,13 +1076,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $firstLiqRes->assertCreated();
 
         $this->rejectSubmission((string) $firstLiqRes->json('data.id'));
-
-
 
         $openResponse = $this->actingAsTenantAdmin()
 
@@ -1288,13 +1086,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->getJson('/api/v1/e-approval/cash-advances/open');
 
-
-
         $openResponse->assertOk();
 
         $openResponse->assertJsonPath('data.items.0.open_balance', 5000);
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1318,10 +1112,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
-    public function test_submit_draft_rejects_amount_over_open_balance(): void
-
+    public function test_submit_draft_allows_amount_over_released_cash(): void
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1338,8 +1129,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '5000',
@@ -1347,8 +1136,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -1365,8 +1152,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $draftRes = $this->actingAsTenantAdmin()
 
@@ -1388,13 +1173,9 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $draftRes->assertCreated();
 
         $draftId = (string) $draftRes->json('data.id');
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1414,16 +1195,11 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ])
 
-            ->assertUnprocessable()
-
-            ->assertJsonValidationErrors(['total_reimbursement']);
+            ->assertOk();
 
     }
 
-
-
     public function test_reimbursement_submits_without_parent_link(): void
-
     {
 
         $reimbFormId = $this->createPublishedForm(
@@ -1439,8 +1215,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'reimbursement'],
 
         );
-
-
 
         $this->actingAsTenantAdmin()
 
@@ -1464,10 +1238,7 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
     }
 
-
-
     public function test_parent_prefill_does_not_overwrite_user_document_no(): void
-
     {
 
         $caFormId = $this->createPublishedForm(
@@ -1484,8 +1255,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
         );
 
-
-
         $caSubmissionId = $this->createSubmission($caFormId, [
 
             'requested_amount' => '3000',
@@ -1493,8 +1262,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
         ]);
 
         $this->approveSubmission($caSubmissionId);
-
-
 
         $liqFormId = $this->createPublishedForm(
 
@@ -1511,8 +1278,6 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
 
         );
-
-
 
         $liqRes = $this->actingAsTenantAdmin()
 
@@ -1534,34 +1299,21 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $liqRes->assertCreated();
-
-
 
         $caRef = collect($liqRes->json('data.values'))
 
             ->firstWhere('field_name', 'cash_advance_document_no');
 
-
-
         $this->assertSame('USER-REF-001', $caRef['value'] ?? null);
 
     }
 
-
-
     /**
-
      * @param  list<array<string, mixed>>  $fields
-
      * @param  array<string, mixed>  $metadata
-
      */
-
     private function createPublishedForm(string $name, array $fields, array $metadata = []): string
-
     {
 
         $response = $this->actingAsTenantAdmin()
@@ -1588,31 +1340,19 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $response->assertCreated();
-
-
 
         return (string) $response->json('data.form.id');
 
     }
 
-
-
     /**
-
      * @param  array<string, mixed>  $values
-
      */
-
     private function createSubmission(string $formId, array $values, ?TenantUser $actor = null): string
-
     {
 
         $actor ??= $this->testTenantAdmin;
-
-
 
         $response = $this->actingAs($actor)
 
@@ -1626,45 +1366,30 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ]);
 
-
-
         $response->assertCreated();
-
-
 
         return (string) $response->json('data.id');
 
     }
 
-
-
     private function approveSubmission(string $submissionId, ?TenantUser $approver = null): void
-
     {
 
         $this->decideSubmission($submissionId, 'approved', $approver);
 
     }
 
-
-
     private function rejectSubmission(string $submissionId, ?TenantUser $approver = null): void
-
     {
 
         $this->decideSubmission($submissionId, 'rejected', $approver);
 
     }
 
-
-
     private function decideSubmission(string $submissionId, string $decision, ?TenantUser $approver = null): void
-
     {
 
         $approver ??= $this->testTenantAdmin;
-
-
 
         $inbox = $this->actingAs($approver, 'sanctum')
 
@@ -1672,28 +1397,18 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
 
             ->getJson('/api/v1/e-approval/approvals?awaiting_me=1');
 
-
-
         $inbox->assertOk();
-
-
 
         $approvalId = collect($inbox->json('data'))
 
             ->firstWhere('submission_id', $submissionId)['id'] ?? $inbox->json('data.0.id');
 
-
-
         $this->assertNotEmpty($approvalId);
-
-
 
         $payload = ['decision' => $decision];
         if ($decision === 'rejected') {
             $payload['remarks'] = 'Rejected for test';
         }
-
-
 
         $this->actingAs($approver, 'sanctum')
 
@@ -1704,6 +1419,4 @@ final class EApprovalSubmissionParentLinkTest extends TestCase
             ->assertOk();
 
     }
-
 }
-

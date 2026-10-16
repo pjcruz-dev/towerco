@@ -7,7 +7,6 @@ namespace App\Modules\AiAssistant\Services;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\AskAssistantInput;
 use App\Modules\AiAssistant\DTOs\AskAssistantResult;
-use App\Modules\AiAssistant\DTOs\RetrievedKnowledgeChunk;
 use App\Modules\AiAssistant\DTOs\ToolPlan;
 use App\Modules\AiAssistant\DTOs\ToolResult;
 use App\Modules\AiAssistant\Models\AiAssistantProposedAction;
@@ -17,48 +16,67 @@ use App\Modules\AiAssistant\Services\Tools\AssistantToolExecutor;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolFallbackPlanner;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRouter;
 use App\Modules\AiAssistant\Support\AssistantAskStatus;
-use App\Modules\AiAssistant\Support\AssistantChunkRanker;
+use App\Modules\AiAssistant\Support\AssistantAudience;
 use App\Modules\AiAssistant\Support\AssistantCostEstimator;
 use App\Modules\AiAssistant\Support\AssistantModuleSuggestionCatalog;
 use App\Modules\AiAssistant\Support\AssistantPromptBuilder;
 use App\Modules\AiAssistant\Support\AssistantProviderErrorClassifier;
-use App\Modules\AiAssistant\Support\AssistantRelevanceGate;
+use App\Modules\AiAssistant\Support\AssistantRolePolicy;
+use App\Modules\AiAssistant\Support\AssistantWorkLog;
 use App\Modules\AiAssistant\Support\PromptSecurityService;
 use App\Modules\Identity\Models\TenantUser;
-use App\Modules\Tenancy\Support\TenantEnabledModulesResolver;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Tenant-aware assistant orchestration with RAG + optional read-only tools + grounded LLM.
+ * Tenant-aware assistant orchestration: catalog operations, live tools, and the API model.
  */
 final class AssistantService
 {
     public function __construct(
         private readonly ConversationService $conversations,
-        private readonly KnowledgeRetrievalService $retrieval,
         private readonly AssistantPromptBuilder $prompts,
         private readonly LlmProviderInterface $llm,
         private readonly PromptSecurityService $security,
-        private readonly KnowledgeCatalogService $catalog,
-        private readonly TenantEnabledModulesResolver $enabledModules,
         private readonly AssistantToolRouter $toolRouter,
         private readonly AssistantToolFallbackPlanner $toolFallback,
         private readonly AssistantToolExecutor $toolExecutor,
         private readonly AssistantActionService $actions,
-        private readonly AssistantChunkRanker $chunkRanker = new AssistantChunkRanker,
-        private readonly AssistantRelevanceGate $relevance = new AssistantRelevanceGate,
+        private readonly AssistantCatalogRunner $catalogRunner,
+        private readonly AssistantRolePolicy $rolePolicy,
     ) {}
 
-    public function ask(TenantUser $viewer, AskAssistantInput $input): AskAssistantResult
+    private string $streamedThought = '';
+
+    /**
+     * @var list<array{id: string, kind: string, title: string, detail: string|null, status: string}>
+     */
+    private array $llmTrace = [];
+
+    /**
+     * @param  (callable(array{kind: string, text: string, name?: string, status?: string}): void)|null  $onDelta
+     */
+    public function ask(TenantUser $viewer, AskAssistantInput $input, ?callable $onProgress = null, ?callable $onDelta = null): AskAssistantResult
     {
         abort_unless((bool) config('ai_assistant.enabled', true), 503, __('AI Assistant is disabled.'));
 
         $safeQuestion = $this->security->sanitizeUserText($input->question);
+        $this->streamedThought = '';
+        $this->llmTrace = [];
 
-        return DB::transaction(function () use ($viewer, $input, $safeQuestion): AskAssistantResult {
+        return DB::transaction(function () use ($viewer, $input, $safeQuestion, $onProgress, $onDelta): AskAssistantResult {
+            $emit = function (array $delta) use ($onDelta): void {
+                if (($delta['kind'] ?? '') === 'thinking') {
+                    $this->streamedThought .= (string) ($delta['text'] ?? '');
+                }
+                if ($onDelta !== null) {
+                    $onDelta($delta);
+                }
+            };
+
             $conversation = $this->conversations->findOrCreateForAsk($viewer, $input->conversationId, [
                 'question' => $safeQuestion,
                 'module_context' => $input->moduleContext,
@@ -72,14 +90,114 @@ final class AssistantService
                 $conversation->page_path = $input->pagePath;
             }
 
+            $this->reportProgress($onProgress, 'question', 'model', 'Reading your question', 'done');
+
+            if ($this->rolePolicy->blocksAssistant($viewer)) {
+                return $this->finalizeActionValidationAsk(
+                    viewer: $viewer,
+                    conversation: $conversation,
+                    message: 'The assistant is turned off for your role. An administrator can change that under Role Management, on the AI Assistant tab.',
+                    modelName: $this->llm->modelName(),
+                );
+            }
+            $roleNote = $this->rolePolicy->promptConstraint($viewer);
+
             $userMessage = $this->conversations->storeUserMessage($conversation, $safeQuestion);
             $history = $this->conversations->recentTurns($conversation, (string) $userMessage->id);
 
             $moduleContext = $input->moduleContext ?? $conversation->module_context;
             $pagePath = $input->pagePath ?? $conversation->page_path;
 
+            $adminBuilder = AssistantAudience::isTenantAdmin($viewer);
+            $catalogToolResults = null;
+
+            // Tenant admins choose from the live catalog. Other users keep the sentence router.
+            if ($adminBuilder && ! $input->planMode) {
+                try {
+                    $catalogRun = $this->catalogRunner->run(
+                        viewer: $viewer,
+                        question: $safeQuestion,
+                        moduleContext: is_string($moduleContext) ? $moduleContext : null,
+                        conversationId: (string) $conversation->id,
+                        history: $history,
+                        preferredModel: $input->preferredModel,
+                        onProgress: function (array $step) use ($onProgress): void {
+                            $this->rememberLlmStep($step);
+                            if ($onProgress !== null) {
+                                $onProgress($step);
+                            }
+                        },
+                        onDelta: $emit,
+                        roleNote: $roleNote,
+                    );
+                } catch (ValidationException $e) {
+                    return $this->finalizeActionValidationAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        message: (string) collect($e->errors())->flatten()->first(),
+                        modelName: (is_string($input->preferredModel) && $input->preferredModel !== '')
+                            ? $input->preferredModel
+                            : $this->llm->modelName(),
+                    );
+                } catch (Throwable $e) {
+                    $providerFailure = $this->providerFailureFrom($e);
+                    if ($providerFailure === null) {
+                        throw $e;
+                    }
+
+                    return $this->finalizeProviderFailureAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        failure: $providerFailure,
+                        modelName: $this->llm->modelName(),
+                    );
+                }
+
+                if (is_string($catalogRun->executedSummary) && $catalogRun->executedSummary !== '') {
+                    $this->reportProgress(
+                        $onProgress,
+                        'action',
+                        'action',
+                        'Saved the change',
+                        'done',
+                        $catalogRun->executedSummary,
+                    );
+
+                    return $this->finalizeActionValidationAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        message: $catalogRun->executedSummary,
+                        modelName: (is_string($input->preferredModel) && $input->preferredModel !== '')
+                            ? $input->preferredModel
+                            : $this->llm->modelName(),
+                    );
+                }
+
+                if ($catalogRun->proposedAction !== null) {
+                    $this->reportProgress(
+                        $onProgress,
+                        'action',
+                        'action',
+                        'Prepared a change for you to confirm',
+                        'done',
+                        'Nothing has been saved yet.',
+                    );
+
+                    return $this->finalizeActionOnlyAsk(
+                        viewer: $viewer,
+                        conversation: $conversation,
+                        proposedAction: $catalogRun->proposedAction,
+                        modelName: (is_string($input->preferredModel) && $input->preferredModel !== '')
+                            ? $input->preferredModel
+                            : $this->llm->modelName(),
+                    );
+                }
+
+                $catalogToolResults = $catalogRun->toolResults;
+            }
+
             // Write actions (report builder, tickets, etc.) skip chat LLM — they use domain services directly.
-            if (! $input->planMode) {
+            if ($catalogToolResults === null && ! $input->planMode) {
                 try {
                     $earlyAction = $this->actions->maybePropose(
                         viewer: $viewer,
@@ -100,6 +218,15 @@ final class AssistantService
                     );
                 }
                 if ($earlyAction !== null) {
+                    $this->reportProgress(
+                        $onProgress,
+                        'action',
+                        'action',
+                        'Prepared a change for you to confirm',
+                        'done',
+                        'Nothing has been saved yet.',
+                    );
+
                     return $this->finalizeActionOnlyAsk(
                         viewer: $viewer,
                         conversation: $conversation,
@@ -111,23 +238,51 @@ final class AssistantService
                 }
             }
 
-            // Stage 1: deterministic heuristic router.
-            $plan = $this->toolRouter->plan($safeQuestion, $moduleContext);
-            if (! (bool) config('ai_assistant.retrieval.enabled', false) && $plan->mode === ToolPlan::MODE_BOTH) {
+            // Stage 1: deterministic heuristic router. Admin builder already chose from the catalog.
+            if ($catalogToolResults !== null) {
+                $plan = new ToolPlan(
+                    $catalogToolResults !== [] ? ToolPlan::MODE_BOTH : ToolPlan::MODE_DOCS,
+                );
+            } else {
+                $plan = $this->toolRouter->plan($safeQuestion, $moduleContext);
+            }
+            if ($plan->mode === ToolPlan::MODE_BOTH) {
                 $plan = new ToolPlan(ToolPlan::MODE_TOOLS, $plan->calls);
             }
 
             // Stage 2: allowlisted fallback when heuristics miss (follow-ups / module bias).
-            if (! $plan->useTools()) {
+            if ($catalogToolResults === null && ! $plan->useTools()) {
                 $fallback = $this->toolFallback->plan($safeQuestion, $moduleContext, $history);
                 if ($fallback instanceof ToolPlan && $fallback->useTools()) {
                     $plan = $fallback;
                 }
             }
 
-            $toolResults = [];
-            if ($plan->useTools()) {
+            $toolResults = $catalogToolResults ?? [];
+            if ($catalogToolResults === null && $plan->useTools()) {
+                foreach ($plan->calls as $index => $call) {
+                    $this->reportProgress(
+                        $onProgress,
+                        'tool-'.$index,
+                        'tool',
+                        'Running '.$this->toolStepLabel($call->tool),
+                        'running',
+                    );
+                }
                 $toolResults = $this->toolExecutor->executeMany($viewer, $plan->calls);
+                foreach ($toolResults as $index => $result) {
+                    $detail = $result->ok
+                        ? ($result->rowCount > 0 ? $result->rowCount.' '.Str::plural('row', $result->rowCount) : 'Finished.')
+                        : trim((string) ($result->error ?? 'The tool did not finish.'));
+                    $this->reportProgress(
+                        $onProgress,
+                        'tool-'.$index,
+                        'tool',
+                        'Ran '.$this->toolStepLabel($result->tool),
+                        $result->ok ? 'done' : 'failed',
+                        $detail !== '' ? $detail : null,
+                    );
+                }
             }
 
             $successfulTools = array_values(array_filter(
@@ -138,40 +293,7 @@ final class AssistantService
 
             $chunks = [];
             $providerFailure = null;
-            $retrievalEnabled = (bool) config('ai_assistant.retrieval.enabled', false);
-            if ($retrievalEnabled && $input->useRetrieval === false) {
-                $retrievalEnabled = false;
-            }
-            if ($plan->useDocs() && $retrievalEnabled) {
-                try {
-                    $chunks = $this->retrieval->retrieve($viewer, $safeQuestion, null, $moduleContext, $pagePath);
-                    $chunks = $this->chunkRanker->rank($chunks, $safeQuestion, $moduleContext, $pagePath);
-                    $chunks = $this->relevance->filter($chunks, $safeQuestion);
-                    $chunks = $this->limitChunksForIntent($chunks, $safeQuestion);
-                } catch (Throwable $e) {
-                    $providerFailure = $this->providerFailureFrom($e);
-                    if ($providerFailure === null) {
-                        throw $e;
-                    }
-
-                    Log::warning('ai_assistant.ask.retrieval_failed', $this->security->sanitizeLogPayload([
-                        'tenant_id' => tenant()?->getTenantKey(),
-                        'user_id' => (string) $viewer->id,
-                        'error' => $e->getMessage(),
-                        'error_code' => $providerFailure['error_code'],
-                    ]));
-                }
-            }
-
-            $undocumentedModule = $retrievalEnabled ? $this->undocumentedEnabledModule($moduleContext) : null;
             $notes = [];
-            if ($retrievalEnabled && $undocumentedModule !== null && $chunks === [] && ! $usedLiveData) {
-                $notes[] = sprintf(
-                    "The '%s' module is enabled for this tenant, but no help guide has been published yet. "
-                    .'Tell the user honestly that the guide is not published yet and suggest a tenant admin publish one. Do not invent steps.',
-                    $undocumentedModule,
-                );
-            }
             if ($usedLiveData) {
                 $notes[] = 'Live system data was retrieved via allowlisted read-only tools. Prefer it for current operational facts.';
             }
@@ -180,6 +302,9 @@ final class AssistantService
             }
             if ($input->planMode) {
                 $notes[] = 'PLAN MODE: Reply with a clear numbered implementation / fix plan only. Do not claim work was executed. Do not propose write actions yet.';
+            }
+            if ($roleNote !== '') {
+                $notes[] = $roleNote;
             }
 
             $prompt = $this->prompts->build(
@@ -191,10 +316,12 @@ final class AssistantService
                 $toolResults,
                 $history,
                 $input->preferredModel,
+                AssistantAudience::isTenantAdmin($viewer),
             );
 
             $errorCode = null;
             $providerNotice = null;
+            $askedModel = $providerFailure === null;
 
             if ($providerFailure !== null) {
                 $status = $providerFailure['status'];
@@ -207,19 +334,31 @@ final class AssistantService
                 $errorCode = $providerFailure['error_code'];
                 $providerNotice = $providerFailure['provider_notice'];
             } else {
+                $modelLabel = $this->liveModelLabel($input);
+                $this->reportProgress($onProgress, 'model', 'model', 'Asking '.$modelLabel, 'running', 'Starting');
+                if ($this->llm instanceof CursorLlmProvider) {
+                    $this->llm->listenToDeltas($emit);
+                    $this->llm->listenWhileWaiting(function (string $status) use ($onProgress, $modelLabel): void {
+                        $phase = match (strtoupper($status)) {
+                            'CREATING' => 'Starting',
+                            'RUNNING' => 'Working',
+                            'FINISHED' => 'Finishing',
+                            default => $status !== '' ? ucfirst(strtolower($status)) : 'Working',
+                        };
+                        $this->reportProgress(
+                            $onProgress,
+                            'model',
+                            'model',
+                            'Asking '.$modelLabel,
+                            'running',
+                            $phase,
+                        );
+                    });
+                }
                 try {
                     $completion = $this->llm->complete($prompt);
-                    $provider = strtolower((string) config('ai_assistant.llm_provider', 'local'));
-                    $cloudLlm = ! in_array($provider, ['local', 'fake'], true);
-                    $hasGrounding = $chunks !== [] || $usedLiveData;
-                    // Cloud LLMs (Gemini/OpenAI/…) answer without a tenant knowledge base.
-                    $status = (! $cloudLlm && ($completion->insufficientContext || (! $hasGrounding && $toolResults === [])))
-                        ? AssistantAskStatus::INSUFFICIENT_CONTEXT
-                        : AssistantAskStatus::COMPLETED;
+                    $status = AssistantAskStatus::COMPLETED;
                     $answer = $completion->answer;
-                    if (! $cloudLlm && ! $hasGrounding && $undocumentedModule !== null) {
-                        $answer = $this->guideNotPublishedAnswer($undocumentedModule);
-                    }
                     $modelName = $completion->modelName;
                     $promptTokens = $completion->promptTokens;
                     $completionTokens = $completion->completionTokens;
@@ -248,18 +387,36 @@ final class AssistantService
                     $completionTokens = null;
                     $latencyMs = null;
                     $followups = [];
+                } finally {
+                    if ($this->llm instanceof CursorLlmProvider) {
+                        $this->llm->listenWhileWaiting(null);
+                        $this->llm->listenToDeltas(null);
+                    }
                 }
             }
 
-            $docCitations = array_map(
-                static fn (RetrievedKnowledgeChunk $chunk): array => $chunk->toCitationArray(),
-                $chunks,
-            );
+            if ($askedModel) {
+                $modelFailedNow = ! in_array($status, [
+                    AssistantAskStatus::COMPLETED,
+                    AssistantAskStatus::INSUFFICIENT_CONTEXT,
+                ], true);
+                $this->reportProgress(
+                    $onProgress,
+                    'model',
+                    'model',
+                    $modelFailedNow ? 'Model request failed' : 'Asked '.$modelName,
+                    $modelFailedNow ? 'failed' : 'done',
+                    $modelFailedNow
+                        ? null
+                        : ($latencyMs !== null ? 'Finished in '.number_format($latencyMs / 1000, 1).'s' : 'Finished.'),
+                );
+            }
+
             $liveCitations = array_map(
                 static fn (ToolResult $result): array => $result->toCitationArray(),
                 $successfulTools,
             );
-            $citations = array_values(array_merge($liveCitations, $docCitations));
+            $citations = array_values($liveCitations);
 
             $relatedLinks = $this->mergeRelatedLinks($chunks, $successfulTools);
             if ($followups === []) {
@@ -278,7 +435,7 @@ final class AssistantService
             );
 
             $proposedAction = null;
-            if (! $input->planMode) {
+            if ($catalogToolResults === null && ! $input->planMode) {
                 $proposedAction = $this->actions->maybePropose(
                     viewer: $viewer,
                     question: $safeQuestion,
@@ -289,6 +446,14 @@ final class AssistantService
                 );
 
                 if ($proposedAction !== null) {
+                    $this->reportProgress(
+                        $onProgress,
+                        'action',
+                        'action',
+                        'Prepared a change for you to confirm',
+                        'done',
+                        'Nothing has been saved yet.',
+                    );
                     $status = AssistantAskStatus::COMPLETED;
                     $answer = ($proposedAction['summary'] ?? 'I prepared an action for your review.')
                         ."\n\nNothing has been saved yet — confirm in the card below to proceed.";
@@ -299,6 +464,22 @@ final class AssistantService
                     $proposedAction['message_id'] = (string) $assistantMessage->id;
                 }
             }
+
+            $activity = AssistantWorkLog::build(
+                searched: false,
+                searchFailed: false,
+                chunkTitles: [],
+                toolResults: $toolResults,
+                modelName: $askedModel ? $modelName : null,
+                latencyMs: $latencyMs,
+                modelFailed: $askedModel && ! in_array($status, [
+                    AssistantAskStatus::COMPLETED,
+                    AssistantAskStatus::INSUFFICIENT_CONTEXT,
+                ], true),
+                proposedAction: $proposedAction,
+            );
+            $activity = $this->withThought($activity);
+            $assistantMessage->forceFill(['activity' => $activity])->save();
 
             $conversation->forceFill([
                 'last_message_at' => now(),
@@ -342,7 +523,9 @@ final class AssistantService
                     $completionTokens,
                     $prompt->user ?? $safeQuestion,
                     $answer,
+                    $modelName,
                 ),
+                activity: $activity,
             );
         });
     }
@@ -359,12 +542,25 @@ final class AssistantService
         $answer = ($proposedAction['summary'] ?? 'I prepared an action for your review.')
             ."\n\nNothing has been saved yet — confirm in the card below to proceed.";
 
+        $activity = AssistantWorkLog::build(
+            searched: false,
+            searchFailed: false,
+            chunkTitles: [],
+            toolResults: [],
+            modelName: null,
+            latencyMs: null,
+            modelFailed: false,
+            proposedAction: $proposedAction,
+        );
+        $activity = $this->withThought($activity);
+
         $assistantMessage = $this->conversations->storeAssistantMessage(
             conversation: $conversation,
             content: $answer,
             status: AssistantAskStatus::COMPLETED,
             citations: [],
             modelName: $modelName,
+            activity: $activity,
         );
 
         AiAssistantProposedAction::query()
@@ -406,25 +602,106 @@ final class AssistantService
             modelName: $modelName,
             usedLiveData: false,
             proposedAction: $proposedAction,
+            activity: $activity,
         );
     }
 
+    /**
+     * @param  array{status: string, answer: string, error_code: string, provider_notice: array<string, string>}  $failure
+     */
+    private function finalizeProviderFailureAsk(
+        TenantUser $viewer,
+        AiConversation $conversation,
+        array $failure,
+        string $modelName,
+    ): AskAssistantResult {
+        $activity = AssistantWorkLog::build(
+            searched: false,
+            searchFailed: false,
+            chunkTitles: [],
+            toolResults: [],
+            modelName: $modelName,
+            latencyMs: null,
+            modelFailed: true,
+            blockedDetail: $failure['answer'],
+        );
+        $activity = $this->withThought($activity);
+
+        $assistantMessage = $this->conversations->storeAssistantMessage(
+            conversation: $conversation,
+            content: $failure['answer'],
+            status: $failure['status'],
+            citations: [],
+            modelName: $modelName,
+            activity: $activity,
+        );
+
+        $conversation->forceFill([
+            'last_message_at' => now(),
+        ])->save();
+
+        $this->conversations->recordAskAudit($viewer, $conversation, $assistantMessage);
+
+        return new AskAssistantResult(
+            conversationId: (string) $conversation->id,
+            messageId: (string) $assistantMessage->id,
+            answer: $failure['answer'],
+            citations: [],
+            status: $failure['status'],
+            suggestedFollowups: [],
+            relatedLinks: [],
+            modelName: $modelName,
+            usedLiveData: false,
+            proposedAction: null,
+            errorCode: $failure['error_code'],
+            providerNotice: $failure['provider_notice'],
+            activity: $activity,
+        );
+    }
+
+    /**
+     * @param  list<ToolResult>  $toolResults
+     */
     private function finalizeActionValidationAsk(
         TenantUser $viewer,
         AiConversation $conversation,
         string $message,
         string $modelName,
+        array $toolResults = [],
+        bool $usedLiveData = false,
     ): AskAssistantResult {
         $answer = trim($message) !== ''
             ? $message
             : 'I could not prepare that action. Check the email and role name, then try again.';
 
+        $activity = AssistantWorkLog::build(
+            searched: false,
+            searchFailed: false,
+            chunkTitles: [],
+            toolResults: $toolResults,
+            modelName: $toolResults === [] ? null : $modelName,
+            latencyMs: null,
+            modelFailed: false,
+            blockedDetail: $toolResults === [] ? $answer : null,
+        );
+        $activity = $this->withThought($activity);
+
+        $citations = [];
+        if ($usedLiveData) {
+            foreach ($toolResults as $result) {
+                if ($result->ok) {
+                    $citations[] = $result->toCitationArray();
+                }
+            }
+        }
+
         $assistantMessage = $this->conversations->storeAssistantMessage(
             conversation: $conversation,
             content: $answer,
             status: AssistantAskStatus::COMPLETED,
-            citations: [],
+            citations: $citations,
             modelName: $modelName,
+            activity: $activity,
         );
 
         $conversation->forceFill([
@@ -437,13 +714,14 @@ final class AssistantService
             conversationId: (string) $conversation->id,
             messageId: (string) $assistantMessage->id,
             answer: $answer,
-            citations: [],
+            citations: $citations,
             status: AssistantAskStatus::COMPLETED,
             suggestedFollowups: [],
             relatedLinks: [],
             modelName: $modelName,
-            usedLiveData: false,
+            usedLiveData: $usedLiveData,
             proposedAction: null,
+            activity: $activity,
         );
     }
 
@@ -471,38 +749,13 @@ final class AssistantService
         ];
     }
 
-    private function undocumentedEnabledModule(?string $moduleContext): ?string
-    {
-        if ($moduleContext === null || $moduleContext === '') {
-            return null;
-        }
-
-        $enabled = $this->enabledModules->resolveForCurrentTenant();
-        if (! in_array($moduleContext, $enabled, true)) {
-            return null;
-        }
-
-        $publishedModules = $this->catalog->publishedModuleKeysForCurrentTenant();
-
-        return in_array($moduleContext, $publishedModules, true) ? null : $moduleContext;
-    }
-
-    private function guideNotPublishedAnswer(string $moduleKey): string
-    {
-        return sprintf(
-            'The "%s" module is enabled for your tenant, but its help guide has not been published yet. '
-            .'I will not invent steps. Ask a tenant admin to publish a help pack or a tenant knowledge article for this module.',
-            $moduleKey,
-        );
-    }
-
     /**
-     * @param  list<RetrievedKnowledgeChunk>  $chunks
      * @param  list<ToolResult>  $tools
      * @return list<array{label: string, href: string}>
      */
     private function mergeRelatedLinks(array $chunks, array $tools): array
     {
+        unset($chunks);
         $links = [];
         $seen = [];
 
@@ -519,96 +772,199 @@ final class AssistantService
             }
         }
 
-        foreach ($chunks as $chunk) {
-            foreach ($chunk->relatedRoutes as $href) {
-                if (isset($seen[$href])) {
-                    continue;
-                }
-                $seen[$href] = true;
-                $links[] = [
-                    'label' => $this->labelForRoute($href),
-                    'href' => $href,
-                ];
-            }
-        }
-
         return array_slice($links, 0, 8);
     }
 
-    private function labelForRoute(string $href): string
-    {
-        $path = parse_url($href, PHP_URL_PATH) ?: $href;
-        $path = rtrim($path, '/') ?: '/';
-
-        return match (true) {
-            $path === '/e-approval/submissions/new' => 'New E-Forms submission',
-            $path === '/e-approval/submissions' => 'E-Forms submissions',
-            str_starts_with($path, '/e-approval/approvals') => 'E-Forms approvals',
-            $path === '/e-approval' => 'E-Forms',
-            default => $href,
-        };
-    }
-
     /**
-     * @param  list<RetrievedKnowledgeChunk>  $chunks
-     * @return list<RetrievedKnowledgeChunk>
-     */
-    private function limitChunksForIntent(array $chunks, string $question): array
-    {
-        $intent = $this->chunkRanker->detectIntent($question);
-        if ($intent === 'submit') {
-            $filtered = array_values(array_filter(
-                $chunks,
-                fn (RetrievedKnowledgeChunk $chunk): bool => ! $this->chunkRanker->looksLikeApproveGuide($chunk),
-            ));
-            if ($filtered !== []) {
-                $chunks = $filtered;
-            }
-        }
-
-        return array_slice($chunks, 0, 3);
-    }
-
-    /**
-     * @param  list<RetrievedKnowledgeChunk>  $chunks
+     * @param  list<mixed>  $chunks
      * @return list<string>
      */
     private function defaultFollowups(array $chunks, bool $usedLiveData, ?string $moduleContext): array
     {
+        unset($chunks);
         $catalog = new AssistantModuleSuggestionCatalog;
         $moduleSuggestions = $catalog->forModule($moduleContext);
 
-        if ($chunks === [] && ! $usedLiveData) {
+        if (! $usedLiveData) {
             return $moduleSuggestions;
         }
 
-        if ($usedLiveData && $chunks === []) {
-            return array_values(array_unique(array_merge([
-                'What else is waiting for my approval?',
-                'Show my open tickets',
-                'How do I create an E-Forms request?',
-            ], array_slice($moduleSuggestions, 0, 1))));
+        return array_values(array_unique(array_merge([
+            'What else is waiting for my approval?',
+            'Show my open tickets',
+            'How do I create an E-Forms request?',
+        ], array_slice($moduleSuggestions, 0, 1))));
+    }
+
+    private function liveModelLabel(AskAssistantInput $input): string
+    {
+        $preferred = is_string($input->preferredModel) ? trim($input->preferredModel) : '';
+
+        return $preferred !== '' ? $preferred : $this->llm->modelName();
+    }
+
+    private function toolStepLabel(string $tool): string
+    {
+        $label = trim(Str::headline(str_replace('_', ' ', $tool)));
+
+        return $label !== '' ? $label : $tool;
+    }
+
+    /**
+     * @param  (callable(array{id: string, kind: string, title: string, status: string, detail: string|null}): void)|null  $onProgress
+     */
+    /**
+     * @param  list<array{id: string, kind: string, title: string, detail: string|null, status: string}>  $activity
+     * @return list<array{id: string, kind: string, title: string, detail: string|null, status: string}>
+     */
+    private function withThought(array $activity): array
+    {
+        $trace = array_values(array_filter(
+            $this->llmTrace,
+            static fn (array $step): bool => ($step['status'] ?? '') !== 'running',
+        ));
+        if ($this->traceIsLlmWork($trace)) {
+            if (! $this->traceHasThought($trace)) {
+                $text = $this->proseThought($this->streamedThought);
+                if ($text !== '') {
+                    array_unshift($trace, [
+                        'id' => 'thought',
+                        'kind' => 'thought',
+                        'title' => 'Thinking',
+                        'detail' => $text,
+                        'status' => 'done',
+                    ]);
+                }
+            }
+
+            return $trace;
         }
 
-        $followups = [];
-        foreach ($chunks as $chunk) {
-            if ($chunk->title !== '') {
-                $followups[] = 'Tell me more about: '.$chunk->title;
-            }
-            if (count($followups) >= 2) {
-                break;
+        $text = $this->proseThought($this->streamedThought);
+        if ($text === '') {
+            return $activity;
+        }
+
+        array_unshift($activity, [
+            'id' => 'thought',
+            'kind' => 'thought',
+            'title' => 'Thinking',
+            'detail' => $text,
+            'status' => 'done',
+        ]);
+
+        return $activity;
+    }
+
+    /**
+     * @param  array{id: string, kind: string, title: string, status: string, detail: string|null}  $step
+     */
+    private function rememberLlmStep(array $step): void
+    {
+        $kind = (string) ($step['kind'] ?? '');
+        if (! in_array($kind, ['thought', 'tool', 'action'], true)) {
+            return;
+        }
+        $id = (string) ($step['id'] ?? '');
+        if ($id === '') {
+            return;
+        }
+
+        foreach ($this->llmTrace as $index => $existing) {
+            if ($existing['id'] === $id) {
+                $this->llmTrace[$index] = [
+                    'id' => $id,
+                    'kind' => $kind,
+                    'title' => (string) ($step['title'] ?? ''),
+                    'detail' => isset($step['detail']) ? (is_string($step['detail']) ? $step['detail'] : null) : null,
+                    'status' => (string) ($step['status'] ?? 'done'),
+                ];
+
+                return;
             }
         }
 
-        foreach ($moduleSuggestions as $suggestion) {
-            if (! in_array($suggestion, $followups, true)) {
-                $followups[] = $suggestion;
-            }
-            if (count($followups) >= 3) {
-                break;
+        $this->llmTrace[] = [
+            'id' => $id,
+            'kind' => $kind,
+            'title' => (string) ($step['title'] ?? ''),
+            'detail' => isset($step['detail']) ? (is_string($step['detail']) ? $step['detail'] : null) : null,
+            'status' => (string) ($step['status'] ?? 'done'),
+        ];
+    }
+
+    /**
+     * @param  list<array{id: string, kind: string, title: string, detail: string|null, status: string}>  $trace
+     */
+    private function traceIsLlmWork(array $trace): bool
+    {
+        foreach ($trace as $step) {
+            if (in_array($step['kind'], ['tool', 'thought', 'action'], true)) {
+                return true;
             }
         }
 
-        return array_slice($followups, 0, 3);
+        return false;
+    }
+
+    /**
+     * @param  list<array{id: string, kind: string, title: string, detail: string|null, status: string}>  $trace
+     */
+    private function traceHasThought(array $trace): bool
+    {
+        foreach ($trace as $step) {
+            if ($step['kind'] === 'thought' && trim((string) ($step['detail'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function proseThought(string $text): string
+    {
+        $lines = preg_split('/\R/', trim($text)) ?: [];
+        $kept = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '```') || str_starts_with($line, '{') || str_starts_with($line, '[')) {
+                continue;
+            }
+            if (preg_match('/^\s*(select|insert|update|delete|with)\b/i', $line) === 1) {
+                continue;
+            }
+            $kept[] = $line;
+        }
+
+        $prose = trim(implode("\n", $kept));
+        if ($prose === '') {
+            return '';
+        }
+        if (mb_strlen($prose) > 1200) {
+            return mb_substr($prose, 0, 1199).'…';
+        }
+
+        return $prose;
+    }
+
+    private function reportProgress(
+        ?callable $onProgress,
+        string $id,
+        string $kind,
+        string $title,
+        string $status,
+        ?string $detail = null,
+    ): void {
+        if ($onProgress === null) {
+            return;
+        }
+
+        $onProgress([
+            'id' => $id,
+            'kind' => $kind,
+            'title' => $title,
+            'status' => $status,
+            'detail' => $detail,
+        ]);
     }
 }

@@ -67,6 +67,7 @@ const ENTITY_MODULE_ORDER = [
   "dynamic_entities",
   "e_approval",
   "ticketing",
+  "asset_management",
   "team_access",
   "ai_assistant",
 ];

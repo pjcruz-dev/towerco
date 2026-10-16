@@ -23,6 +23,7 @@ import {
   dynSelectChoiceBadgeClass,
   dynSelectChoiceLabel,
 } from "@/lib/dynamic-entities/select-choices";
+import { notify } from "@/lib/ui/notify";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -123,6 +124,11 @@ export function DynRelatedRecordsPanel({
     try {
       await deleteDynRecord(row.id);
       await load();
+      setError(null);
+      notify.success(
+        "Record deleted",
+        row.title?.trim() ? `“${row.title.trim()}” was deleted.` : `${label} was deleted.`,
+      );
     } catch (e) {
       setError(getErrorMessage(e) || "Delete failed.");
     } finally {

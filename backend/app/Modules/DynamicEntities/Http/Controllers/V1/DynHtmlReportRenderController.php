@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\DynamicEntities\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
-use App\Modules\AdminOne\Services\TenantSystemConfigService;
+use App\Models\Tenant;
 use App\Modules\DynamicEntities\Services\DynHtmlReportService;
 use App\Modules\DynamicEntities\Services\DynReportBuilderService;
+use App\Modules\DynamicEntities\Support\DynHtmlReportGuideShell;
 use App\Modules\DynamicEntities\Support\DynReportBuilderHtmlGenerator;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
@@ -24,7 +25,6 @@ class DynHtmlReportRenderController extends AbstractApiController
         string $slug,
         DynHtmlReportService $reports,
         DynReportBuilderService $builder,
-        TenantSystemConfigService $system,
     ): JsonResponse {
         abort_unless(
             $request->user()?->can('html_reports:manage')
@@ -34,11 +34,7 @@ class DynHtmlReportRenderController extends AbstractApiController
 
         $report = $reports->findBySlug($slug);
         $detail = $reports->show($report);
-        $sys = $system->get();
-        $company = (string) ($sys['config']['brand']['company_name'] ?? '');
-        if ($company === '') {
-            $company = (string) ($sys['tenant_slug'] ?? 'TowerOS');
-        }
+        $company = self::companyName();
 
         $tokens = [
             '{{system.company_name}}' => $company,
@@ -78,12 +74,16 @@ class DynHtmlReportRenderController extends AbstractApiController
             }
         }
 
-        $document = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
-            .htmlspecialchars((string) $detail['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-            .'</title><style>'.$css.'</style></head><body>'
-            .$html
-            .$embeddedData
-            .'<script>'.$js.'</script></body></html>';
+        if ($builderJson !== null && $builderJson !== []) {
+            $document = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'
+                .htmlspecialchars((string) $detail['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                .'</title><style>'.$css.'</style></head><body>'
+                .$html
+                .$embeddedData
+                .'<script>'.$js.'</script></body></html>';
+        } else {
+            $document = DynHtmlReportGuideShell::document((string) $detail['name'], $html, $css, $js);
+        }
 
         return $this->ok([
             'id' => $detail['id'],
@@ -95,5 +95,22 @@ class DynHtmlReportRenderController extends AbstractApiController
             'js_source' => $detail['js_source'],
             'has_builder' => $builderJson !== null && $builderJson !== [],
         ]);
+    }
+
+    private static function companyName(): string
+    {
+        $tenant = tenant();
+        if (! $tenant instanceof Tenant) {
+            return 'TowerOS';
+        }
+
+        $name = trim((string) ($tenant->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $slug = trim((string) ($tenant->slug ?? ''));
+
+        return $slug !== '' ? $slug : 'TowerOS';
     }
 }

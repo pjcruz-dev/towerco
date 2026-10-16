@@ -94,6 +94,17 @@ final class DynScheduledTaskCatalog
                 'module' => 'e_approval',
             ],
             [
+                'key' => 'documents_reports',
+                'name' => 'Document register scheduled reports',
+                'description' => 'Run saved document register report schedules and store the CSV.',
+                'schedule' => 'hourly',
+                'cron_expression' => '0 * * * *',
+                'artisan' => 'documents:reports-run-scheduled',
+                'execution_label' => 'documents:reports-run-scheduled',
+                'tenant_scoped' => true,
+                'module' => 'document_register',
+            ],
+            [
                 'key' => 'documents_expiry',
                 'name' => 'Document expiry',
                 'description' => 'Notify document controllers when a published controlled document is due for review in 90, 60, or 30 days.',

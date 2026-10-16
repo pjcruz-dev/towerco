@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalSiteStop;
 
 final class EApprovalSubmissionPrintService
 {
@@ -65,6 +66,7 @@ final class EApprovalSubmissionPrintService
         return [
             'document_no' => $submission->document_no,
             'form_name' => $submission->form?->name,
+            'form_family' => isset($formMetadata['form_family']) ? (string) $formMetadata['form_family'] : null,
             'status' => $submission->status,
             'requestor' => $submission->requestor?->name,
             'requestor_signature' => $submission->requestor_id
@@ -249,8 +251,12 @@ final class EApprovalSubmissionPrintService
             return [];
         }
 
+        $entries = is_array($decoded['rows'] ?? null)
+            ? $decoded['rows']
+            : (array_is_list($decoded) ? $decoded : []);
+
         $rows = [];
-        foreach ($decoded as $entry) {
+        foreach ($entries as $entry) {
             if (! is_array($entry)) {
                 continue;
             }
@@ -258,11 +264,11 @@ final class EApprovalSubmissionPrintService
             $labeled = [];
             if (array_is_list($entry)) {
                 foreach ($columns as $index => $label) {
-                    $labeled[$label] = isset($entry[$index]) ? (string) $entry[$index] : '';
+                    $labeled[$label] = $this->gridCellString($entry[$index] ?? '');
                 }
             } else {
                 foreach ($entry as $key => $value) {
-                    $labeled[(string) $key] = is_scalar($value) ? (string) $value : '';
+                    $labeled[(string) $key] = $this->gridCellString($value);
                 }
             }
 
@@ -272,6 +278,29 @@ final class EApprovalSubmissionPrintService
         return $rows;
     }
 
+    private function gridCellString(mixed $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '';
+        }
+
+        if (is_array($value)) {
+            $encoded = json_encode($value);
+
+            return is_string($encoded) ? $encoded : '';
+        }
+
+        return '';
+    }
+
     /**
      * @param  array<string, string>  $row
      */
@@ -279,7 +308,7 @@ final class EApprovalSubmissionPrintService
     {
         foreach ([$label, strtolower($label), (string) $index] as $key) {
             if (array_key_exists($key, $row)) {
-                return trim((string) $row[$key]);
+                return $this->displayGridCell(trim((string) $row[$key]));
             }
         }
 
@@ -289,10 +318,15 @@ final class EApprovalSubmissionPrintService
                 continue;
             }
 
-            return trim((string) $value);
+            return $this->displayGridCell(trim((string) $value));
         }
 
         return '';
+    }
+
+    private function displayGridCell(string $raw): string
+    {
+        return $this->valueDisplay->formatStoredDateRange($raw) ?? EApprovalSiteStop::display($raw);
     }
 
     private function isAmountColumn(string $label): bool

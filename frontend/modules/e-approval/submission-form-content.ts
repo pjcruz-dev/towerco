@@ -1,7 +1,11 @@
 import {
+  bindMoneyTotalsToGrids,
   buildChecklistMatrixReviewTable,
   buildGridReviewTable,
+  isGridMoneyTotalField,
+  moneyTotalSourceField,
   type ComposeReviewTable,
+  type ComposeReviewTotal,
 } from "@/modules/e-approval/form-compose-review";
 import { formatCurrencyGrouping } from "@/lib/format-currency-input";
 import { isComposeStructuralFieldType } from "@/modules/e-approval/form-compose-structural";
@@ -17,6 +21,7 @@ export type SubmissionFormContentItem = {
   value: SubmissionFormValueRow;
   formField: EApprovalFormFieldInput | null;
   table: ComposeReviewTable | null;
+  totals?: ComposeReviewTotal[];
   fullWidth: boolean;
 };
 
@@ -238,5 +243,64 @@ export function buildSubmissionFormContentGroups(
     }
   }
 
-  return groups.filter((group) => group.items.length > 0);
+  return alignGridMoneyTotals(groups.filter((group) => group.items.length > 0));
+}
+
+function alignGridMoneyTotals(groups: SubmissionFormContentGroup[]): SubmissionFormContentGroup[] {
+  const items = groups.flatMap((group) => group.items);
+  const grids = items.filter((item) => item.table && item.formField);
+  if (grids.length === 0) {
+    return groups;
+  }
+
+  const bindings = grids.map((item) => ({
+    item,
+    fieldName: item.formField?.name ?? "",
+    table: item.table,
+    totals: item.totals,
+  }));
+  const moneyItems = items.filter((item) => item.formField && isGridMoneyTotalField(item.formField));
+  const unmatched = new Set(
+    bindMoneyTotalsToGrids(
+      bindings,
+      moneyItems.flatMap((item) => {
+        const field = item.formField;
+        if (!field) {
+          return [];
+        }
+        return [
+          {
+            fieldName: field.name,
+            source: moneyTotalSourceField(field),
+            label: item.value.label?.trim() || field.label?.trim() || field.name,
+            value:
+              formatSubmissionCurrencyDisplay(item.value) ??
+              item.value.display_value ??
+              item.value.value ??
+              "—",
+          },
+        ];
+      }),
+    ),
+  );
+
+  for (const binding of bindings) {
+    binding.item.totals = binding.totals;
+  }
+
+  const hidden = new Set(
+    moneyItems
+      .filter((item) => item.formField && !unmatched.has(item.formField.name))
+      .map((item) => item.key),
+  );
+  if (hidden.size === 0) {
+    return groups;
+  }
+
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !hidden.has(item.key)),
+    }))
+    .filter((group) => group.items.length > 0);
 }

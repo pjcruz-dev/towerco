@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { environmentBadgeClass } from "@/components/platform/tenant-environment-sheet";
 import { PlatformDataTable } from "@/components/platform/platform-data-table";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { environmentStatusTone } from "@/components/ui/status-tone";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshingHint } from "@/components/ui/refreshing-hint";
@@ -283,9 +283,9 @@ export function PlatformScheduledTasksPageClient() {
                   id: "environment",
                   header: "Environment",
                   cell: (row) => (
-                    <Badge variant="outline" className={environmentBadgeClass(row.environment)}>
+                    <StatusBadge tone={environmentStatusTone(row.environment)}>
                       {row.environment || "—"}
-                    </Badge>
+                    </StatusBadge>
                   ),
                 },
                 { id: "domain", header: "Domain", cell: (row) =>

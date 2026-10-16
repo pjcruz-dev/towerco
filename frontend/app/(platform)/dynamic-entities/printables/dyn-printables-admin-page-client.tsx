@@ -26,6 +26,7 @@ import {
   type DynPrintTemplate,
 } from "@/lib/dynamic-entities/dyn-print-templates";
 import { permissions } from "@/lib/rbac/permissions";
+import { notify } from "@/lib/ui/notify";
 import { adminPageShellClass } from "@/lib/ui/page-shell";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +66,7 @@ export function DynPrintablesAdminPageClient() {
     setLoading(true);
     setError(null);
     try {
-      const list = await fetchDynEntities({ active_only: true });
+      const list = await fetchDynEntities({ active_only: true, print_bodies: true });
       const rows = Array.isArray(list) ? list : [];
       setEntities([...rows].sort((a, b) => a.name.localeCompare(b.name)));
     } catch (err) {
@@ -84,7 +85,7 @@ export function DynPrintablesAdminPageClient() {
       setLoading(true);
       setError(null);
       try {
-        const list = await fetchDynEntities({ active_only: true });
+        const list = await fetchDynEntities({ active_only: true, print_bodies: true });
         if (cancelled) return;
         const rows = Array.isArray(list) ? list : [];
         setEntities([...rows].sort((a, b) => a.name.localeCompare(b.name)));
@@ -153,6 +154,7 @@ export function DynPrintablesAdminPageClient() {
       print_settings_json: packPrintSettingsJson(
         templates,
         defaultId ?? entity.print_settings?.default_template_id ?? templates[0]?.id,
+        entity.print_settings?.seeded_template_ids,
       ),
     });
   }
@@ -172,6 +174,7 @@ export function DynPrintablesAdminPageClient() {
       // If entity only had auto-seeded empty default with no custom name history, keep both.
       const next = [...existing, created];
       await saveEntityTemplates(entity, next, created.id);
+      notify.success("Template created", created.name || entity.name);
       setNewOpen(false);
       setNewSlug("");
       setNewName("");
@@ -194,6 +197,7 @@ export function DynPrintablesAdminPageClient() {
       const copy = clonePrintTemplate(template);
       await saveEntityTemplates(entity, [...existing, copy], entity.print_settings?.default_template_id);
       await refresh();
+      notify.success("Template duplicated", templateDisplayName(template));
     } catch {
       setError("Unable to duplicate template.");
     } finally {
@@ -225,6 +229,7 @@ export function DynPrintablesAdminPageClient() {
           : entity.print_settings?.default_template_id;
       await saveEntityTemplates(entity, next, defaultId);
       await refresh();
+      notify.success("Template deleted", templateDisplayName(template));
       setSelected((prev) => {
         const n = new Set(prev);
         n.delete(key);
@@ -241,7 +246,7 @@ export function DynPrintablesAdminPageClient() {
     <PermissionGate requiredPermissions={[permissions.printablesManage]}>
       <div className={adminPageShellClass}>
         <WorkspacePageHeader
-          eyebrow="System Core"
+          eyebrow="Dynamic Entities"
           title="Manage Printables"
           description="Multiple templates per entity (e.g. Official Receipt + Disbursement Voucher)."
           actions={

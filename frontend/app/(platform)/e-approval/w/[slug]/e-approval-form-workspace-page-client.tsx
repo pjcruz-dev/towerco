@@ -417,7 +417,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
         enableSorting: sortable,
         cell: ({ row }) => {
           if (column.key === "status") {
-            return <EApprovalStatusBadge status={row.original.status} kind="submission" />;
+            return <EApprovalStatusBadge status={row.original.status} label={row.original.status_label} kind="submission" />;
           }
           if (column.key === "document_no") {
             return <span className="font-medium">{row.original.document_no}</span>;

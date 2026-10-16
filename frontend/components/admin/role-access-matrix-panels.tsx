@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ChevronDown, Settings2 } from "lucide-react";
 
 import { RoleDataFiltersDialog } from "@/components/admin/role-data-filters-dialog";
@@ -12,48 +12,43 @@ import type {
   RoleAccessMatrix,
   RoleDataFilterGroup,
 } from "@/lib/api/modules/admin-roles-api";
+import { FIELD_ACCESS_LEVELS } from "@/lib/rbac/field-surface-access";
+import { dynSelectChoiceLabel, dynSelectChoiceValues } from "@/lib/dynamic-entities/select-choices";
 import type { DynEntityDetail, DynEntitySummary, DynField } from "@/lib/api/modules/dynamic-entities-api";
 import { dynWorkflowActionsFromFields } from "@/lib/dynamic-entities/dyn-workflow-actions";
 import { cn } from "@/lib/utils";
 
 const ENTITY_COLS = [
-  { id: "view", label: "View" },
-  { id: "view_own", label: "View Own" },
-  { id: "create", label: "Create" },
-  { id: "edit", label: "Edit" },
-  { id: "delete", label: "Delete" },
-  { id: "export", label: "Export" },
+  { id: "view", label: "View", tone: "" },
+  { id: "view_own", label: "View Own", tone: "" },
+  { id: "create", label: "Create", tone: "" },
+  { id: "edit", label: "Edit", tone: "" },
+  { id: "delete", label: "Delete", tone: "" },
+  { id: "export", label: "Export", tone: "" },
+  { id: "import", label: "Import", tone: "text-info" },
+  { id: "smart_scan", label: "Smart Scan", tone: "text-info" },
+  { id: "undo", label: "Undo", tone: "text-warning" },
+  { id: "truncate", label: "Truncate", tone: "text-destructive" },
+  { id: "duplicate", label: "Duplicate", tone: "text-success" },
 ] as const;
 
-const FIELD_LEVELS: Array<{ value: FieldAccessLevel; label: string }> = [
-  { value: "full", label: "Full access" },
-  { value: "view", label: "View only (read-only)" },
-  { value: "table_record", label: "Table + Record view only" },
-  { value: "record", label: "Record view only" },
-  { value: "form", label: "Form only (fill-in)" },
-  { value: "hide", label: "Hide from this role" },
-];
-
-/** List chrome — Metacoresoft Field Level Security includes these (form/table/record ACL). */
-const LIST_CHROME_FIELD_NAMES = new Set(["id", "actions", "workflows", "print"]);
-
+/** Every stored field, including IT Ticket system fields and list chrome. */
 function isFieldLevelSecurityField(field: DynField): boolean {
-  if (LIST_CHROME_FIELD_NAMES.has(field.name)) return true;
-  if (field.name === "status") return true;
-  if (field.is_system_field) return false;
-  return true;
+  return field.name.trim() !== "";
 }
 
 type EntityAccessKey = (typeof ENTITY_COLS)[number]["id"];
 
 type Props = {
-  tab: "data" | "fields" | "workflow";
+  tab: "data" | "fields" | "workflow" | "status";
   roleName?: string;
   entities: DynEntitySummary[];
   entityDetails: Record<string, DynEntityDetail | undefined>;
   loadEntityDetail: (slug: string) => void;
   matrix: RoleAccessMatrix;
   filter: string;
+  entityGroup?: string;
+  groupByPack?: boolean;
   disabled?: boolean;
   onChange: (next: RoleAccessMatrix) => void;
 };
@@ -66,6 +61,11 @@ function defaultEntityAccess(hasManage: boolean): Record<EntityAccessKey, boolea
     edit: hasManage,
     delete: hasManage,
     export: true,
+    import: hasManage,
+    smart_scan: hasManage,
+    undo: hasManage,
+    truncate: hasManage,
+    duplicate: hasManage,
   };
 }
 
@@ -83,6 +83,8 @@ export function RoleAccessMatrixPanels({
   loadEntityDetail,
   matrix,
   filter,
+  entityGroup = "all",
+  groupByPack = false,
   disabled,
   onChange,
 }: Props) {
@@ -91,19 +93,25 @@ export function RoleAccessMatrixPanels({
   const needle = filter.trim().toLowerCase();
 
   const filteredEntities = useMemo(() => {
-    if (!needle) return entities;
-    return entities.filter((e) => {
-      if (e.name.toLowerCase().includes(needle) || e.slug.includes(needle)) return true;
-      if (tab !== "fields") return false;
-      const detail = entityDetails[e.slug];
-      if (!detail) return false;
-      return detail.fields.some(
-        (f) =>
-          isFieldLevelSecurityField(f) &&
-          (f.label.toLowerCase().includes(needle) || f.name.toLowerCase().includes(needle)),
-      );
-    });
-  }, [entities, entityDetails, needle, tab]);
+    const grouped = entityGroup === "all" ? entities : entities.filter((e) => e.module_pack === entityGroup);
+    const matched = !needle
+      ? grouped
+      : grouped.filter((e) => {
+          if (e.name.toLowerCase().includes(needle) || e.slug.includes(needle)) return true;
+          if (tab !== "fields") return false;
+          const detail = entityDetails[e.slug];
+          if (!detail) return false;
+          return detail.fields.some(
+            (f) =>
+              isFieldLevelSecurityField(f) &&
+              (f.label.toLowerCase().includes(needle) || f.name.toLowerCase().includes(needle)),
+          );
+        });
+    if (!groupByPack) return matched;
+    return [...matched].sort(
+      (a, b) => a.module_pack.localeCompare(b.module_pack) || a.name.localeCompare(b.name),
+    );
+  }, [entities, entityDetails, entityGroup, groupByPack, needle, tab]);
 
   function fieldsForEntity(detail: DynEntityDetail | undefined): DynField[] {
     if (!detail) return [];
@@ -123,13 +131,21 @@ export function RoleAccessMatrixPanels({
   function entityRow(slug: string): Record<EntityAccessKey, boolean> {
     const row = matrix.entities?.[slug];
     if (row) {
+      const create = Boolean(row.create);
+      const edit = Boolean(row.edit);
+      const del = Boolean(row.delete);
       return {
         view: Boolean(row.view),
         view_own: Boolean(row.view_own),
-        create: Boolean(row.create),
-        edit: Boolean(row.edit),
-        delete: Boolean(row.delete),
+        create,
+        edit,
+        delete: del,
         export: Boolean(row.export),
+        import: row.import ?? create,
+        smart_scan: row.smart_scan ?? create,
+        undo: row.undo ?? edit,
+        truncate: row.truncate ?? del,
+        duplicate: row.duplicate ?? create,
       };
     }
     return defaultEntityAccess(true);
@@ -167,8 +183,32 @@ export function RoleAccessMatrixPanels({
     const nextEntities = { ...(matrix.entities ?? {}) };
     for (const entity of filteredEntities) {
       nextEntities[entity.slug] = value
-        ? { view: true, view_own: false, create: true, edit: true, delete: true, export: true }
-        : { view: false, view_own: false, create: false, edit: false, delete: false, export: false };
+        ? {
+            view: true,
+            view_own: false,
+            create: true,
+            edit: true,
+            delete: true,
+            export: true,
+            import: true,
+            smart_scan: true,
+            undo: true,
+            truncate: true,
+            duplicate: true,
+          }
+        : {
+            view: false,
+            view_own: false,
+            create: false,
+            edit: false,
+            delete: false,
+            export: false,
+            import: false,
+            smart_scan: false,
+            undo: false,
+            truncate: false,
+            duplicate: false,
+          };
     }
     onChange({ ...matrix, entities: nextEntities });
   }
@@ -218,15 +258,16 @@ export function RoleAccessMatrixPanels({
 
   if (tab === "data") {
     return (
-      <div className="space-y-3">
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="shrink-0 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <strong className="font-medium text-foreground">View</strong> shows all records.{" "}
           <strong className="font-medium text-foreground">View Own</strong> limits to records the user
           created or is assigned (disables View). Use{" "}
           <strong className="font-medium text-foreground">Data Filters</strong> for field-level row
-          restrictions.
+          restrictions. Import, undo and duplicate are enforced on the record list. Smart Scan and
+          Truncate are saved on the role for those tools.
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             {needle
               ? `Bulk actions apply to ${filteredEntities.length} filtered entit${filteredEntities.length === 1 ? "y" : "ies"}.`
@@ -253,19 +294,26 @@ export function RoleAccessMatrixPanels({
             </Button>
           </div>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-medium text-muted-foreground">
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+          <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+            <thead className="text-left text-xs font-medium text-muted-foreground">
               <tr>
-                <th className="px-3 py-2.5">Entity Name</th>
+                <th className="sticky top-0 left-0 z-20 w-44 min-w-44 border-b border-r border-border bg-muted px-3 py-2 text-left">
+                  Entity Name
+                </th>
                 {ENTITY_COLS.map((col) => {
                   const allOn =
                     filteredEntities.length > 0 &&
                     filteredEntities.every((entity) => entityRow(entity.slug)[col.id]);
                   return (
-                    <th key={col.id} className="px-2 py-2.5 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span>{col.label}</span>
+                    <th
+                      key={col.id}
+                      className="sticky top-0 z-10 w-16 min-w-16 border-b border-border bg-muted px-1 py-2 text-center align-bottom"
+                    >
+                      <span className={cn("mb-1 block whitespace-normal text-[11px] leading-tight", col.tone)}>
+                        {col.label}
+                      </span>
+                      <div className="flex justify-center">
                         <Checkbox
                           checked={allOn}
                           disabled={disabled || filteredEntities.length === 0}
@@ -279,38 +327,58 @@ export function RoleAccessMatrixPanels({
                     </th>
                   );
                 })}
-                <th className="px-2 py-2.5 text-center">Data Filters</th>
+                <th className="sticky top-0 z-10 min-w-32 border-b border-border bg-muted px-2 py-2 text-center align-bottom">
+                  Data Filters
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredEntities.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={ENTITY_COLS.length + 2} className="px-3 py-8 text-center text-sm text-muted-foreground">
                     {needle
                       ? "No entities match this filter."
                       : "No Dynamic Entities found. Confirm the Dynamic Entities module is on and packs are imported."}
                   </td>
                 </tr>
               ) : (
-                filteredEntities.map((entity) => {
+                filteredEntities.map((entity, index) => {
                   const row = entityRow(entity.slug);
                   const count = filterCount(entity.slug);
+                  const showPack =
+                    groupByPack &&
+                    (index === 0 || filteredEntities[index - 1]?.module_pack !== entity.module_pack);
                   return (
-                    <tr key={entity.id} className="border-t border-border/70">
-                      <td className="px-3 py-2 font-medium text-foreground">{entity.name}</td>
+                    <Fragment key={entity.id}>
+                    {showPack ? (
+                      <tr>
+                        <td
+                          colSpan={ENTITY_COLS.length + 2}
+                          className="border-b border-border bg-muted px-3 py-1.5 text-xs font-medium capitalize text-muted-foreground"
+                        >
+                          {entity.module_pack.replace(/_/g, " ")}
+                        </td>
+                      </tr>
+                    ) : null}
+                    <tr className="group">
+                      <td className="sticky left-0 z-10 w-44 min-w-44 border-r border-b border-border/70 bg-card px-3 py-2 font-medium text-foreground group-hover:bg-muted">
+                        {entity.name}
+                      </td>
                       {ENTITY_COLS.map((col) => (
-                        <td key={col.id} className="px-2 py-2 text-center">
-                          <Checkbox
-                            checked={row[col.id]}
-                            disabled={disabled}
-                            aria-label={`${entity.name} ${col.label}`}
-                            onCheckedChange={(checked) =>
-                              setEntityFlag(entity.slug, col.id, checked === true)
-                            }
-                          />
+                        <td key={col.id} className="w-16 min-w-16 border-b border-border/70 px-1 py-2 align-middle">
+                          <div className="flex justify-center">
+                            <Checkbox
+                              checked={row[col.id]}
+                              disabled={disabled}
+                              aria-label={`${entity.name} ${col.label}`}
+                              onCheckedChange={(checked) =>
+                                setEntityFlag(entity.slug, col.id, checked === true)
+                              }
+                            />
+                          </div>
                         </td>
                       ))}
-                      <td className="px-2 py-2 text-center">
+                      <td className="border-b border-border/70 px-2 py-2 text-center align-middle">
                         <Button
                           type="button"
                           size="sm"
@@ -330,6 +398,7 @@ export function RoleAccessMatrixPanels({
                         </Button>
                       </td>
                     </tr>
+                    </Fragment>
                   );
                 })
               )}
@@ -356,9 +425,9 @@ export function RoleAccessMatrixPanels({
 
   if (tab === "fields") {
     return (
-      <div className="space-y-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Configure access per view — form, table and record. Default is Full access.
+          One access level per field, the same list as the field menu. Default is Full access.
         </div>
         <div className="rounded-lg border border-border">
           {filteredEntities.length === 0 ? (
@@ -396,7 +465,7 @@ export function RoleAccessMatrixPanels({
                       <p className="text-xs text-muted-foreground">Loading fields…</p>
                     ) : fields.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        {needle ? "No fields match this search." : "No custom fields."}
+                        {needle ? "No fields match this search." : "No fields."}
                       </p>
                     ) : (
                       <table className="min-w-full text-sm">
@@ -422,7 +491,7 @@ export function RoleAccessMatrixPanels({
                                 </td>
                                 <td className="py-2">
                                   <select
-                                    className="h-8 w-full max-w-xs rounded-md border border-input bg-background px-2 text-xs"
+                                    className="h-8 w-full max-w-[16rem] rounded-md border border-input bg-background px-2 text-xs"
                                     value={level}
                                     disabled={disabled}
                                     aria-label={`Access for ${field.label}`}
@@ -430,7 +499,7 @@ export function RoleAccessMatrixPanels({
                                       setFieldLevel(entity.slug, field.name, e.target.value as FieldAccessLevel)
                                     }
                                   >
-                                    {FIELD_LEVELS.map((opt) => (
+                                    {FIELD_ACCESS_LEVELS.map((opt) => (
                                       <option key={opt.value} value={opt.value}>
                                         {opt.label}
                                       </option>
@@ -453,9 +522,98 @@ export function RoleAccessMatrixPanels({
     );
   }
 
+  if (tab === "status") {
+    return (
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Choose which status values this role can see and set. Leaving every value on means the role
+          is not limited.
+        </div>
+        <div className="rounded-lg border border-border">
+          {filteredEntities.length === 0 ? (
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+              {needle ? "No entities match this filter." : "No Dynamic Entities found."}
+            </p>
+          ) : null}
+          {filteredEntities.map((entity) => {
+            const open = expanded === entity.slug;
+            const detail = entityDetails[entity.slug];
+            const statusField =
+              detail?.fields.find((field) => field.name === "status") ??
+              detail?.fields.find((field) => field.type === "status") ??
+              detail?.fields.find((field) => /status/i.test(field.name));
+            const choices = statusField ? dynSelectChoiceValues(statusField.options) : [];
+            const limited = matrix.statuses?.[entity.slug];
+            return (
+              <div key={entity.id} className="border-b border-border last:border-b-0">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-muted/40"
+                  onClick={() => {
+                    const next = open ? null : entity.slug;
+                    setExpanded(next);
+                    if (next) loadEntityDetail(next);
+                  }}
+                >
+                  <span className="font-medium">
+                    {entity.name}{" "}
+                    <span className="font-normal text-muted-foreground">
+                      ({limited ? `${limited.length} of ${choices.length || "…"}` : "all statuses"})
+                    </span>
+                  </span>
+                  <ChevronDown className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+                </button>
+                {open ? (
+                  <div className="border-t border-border px-3 py-3">
+                    {!detail ? (
+                      <p className="text-xs text-muted-foreground">Loading fields…</p>
+                    ) : !statusField || choices.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">This entity has no status choices to limit.</p>
+                    ) : (
+                      <ul className="grid gap-2 sm:grid-cols-2">
+                        {choices.map((choice) => {
+                          const checked = !limited || limited.includes(choice);
+                          return (
+                            <label key={choice} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={checked}
+                                disabled={disabled}
+                                onCheckedChange={(next) => {
+                                  const current = limited ?? choices;
+                                  const selected = next === true
+                                    ? [...new Set([...current, choice])]
+                                    : current.filter((value) => value !== choice);
+                                  const statuses = { ...(matrix.statuses ?? {}) };
+                                  if (selected.length === choices.length) {
+                                    delete statuses[entity.slug];
+                                  } else {
+                                    statuses[entity.slug] = selected;
+                                  }
+                                  onChange({
+                                    ...matrix,
+                                    statuses: Object.keys(statuses).length > 0 ? statuses : undefined,
+                                  });
+                                }}
+                              />
+                              <span>{dynSelectChoiceLabel(statusField.options, choice)}</span>
+                            </label>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // workflow
   return (
-    <div className="space-y-3">
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
       <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         Toggle a step to Active so users in this role can trigger that workflow action on the entity.
       </div>

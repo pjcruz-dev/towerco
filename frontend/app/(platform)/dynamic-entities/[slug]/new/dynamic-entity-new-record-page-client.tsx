@@ -10,6 +10,7 @@ import {
   type DynSchemaMode,
 } from "@/components/dynamic-entities/dyn-schema-sheets";
 import { DynStructuredLayout } from "@/components/dynamic-entities/dyn-structured-layout";
+import { AttachmentDropzone } from "@/components/attachments/attachment-dropzone";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +18,6 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -28,14 +28,21 @@ import {
 } from "@/lib/api/modules/dynamic-entities-api";
 import {
   canEntityAction,
-  isFieldHiddenForRole,
+  isFieldHiddenOnSurface,
   isFieldReadOnlyForRole,
   notifyDynPermissionDenied,
 } from "@/lib/rbac/entity-access";
+import { dynListPath, dynRecordPath } from "@/lib/dynamic-entities/helpdesk-paths";
+import {
+  RequiredFieldsAlert,
+  useRequiredFields,
+} from "@/components/dynamic-entities/required-fields-alert";
 import { parseDynSelectOptions } from "@/lib/dynamic-entities/select-choices";
 import { parseDynNumberOptions } from "@/lib/dynamic-entities/number-options";
 import { parseDynTextOptions } from "@/lib/dynamic-entities/text-options";
 import { permissions } from "@/lib/rbac/permissions";
+import { uploadTicketingAttachment } from "@/lib/api/modules/ticketing-api";
+import { notify } from "@/lib/ui/notify";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
@@ -45,9 +52,15 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   const foreignField = searchParams.get("foreign_field");
   const returnTo = searchParams.get("return_to");
   const canManageSchema = usePermission([permissions.dynamicEntitiesFieldsManage]);
+  const helpdesk = slug === "helpdesk_ticket";
   const canManageRecords = usePermission([permissions.dynamicEntitiesRecordsManage]);
+  const canTicketWrite = usePermission([permissions.ticketingTicketsCreate]);
+  const canTicketManage = usePermission([permissions.ticketingTicketsManage]);
   const accessMatrix = useAuthStore((state) => state.user?.accessMatrix);
-  const canCreate = canManageRecords && canEntityAction(accessMatrix, slug, "create");
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const canCreate =
+    (canManageRecords || (helpdesk && (canTicketWrite || canTicketManage))) &&
+    (canEntityAction(accessMatrix, slug, "create") || helpdesk);
   const [entity, setEntity] = useState<DynEntityDetail | null>(null);
   const [values, setValues] = useState<Record<string, string>>(() => {
     if (parentRecordId && foreignField) {
@@ -55,7 +68,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
     }
     return {};
   });
-  const [status, setStatus] = useState("");
+  const [filesByField, setFilesByField] = useState<Record<string, File[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [schemaMode, setSchemaMode] = useState<DynSchemaMode>({ kind: "closed" });
@@ -72,7 +85,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
         action: "create",
         entityLabel: slug.replace(/_/g, " "),
       });
-      router.replace(`/dynamic-entities/${slug}`);
+      router.replace(dynListPath(slug));
     }
   }, [canCreate, router, slug]);
 
@@ -130,6 +143,11 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   }, [slug]);
 
   useEffect(() => {
+    if (!helpdesk || !canTicketManage || !currentUserId) return;
+    setValues((prev) => (prev.requester ? prev : { ...prev, requester: currentUserId }));
+  }, [helpdesk, canTicketManage, currentUserId]);
+
+  useEffect(() => {
     if (!parentRecordId || !foreignField) return;
     setValues((prev) =>
       prev[foreignField] === parentRecordId
@@ -148,15 +166,15 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
       [...(entity?.fields ?? [])]
         .filter(
           (f) =>
-            !f.is_system_field &&
+            (slug === "helpdesk_ticket" || !f.is_system_field) &&
             !["actions", "workflows", "print", "id"].includes(f.name) &&
-            f.type !== "file" &&
-            !isFieldHiddenForRole(accessMatrix, slug, f.name) &&
-            !isFieldReadOnlyForRole(accessMatrix, slug, f.name),
+            (slug === "helpdesk_ticket" || f.type !== "file") &&
+            (canManageSchema || !isFieldHiddenOnSurface(accessMatrix, slug, f.name, "form")),
         )
         .sort((a, b) => a.field_order - b.field_order),
-    [entity, accessMatrix, slug],
+    [entity, accessMatrix, slug, canManageSchema],
   );
+  const required = useRequiredFields(fields, values);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -165,12 +183,14 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
       notifyDynPermissionDenied({ action: "create", entityLabel: entity.name });
       return;
     }
+    if (required.blockIfMissing()) return;
     setSaving(true);
     setError(null);
     try {
       const payloadValues: Record<string, unknown> = {};
       for (const field of fields) {
         if (field.type === "automatic_id") continue;
+        if (isFieldReadOnlyForRole(accessMatrix, slug, field.name)) continue;
         const raw = values[field.name];
         if (raw === undefined || raw === "") continue;
         if (field.type === "number" || field.type === "decimal") {
@@ -185,14 +205,30 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
         payloadValues[foreignField] = parentRecordId;
       }
       const record = await createDynRecord(slug, {
-        status: status || undefined,
         values: payloadValues,
         parent_record_id: parentRecordId || undefined,
       });
+      const queuedFiles = Object.values(filesByField).flat();
+      if (helpdesk && queuedFiles.length > 0) {
+        try {
+          for (const file of queuedFiles) {
+            await uploadTicketingAttachment(record.id, file);
+          }
+        } catch (uploadError) {
+          notify.error("Ticket created, files did not upload", getErrorMessage(uploadError));
+          router.push(
+            returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+              ? returnTo
+              : dynRecordPath(slug, record.id),
+          );
+          return;
+        }
+      }
+      notify.success("Record created", `${entity.name} was created.`);
       router.push(
         returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
           ? returnTo
-          : `/dynamic-entities/records/${record.id}`,
+          : dynRecordPath(slug, record.id),
       );
     } catch (err) {
       notifyDynPermissionDenied({ action: "create", entityLabel: entity.name, error: err });
@@ -210,6 +246,28 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   }
 
   function renderFormField(field: DynField) {
+    if (field.type === "file" || field.name === "attachment_names") {
+      if (!helpdesk) {
+        return <p className="text-sm text-muted-foreground">Add files after the record is saved.</p>;
+      }
+      return (
+        <AttachmentDropzone
+          files={filesByField[field.name] ?? []}
+          onChange={(next) =>
+            setFilesByField((prev) => ({ ...prev, [field.name]: next }))
+          }
+          multiple
+          maxFiles={20}
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+          enablePaste
+          disabled={saving}
+          hint="PNG, JPG, PDF, Office · files upload when the ticket is created"
+        />
+      );
+    }
+    if (!canManageSchema && isFieldReadOnlyForRole(accessMatrix, slug, field.name)) {
+      return <span className="text-muted-foreground">{values[field.name] || "—"}</span>;
+    }
     if (field.type === "automatic_id") {
       return (
         <Input
@@ -293,11 +351,18 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   }
 
   return (
-    <PermissionGate requiredPermissions={[permissions.dynamicEntitiesRecordsManage]}>
+    <PermissionGate
+      requiredPermissions={
+        helpdesk
+          ? [permissions.dynamicEntitiesRecordsManage, permissions.ticketingTicketsCreate, permissions.ticketingTicketsManage]
+          : [permissions.dynamicEntitiesRecordsManage]
+      }
+      match={helpdesk ? "any" : "all"}
+    >
       <div className="w-full space-y-5">
         <header>
           <p className="text-sm text-muted-foreground">
-            <Link href={`/dynamic-entities/${slug}`} className="underline-offset-4 hover:underline">
+            <Link href={dynListPath(slug)} className="underline-offset-4 hover:underline">
               {entity?.name ?? slug}
             </Link>
             {" / New"}
@@ -306,23 +371,18 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
         </header>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <RequiredFieldsAlert fields={required.missing} pulse={required.pulse} />
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <Card className="rounded-xl">
-            <CardHeader>
-              <CardTitle className="text-base font-medium">Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="Optional status" />
-            </CardContent>
-          </Card>
-
+        <form noValidate onSubmit={onSubmit} className="space-y-4">
           <DynStructuredLayout
             groups={groups}
             fields={fields}
+            entitySlug={slug}
             canManageSchema={canManageSchema}
+            allowWidthAdjust={helpdesk}
             mode="form"
             renderFieldValue={renderFormField}
+            invalidFieldNames={required.invalidNames}
             onSchemaAction={setSchemaMode}
             onLayoutChanged={async () => {
               await reloadEntity();
@@ -341,7 +401,7 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
                   href={
                     returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
                       ? returnTo
-                      : `/dynamic-entities/${slug}`
+                      : dynListPath(slug)
                   }
                   prefetch={false}
                 />

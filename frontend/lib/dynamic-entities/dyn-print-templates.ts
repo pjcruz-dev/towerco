@@ -121,6 +121,7 @@ export function clonePrintTemplate(source: DynPrintTemplate, nameSuffix = "(Copy
 export function packPrintSettingsJson(
   templates: DynPrintTemplate[],
   defaultTemplateId?: string | null,
+  seededTemplateIds?: string[] | null,
 ): DynPrintSettings {
   const list = templates.length > 0 ? templates : [createEmptyPrintTemplate("Print")];
   const defaultId =
@@ -150,6 +151,9 @@ export function packPrintSettingsJson(
       };
     }),
     default_template_id: defaultId,
+    ...(seededTemplateIds && seededTemplateIds.length > 0
+      ? { seeded_template_ids: seededTemplateIds }
+      : {}),
   } as DynPrintSettings;
 }
 

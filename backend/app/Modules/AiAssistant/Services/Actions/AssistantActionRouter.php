@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\AiAssistant\Services\Actions;
 
+use App\Modules\DynamicEntities\Support\DynHtmlReportTemplateCatalog;
+
 /**
  * Deterministic heuristic: when the user is asking to create/draft something,
  * return an allowlisted action name. Never invent action keys.
@@ -54,6 +56,53 @@ final class AssistantActionRouter
             return ['action' => 'pin_html_report_to_dashboard', 'args' => []];
         }
 
+        if ($this->matchEApprovalCancel($question, $q)) {
+            return ['action' => 'cancel_eapproval_submission', 'args' => []];
+        }
+
+        if ($this->matchEApprovalReject($question, $q)) {
+            return ['action' => 'reject_eapproval_submission', 'args' => []];
+        }
+
+        if ($this->matchSampleAssets($q)) {
+            return [
+                'action' => 'seed_sample_it_assets',
+                'args' => ['count' => SeedSampleItAssetsAction::countFrom($question, [])],
+            ];
+        }
+
+        if ($this->matchAssetFieldUpdate($question, $q)) {
+            return ['action' => 'update_it_asset', 'args' => []];
+        }
+
+        if ($this->matchAssetStatusChange($question, $q)) {
+            return ['action' => 'change_it_asset_status', 'args' => []];
+        }
+
+        if ($this->matchTicketStatus($question, $q)) {
+            return ['action' => 'change_ticket_status', 'args' => []];
+        }
+
+        if ($this->matchDocumentDetails($question, $q)) {
+            return ['action' => 'update_controlled_document', 'args' => []];
+        }
+
+        if (
+            preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i', $question) === 1
+            && preg_match('/\b(create|add|invite)\b/u', $q) === 1
+            && preg_match('/\buser\b/u', $q) === 1
+        ) {
+            return ['action' => 'create_tenant_user', 'args' => []];
+        }
+
+        if (
+            preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i', $question) === 1
+            && preg_match('/\b(inactive|deactivate|deactivated|disable|disabled|reactivate|activate|active|enable|enabled)\b/u', $q) === 1
+            && preg_match('/\b(role|roles)\b/u', $q) !== 1
+        ) {
+            return ['action' => 'set_user_active', 'args' => []];
+        }
+
         // Team & Access role changes — before report heuristics (email + "role" must not become a dashboard).
         if (
             preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i', $question) === 1
@@ -82,6 +131,14 @@ final class AssistantActionRouter
             && preg_match('/\b(role|roles|viewer|assign)\b/u', $q) === 1
         )) {
             return ['action' => 'update_user_roles', 'args' => []];
+        }
+
+        $template = DynHtmlReportTemplateCatalog::match($question);
+        if ($template !== null) {
+            return [
+                'action' => 'create_html_report_from_template',
+                'args' => ['template_key' => $template['key']],
+            ];
         }
 
         if ($this->matches($q, [
@@ -132,6 +189,92 @@ final class AssistantActionRouter
         }
 
         return null;
+    }
+
+    private function matchEApprovalCancel(string $question, string $q): bool
+    {
+        if (preg_match('/\b(cancel|canceled|cancelled|withdraw)\b/u', $q) !== 1) {
+            return false;
+        }
+
+        if (preg_match('/\breject\b/u', $q) === 1) {
+            return false;
+        }
+
+        return preg_match('/\b([A-Z][A-Z0-9]*(?:-+[A-Z0-9]+)+)\b/i', $question, $match) === 1
+            && (str_contains(strtoupper($match[1]), '--') || str_contains(strtoupper($match[1]), 'EAPPROVAL')
+                || preg_match('/^[A-Z]{2,}-[A-Z0-9]{1,3}-\d{3,}$/i', $match[1]) === 1);
+    }
+
+    private function matchEApprovalReject(string $question, string $q): bool
+    {
+        if (preg_match('/\breject\b/u', $q) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\b([A-Z][A-Z0-9]*(?:-+[A-Z0-9]+)+)\b/i', $question, $match) === 1
+            && (str_contains(strtoupper($match[1]), '--') || str_contains(strtoupper($match[1]), 'EAPPROVAL')
+                || preg_match('/^[A-Z]{2,}-[A-Z0-9]{1,3}-\d{3,}$/i', $match[1]) === 1);
+    }
+
+    private function matchSampleAssets(string $q): bool
+    {
+        return preg_match('/\b(dummy|sample|seed|fake|demo)\b/u', $q) === 1
+            && preg_match('/\bassets?\b/u', $q) === 1;
+    }
+
+    private function matchAssetFieldUpdate(string $question, string $q): bool
+    {
+        if (preg_match('/\b(notes|manufacturer|hostname|product name)\b/u', $q) !== 1) {
+            return false;
+        }
+        if (preg_match('/\bstatus\b/u', $q) === 1) {
+            return false;
+        }
+
+        return preg_match('/\b(SN-[A-Z0-9]+(?:-[A-Z0-9]+)*|ATC-(?:LAP|DSK|MON|DOC|PHN|PER)-\d+)\b/i', $question) === 1;
+    }
+
+    private function matchTicketStatus(string $question, string $q): bool
+    {
+        if (preg_match('/\bTKT-\d+\b/i', $question) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\b(status|in progress|in_progress|resolved|resolve|closed|close|reopen)\b/u', $q) === 1;
+    }
+
+    private function matchDocumentDetails(string $question, string $q): bool
+    {
+        if (preg_match('/\b(title|department)\b/u', $q) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\b([A-Z][A-Z0-9]*(?:-+[A-Z0-9]+)+)\b/i', $question) === 1;
+    }
+
+    private function matchAssetStatusChange(string $question, string $q): bool
+    {
+        $asksChange = preg_match('/\b(change|set|update|mark|switch)\b/u', $q) === 1
+            && (
+                preg_match('/\bstatus\b/u', $q) === 1
+                || preg_match('/\b(to|as)\b/u', $q) === 1
+            );
+        if (! $asksChange) {
+            return false;
+        }
+
+        if (preg_match('/\b(SN-[A-Z0-9]+(?:-[A-Z0-9]+)*|ATC-(?:LAP|DSK|MON|DOC|PHN|PER)-\d+)\b/i', $question) === 1) {
+            return true;
+        }
+
+        foreach (['NEW', 'AVAILABLE', 'ASSIGNED', 'UNDER_REPAIR', 'UNDER REPAIR', 'REPLACEMENT_PENDING', 'REPLACEMENT PENDING', 'LOST', 'STOLEN', 'RETIRED', 'E_WASTE', 'E-WASTE', 'E WASTE', 'DISPOSED'] as $status) {
+            if (str_contains($q, mb_strtolower($status))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

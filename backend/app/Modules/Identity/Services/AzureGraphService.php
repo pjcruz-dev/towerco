@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Http;
 
 class AzureGraphService
 {
-    private const SELECT = 'id,mail,userPrincipalName,displayName,jobTitle,department,assignedLicenses';
+    private const SELECT = 'id,mail,userPrincipalName,displayName,givenName,surname,jobTitle,department,assignedLicenses';
 
     /**
      * @return list<string>

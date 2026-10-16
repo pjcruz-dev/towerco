@@ -1,12 +1,12 @@
+import { formatDisplayDate } from "@/lib/format-display-date";
+
 export function ticketingStatusLabel(status: string): string {
   return status.replace(/_/g, " ");
 }
 
 export function formatTicketingDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  return formatDisplayDate(iso, "datetime") ?? iso;
 }
 
 export function formatFileSize(bytes: number): string {

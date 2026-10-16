@@ -7,6 +7,7 @@ namespace App\Modules\DynamicEntities\Services;
 use App\Modules\DynamicEntities\Models\DynEntity;
 use App\Modules\DynamicEntities\Models\DynField;
 use App\Modules\DynamicEntities\Models\DynFieldGroup;
+use App\Modules\DynamicEntities\Support\AssetPrintCatalog;
 use App\Modules\DynamicEntities\Support\AtcPrintTemplates;
 use App\Modules\DynamicEntities\Support\DynFieldType;
 use App\Modules\DynamicEntities\Support\DynModulePack;
@@ -112,7 +113,11 @@ final class DynEntityAdminService
             $entity->related_tabs_json = $data['related_tabs_json'];
         }
         if (array_key_exists('print_settings_json', $data)) {
-            $entity->print_settings_json = $data['print_settings_json'];
+            $incoming = is_array($data['print_settings_json']) ? $data['print_settings_json'] : null;
+            $entity->print_settings_json = $this->mergePrintSettings(
+                is_array($entity->print_settings_json) ? $entity->print_settings_json : null,
+                $incoming,
+            );
         }
         $entity->updated_by = $actor->id;
         $entity->save();
@@ -235,7 +240,8 @@ final class DynEntityAdminService
             if (! in_array($type, DynFieldType::all(), true)) {
                 throw ValidationException::withMessages(['type' => 'Invalid field type.']);
             }
-            if ($field->is_system_field && $type !== (string) $field->type) {
+            $typeLocked = in_array((string) $field->name, ['actions', 'workflows', 'print', 'id'], true);
+            if ($field->is_system_field && $typeLocked && $type !== (string) $field->type) {
                 throw ValidationException::withMessages(['type' => 'System field type cannot be changed.']);
             }
             $field->type = $type;
@@ -305,6 +311,41 @@ final class DynEntityAdminService
         return $field;
     }
 
+    public function deleteField(DynField $field, ?TenantUser $actor = null): void
+    {
+        if ($field->is_system_field || in_array((string) $field->name, ['actions', 'workflows', 'print', 'id'], true)) {
+            throw ValidationException::withMessages([
+                'field' => ['System fields stay on the record. You can rename or move them, not delete them.'],
+            ]);
+        }
+
+        if ((string) $field->type === DynFieldType::RELATIONSHIP && $actor instanceof TenantUser) {
+            app(DynRelationshipService::class)->deleteEdge((string) $field->id, $actor, true);
+
+            return;
+        }
+
+        $entity = $field->entity;
+        $label = (string) $field->label;
+        $id = (string) $field->id;
+        $name = (string) $field->name;
+        $field->delete();
+
+        $this->activity->record(
+            module: 'dynamic_entities',
+            action: 'dyn_field.deleted',
+            summary: 'Field deleted · '.($entity?->name ?? 'Entity').' / '.$label,
+            entityType: 'dyn_field',
+            entityId: $id,
+            entityLabel: $label,
+            actor: $actor,
+            metadata: [
+                'entity_slug' => $entity?->slug,
+                'field_name' => $name,
+            ],
+        );
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -319,6 +360,7 @@ final class DynEntityAdminService
             'applies_to_view' => (bool) ($data['applies_to_view'] ?? true),
             'start_collapsed' => (bool) ($data['start_collapsed'] ?? false),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
+            'column_span' => $this->clampColumnSpan($data['column_span'] ?? 12),
         ]);
 
         $this->activity->record(
@@ -362,6 +404,9 @@ final class DynEntityAdminService
         }
         if (isset($data['sort_order'])) {
             $group->sort_order = (int) $data['sort_order'];
+        }
+        if (isset($data['column_span'])) {
+            $group->column_span = $this->clampColumnSpan($data['column_span']);
         }
         $group->save();
 
@@ -418,9 +463,13 @@ final class DynEntityAdminService
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    private function clampColumnSpan(mixed $value): int
+    {
+        $span = (int) $value;
+
+        return max(1, min(12, $span > 0 ? $span : 12));
+    }
+
     /**
      * List row without print-template merge (index / ACL pickers).
      *
@@ -443,6 +492,10 @@ final class DynEntityAdminService
 
     public function presentEntity(DynEntity $entity, bool $withSchema = false): array
     {
+        if ($entity->slug === AssetPrintCatalog::SLUG) {
+            AssetPrintCatalog::ensure($entity);
+        }
+
         $payload = [
             'id' => $entity->id,
             'slug' => $entity->slug,
@@ -473,6 +526,7 @@ final class DynEntityAdminService
                 'applies_to_view' => $g->applies_to_view,
                 'start_collapsed' => $g->start_collapsed,
                 'sort_order' => $g->sort_order,
+                'column_span' => (int) ($g->column_span ?: 12),
             ])->values()->all();
             $payload['fields'] = $entity->fields->map(fn (DynField $f): array => $this->presentField($f))->values()->all();
             $payload['record_count'] = $entity->records()->where('is_deleted', false)->count();
@@ -526,11 +580,14 @@ final class DynEntityAdminService
     private function presentPrintSettings(DynEntity $entity): array
     {
         try {
-            return AtcPrintTemplates::merge(
+            $presented = AtcPrintTemplates::merge(
                 is_array($entity->print_settings_json) ? $entity->print_settings_json : null,
                 $entity->slug,
                 $entity->name,
             );
+            $presented['seeded_template_ids'] = $this->seededTemplateIds($entity);
+
+            return $presented;
         } catch (\Throwable) {
             return $this->presentPrintSettingsSummary($entity);
         }
@@ -613,7 +670,91 @@ final class DynEntityAdminService
             ...$active,
             'templates' => array_values($rows),
             'default_template_id' => $defaultId,
+            'seeded_template_ids' => $this->seededTemplateIds($entity),
         ];
+    }
+
+    /**
+     * Keep stored HTML when a list save omits the body. A string, including empty, is an editor write.
+     *
+     * @param  array<string, mixed>|null  $stored
+     * @param  array<string, mixed>|null  $incoming
+     * @return array<string, mixed>|null
+     */
+    private function mergePrintSettings(?array $stored, ?array $incoming): ?array
+    {
+        if ($incoming === null) {
+            return null;
+        }
+
+        $storedTemplates = [];
+        if (is_array($stored) && isset($stored['templates']) && is_array($stored['templates'])) {
+            foreach ($stored['templates'] as $row) {
+                if (is_array($row) && isset($row['id']) && is_string($row['id'])) {
+                    $storedTemplates[$row['id']] = $row;
+                }
+            }
+        }
+
+        if (isset($incoming['templates']) && is_array($incoming['templates'])) {
+            $merged = [];
+            foreach ($incoming['templates'] as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $id = isset($row['id']) && is_string($row['id']) ? $row['id'] : '';
+                $previous = $storedTemplates[$id] ?? null;
+                if (is_array($previous)) {
+                    foreach (['template_html', 'template_css'] as $key) {
+                        if (! array_key_exists($key, $row) || $row[$key] === null) {
+                            if (array_key_exists($key, $previous)) {
+                                $row[$key] = $previous[$key];
+                            }
+                        }
+                    }
+                }
+                $merged[] = $row;
+            }
+            $incoming['templates'] = $merged;
+        }
+
+        if (! array_key_exists('seeded_template_ids', $incoming) && is_array($stored) && isset($stored['seeded_template_ids'])) {
+            $incoming['seeded_template_ids'] = $stored['seeded_template_ids'];
+        }
+
+        $flatId = isset($incoming['id']) && is_string($incoming['id']) ? $incoming['id'] : '';
+        $previousFlat = $storedTemplates[$flatId] ?? null;
+        if (is_array($previousFlat)) {
+            foreach (['template_html', 'template_css'] as $key) {
+                if (! array_key_exists($key, $incoming) || $incoming[$key] === null) {
+                    if (array_key_exists($key, $previousFlat)) {
+                        $incoming[$key] = $previousFlat[$key];
+                    }
+                }
+            }
+        }
+
+        return $incoming;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function seededTemplateIds(DynEntity $entity): array
+    {
+        $stored = $entity->print_settings_json;
+        if (! is_array($stored) || ! isset($stored['seeded_template_ids']) || ! is_array($stored['seeded_template_ids'])) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($stored['seeded_template_ids'] as $id) {
+            if (is_string($id) && $id !== '') {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
     }
 
     /**

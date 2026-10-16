@@ -19,6 +19,7 @@ final class TenantEnabledModulesResolver
         'doc_extract',
         'dynamic_entities',
         'ai_assistant',
+        'asset_management',
     ];
 
     /** @var array<string, string> */
@@ -31,6 +32,7 @@ final class TenantEnabledModulesResolver
         'doc_extract' => 'DocExtract',
         'dynamic_entities' => 'Dynamic Entities',
         'ai_assistant' => 'AI Assistant',
+        'asset_management' => 'Asset management',
     ];
 
     /** @var array<string, string> */
@@ -41,6 +43,7 @@ final class TenantEnabledModulesResolver
         'doc_extract' => 'Upload finance PDFs, OCR scan, map fields, review, and export CSV/XLSX.',
         'dynamic_entities' => 'Dynamic entity packs, records, fields, reports, and workflows.',
         'ai_assistant' => 'In-app assistant for workflows, permissions, and how-to guidance.',
+        'asset_management' => 'IT asset register, assignment, repair, and offboarding.',
     ];
 
     /**

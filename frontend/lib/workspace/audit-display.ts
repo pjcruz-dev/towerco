@@ -1,3 +1,5 @@
+import { statusToneClasses, type StatusTone } from "@/components/ui/status-tone";
+
 export function auditCategoryLabel(category: string | null | undefined): string {
   switch (category) {
     case "security":
@@ -28,16 +30,20 @@ export function auditSeverityLabel(severity: string | null | undefined): string 
   }
 }
 
-export function auditSeverityClassName(severity: string | null | undefined): string {
+export function auditSeverityTone(severity: string | null | undefined): StatusTone {
   switch (severity) {
     case "critical":
-      return "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300";
+      return "danger";
     case "high":
-      return "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
+      return "warning";
     case "medium":
-      return "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300";
-    case "low":
+      return "info";
     default:
-      return "border-border bg-muted/40 text-muted-foreground";
+      return "neutral";
   }
+}
+
+/** Badge class for callers that still spread a className. Prefer <StatusBadge>. */
+export function auditSeverityClassName(severity: string | null | undefined): string {
+  return statusToneClasses[auditSeverityTone(severity)].badge;
 }

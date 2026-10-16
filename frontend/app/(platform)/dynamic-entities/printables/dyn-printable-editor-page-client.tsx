@@ -33,6 +33,7 @@ import {
   type DynPrintTemplate,
 } from "@/lib/dynamic-entities/dyn-print-templates";
 import { permissions } from "@/lib/rbac/permissions";
+import { notify } from "@/lib/ui/notify";
 import { cn } from "@/lib/utils";
 
 const LAYOUT_OPTIONS = [
@@ -97,6 +98,7 @@ export function DynPrintableEditorPageClient() {
   const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
   const [settings, setSettings] = useState<DynPrintTemplate | null>(null);
   const [fieldFilter, setFieldFilter] = useState("");
+  const [insertAsValue, setInsertAsValue] = useState(true);
   const [sideTab, setSideTab] = useState<SideTab>("fields");
   const [showSettings, setShowSettings] = useState(false);
   const [previewRecordId, setPreviewRecordId] = useState("");
@@ -170,8 +172,20 @@ export function DynPrintableEditorPageClient() {
     [dataFields],
   );
 
-  function insertToken(token: string) {
-    wysiwygRef.current?.insertToken(token);
+  const tokenOptions = useMemo(
+    () => [
+      ...SYSTEM_DATE_TOKENS,
+      ...SYSTEM_GENERAL_TOKENS,
+      ...dataFields.map((f) => ({ token: `{{record.${f.name}}}`, label: f.label })),
+      ...linkedFields.map((f) => ({ token: `{{record.${f.name}.title}}`, label: f.label })),
+      { token: "{{loop.index}}", label: "Loop index" },
+      { token: "{{item.field_name}}", label: "Item field" },
+    ],
+    [dataFields, linkedFields],
+  );
+
+  function insertToken(token: string, label?: string) {
+    wysiwygRef.current?.insertToken(token, label);
     setInserted(token);
     window.setTimeout(() => setInserted(null), 1200);
   }
@@ -194,7 +208,11 @@ export function DynPrintableEditorPageClient() {
         updated_at: new Date().toISOString(),
       });
     }
-    return packPrintSettingsJson(merged, defaultTemplateId ?? settings.id);
+    return packPrintSettingsJson(
+      merged,
+      defaultTemplateId ?? settings.id,
+      detail.print_settings?.seeded_template_ids,
+    );
   }
 
   async function save() {
@@ -217,6 +235,7 @@ export function DynPrintableEditorPageClient() {
           updated.name,
         ),
       );
+      notify.success("Printable saved", settings.name || detail.name);
     } catch {
       setError("Unable to save printable. Check you have Manage Printables permission.");
     } finally {
@@ -234,6 +253,7 @@ export function DynPrintableEditorPageClient() {
       await updateDynEntity(detail.slug, {
         print_settings_json: payload,
       });
+      notify.success("Printable saved", settings.name || detail.name);
       router.push("/dynamic-entities/printables");
     } catch {
       setError("Unable to save printable. Check you have Manage Printables permission.");
@@ -403,6 +423,8 @@ export function DynPrintableEditorPageClient() {
                     fields={filteredFields}
                     linked={linkedFields}
                     inserted={inserted}
+                    insertAsValue={insertAsValue}
+                    onInsertAsValue={setInsertAsValue}
                     onInsert={insertToken}
                   />
                 ) : null}
@@ -415,7 +437,7 @@ export function DynPrintableEditorPageClient() {
                       <button
                         type="button"
                         className="font-mono text-xs text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
-                        onClick={() => insertToken("{{system.company_logo}}")}
+                        onClick={() => insertToken("{{system.company_logo}}", "Company Logo")}
                       >
                         {"{{system.company_logo}}"}
                       </button>
@@ -488,6 +510,8 @@ export function DynPrintableEditorPageClient() {
                   html={settings.template_html ?? ""}
                   css={settings.template_css ?? ""}
                   orientation={settings.orientation === "landscape" ? "landscape" : "portrait"}
+                  insertAsValue={insertAsValue}
+                  tokens={tokenOptions}
                   onHtmlChange={(template_html) => patchSettings({ template_html })}
                   onCssChange={(template_css) => patchSettings({ template_css })}
                 />
@@ -523,6 +547,8 @@ function TokenSidebar({
   fields,
   linked,
   inserted,
+  insertAsValue,
+  onInsertAsValue,
   onInsert,
 }: {
   fieldFilter: string;
@@ -530,7 +556,9 @@ function TokenSidebar({
   fields: DynField[];
   linked: DynField[];
   inserted: string | null;
-  onInsert: (token: string) => void;
+  insertAsValue: boolean;
+  onInsertAsValue: (value: boolean) => void;
+  onInsert: (token: string, label: string) => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -541,6 +569,28 @@ function TokenSidebar({
           value={fieldFilter}
           onChange={(e) => onFieldFilter(e.target.value)}
         />
+        <div className="mt-2 flex overflow-hidden rounded-full border border-border text-[11px]">
+          <button
+            type="button"
+            className={cn(
+              "flex-1 px-2 py-1",
+              insertAsValue ? "bg-foreground text-background" : "text-muted-foreground",
+            )}
+            onClick={() => onInsertAsValue(true)}
+          >
+            Show value
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex-1 px-2 py-1",
+              !insertAsValue ? "bg-foreground text-background" : "text-muted-foreground",
+            )}
+            onClick={() => onInsertAsValue(false)}
+          >
+            Manual input
+          </button>
+        </div>
         <p className="mt-2 text-[11px] text-muted-foreground">Click a token to insert at the caret.</p>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -551,7 +601,7 @@ function TokenSidebar({
               label={row.label}
               token={row.token}
               active={inserted === row.token}
-              onInsert={() => onInsert(row.token)}
+              onInsert={() => onInsert(row.token, row.label)}
             />
           ))}
         </TokenGroup>
@@ -562,7 +612,7 @@ function TokenSidebar({
               label={row.label}
               token={row.token}
               active={inserted === row.token}
-              onInsert={() => onInsert(row.token)}
+              onInsert={() => onInsert(row.token, row.label)}
             />
           ))}
         </TokenGroup>
@@ -578,7 +628,7 @@ function TokenSidebar({
                   label={f.label.toUpperCase()}
                   token={token}
                   active={inserted === token}
-                  onInsert={() => onInsert(token)}
+                  onInsert={() => onInsert(token, f.label)}
                 />
               );
             })
@@ -594,7 +644,7 @@ function TokenSidebar({
                   label={`${f.label} → ${f.target_entity_slug ?? "entity"}`}
                   token={token}
                   active={inserted === token}
-                  onInsert={() => onInsert(token)}
+                  onInsert={() => onInsert(token, f.label)}
                 />
               );
             })}
@@ -605,13 +655,13 @@ function TokenSidebar({
             label="LOOP INDEX (#)"
             token="{{loop.index}}"
             active={inserted === "{{loop.index}}"}
-            onInsert={() => onInsert("{{loop.index}}")}
+            onInsert={() => onInsert("{{loop.index}}", "Loop index")}
           />
           <TokenRow
             label="ITEM FIELD (IN TABLE ROW)"
             token="{{item.field_name}}"
             active={inserted === "{{item.field_name}}"}
-            onInsert={() => onInsert("{{item.field_name}}")}
+            onInsert={() => onInsert("{{item.field_name}}", "Item field")}
           />
           <p className="px-1 text-[10px] text-muted-foreground">
             Put {"{{loop.index}}"} / {"{{item.*}}"} inside a table row; print expands one row per line

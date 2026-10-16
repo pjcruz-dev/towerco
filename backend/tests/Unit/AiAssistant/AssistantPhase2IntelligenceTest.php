@@ -6,85 +6,16 @@ namespace Tests\Unit\AiAssistant;
 
 use App\Modules\AiAssistant\Contracts\AssistantToolInterface;
 use App\Modules\AiAssistant\DTOs\ConversationTurn;
-use App\Modules\AiAssistant\DTOs\RetrievedKnowledgeChunk;
 use App\Modules\AiAssistant\DTOs\ToolResult;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolFallbackPlanner;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRegistry;
 use App\Modules\AiAssistant\Support\AssistantPromptBuilder;
-use App\Modules\AiAssistant\Support\AssistantRelevanceGate;
 use App\Modules\AiAssistant\Support\PromptSecurityService;
 use App\Modules\Identity\Models\TenantUser;
 use Tests\TestCase;
 
 final class AssistantPhase2IntelligenceTest extends TestCase
 {
-    public function test_relevance_gate_rejects_weak_unrelated_chunk(): void
-    {
-        $gate = new AssistantRelevanceGate;
-        $chunk = new RetrievedKnowledgeChunk(
-            chunkId: '1',
-            sourceId: 'document-register',
-            vectorId: 'v1',
-            content: 'Document register overview',
-            score: 0.08,
-            scope: 'global',
-            moduleKey: 'document_register',
-            title: 'Document register (controlled documents)',
-            slug: 'document-register',
-            version: 1,
-            permissions: [],
-            relatedRoutes: [],
-            sourceBody: "# Document register\n\nFind controlled documents.",
-        );
-
-        $this->assertSame([], $gate->filter([$chunk], 'Write me a poem about cats and the weather'));
-    }
-
-    public function test_relevance_gate_rejects_high_score_without_lexical_overlap(): void
-    {
-        $gate = new AssistantRelevanceGate;
-        $chunk = new RetrievedKnowledgeChunk(
-            chunkId: '1',
-            sourceId: 'document-register',
-            vectorId: 'v1',
-            content: 'Document register overview',
-            score: 0.45,
-            scope: 'global',
-            moduleKey: 'document_register',
-            title: 'Document register (controlled documents)',
-            slug: 'document-register',
-            version: 1,
-            permissions: [],
-            relatedRoutes: [],
-            sourceBody: "# Document register\n\nFind controlled documents.",
-        );
-
-        $this->assertFalse($gate->isRelevant($chunk, 'Write me a poem about cats'));
-    }
-
-    public function test_relevance_gate_keeps_lexically_matching_chunk(): void
-    {
-        $gate = new AssistantRelevanceGate;
-        $chunk = new RetrievedKnowledgeChunk(
-            chunkId: '1',
-            sourceId: 'e-approval-create-request',
-            vectorId: 'v1',
-            content: 'Create an E-Forms request',
-            score: 0.2,
-            scope: 'global',
-            moduleKey: 'e_approval',
-            title: 'Create an E-Forms request',
-            slug: 'e-approval-create-request',
-            version: 1,
-            permissions: [],
-            relatedRoutes: [],
-            sourceBody: "# Create an E-Forms request\n\nSubmit forms for review.",
-        );
-
-        $kept = $gate->filter([$chunk], 'How do I create an E-Forms request?');
-        $this->assertCount(1, $kept);
-    }
-
     public function test_fallback_planner_resolves_ticket_follow_up_from_history(): void
     {
         $registry = new AssistantToolRegistry([
@@ -133,6 +64,22 @@ final class AssistantPhase2IntelligenceTest extends TestCase
         $this->assertStringContainsString('TKT-00004', $prompt->user);
         $this->assertStringContainsString('USER_QUESTION:', $prompt->user);
         $this->assertStringContainsString('What about that ticket?', $prompt->user);
+        $this->assertStringContainsString('in-product help assistant', $prompt->system);
+    }
+
+    public function test_admin_builder_prompt_is_for_tenant_administrators(): void
+    {
+        $builder = new AssistantPromptBuilder(new PromptSecurityService);
+        $prompt = $builder->build(
+            question: 'Change the asset status labels.',
+            chunks: [],
+            adminBuilder: true,
+        );
+
+        $this->assertStringContainsString('builder for a tenant administrator', $prompt->system);
+        $this->assertStringContainsString('Just do the operation', $prompt->system);
+        $this->assertStringNotContainsString('confirm the card', $prompt->system);
+        $this->assertStringNotContainsString('in-product help assistant', $prompt->system);
     }
 
     private function stubTool(string $name): AssistantToolInterface

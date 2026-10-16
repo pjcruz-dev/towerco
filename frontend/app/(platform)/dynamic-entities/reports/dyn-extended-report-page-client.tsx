@@ -22,11 +22,6 @@ const REPORT_META: Record<
   DynExtendedReportKey,
   { eyebrow: string; title: string; description: string }
 > = {
-  "cas-executive-dashboard": {
-    eyebrow: "Finance",
-    title: "CAS Executive Dashboard",
-    description: "Cash, AR/AP, sales and purchase KPIs for commercial and accounting leadership.",
-  },
   "ar-ap-aging": {
     eyebrow: "Finance",
     title: "AR & AP Aging",
