@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Upload } from "lucide-react";
+import { Download, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { EApprovalMasterDataImportDialog } from "@/components/e-approval/e-approval-master-data-import-dialog";
@@ -15,11 +15,20 @@ import {
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
 import {
   createEApprovalMasterDataRow,
   createEApprovalMasterDataSet,
+  deleteAllEApprovalMasterDataRows,
   deleteEApprovalMasterDataRow,
   fetchEApprovalMasterDataRows,
   fetchEApprovalMasterDataSets,
@@ -73,6 +82,7 @@ export function EApprovalMasterDataPageClient() {
   const [renameDraft, setRenameDraft] = useState("");
   const renameCancel = useRef(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
 
   const setsQuery = useQuery({
     queryKey: ["e-approval", "master-data-sets"],
@@ -89,6 +99,20 @@ export function EApprovalMasterDataPageClient() {
     queryClient.invalidateQueries({ queryKey: ["e-approval", "master-data-rows", selectedSetId] });
     queryClient.invalidateQueries({ queryKey: ["e-approval", "master-data-sets"] });
   };
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => deleteAllEApprovalMasterDataRows(selectedSetId!),
+    onSuccess: (result) => {
+      setDeleteAllOpen(false);
+      invalidateRows();
+      push({
+        level: "success",
+        title: "Rows deleted",
+        message: `${result.deleted.toLocaleString()} rows removed.`,
+      });
+    },
+    onError: (error) => push({ level: "error", title: "Delete failed", message: getErrorMessage(error) }),
+  });
 
   const sets = setsQuery.data ?? [];
   const rows = rowsQuery.data ?? [];
@@ -274,6 +298,16 @@ export function EApprovalMasterDataPageClient() {
                     <Download className="size-3.5" />
                     Export
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    disabled={rows.length === 0 || deleteAllMutation.isPending}
+                    onClick={() => setDeleteAllOpen(true)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete all
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -423,6 +457,30 @@ export function EApprovalMasterDataPageClient() {
                     onImported={invalidateRows}
                   />
                 ) : null}
+                <Dialog open={deleteAllOpen} onOpenChange={setDeleteAllOpen}>
+                  <DialogContent className="w-[min(calc(100vw-2rem),440px)]">
+                    <DialogHeader>
+                      <DialogTitle>Delete all rows</DialogTitle>
+                      <DialogDescription>
+                        This removes {rows.length.toLocaleString()} rows from {selectedSet?.name ?? "this set"}. The set
+                        stays. The rows do not.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setDeleteAllOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={deleteAllMutation.isPending}
+                        onClick={() => deleteAllMutation.mutate()}
+                      >
+                        Delete all
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </>
             )}
           </div>

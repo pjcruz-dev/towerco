@@ -171,6 +171,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceSubmissionsC
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalHealthController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalManagerLookupTestController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalMasterDataLookupController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalMasterDataRowBulkDestroyController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalMasterDataRowBulkStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalMasterDataRowDestroyController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalMasterDataRowIndexController;
@@ -625,6 +626,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('e-approval/master-data-sets/{set}/rows', EApprovalMasterDataRowIndexController::class)->name('api.tenant.v1.e_approval.master_data_rows.index');
     Route::post('e-approval/master-data-sets/{set}/rows', EApprovalMasterDataRowStoreController::class)->name('api.tenant.v1.e_approval.master_data_rows.store');
     Route::post('e-approval/master-data-sets/{set}/rows/bulk', EApprovalMasterDataRowBulkStoreController::class)->name('api.tenant.v1.e_approval.master_data_rows.bulk');
+    Route::delete('e-approval/master-data-sets/{set}/rows', EApprovalMasterDataRowBulkDestroyController::class)->name('api.tenant.v1.e_approval.master_data_rows.bulk_destroy');
     Route::put('e-approval/master-data-rows/{row}', EApprovalMasterDataRowUpdateController::class)->name('api.tenant.v1.e_approval.master_data_rows.update');
     Route::delete('e-approval/master-data-rows/{row}', EApprovalMasterDataRowDestroyController::class)->name('api.tenant.v1.e_approval.master_data_rows.destroy');
     Route::get('e-approval/delegations', EApprovalDelegationIndexController::class)->name('api.tenant.v1.e_approval.delegations.index');

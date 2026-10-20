@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\Documents\Models\Site;
 use App\Modules\EApproval\Models\EApprovalMasterDataRow;
 use App\Modules\EApproval\Models\EApprovalMasterDataSet;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -14,6 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 final class EApprovalMasterDataService
 {
+    public function __construct(
+        private readonly EApprovalAuditLogger $audit,
+    ) {}
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -296,6 +301,27 @@ final class EApprovalMasterDataService
     public function deleteRow(EApprovalMasterDataRow $row): void
     {
         $row->delete();
+    }
+
+    public function deleteAllRows(EApprovalMasterDataSet $set, ?Authenticatable $actor = null): int
+    {
+        $count = $set->rows()->count();
+        if ($count === 0) {
+            return 0;
+        }
+
+        $set->rows()->delete();
+        $this->audit->log(
+            'master_data.rows_cleared',
+            (string) $set->id,
+            'Deleted '.$count.' rows from '.$set->name,
+            $actor,
+            ['row_count' => ['from' => $count, 'to' => 0]],
+            entityType: 'e_approval_master_data_set',
+            entityLabel: (string) $set->name,
+        );
+
+        return $count;
     }
 
     private function blankToNull(mixed $value): ?string

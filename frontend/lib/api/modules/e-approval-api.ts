@@ -1489,6 +1489,13 @@ export async function deleteEApprovalMasterDataRow(rowId: string): Promise<void>
   await apiClient.delete(`/e-approval/master-data-rows/${rowId}`);
 }
 
+export async function deleteAllEApprovalMasterDataRows(setId: string): Promise<{ deleted: number }> {
+  const response = await apiClient.delete<{ data: { deleted: number } }>(
+    `/e-approval/master-data-sets/${setId}/rows`,
+  );
+  return response.data.data;
+}
+
 export async function bulkImportEApprovalMasterDataRows(
   setId: string,
   rows: Record<string, unknown>[],
