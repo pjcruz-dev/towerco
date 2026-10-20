@@ -40,7 +40,7 @@ import {
 import { permissions } from "@/lib/rbac/permissions";
 import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
 import { GENERAL_SYSTEM_GROUPS } from "@/lib/rbac/role-management-layout";
-import type { RoleAiAccess } from "@/lib/rbac/role-ai-access";
+import { roleAllowsPermissionEdit, type RoleAiAccess } from "@/lib/rbac/role-ai-access";
 import { ATC_OPERATIONAL_ROLE_ORDER, filterRolesForEnabledModules } from "@/lib/rbac/role-groups";
 import { useNotificationStore } from "@/stores/notification-store";
 import { cn } from "@/lib/utils";
@@ -101,7 +101,7 @@ export function RolesPageClient() {
   const dynEntities = entitiesQuery.data ?? [];
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
-  const canEditSelected = Boolean(selectedRole && !selectedRole.is_system);
+  const canEditSelected = Boolean(selectedRole && roleAllowsPermissionEdit(selectedRole.name));
 
   useEffect(() => {
     if (roles.length === 0) {
@@ -167,11 +167,13 @@ export function RolesPageClient() {
       permissions: string[];
       accessMatrix: RoleAccessMatrix;
     }) => updateAdminRole(roleId, perms, accessMatrix),
-    onSuccess: (_data, variables) => {
+    onSuccess: (updated, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
       setDirty(false);
-      setDraftPermissions(variables.permissions);
-      setDraftMatrix(variables.accessMatrix);
+      if (selectedRole?.id === variables.roleId) {
+        setDraftPermissions(updated.permissions);
+        setDraftMatrix(updated.access_matrix ?? variables.accessMatrix);
+      }
       notify({
         level: "success",
         title: "Permission updated successfully",
@@ -218,7 +220,7 @@ export function RolesPageClient() {
   });
 
   function persist(nextPermissions: string[], nextMatrix: RoleAccessMatrix) {
-    if (!selectedRole || !canEditSelected) return;
+    if (!selectedRole || !canEditSelected || updateMutation.isPending) return;
     setDraftPermissions(nextPermissions);
     setDraftMatrix(nextMatrix);
     setDirty(false);
@@ -416,7 +418,7 @@ export function RolesPageClient() {
                               {role.is_baseline ? (
                                 <Shield
                                   className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-                                  aria-label="Protected role"
+                                  aria-label="Built-in role"
                                 />
                               ) : null}
                             </div>
@@ -452,13 +454,13 @@ export function RolesPageClient() {
                     Permissions for{" "}
                     <span className="capitalize">{selectedRole ? roleLabel(selectedRole.name) : "…"}</span>
                   </h2>
-                  {selectedRole?.is_system ? (
+                  {selectedRole && !canEditSelected ? (
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Protected system role — clone to customize permissions.
+                      Workspace owner stays unrestricted.
                     </p>
                   ) : (
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Changes save automatically when you toggle a permission.
+                      Check a permission to make it applicable for this role. Changes save when you toggle.
                     </p>
                   )}
                 </div>
@@ -677,6 +679,7 @@ export function RolesPageClient() {
               {selectedRole && permTab === "ai" ? (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                 <RoleAiAccessPanel
+                  key={selectedRole.id}
                   value={draftMatrix.ai}
                   disabled={!canEditSelected || updateMutation.isPending}
                   saving={updateMutation.isPending}

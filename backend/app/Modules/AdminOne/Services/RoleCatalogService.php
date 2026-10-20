@@ -211,17 +211,10 @@ class RoleCatalogService
             ]);
         }
 
-        if ($systemRole && $accessMatrix === null) {
-            throw ValidationException::withMessages([
-                'role' => [__('System role permissions stay fixed. Field access can still be set.')],
-            ]);
-        }
-
         $beforeCount = $role->permissions()->count();
-        if (! $systemRole) {
-            $this->assertPermissionsExist($permissions);
-            $role->syncPermissions($permissions);
-        }
+        $permissions = $this->alignAiAssistantPermissions($permissions, $accessMatrix);
+        $this->assertPermissionsExist($permissions);
+        $role->syncPermissions($permissions);
 
         if ($accessMatrix !== null && Schema::connection('tenant')->hasColumn('roles', 'access_matrix_json')) {
             $role->access_matrix_json = RoleAccessMatrix::normalize($accessMatrix);
@@ -235,7 +228,7 @@ class RoleCatalogService
         $this->activity->record(
             module: 'team_access',
             action: 'rbac.role_permissions_updated',
-            summary: ($systemRole ? 'Field access updated · ' : 'Role permissions updated · ').$role->name,
+            summary: 'Role permissions updated · '.$role->name,
             entityType: 'role',
             entityId: (string) $role->id,
             entityLabel: (string) $role->name,
@@ -249,6 +242,58 @@ class RoleCatalogService
         );
 
         return $fresh;
+    }
+
+    /**
+     * The AI Assistant tab is the control for this role's assistant permissions.
+     * Other permissions on the role are left as submitted.
+     *
+     * @param  list<string>  $permissions
+     * @param  array<string, mixed>|null  $accessMatrix
+     * @return list<string>
+     */
+    private function alignAiAssistantPermissions(array $permissions, ?array $accessMatrix): array
+    {
+        if ($accessMatrix === null || ! array_key_exists('ai', $accessMatrix)) {
+            return $permissions;
+        }
+
+        $managed = ['ai_assistant:use', 'ai_assistant:tools:use', 'ai_assistant:actions:execute'];
+        $kept = array_values(array_diff($permissions, $managed));
+        $normalized = RoleAccessMatrix::normalize(['ai' => $accessMatrix['ai']]);
+        $ai = $normalized['ai'] ?? null;
+
+        if ($ai === null) {
+            $grant = $managed;
+        } else {
+            $preset = (string) ($ai['preset'] ?? 'unrestricted');
+            $caps = RoleAccessMatrix::capabilitiesForPreset(
+                $preset,
+                is_array($ai['capabilities'] ?? null) ? $ai['capabilities'] : [],
+            );
+            if ($preset === 'none' || ! in_array(true, $caps, true)) {
+                $grant = [];
+            } else {
+                $grant = ['ai_assistant:use'];
+                if ($caps['ask_lookup'] ?? false) {
+                    $grant[] = 'ai_assistant:tools:use';
+                }
+                foreach (['create_update', 'delete_records', 'build_reports', 'build_system', 'workflows', 'users_roles', 'read_code'] as $cap) {
+                    if ($caps[$cap] ?? false) {
+                        $grant[] = 'ai_assistant:actions:execute';
+                        break;
+                    }
+                }
+            }
+        }
+
+        $present = TenantPermission::query()
+            ->where('guard_name', 'sanctum')
+            ->whereIn('name', $grant)
+            ->pluck('name')
+            ->all();
+
+        return array_values(array_unique([...$kept, ...$present]));
     }
 
     public function deleteCustomRole(TenantRole $role): void

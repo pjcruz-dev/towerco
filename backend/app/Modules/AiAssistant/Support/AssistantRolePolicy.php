@@ -39,8 +39,19 @@ final class AssistantRolePolicy
     public function blocksAssistant(TenantUser $user): bool
     {
         $ai = $this->policy($user);
+        if (! is_array($ai)) {
+            return false;
+        }
+        if (($ai['preset'] ?? '') === 'none') {
+            return true;
+        }
 
-        return is_array($ai) && ($ai['preset'] ?? '') === 'none';
+        $caps = RoleAccessMatrix::capabilitiesForPreset(
+            (string) ($ai['preset'] ?? 'unrestricted'),
+            is_array($ai['capabilities'] ?? null) ? $ai['capabilities'] : [],
+        );
+
+        return ! in_array(true, $caps, true);
     }
 
     public function allowsCapability(TenantUser $user, string $capability): bool
