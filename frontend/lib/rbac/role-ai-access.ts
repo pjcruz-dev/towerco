@@ -125,6 +125,25 @@ export function resolvedAiCapabilities(access: RoleAiAccess | null | undefined):
   return capabilitiesForPreset(preset);
 }
 
+/** Workspace owner stays unrestricted. The API rejects a matrix on these names. */
+const AI_LOCKED_ROLE_NAMES = new Set(["tenant_admin", "administrator"]);
+
+export function roleAllowsPermissionEdit(roleName: string): boolean {
+  return !AI_LOCKED_ROLE_NAMES.has(roleName);
+}
+
+/**
+ * Flip one capability and keep the boxes that are on screen.
+ * Callers store the result under the Custom preset.
+ */
+export function toggleAiCapability(
+  access: RoleAiAccess | null | undefined,
+  id: AiCapability,
+  checked: boolean,
+): AiCapabilityMap {
+  return { ...resolvedAiCapabilities(access), [id]: checked };
+}
+
 export function isAiPreset(value: string): value is AiPreset {
   return AI_PRESETS.some((preset) => preset.id === value);
 }
