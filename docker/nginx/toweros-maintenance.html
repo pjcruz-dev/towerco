@@ -7,74 +7,114 @@
   <style>
     :root {
       color-scheme: light;
+      --bg: #f4f6f8;
+      --ink: #1c2834;
+      --muted: #5c6b7a;
+      --gear: #5d6b7a;
+      --gear-soft: #8b98a6;
+      --ring: rgba(93, 107, 122, 0.18);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #12171c;
+        --ink: #e7edf2;
+        --muted: #9aa8b5;
+        --gear: #c5d0d8;
+        --gear-soft: #8b98a6;
+        --ring: rgba(197, 208, 216, 0.16);
+      }
     }
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      min-height: 100%;
-    }
+    html, body { height: 100%; margin: 0; }
     body {
       display: flex;
       align-items: center;
       justify-content: center;
+      min-height: 100vh;
       padding: 32px 20px;
-      background: #f7f8fb;
-      color: #1e293b;
+      background:
+        radial-gradient(circle at 50% 42%, var(--ring), transparent 28%),
+        var(--bg);
+      color: var(--ink);
       font-family: "Segoe UI", system-ui, sans-serif;
     }
     main {
-      width: min(100%, 520px);
+      width: min(100%, 440px);
       text-align: center;
+      animation: rise 700ms ease both;
     }
-    .mark {
+    .stage {
       position: relative;
-      width: 148px;
-      height: 148px;
+      width: 168px;
+      height: 168px;
       margin: 0 auto 28px;
     }
-    .mark::before {
-      content: "";
+    .halo {
       position: absolute;
-      inset: 0;
+      inset: 8px;
       border-radius: 999px;
       background:
-        radial-gradient(circle, rgba(148, 163, 184, 0.16) 0 62%, transparent 63%),
-        repeating-radial-gradient(circle, rgba(148, 163, 184, 0.28) 0 1px, transparent 1px 7px);
+        repeating-radial-gradient(circle, var(--ring) 0 1px, transparent 1px 8px);
+      animation: pulse 3.6s ease-in-out infinite;
     }
     svg {
       position: relative;
-      width: 148px;
-      height: 148px;
+      width: 168px;
+      height: 168px;
+      overflow: visible;
     }
+    .gear {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .gear-lg { animation: spin 9s linear infinite; }
+    .gear-sm { animation: spin 6s linear infinite reverse; }
     h1 {
       margin: 0;
       font-size: 32px;
-      font-weight: 700;
+      font-weight: 650;
       letter-spacing: -0.03em;
-      color: #1e293b;
     }
     p {
       margin: 12px auto 0;
-      max-width: 360px;
-      font-size: 14px;
-      line-height: 1.55;
-      color: #64748b;
+      max-width: 340px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.96); opacity: 0.7; }
+      50% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gear-lg, .gear-sm, .halo, main { animation: none; }
     }
   </style>
 </head>
 <body>
   <main>
-    <div class="mark" aria-hidden="true">
-      <svg viewBox="0 0 148 148" fill="none" stroke-linecap="round" stroke-linejoin="round">
-        <g transform="translate(78 62)" stroke="#64748b" stroke-width="2">
-          <circle r="18" />
-          <circle r="7" />
-          <path d="M0-27v8M0 19v8M-27 0h8M19 0h8M-19-19l5.6 5.6M13.4 13.4 19 19M-19 19l5.6-5.6M13.4-13.4 19-19" />
+    <div class="stage" aria-hidden="true">
+      <div class="halo"></div>
+      <svg viewBox="0 0 168 168" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(96 70)">
+          <g class="gear gear-lg" stroke="var(--gear)" stroke-width="2.1">
+            <circle r="22" />
+            <circle r="8" />
+            <path d="M0-32v9M0 23v9M-32 0h9M23 0h9M-22.6-22.6l6.4 6.4M16.2 16.2l6.4 6.4M-22.6 22.6l6.4-6.4M16.2-16.2l6.4-6.4" />
+          </g>
         </g>
-        <g transform="translate(48 96)" stroke="#94a3b8" stroke-width="1.8">
-          <circle r="14" />
-          <circle r="5" />
-          <path d="M0-21v6M0 15v6M-21 0h6M15 0h6M-15-15l4.2 4.2M10.8 10.8 15 15M-15 15l4.2-4.2M10.8-10.8 15-15" />
+        <g transform="translate(58 112)">
+          <g class="gear gear-sm" stroke="var(--gear-soft)" stroke-width="1.9">
+            <circle r="16" />
+            <circle r="5.5" />
+            <path d="M0-24v7M0 17v7M-24 0h7M17 0h7M-17-17l4.8 4.8M12.2 12.2l4.8 4.8M-17 17l4.8-4.8M12.2-12.2l4.8-4.8" />
+          </g>
         </g>
       </svg>
     </div>
