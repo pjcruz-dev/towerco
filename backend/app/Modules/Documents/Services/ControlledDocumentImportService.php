@@ -31,6 +31,7 @@ final class ControlledDocumentImportService
         private readonly TenantActivityLogger $activity,
         private readonly ControlledDocumentPendingImportService $pending,
         private readonly ExcelWorkbookReader $workbooks,
+        private readonly ControlledDocumentDcfNumberService $dcfNumbers,
     ) {}
 
     /**
@@ -327,8 +328,9 @@ final class ControlledDocumentImportService
         $code = trim((string) ($data['document_code'] ?? ''));
         $title = trim((string) ($data['title'] ?? ''));
         $revisionNumber = $this->parseRevisionNumber($data['revision_number'] ?? null, 0);
+        $dcfNumber = $this->dcfNumbers->parseImported($data['dcf_number'] ?? null);
 
-        return DB::connection('tenant')->transaction(function () use ($data, $actor, $file, $code, $title, $revisionNumber): string {
+        return DB::connection('tenant')->transaction(function () use ($data, $actor, $file, $code, $title, $revisionNumber, $dcfNumber): string {
             /** @var ControlledDocument|null $document */
             $document = ControlledDocument::query()
                 ->where('document_code', $code)
@@ -347,6 +349,9 @@ final class ControlledDocumentImportService
                 if (! $document instanceof ControlledDocument || ! $target instanceof ControlledDocumentRevision || ! $file instanceof UploadedFile || $targetHasFile) {
                     if ($document instanceof ControlledDocument) {
                         $this->supersedeRevisionsBelowCurrent($document);
+                        if ($this->applyImportedDcf($document, $revisionNumber, $dcfNumber)) {
+                            return 'updated';
+                        }
                     }
 
                     return 'skipped';
@@ -354,6 +359,7 @@ final class ControlledDocumentImportService
 
                 $this->storeRevisionFile($document, $target, $file, $actor);
                 $this->supersedeRevisionsBelowCurrent($document);
+                $this->applyImportedDcf($document, $revisionNumber, $dcfNumber);
 
                 return 'attached';
             }
@@ -415,9 +421,82 @@ final class ControlledDocumentImportService
 
             $outcome = $document->wasRecentlyCreated ? 'created' : 'updated';
             $this->supersedeRevisionsBelowCurrent($document);
+            $this->applyImportedDcf($document, $revisionNumber, $dcfNumber);
 
             return $outcome;
         });
+    }
+
+    /**
+     * Store a DCF number that already exists on a published import row.
+     * The document keeps the number of its current revision. Older rows keep their own.
+     */
+    private function applyImportedDcf(ControlledDocument $document, int $revisionNumber, ?string $dcfNumber): bool
+    {
+        if ($dcfNumber === null) {
+            return false;
+        }
+
+        $revision = $document->revisions()->where('revision_number', $revisionNumber)->first();
+        $isCurrent = $revisionNumber >= (int) $document->current_revision;
+        $changed = false;
+
+        if ($isCurrent) {
+            $current = trim((string) ($document->dcf_number ?? ''));
+            if ($current !== '' && $current !== $dcfNumber) {
+                throw ValidationException::withMessages([
+                    'dcf_number' => [__('This document already has DCF number :current.', ['current' => $current])],
+                ]);
+            }
+
+            $taken = ControlledDocument::query()
+                ->where('dcf_number', $dcfNumber)
+                ->where('id', '!=', $document->id)
+                ->exists();
+            if ($taken) {
+                throw ValidationException::withMessages([
+                    'dcf_number' => [__('DCF number :number is already used.', ['number' => $dcfNumber])],
+                ]);
+            }
+
+            if ($current === '') {
+                $document->dcf_number = $dcfNumber;
+                $document->save();
+                $changed = true;
+            }
+        }
+
+        if ($revision instanceof ControlledDocumentRevision) {
+            $revisionNumberValue = trim((string) ($revision->dcf_number ?? ''));
+            if ($revisionNumberValue !== '' && $revisionNumberValue !== $dcfNumber) {
+                throw ValidationException::withMessages([
+                    'dcf_number' => [__('Revision :rev already has DCF number :current.', [
+                        'rev' => (string) $revisionNumber,
+                        'current' => $revisionNumberValue,
+                    ])],
+                ]);
+            }
+
+            $takenByRevision = ControlledDocumentRevision::query()
+                ->where('dcf_number', $dcfNumber)
+                ->where('id', '!=', $revision->id)
+                ->exists();
+            if ($takenByRevision) {
+                throw ValidationException::withMessages([
+                    'dcf_number' => [__('DCF number :number is already used.', ['number' => $dcfNumber])],
+                ]);
+            }
+
+            if ($revisionNumberValue === '') {
+                $revision->dcf_number = $dcfNumber;
+                $revision->save();
+                $changed = true;
+            }
+        }
+
+        $this->dcfNumbers->reserveImported($dcfNumber);
+
+        return $changed;
     }
 
     private function currentRevision(?ControlledDocument $document): ?ControlledDocumentRevision
@@ -670,6 +749,11 @@ final class ControlledDocumentImportService
         $status = strtolower(trim((string) ($data['status'] ?? '')));
         if ($status !== '' && ! in_array($status, ['pending', 'published'], true)) {
             return __('status must be pending or published.');
+        }
+
+        $dcfProblem = $this->dcfNumbers->importProblem($data['dcf_number'] ?? null, $status === 'pending');
+        if ($dcfProblem !== null) {
+            return $dcfProblem;
         }
 
         return match ($fileStatus) {

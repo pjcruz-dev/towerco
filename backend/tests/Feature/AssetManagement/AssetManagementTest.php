@@ -10,7 +10,9 @@ use App\Modules\AssetManagement\Models\Asset;
 use App\Modules\DynamicEntities\Models\DynField;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Schema;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -333,6 +335,45 @@ final class AssetManagementTest extends TestCase
         $this->assertIsArray($identification);
         $this->assertSame($identification['id'], $created->json('data.form_group_id'));
         $this->assertSame($identification['id'], $created->json('data.view_group_id'));
+    }
+
+    public function test_the_asset_form_loads_when_dynamic_entities_is_off(): void
+    {
+        Schema::connection('central')->table('tenants', function (Blueprint $table): void {
+            $table->json('enabled_modules')->nullable();
+        });
+        $this->testTenant->enabled_modules = ['core', 'team_access', 'asset_management'];
+        $this->testTenant->save();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/assets/schema')
+            ->assertOk();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dynamic-entities/entities/it_asset')
+            ->assertOk()
+            ->assertJsonPath('data.slug', 'it_asset');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/dynamic-entities/entities/it_asset/field-groups', [
+                'name' => 'Holder notes',
+                'surface' => 'assignment',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.surface', 'assignment');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dynamic-entities/entities')
+            ->assertForbidden();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dynamic-entities/entities/it_asset/records')
+            ->assertForbidden();
     }
 
     public function test_a_field_group_can_live_on_an_asset_tab(): void

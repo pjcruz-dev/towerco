@@ -103,6 +103,26 @@ export function formatSubmissionCurrencyDisplay(
   return formatted || empty;
 }
 
+function isBlankPublishAssignedField(
+  name: string,
+  options: SubmissionFormFieldSnapshot["options"],
+  value: string | null | undefined,
+): boolean {
+  if ((value ?? "").trim() !== "") {
+    return false;
+  }
+
+  if (name === "dcf_number") {
+    return true;
+  }
+
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    return false;
+  }
+
+  return options.assigned_on_publish === true;
+}
+
 function buildTableForValue(
   value: SubmissionFormValueRow,
   formField: EApprovalFormFieldInput | null,
@@ -210,6 +230,11 @@ export function buildSubmissionFormContentGroups(
 
       const value = valueByName.get(name);
       if (!value) {
+        continue;
+      }
+
+      if (isBlankPublishAssignedField(name, snapshot.options, value.value)) {
+        usedNames.add(name);
         continue;
       }
 

@@ -59,13 +59,27 @@
       },
       {
         "type": "text",
+        "name": "dcf_number",
+        "label": "DCF number",
+        "validation": {
+          "required": false,
+          "help_text": "Assigned when the document is published."
+        },
+        "options": {
+          "layout": { "width": "half" },
+          "assigned_on_publish": true
+        },
+        "step_order": 2
+      },
+      {
+        "type": "text",
         "name": "document_title",
         "label": "Document title",
         "validation": { "required": true },
         "options": {
           "layout": { "width": "half", "row_id": "dcf_id_row", "slot": 1, "row_columns": 2 }
         },
-        "step_order": 2
+        "step_order": 3
       },
       {
         "type": "number",

@@ -164,12 +164,121 @@ final class EApprovalDocumentSequenceService
         });
     }
 
+    /**
+     * Put an issued document code back in front of the counter.
+     *
+     * Only numbers this prefix has already handed out are accepted. The caller
+     * must free the submission's document_no in the same transaction so the
+     * unique key can be reused.
+     */
+    public function releaseDocumentCode(string $documentNo): bool
+    {
+        $documentNo = trim($documentNo);
+        if ($documentNo === '' || preg_match('/-R\d+$/i', $documentNo) === 1) {
+            return false;
+        }
+
+        if (preg_match('/^(.*)-(\d+)$/', $documentNo, $matches) !== 1) {
+            return false;
+        }
+
+        $prefix = $matches[1];
+        $number = (int) $matches[2];
+        if ($prefix === '' || $number < 1) {
+            return false;
+        }
+
+        $row = DB::connection('tenant')->table('e_approval_document_sequences')
+            ->where('prefix', $prefix)
+            ->lockForUpdate()
+            ->first();
+
+        if ($row === null || $number >= (int) $row->next_no) {
+            return false;
+        }
+
+        $held = DB::connection('tenant')->table('e_approval_released_document_numbers')
+            ->where('prefix', $prefix)
+            ->where('seq_no', $number)
+            ->lockForUpdate()
+            ->exists();
+
+        if (! $held) {
+            DB::connection('tenant')->table('e_approval_released_document_numbers')->insert([
+                'prefix' => $prefix,
+                'seq_no' => $number,
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * Next integer for a private series key. The caller formats the visible number.
+     */
+    public function takeNext(string $prefix): int
+    {
+        return DB::connection('tenant')->transaction(
+            fn (): int => $this->allocateSequence($prefix),
+        );
+    }
+
+    /**
+     * An imported number is already used. The next issue for this prefix must be higher,
+     * and the same integer must not come back out of the released pool.
+     */
+    public function noteConsumed(string $prefix, int $seq): void
+    {
+        if ($seq < 1) {
+            return;
+        }
+
+        DB::connection('tenant')->transaction(function () use ($prefix, $seq): void {
+            $row = DB::connection('tenant')->table('e_approval_document_sequences')
+                ->where('prefix', $prefix)
+                ->lockForUpdate()
+                ->first();
+
+            $floor = $seq + 1;
+            if ($row === null) {
+                DB::connection('tenant')->table('e_approval_document_sequences')->insert([
+                    'prefix' => $prefix,
+                    'next_no' => $floor,
+                ]);
+            } elseif ((int) $row->next_no < $floor) {
+                DB::connection('tenant')->table('e_approval_document_sequences')
+                    ->where('prefix', $prefix)
+                    ->update(['next_no' => $floor]);
+            }
+
+            DB::connection('tenant')->table('e_approval_released_document_numbers')
+                ->where('prefix', $prefix)
+                ->where('seq_no', $seq)
+                ->delete();
+        });
+    }
+
     private function allocateSequence(string $prefix): int
     {
         $row = DB::connection('tenant')->table('e_approval_document_sequences')
             ->where('prefix', $prefix)
             ->lockForUpdate()
             ->first();
+
+        $released = DB::connection('tenant')->table('e_approval_released_document_numbers')
+            ->where('prefix', $prefix)
+            ->orderBy('seq_no')
+            ->lockForUpdate()
+            ->first();
+
+        if ($released !== null) {
+            DB::connection('tenant')->table('e_approval_released_document_numbers')
+                ->where('prefix', $prefix)
+                ->where('seq_no', (int) $released->seq_no)
+                ->delete();
+
+            return (int) $released->seq_no;
+        }
 
         $n = $row ? max(1, (int) $row->next_no) : 1;
 

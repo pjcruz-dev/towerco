@@ -47,6 +47,30 @@ final class ControlledDocumentFormResolverService
             });
     }
 
+    /**
+     * Form used to start a revision when the register row was imported and has no form of its own.
+     */
+    public function resolveRevisionFormFor(TenantUser $actor): ?EApprovalForm
+    {
+        $preferred = $this->resolvePublishedDefaultFormFor($actor);
+        if ($preferred instanceof EApprovalForm) {
+            return $preferred;
+        }
+
+        return EApprovalForm::query()
+            ->where('status', 'published')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->first(function (EApprovalForm $form) use ($actor): bool {
+                $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+                if (ControlledDocumentSyncConfig::parse($metadata) === null) {
+                    return false;
+                }
+
+                return EApprovalFormRequestAccessSupport::viewerCanStart($actor, $metadata);
+            });
+    }
+
     public function resolveSyncConfig(): ?ControlledDocumentSyncConfig
     {
         $form = $this->resolvePublishedDefaultForm();

@@ -7,6 +7,15 @@ import { EApprovalSignaturePad } from "@/components/e-approval/e-approval-signat
 import { EApprovalSignaturePreview } from "@/components/e-approval/e-approval-signature-preview";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,15 +31,10 @@ import {
 } from "@/modules/e-approval/signature";
 import { SIGNATURE_CONSENT_HINT, SIGNATURE_CONSENT_LABEL, signatureStorageConsentLabel } from "@/modules/e-approval/signature-consent";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
-import { cn } from "@/lib/utils";
 
 type Props = {
   value: string | null;
   onChange: (value: string | null) => void;
-  consentAccepted: boolean;
-  onConsentChange: (accepted: boolean) => void;
-  /** When true, draw attention to unchecked consent boxes (e.g. Approve clicked early). */
-  highlightMissingConsents?: boolean;
   disabled?: boolean;
   error?: string | null;
   onErrorChange?: (error: string | null) => void;
@@ -40,21 +44,14 @@ type Props = {
 export function EApprovalApprovalSignatureField({
   value,
   onChange,
-  consentAccepted,
-  onConsentChange,
-  highlightMissingConsents = false,
   disabled,
   error,
   onErrorChange,
   enabled = true,
 }: Props) {
-  const organizationLabel = useOrganizationLabel("Alliance Towers");
-  const storageConsentLabel = signatureStorageConsentLabel(organizationLabel);
   const [mode, setMode] = useState<SignatureInputMode>("draw");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [legalConsent, setLegalConsent] = useState(false);
-  const [storageConsent, setStorageConsent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileQuery = useQuery({
@@ -81,20 +78,6 @@ export function EApprovalApprovalSignatureField({
       setMode(signatureModeForValue(profileSignature));
     }
   }, [enabled, onChange, profileSignature, value]);
-
-  useEffect(() => {
-    if (!consentAccepted) {
-      setLegalConsent(false);
-      setStorageConsent(false);
-    }
-  }, [consentAccepted]);
-
-  const syncConsents = (legal: boolean, storage: boolean) => {
-    setLegalConsent(legal);
-    setStorageConsent(storage);
-    onConsentChange(legal && storage);
-    onErrorChange?.(null);
-  };
 
   const handleUpload = async (file: File | null | undefined) => {
     if (!file || disabled) {
@@ -239,68 +222,9 @@ export function EApprovalApprovalSignatureField({
         </div>
       </Tabs>
 
-      <div
-        data-help="ea-decide-signature-consent"
-        className={cn(
-          "space-y-3 rounded-lg transition-colors",
-          highlightMissingConsents && !consentAccepted && "ring-2 ring-destructive/70 ring-offset-2 ring-offset-background",
-        )}
-      >
-        <label
-          className={cn(
-            "flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-            highlightMissingConsents && !legalConsent && "bg-destructive/10 ring-1 ring-destructive/40",
-          )}
-        >
-          <Checkbox
-            className={cn("mt-0.5", highlightMissingConsents && !legalConsent && "border-destructive")}
-            checked={legalConsent}
-            onCheckedChange={(checked) => {
-              syncConsents(checked === true, storageConsent);
-            }}
-            disabled={disabled}
-            aria-invalid={highlightMissingConsents && !legalConsent ? true : undefined}
-            aria-describedby="ea-approval-signature-consent-hint"
-          />
-          <span>
-            <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
-            <span id="ea-approval-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
-              {SIGNATURE_CONSENT_HINT}
-            </span>
-          </span>
-        </label>
-        <label
-          className={cn(
-            "flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
-            highlightMissingConsents && !storageConsent && "bg-destructive/10 ring-1 ring-destructive/40",
-          )}
-        >
-          <Checkbox
-            className={cn("mt-0.5", highlightMissingConsents && !storageConsent && "border-destructive")}
-            checked={storageConsent}
-            onCheckedChange={(checked) => {
-              syncConsents(legalConsent, checked === true);
-            }}
-            disabled={disabled}
-            aria-invalid={highlightMissingConsents && !storageConsent ? true : undefined}
-            aria-describedby="ea-approval-signature-storage-consent-hint"
-          />
-          <span>
-            <span className="font-medium text-foreground">{storageConsentLabel}</span>
-            <span
-              id="ea-approval-signature-storage-consent-hint"
-              className="mt-1 block text-xs text-muted-foreground"
-            >
-              {SIGNATURE_CONSENT_HINT}
-            </span>
-          </span>
-        </label>
-        {highlightMissingConsents && !consentAccepted ? (
-          <p className="px-2 text-xs font-medium text-destructive" role="alert">
-            Check both consent boxes before approving.
-          </p>
-        ) : null}
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Approve opens a confirmation. Both consent checkboxes there are required before Confirm.
+      </p>
 
       {error && !uploadError ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
@@ -311,6 +235,81 @@ export function validateApprovalSignature(signature: string | null): string | nu
   return hasSignatureValue(signature) ? null : "Add your signature before approving.";
 }
 
-export function validateApprovalSignatureConsent(accepted: boolean): string | null {
-  return accepted ? null : "Accept both electronic signature consents before approving.";
+type ConsentDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  confirming?: boolean;
+};
+
+export function EApprovalSignatureConsentDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  confirming = false,
+}: ConsentDialogProps) {
+  const organizationLabel = useOrganizationLabel("Alliance Towers");
+  const storageConsentLabel = signatureStorageConsentLabel(organizationLabel);
+  const [legalConsent, setLegalConsent] = useState(false);
+  const [storageConsent, setStorageConsent] = useState(false);
+  const ready = legalConsent && storageConsent;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setLegalConsent(false);
+    setStorageConsent(false);
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-help="ea-decide-signature-consent">
+        <DialogHeader>
+          <DialogTitle>Confirm electronic signature</DialogTitle>
+          <DialogDescription>Check both statements before you confirm this approval.</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-3">
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={legalConsent}
+              onCheckedChange={(checked) => setLegalConsent(checked === true)}
+              disabled={confirming}
+              aria-describedby="ea-approval-signature-consent-hint"
+            />
+            <span>
+              <span className="font-medium text-foreground">{SIGNATURE_CONSENT_LABEL}</span>
+              <span id="ea-approval-signature-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+                {SIGNATURE_CONSENT_HINT}
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={storageConsent}
+              onCheckedChange={(checked) => setStorageConsent(checked === true)}
+              disabled={confirming}
+              aria-describedby="ea-approval-signature-storage-consent-hint"
+            />
+            <span>
+              <span className="font-medium text-foreground">{storageConsentLabel}</span>
+              <span id="ea-approval-signature-storage-consent-hint" className="mt-1 block text-xs text-muted-foreground">
+                {SIGNATURE_CONSENT_HINT}
+              </span>
+            </span>
+          </label>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={confirming} onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={!ready || confirming} onClick={onConfirm}>
+            {confirming ? "Confirming…" : "Confirm"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

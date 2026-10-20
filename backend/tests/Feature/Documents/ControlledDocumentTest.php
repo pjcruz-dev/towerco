@@ -8,6 +8,7 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Models\ControlledDocumentRevision;
+use App\Modules\Documents\Services\ControlledDocumentDcfNumberService;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalHookService;
 use App\Modules\Documents\Services\ControlledDocumentEApprovalValuesService;
 use App\Modules\Documents\Services\ControlledDocumentPendingImportService;
@@ -23,6 +24,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
@@ -605,6 +607,185 @@ CSV;
         );
 
         tenancy()->end();
+    }
+
+    public function test_publish_stamps_a_monthly_dcf_number(): void
+    {
+        Carbon::setTestNow('2026-10-20 08:00:00');
+
+        try {
+            tenancy()->initialize($this->testTenant);
+            $form = $this->controlledForm();
+            $hook = app(ControlledDocumentEApprovalHookService::class);
+
+            $first = $this->pendingSubmission($form, 'ATC-BDD-P-010');
+            $hook->afterSubmissionOpened($first->fresh(['form']), $this->testTenantAdmin);
+            $pending = ControlledDocument::query()->where('document_code', 'ATC-BDD-P-010')->first();
+            $this->assertNotNull($pending);
+            $this->assertNull($pending->dcf_number);
+
+            $first->status = EApprovalSubmissionStatus::APPROVED;
+            $first->save();
+            $hook->afterSubmissionMutation($first->fresh(['form', 'values.field', 'attachments']), $this->testTenantAdmin);
+            $pending->refresh();
+            $this->assertSame('2026-10-001', $pending->dcf_number);
+            $this->assertSame('2026-10-001', $pending->revisions()->first()?->dcf_number);
+
+            $second = $this->approvedSubmission($form, 'ATC-BDD-P-011');
+            $hook->afterSubmissionMutation($second->fresh(['form', 'values.field', 'attachments']), $this->testTenantAdmin);
+            $this->assertSame(
+                '2026-10-002',
+                ControlledDocument::query()->where('document_code', 'ATC-BDD-P-011')->value('dcf_number'),
+            );
+
+            Carbon::setTestNow('2026-11-03 08:00:00');
+            $third = $this->approvedSubmission($form, 'ATC-BDD-P-012');
+            $hook->afterSubmissionMutation($third->fresh(['form', 'values.field', 'attachments']), $this->testTenantAdmin);
+            $this->assertSame(
+                '2026-11-001',
+                ControlledDocument::query()->where('document_code', 'ATC-BDD-P-012')->value('dcf_number'),
+            );
+
+            $direct = app(ControlledDocumentDcfNumberService::class)->next();
+            $this->assertSame('2026-11-002', $direct);
+            tenancy()->end();
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_cancelled_controlled_request_reuses_its_document_code(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $form = $this->controlledForm('ATC-{department}-{documentType}-{seq:3}');
+        $numbers = app(EApprovalDocumentSequenceService::class);
+
+        $first = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $this->assertSame('ATC-BDD-P-001', $first);
+
+        $second = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $this->assertSame('ATC-BDD-P-002', $second);
+
+        $cancelled = $this->submission($form, $first, EApprovalSubmissionStatus::CANCELLED);
+        app(ControlledDocumentEApprovalHookService::class)->afterSubmissionClosed($cancelled->fresh('form'));
+        $cancelled->refresh();
+        $this->assertSame('ATC-BDD-P-001-CANCELLED', $cancelled->document_no);
+
+        $reused = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $this->assertSame('ATC-BDD-P-001', $reused);
+
+        $next = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $this->assertSame('ATC-BDD-P-003', $next);
+
+        $revisionNo = $numbers->nextRevisionNumber('ATC-BDD-P-002');
+        $revision = $this->submission($form, $revisionNo, EApprovalSubmissionStatus::CANCELLED);
+        app(ControlledDocumentEApprovalHookService::class)->afterSubmissionClosed($revision->fresh('form'));
+        $revision->refresh();
+        $this->assertSame($revisionNo, $revision->document_no);
+
+        $afterRevisionCancel = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $this->assertSame('ATC-BDD-P-004', $afterRevisionCancel);
+
+        $rejected = $this->submission($form, 'ATC-BDD-P-004', EApprovalSubmissionStatus::REJECTED);
+        app(ControlledDocumentEApprovalHookService::class)->afterSubmissionClosed($rejected->fresh('form'));
+        $rejected->refresh();
+        $this->assertSame('ATC-BDD-P-004', $rejected->document_no);
+
+        $hook = app(ControlledDocumentEApprovalHookService::class);
+        $openedCode = $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]);
+        $opened = $this->pendingSubmission($form, $openedCode);
+        $hook->afterSubmissionOpened($opened->fresh(['form']), $this->testTenantAdmin);
+        $this->assertNotNull(ControlledDocument::query()->where('document_code', $openedCode)->first());
+        $opened->status = EApprovalSubmissionStatus::CANCELLED;
+        $opened->save();
+        $hook->afterSubmissionClosed($opened->fresh('form'));
+        $opened->refresh();
+        $this->assertNull(ControlledDocument::query()->where('document_code', $openedCode)->first());
+        $this->assertSame($openedCode.'-CANCELLED', $opened->document_no);
+        $this->assertSame($openedCode, $numbers->nextDocumentNumber($form, [
+            'department' => 'BDD',
+            'document_type' => 'P',
+        ]));
+
+        tenancy()->end();
+    }
+
+    public function test_imported_register_row_exposes_a_revision_form(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $form = $this->controlledForm();
+        ControlledDocument::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_code' => 'ATC-BDD-P-050',
+            'title' => 'Imported policy',
+            'current_revision' => 0,
+            'status' => ControlledDocumentStatus::PUBLISHED,
+            'published_at' => now(),
+        ]);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled?search=ATC-BDD-P-050')
+            ->assertOk()
+            ->assertJsonPath('data.default_form_id', $form->id)
+            ->assertJsonPath('data.documents.data.0.revision_form_id', $form->id)
+            ->assertJsonPath('data.documents.data.0.e_approval_form_id', null)
+            ->assertJsonPath('data.documents.data.0.dcf_number', null);
+    }
+
+    private function controlledForm(?string $template = null): EApprovalForm
+    {
+        return EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Document Control',
+            'status' => 'published',
+            'doc_no_custom_enabled' => $template !== null,
+            'doc_no_template' => $template,
+            'metadata_json' => [
+                'controlledDocumentSync' => ['enabled' => true],
+            ],
+        ]);
+    }
+
+    private function pendingSubmission(EApprovalForm $form, string $documentNo): EApprovalSubmission
+    {
+        return $this->submission($form, $documentNo, EApprovalSubmissionStatus::PENDING);
+    }
+
+    private function approvedSubmission(EApprovalForm $form, string $documentNo): EApprovalSubmission
+    {
+        return $this->submission($form, $documentNo, EApprovalSubmissionStatus::APPROVED);
+    }
+
+    private function submission(EApprovalForm $form, string $documentNo, string $status): EApprovalSubmission
+    {
+        return EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'document_no' => $documentNo,
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => $status,
+            'current_step' => 1,
+        ]);
     }
 
     private function createViewerUser(): TenantUser

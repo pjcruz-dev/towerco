@@ -53,7 +53,7 @@ import { lookupControlledDocument, type ControlledDocumentLookupResult } from "@
 import { applyComputedFieldValues } from "@/modules/e-approval/field-computed";
 import { fieldDefaultValue, parseFieldValidation, validateSubmissionValues } from "@/modules/e-approval/field-validation";
 import { isComposeFillableFieldType } from "@/modules/e-approval/form-compose-structural";
-import { groupSavedAttachmentsByField, hasPendingAttachmentFiles, pendingAttachmentsNotYetSaved } from "@/modules/e-approval/draft-attachments";
+import { groupSavedAttachmentsByField, hasPendingAttachmentFiles, mergeUploadedDraftAttachments, pendingAttachmentsNotYetSaved } from "@/modules/e-approval/draft-attachments";
 import {
   buildFormSectionProgress,
   shouldShowFormSectionProgress,
@@ -805,9 +805,18 @@ export function EApprovalSubmissionComposePanel({
       );
 
       if (hasPendingAttachmentFiles(pendingUploads)) {
-        await uploadEApprovalSubmissionAttachmentsOrThrow(submission.id, pendingUploads, cameraMetadataByField);
-        setAttachmentFiles({});
-        setCameraMetadataByField({});
+        const uploaded = await uploadEApprovalSubmissionAttachmentsOrThrow(
+          submission.id,
+          pendingUploads,
+          cameraMetadataByField,
+        );
+        submission = {
+          ...submission,
+          attachments: mergeUploadedDraftAttachments(submission.attachments ?? [], uploaded.map((attachment) => ({
+            ...attachment,
+            file_path: attachment.file_path ?? "",
+          }))),
+        };
       }
 
       return submission;
@@ -816,6 +825,36 @@ export function EApprovalSubmissionComposePanel({
       setDraftSubmissionId(submission.id);
       setParentSubmissionId(submission.parent_submission_id ?? parentSubmissionId);
       setDraftSavedAt(new Date());
+      const savedKeys = new Set(
+        (submission.attachments ?? [])
+          .filter((attachment) => attachment.field_name?.trim())
+          .map((attachment) => `${attachment.field_name!.trim()}::${attachment.file_name}`),
+      );
+      setAttachmentFiles((prev) => {
+        const next: Record<string, File[]> = {};
+        for (const [fieldName, files] of Object.entries(prev)) {
+          const remaining = files.filter((file) => !savedKeys.has(`${fieldName}::${file.name}`));
+          if (remaining.length > 0) {
+            next[fieldName] = remaining;
+          }
+        }
+        return next;
+      });
+      setCameraMetadataByField((prev) => {
+        const next: typeof prev = {};
+        for (const [fieldName, byName] of Object.entries(prev)) {
+          const remaining: typeof byName = {};
+          for (const [fileName, metadata] of Object.entries(byName)) {
+            if (!savedKeys.has(`${fieldName}::${fileName}`)) {
+              remaining[fileName] = metadata;
+            }
+          }
+          if (Object.keys(remaining).length > 0) {
+            next[fieldName] = remaining;
+          }
+        }
+        return next;
+      });
       writeLocalComposeDraft(formId, computedValues, submission.parent_submission_id ?? parentSubmissionId);
       // Update cache in place — avoid invalidate/refetch tearing down the stepped form.
       queryClient.setQueryData(["e-approval", "form", formId, "my-draft"], submission);
@@ -1057,7 +1096,7 @@ export function EApprovalSubmissionComposePanel({
     }, 4000);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- debounced autosave
-  }, [computedValues, formId, draftSubmissionId, parentSubmissionId, requiresParentSubmission, hasBalanceBlocker, isResubmitMode]);
+  }, [attachmentFiles, computedValues, formId, draftSubmissionId, parentSubmissionId, requiresParentSubmission, hasBalanceBlocker, isResubmitMode]);
 
   const showRevisionSummaryBanner =
     Boolean(controlledDocumentSync) &&
@@ -1284,7 +1323,8 @@ export function EApprovalSubmissionComposePanel({
               existingAttachmentsByField={draftExistingAttachmentsByField}
               onRemoveSavedAttachment={(attachmentId) => removeSavedAttachmentMutation.mutateAsync(attachmentId)}
               removingSavedAttachmentId={removeSavedAttachmentMutation.isPending ? removeSavedAttachmentMutation.variables ?? null : null}
-              onFileChange={(name, files) =>
+              onFileChange={(name, files) => {
+                userEditedRef.current = true;
                 setAttachmentFiles((prev) => {
                   const next = { ...prev };
                   if (files.length === 0) {
@@ -1293,9 +1333,10 @@ export function EApprovalSubmissionComposePanel({
                     next[name] = files;
                   }
                   return next;
-                })
-              }
+                });
+              }}
               onCameraChange={(name, files, metadataByName) => {
+                userEditedRef.current = true;
                 setAttachmentFiles((prev) => {
                   const next = { ...prev };
                   if (files.length === 0) {

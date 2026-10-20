@@ -7,8 +7,10 @@ namespace Tests\Feature\Documents;
 use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\Documents\Models\ControlledDocument;
+use App\Modules\Documents\Services\ControlledDocumentDcfNumberService;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -278,5 +280,53 @@ final class ControlledDocumentImportWizardTest extends TestCase
         $this->assertSame('superseded', $zero->status);
         $this->assertTrue($zero->stored_path === null || $zero->stored_path === '');
         tenancy()->end();
+    }
+
+    public function test_import_keeps_a_published_dcf_number_and_continues_the_series(): void
+    {
+        Carbon::setTestNow('2026-10-20 12:00:00');
+
+        try {
+            $template = $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->get('/api/v1/documents/controlled/import/template');
+            $template->assertOk();
+            $this->assertStringContainsString('dcf_number', $template->streamedContent());
+
+            $csv = "document_code,title,DCF Number\nATC-OMD-P-009,Leasing,2026-10-004\n";
+
+            $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->post('/api/v1/documents/controlled/import/analyze', [
+                    'file' => UploadedFile::fake()->createWithContent('register.csv', $csv),
+                ])
+                ->assertOk()
+                ->assertJsonPath('data.suggested_map.DCF Number', 'dcf_number');
+
+            $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->post('/api/v1/documents/controlled/import/run', [
+                    'file' => UploadedFile::fake()->createWithContent('register.csv', $csv),
+                    'column_map' => json_encode([
+                        'document_code' => 'document_code',
+                        'title' => 'title',
+                        'DCF Number' => 'dcf_number',
+                    ]),
+                    'available_paths' => json_encode([]),
+                ])
+                ->assertOk()
+                ->assertJsonPath('data.created', 1)
+                ->assertJsonPath('data.errors', []);
+
+            tenancy()->initialize($this->testTenant);
+            $document = ControlledDocument::query()->where('document_code', 'ATC-OMD-P-009')->first();
+            $this->assertNotNull($document);
+            $this->assertSame('2026-10-004', $document->dcf_number);
+            $this->assertSame('2026-10-004', $document->revisions()->first()?->dcf_number);
+            $this->assertSame('2026-10-005', app(ControlledDocumentDcfNumberService::class)->next());
+            tenancy()->end();
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }

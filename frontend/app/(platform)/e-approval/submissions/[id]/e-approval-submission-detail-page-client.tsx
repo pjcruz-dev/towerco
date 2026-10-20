@@ -13,7 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 
-import { EApprovalApprovalSignatureField, validateApprovalSignature, validateApprovalSignatureConsent } from "@/components/e-approval/e-approval-approval-signature-field";
+import { EApprovalApprovalSignatureField, EApprovalSignatureConsentDialog, validateApprovalSignature } from "@/components/e-approval/e-approval-approval-signature-field";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalSettlementVerdict } from "@/components/e-approval/e-approval-settlement-verdict";
@@ -143,8 +143,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [forceFullRestart, setForceFullRestart] = useState(false);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
-  const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
-  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
+  const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
   const [rerouteUserId, setRerouteUserId] = useState("");
   const [rerouteReason, setRerouteReason] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
@@ -379,8 +378,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       setSettlementReference("");
       setApprovalSignature(null);
       setApprovalSignatureError(null);
-      setSignatureConsentAccepted(false);
-      setHighlightSignatureConsents(false);
+      setSignatureConsentOpen(false);
     },
     onError: (e) => push({ level: "error", title: "Decision failed", message: getErrorMessage(e) }),
     onSettled: () => {
@@ -998,14 +996,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       <EApprovalApprovalSignatureField
                         value={approvalSignature}
                         onChange={setApprovalSignature}
-                        consentAccepted={signatureConsentAccepted}
-                        onConsentChange={(accepted) => {
-                          setSignatureConsentAccepted(accepted);
-                          if (accepted) {
-                            setHighlightSignatureConsents(false);
-                          }
-                        }}
-                        highlightMissingConsents={highlightSignatureConsents}
                         disabled={decideMutation.isPending || revisionMutation.isPending}
                         error={approvalSignatureError}
                         onErrorChange={setApprovalSignatureError}
@@ -1101,36 +1091,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           <Button
                             size="sm"
                             className={
-                              ((!signatureConsentAccepted &&
-                                !decideMutation.isPending &&
-                                !revisionMutation.isPending) ||
-                                (settlementNeedsConfirm && !settlementSeen))
-                                ? "opacity-50"
-                                : undefined
+                              settlementNeedsConfirm && !settlementSeen ? "opacity-50" : undefined
                             }
                             onClick={() => {
                               if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
                                 return;
                               }
-                              if (!signatureConsentAccepted) {
-                                setHighlightSignatureConsents(true);
-                                setApprovalSignatureError(
-                                  "Accept both electronic signature consents before approving.",
-                                );
-                                document
-                                  .querySelector('[data-help="ea-decide-signature-consent"]')
-                                  ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                return;
-                              }
                               const signatureError = validateApprovalSignature(approvalSignature);
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
-                                return;
-                              }
-                              const consentError = validateApprovalSignatureConsent(signatureConsentAccepted);
-                              if (consentError) {
-                                setHighlightSignatureConsents(true);
-                                setApprovalSignatureError(consentError);
                                 return;
                               }
                               if (settlementNeedsConfirm && !settlementSeen) {
@@ -1152,11 +1121,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                 });
                                 return;
                               }
-                              submitDecision({
-                                approvalId: pendingApproval.id,
-                                decision: "approved",
-                                signature: approvalSignature!.trim(),
-                              });
+                              setSignatureConsentOpen(true);
                             }}
                             disabled={decideMutation.isPending || revisionMutation.isPending}
                           >
@@ -1194,6 +1159,19 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           </Button>
                         </span>
                       </div>
+                      <EApprovalSignatureConsentDialog
+                        open={signatureConsentOpen}
+                        onOpenChange={setSignatureConsentOpen}
+                        confirming={decideMutation.isPending}
+                        onConfirm={() => {
+                          setSignatureConsentOpen(false);
+                          submitDecision({
+                            approvalId: pendingApproval.id,
+                            decision: "approved",
+                            signature: approvalSignature!.trim(),
+                          });
+                        }}
+                      />
                     </div>
 
                     {canManage ? (

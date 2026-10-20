@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   groupSavedAttachmentsByField,
+  mergeUploadedDraftAttachments,
   pendingAttachmentsNotYetSaved,
 } from "@/modules/e-approval/draft-attachments";
 
@@ -33,6 +34,18 @@ describe("pendingAttachmentsNotYetSaved", () => {
         [{ field_name: "file_upload_5", file_name: "report.pdf" }],
       ),
     ).toEqual({ file_upload_5: [other] });
+  });
+
+  it("keeps a file uploaded after the draft payload was read", () => {
+    expect(
+      mergeUploadedDraftAttachments(
+        [{ id: "a1", field_name: "attachments", file_name: "old.pdf" }],
+        [{ id: "a2", field_name: "attachments", file_name: "new.pdf" }],
+      ),
+    ).toEqual([
+      { id: "a1", field_name: "attachments", file_name: "old.pdf" },
+      { id: "a2", field_name: "attachments", file_name: "new.pdf" },
+    ]);
   });
 
   it("returns empty when every pending file is already saved", () => {

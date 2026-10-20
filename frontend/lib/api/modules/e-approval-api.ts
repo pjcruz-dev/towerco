@@ -408,12 +408,20 @@ export async function createEApprovalSubmission(
   return submission;
 }
 
+export type EApprovalUploadedAttachment = {
+  id: string;
+  file_name: string;
+  field_name: string | null;
+  file_path?: string;
+  metadata?: Record<string, unknown> | null;
+};
+
 export async function uploadEApprovalSubmissionAttachment(
   submissionId: string,
   file: File,
   fieldName?: string,
   metadata?: Record<string, unknown> | null,
-): Promise<{ id: string; file_name: string; field_name: string | null; metadata?: Record<string, unknown> | null }> {
+): Promise<EApprovalUploadedAttachment> {
   const form = new FormData();
   form.append("file", file);
   if (fieldName) {
@@ -424,7 +432,7 @@ export async function uploadEApprovalSubmissionAttachment(
   }
 
   const response = await apiClient.post<{
-    data: { id: string; file_name: string; field_name: string | null; metadata?: Record<string, unknown> | null };
+    data: EApprovalUploadedAttachment;
   }>(`/e-approval/submissions/${submissionId}/attachments`, form, { timeout: 120_000 });
   return response.data.data;
 }
@@ -433,14 +441,15 @@ export async function uploadEApprovalSubmissionAttachmentsOrThrow(
   submissionId: string,
   attachmentFiles: Record<string, File[]>,
   attachmentMetadata?: Record<string, Record<string, Record<string, unknown>>>,
-): Promise<void> {
+): Promise<EApprovalUploadedAttachment[]> {
   const failedUploads: string[] = [];
+  const uploaded: EApprovalUploadedAttachment[] = [];
 
   for (const [fieldName, files] of Object.entries(attachmentFiles)) {
     for (const file of files) {
       try {
         const metadata = attachmentMetadata?.[fieldName]?.[file.name] ?? null;
-        await uploadEApprovalSubmissionAttachment(submissionId, file, fieldName, metadata);
+        uploaded.push(await uploadEApprovalSubmissionAttachment(submissionId, file, fieldName, metadata));
       } catch (uploadError) {
         failedUploads.push(`${fieldName}: ${getErrorMessage(uploadError)}`);
       }
@@ -454,6 +463,8 @@ export async function uploadEApprovalSubmissionAttachmentsOrThrow(
         : `Some files could not be uploaded: ${failedUploads.join("; ")}`,
     );
   }
+
+  return uploaded;
 }
 
 export async function downloadEApprovalAttachment(attachmentId: string): Promise<Blob> {

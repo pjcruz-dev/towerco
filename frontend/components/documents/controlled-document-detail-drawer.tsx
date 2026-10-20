@@ -184,6 +184,13 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
 
               {/* Metadata grid */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                <MetaRow
+                  icon={FileText}
+                  label="DCF number"
+                  value={
+                    <span className="font-mono tabular-nums">{doc.dcf_number ?? "—"}</span>
+                  }
+                />
                 <MetaRow icon={Tag} label="Document type" value={doc.document_type ?? "—"} />
                 <MetaRow icon={Users} label="Department" value={doc.department ?? "—"} />
                 <MetaRow
@@ -239,10 +246,10 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
               {/* Primary actions */}
               {!isObsolete ? (
                 <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3">
-                  {canCreate && doc.e_approval_form_id ? (
+                  {canCreate && (doc.revision_form_id || doc.e_approval_form_id) ? (
                     <Link
                       href={controlledDocumentSubmissionUrl({
-                        formId: doc.e_approval_form_id,
+                        formId: doc.revision_form_id || doc.e_approval_form_id || "",
                         mode: "revision",
                         documentCode: doc.document_code,
                       })}
@@ -310,6 +317,11 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                               Rev {revision.revision_number}
                             </span>
                             <RevisionStatusPill status={revision.status} />
+                            {revision.dcf_number ? (
+                              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                                {revision.dcf_number}
+                              </span>
+                            ) : null}
                           </div>
                           {revision.approved_at ? (
                             <span className="text-[11px] text-muted-foreground">

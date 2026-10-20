@@ -183,6 +183,35 @@ describe("submission form content", () => {
     ).toBe(true);
   });
 
+  it("hides a blank DCF number until publish fills it", () => {
+    const groups = buildSubmissionFormContentGroups(
+      [
+        {
+          field_id: "dcf",
+          field_name: "dcf_number",
+          field_type: "text",
+          label: "DCF number",
+          value: "",
+        },
+        {
+          field_id: "title",
+          field_name: "title",
+          field_type: "text",
+          label: "Title",
+          value: "Leasing",
+        },
+      ],
+      [
+        { id: "dcf", type: "text", name: "dcf_number", label: "DCF number", options: { assigned_on_publish: true } },
+        { id: "title", type: "text", name: "title", label: "Title" },
+      ],
+      [],
+    );
+
+    const labels = groups.flatMap((group) => group.items.map((item) => item.value.field_name));
+    expect(labels).toEqual(["title"]);
+  });
+
   it("formats currency for submission display", () => {
     expect(
       formatSubmissionCurrencyDisplay({

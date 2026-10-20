@@ -21,6 +21,10 @@ export function createControlledDocumentsTableColumns(options: {
       className: "font-mono text-xs",
       enableSorting: true,
     }),
+    createTextColumn("dcf_number", "DCF number", (row) => row.dcf_number ?? "—", {
+      className: "font-mono text-xs tabular-nums",
+      enableSorting: true,
+    }),
     createTextColumn(
       "title",
       "Title",
@@ -84,14 +88,13 @@ export function createControlledDocumentsTableColumns(options: {
       ),
     ),
     createActionsColumn("Actions", (row) => {
+      const revisionFormId = row.original.revision_form_id || row.original.e_approval_form_id;
       const canRevise =
-        options.canCreate &&
-        Boolean(row.original.e_approval_form_id) &&
-        row.original.status !== "obsolete";
+        options.canCreate && Boolean(revisionFormId) && row.original.status !== "obsolete";
       const revisionHref =
-        canRevise && row.original.e_approval_form_id
+        canRevise && revisionFormId
           ? controlledDocumentSubmissionUrl({
-              formId: row.original.e_approval_form_id,
+              formId: revisionFormId,
               mode: "revision",
               documentCode: row.original.document_code,
             })

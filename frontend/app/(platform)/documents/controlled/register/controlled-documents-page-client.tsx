@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 const DEFAULT_SORT = "document_code:asc";
 const SORTABLE = [
   "document_code",
+  "dcf_number",
   "title",
   "document_type",
   "department",
@@ -125,8 +126,12 @@ export function ControlledDocumentsPageClient() {
   }, [listQuery.data?.facets?.document_types, queryState.documentType]);
 
   const defaultFormId = useMemo(
-    () => rows.find((row) => row.e_approval_form_id)?.e_approval_form_id ?? null,
-    [rows],
+    () =>
+      listQuery.data?.default_form_id ??
+      rows.find((row) => row.revision_form_id)?.revision_form_id ??
+      rows.find((row) => row.e_approval_form_id)?.e_approval_form_id ??
+      null,
+    [listQuery.data?.default_form_id, rows],
   );
   const newRequestHref = defaultFormId
     ? controlledDocumentSubmissionUrl({ formId: defaultFormId, mode: "new" })
@@ -255,7 +260,7 @@ export function ControlledDocumentsPageClient() {
                     id="cdr-search"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Document code or title"
+                    placeholder="Document code, title, or DCF number"
                     className="pl-9"
                   />
                 </div>

@@ -8,7 +8,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { usePermission } from "@/hooks/use-permission";
 import { dismissEApprovalTourPrompt } from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
-import { E_APPROVAL_FINANCE_TOUR_GUIDE_PATH } from "@/lib/help/e-approval-finance-tour";
 import { permissions } from "@/lib/rbac/permissions";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -48,15 +47,6 @@ export function EApprovalHelpEntryActions({
         >
           <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
           Tour guide
-        </Link>
-      ) : null}
-      {showHelp ? (
-        <Link
-          href={E_APPROVAL_FINANCE_TOUR_GUIDE_PATH}
-          className={cn(buttonVariants({ variant: "outline", size }))}
-        >
-          <BookOpen className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-          Finance tour
         </Link>
       ) : null}
       {showTour ? (

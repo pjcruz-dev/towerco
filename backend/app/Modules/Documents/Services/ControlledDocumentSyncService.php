@@ -16,6 +16,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -23,6 +24,7 @@ final class ControlledDocumentSyncService
 {
     public function __construct(
         private readonly ControlledDocumentStorageService $storage,
+        private readonly ControlledDocumentDcfNumberService $dcfNumbers,
     ) {}
 
     public function syncApprovedSubmission(EApprovalSubmission $submission, ?TenantUser $actor = null): ?ControlledDocument
@@ -102,11 +104,13 @@ final class ControlledDocumentSyncService
 
             $requestorId = (string) ($submission->requestor_id ?? '');
             $authorId = $requestorId !== '' ? $requestorId : ($actor !== null ? (string) $actor->id : null);
+            $dcfNumber = $this->dcfNumbers->next();
 
             if ($existing === null) {
                 $existing = ControlledDocument::query()->create([
                     'id' => (string) Str::uuid(),
                     'document_code' => $documentCode,
+                    'dcf_number' => $dcfNumber,
                     'title' => $title,
                     'document_type' => $this->fieldValue($values, $config->fieldMap, 'document_type'),
                     'department' => $this->fieldValue($values, $config->fieldMap, 'department'),
@@ -122,6 +126,7 @@ final class ControlledDocumentSyncService
             } else {
                 $existing->fill([
                     'title' => $title,
+                    'dcf_number' => $dcfNumber,
                     'document_type' => $this->fieldValue($values, $config->fieldMap, 'document_type') ?: $existing->document_type,
                     'department' => $this->fieldValue($values, $config->fieldMap, 'department') ?: $existing->department,
                     'current_revision' => $revisionNumber,
@@ -142,6 +147,7 @@ final class ControlledDocumentSyncService
                 'id' => (string) Str::uuid(),
                 'controlled_document_id' => $existing->id,
                 'revision_number' => $revisionNumber,
+                'dcf_number' => $dcfNumber,
                 'change_summary' => $changeSummary,
                 'e_approval_submission_id' => $submission->id,
                 'status' => ControlledDocumentRevisionStatus::PUBLISHED,
@@ -162,6 +168,8 @@ final class ControlledDocumentSyncService
                 $revision->fill($copied);
                 $revision->save();
             }
+
+            $this->stampPublishedDcf($submission, $dcfNumber);
 
             return $existing->fresh(['revisions']);
         });
@@ -350,8 +358,14 @@ final class ControlledDocumentSyncService
         $values = $this->valuesMap($submission);
         $fieldMap = $config?->fieldMap ?? [];
 
+        $dcfNumber = trim((string) ($revision->dcf_number ?? ''));
+        if ($dcfNumber === '') {
+            $dcfNumber = $this->dcfNumbers->next();
+        }
+
         $document->fill([
             'title' => $this->fieldValue($values, $fieldMap, 'title') ?: $document->title,
+            'dcf_number' => $dcfNumber,
             'status' => ControlledDocumentStatus::PUBLISHED,
             'published_at' => now(),
             'effective_date' => $this->parseDate($this->fieldValue($values, $fieldMap, 'effective_date')) ?? $document->effective_date,
@@ -360,6 +374,7 @@ final class ControlledDocumentSyncService
         $document->save();
 
         $revision->fill([
+            'dcf_number' => $dcfNumber,
             'status' => ControlledDocumentRevisionStatus::PUBLISHED,
             'change_summary' => $this->fieldValue($values, $fieldMap, 'change_summary') ?? $revision->change_summary,
             'approved_by_id' => $actor?->id,
@@ -386,7 +401,84 @@ final class ControlledDocumentSyncService
             ->where('revision_number', '<', (int) $revision->revision_number)
             ->update(['status' => ControlledDocumentRevisionStatus::SUPERSEDED]);
 
+        $this->stampPublishedDcf($submission, $dcfNumber);
+
         return $document->fresh(['revisions']);
+    }
+
+    /**
+     * The request form keeps this field hidden. The number is written when the document is published.
+     */
+    private function stampPublishedDcf(EApprovalSubmission $submission, string $dcfNumber): void
+    {
+        $submission->loadMissing('form.fields');
+        $form = $submission->form;
+        if (! $form instanceof EApprovalForm) {
+            return;
+        }
+
+        $field = $form->fields->first(
+            static fn ($candidate): bool => $candidate instanceof EApprovalFormField && $candidate->name === 'dcf_number',
+        );
+        if (! $field instanceof EApprovalFormField) {
+            return;
+        }
+
+        $row = EApprovalFormValue::query()
+            ->where('submission_id', $submission->id)
+            ->where('field_id', $field->id)
+            ->first();
+
+        if ($row === null) {
+            EApprovalFormValue::query()->create([
+                'id' => (string) Str::uuid(),
+                'submission_id' => $submission->id,
+                'field_id' => $field->id,
+                'value' => $dcfNumber,
+            ]);
+        } elseif (trim((string) $row->value) === '') {
+            $row->value = $dcfNumber;
+            $row->save();
+        }
+
+        $this->ensureSnapshotHasDcfField($submission, $field);
+    }
+
+    private function ensureSnapshotHasDcfField(EApprovalSubmission $submission, EApprovalFormField $field): void
+    {
+        $raw = $submission->schema_snapshot_json;
+        if (! is_string($raw) || trim($raw) === '') {
+            return;
+        }
+
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return;
+        }
+
+        if (! is_array($decoded) || ! is_array($decoded['fields'] ?? null)) {
+            return;
+        }
+
+        foreach ($decoded['fields'] as $existing) {
+            if (is_array($existing) && ($existing['name'] ?? null) === 'dcf_number') {
+                return;
+            }
+        }
+
+        $decoded['fields'][] = [
+            'id' => (string) $field->id,
+            'type' => $field->type,
+            'name' => $field->name,
+            'label' => $field->label,
+            'semantic_type' => $field->semantic_type,
+            'validation' => $field->validation,
+            'options' => $field->options,
+        ];
+
+        $submission->schema_snapshot_json = json_encode($decoded, JSON_THROW_ON_ERROR);
+        $submission->save();
     }
 
     public function resolveConfig(EApprovalForm $form): ?ControlledDocumentSyncConfig

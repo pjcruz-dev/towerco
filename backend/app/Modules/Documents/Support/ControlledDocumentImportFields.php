@@ -15,6 +15,7 @@ final class ControlledDocumentImportFields
     {
         return [
             ['name' => 'document_code', 'label' => 'Document code', 'required' => true],
+            ['name' => 'dcf_number', 'label' => 'DCF number', 'required' => false],
             ['name' => 'title', 'label' => 'Title', 'required' => true],
             ['name' => 'document_type', 'label' => 'Document type', 'required' => false],
             ['name' => 'department', 'label' => 'Department', 'required' => false],
@@ -91,6 +92,7 @@ final class ControlledDocumentImportFields
     {
         return [
             'document_code' => ['document_code', 'code', 'document_no', 'doc_no'],
+            'dcf_number' => ['dcf_number', 'dcf', 'dcf_no', 'dcf_num'],
             'title' => ['title', 'document_title', 'name'],
             'document_type' => ['document_type', 'type'],
             'department' => ['department', 'dept'],

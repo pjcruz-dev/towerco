@@ -9,7 +9,7 @@ import {
   AttachmentPreviewGallery,
   type AttachmentGalleryItem,
 } from "@/components/attachments/attachment-preview-gallery";
-import { EApprovalApprovalSignatureField } from "@/components/e-approval/e-approval-approval-signature-field";
+import { EApprovalApprovalSignatureField, EApprovalSignatureConsentDialog } from "@/components/e-approval/e-approval-approval-signature-field";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalGenericFormPrintView } from "@/components/e-approval/e-approval-generic-form-print-view";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -230,8 +230,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
   const printPath = financeTourPrintPath(family);
 
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
-  const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
-  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
+  const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [decisionRemarks, setDecisionRemarks] = useState("");
 
@@ -482,12 +481,6 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                   <EApprovalApprovalSignatureField
                     value={approvalSignature}
                     onChange={setApprovalSignature}
-                    consentAccepted={signatureConsentAccepted}
-                    onConsentChange={(accepted) => {
-                      setSignatureConsentAccepted(accepted);
-                      if (accepted) setHighlightSignatureConsents(false);
-                    }}
-                    highlightMissingConsents={highlightSignatureConsents}
                     disabled={false}
                     error={approvalSignatureError}
                     onErrorChange={setApprovalSignatureError}
@@ -507,14 +500,9 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                       <Button
                         type="button"
                         size="sm"
-                        className={!signatureConsentAccepted ? "opacity-50" : undefined}
                         onClick={() => {
-                          if (!signatureConsentAccepted) {
-                            setHighlightSignatureConsents(true);
-                            setApprovalSignatureError("Accept both electronic signature consents before approving.");
-                            return;
-                          }
-                          setApprovalSignatureError("Sample only — Approve does not save.");
+                          setApprovalSignatureError(null);
+                          setSignatureConsentOpen(true);
                         }}
                       >
                         Approve
@@ -532,6 +520,14 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                     </span>
                     <p className="w-full text-xs text-muted-foreground">Sample only — actions do not save.</p>
                   </div>
+                  <EApprovalSignatureConsentDialog
+                    open={signatureConsentOpen}
+                    onOpenChange={setSignatureConsentOpen}
+                    onConfirm={() => {
+                      setSignatureConsentOpen(false);
+                      setApprovalSignatureError("Sample only — Approve does not save.");
+                    }}
+                  />
                 </div>
               </EApprovalSectionCard>
             ) : null}

@@ -21,6 +21,7 @@ class ControlledDocumentRevision extends Model
     protected $fillable = [
         'controlled_document_id',
         'revision_number',
+        'dcf_number',
         'change_summary',
         'e_approval_submission_id',
         'stored_path',

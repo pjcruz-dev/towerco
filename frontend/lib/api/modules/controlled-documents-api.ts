@@ -4,7 +4,9 @@ import type { ControlledDocumentRegisterAccessPayload } from "@/modules/document
 export type ControlledDocumentRow = {
   id: string;
   document_code: string;
+  dcf_number: string | null;
   e_approval_form_id: string | null;
+  revision_form_id: string | null;
   title: string;
   document_type: string | null;
   department: string | null;
@@ -23,6 +25,7 @@ export type ControlledDocumentRow = {
 export type ControlledDocumentRevision = {
   id: string;
   revision_number: number;
+  dcf_number: string | null;
   status: string;
   change_summary: string | null;
   effective_date: string | null;
@@ -50,6 +53,7 @@ export type ControlledDocumentIndexPayload = {
     departments: string[];
     document_types: string[];
   };
+  default_form_id: string | null;
   documents: {
     data: ControlledDocumentRow[];
     current_page: number;

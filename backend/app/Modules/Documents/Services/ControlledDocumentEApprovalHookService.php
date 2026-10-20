@@ -18,6 +18,7 @@ final class ControlledDocumentEApprovalHookService
 {
     public function __construct(
         private readonly ControlledDocumentSyncService $sync,
+        private readonly ControlledDocumentCodeReleaseService $codes,
     ) {}
 
     public function afterSubmissionOpened(EApprovalSubmission $submission, ?TenantUser $actor = null): void
@@ -43,6 +44,7 @@ final class ControlledDocumentEApprovalHookService
     {
         $this->runSync($submission, function () use ($submission): void {
             $this->sync->releasePending($submission);
+            $this->codes->releaseCancelled($submission);
         });
     }
 

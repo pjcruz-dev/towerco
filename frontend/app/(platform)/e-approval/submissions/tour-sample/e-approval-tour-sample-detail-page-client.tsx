@@ -6,6 +6,7 @@ import {
 } from "@/components/attachments/attachment-preview-gallery";
 import {
   EApprovalApprovalSignatureField,
+  EApprovalSignatureConsentDialog,
 } from "@/components/e-approval/e-approval-approval-signature-field";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -119,8 +120,7 @@ function TourSampleDetailInner() {
   const tab = rawTab === "decide" && !showDecideTab ? "request" : rawTab;
 
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
-  const [signatureConsentAccepted, setSignatureConsentAccepted] = useState(false);
-  const [highlightSignatureConsents, setHighlightSignatureConsents] = useState(false);
+  const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [decisionRemarks, setDecisionRemarks] = useState("");
 
@@ -359,14 +359,6 @@ function TourSampleDetailInner() {
                 <EApprovalApprovalSignatureField
                   value={approvalSignature}
                   onChange={setApprovalSignature}
-                  consentAccepted={signatureConsentAccepted}
-                  onConsentChange={(accepted) => {
-                    setSignatureConsentAccepted(accepted);
-                    if (accepted) {
-                      setHighlightSignatureConsents(false);
-                    }
-                  }}
-                  highlightMissingConsents={highlightSignatureConsents}
                   disabled={false}
                   error={approvalSignatureError}
                   onErrorChange={setApprovalSignatureError}
@@ -391,19 +383,9 @@ function TourSampleDetailInner() {
                     <Button
                       type="button"
                       size="sm"
-                      className={!signatureConsentAccepted ? "opacity-50" : undefined}
                       onClick={() => {
-                        if (!signatureConsentAccepted) {
-                          setHighlightSignatureConsents(true);
-                          setApprovalSignatureError(
-                            "Accept both electronic signature consents before approving.",
-                          );
-                          document
-                            .querySelector('[data-help="ea-decide-signature-consent"]')
-                            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          return;
-                        }
-                        setApprovalSignatureError("Sample only — Approve does not save.");
+                        setApprovalSignatureError(null);
+                        setSignatureConsentOpen(true);
                       }}
                     >
                       Approve
@@ -421,6 +403,14 @@ function TourSampleDetailInner() {
                   </span>
                   <p className="w-full text-xs text-muted-foreground">Sample only — actions do not save.</p>
                 </div>
+                <EApprovalSignatureConsentDialog
+                  open={signatureConsentOpen}
+                  onOpenChange={setSignatureConsentOpen}
+                  onConfirm={() => {
+                    setSignatureConsentOpen(false);
+                    setApprovalSignatureError("Sample only — Approve does not save.");
+                  }}
+                />
               </div>
             </EApprovalSectionCard>
             ) : null}

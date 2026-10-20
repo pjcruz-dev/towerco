@@ -21,6 +21,7 @@ class ControlledDocument extends Model
 
     protected $fillable = [
         'document_code',
+        'dcf_number',
         'title',
         'document_type',
         'department',

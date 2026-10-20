@@ -47,3 +47,16 @@ export function pendingAttachmentsNotYetSaved(
 export function hasPendingAttachmentFiles(attachmentFiles: Record<string, File[]>): boolean {
   return Object.values(attachmentFiles).some((files) => files.length > 0);
 }
+
+/** Keep files that were just stored when the draft payload was loaded before the upload. */
+export function mergeUploadedDraftAttachments<T extends { id: string }>(
+  existing: T[],
+  uploaded: T[],
+): T[] {
+  const byId = new Map(existing.map((attachment) => [attachment.id, attachment]));
+  for (const attachment of uploaded) {
+    byId.set(attachment.id, attachment);
+  }
+
+  return [...byId.values()];
+}

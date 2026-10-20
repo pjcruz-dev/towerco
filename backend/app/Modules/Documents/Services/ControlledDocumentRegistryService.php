@@ -22,6 +22,7 @@ final class ControlledDocumentRegistryService
 {
     private const SORTABLE = [
         'document_code',
+        'dcf_number',
         'title',
         'document_type',
         'department',
@@ -378,6 +379,7 @@ final class ControlledDocumentRegistryService
 
         fputcsv($handle, [
             'document_code',
+            'dcf_number',
             'title',
             'document_type',
             'department',
@@ -392,6 +394,7 @@ final class ControlledDocumentRegistryService
         foreach ($documents as $document) {
             fputcsv($handle, [
                 $document->document_code,
+                $document->dcf_number,
                 $document->title,
                 $document->document_type,
                 $document->department,
@@ -455,7 +458,8 @@ final class ControlledDocumentRegistryService
             $needle = '%'.strtolower(trim($search)).'%';
             $query->where(static function (Builder $inner) use ($needle): void {
                 $inner->whereRaw('LOWER(document_code) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(title) LIKE ?', [$needle]);
+                    ->orWhereRaw('LOWER(title) LIKE ?', [$needle])
+                    ->orWhereRaw('LOWER(dcf_number) LIKE ?', [$needle]);
             });
         }
 
@@ -673,6 +677,7 @@ final class ControlledDocumentRegistryService
         return [
             'id' => (string) $document->id,
             'document_code' => $document->document_code,
+            'dcf_number' => $document->dcf_number,
             'e_approval_form_id' => $document->e_approval_form_id,
             'title' => $document->title,
             'document_type' => $document->document_type,
@@ -687,6 +692,7 @@ final class ControlledDocumentRegistryService
             'revisions' => $document->revisions->map(static fn (ControlledDocumentRevision $revision): array => [
                 'id' => (string) $revision->id,
                 'revision_number' => (int) $revision->revision_number,
+                'dcf_number' => $revision->dcf_number,
                 'status' => $revision->status,
                 'change_summary' => $revision->change_summary,
                 'effective_date' => $revision->effective_date?->toDateString(),

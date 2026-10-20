@@ -47,18 +47,33 @@ export function controlledDocumentFieldsHiddenInNewMode(
   return hidden;
 }
 
+function fieldAssignedOnPublish(field: EApprovalFormFieldInput): boolean {
+  if (field.name === "dcf_number") {
+    return true;
+  }
+
+  const options = field.options;
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    return false;
+  }
+
+  return (options as Record<string, unknown>).assigned_on_publish === true;
+}
+
 export function filterFieldsForControlledDocumentMode(
   fields: EApprovalFormFieldInput[],
   sync: ControlledDocumentSyncMeta | null,
   mode: ControlledDocumentRequestMode,
 ): EApprovalFormFieldInput[] {
+  const requestFields = fields.filter((field) => !fieldAssignedOnPublish(field));
+
   if (!sync) {
-    return fields;
+    return requestFields;
   }
 
   if (mode === "new") {
-    const hidden = controlledDocumentFieldsHiddenInNewMode(sync, fields);
-    const withoutHiddenFields = fields.filter((field) => !hidden.has(field.name));
+    const hidden = controlledDocumentFieldsHiddenInNewMode(sync, requestFields);
+    const withoutHiddenFields = requestFields.filter((field) => !hidden.has(field.name));
 
     return removeEmptySectionHeadings(withoutHiddenFields);
   }
@@ -72,7 +87,7 @@ export function filterFieldsForControlledDocumentMode(
     "review_date",
   ]);
 
-  return removeEmptySectionHeadings(fields.filter((field) => !revisionHidden.has(field.name)));
+  return removeEmptySectionHeadings(requestFields.filter((field) => !revisionHidden.has(field.name)));
 }
 
 /** Drop section headings that have no remaining fields in their group. */

@@ -933,9 +933,9 @@ const decideSteps: LiveTourStep[] = [
     path: CA_DETAIL,
     entryPath: CA_DETAIL,
     query: { tab: "decide" },
-    target: "ea-decide-signature-consent",
+    target: "ea-decide-approve",
     title: "Signature consent",
-    body: "Accept both consent checkboxes before Approve. Unchecked boxes highlight if you click early.",
+    body: "Approve opens a confirmation. Check both consent boxes. Confirm stays off until both are checked.",
     audience: "approver",
   },
   {
