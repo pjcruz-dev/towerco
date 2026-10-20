@@ -284,6 +284,13 @@ final class CursorLlmProvider implements LlmProviderInterface
         }
 
         $body = $response->toPsrResponse()->getBody();
+        $resource = $body->detach();
+        if (! is_resource($resource)) {
+            return null;
+        }
+
+        stream_set_blocking($resource, false);
+        $deadline = time() + max(10, $this->maxWaitSeconds);
         $buffer = '';
         $event = 'message';
         $dataLines = [];
@@ -299,45 +306,66 @@ final class CursorLlmProvider implements LlmProviderInterface
             }
         };
 
-        while (! $body->eof()) {
-            $chunk = $body->read(2048);
-            if ($chunk === '') {
-                break;
-            }
-            $buffer .= $chunk;
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = rtrim(substr($buffer, 0, $pos), "\r");
-                $buffer = substr($buffer, $pos + 1);
-                if ($line === '') {
-                    $flush();
-                    if (is_string($final) && $final !== '') {
-                        return $final;
+        try {
+            while (time() < $deadline && ! feof($resource)) {
+                $read = [$resource];
+                $write = null;
+                $except = null;
+                $ready = stream_select($read, $write, $except, 15);
+                if ($ready === false) {
+                    break;
+                }
+                if ($ready === 0) {
+                    $this->notifyWaiting('RUNNING');
+
+                    continue;
+                }
+                $chunk = fread($resource, 2048);
+                if ($chunk === false || $chunk === '') {
+                    if (feof($resource)) {
+                        break;
                     }
+                    $this->notifyWaiting('RUNNING');
 
                     continue;
                 }
-                if (str_starts_with($line, ':')) {
-                    continue;
-                }
-                if (str_starts_with($line, 'event:')) {
-                    $event = trim(substr($line, 6));
-                } elseif (str_starts_with($line, 'data:')) {
-                    $dataLines[] = ltrim(substr($line, 5));
+                $buffer .= $chunk;
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = rtrim(substr($buffer, 0, $pos), "\r");
+                    $buffer = substr($buffer, $pos + 1);
+                    if ($line === '') {
+                        $flush();
+                        if (is_string($final) && $final !== '') {
+                            return $final;
+                        }
+
+                        continue;
+                    }
+                    if (str_starts_with($line, ':')) {
+                        continue;
+                    }
+                    if (str_starts_with($line, 'event:')) {
+                        $event = trim(substr($line, 6));
+                    } elseif (str_starts_with($line, 'data:')) {
+                        $dataLines[] = ltrim(substr($line, 5));
+                    }
                 }
             }
+
+            if ($dataLines !== []) {
+                $flush();
+            }
+
+            if (is_string($final) && $final !== '') {
+                return $final;
+            }
+
+            $assistant = trim($assistant);
+
+            return $assistant !== '' ? $assistant : null;
+        } finally {
+            fclose($resource);
         }
-
-        if ($dataLines !== []) {
-            $flush();
-        }
-
-        if (is_string($final) && $final !== '') {
-            return $final;
-        }
-
-        $assistant = trim($assistant);
-
-        return $assistant !== '' ? $assistant : null;
     }
 
     private function consumeStreamEvent(string $event, string $data, string &$assistant): ?string

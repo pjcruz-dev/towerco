@@ -73,6 +73,8 @@ class AssistantAskController extends AbstractApiController
 
     private function beginEventStream(): void
     {
+        @set_time_limit(0);
+        @ini_set('default_socket_timeout', '360');
         @ini_set('zlib.output_compression', '0');
         @ini_set('implicit_flush', '1');
         while (ob_get_level() > 0) {

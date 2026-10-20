@@ -10,11 +10,15 @@ import {
   useState,
 } from "react";
 
+export type AssistantLauncherActivity = "idle" | "working" | "done";
+
 type AssistantDrawerContextValue = {
   open: boolean;
   minimized: boolean;
+  activity: AssistantLauncherActivity;
   setOpen: (open: boolean) => void;
   setMinimized: (minimized: boolean) => void;
+  setActivity: (activity: AssistantLauncherActivity) => void;
   toggle: () => void;
 };
 
@@ -29,8 +33,10 @@ export function AssistantDrawerProvider({
 }) {
   const [open, setOpenState] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [activity, setActivityState] = useState<AssistantLauncherActivity>("idle");
   const openRef = useRef(open);
   const minimizedRef = useRef(minimized);
+  const doneTimer = useRef<number | null>(null);
   openRef.current = open;
   minimizedRef.current = minimized;
 
@@ -38,6 +44,20 @@ export function AssistantDrawerProvider({
     setOpenState(next);
     if (next) {
       setMinimized(false);
+    }
+  }, []);
+
+  const setActivity = useCallback((next: AssistantLauncherActivity) => {
+    if (doneTimer.current !== null) {
+      window.clearTimeout(doneTimer.current);
+      doneTimer.current = null;
+    }
+    setActivityState(next);
+    if (next === "done") {
+      doneTimer.current = window.setTimeout(() => {
+        setActivityState("idle");
+        doneTimer.current = null;
+      }, 5000);
     }
   }, []);
 
@@ -86,11 +106,13 @@ export function AssistantDrawerProvider({
     () => ({
       open,
       minimized,
+      activity,
       setOpen,
       setMinimized,
+      setActivity,
       toggle,
     }),
-    [open, minimized, setOpen, toggle],
+    [open, minimized, activity, setOpen, setActivity, toggle],
   );
 
   return (

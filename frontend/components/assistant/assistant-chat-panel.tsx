@@ -31,6 +31,7 @@ import {
   type AssistantStreamDelta,
 } from "@/lib/api/modules/assistant-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { useAssistantDrawer } from "@/hooks/use-assistant-drawer";
 import type { AssistantRouteContext } from "@/lib/assistant/route-context";
 
 type Props = {
@@ -127,6 +128,7 @@ export function AssistantChatPanel({
       typeof window !== "undefined" &&
       window.localStorage.getItem(CONVERSATION_STORAGE_KEY) !== null,
   );
+  const { setActivity } = useAssistantDrawer();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const askStartedRef = useRef(0);
@@ -239,6 +241,7 @@ export function AssistantChatPanel({
       { id: tempUserId, role: "user", content: trimmed },
     ]);
     setIsAsking(true);
+    setActivity("working");
     askStartedRef.current = Date.now();
     liveThoughtRef.current = "";
     setLiveThought("");
@@ -253,6 +256,7 @@ export function AssistantChatPanel({
       },
     ]);
 
+    let failed = false;
     try {
       const response = await askAssistantLive(
         {
@@ -359,12 +363,14 @@ export function AssistantChatPanel({
         );
       }
     } catch (err) {
+      failed = true;
       setError(getErrorMessage(err));
     } finally {
       setIsAsking(false);
       setLiveThought("");
       setLiveAnswer("");
       setLiveSteps([]);
+      setActivity(failed ? "idle" : "done");
     }
   };
 

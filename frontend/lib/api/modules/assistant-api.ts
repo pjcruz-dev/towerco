@@ -253,6 +253,9 @@ export async function askAssistantLive(
     if (isAssistantStreamAbort(error)) {
       throw new Error("The assistant took too long. Ask again.");
     }
+    if (error instanceof TypeError) {
+      throw new Error("The assistant connection dropped before the reply finished. Ask again.");
+    }
     throw error;
   }
 
@@ -274,6 +277,9 @@ export async function askAssistantLive(
     } catch (error) {
       if (isAssistantStreamAbort(error)) {
         throw new Error("The assistant took too long. Ask again.");
+      }
+      if (error instanceof TypeError) {
+        throw new Error("The assistant connection dropped before the reply finished. Ask again.");
       }
       throw error;
     }

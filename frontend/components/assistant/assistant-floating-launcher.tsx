@@ -36,7 +36,7 @@ function defaultPosition(): Position {
 }
 
 export function AssistantFloatingLauncher() {
-  const { open, setOpen, minimized } = useAssistantDrawer();
+  const { open, setOpen, minimized, activity } = useAssistantDrawer();
   const [position, setPosition] = useState<Position | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragState = useRef<{
@@ -143,16 +143,43 @@ export function AssistantFloatingLauncher() {
       type="button"
       onPointerDown={onPointerDown}
       onClick={onClick}
-      aria-label="Ask INFRA SUITE"
+      aria-label={
+        activity === "working"
+          ? "Assistant is still working. Open to watch."
+          : activity === "done"
+            ? "Assistant finished. Open the reply."
+            : "Ask INFRA SUITE"
+      }
+      aria-busy={activity === "working"}
+      title={
+        activity === "working"
+          ? "Still working"
+          : activity === "done"
+            ? "Reply is ready"
+            : "Ask INFRA SUITE"
+      }
       className={cn(
         "fixed z-40 flex h-14 w-14 touch-none items-center justify-center rounded-full",
         "bg-primary text-primary-foreground shadow-lg",
         "transition-shadow hover:bg-primary/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         dragging ? "cursor-grabbing" : "cursor-grab",
+        activity === "working" && "animate-pulse",
       )}
       style={{ left: position.x, top: position.y }}
     >
-      <TowerOsAssistantMark className="h-6 w-6" />
+      {activity === "working" ? (
+        <span
+          className="pointer-events-none absolute -inset-1 animate-spin rounded-full border-2 border-transparent border-t-primary-foreground border-r-primary-foreground/40"
+          aria-hidden
+        />
+      ) : null}
+      {activity === "done" ? (
+        <span
+          className="pointer-events-none absolute -inset-1 rounded-full border-2 border-primary-foreground"
+          aria-hidden
+        />
+      ) : null}
+      <TowerOsAssistantMark className="relative h-6 w-6" />
     </button>
   );
 }
