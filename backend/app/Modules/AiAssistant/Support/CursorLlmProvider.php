@@ -12,6 +12,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 /**
  * Cursor Cloud Agents API adapter for grounded chat answers (no-repo agent).
@@ -96,7 +97,12 @@ final class CursorLlmProvider implements LlmProviderInterface
         }
 
         try {
-            $answer = $this->streamRunResult($agentId, $runId) ?? $this->pollRunResult($agentId, $runId);
+            try {
+                $answer = $this->streamRunResult($agentId, $runId);
+            } catch (Throwable) {
+                $answer = null;
+            }
+            $answer = $answer ?? $this->pollRunResult($agentId, $runId);
         } finally {
             $this->archiveAgentQuietly($agentId);
         }
@@ -193,7 +199,7 @@ final class CursorLlmProvider implements LlmProviderInterface
         try {
             $response = $this->cursorHttp(min(20, $this->requestTimeoutSeconds), retry: false)
                 ->get(rtrim($this->baseUrl, '/').'/models');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return $this->catalog = [];
         }
 
@@ -270,7 +276,7 @@ final class CursorLlmProvider implements LlmProviderInterface
                 ->accept('text/event-stream')
                 ->withOptions(['stream' => true])
                 ->get($url);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
 
@@ -284,13 +290,6 @@ final class CursorLlmProvider implements LlmProviderInterface
         }
 
         $body = $response->toPsrResponse()->getBody();
-        $resource = $body->detach();
-        if (! is_resource($resource)) {
-            return null;
-        }
-
-        stream_set_blocking($resource, false);
-        $deadline = time() + max(10, $this->maxWaitSeconds);
         $buffer = '';
         $event = 'message';
         $dataLines = [];
@@ -306,66 +305,45 @@ final class CursorLlmProvider implements LlmProviderInterface
             }
         };
 
-        try {
-            while (time() < $deadline && ! feof($resource)) {
-                $read = [$resource];
-                $write = null;
-                $except = null;
-                $ready = stream_select($read, $write, $except, 15);
-                if ($ready === false) {
-                    break;
-                }
-                if ($ready === 0) {
-                    $this->notifyWaiting('RUNNING');
+        while (! $body->eof()) {
+            $chunk = $body->read(2048);
+            if ($chunk === '') {
+                break;
+            }
+            $buffer .= $chunk;
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = rtrim(substr($buffer, 0, $pos), "\r");
+                $buffer = substr($buffer, $pos + 1);
+                if ($line === '') {
+                    $flush();
+                    if (is_string($final) && $final !== '') {
+                        return $final;
+                    }
 
                     continue;
                 }
-                $chunk = fread($resource, 2048);
-                if ($chunk === false || $chunk === '') {
-                    if (feof($resource)) {
-                        break;
-                    }
-                    $this->notifyWaiting('RUNNING');
-
+                if (str_starts_with($line, ':')) {
                     continue;
                 }
-                $buffer .= $chunk;
-                while (($pos = strpos($buffer, "\n")) !== false) {
-                    $line = rtrim(substr($buffer, 0, $pos), "\r");
-                    $buffer = substr($buffer, $pos + 1);
-                    if ($line === '') {
-                        $flush();
-                        if (is_string($final) && $final !== '') {
-                            return $final;
-                        }
-
-                        continue;
-                    }
-                    if (str_starts_with($line, ':')) {
-                        continue;
-                    }
-                    if (str_starts_with($line, 'event:')) {
-                        $event = trim(substr($line, 6));
-                    } elseif (str_starts_with($line, 'data:')) {
-                        $dataLines[] = ltrim(substr($line, 5));
-                    }
+                if (str_starts_with($line, 'event:')) {
+                    $event = trim(substr($line, 6));
+                } elseif (str_starts_with($line, 'data:')) {
+                    $dataLines[] = ltrim(substr($line, 5));
                 }
             }
-
-            if ($dataLines !== []) {
-                $flush();
-            }
-
-            if (is_string($final) && $final !== '') {
-                return $final;
-            }
-
-            $assistant = trim($assistant);
-
-            return $assistant !== '' ? $assistant : null;
-        } finally {
-            fclose($resource);
         }
+
+        if ($dataLines !== []) {
+            $flush();
+        }
+
+        if (is_string($final) && $final !== '') {
+            return $final;
+        }
+
+        $assistant = trim($assistant);
+
+        return $assistant !== '' ? $assistant : null;
     }
 
     private function consumeStreamEvent(string $event, string $data, string &$assistant): ?string
@@ -508,7 +486,7 @@ final class CursorLlmProvider implements LlmProviderInterface
         try {
             $this->cursorHttp($this->requestTimeoutSeconds, retry: false)
                 ->post(rtrim($this->baseUrl, '/').'/agents/'.$agentId.'/archive');
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Best-effort cleanup; do not fail the user answer.
         }
     }
