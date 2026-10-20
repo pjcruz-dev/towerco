@@ -125,6 +125,9 @@ export function getErrorMessage(error: unknown): string {
       if (url.includes("/doc-extract/batches") && method === "post" && !url.includes("/requeue")) {
         return "Upload timed out. Check Batches — the file may still have been accepted and is processing in the background.";
       }
+      if (url.includes("/e-approval/master-data")) {
+        return "The master data import timed out. Refresh the list before trying again — some rows may already have been saved.";
+      }
       if (process.env.NEXT_PUBLIC_APP_ENV === "local") {
         return "The API did not respond in time. If you just restarted Docker or saved a large form, wait a few seconds and try again. Confirm the API is running at http://localhost:8000.";
       }

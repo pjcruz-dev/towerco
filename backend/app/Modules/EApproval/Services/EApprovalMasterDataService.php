@@ -122,15 +122,7 @@ final class EApprovalMasterDataService
         }
         $this->assertUniqueRow($set, $code, $label);
 
-        return EApprovalMasterDataRow::query()->create([
-            'id' => (string) Str::uuid(),
-            'set_id' => $set->id,
-            'code' => $code,
-            'label' => $label,
-            'data_json' => is_array($input['data'] ?? null) ? $input['data'] : (is_array($input['data_json'] ?? null) ? $input['data_json'] : null),
-            'sort_order' => (int) ($input['sort_order'] ?? 0),
-            'is_active' => (bool) ($input['is_active'] ?? true),
-        ]);
+        return $this->insertRow($set, $code, $label, $input);
     }
 
     /**
@@ -143,6 +135,21 @@ final class EApprovalMasterDataService
         $errors = [];
         $seenLabels = [];
         $seenCodes = [];
+        $existingLabels = [];
+        $existingCodes = [];
+
+        foreach ($set->rows()->get(['code', 'label']) as $existing) {
+            $existingLabel = mb_strtolower(trim((string) $existing->label));
+            if ($existingLabel !== '') {
+                $existingLabels[$existingLabel] = true;
+            }
+            $existingCode = $this->blankToNull($existing->code);
+            if ($existingCode !== null) {
+                $existingCodes[mb_strtolower($existingCode)] = true;
+            }
+        }
+
+        $pending = [];
 
         foreach ($rows as $index => $row) {
             $rowNumber = is_array($row) && isset($row['row_number']) ? (int) $row['row_number'] : $index + 1;
@@ -173,37 +180,74 @@ final class EApprovalMasterDataService
                 continue;
             }
 
-            try {
-                $this->assertUniqueRow($set, $code, $label);
-            } catch (ValidationException $exception) {
+            if (isset($existingLabels[$labelKey])) {
                 $errors[] = ['row' => $rowNumber, 'message' => __('Row :row: :message', [
                     'row' => $rowNumber,
-                    'message' => collect($exception->errors())->flatten()->first() ?: __('Already exists.'),
+                    'message' => __('A row labeled ":label" already exists.', ['label' => $label]),
+                ])];
+
+                continue;
+            }
+            if ($codeKey !== '' && isset($existingCodes[$codeKey])) {
+                $errors[] = ['row' => $rowNumber, 'message' => __('Row :row: :message', [
+                    'row' => $rowNumber,
+                    'message' => __('A row with code ":code" already exists.', ['code' => $code]),
                 ])];
 
                 continue;
             }
 
             $seenLabels[$labelKey] = true;
+            $existingLabels[$labelKey] = true;
             if ($codeKey !== '') {
                 $seenCodes[$codeKey] = true;
+                $existingCodes[$codeKey] = true;
             }
 
             if ($dryRun) {
                 continue;
             }
 
-            $this->createRow($set, [
+            $pending[] = [
                 'code' => $code,
                 'label' => $label,
                 'data' => $row['data'] ?? $row['data_json'] ?? null,
                 'sort_order' => $row['sort_order'] ?? $index,
                 'is_active' => $row['is_active'] ?? true,
-            ]);
-            $created++;
+            ];
+        }
+
+        if ($pending !== []) {
+            DB::transaction(function () use ($set, $pending, &$created): void {
+                foreach ($pending as $input) {
+                    $this->insertRow(
+                        $set,
+                        $input['code'],
+                        $input['label'],
+                        $input,
+                    );
+                    $created++;
+                }
+            });
         }
 
         return ['created' => $created, 'errors' => $errors];
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     */
+    private function insertRow(EApprovalMasterDataSet $set, ?string $code, string $label, array $input): EApprovalMasterDataRow
+    {
+        return EApprovalMasterDataRow::query()->create([
+            'id' => (string) Str::uuid(),
+            'set_id' => $set->id,
+            'code' => $code,
+            'label' => $label,
+            'data_json' => is_array($input['data'] ?? null) ? $input['data'] : (is_array($input['data_json'] ?? null) ? $input['data_json'] : null),
+            'sort_order' => (int) ($input['sort_order'] ?? 0),
+            'is_active' => (bool) ($input['is_active'] ?? true),
+        ]);
     }
 
     /**

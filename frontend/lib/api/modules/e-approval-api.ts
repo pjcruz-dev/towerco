@@ -1502,7 +1502,10 @@ export async function bulkImportEApprovalMasterDataRows(
       rows,
       dry_run: options?.dryRun === true,
     },
-    { signal: options?.signal },
+    {
+      signal: options?.signal,
+      timeout: 120_000,
+    },
   );
   return {
     created: response.data.data.created ?? 0,
