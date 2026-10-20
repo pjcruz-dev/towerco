@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Under Maintenance</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+      background: #f7f8fb;
+      color: #1e293b;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    main {
+      width: min(100%, 520px);
+      text-align: center;
+    }
+    .mark {
+      position: relative;
+      width: 148px;
+      height: 148px;
+      margin: 0 auto 28px;
+    }
+    .mark::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle, rgba(148, 163, 184, 0.16) 0 62%, transparent 63%),
+        repeating-radial-gradient(circle, rgba(148, 163, 184, 0.28) 0 1px, transparent 1px 7px);
+    }
+    svg {
+      position: relative;
+      width: 148px;
+      height: 148px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #1e293b;
+    }
+    p {
+      margin: 12px auto 0;
+      max-width: 360px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 148 148" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g transform="translate(78 62)" stroke="#64748b" stroke-width="2">
+          <circle r="18" />
+          <circle r="7" />
+          <path d="M0-27v8M0 19v8M-27 0h8M19 0h8M-19-19l5.6 5.6M13.4 13.4 19 19M-19 19l5.6-5.6M13.4-13.4 19-19" />
+        </g>
+        <g transform="translate(48 96)" stroke="#94a3b8" stroke-width="1.8">
+          <circle r="14" />
+          <circle r="5" />
+          <path d="M0-21v6M0 15v6M-21 0h6M15 0h6M-15-15l4.2 4.2M10.8 10.8 15 15M-15 15l4.2-4.2M10.8-10.8 15-15" />
+        </g>
+      </svg>
+    </div>
+    <h1>Under Maintenance</h1>
+    <p>Our website is currently undergoing scheduled maintenance to improve your experience.</p>
+  </main>
+</body>
+</html>
