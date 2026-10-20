@@ -9,6 +9,7 @@ use App\Modules\EApproval\Models\EApprovalMasterDataRow;
 use App\Modules\EApproval\Models\EApprovalMasterDataSet;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
