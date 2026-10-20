@@ -119,6 +119,8 @@ export type DynEntityDetail = DynEntitySummary & {
     start_collapsed?: boolean;
     sort_order: number;
     column_span?: number;
+    /** Asset tab this group is drawn on. Missing means Details. */
+    surface?: string | null;
   }>;
   record_count?: number;
 };
@@ -694,6 +696,7 @@ export async function createDynFieldGroup(
     applies_to_view?: boolean;
     start_collapsed?: boolean;
     sort_order?: number;
+    surface?: string;
   },
 ): Promise<{
   id: string;
@@ -717,6 +720,7 @@ export async function createDynFieldGroup(
       start_collapsed?: boolean;
       sort_order?: number;
       column_span?: number;
+      surface?: string;
     };
   }>(`/dynamic-entities/entities/${entity}/field-groups`, payload);
   return response.data.data;
@@ -733,6 +737,7 @@ export async function updateDynFieldGroup(
     start_collapsed: boolean;
     sort_order: number;
     column_span: number;
+    surface: string;
   }>,
 ): Promise<{
   id: string;

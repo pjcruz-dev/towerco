@@ -10,6 +10,10 @@ import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalSubmissionFormPickerCard } from "@/components/e-approval/e-approval-submission-form-picker-card";
+import {
+  EApprovalFinanceTourPickerFixtures,
+  useEApprovalFinanceTourFamily,
+} from "@/components/help/e-approval-finance-tour-fixtures";
 import { EApprovalTourPickerFixtures } from "@/components/help/e-approval-tour-fixtures";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -25,6 +29,11 @@ import {
   fetchEApprovalFormsIndex,
 } from "@/lib/api/modules/e-approval-api";
 import {
+  financeFamilyFromFormName,
+  financeTourComposePath,
+  isEApprovalFinanceTourActive,
+} from "@/lib/help/e-approval-finance-tour";
+import {
   E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH,
   isEApprovalDocumentApprovalFormName,
   isEApprovalTourActive,
@@ -39,7 +48,10 @@ const VIEW_STORAGE_KEY = "e-approval-submission-new-view";
 export function EApprovalSubmissionNewPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tourActive = isEApprovalTourActive(searchParams);
+  const documentTour = isEApprovalTourActive(searchParams);
+  const financeTour = isEApprovalFinanceTourActive(searchParams);
+  const tourActive = documentTour || financeTour;
+  const financeFamily = useEApprovalFinanceTourFamily();
   const push = useNotificationStore((s) => s.push);
   const requestRedirect = useMemo(
     () => eApprovalRequestUrlFromNewSubmissionQuery(searchParams),
@@ -77,33 +89,47 @@ export function EApprovalSubmissionNewPageClient() {
     );
   }, [publishedForms, search]);
 
-  /** Tour uses Document Approval only — never Cash Advance / Liquidation as the example. */
+  /** Document Approval tour stays on that form. The finance tour stays on cash advance, liquidation, and reimbursement. */
   const formsForDisplay = useMemo(() => {
-    if (!tourActive) {
-      return filteredForms;
+    if (documentTour) {
+      return filteredForms.filter((form) => isEApprovalDocumentApprovalFormName(form.name));
     }
-    return filteredForms.filter((form) => isEApprovalDocumentApprovalFormName(form.name));
-  }, [filteredForms, tourActive]);
+    if (financeTour) {
+      return filteredForms.filter((form) => financeFamilyFromFormName(form.name) != null);
+    }
+    return filteredForms;
+  }, [documentTour, filteredForms, financeTour]);
 
   const openRequestForm = useCallback(
     (formId: string) => {
       const params = new URLSearchParams();
       const tour = searchParams.get("tour");
       const tourStep = searchParams.get("tourStep");
+      const tourChapter = searchParams.get("tourChapter");
       if (tour) {
         params.set("tour", tour);
       }
       if (tourStep) {
         params.set("tourStep", tourStep);
       }
+      if (tourChapter) {
+        params.set("tourChapter", tourChapter);
+      }
       const qs = params.toString();
-      if (tourActive) {
+      if (documentTour) {
         router.push(`${E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH}${qs ? `?${qs}` : ""}`);
+        return;
+      }
+      if (financeTour) {
+        const family = financeFamilyFromFormName(
+          publishedForms.find((row) => row.id === formId)?.name,
+        ) ?? financeFamily;
+        router.push(`${financeTourComposePath(family)}${qs ? `?${qs}` : ""}`);
         return;
       }
       router.push(`/e-approval/request/${formId}${qs ? `?${qs}` : ""}`);
     },
-    [router, searchParams, tourActive],
+    [documentTour, financeFamily, financeTour, publishedForms, router, searchParams],
   );
 
   const copyExternalMutation = useMutation({
@@ -174,18 +200,28 @@ export function EApprovalSubmissionNewPageClient() {
 
   const renderGallery = (forms: EApprovalFormListRow[]) => (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {forms.map((form, index) => (
-        <EApprovalSubmissionFormPickerCard
-          key={form.id}
-          form={form}
-          onStart={() => openRequestForm(form.id)}
-          onStartFocused={tourActive ? undefined : () => openFocusedRequestForm(form.id)}
-          onCopyExternalLink={tourActive ? undefined : () => copyExternalLink(form.id)}
-          copyingExternalLink={copyingFormId === form.id}
-          helpTour={index === 0}
-          tourNavPath={tourActive ? E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH : undefined}
-        />
-      ))}
+      {forms.map((form, index) => {
+        const family = financeFamilyFromFormName(form.name);
+        const helpTour = documentTour ? index === 0 : financeTour && family === financeFamily;
+        return (
+          <EApprovalSubmissionFormPickerCard
+            key={form.id}
+            form={form}
+            onStart={() => openRequestForm(form.id)}
+            onStartFocused={tourActive ? undefined : () => openFocusedRequestForm(form.id)}
+            onCopyExternalLink={tourActive ? undefined : () => copyExternalLink(form.id)}
+            copyingExternalLink={copyingFormId === form.id}
+            helpTour={helpTour}
+            tourNavPath={
+              documentTour
+                ? E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH
+                : helpTour && family
+                  ? financeTourComposePath(family)
+                  : undefined
+            }
+          />
+        );
+      })}
     </div>
   );
 
@@ -240,7 +276,17 @@ export function EApprovalSubmissionNewPageClient() {
       return <p className="text-sm text-muted-foreground">No forms match your search.</p>;
     }
 
-    return viewMode === "gallery" ? renderGallery(formsForDisplay) : renderTable(formsForDisplay);
+    const missingFinanceHighlight =
+      financeTour &&
+      !formsForDisplay.some((form) => financeFamilyFromFormName(form.name) === financeFamily);
+    const list = viewMode === "gallery" ? renderGallery(formsForDisplay) : renderTable(formsForDisplay);
+    if (!missingFinanceHighlight) return list;
+    return (
+      <div className="space-y-4">
+        <EApprovalFinanceTourPickerFixtures onlyFamily={financeFamily} />
+        {list}
+      </div>
+    );
   };
 
   return (

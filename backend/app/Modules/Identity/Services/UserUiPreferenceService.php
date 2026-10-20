@@ -13,8 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class UserUiPreferenceService extends AbstractDomainService
 {
-    /** module-list.*, dashboard-layout.*, or product-release.* (seen flag and published notes). */
-    public const KEY_PATTERN = '/^(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]{1,140}$/';
+    /** module-list.*, dashboard-layout.*, product-release.*, or workspace-appearance.* */
+    public const KEY_PATTERN = '/^(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]{1,140}$/';
 
     public const MAX_VALUE_BYTES = 65536;
 
@@ -316,7 +316,7 @@ class UserUiPreferenceService extends AbstractDomainService
         $trimmed = trim($key);
         if ($trimmed === '' || ! preg_match(self::KEY_PATTERN, $trimmed)) {
             throw ValidationException::withMessages([
-                'key' => 'Preference key must match module-list.*, dashboard-layout.*, or product-release.* and use safe characters.',
+                'key' => 'Preference key must match module-list.*, dashboard-layout.*, product-release.*, or workspace-appearance.* and use safe characters.',
             ]);
         }
 

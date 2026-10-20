@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
  *     logo_asset?: string|null,
  *     favicon_asset?: string|null,
  *     light?: array<string, string>,
- *     dark?: array<string, string>
+ *     dark?: array<string, string>,
+ *     chrome?: array<string, mixed>|null
  * }
  */
 final class TenantThemeTokensValidator
@@ -84,6 +85,13 @@ final class TenantThemeTokensValidator
                 'favicon_asset' => ['nullable', 'string', 'max:512', 'regex:'.self::HOSTED_ASSET_PATH],
                 'light' => ['nullable', 'array', 'max:50'],
                 'dark' => ['nullable', 'array', 'max:50'],
+                'chrome' => ['nullable', 'array'],
+                'chrome.saved' => ['sometimes', 'boolean'],
+                'chrome.primary_preset' => ['nullable', 'string', 'in:violet,teal,rose,amber,blue,custom'],
+                'chrome.primary' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'chrome.skin' => ['nullable', 'string', 'in:default,bordered'],
+                'chrome.layout' => ['nullable', 'string', 'in:vertical,collapsed,horizontal'],
+                'chrome.content' => ['nullable', 'string', 'in:compact,wide'],
             ],
         );
 
@@ -161,6 +169,7 @@ final class TenantThemeTokensValidator
             'favicon_url' => null,
             'light' => [],
             'dark' => [],
+            'chrome' => self::defaultChrome(),
         ];
 
         if (! is_array($raw)) {
@@ -170,11 +179,89 @@ final class TenantThemeTokensValidator
         try {
             $validated = self::validate($raw);
             unset($validated['logo_asset'], $validated['favicon_asset']);
+            $validated['chrome'] = self::normalizeChrome(
+                is_array($validated['chrome'] ?? null) ? $validated['chrome'] : null,
+            );
 
             return array_merge($defaults, $validated);
         } catch (ValidationException) {
             return $defaults;
         }
+    }
+
+    /**
+     * Keep a previously saved customizer when an older client saves logo URLs only.
+     *
+     * @param  array<string, mixed>  $existing
+     * @param  array<string, mixed>  $incoming
+     * @return array<string, mixed>
+     */
+    public static function withPreservedChrome(array $existing, array $incoming): array
+    {
+        if (! array_key_exists('chrome', $incoming) && isset($existing['chrome']) && is_array($existing['chrome'])) {
+            $incoming['chrome'] = $existing['chrome'];
+        }
+
+        return $incoming;
+    }
+
+    /**
+     * @return array{
+     *     saved: bool,
+     *     primary_preset: string|null,
+     *     primary: string|null,
+     *     skin: string,
+     *     layout: string,
+     *     content: string
+     * }
+     */
+    public static function defaultChrome(): array
+    {
+        return [
+            'saved' => false,
+            'primary_preset' => null,
+            'primary' => null,
+            'skin' => 'default',
+            'layout' => 'vertical',
+            'content' => 'compact',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $chrome
+     * @return array{
+     *     saved: bool,
+     *     primary_preset: string|null,
+     *     primary: string|null,
+     *     skin: string,
+     *     layout: string,
+     *     content: string
+     * }
+     */
+    public static function normalizeChrome(?array $chrome): array
+    {
+        $defaults = self::defaultChrome();
+        if ($chrome === null) {
+            return $defaults;
+        }
+
+        $preset = $chrome['primary_preset'] ?? null;
+        $primary = $chrome['primary'] ?? null;
+
+        return [
+            'saved' => (bool) ($chrome['saved'] ?? false),
+            'primary_preset' => is_string($preset) && $preset !== '' ? $preset : null,
+            'primary' => is_string($primary) && $primary !== '' ? strtolower($primary) : null,
+            'skin' => is_string($chrome['skin'] ?? null) && $chrome['skin'] !== ''
+                ? (string) $chrome['skin']
+                : $defaults['skin'],
+            'layout' => is_string($chrome['layout'] ?? null) && $chrome['layout'] !== ''
+                ? (string) $chrome['layout']
+                : $defaults['layout'],
+            'content' => is_string($chrome['content'] ?? null) && $chrome['content'] !== ''
+                ? (string) $chrome['content']
+                : $defaults['content'],
+        ];
     }
 
     public static function isAllowedPublicUrl(string $url): bool

@@ -11,10 +11,19 @@ import {
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import { Button } from "@/components/ui/button";
 import {
+  EApprovalFinanceTourApprovalFixtures,
+  EApprovalFinanceTourCompleteAnchor,
+  EApprovalFinanceTourOverviewFixtures,
+  EApprovalFinanceTourPickerFixtures,
+  EApprovalFinanceTourSubmissionFixtures,
+  EApprovalFinanceTourSubmissionTableFixtures,
+} from "@/components/help/e-approval-finance-tour-fixtures";
+import {
   E_APPROVAL_TOUR_SAMPLE_COMPOSE_PATH,
   E_APPROVAL_TOUR_SAMPLE_DETAIL_PATH,
   isEApprovalTourActive,
 } from "@/lib/help/e-approval-tour-fixtures";
+import { isEApprovalFinanceTourActive } from "@/lib/help/e-approval-finance-tour";
 import {
   E_APPROVAL_TOUR_SAMPLE_DOCUMENT_NO,
   E_APPROVAL_TOUR_SAMPLE_FORM_NAME,
@@ -47,6 +56,9 @@ export function EApprovalTourSampleNotice() {
 /** Overview queue rows while the live tour is active (ephemeral). */
 export function EApprovalTourOverviewQueueFixtures({ variant }: { variant: "awaiting" | "attention" }) {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourOverviewFixtures variant={variant} />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }
@@ -103,6 +115,9 @@ export function EApprovalTourOverviewQueueFixtures({ variant }: { variant: "awai
 /** Gallery cards for an empty Submissions list during the tour. */
 export function EApprovalTourSubmissionFixtures() {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourSubmissionFixtures />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }
@@ -184,6 +199,9 @@ export function EApprovalTourSubmissionFixtures() {
 /** Table rows for an empty Submissions list during the tour (same Document Approval data as gallery). */
 export function EApprovalTourSubmissionTableFixtures() {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourSubmissionTableFixtures />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }
@@ -266,6 +284,9 @@ export function EApprovalTourSubmissionTableFixtures() {
 /** Published-form picker card when the tenant has no forms (tour only). */
 export function EApprovalTourPickerFixtures() {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourPickerFixtures />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }
@@ -315,6 +336,9 @@ export function EApprovalTourPickerFixtures() {
 /** Approvals inbox card when the queue is empty (tour only). */
 export function EApprovalTourApprovalFixtures() {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourApprovalFixtures />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }
@@ -350,6 +374,9 @@ export function EApprovalTourApprovalFixtures() {
 /** Final tour step anchor on Overview (ephemeral while tour is active). */
 export function EApprovalTourCompleteAnchor() {
   const searchParams = useSearchParams();
+  if (isEApprovalFinanceTourActive(searchParams)) {
+    return <EApprovalFinanceTourCompleteAnchor />;
+  }
   if (!isEApprovalTourActive(searchParams)) {
     return null;
   }

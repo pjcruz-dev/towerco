@@ -24,7 +24,7 @@ import {
   fetchEApprovalFormWorkspaces,
 } from "@/lib/api/modules/e-approval-api";
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
-import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
@@ -97,7 +97,7 @@ function SidebarNavLink({
 export function AppSidebar() {
   const searchParams = useSearchParams();
   const tourActive =
-    isEApprovalTourActive(searchParams) ||
+    isEApprovalSampleTourActive(searchParams) ||
     isTicketingTourActive(searchParams) ||
     isDocExtractTourActive(searchParams);
   const user = useAuthStore((state) => state.user);

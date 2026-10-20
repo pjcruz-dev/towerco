@@ -1,5 +1,6 @@
 "use client";
 
+import { Palette } from "lucide-react";
 import { Suspense, useMemo } from "react";
 
 import { AppHeaderSearchTrigger } from "@/components/layout/app-header-search-trigger";
@@ -10,8 +11,10 @@ import { OfflineDataSyncButton } from "@/components/layout/offline-data-sync-but
 import { TenantNotificationBell } from "@/components/notifications/tenant-notification-bell";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { WorkspaceActionHistoryButton } from "@/components/dynamic-entities/record-action-history";
+import { Button } from "@/components/ui/button";
 import { hasAnyPermission, hasPermission, permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
+import { useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
 
 /**
  * Utility chrome bar (Metacoresoft-style top row when navbar layout):
@@ -40,6 +43,7 @@ export function AppHeader({
     () => hasPermission(scopedUser, [permissions.eApprovalView]),
     [scopedUser],
   );
+  const setAppearanceOpen = useTenantAppearanceStore((state) => state.setOpen);
   const canViewHistory = useMemo(
     () =>
       hasAnyPermission(scopedUser, [
@@ -65,6 +69,15 @@ export function AppHeader({
       ) : null}
       <WorkspaceBreadcrumbs />
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Customize workspace"
+          onClick={() => setAppearanceOpen(true)}
+        >
+          <Palette aria-hidden />
+        </Button>
         <AppHeaderSearchTrigger />
         <OfflineDataSyncButton />
         {canViewHistory ? <WorkspaceActionHistoryButton /> : null}

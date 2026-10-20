@@ -25,6 +25,7 @@ class DynFieldGroup extends Model
         'start_collapsed',
         'sort_order',
         'column_span',
+        'surface',
     ];
 
     protected function casts(): array

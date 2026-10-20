@@ -32,6 +32,7 @@ final class DynFieldGroupStoreController extends AbstractApiController
             'start_collapsed' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
             'column_span' => ['sometimes', 'integer', 'min:1', 'max:12'],
+            'surface' => ['sometimes', 'string', 'max:32', 'regex:/^[a-z][a-z0-9_]*$/'],
         ]);
 
         $actor = $request->user();
@@ -48,6 +49,7 @@ final class DynFieldGroupStoreController extends AbstractApiController
             'start_collapsed' => $group->start_collapsed,
             'sort_order' => $group->sort_order,
             'column_span' => (int) ($group->column_span ?: 12),
+            'surface' => $group->surface ?: 'overview',
         ]);
     }
 }

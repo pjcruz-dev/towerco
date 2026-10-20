@@ -84,6 +84,33 @@ export function SidebarNavGroup({
   const groupActive = homeActive || sortedItems.some((item) => isNavActive(pathname, item.href, item.exact));
   const [open, setOpen] = useState(groupActive || forceOpen);
   const [flyoutOpen, setFlyoutOpen] = useState(false);
+  const flyoutCloseTimer = useRef<number | null>(null);
+
+  const showFlyout = () => {
+    if (flyoutCloseTimer.current != null) {
+      window.clearTimeout(flyoutCloseTimer.current);
+      flyoutCloseTimer.current = null;
+    }
+    setFlyoutOpen(true);
+  };
+
+  const hideFlyout = () => {
+    if (flyoutCloseTimer.current != null) {
+      window.clearTimeout(flyoutCloseTimer.current);
+    }
+    flyoutCloseTimer.current = window.setTimeout(() => {
+      setFlyoutOpen(false);
+      flyoutCloseTimer.current = null;
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (flyoutCloseTimer.current != null) {
+        window.clearTimeout(flyoutCloseTimer.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (groupActive || forceOpen) {
@@ -104,7 +131,7 @@ export function SidebarNavGroup({
 
       setFlyoutPosition({
         top: rect.top,
-        left: rect.right + 8,
+        left: rect.right,
       });
     };
 
@@ -149,8 +176,11 @@ export function SidebarNavGroup({
           <div
             ref={flyoutRef}
             style={{ top: flyoutPosition.top, left: flyoutPosition.left }}
-            className="fixed z-[100] min-w-[12rem] overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md"
+            onMouseEnter={showFlyout}
+            onMouseLeave={hideFlyout}
+            className="fixed z-[100] pl-2"
           >
+          <div className="min-w-[12rem] overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md">
             <Link
               href={href}
               prefetch={false}
@@ -201,6 +231,7 @@ export function SidebarNavGroup({
                 );
               })}
             </ul>
+          </div>
           </div>,
           document.body,
         )
@@ -209,9 +240,8 @@ export function SidebarNavGroup({
   if (collapsed) {
     return (
       <SidebarMenuItem ref={containerRef} className="relative">
-        <div ref={triggerRef}>
+        <div ref={triggerRef} onMouseEnter={showFlyout} onMouseLeave={hideFlyout}>
           <SidebarMenuButton
-            tooltip={flyoutOpen ? undefined : title}
             isActive={groupActive}
             onClick={() => setFlyoutOpen((value) => !value)}
             className={cn(groupShellClass, buttonClassName)}

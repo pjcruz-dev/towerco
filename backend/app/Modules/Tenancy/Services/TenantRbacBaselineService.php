@@ -56,9 +56,10 @@ class TenantRbacBaselineService
         $templates = TenantRbacModuleRoleTemplates::all();
 
         foreach ($templates as $roleName => $permissions) {
-            $this->syncRole($guard, $roleName, $this->filterEnabled($permissions, $enabled));
+            $this->seedRoleIfMissing($guard, $roleName, $this->filterEnabled($permissions, $enabled));
         }
 
+        // Owner keeps the full enabled set. Every other role is seeded once, then edited in Role Management.
         $this->syncRole($guard, TenantRbacSystemRoles::FULL_ADMIN, $enabled);
 
         // Leftover full-access alias (not created). Keep perms in sync so fold is a no-op if empty.
@@ -155,6 +156,23 @@ class TenantRbacBaselineService
         }
 
         $role->syncPermissions($permissions);
+    }
+
+    /**
+     * Create a built-in role with its template the first time it appears.
+     * Later baseline runs leave the permission list alone so an admin toggle sticks.
+     *
+     * @param  list<string>  $permissions
+     */
+    private function seedRoleIfMissing(string $guard, string $name, array $permissions): void
+    {
+        $role = TenantRole::query()->firstOrCreate(
+            ['name' => $name, 'guard_name' => $guard],
+        );
+
+        if ($role->wasRecentlyCreated) {
+            $role->syncPermissions($permissions);
+        }
     }
 
     /**

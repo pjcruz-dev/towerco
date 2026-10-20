@@ -10,6 +10,7 @@ import {
   capabilitiesForPreset,
   isAiPreset,
   resolvedAiCapabilities,
+  toggleAiCapability,
   type AiPreset,
   type RoleAiAccess,
 } from "@/lib/rbac/role-ai-access";
@@ -29,9 +30,6 @@ export function RoleAiAccessPanel({ value, disabled, saving, onSave }: Props) {
   useEffect(() => {
     setInstructions(value?.instructions ?? "");
   }, [value?.instructions]);
-  const custom = preset === "custom";
-  const locked = disabled || preset === "unrestricted" || preset === "none" || preset === "full";
-
   function savePreset(next: AiPreset) {
     onSave({
       preset: next,
@@ -41,10 +39,9 @@ export function RoleAiAccessPanel({ value, disabled, saving, onSave }: Props) {
   }
 
   function saveCapability(id: (typeof AI_CAPABILITIES)[number]["id"], checked: boolean) {
-    const next = { ...resolvedAiCapabilities({ preset: "custom", capabilities: value?.capabilities }), [id]: checked };
     onSave({
       preset: "custom",
-      capabilities: next,
+      capabilities: toggleAiCapability({ preset, capabilities: value?.capabilities }, id, checked),
       instructions: value?.instructions,
     });
   }
@@ -89,18 +86,21 @@ export function RoleAiAccessPanel({ value, disabled, saving, onSave }: Props) {
 
       <div>
         <h3 className="text-xs font-medium tracking-wide text-muted-foreground">Capabilities</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          A preset fills these in. Clear or tick a box to switch this role to Custom.
+        </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {AI_CAPABILITIES.map((cap) => (
             <label
               key={cap.id}
               className={cn(
                 "flex gap-3 rounded-lg border border-border p-3",
-                custom && !disabled ? "cursor-pointer hover:bg-muted/40" : "cursor-default",
+                disabled ? "cursor-default" : "cursor-pointer hover:bg-muted/40",
               )}
             >
               <Checkbox
                 checked={capabilities[cap.id]}
-                disabled={locked || !custom}
+                disabled={disabled}
                 onCheckedChange={(checked) => saveCapability(cap.id, checked === true)}
                 className="mt-0.5"
               />

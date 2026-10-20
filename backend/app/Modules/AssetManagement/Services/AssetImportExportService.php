@@ -303,6 +303,8 @@ final class AssetImportExportService
         $wouldSkip = 0;
         $errors = [];
         $seen = [];
+        /** @var array<string, true> $stagedSerials Serials an earlier row in this file will create. */
+        $stagedSerials = [];
 
         foreach ($rows as $offset => $row) {
             $line = $offset + 2;
@@ -313,14 +315,20 @@ final class AssetImportExportService
 
                     continue;
                 }
-                $existing = $this->findUpsert($upsertField, $payload);
-                $this->assertImportPayload($payload, $existing instanceof Asset, $seen);
+                $target = $this->resolveImportAsset($upsertField, $payload, $stagedSerials);
+                $existing = $target instanceof Asset ? $target : null;
+                $updating = $existing instanceof Asset || $target === 'staged';
+                $this->assertImportPayload($payload, $updating, $seen);
+                $serial = strtoupper(trim((string) ($payload['serial_number'] ?? '')));
+                if ($serial !== '' && ! $updating) {
+                    $stagedSerials[$serial] = true;
+                }
                 $key = $this->dedupeKey($upsertField, $payload);
                 if ($key !== null) {
                     $seen[$key] = true;
                 }
                 if ($dryRun) {
-                    $existing instanceof Asset ? $wouldUpdate++ : $wouldCreate++;
+                    $updating ? $wouldUpdate++ : $wouldCreate++;
 
                     continue;
                 }
@@ -651,7 +659,7 @@ final class AssetImportExportService
         if (! $updating && $serial === '') {
             throw ValidationException::withMessages(['serial_number' => [__('Serial number is missing.')]]);
         }
-        if ($serial !== '' && isset($seen['serial:'.$serial])) {
+        if ($serial !== '' && isset($seen['serial:'.$serial]) && ! $updating) {
             throw ValidationException::withMessages(['serial_number' => [__('Duplicate serial number.')]]);
         }
         if (! $updating && $serial !== '' && Asset::query()->where('serial_number', $serial)->exists()) {
@@ -698,8 +706,33 @@ final class AssetImportExportService
     }
 
     /**
+     * A serial number is one laptop. A later row, in this file or already on the register, is a reissue.
+     *
      * @param  array<string, mixed>  $payload
+     * @param  array<string, true>  $stagedSerials
+     * @return Asset|'staged'|null
      */
+    private function resolveImportAsset(?string $upsertField, array $payload, array $stagedSerials): Asset|string|null
+    {
+        $found = $this->findUpsert($upsertField, $payload);
+        if ($found instanceof Asset) {
+            return $found;
+        }
+        $serial = strtoupper(trim((string) ($payload['serial_number'] ?? '')));
+        if ($serial === '') {
+            return null;
+        }
+        $bySerial = Asset::query()->where('serial_number', $serial)->first();
+        if ($bySerial instanceof Asset) {
+            return $bySerial;
+        }
+        if (isset($stagedSerials[$serial])) {
+            return 'staged';
+        }
+
+        return null;
+    }
+
     private function findUpsert(?string $upsertField, array $payload): ?Asset
     {
         if ($upsertField === null) {
@@ -786,9 +819,11 @@ final class AssetImportExportService
         if (! $employee instanceof TenantUser) {
             return;
         }
-        if ($asset->status === AssetStatus::Available->value || $asset->status === AssetStatus::New->value) {
-            $this->workflow->assign($asset, $employee, $actor);
+        $asset->refresh();
+        if ((string) $asset->assigned_user_id === (string) $employee->id && $asset->status === AssetStatus::Assigned->value) {
+            return;
         }
+        $this->workflow->assign($asset, $employee, $actor);
     }
 
     /**

@@ -67,5 +67,50 @@ final class TenantThemeTokensValidatorTest extends TestCase
 
         $this->assertArrayNotHasKey('logo_asset', $public);
         $this->assertSame('/api/v1/public/tenant-branding/logo?tenant='.$tenantId, $public['logo_url']);
+        $this->assertFalse($public['chrome']['saved']);
+    }
+
+    public function test_accepts_workspace_chrome_and_preserves_it_when_omitted(): void
+    {
+        $tokens = TenantThemeTokensValidator::validate([
+            'version' => 3,
+            'logo_url' => null,
+            'favicon_url' => null,
+            'light' => ['primary' => '#0d9488'],
+            'dark' => ['primary' => '#0d9488'],
+            'chrome' => [
+                'saved' => true,
+                'primary_preset' => 'teal',
+                'primary' => '#0d9488',
+                'skin' => 'bordered',
+                'layout' => 'collapsed',
+                'content' => 'wide',
+            ],
+        ]);
+
+        $this->assertSame('bordered', $tokens['chrome']['skin']);
+
+        $preserved = TenantThemeTokensValidator::withPreservedChrome($tokens, [
+            'version' => 4,
+            'logo_url' => 'https://cdn.example.com/logo.png',
+            'light' => [],
+            'dark' => [],
+        ]);
+
+        $this->assertSame('collapsed', $preserved['chrome']['layout']);
+    }
+
+    public function test_rejects_unknown_chrome_skin(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        TenantThemeTokensValidator::validate([
+            'version' => 1,
+            'light' => [],
+            'dark' => [],
+            'chrome' => [
+                'skin' => 'glass',
+            ],
+        ]);
     }
 }

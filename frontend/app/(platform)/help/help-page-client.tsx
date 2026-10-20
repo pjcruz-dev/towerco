@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { BookOpen, FileScan, Fingerprint, Play, ShieldCheck } from "lucide-react";
+import { BookOpen, CreditCard, FileScan, Fingerprint, Play, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -13,9 +13,14 @@ import { fetchPublishedHelpGuides, type HelpGuideListRow } from "@/lib/api/modul
 import {
   dismissDocExtractTourPrompt,
   dismissEApprovalTourPrompt,
+  dismissLiveTourPrompt,
   dismissTicketingTourPrompt,
 } from "@/lib/help/e-approval-tour-prompt-preference";
 import { liveTourStartHref } from "@/lib/help/e-approval-live-tour";
+import {
+  E_APPROVAL_FINANCE_TOUR_GUIDE_PATH,
+  E_APPROVAL_FINANCE_TOUR_ID,
+} from "@/lib/help/e-approval-finance-tour";
 import { docExtractTourStartHref } from "@/lib/help/doc-extract-live-tour";
 import { passkeysTourStartHref } from "@/lib/help/passkeys-live-tour";
 import { mfaTourStartHref } from "@/lib/help/mfa-live-tour";
@@ -70,8 +75,8 @@ function EApprovalVisualGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Guide</p>
       <h3 className="mt-2 text-base font-medium text-foreground">E-Forms tour guide</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Annotated screenshots plus jump-into-chapter starts — overview, submissions, compose, decide,
-        cancel, and follow-up. Print-friendly for desk training.
+        Document Approval full tour — annotated screenshots plus jump-into-chapter starts. Overview,
+        submissions, compose, decide, cancel, and follow-up.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <BookOpen className="h-3.5 w-3.5" aria-hidden />
@@ -100,8 +105,58 @@ function EApprovalTourGuideCard() {
       <p className="text-xs font-medium text-muted-foreground">Interactive</p>
       <h3 className="mt-2 text-base font-medium text-foreground">E-Forms product tour</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Walk the real screens with coach marks — including drag-and-drop attachments with upload
-        progress. Sample UI appears while the tour runs and is never saved.
+        Document Approval on the real screens, including drag-and-drop attachments. Sample UI appears
+        while the tour runs and is never saved.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <Play className="h-3.5 w-3.5" aria-hidden />
+        Start full tour →
+      </p>
+    </Link>
+  );
+}
+
+function EApprovalFinanceGuideCard() {
+  return (
+    <Link
+      href={E_APPROVAL_FINANCE_TOUR_GUIDE_PATH}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Guide</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Cash advance, liquidation & reimbursement</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Full tour guide for the finance forms — forecast lines, released cash advance, settlement, and
+        out-of-pocket reimbursement. Jump into a chapter or start the whole walkthrough.
+      </p>
+      <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
+        <CreditCard className="h-3.5 w-3.5" aria-hidden />
+        Open tour guide →
+      </p>
+    </Link>
+  );
+}
+
+function EApprovalFinanceTourCard() {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const tenantId = useAuthStore((state) => state.activeTenantId);
+  const canApprove = usePermission([permissions.eApprovalApprove]);
+  const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
+  const liveTourHref = useMemo(
+    () => liveTourStartHref(E_APPROVAL_FINANCE_TOUR_ID, 0, { canApprove, canCreate }),
+    [canApprove, canCreate],
+  );
+
+  return (
+    <Link
+      href={liveTourHref}
+      onClick={() => dismissLiveTourPrompt(E_APPROVAL_FINANCE_TOUR_ID, userId, tenantId)}
+      className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted/30"
+    >
+      <p className="text-xs font-medium text-muted-foreground">Interactive</p>
+      <h3 className="mt-2 text-base font-medium text-foreground">Finance forms full tour</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Walk cash advance, liquidation, and reimbursement on the real screens. Sample requests are never
+        saved.
       </p>
       <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-400">
         <Play className="h-3.5 w-3.5" aria-hidden />
@@ -286,6 +341,8 @@ export function HelpPageClient() {
           <div className="grid gap-4 sm:grid-cols-2">
             <EApprovalVisualGuideCard />
             <EApprovalTourGuideCard />
+            <EApprovalFinanceGuideCard />
+            <EApprovalFinanceTourCard />
           </div>
         </section>
 

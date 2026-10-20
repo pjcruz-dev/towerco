@@ -1,11 +1,14 @@
 import { apiClient } from "@/lib/api/client";
 
+import type { TenantChrome } from "@/lib/theme/tenant-chrome";
+
 export type TenantBrandingPayload = {
   version: number;
   logo_url: string | null;
   favicon_url: string | null;
   light: Record<string, string>;
   dark: Record<string, string>;
+  chrome?: TenantChrome;
   /** From tenant slug (e.g. ATC). Present on known hosts so pre-login chrome can brand correctly. */
   organization_label?: string | null;
   company_address?: string | null;

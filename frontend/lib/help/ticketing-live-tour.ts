@@ -17,7 +17,14 @@ export type TicketingTourCapabilities = {
 export type TicketingTourChapterStart = {
   id: Exclude<
     LiveTourChapterId,
-    "complete" | "approvals" | "signature" | "decide" | "follow_up"
+    | "complete"
+    | "approvals"
+    | "signature"
+    | "decide"
+    | "follow_up"
+    | "cash_advance"
+    | "liquidation"
+    | "reimbursement"
   >;
   how: string;
   /** Who sees this chapter. Default `all`. Admin chapters use manager/settings. */

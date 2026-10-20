@@ -28,15 +28,15 @@ function EApprovalTourSoftPromptInner({ tourId = "e-approval" }: EApprovalTourSo
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const [visible, setVisible] = useState(false);
 
-  const tourActive = searchParams.get(LIVE_TOUR_QUERY) === tourId;
+  const anyTour = Boolean(searchParams.get(LIVE_TOUR_QUERY));
 
   useEffect(() => {
-    if (!userId || tourActive) {
+    if (!userId || anyTour) {
       setVisible(false);
       return;
     }
     setVisible(!hasDismissedEApprovalTourPrompt(userId, tenantId));
-  }, [tenantId, tourActive, tourId, userId]);
+  }, [anyTour, tenantId, userId]);
 
   const dismiss = useCallback(() => {
     dismissEApprovalTourPrompt(userId, tenantId);

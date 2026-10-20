@@ -8,16 +8,11 @@ import {
   Layers,
   Loader2,
   LogOut,
-  Monitor,
-  Moon,
-  PanelLeft,
-  Sun,
-  PanelTop,
+  Palette,
   UserCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTheme } from "next-themes";
 import { forwardRef, useEffect, useMemo, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -57,13 +52,8 @@ import {
 } from "@/lib/tenant/environment-switch";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import {
-  useNavigationLayoutStore,
-  type NavigationLayout,
-} from "@/stores/navigation-layout-store";
 import { useNotificationStore } from "@/stores/notification-store";
-
-type ThemeChoice = "light" | "dark" | "system";
+import { useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
 
 function userInitials(name: string | undefined, email: string | undefined): string {
   const source = name ?? email ?? "?";
@@ -109,100 +99,6 @@ const ProfileTrigger = forwardRef<
     </button>
   );
 });
-
-function ThemeSegment({ onSelect }: { onSelect?: () => void }) {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const active = (mounted ? theme : "system") as ThemeChoice;
-
-  const options: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
-    { value: "light", label: "Light", icon: Sun },
-    { value: "dark", label: "Dark", icon: Moon },
-    { value: "system", label: "System", icon: Monitor },
-  ];
-
-  return (
-    <div className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted/30 p-1">
-      {options.map((option) => {
-        const Icon = option.icon;
-        const isActive = active === option.value;
-
-        return (
-          <button
-            key={option.value}
-            type="button"
-            disabled={!mounted}
-            onClick={() => {
-              setTheme(option.value);
-              onSelect?.();
-            }}
-            className={cn(
-              "inline-flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[11px] font-medium transition-colors",
-              isActive
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden />
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function NavigationLayoutSegment() {
-  const layout = useNavigationLayoutStore((s) => s.layout);
-  const setLayout = useNavigationLayoutStore((s) => s.setLayout);
-  const hydrate = useNavigationLayoutStore((s) => s.hydrate);
-  const hydrated = useNavigationLayoutStore((s) => s.hydrated);
-
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
-
-  const options: { value: NavigationLayout; label: string; icon: typeof PanelLeft }[] = [
-    { value: "sidebar", label: "Sidebar", icon: PanelLeft },
-    { value: "navbar", label: "Navbar", icon: PanelTop },
-  ];
-
-  return (
-    <div className="space-y-1.5">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <PanelLeft className="size-3.5" aria-hidden />
-        Navigation Layout
-      </p>
-      <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/30 p-1">
-        {options.map((option) => {
-          const Icon = option.icon;
-          const isActive = hydrated ? layout === option.value : option.value === "sidebar";
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setLayout(option.value)}
-              className={cn(
-                "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors",
-                isActive
-                  ? "bg-foreground text-background shadow-sm"
-                  : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
-              )}
-            >
-              <span>{option.label}</span>
-              <Icon className="size-3.5 opacity-80" aria-hidden />
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function EnvironmentSwitcher({ onSelect }: { onSelect?: () => void }) {
   const notify = useNotificationStore((state) => state.push);
@@ -419,6 +315,7 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
     [activeTenantId, user?.tenantAccesses],
   );
 
+  const setAppearanceOpen = useTenantAppearanceStore((state) => state.setOpen);
   const realtimeEnabled = isEchoEnabled();
   const { displayedVersion } = useProductRelease();
 
@@ -462,12 +359,18 @@ function ProfileMenuContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-4 px-4 py-3">
         <TenantPicker onSelect={onNavigate} />
 
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">Appearance</p>
-          <ThemeSegment onSelect={onNavigate} />
-        </div>
-
-        <NavigationLayoutSegment />
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            setAppearanceOpen(true);
+            onNavigate?.();
+          }}
+        >
+          <Palette className="size-4" aria-hidden />
+          Customize workspace
+        </Button>
 
         {settingsLinks.length > 0 ? (
           <div className="space-y-1">

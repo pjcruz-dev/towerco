@@ -116,8 +116,13 @@ export function EApprovalVisualGuidePageClient() {
               Tour guide
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground">
-              Diagrams first — numbered callouts explain each screen. Jump into a chapter below, or use
-              Start full tour for a live walkthrough (including cancel and manual follow-up).
+              Document Approval — numbered callouts explain each screen. Jump into a chapter below, or use
+              Start full tour for a live walkthrough (including cancel and manual follow-up). Cash advance,
+              liquidation, and reimbursement have their own{" "}
+              <Link href="/help/e-approval/finance" className="font-medium text-primary underline-offset-2 hover:underline">
+                tour guide
+              </Link>
+              .
             </p>
           </header>
           <div className="flex flex-wrap items-center gap-2 print:hidden">

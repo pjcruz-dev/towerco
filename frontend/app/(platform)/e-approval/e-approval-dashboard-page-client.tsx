@@ -33,7 +33,7 @@ import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-lay
 import { useEApprovalDashboard } from "@/hooks/use-e-approval-dashboard";
 import { usePermission } from "@/hooks/use-permission";
 import { EMPTY_DASHBOARD_LAYOUT_PREFS } from "@/lib/ui/dashboard-widget-registry";
-import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
 import {
@@ -80,7 +80,7 @@ function QueueList({
   tourFixture?: "awaiting" | "attention";
 }) {
   const searchParams = useSearchParams();
-  const tourActive = isEApprovalTourActive(searchParams);
+  const tourActive = isEApprovalSampleTourActive(searchParams);
 
   if (items.length === 0) {
     if (tourActive && tourFixture) {

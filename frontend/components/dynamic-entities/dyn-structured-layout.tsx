@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   DndContext,
   DragOverlay,
@@ -21,7 +31,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, GripVertical, Layers, Pencil, Plus, SlidersHorizontal, SquarePen, Trash2 } from "lucide-react";
+import { Check, ChevronDown, GripVertical, Layers, Pencil, Plus, SlidersHorizontal, SquarePen, Trash2 } from "lucide-react";
 
 import type { DynSchemaMode } from "@/components/dynamic-entities/dyn-schema-sheets";
 import {
@@ -38,6 +48,7 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSub,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
@@ -57,10 +68,19 @@ import {
 } from "@/components/dynamic-entities/dyn-width-adjust";
 import { getErrorMessage } from "@/lib/api/error";
 import { clampSpan, dynColumnSpanStyle } from "@/lib/dynamic-entities/form-arrange-rows";
+import { groupSurface, OVERVIEW_SURFACE } from "@/lib/dynamic-entities/form-surfaces";
 import { notify } from "@/lib/ui/notify";
 import { fieldEditableOnForm } from "@/lib/rbac/field-surface-access";
 
 type Group = DynEntityDetail["field_groups"][number];
+
+type FormSurfaceOption = { id: string; label: string };
+
+const FormSurfaceContext = createContext<{
+  surface: string;
+  options: FormSurfaceOption[];
+  move: (group: Group, surface: string) => void;
+} | null>(null);
 
 type Props = {
   groups: Group[];
@@ -72,6 +92,10 @@ type Props = {
   allowWidthAdjust?: boolean;
   mode?: "view" | "form";
   includeUngrouped?: boolean;
+  /** Tab this canvas belongs to. New groups are created here. */
+  formSurface?: string;
+  /** When set, a group can be moved between these tabs. */
+  surfaces?: FormSurfaceOption[];
   renderFieldValue: (field: DynField) => ReactNode;
   onSchemaAction: (mode: DynSchemaMode) => void;
   onLayoutChanged: () => Promise<void> | void;
@@ -117,6 +141,8 @@ export function DynStructuredLayout({
   allowWidthAdjust = true,
   mode = "view",
   includeUngrouped = true,
+  formSurface = OVERVIEW_SURFACE,
+  surfaces,
   renderFieldValue,
   onSchemaAction,
   onLayoutChanged,
@@ -212,6 +238,21 @@ export function DynStructuredLayout({
     }
     setAdjustingWidths(true);
   }
+
+  const moveGroupSurface = useCallback(
+    async (group: Group, surface: string) => {
+      if (groupSurface(group) === surface) return;
+      const label = surfaces?.find((option) => option.id === surface)?.label ?? surface;
+      try {
+        await updateDynFieldGroup(group.id, { surface });
+        await onLayoutChanged();
+        notify.success("Group moved", label);
+      } catch (error) {
+        notify.error("Could not move group", getErrorMessage(error));
+      }
+    },
+    [onLayoutChanged, surfaces],
+  );
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
   const [activeKind, setActiveKind] = useState<"group" | "field" | null>(null);
   const fieldsByGroupRef = useRef<Record<string, DynField[]>>({});
@@ -315,14 +356,15 @@ export function DynStructuredLayout({
   const sectionKeys = useMemo(() => {
     const keys = orderedGroups.map((g) => g.id);
     const ungrouped = fieldsByGroup[UNGROUPED] ?? [];
+    const emptyCanvas = schemaMenus && orderedGroups.length === 0;
     if (includeUngrouped && (ungrouped.length > 0 || orderedGroups.length === 0 || schemaTools)) {
       keys.push(UNGROUPED);
     }
     return keys.filter((key) => {
       const list = fieldsByGroup[key] ?? [];
-      return list.length > 0 || schemaTools;
+      return list.length > 0 || schemaTools || (emptyCanvas && key === UNGROUPED);
     });
-  }, [orderedGroups, fieldsByGroup, includeUngrouped, schemaTools]);
+  }, [orderedGroups, fieldsByGroup, includeUngrouped, schemaTools, schemaMenus]);
 
   const activeField = useMemo(() => {
     if (activeKind !== "field" || !activeId) return null;
@@ -685,11 +727,20 @@ export function DynStructuredLayout({
     </WidthAdjustProvider>
   );
 
+  const surfaced =
+    surfaces && surfaces.length > 0 ? (
+      <FormSurfaceContext.Provider value={{ surface: formSurface, options: surfaces, move: moveGroupSurface }}>
+        {layout}
+      </FormSurfaceContext.Provider>
+    ) : (
+      layout
+    );
+
   if (!entitySlug || !schemaMenus) {
-    return layout;
+    return surfaced;
   }
 
-  return <RoleFieldAccessProvider entitySlug={entitySlug}>{layout}</RoleFieldAccessProvider>;
+  return <RoleFieldAccessProvider entitySlug={entitySlug}>{surfaced}</RoleFieldAccessProvider>;
 }
 
 function SchemaMenuItems({
@@ -710,7 +761,10 @@ function SchemaMenuItems({
   onAdjustWidths?: () => void;
 }) {
   const widths = useWidthAdjust();
+  const formSurface = useContext(FormSurfaceContext);
   const canPreviewRoles = Boolean(useRoleFieldAccessContext()?.canManageRoles);
+  const currentSurface = group ? groupSurface(group) : (formSurface?.surface ?? OVERVIEW_SURFACE);
+  const currentLabel = formSurface?.options.find((option) => option.id === currentSurface)?.label;
   return (
     <>
       <ContextMenuLabel>Field</ContextMenuLabel>
@@ -737,7 +791,13 @@ function SchemaMenuItems({
       <ContextMenuLabel>Group</ContextMenuLabel>
       <ContextMenuItem
         className="text-emerald-700 dark:text-emerald-400"
-        onClick={() => onSchemaAction({ kind: "new-group" })}
+        onClick={() =>
+          onSchemaAction({
+            kind: "new-group",
+            surface: formSurface?.surface,
+            surfaceLabel: formSurface?.options.find((option) => option.id === formSurface.surface)?.label,
+          })
+        }
       >
         <Layers className="size-3.5" />
         New group
@@ -748,6 +808,27 @@ function SchemaMenuItems({
             <Pencil className="size-3.5 text-sky-600" />
             Edit “{group.name}”
           </ContextMenuItem>
+          {formSurface ? (
+            <ContextMenuSub
+              label={
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  Show on
+                  {currentLabel ? (
+                    <span className="ml-auto max-w-24 truncate text-xs text-muted-foreground">{currentLabel}</span>
+                  ) : null}
+                </span>
+              }
+            >
+              {formSurface.options.map((option) => (
+                <ContextMenuItem key={option.id} onClick={() => formSurface.move(group, option.id)}>
+                  {option.label}
+                  {option.id === currentSurface ? (
+                    <Check className="ml-auto size-3.5 text-emerald-600" aria-label="Selected" />
+                  ) : null}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSub>
+          ) : null}
           <ContextMenuItem destructive onClick={() => onDeleteGroup?.(group)}>
             <Trash2 className="size-3.5" />
             Delete group

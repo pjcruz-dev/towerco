@@ -451,8 +451,10 @@ export function DynRecordImportDialog({
                     ))}
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Select a unique column (code, name, etc.) to update matches; otherwise new
-                    records are created. About {analyze.row_count.toLocaleString()} data row
+                    {entitySlug === "it_asset"
+                      ? "A serial number is one asset. If that laptop was already issued and shows up again, the row updates it and keeps the previous holder in the history. "
+                      : "Select a unique column to update matches. Otherwise new records are created. "}
+                    About {analyze.row_count.toLocaleString()} data row
                     {analyze.row_count === 1 ? "" : "s"} detected.
                   </p>
                 </div>

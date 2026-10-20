@@ -49,6 +49,7 @@ import {
   notifyDynPermissionDenied,
 } from "@/lib/rbac/entity-access";
 import { dynWorkflowActionsForStatus } from "@/lib/dynamic-entities/dyn-workflow-actions";
+import { fieldsForSurface, groupsForSurface, OVERVIEW_SURFACE } from "@/lib/dynamic-entities/form-surfaces";
 import {
   dynSelectChoiceBadgeClass,
   dynSelectChoiceLabel,
@@ -191,7 +192,7 @@ export function DynamicRecordDetailPageClient({
 
   const groups = useMemo(
     () =>
-      [...(record?.entity.field_groups ?? [])]
+      groupsForSurface(record?.entity.field_groups ?? [], OVERVIEW_SURFACE)
         .filter((g) => {
           // View mirrors form groups so the whole group shows (not a sparse view-only subset).
           if (isEditing || layoutEditing) return g.applies_to_form;
@@ -202,17 +203,21 @@ export function DynamicRecordDetailPageClient({
   );
   const fields = useMemo(
     () =>
-      [...(record?.entity.fields ?? [])].filter((f) => {
-        if (["actions", "workflows", "print", "id"].includes(f.name)) {
-          return false;
-        }
-        if (f.is_system_field && entitySlug !== "helpdesk_ticket") {
-          return false;
-        }
-        if (canManageSchema) return true;
-        const surface = isEditing ? "form" : "record";
-        return !isFieldHiddenOnSurface(accessMatrix, entitySlug, f.name, surface);
-      }),
+      fieldsForSurface(
+        [...(record?.entity.fields ?? [])].filter((f) => {
+          if (["actions", "workflows", "print", "id"].includes(f.name)) {
+            return false;
+          }
+          if (f.is_system_field && entitySlug !== "helpdesk_ticket") {
+            return false;
+          }
+          if (canManageSchema) return true;
+          const surface = isEditing ? "form" : "record";
+          return !isFieldHiddenOnSurface(accessMatrix, entitySlug, f.name, surface);
+        }),
+        record?.entity.field_groups ?? [],
+        OVERVIEW_SURFACE,
+      ),
     [record, accessMatrix, entitySlug, canManageSchema, isEditing],
   );
   const required = useRequiredFields(fields, draft);

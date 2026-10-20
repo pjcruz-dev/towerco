@@ -31,6 +31,15 @@ import {
 } from "@/lib/help/passkeys-live-tour";
 import { isMfaLoginTourId, isMfaTourId } from "@/lib/help/mfa-live-tour";
 import { markEApprovalTourChapterComplete } from "@/lib/help/e-approval-tour-chapter-progress";
+import {
+  E_APPROVAL_FINANCE_TOUR_GUIDE_PATH,
+  E_APPROVAL_FINANCE_TOUR_ID,
+  eApprovalFinanceTourExitPath,
+} from "@/lib/help/e-approval-finance-tour";
+import {
+  markEApprovalFinanceTourChapterComplete,
+  markEApprovalFinanceTourChaptersComplete,
+} from "@/lib/help/e-approval-finance-tour-chapter-progress";
 import { markTicketingTourChapterComplete } from "@/lib/help/ticketing-tour-chapter-progress";
 import {
   TICKETING_LIVE_TOUR_ID,
@@ -543,6 +552,10 @@ export function LiveProductTour() {
       router.replace(TICKETING_TOUR_GUIDE_PATH);
       return;
     }
+    if (tourId === E_APPROVAL_FINANCE_TOUR_ID) {
+      router.replace(E_APPROVAL_FINANCE_TOUR_GUIDE_PATH);
+      return;
+    }
     if (isDocExtractTourId(tourId)) {
       router.replace("/help");
       return;
@@ -580,7 +593,9 @@ export function LiveProductTour() {
             ? pathname.startsWith("/doc-extract")
               ? pathname
               : "/doc-extract"
-            : eApprovalTourExitPath(pathname);
+            : tourId === E_APPROVAL_FINANCE_TOUR_ID
+              ? eApprovalFinanceTourExitPath(pathname)
+              : eApprovalTourExitPath(pathname);
     const next = clearTourSearch(searchParams);
     const qs = next.toString();
     router.replace(qs ? `${nextPath}?${qs}` : nextPath);
@@ -603,6 +618,8 @@ export function LiveProductTour() {
     const { user, activeTenantId } = useAuthStore.getState();
     if (tourId === TICKETING_LIVE_TOUR_ID) {
       markTicketingTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
+    } else if (tourId === E_APPROVAL_FINANCE_TOUR_ID) {
+      markEApprovalFinanceTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
     } else {
       markEApprovalTourChapterComplete(activeChapterId, user?.id ?? null, activeTenantId);
     }
@@ -614,7 +631,7 @@ export function LiveProductTour() {
       endTour();
       return;
     }
-    if (tour.id === "e-approval" || tour.id === TICKETING_LIVE_TOUR_ID) {
+    if (tour.id === "e-approval" || tour.id === TICKETING_LIVE_TOUR_ID || tour.id === E_APPROVAL_FINANCE_TOUR_ID) {
       const { user, activeTenantId } = useAuthStore.getState();
       const seen = new Set<LiveTourChapterId>();
       for (const entry of tour.steps) {
@@ -623,10 +640,13 @@ export function LiveProductTour() {
           seen.add(chapterId);
         }
       }
+      if (tour.id === E_APPROVAL_FINANCE_TOUR_ID) {
+        markEApprovalFinanceTourChaptersComplete([...seen], user?.id ?? null, activeTenantId);
+      }
       for (const chapterId of seen) {
         if (tour.id === TICKETING_LIVE_TOUR_ID) {
           markTicketingTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
-        } else {
+        } else if (tour.id !== E_APPROVAL_FINANCE_TOUR_ID) {
           markEApprovalTourChapterComplete(chapterId, user?.id ?? null, activeTenantId);
         }
       }

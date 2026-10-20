@@ -94,6 +94,17 @@
   --sidebar-accent-foreground: #0f172a;
   --sidebar-border: #e2e8f0;
   --sidebar-ring: #94a3b8;
+  /* Workspace customizer swatches. Components reference these variables; hex stays in this token file. */
+  --chrome-swatch-violet: #7367f0;
+  --chrome-swatch-violet-fg: #fafafa;
+  --chrome-swatch-teal: #0d9488;
+  --chrome-swatch-teal-fg: #fafafa;
+  --chrome-swatch-rose: #e11d48;
+  --chrome-swatch-rose-fg: #fafafa;
+  --chrome-swatch-amber: #f59e0b;
+  --chrome-swatch-amber-fg: #111827;
+  --chrome-swatch-blue: #2563eb;
+  --chrome-swatch-blue-fg: #fafafa;
 }
 
 .dark {
@@ -320,5 +331,20 @@
     margin: 0 !important;
     width: 100% !important;
     max-width: none !important;
+    border: none !important;
+    border-radius: 0 !important;
   }
+}
+
+/* Bordered skin frames the workspace the way a boxed admin skin does. */
+html[data-skin="bordered"] .app-shell-viewport {
+  background: var(--muted);
+}
+
+html[data-skin="bordered"] [data-slot="sidebar-inset"] {
+  margin: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--background);
 }

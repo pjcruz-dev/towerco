@@ -48,6 +48,7 @@ final class TenantBrandingAssetService
     public function mergeForSave(Tenant $tenant, array $incoming): array
     {
         $existing = is_array($tenant->theme_tokens) ? $tenant->theme_tokens : [];
+        $incoming = TenantThemeTokensValidator::withPreservedChrome($existing, $incoming);
 
         foreach ([self::KIND_LOGO, self::KIND_FAVICON] as $kind) {
             $urlKey = $kind.'_url';

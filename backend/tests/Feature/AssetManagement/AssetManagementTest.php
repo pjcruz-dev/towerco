@@ -335,6 +335,39 @@ final class AssetManagementTest extends TestCase
         $this->assertSame($identification['id'], $created->json('data.view_group_id'));
     }
 
+    public function test_a_field_group_can_live_on_an_asset_tab(): void
+    {
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/assets/schema')
+            ->assertOk();
+
+        $created = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/dynamic-entities/entities/it_asset/field-groups', [
+                'name' => 'Previous holders',
+                'surface' => 'assignment',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.surface', 'assignment');
+
+        $entity = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dynamic-entities/entities/it_asset')
+            ->assertOk();
+        $group = collect($entity->json('data.field_groups'))->firstWhere('name', 'Previous holders');
+        $this->assertIsArray($group);
+        $this->assertSame('assignment', $group['surface']);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/dynamic-entities/field-groups/'.$created->json('data.id'), [
+                'surface' => 'repair',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.surface', 'repair');
+    }
+
     public function test_custom_field_sorts_by_its_stored_value(): void
     {
         $this->actingAsTenantAdmin()
@@ -475,6 +508,103 @@ final class AssetManagementTest extends TestCase
         foreach ($exclude as $serial) {
             $this->assertNotContains($serial, $serials);
         }
+    }
+
+    public function test_a_reissued_serial_updates_the_same_laptop(): void
+    {
+        $assetId = $this->createAsset('SN-REISSUE');
+        tenancy()->initialize($this->testTenant);
+        $first = TenantUser::query()->create([
+            'name' => 'First Holder',
+            'email' => 'first.reissue@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $second = TenantUser::query()->create([
+            'name' => 'Second Holder',
+            'email' => 'second.reissue@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $first->assignRole('assets_employee');
+        $second->assignRole('assets_employee');
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assets/'.$assetId.'/assign', ['employee_id' => $first->id])
+            ->assertCreated();
+
+        $map = json_encode([
+            'Serial Number' => 'serial_number',
+            'Type' => 'asset_type',
+            'Status' => 'status',
+            'Employee Email' => 'employee_email',
+        ]);
+        $reissue = "Serial Number,Type,Status,Employee Email\nSN-REISSUE,laptop,ASSIGNED,second.reissue@test.localhost\n";
+        $dry = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/assets/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('reissue.csv', $reissue),
+                'column_map' => $map,
+                'dry_run' => '1',
+            ]);
+        $dry->assertOk()
+            ->assertJsonPath('data.would_create', 0)
+            ->assertJsonPath('data.would_update', 1)
+            ->assertJsonPath('data.error_rows', 0);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/assets/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('reissue.csv', $reissue),
+                'column_map' => $map,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.error_rows', 0);
+
+        $shown = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/assets/'.$assetId);
+        $shown->assertOk()
+            ->assertJsonPath('data.serial_number', 'SN-REISSUE')
+            ->assertJsonPath('data.assignee.email', 'second.reissue@test.localhost');
+        $assignments = collect($shown->json('data.assignments'));
+        $this->assertCount(2, $assignments);
+        $this->assertTrue($assignments->contains(fn (array $row): bool => $row['status'] === 'CLOSED' && ($row['employee']['email'] ?? null) === 'first.reissue@test.localhost'));
+        $this->assertTrue($assignments->contains(fn (array $row): bool => $row['status'] === 'ACTIVE' && ($row['employee']['email'] ?? null) === 'second.reissue@test.localhost'));
+
+        $fileRows = "Serial Number,Type,Status,Employee Email\nSN-FILE,laptop,ASSIGNED,first.reissue@test.localhost\nSN-FILE,laptop,ASSIGNED,second.reissue@test.localhost\n";
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/assets/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('file.csv', $fileRows),
+                'column_map' => $map,
+                'dry_run' => '1',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.would_create', 1)
+            ->assertJsonPath('data.would_update', 1)
+            ->assertJsonPath('data.error_rows', 0);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/assets/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('file.csv', $fileRows),
+                'column_map' => $map,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.updated', 1)
+            ->assertJsonPath('data.error_rows', 0);
+
+        $listed = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/assets?q=SN-FILE');
+        $listed->assertOk()->assertJsonPath('meta.total', 1);
+        $this->assertSame('second.reissue@test.localhost', $listed->json('data.0.assignee.email'));
     }
 
     public function test_import_preview_flags_a_duplicate_serial(): void

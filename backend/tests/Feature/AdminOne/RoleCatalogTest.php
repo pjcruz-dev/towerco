@@ -8,6 +8,7 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Services\TenantRbacBaselineService;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -154,6 +155,62 @@ final class RoleCatalogTest extends TestCase
         $this->assertTrue($fresh->hasRole('tenant_admin'));
         $this->assertFalse($fresh->hasRole('administrator'));
         tenancy()->end();
+    }
+
+    public function test_system_role_permission_toggles_persist_through_baseline_ensure(): void
+    {
+        $roleId = $this->viewerRoleId();
+        $catalog = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/roles');
+        $catalog->assertOk();
+
+        $permissions = $catalog->json('data.permissions');
+        $viewer = collect($catalog->json('data.roles'))->firstWhere('name', 'viewer');
+        $this->assertIsArray($permissions);
+        $this->assertIsArray($viewer);
+        $current = $viewer['permissions'];
+        $this->assertIsArray($current);
+        $extra = collect($permissions)->first(
+            static fn (mixed $name): bool => is_string($name) && ! in_array($name, $current, true),
+        );
+        $this->assertIsString($extra);
+
+        $next = ['dashboard:view', $extra];
+        $update = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/roles/'.$roleId, [
+                'permissions' => $next,
+            ]);
+
+        $update->assertOk();
+        $this->assertEqualsCanonicalizing($next, $update->json('data.permissions'));
+
+        tenancy()->initialize($this->testTenant);
+        app(TenantRbacBaselineService::class)->ensure();
+        tenancy()->end();
+
+        $again = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/admin/roles/'.$roleId);
+
+        $again->assertOk();
+        $this->assertEqualsCanonicalizing($next, $again->json('data.permissions'));
+    }
+
+    public function test_workspace_owner_permissions_cannot_be_narrowed(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $id = (int) TenantRole::query()->where('name', 'tenant_admin')->value('id');
+        tenancy()->end();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/roles/'.$id, [
+                'permissions' => ['dashboard:view'],
+            ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_owner_alias_cannot_be_created_as_custom_role(): void

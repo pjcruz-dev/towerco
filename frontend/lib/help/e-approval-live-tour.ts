@@ -2,6 +2,10 @@ import { passkeysLiveTour } from "@/lib/help/passkeys-live-tour";
 import { mfaLiveTour, mfaLoginEnrollLiveTour } from "@/lib/help/mfa-live-tour";
 import { ticketingLiveTour } from "@/lib/help/ticketing-live-tour";
 import { docExtractLiveTour, DOC_EXTRACT_LIVE_TOUR_ID } from "@/lib/help/doc-extract-live-tour";
+import {
+  eApprovalFinanceLiveTour,
+  resolveEApprovalFinanceTourSteps,
+} from "@/lib/help/e-approval-finance-tour";
 
 export type LiveTourAudience =
   | "all"
@@ -22,6 +26,9 @@ export type LiveTourChapterId =
   | "decide"
   | "manage"
   | "settings"
+  | "cash_advance"
+  | "liquidation"
+  | "reimbursement"
   | "complete";
 
 export const LIVE_TOUR_CHAPTER_LABELS: Record<LiveTourChapterId, string> = {
@@ -35,6 +42,9 @@ export const LIVE_TOUR_CHAPTER_LABELS: Record<LiveTourChapterId, string> = {
   decide: "Decide on a request",
   manage: "Manage tickets",
   settings: "Settings",
+  cash_advance: "Cash advance",
+  liquidation: "Liquidation",
+  reimbursement: "Reimbursement",
   complete: "Finish",
 };
 
@@ -427,6 +437,9 @@ export function tourById(id: string): LiveTourDefinition | null {
   }
   if (id === DOC_EXTRACT_LIVE_TOUR_ID) {
     return docExtractLiveTour;
+  }
+  if (id === eApprovalFinanceLiveTour.id) {
+    return eApprovalFinanceLiveTour;
   }
   return null;
 }
@@ -1120,6 +1133,12 @@ export function resolveLiveTour(
     return {
       ...base,
       steps: resolveEApprovalTourSteps(capabilities),
+    };
+  }
+  if (base.id === eApprovalFinanceLiveTour.id) {
+    return {
+      ...base,
+      steps: resolveEApprovalFinanceTourSteps(capabilities),
     };
   }
   if (base.id === ticketingLiveTour.id) {

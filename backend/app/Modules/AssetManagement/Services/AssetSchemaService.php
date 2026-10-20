@@ -105,6 +105,7 @@ final class AssetSchemaService
                 'id' => $group->id,
                 'name' => $group->name,
                 'sort_order' => $group->sort_order,
+                'surface' => $group->surface ?: 'overview',
             ])->values()->all(),
             'fields' => $entity->fields->map(fn (DynField $field): array => [
                 'id' => $field->id,

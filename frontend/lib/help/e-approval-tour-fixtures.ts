@@ -1,4 +1,5 @@
 import { LIVE_TOUR_QUERY } from "@/lib/help/e-approval-live-tour";
+import { isEApprovalFinanceTourActive } from "@/lib/help/e-approval-finance-tour";
 
 /** Client-only sample routes used by the live tour (never persisted). */
 export const E_APPROVAL_TOUR_SAMPLE_FORM_ID = "tour-sample";
@@ -10,6 +11,11 @@ export const E_APPROVAL_TOUR_SAMPLE_PRINT_PATH = `${E_APPROVAL_TOUR_SAMPLE_DETAI
 
 export function isEApprovalTourActive(searchParams: { get: (key: string) => string | null }): boolean {
   return searchParams.get(LIVE_TOUR_QUERY) === "e-approval";
+}
+
+/** Document Approval tour or the cash advance / liquidation / reimbursement tour. */
+export function isEApprovalSampleTourActive(searchParams: { get: (key: string) => string | null }): boolean {
+  return isEApprovalTourActive(searchParams) || isEApprovalFinanceTourActive(searchParams);
 }
 
 /** Match live Document Approval / Document Control forms for tour targeting. */

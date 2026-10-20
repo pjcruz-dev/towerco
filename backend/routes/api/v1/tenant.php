@@ -11,6 +11,8 @@ use App\Modules\AdminOne\Http\Controllers\V1\RoleIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleShowController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleStoreController;
 use App\Modules\AdminOne\Http\Controllers\V1\RoleUpdateController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantAppearanceShowController;
+use App\Modules\AdminOne\Http\Controllers\V1\TenantAppearanceUpdateController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupDownloadController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBackupIndexController;
 use App\Modules\AdminOne\Http\Controllers\V1\TenantBillingCheckoutSessionStoreController;
@@ -345,19 +347,19 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('me', [TenantAuthController::class, 'me'])->name('api.tenant.v1.auth.me');
     Route::get('me/related-records', MeRelatedRecordsController::class)->name('api.tenant.v1.me.related_records');
     Route::get('me/ui-preferences/{key}', UserUiPreferenceShowController::class)
-        ->where('key', '(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]+')
+        ->where('key', '(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]+')
         ->name('api.tenant.v1.me.ui_preferences.show');
     Route::put('me/ui-preferences/{key}', UserUiPreferenceUpdateController::class)
-        ->where('key', '(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]+')
+        ->where('key', '(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]+')
         ->name('api.tenant.v1.me.ui_preferences.update');
     Route::delete('me/ui-preferences/{key}', UserUiPreferenceDestroyController::class)
-        ->where('key', '(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]+')
+        ->where('key', '(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]+')
         ->name('api.tenant.v1.me.ui_preferences.destroy');
     Route::put('me/ui-preferences/{key}/shared', UserUiPreferenceSharedUpdateController::class)
-        ->where('key', '(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]+')
+        ->where('key', '(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]+')
         ->name('api.tenant.v1.me.ui_preferences.shared.update');
     Route::delete('me/ui-preferences/{key}/shared', UserUiPreferenceSharedDestroyController::class)
-        ->where('key', '(module-list|dashboard-layout|product-release)\.[A-Za-z0-9._-]+')
+        ->where('key', '(module-list|dashboard-layout|product-release|workspace-appearance)\.[A-Za-z0-9._-]+')
         ->name('api.tenant.v1.me.ui_preferences.shared.destroy');
     Route::get('module-list-exports', ModuleListExportIndexController::class)
         ->name('api.tenant.v1.module_list_exports.index');
@@ -654,6 +656,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::get('sso/config', [TenantSsoConfigController::class, 'show'])->name('api.tenant.v1.admin.sso.config.show');
         Route::put('sso/config', [TenantSsoConfigController::class, 'update'])->name('api.tenant.v1.admin.sso.config.update');
         Route::post('sso/test-connection', [TenantSsoConfigController::class, 'testConnection'])->name('api.tenant.v1.admin.sso.test');
+        Route::get('appearance', TenantAppearanceShowController::class)->name('api.tenant.v1.admin.appearance.show');
+        Route::put('appearance', TenantAppearanceUpdateController::class)->name('api.tenant.v1.admin.appearance.update');
         Route::get('security', TenantSecuritySettingsShowController::class)->name('api.tenant.v1.admin.security.show');
         Route::patch('security', TenantSecuritySettingsUpdateController::class)->name('api.tenant.v1.admin.security.update');
         Route::get('users', TenantUserIndexController::class)->name('api.tenant.v1.admin.users.index');

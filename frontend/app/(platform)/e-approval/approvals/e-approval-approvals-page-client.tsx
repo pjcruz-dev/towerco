@@ -28,7 +28,7 @@ import {
 import { useEApprovalListView } from "@/hooks/use-e-approval-list-view";
 import { useServerTableSort } from "@/hooks/use-server-table-sort";
 import { fetchEApprovalApprovalsIndex } from "@/lib/api/modules/e-approval-api";
-import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
 import {
   bindableCatalogEntries,
@@ -174,7 +174,7 @@ export function EApprovalApprovalsPageClient() {
                     ))}
                   </div>
                 ) : isEmpty ? (
-                  isEApprovalTourActive(searchParams) ? (
+                  isEApprovalSampleTourActive(searchParams) ? (
                     <EApprovalTourApprovalFixtures />
                   ) : (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">

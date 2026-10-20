@@ -20,6 +20,7 @@ import { SelectField } from "@/components/ui/select-field";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermission } from "@/hooks/use-permission";
 import { getErrorMessage } from "@/lib/api/error";
+import { fieldsForSurface, groupsForSurface, OVERVIEW_SURFACE } from "@/lib/dynamic-entities/form-surfaces";
 import {
   createDynRecord,
   fetchDynEntity,
@@ -157,21 +158,28 @@ export function DynamicEntityNewRecordPageClient({ slug }: { slug: string }) {
   }, [foreignField, parentRecordId]);
 
   const groups = useMemo(
-    () => [...(entity?.field_groups ?? [])].filter((g) => g.applies_to_form).sort((a, b) => a.sort_order - b.sort_order),
+    () =>
+      groupsForSurface(entity?.field_groups ?? [], OVERVIEW_SURFACE)
+        .filter((g) => g.applies_to_form)
+        .sort((a, b) => a.sort_order - b.sort_order),
     [entity],
   );
 
   const fields = useMemo(
     () =>
-      [...(entity?.fields ?? [])]
-        .filter(
-          (f) =>
-            (slug === "helpdesk_ticket" || !f.is_system_field) &&
-            !["actions", "workflows", "print", "id"].includes(f.name) &&
-            (slug === "helpdesk_ticket" || f.type !== "file") &&
-            (canManageSchema || !isFieldHiddenOnSurface(accessMatrix, slug, f.name, "form")),
-        )
-        .sort((a, b) => a.field_order - b.field_order),
+      fieldsForSurface(
+        [...(entity?.fields ?? [])]
+          .filter(
+            (f) =>
+              (slug === "helpdesk_ticket" || !f.is_system_field) &&
+              !["actions", "workflows", "print", "id"].includes(f.name) &&
+              (slug === "helpdesk_ticket" || f.type !== "file") &&
+              (canManageSchema || !isFieldHiddenOnSurface(accessMatrix, slug, f.name, "form")),
+          )
+          .sort((a, b) => a.field_order - b.field_order),
+        entity?.field_groups ?? [],
+        OVERVIEW_SURFACE,
+      ),
     [entity, accessMatrix, slug, canManageSchema],
   );
   const required = useRequiredFields(fields, values);

@@ -38,6 +38,7 @@ import {
 } from "@/lib/api/modules/assets-api";
 import { fetchDynEntity, type DynField } from "@/lib/api/modules/dynamic-entities-api";
 import { listPrintTemplates, templateDisplayName } from "@/lib/dynamic-entities/dyn-print-templates";
+import { fieldsForSurface, groupsForSurface } from "@/lib/dynamic-entities/form-surfaces";
 import { dynSelectChoiceLabel } from "@/lib/dynamic-entities/select-choices";
 import { getErrorMessage } from "@/lib/api/error";
 import { formatDisplayDate } from "@/lib/format-display-date";
@@ -154,6 +155,9 @@ export function AssetDetailPageClient({ tag }: { tag: string }) {
   const computer = record.asset_type === "laptop" || record.asset_type === "desktop";
 
   const groups = entity.data?.field_groups ?? [];
+  const surfaceGroups = groupsForSurface(groups, tab);
+  const surfaceFields = fieldsForSurface(fields, groups, tab);
+  const formSurfaces = TABS.map((item) => ({ id: item.id, label: item.label }));
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ["asset", tag] });
@@ -168,7 +172,6 @@ export function AssetDetailPageClient({ tag }: { tag: string }) {
   function openEdit() {
     const next = new URLSearchParams(params.toString());
     next.set("edit", "1");
-    next.set("tab", "overview");
     router.replace(`/assets/${record.asset_tag}?${next.toString()}`);
   }
 
@@ -324,41 +327,41 @@ export function AssetDetailPageClient({ tag }: { tag: string }) {
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <RequiredFieldsAlert fields={required.missing} pulse={required.pulse} />
 
-      {tab === "overview" ? (
-          <section className="min-w-0 space-y-4">
-            {entity.data ? (
-              <DynStructuredLayout
-                groups={groups}
-                fields={fields}
-                entitySlug="it_asset"
-                canManageSchema={canManageFields}
-                layoutEditing={isEditing || layoutEditing}
-                allowWidthAdjust={!isEditing}
-                mode={isEditing || layoutEditing ? "form" : "view"}
-                renderFieldValue={isEditing ? renderEditField : renderViewField}
-                invalidFieldNames={isEditing ? required.invalidNames : undefined}
-                onSchemaAction={setSchemaMode}
-                onLayoutChanged={async () => {
-                  await entity.refetch();
-                }}
-              />
-            ) : (
-              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-sm">
-                {entity.isError ? getErrorMessage(entity.error) : "Loading fields…"}
-              </div>
-            )}
-            <DynSchemaSheets
-              entitySlug="it_asset"
-              entityName={entity.data?.name ?? "IT asset"}
-              groups={entity.data?.field_groups ?? []}
-              fields={fields}
-              mode={schemaMode}
-              onClose={() => setSchemaMode({ kind: "closed" })}
-              onSaved={async () => {
-                await entity.refetch();
-              }}
-            />
-          </section>
+      {entity.data && (canManageFields || surfaceGroups.length > 0 || surfaceFields.length > 0) ? (
+        <DynStructuredLayout
+          groups={surfaceGroups}
+          fields={surfaceFields}
+          entitySlug="it_asset"
+          canManageSchema={canManageFields}
+          layoutEditing={isEditing || layoutEditing}
+          allowWidthAdjust={!isEditing}
+          mode={isEditing || layoutEditing ? "form" : "view"}
+          formSurface={tab}
+          surfaces={formSurfaces}
+          renderFieldValue={isEditing ? renderEditField : renderViewField}
+          invalidFieldNames={isEditing ? required.invalidNames : undefined}
+          onSchemaAction={setSchemaMode}
+          onLayoutChanged={async () => {
+            await entity.refetch();
+          }}
+        />
+      ) : !entity.data ? (
+        <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-sm">
+          {entity.isError ? getErrorMessage(entity.error) : "Loading fields…"}
+        </div>
+      ) : null}
+      {entity.data ? (
+        <DynSchemaSheets
+          entitySlug="it_asset"
+          entityName={entity.data.name}
+          groups={groups}
+          fields={fields}
+          mode={schemaMode}
+          onClose={() => setSchemaMode({ kind: "closed" })}
+          onSaved={async () => {
+            await entity.refetch();
+          }}
+        />
       ) : null}
 
       {tab === "assignment" ? (

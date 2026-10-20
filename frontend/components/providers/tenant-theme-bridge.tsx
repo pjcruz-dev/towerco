@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 
 import { fetchTenantBranding, resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
 import { applyTenantThemePalette, clearTenantThemeCssVariables } from "@/lib/theme/apply-tenant-theme";
+import { applyPreviewPrimary, applyTenantChromeSurface } from "@/lib/theme/tenant-chrome";
+import { useResolvedTenantChrome, useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
 import { isCentralHostname } from "@/lib/tenant/resolve-tenant-domain";
 import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
 
@@ -15,6 +17,8 @@ export function TenantThemeBridge() {
   const { resolvedTheme } = useTheme();
   const branding = useTenantBrandingStore((s) => s.branding);
   const setBranding = useTenantBrandingStore((s) => s.setBranding);
+  const preview = useTenantAppearanceStore((state) => state.preview);
+  const chrome = useResolvedTenantChrome();
 
   const [hostname, setHostname] = useState<string | null>(null);
 
@@ -25,6 +29,7 @@ export function TenantThemeBridge() {
   useEffect(() => {
     if (!hostname || isCentralHostname(hostname)) {
       clearTenantThemeCssVariables();
+      applyTenantChromeSurface(null);
       setBranding(null);
 
       return undefined;
@@ -42,6 +47,7 @@ export function TenantThemeBridge() {
         if (!cancelled) {
           setBranding(null);
           clearTenantThemeCssVariables();
+          applyTenantChromeSurface(null);
         }
       }
     })();
@@ -54,22 +60,30 @@ export function TenantThemeBridge() {
   useEffect(() => {
     if (!hostname || isCentralHostname(hostname)) {
       clearTenantThemeCssVariables();
+      applyTenantChromeSurface(null);
 
       return;
     }
 
-    if (!branding) {
+    if (!branding && !preview && !chrome) {
       clearTenantThemeCssVariables();
+      applyTenantChromeSurface(null);
 
       return;
     }
 
     clearTenantThemeCssVariables();
     const mode = resolvedTheme === "dark" ? "dark" : "light";
-    const palette = mode === "dark" ? branding.dark : branding.light;
+    const palette = mode === "dark" ? branding?.dark : branding?.light;
     applyTenantThemePalette(palette);
+    if (preview) {
+      applyPreviewPrimary(preview);
+    } else if (chrome?.primary_preset) {
+      applyPreviewPrimary(chrome);
+    }
+    applyTenantChromeSurface(chrome);
 
-    if (typeof document !== "undefined" && branding.favicon_url) {
+    if (typeof document !== "undefined" && branding?.favicon_url) {
       const existing = document.querySelector<HTMLLinkElement>("link[rel='icon']");
       const link = existing ?? document.createElement("link");
       if (!existing) {
@@ -78,7 +92,7 @@ export function TenantThemeBridge() {
       }
       link.href = resolveBrandingAssetUrl(branding.favicon_url) ?? branding.favicon_url;
     }
-  }, [branding, hostname, resolvedTheme]);
+  }, [branding, chrome, hostname, preview, resolvedTheme]);
 
   return null;
 }

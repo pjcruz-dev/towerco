@@ -42,7 +42,8 @@ import {
   fetchEApprovalSubmissionsIndex,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
-import { isEApprovalTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures";
+import { E_APPROVAL_FINANCE_TOUR_ID } from "@/lib/help/e-approval-finance-tour";
 import {
   LIVE_TOUR_QUERY,
   LIVE_TOUR_STEP_QUERY,
@@ -199,10 +200,11 @@ export function EApprovalSubmissionsPageClient() {
 
   // Live tour steps can force Gallery or Table so both layouts are demonstrated.
   useEffect(() => {
-    if (searchParams.get(LIVE_TOUR_QUERY) !== "e-approval") {
+    const tourId = searchParams.get(LIVE_TOUR_QUERY);
+    if (tourId !== "e-approval" && tourId !== E_APPROVAL_FINANCE_TOUR_ID) {
       return;
     }
-    const tour = resolveLiveTour("e-approval", { canApprove, canCreate });
+    const tour = resolveLiveTour(tourId, { canApprove, canCreate });
     const stepIndex = Number.parseInt(searchParams.get(LIVE_TOUR_STEP_QUERY) ?? "", 10);
     const step = tour?.steps[stepIndex];
     const mode = step?.listViewMode;
@@ -549,7 +551,7 @@ export function EApprovalSubmissionsPageClient() {
                     ))}
                   </div>
                 ) : isEmpty ? (
-                  isEApprovalTourActive(searchParams) ? (
+                  isEApprovalSampleTourActive(searchParams) ? (
                     <EApprovalTourSubmissionFixtures />
                   ) : (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
@@ -589,7 +591,7 @@ export function EApprovalSubmissionsPageClient() {
               </div>
             ) : (
               <div data-help="ea-submissions-table">
-                {isEmpty && isEApprovalTourActive(searchParams) ? (
+                {isEmpty && isEApprovalSampleTourActive(searchParams) ? (
                   <EApprovalTourSubmissionTableFixtures />
                 ) : (
                   <RegistryDataTableView

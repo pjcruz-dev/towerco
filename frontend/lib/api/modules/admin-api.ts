@@ -1,4 +1,6 @@
 import { apiClient } from "@/lib/api/client";
+import type { TenantBrandingPayload } from "@/lib/api/modules/branding-api";
+import type { TenantChrome } from "@/lib/theme/tenant-chrome";
 
 export type TenantMicrosoftSsoConfig = {
   id: string;
@@ -116,6 +118,26 @@ export async function updateTenantSecuritySettings(payload: {
   passkeys_satisfies_mfa?: boolean;
 }): Promise<TenantSecuritySettings> {
   const response = await apiClient.patch<{ data: TenantSecuritySettings }>("/admin/security", payload);
+  return response.data.data;
+}
+
+export type TenantAppearanceInput = {
+  primary_preset: TenantChrome["primary_preset"];
+  primary: string | null;
+  skin: TenantChrome["skin"];
+  layout: TenantChrome["layout"];
+  content: TenantChrome["content"];
+};
+
+export async function fetchTenantAppearance(): Promise<TenantBrandingPayload> {
+  const response = await apiClient.get<{ data: TenantBrandingPayload }>("/admin/appearance");
+  return response.data.data;
+}
+
+export async function updateTenantAppearance(
+  payload: TenantAppearanceInput,
+): Promise<TenantBrandingPayload> {
+  const response = await apiClient.put<{ data: TenantBrandingPayload }>("/admin/appearance", payload);
   return response.data.data;
 }
 

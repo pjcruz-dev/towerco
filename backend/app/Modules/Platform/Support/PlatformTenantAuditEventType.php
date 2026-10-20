@@ -18,6 +18,8 @@ final class PlatformTenantAuditEventType
 
     public const TENANT_BRANDING_UPDATED = 'tenant.branding.updated';
 
+    public const TENANT_APPEARANCE_UPDATED = 'tenant.appearance.updated';
+
     public const TENANT_MODULES_UPDATED = 'tenant.modules.updated';
 
     public const TENANT_BILLING_UPDATED = 'tenant.billing.updated';
@@ -48,6 +50,7 @@ final class PlatformTenantAuditEventType
             self::TENANT_DELETED,
             self::TENANT_MFA_UPDATED,
             self::TENANT_BRANDING_UPDATED,
+            self::TENANT_APPEARANCE_UPDATED,
             self::TENANT_MODULES_UPDATED,
             self::TENANT_BILLING_UPDATED,
             self::TENANT_PLAYBOOK_ASSIGNED,

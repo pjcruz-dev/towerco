@@ -16,6 +16,7 @@ import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { Button } from "@/components/ui/button";
 import { createAsset, fetchAssetSchema } from "@/lib/api/modules/assets-api";
 import { fetchDynEntity } from "@/lib/api/modules/dynamic-entities-api";
+import { fieldsForSurface, groupsForSurface, OVERVIEW_SURFACE } from "@/lib/dynamic-entities/form-surfaces";
 import { getErrorMessage } from "@/lib/api/error";
 import { isFieldHiddenOnSurface, isFieldReadOnlyForRole } from "@/lib/rbac/entity-access";
 import { notify } from "@/lib/ui/notify";
@@ -44,9 +45,11 @@ export function AssetRegisterPageClient() {
     staleTime: 0,
     refetchOnMount: "always",
   });
-  const fields = (entity.data?.fields ?? []).filter(
+  const visibleFields = (entity.data?.fields ?? []).filter(
     (field) => canManageFields || !isFieldHiddenOnSurface(accessMatrix, "it_asset", field.name, "form"),
   );
+  const registerGroups = groupsForSurface(entity.data?.field_groups ?? [], OVERVIEW_SURFACE);
+  const fields = fieldsForSurface(visibleFields, entity.data?.field_groups ?? [], OVERVIEW_SURFACE);
   const [draft, setDraft] = useState<Record<string, string>>(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +104,7 @@ export function AssetRegisterPageClient() {
       <section className="min-w-0 space-y-4">
         {entity.data ? (
           <DynStructuredLayout
-            groups={entity.data.field_groups}
+            groups={registerGroups}
             fields={fields}
             entitySlug="it_asset"
             canManageSchema={canManageFields}

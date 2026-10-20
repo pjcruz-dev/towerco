@@ -89,7 +89,7 @@ export type DynSchemaMode =
   | { kind: "edit-field"; field: DynField }
   | { kind: "add-field"; groupId?: string | null }
   | { kind: "edit-group"; group: DynEntityDetail["field_groups"][number] }
-  | { kind: "new-group" };
+  | { kind: "new-group"; surface?: string; surfaceLabel?: string };
 
 type Props = {
   entitySlug: string;
@@ -177,7 +177,13 @@ export function DynSchemaSheets({
             <EditGroupForm group={mode.group} onClose={onClose} onSaved={onSaved} />
           ) : null}
           {mode.kind === "new-group" ? (
-            <NewGroupForm entitySlug={entitySlug} onClose={onClose} onSaved={onSaved} />
+            <NewGroupForm
+              entitySlug={entitySlug}
+              surface={mode.surface}
+              surfaceLabel={mode.surfaceLabel}
+              onClose={onClose}
+              onSaved={onSaved}
+            />
           ) : null}
         </DialogContent>
       </Dialog>
@@ -1617,10 +1623,14 @@ function EditGroupForm({
 
 function NewGroupForm({
   entitySlug,
+  surface,
+  surfaceLabel,
   onClose,
   onSaved,
 }: {
   entitySlug: string;
+  surface?: string;
+  surfaceLabel?: string;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
@@ -1638,6 +1648,7 @@ function NewGroupForm({
         applies_to_form: true,
         applies_to_view: true,
         start_collapsed: startCollapsed,
+        surface,
       });
       await onSaved();
       onClose();
@@ -1652,7 +1663,11 @@ function NewGroupForm({
     <>
       <DialogHeader className="shrink-0 border-b border-border px-6 py-4 pr-12">
         <DialogTitle>New field group</DialogTitle>
-        <DialogDescription>Groups organize fields on New and View forms.</DialogDescription>
+        <DialogDescription>
+          {surfaceLabel
+            ? `This group is added to ${surfaceLabel}.`
+            : "Groups organize fields on New and View forms."}
+        </DialogDescription>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
         <label className="space-y-1.5">

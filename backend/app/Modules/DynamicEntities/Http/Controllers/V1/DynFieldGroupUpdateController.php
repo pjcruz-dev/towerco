@@ -28,6 +28,7 @@ final class DynFieldGroupUpdateController extends AbstractApiController
             'start_collapsed' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
             'column_span' => ['sometimes', 'integer', 'min:1', 'max:12'],
+            'surface' => ['sometimes', 'string', 'max:32', 'regex:/^[a-z][a-z0-9_]*$/'],
         ]);
 
         $actor = $request->user();
@@ -44,6 +45,7 @@ final class DynFieldGroupUpdateController extends AbstractApiController
             'start_collapsed' => $updated->start_collapsed,
             'sort_order' => $updated->sort_order,
             'column_span' => (int) ($updated->column_span ?: 12),
+            'surface' => $updated->surface ?: 'overview',
         ]);
     }
 }

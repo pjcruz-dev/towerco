@@ -21,6 +21,7 @@ class UserUiPreferenceKeyPatternTest extends TestCase
         $this->assertSame(1, preg_match($pattern, 'dashboard-layout.toweros.e-approval.workspace.layout.Leave-Request'));
         $this->assertSame(1, preg_match($pattern, 'product-release.current'));
         $this->assertSame(1, preg_match($pattern, 'product-release.seen'));
+        $this->assertSame(1, preg_match($pattern, 'workspace-appearance.self'));
         $this->assertSame(0, preg_match($pattern, 'toweros.ticketing.tickets.layout'));
         $this->assertSame(0, preg_match($pattern, 'dashboard.layout.foo'));
     }

@@ -361,6 +361,7 @@ final class DynEntityAdminService
             'start_collapsed' => (bool) ($data['start_collapsed'] ?? false),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'column_span' => $this->clampColumnSpan($data['column_span'] ?? 12),
+            'surface' => $this->normalizeSurface($data['surface'] ?? 'overview'),
         ]);
 
         $this->activity->record(
@@ -407,6 +408,9 @@ final class DynEntityAdminService
         }
         if (isset($data['column_span'])) {
             $group->column_span = $this->clampColumnSpan($data['column_span']);
+        }
+        if (array_key_exists('surface', $data)) {
+            $group->surface = $this->normalizeSurface($data['surface']);
         }
         $group->save();
 
@@ -470,6 +474,16 @@ final class DynEntityAdminService
         return max(1, min(12, $span > 0 ? $span : 12));
     }
 
+    private function normalizeSurface(mixed $value): string
+    {
+        $surface = strtolower(trim((string) $value));
+        if (preg_match('/^[a-z][a-z0-9_]{0,31}$/', $surface) !== 1) {
+            return 'overview';
+        }
+
+        return $surface;
+    }
+
     /**
      * List row without print-template merge (index / ACL pickers).
      *
@@ -527,6 +541,7 @@ final class DynEntityAdminService
                 'start_collapsed' => $g->start_collapsed,
                 'sort_order' => $g->sort_order,
                 'column_span' => (int) ($g->column_span ?: 12),
+                'surface' => $g->surface ?: 'overview',
             ])->values()->all();
             $payload['fields'] = $entity->fields->map(fn (DynField $f): array => $this->presentField($f))->values()->all();
             $payload['record_count'] = $entity->records()->where('is_deleted', false)->count();
