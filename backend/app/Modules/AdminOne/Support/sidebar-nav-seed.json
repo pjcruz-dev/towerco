@@ -1823,6 +1823,21 @@
             "children": []
           },
           {
+            "key": "group.administration.settings.ai-model",
+            "type": "internal_page",
+            "title": "AI model",
+            "icon": null,
+            "href": "/settings/ai-assistant/model",
+            "entity_slug": null,
+            "required_permissions": [
+              "tenant:manage"
+            ],
+            "permissions_match": "all",
+            "module": "ai_assistant",
+            "sort_order": 8,
+            "children": []
+          },
+          {
             "key": "group.administration.settings.kpi-sla",
             "type": "internal_page",
             "title": "KPI & SLA",

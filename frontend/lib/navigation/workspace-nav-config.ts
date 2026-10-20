@@ -726,6 +726,13 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
           { title: "Manage Cron Jobs", href: "/admin/automation", section: "Platform", permissions: ["automation:manage"] },
           { title: "KPI & SLA", href: "/admin/settings/kpi", section: "Platform", permissions: ["tenant:manage"] },
           {
+            title: "AI model",
+            href: "/settings/ai-assistant/model",
+            section: "AI Assistant",
+            module: "ai_assistant",
+            permissions: ["tenant:manage"],
+          },
+          {
             title: "Assistant conversations",
             href: "/settings/ai-assistant/conversations",
             section: "AI Assistant",

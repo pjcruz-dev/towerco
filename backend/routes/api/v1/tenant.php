@@ -53,6 +53,8 @@ use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationIndexContro
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationShowController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantConversationUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantFeedbackStoreController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AssistantLlmCredentialShowController;
+use App\Modules\AiAssistant\Http\Controllers\V1\AssistantLlmCredentialUpdateController;
 use App\Modules\AiAssistant\Http\Controllers\V1\AssistantMetaShowController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchExportController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractBatchFieldsUpdateController;
@@ -438,6 +440,8 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('workspace/audit', WorkspaceAuditIndexController::class)->name('api.tenant.v1.workspace.audit.index');
     Route::middleware(['tenant.module:ai_assistant', 'throttle:assistant'])->group(function () {
         Route::get('assistant/meta', AssistantMetaShowController::class)->name('api.tenant.v1.assistant.meta');
+        Route::get('assistant/settings/llm', AssistantLlmCredentialShowController::class)->name('api.tenant.v1.assistant.settings.llm.show');
+        Route::put('assistant/settings/llm', AssistantLlmCredentialUpdateController::class)->name('api.tenant.v1.assistant.settings.llm.update');
         Route::get('assistant/prompt-modules', AiPromptModuleIndexController::class)->name('api.tenant.v1.assistant.prompt_modules.index');
         Route::get('assistant/prompt-modules/{module}', AiPromptModuleShowController::class)->name('api.tenant.v1.assistant.prompt_modules.show');
         Route::patch('assistant/prompt-modules/{module}', AiPromptModuleUpdateController::class)->name('api.tenant.v1.assistant.prompt_modules.update');

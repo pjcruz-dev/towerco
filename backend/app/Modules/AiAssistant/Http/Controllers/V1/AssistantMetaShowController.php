@@ -6,6 +6,7 @@ namespace App\Modules\AiAssistant\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
+use App\Modules\AiAssistant\Services\TenantLlmCredentialService;
 use App\Modules\AiAssistant\Support\AssistantAudience;
 use App\Modules\AiAssistant\Support\AssistantModelPricing;
 use App\Modules\AiAssistant\Support\AssistantRateLimitReporter;
@@ -17,12 +18,12 @@ use Illuminate\Http\Request;
 
 class AssistantMetaShowController extends AbstractApiController
 {
-    public function __invoke(Request $request, LlmProviderInterface $llm): JsonResponse
+    public function __invoke(Request $request, LlmProviderInterface $llm, TenantLlmCredentialService $credentials): JsonResponse
     {
         abort_unless($request->user()?->can('ai_assistant:use'), 403);
         abort_unless((bool) config('ai_assistant.enabled', true), 503, __('AI Assistant is disabled.'));
 
-        $provider = strtolower((string) config('ai_assistant.llm_provider', 'cursor'));
+        $provider = $credentials->effectiveProvider();
         $models = AssistantModelPricing::sortHighestFirst($this->selectableModels($llm));
         $adminBuilder = AssistantAudience::isTenantAdmin($request->user());
 

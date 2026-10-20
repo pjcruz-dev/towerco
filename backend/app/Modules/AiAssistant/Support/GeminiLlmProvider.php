@@ -7,6 +7,7 @@ namespace App\Modules\AiAssistant\Support;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\LlmCompletionResult;
 use App\Modules\AiAssistant\DTOs\LlmPrompt;
+use App\Modules\AiAssistant\Services\TenantLlmCredentialService;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -144,7 +145,7 @@ final class GeminiLlmProvider implements LlmProviderInterface
         $endpoint = rtrim($this->baseUrl, '/').'/models/'.$model.':generateContent';
 
         return Http::withHeaders([
-            'x-goog-api-key' => $this->apiKey,
+            'x-goog-api-key' => $this->resolvedApiKey(),
         ])
             ->acceptJson()
             ->timeout($this->timeoutSeconds)
@@ -184,11 +185,18 @@ final class GeminiLlmProvider implements LlmProviderInterface
         return $candidate;
     }
 
+    private function resolvedApiKey(): string
+    {
+        $key = trim(app(TenantLlmCredentialService::class)->apiKeyFor('gemini'));
+
+        return $key !== '' ? $key : trim($this->apiKey);
+    }
+
     private function assertConfigured(): void
     {
-        if (trim($this->apiKey) === '') {
+        if ($this->resolvedApiKey() === '') {
             throw new RuntimeException(
-                'Gemini LLM requires GOOGLE_AI_API_KEY (or AI_ASSISTANT_GOOGLE_AI_API_KEY). Set the key or use AI_ASSISTANT_LLM_PROVIDER=local.',
+                'Gemini requires a workspace token in Settings, or GOOGLE_AI_API_KEY / AI_ASSISTANT_GOOGLE_AI_API_KEY.',
             );
         }
     }

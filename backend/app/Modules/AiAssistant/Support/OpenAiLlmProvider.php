@@ -7,6 +7,7 @@ namespace App\Modules\AiAssistant\Support;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\LlmCompletionResult;
 use App\Modules\AiAssistant\DTOs\LlmPrompt;
+use App\Modules\AiAssistant\Services\TenantLlmCredentialService;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -35,7 +36,7 @@ final class OpenAiLlmProvider implements LlmProviderInterface
         $started = hrtime(true);
         $endpoint = rtrim($this->baseUrl, '/').'/chat/completions';
 
-        $response = Http::withToken($this->apiKey)
+        $response = Http::withToken($this->resolvedApiKey())
             ->acceptJson()
             ->timeout($this->timeoutSeconds)
             ->post($endpoint, [
@@ -113,11 +114,18 @@ final class OpenAiLlmProvider implements LlmProviderInterface
         return $candidate;
     }
 
+    private function resolvedApiKey(): string
+    {
+        $key = trim(app(TenantLlmCredentialService::class)->apiKeyFor('openai'));
+
+        return $key !== '' ? $key : trim($this->apiKey);
+    }
+
     private function assertConfigured(): void
     {
-        if (trim($this->apiKey) === '') {
+        if ($this->resolvedApiKey() === '') {
             throw new RuntimeException(
-                'OpenAI LLM requires OPENAI_API_KEY (or AI_ASSISTANT_OPENAI_API_KEY). Set the key or use AI_ASSISTANT_LLM_PROVIDER=local.',
+                'OpenAI requires a workspace token in Settings, or OPENAI_API_KEY / AI_ASSISTANT_OPENAI_API_KEY.',
             );
         }
     }

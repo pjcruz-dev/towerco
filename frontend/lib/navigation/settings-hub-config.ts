@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
   HardDrive,
+  KeyRound,
   LayoutTemplate,
   Settings2,
   Shield,
@@ -103,6 +104,22 @@ export const settingsHubSections: SettingsHubSection[] = [
         section: "E-Forms",
         module: "e_approval",
         requiredPermissions: [permissions.eApprovalSettingsManage],
+      },
+    ],
+  },
+  {
+    id: "ai-assistant",
+    title: "AI Assistant",
+    items: [
+      {
+        id: "ai-model",
+        title: "AI model",
+        description: "Choose the assistant model and save that provider's token for this workspace.",
+        href: "/settings/ai-assistant/model",
+        icon: KeyRound,
+        section: "AI Assistant",
+        module: "ai_assistant",
+        requiredPermissions: [permissions.tenantManage],
       },
     ],
   },

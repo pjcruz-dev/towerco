@@ -479,6 +479,34 @@ export async function updateAiPromptModule(
   return response.data.data;
 }
 
+export type LlmProviderCredential = {
+  id: string;
+  label: string;
+  uses_token: boolean;
+  configured: boolean;
+  source: "tenant" | "environment" | "missing";
+};
+
+export type LlmCredentialSnapshot = {
+  provider: string;
+  provider_source: "tenant" | "environment";
+  providers: LlmProviderCredential[];
+};
+
+export async function fetchLlmCredentials(): Promise<LlmCredentialSnapshot> {
+  const response = await apiClient.get<{ data: LlmCredentialSnapshot }>("/assistant/settings/llm");
+  return response.data.data;
+}
+
+export async function saveLlmCredential(payload: {
+  provider: string;
+  api_key?: string;
+  clear?: boolean;
+}): Promise<LlmCredentialSnapshot> {
+  const response = await apiClient.put<{ data: LlmCredentialSnapshot }>("/assistant/settings/llm", payload);
+  return response.data.data;
+}
+
 export async function resetAiPromptModule(id: string): Promise<AiPromptModuleDetail> {
   const response = await apiClient.post<{ data: AiPromptModuleDetail }>(
     `/assistant/prompt-modules/${id}/reset`,

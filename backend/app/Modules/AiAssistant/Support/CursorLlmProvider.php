@@ -7,6 +7,7 @@ namespace App\Modules\AiAssistant\Support;
 use App\Modules\AiAssistant\Contracts\LlmProviderInterface;
 use App\Modules\AiAssistant\DTOs\LlmCompletionResult;
 use App\Modules\AiAssistant\DTOs\LlmPrompt;
+use App\Modules\AiAssistant\Services\TenantLlmCredentialService;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -30,6 +31,10 @@ final class CursorLlmProvider implements LlmProviderInterface
         private readonly int $pollIntervalMs = 1500,
         private readonly int $requestTimeoutSeconds = 30,
     ) {}
+
+    private ?string $resolvedKey = null;
+
+    private ?string $resolvedForTenant = null;
 
     /** @var list<array{id: string, label: string}>|null */
     private ?array $catalog = null;
@@ -173,11 +178,13 @@ final class CursorLlmProvider implements LlmProviderInterface
             return $this->catalog;
         }
 
-        if (trim($this->apiKey) === '') {
+        $apiKey = $this->resolvedApiKey();
+        if ($apiKey === '') {
             return $this->catalog = [];
         }
 
-        $cacheKey = 'ai_assistant.cursor.models.'.hash('sha256', $this->apiKey.'|'.$this->baseUrl);
+        $tenantId = tenancy()->initialized ? (string) tenant('id') : 'central';
+        $cacheKey = 'ai_assistant.cursor.models.'.$tenantId.'.'.hash('sha256', $apiKey.'|'.$this->baseUrl);
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && $cached !== []) {
             return $this->catalog = $this->normalizeCatalog($cached);
@@ -227,11 +234,24 @@ final class CursorLlmProvider implements LlmProviderInterface
         return $rows;
     }
 
+    private function resolvedApiKey(): string
+    {
+        $tenantId = tenancy()->initialized ? (string) tenant('id') : '';
+        if ($this->resolvedKey !== null && $this->resolvedForTenant === $tenantId) {
+            return $this->resolvedKey;
+        }
+
+        $key = trim(app(TenantLlmCredentialService::class)->apiKeyFor('cursor'));
+        $this->resolvedForTenant = $tenantId;
+
+        return $this->resolvedKey = $key !== '' ? $key : trim($this->apiKey);
+    }
+
     private function assertConfigured(): void
     {
-        if (trim($this->apiKey) === '') {
+        if ($this->resolvedApiKey() === '') {
             throw new RuntimeException(
-                'Cursor LLM requires CURSOR_API_KEY (or AI_ASSISTANT_CURSOR_API_KEY). Set the key or use AI_ASSISTANT_LLM_PROVIDER=local.',
+                'Cursor LLM requires a workspace Cursor token in Settings, or CURSOR_API_KEY / AI_ASSISTANT_CURSOR_API_KEY.',
             );
         }
     }
@@ -472,7 +492,7 @@ final class CursorLlmProvider implements LlmProviderInterface
             $curl[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
         }
 
-        $pending = Http::withToken($this->apiKey)
+        $pending = Http::withToken($this->resolvedApiKey())
             ->acceptJson()
             ->connectTimeout(25)
             ->timeout(max(1, $timeoutSeconds))

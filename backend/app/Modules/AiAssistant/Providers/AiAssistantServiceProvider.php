@@ -22,6 +22,7 @@ use App\Modules\AiAssistant\Services\Actions\SuggestDocumentMetadataAction;
 use App\Modules\AiAssistant\Services\Actions\UpdateControlledDocumentAction;
 use App\Modules\AiAssistant\Services\Actions\UpdateItAssetAction;
 use App\Modules\AiAssistant\Services\Actions\UpdateUserRolesAction;
+use App\Modules\AiAssistant\Services\TenantLlmCredentialService;
 use App\Modules\AiAssistant\Services\Tools\AssistantToolRegistry;
 use App\Modules\AiAssistant\Services\Tools\ExecuteSqlTool;
 use App\Modules\AiAssistant\Services\Tools\FindItAssetTool;
@@ -45,8 +46,9 @@ final class AiAssistantServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(LlmProviderInterface::class, static function ($app): LlmProviderInterface {
-            $driver = strtolower((string) config('ai_assistant.llm_provider', 'cursor'));
+        $this->app->bind(LlmProviderInterface::class, static function ($app): LlmProviderInterface {
+            $credentials = $app->make(TenantLlmCredentialService::class);
+            $driver = $credentials->effectiveProvider();
 
             return match ($driver) {
                 'local', 'fake', '' => throw new InvalidArgumentException('The local assistant model was removed. Set AI_ASSISTANT_LLM_PROVIDER to cursor, gemini, openai, or bedrock.'),
@@ -57,7 +59,7 @@ final class AiAssistantServiceProvider extends ServiceProvider
                     temperature: (float) config('ai_assistant.bedrock.temperature', 0.2),
                 ),
                 'openai', 'chatgpt' => new OpenAiLlmProvider(
-                    apiKey: (string) config('ai_assistant.openai.api_key', ''),
+                    apiKey: $credentials->apiKeyFor('openai'),
                     baseUrl: (string) config('ai_assistant.openai.base_url', 'https://api.openai.com/v1'),
                     modelId: (string) config('ai_assistant.openai.chat_model', 'gpt-4o-mini'),
                     maxTokens: (int) config('ai_assistant.openai.max_tokens', 1024),
@@ -69,7 +71,7 @@ final class AiAssistantServiceProvider extends ServiceProvider
                     )),
                 ),
                 'cursor', 'cursor_ai' => new CursorLlmProvider(
-                    apiKey: (string) config('ai_assistant.cursor.api_key', ''),
+                    apiKey: $credentials->apiKeyFor('cursor'),
                     baseUrl: (string) config('ai_assistant.cursor.base_url', 'https://api.cursor.com/v1'),
                     modelId: (string) config('ai_assistant.cursor.model', 'composer-2'),
                     allowedModels: array_values(array_filter(
@@ -81,7 +83,7 @@ final class AiAssistantServiceProvider extends ServiceProvider
                     requestTimeoutSeconds: (int) config('ai_assistant.cursor.timeout', 30),
                 ),
                 'gemini', 'google', 'google_ai', 'ai_studio' => new GeminiLlmProvider(
-                    apiKey: (string) config('ai_assistant.gemini.api_key', ''),
+                    apiKey: $credentials->apiKeyFor('gemini'),
                     baseUrl: (string) config('ai_assistant.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta'),
                     modelId: (string) config('ai_assistant.gemini.chat_model', 'gemini-3.6-flash'),
                     maxTokens: (int) config('ai_assistant.gemini.max_tokens', 2048),
