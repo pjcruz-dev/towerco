@@ -36,7 +36,6 @@ export function AssistantDrawerProvider({
   const [activity, setActivityState] = useState<AssistantLauncherActivity>("idle");
   const openRef = useRef(open);
   const minimizedRef = useRef(minimized);
-  const doneTimer = useRef<number | null>(null);
   openRef.current = open;
   minimizedRef.current = minimized;
 
@@ -44,21 +43,12 @@ export function AssistantDrawerProvider({
     setOpenState(next);
     if (next) {
       setMinimized(false);
+      setActivityState((current) => (current === "done" ? "idle" : current));
     }
   }, []);
 
   const setActivity = useCallback((next: AssistantLauncherActivity) => {
-    if (doneTimer.current !== null) {
-      window.clearTimeout(doneTimer.current);
-      doneTimer.current = null;
-    }
     setActivityState(next);
-    if (next === "done") {
-      doneTimer.current = window.setTimeout(() => {
-        setActivityState("idle");
-        doneTimer.current = null;
-      }, 5000);
-    }
   }, []);
 
   const toggle = useCallback(() => {

@@ -226,8 +226,8 @@ export function AssistantDrawer() {
               className="flex items-center gap-2 text-xs font-medium text-foreground"
               title={
                 meta?.assistant_mode === "admin_builder"
-                  ? "Admin builder saves a matching change when you ask. Plan mode still does not save."
-                  : "When On, proposed write actions are confirmed automatically (requires action permission)."
+                  ? "Changes wait for confirmation, including when Auto-Pilot is on. The card lists what will change."
+                  : "Changes wait for confirmation. The card lists what will change."
               }
             >
               Auto-Pilot

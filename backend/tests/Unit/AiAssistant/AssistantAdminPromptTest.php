@@ -22,6 +22,15 @@ final class AssistantAdminPromptTest extends TestCase
         $this->assertStringNotContainsString('G_SEARCH', $prompt);
     }
 
+    public function test_document_control_form_sentence_loads_the_delete_operation(): void
+    {
+        $prompt = AssistantAdminPrompt::forPlanner('Remove the Cash Advance form and its submissions and attachments');
+
+        $this->assertStringContainsString('delete_eapproval_form', $prompt);
+        $this->assertStringContainsString('every form', $prompt);
+        $this->assertStringContainsString('revert_last_admin_change', $prompt);
+    }
+
     public function test_ticket_sentence_loads_the_ticket_section(): void
     {
         $prompt = AssistantAdminPrompt::forPlanner('Close ticket TKT-00001');
@@ -46,6 +55,7 @@ final class AssistantAdminPromptTest extends TestCase
         $this->assertStringContainsString('THIS TENANT DATABASE', $prompt);
         $this->assertStringContainsString('execute_sql', $prompt);
         $this->assertStringContainsString('not COUNT(*) alone', $prompt);
+        $this->assertStringContainsString('DELETE, revert, and customize are tenant administrator functions', $prompt);
         $this->assertStringNotContainsString('PLAN_SYSTEM', $prompt);
     }
 

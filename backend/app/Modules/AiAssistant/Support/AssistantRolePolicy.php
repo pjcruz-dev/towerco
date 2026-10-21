@@ -73,6 +73,10 @@ final class AssistantRolePolicy
 
     public function allowsAction(TenantUser $user, string $action): bool
     {
+        if ($action === 'delete_eapproval_form' || $action === 'confirm_tenant_sql' || $action === 'revert_last_admin_change') {
+            return AssistantAudience::isTenantAdmin($user);
+        }
+
         $capability = self::ACTION_CAPABILITY[$action] ?? 'create_update';
 
         return $this->allowsCapability($user, $capability);
@@ -87,10 +91,11 @@ final class AssistantRolePolicy
             return $this->allowsCapability($user, 'ask_lookup');
         }
 
-        $sql = strtolower(trim((string) ($args['sql'] ?? '')));
-        if (preg_match('/^\s*delete\b/', $sql) === 1) {
-            return $this->allowsCapability($user, 'delete_records');
+        $sql = trim((string) ($args['sql'] ?? ''));
+        if (preg_match('/(?:^|;)\s*delete\b/i', $sql) === 1) {
+            return AssistantAudience::isTenantAdmin($user);
         }
+        $sql = strtolower($sql);
         if (preg_match('/^\s*(insert|update|replace)\b/', $sql) === 1) {
             return $this->allowsCapability($user, 'create_update');
         }

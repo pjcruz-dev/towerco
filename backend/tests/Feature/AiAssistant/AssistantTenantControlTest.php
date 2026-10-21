@@ -98,33 +98,48 @@ final class AssistantTenantControlTest extends TestCase
         tenancy()->end();
 
         $headers = $this->tenantApiHeaders();
+        $confirm = function (mixed $response) use ($headers): void {
+            $response->assertOk();
+            $this->actingAsTenantAdmin()
+                ->withHeaders($headers)
+                ->postJson('/api/v1/assistant/actions/confirm', [
+                    'proposal_id' => $response->json('data.proposed_action.id'),
+                    'payload' => $response->json('data.proposed_action.payload'),
+                ])
+                ->assertOk();
+        };
+
         $user = $this->actingAsTenantAdmin()->withHeaders($headers)->postJson('/api/v1/assistant/ask', [
             'question' => 'create user jane.viewer@test.localhost named Jane Viewer password TempPass123 as viewer',
             'module_context' => 'team_access',
             'page_path' => '/admin/users',
         ]);
-        $user->assertOk()->assertJsonPath('data.answer', 'jane.viewer@test.localhost was created and is active.');
+        $user->assertJsonPath('data.proposed_action.action', 'create_tenant_user');
+        $confirm($user);
 
         $notes = $this->actingAsTenantAdmin()->withHeaders($headers)->postJson('/api/v1/assistant/ask', [
             'question' => 'set the notes on ATC-LAP-000001 to spare laptop',
             'module_context' => 'asset_management',
             'page_path' => '/assets',
         ]);
-        $notes->assertOk()->assertJsonPath('data.answer', 'ATC-LAP-000001 was updated.');
+        $notes->assertJsonPath('data.proposed_action.action', 'update_it_asset');
+        $confirm($notes);
 
         $ticket = $this->actingAsTenantAdmin()->withHeaders($headers)->postJson('/api/v1/assistant/ask', [
             'question' => 'set ticket TKT-00004 to in progress',
             'module_context' => 'ticketing',
             'page_path' => '/tickets',
         ]);
-        $ticket->assertOk()->assertJsonPath('data.answer', 'TKT-00004 is now in progress');
+        $ticket->assertJsonPath('data.proposed_action.action', 'change_ticket_status');
+        $confirm($ticket);
 
         $document = $this->actingAsTenantAdmin()->withHeaders($headers)->postJson('/api/v1/assistant/ask', [
             'question' => 'set the title of ATC-F-HR-003 to Leave Policy',
             'module_context' => 'document_register',
             'page_path' => '/controlled-documents',
         ]);
-        $document->assertOk()->assertJsonPath('data.answer', 'ATC-F-HR-003 title is now Leave Policy.');
+        $document->assertJsonPath('data.proposed_action.action', 'update_controlled_document');
+        $confirm($document);
 
         tenancy()->initialize($this->testTenant);
         $created = TenantUser::query()->where('email', 'jane.viewer@test.localhost')->first();

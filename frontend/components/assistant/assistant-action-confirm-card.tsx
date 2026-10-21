@@ -75,7 +75,9 @@ export function AssistantActionConfirmCard({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{proposal.summary}</p>
         ) : null}
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Requires your confirmation. Nothing is saved until you confirm.
+          {proposal.action === "delete_eapproval_form"
+            ? "Nothing is deleted until you confirm."
+            : "Requires your confirmation. Nothing is saved until you confirm."}
         </p>
       </div>
 
@@ -83,19 +85,30 @@ export function AssistantActionConfirmCard({
         <dl className="grid gap-1.5 rounded-md border border-border/80 bg-muted/30 px-2.5 py-2 text-[11px]">
           {Object.entries(proposal.preview).map(([key, value]) => {
             if (value == null || value === "") return null;
-            const display =
-              Array.isArray(value)
-                ? value.map(String).join(", ")
-                : typeof value === "object"
-                  ? null
-                  : String(value);
+            if (Array.isArray(value)) {
+              const lines = value.map(String).filter((line) => line !== "");
+              if (lines.length === 0) return null;
+              return (
+                <div key={key}>
+                  <dt className="font-medium capitalize text-muted-foreground">{key.replace(/_/g, " ")}</dt>
+                  <dd>
+                    <ul className="mt-1 list-disc space-y-0.5 ps-4 text-foreground">
+                      {lines.map((line, index) => (
+                        <li key={`${key}-${index}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              );
+            }
+            const display = typeof value === "object" ? null : String(value);
             if (display == null || display === "") return null;
             return (
               <div key={key} className="flex gap-2">
                 <dt className="shrink-0 font-medium capitalize text-muted-foreground">
                   {key.replace(/_/g, " ")}
                 </dt>
-                <dd className="min-w-0 truncate text-foreground">{display}</dd>
+                <dd className="min-w-0 text-foreground">{display}</dd>
               </div>
             );
           })}
@@ -147,6 +160,7 @@ export function AssistantActionConfirmCard({
         <Button
           type="button"
           size="sm"
+          variant={proposal.action === "delete_eapproval_form" ? "destructive" : "default"}
           disabled={pending}
           onClick={() => {
             const payload: Record<string, unknown> = { ...proposal.payload };

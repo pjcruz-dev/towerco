@@ -491,6 +491,8 @@ export type LlmProviderCredential = {
   uses_token: boolean;
   configured: boolean;
   source: "tenant" | "environment" | "missing";
+  model?: string;
+  api_key?: string | null;
 };
 
 export type LlmCredentialSnapshot = {

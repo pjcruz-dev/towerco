@@ -102,7 +102,7 @@ function toRestoredMessage(message: AssistantConversationMessage): AssistantChat
 export function AssistantChatPanel({
   routeContext,
   open,
-  autoPilot = false,
+  autoPilot: _autoPilot = false,
   planMode = false,
   preferredModel = null,
   meta = null,
@@ -349,19 +349,6 @@ export function AssistantChatPanel({
         ];
       }
       setMessages((current) => [...current, assistantMsg]);
-
-      if (
-        autoPilot &&
-        !planMode &&
-        response.proposed_action?.id &&
-        response.proposed_action.requires_confirmation !== false
-      ) {
-        void onConfirmAction(
-          response.message_id,
-          response.proposed_action.id,
-          response.proposed_action.payload ?? {},
-        );
-      }
     } catch (err) {
       failed = true;
       setError(getErrorMessage(err));

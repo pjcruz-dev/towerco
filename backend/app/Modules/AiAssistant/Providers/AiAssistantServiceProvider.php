@@ -9,13 +9,16 @@ use App\Modules\AiAssistant\Services\Actions\AssistantActionRegistry;
 use App\Modules\AiAssistant\Services\Actions\CancelEApprovalSubmissionAction;
 use App\Modules\AiAssistant\Services\Actions\ChangeItAssetStatusAction;
 use App\Modules\AiAssistant\Services\Actions\ChangeTicketStatusAction;
+use App\Modules\AiAssistant\Services\Actions\ConfirmTenantSqlAction;
 use App\Modules\AiAssistant\Services\Actions\CreateHtmlReportFromPromptAction;
 use App\Modules\AiAssistant\Services\Actions\CreateHtmlReportFromTemplateAction;
 use App\Modules\AiAssistant\Services\Actions\CreateTenantUserAction;
+use App\Modules\AiAssistant\Services\Actions\DeleteEApprovalFormAction;
 use App\Modules\AiAssistant\Services\Actions\DraftEApprovalSubmissionAction;
 use App\Modules\AiAssistant\Services\Actions\DraftTicketAction;
 use App\Modules\AiAssistant\Services\Actions\PinHtmlReportToDashboardAction;
 use App\Modules\AiAssistant\Services\Actions\RejectEApprovalSubmissionAction;
+use App\Modules\AiAssistant\Services\Actions\RevertLastAdminChangeAction;
 use App\Modules\AiAssistant\Services\Actions\SeedSampleItAssetsAction;
 use App\Modules\AiAssistant\Services\Actions\SetUserActiveAction;
 use App\Modules\AiAssistant\Services\Actions\SuggestDocumentMetadataAction;
@@ -131,6 +134,9 @@ final class AiAssistantServiceProvider extends ServiceProvider
                 $app->make(SeedSampleItAssetsAction::class),
                 $app->make(RejectEApprovalSubmissionAction::class),
                 $app->make(CancelEApprovalSubmissionAction::class),
+                $app->make(DeleteEApprovalFormAction::class),
+                $app->make(ConfirmTenantSqlAction::class),
+                $app->make(RevertLastAdminChangeAction::class),
             ]);
         });
     }

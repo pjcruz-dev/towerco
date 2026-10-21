@@ -80,6 +80,18 @@ final class AssistantCatalogRunner
             $this->progress($onProgress, 'plan-'.$step, 'model', 'Chose an operation', 'done', $decision->decision);
 
             if ($decision->decision === 'read' && is_string($decision->name)) {
+                if ($decision->name === 'execute_sql' && $this->sqlNeedsConfirmation((string) ($decision->arguments['sql'] ?? ''))) {
+                    return $this->holdForConfirmation(
+                        $viewer,
+                        'confirm_tenant_sql',
+                        $question,
+                        $decision->arguments,
+                        $conversationId,
+                        $moduleContext,
+                        $preferredModel,
+                        $toolResults,
+                    );
+                }
                 $signature = $decision->name.':'.json_encode($decision->arguments);
                 if (isset($seen[$signature])) {
                     break;
@@ -141,13 +153,9 @@ final class AssistantCatalogRunner
                     return new CatalogRunResult(null, $toolResults);
                 }
 
-                $confirmed = $this->actions->confirm($viewer, (string) $proposal->id);
-                $label = $confirmed['result']->entityLabel;
-
                 return new CatalogRunResult(
-                    null,
+                    $this->actions->asApiPayload($proposal),
                     $toolResults,
-                    is_string($label) && $label !== '' ? $label : 'Saved.',
                 );
             }
 
@@ -208,15 +216,49 @@ final class AssistantCatalogRunner
             args: $args,
             conversationId: $conversationId,
         );
-        $confirmed = $this->actions->confirm($viewer, (string) $proposal->id);
-        $label = $confirmed['result']->entityLabel;
-        $this->progress($onProgress, 'template', 'action', 'Installed '.$template['name'], 'done', is_string($label) ? $label : null);
+        $this->progress($onProgress, 'template', 'action', 'Ready to install '.$template['name'], 'done', 'Waiting for confirmation.');
 
-        return new CatalogRunResult(
-            null,
-            [],
-            is_string($label) && $label !== '' ? $label : $template['name'],
+        return new CatalogRunResult($this->actions->asApiPayload($proposal), []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @param  list<ToolResult>  $toolResults
+     */
+    private function holdForConfirmation(
+        TenantUser $viewer,
+        string $actionName,
+        string $question,
+        array $arguments,
+        ?string $conversationId,
+        ?string $moduleContext,
+        ?string $preferredModel,
+        array $toolResults,
+    ): CatalogRunResult {
+        if (is_string($conversationId) && $conversationId !== '') {
+            $arguments['conversation_id'] = $conversationId;
+        }
+        if (is_string($moduleContext) && $moduleContext !== '' && ! isset($arguments['module_context'])) {
+            $arguments['module_context'] = $moduleContext;
+        }
+        if (is_string($preferredModel) && trim($preferredModel) !== '') {
+            $arguments['preferred_model'] = trim($preferredModel);
+        }
+
+        $proposal = $this->actions->propose(
+            viewer: $viewer,
+            actionName: $actionName,
+            question: $question,
+            args: $arguments,
+            conversationId: $conversationId,
         );
+
+        return new CatalogRunResult($this->actions->asApiPayload($proposal), $toolResults);
+    }
+
+    private function sqlNeedsConfirmation(string $sql): bool
+    {
+        return preg_match('/(?:^|;)\s*(insert|update|delete|replace)\b/i', trim($sql)) === 1;
     }
 
     /**
@@ -234,7 +276,8 @@ final class AssistantCatalogRunner
             'create_tenant_user' => '/\b(create|add|invite)\b/u',
             'update_it_asset' => '/\b(notes|manufacturer|hostname|product)\b/u',
             'change_ticket_status' => '/\b(status|progress|resolved|resolve|closed|close|reopen|open)\b/u',
-            'update_controlled_document' => '/\b(title|department)\b/u',
+            'delete_eapproval_form' => '/\b(delete|remove|purge|erase)\b/u',
+            'revert_last_admin_change' => '/\b(revert|undo|restore)\b/u',
         ];
 
         if (! isset($verbs[$action])) {

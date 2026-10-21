@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { TowerOsAssistantMark } from "@/components/assistant/toweros-assistant-mark";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { useAssistantDrawer } from "@/hooks/use-assistant-drawer";
 import { cn } from "@/lib/utils";
 
@@ -174,11 +175,16 @@ export function AssistantFloatingLauncher() {
         />
       ) : null}
       {activity === "done" ? (
-        <span
-          className="pointer-events-none absolute -inset-1 rounded-full border-2 border-primary-foreground"
-          aria-hidden
-        />
+        <StatusBadge
+          tone="success"
+          className="pointer-events-none absolute -top-2 left-1/2 z-10 -translate-x-1/2 px-1.5 py-0 text-[10px] leading-4 shadow-sm"
+        >
+          Done
+        </StatusBadge>
       ) : null}
+      <span className="sr-only" aria-live="polite">
+        {activity === "done" ? "Reply is ready." : activity === "working" ? "Assistant is still working." : ""}
+      </span>
       <TowerOsAssistantMark className="relative h-6 w-6" />
     </button>
   );

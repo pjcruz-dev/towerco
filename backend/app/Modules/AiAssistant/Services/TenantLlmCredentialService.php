@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
 final class TenantLlmCredentialService
 {
     /**
-     * @var array<string, array{label: string, token: bool, column: string|null, config: string|null}>
+     * @var array<string, array{label: string, token: bool, column: string|null, config: string|null, model: string}>
      */
     private const PROVIDERS = [
         'cursor' => [
@@ -22,24 +22,28 @@ final class TenantLlmCredentialService
             'token' => true,
             'column' => 'cursor_api_key',
             'config' => 'ai_assistant.cursor.api_key',
+            'model' => 'ai_assistant.cursor.model',
         ],
         'gemini' => [
             'label' => 'Gemini',
             'token' => true,
             'column' => 'gemini_api_key',
             'config' => 'ai_assistant.gemini.api_key',
+            'model' => 'ai_assistant.gemini.chat_model',
         ],
         'openai' => [
             'label' => 'OpenAI',
             'token' => true,
             'column' => 'openai_api_key',
             'config' => 'ai_assistant.openai.api_key',
+            'model' => 'ai_assistant.openai.chat_model',
         ],
         'bedrock' => [
             'label' => 'Amazon Bedrock',
             'token' => false,
             'column' => null,
             'config' => null,
+            'model' => 'ai_assistant.bedrock.chat_model_id',
         ],
     ];
 
@@ -98,7 +102,7 @@ final class TenantLlmCredentialService
      * @return array{
      *     provider: string,
      *     provider_source: string,
-     *     providers: list<array{id: string, label: string, uses_token: bool, configured: bool, source: string}>
+     *     providers: list<array{id: string, label: string, uses_token: bool, configured: bool, source: string, model: string, api_key: string|null}>
      * }
      */
     public function snapshot(): array
@@ -119,7 +123,7 @@ final class TenantLlmCredentialService
      * @return array{
      *     provider: string,
      *     provider_source: string,
-     *     providers: list<array{id: string, label: string, uses_token: bool, configured: bool, source: string}>
+     *     providers: list<array{id: string, label: string, uses_token: bool, configured: bool, source: string, model: string, api_key: string|null}>
      * }
      */
     public function save(TenantUser $actor, string $provider, ?string $apiKey, bool $clear): array
@@ -172,8 +176,8 @@ final class TenantLlmCredentialService
     }
 
     /**
-     * @param  array{label: string, token: bool, column: string|null, config: string|null}  $definition
-     * @return array{id: string, label: string, uses_token: bool, configured: bool, source: string}
+     * @param  array{label: string, token: bool, column: string|null, config: string|null, model: string}  $definition
+     * @return array{id: string, label: string, uses_token: bool, configured: bool, source: string, model: string, api_key: string|null}
      */
     private function providerSnapshot(string $id, array $definition): array
     {
@@ -184,6 +188,8 @@ final class TenantLlmCredentialService
                 'uses_token' => false,
                 'configured' => true,
                 'source' => 'environment',
+                'model' => trim((string) config($definition['model'], '')),
+                'api_key' => null,
             ];
         }
 
@@ -202,6 +208,8 @@ final class TenantLlmCredentialService
             'uses_token' => true,
             'configured' => $source !== 'missing',
             'source' => $source,
+            'model' => trim((string) config($definition['model'], '')),
+            'api_key' => $source === 'tenant' ? $stored : ($source === 'environment' ? $environment : null),
         ];
     }
 

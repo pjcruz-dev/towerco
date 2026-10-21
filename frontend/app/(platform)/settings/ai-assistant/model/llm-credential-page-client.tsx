@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { FilterSelect } from "@/components/forms/filter-select";
@@ -17,6 +18,14 @@ import {
 import { useNotificationStore } from "@/stores/notification-store";
 
 const QUERY_KEY = ["assistant", "llm-credentials"] as const;
+const TOKEN_PREFIX_LENGTH = 8;
+
+function maskToken(token: string): string {
+  if (token.length <= TOKEN_PREFIX_LENGTH) {
+    return "*".repeat(Math.max(token.length, 8));
+  }
+  return token.slice(0, TOKEN_PREFIX_LENGTH) + "*".repeat(token.length - TOKEN_PREFIX_LENGTH);
+}
 
 function sourceLabel(provider: LlmProviderCredential | undefined): string {
   if (!provider) {
@@ -29,7 +38,7 @@ function sourceLabel(provider: LlmProviderCredential | undefined): string {
     return `${provider.label} is using a token saved for this workspace.`;
   }
   if (provider.source === "environment") {
-    return `${provider.label} has no workspace token. The assistant can use the server environment key.`;
+    return `${provider.label} has no workspace token. The token below is the server environment key.`;
   }
   return `${provider.label} has no token yet. Paste one to use it for this workspace.`;
 }
@@ -70,6 +79,23 @@ export function LlmCredentialPageClient() {
   const snapshot = credentialQuery.data;
   const providers = snapshot?.providers ?? [];
   const selected = providers.find((item) => item.id === provider);
+  const visibleToken = selected?.uses_token && selected.api_key ? selected.api_key : "";
+
+  async function copyToken() {
+    if (visibleToken === "") {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(visibleToken);
+      notify({ level: "success", title: "Token copied", message: "The full token is on the clipboard." });
+    } catch {
+      notify({
+        level: "error",
+        title: "Could not copy the token",
+        message: "Allow clipboard access, then press Copy again.",
+      });
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,6 +130,7 @@ export function LlmCredentialPageClient() {
               <p key={item.id}>
                 <span className="font-medium text-foreground">{item.label}</span>
                 {item.id === snapshot.provider ? " · active" : ""}
+                {item.model ? ` · ${item.model}` : ""}
                 {" · "}
                 {item.uses_token ? (item.configured ? "token available" : "no token") : "server credentials"}
               </p>
@@ -125,6 +152,24 @@ export function LlmCredentialPageClient() {
             ))}
           </FilterSelect>
           <p className="text-sm text-muted-foreground">{sourceLabel(selected)}</p>
+          {visibleToken !== "" ? (
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <FormInput
+                  id="assistant-current-token"
+                  label="Current token"
+                  name="current_api_key"
+                  readOnly
+                  value={maskToken(visibleToken)}
+                  spellCheck={false}
+                />
+              </div>
+              <Button type="button" variant="outline" onClick={() => void copyToken()}>
+                <Copy className="size-4" />
+                Copy
+              </Button>
+            </div>
+          ) : null}
           {selected?.uses_token !== false ? (
             <FormInput
               label="API token"

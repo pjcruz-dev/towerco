@@ -48,7 +48,7 @@ final class AssistantLlmCredentialTest extends TestCase
         $this->bootInMemoryTenantApi();
     }
 
-    public function test_admin_can_save_a_provider_token_without_it_being_returned(): void
+    public function test_admin_can_save_a_provider_token_and_copy_it_back(): void
     {
         $token = 'cursor_live_token_value_123456';
 
@@ -64,10 +64,10 @@ final class AssistantLlmCredentialTest extends TestCase
             ->assertJsonPath('data.provider_source', 'tenant')
             ->assertJsonPath('data.providers.0.id', 'cursor')
             ->assertJsonPath('data.providers.0.source', 'tenant')
+            ->assertJsonPath('data.providers.0.api_key', $token)
             ->assertJsonPath('data.providers.1.id', 'gemini')
-            ->assertJsonPath('data.providers.1.source', 'environment');
-
-        $this->assertStringNotContainsString($token, $response->getContent());
+            ->assertJsonPath('data.providers.1.source', 'environment')
+            ->assertJsonPath('data.providers.1.api_key', 'env-gemini-key');
 
         tenancy()->initialize($this->testTenant);
         $row = AiAssistantSetting::query()->findOrFail(AiAssistantSetting::SINGLETON_ID);
@@ -154,7 +154,8 @@ final class AssistantLlmCredentialTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.providers.0.source', 'environment')
-            ->assertJsonPath('data.providers.0.configured', true);
+            ->assertJsonPath('data.providers.0.configured', true)
+            ->assertJsonPath('data.providers.0.api_key', 'env-cursor-key');
 
         tenancy()->initialize($this->testTenant);
         $this->assertNull(AiAssistantSetting::query()->findOrFail(1)->cursor_api_key);

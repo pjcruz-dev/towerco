@@ -55,7 +55,7 @@ PROMPT;
             || preg_match('/\b(sn-|atc-)/u', $q) === 1) {
             $intents[] = 'assets';
         }
-        if (preg_match('/\b(approval|approvals|e-approval|eapproval|submission|submissions|reject|cancel|withdraw)\b/u', $q) === 1) {
+        if (preg_match('/\b(approval|approvals|e-approval|eapproval|submission|submissions|reject|cancel|withdraw|form|forms)\b/u', $q) === 1) {
             $intents[] = 'e_approval';
         }
         if (preg_match('/\b(ticket|tickets)\b/u', $q) === 1) {
@@ -87,7 +87,7 @@ Table it_assets. A new row starts as NEW or AVAILABLE. Later statuses must follo
 PROMPT,
             'e_approval' => <<<'PROMPT'
 E-APPROVAL
-Table e_approval_submissions. document_no identifies a request. status pending, draft, or returned can be cancelled by the requestor. Reject is a different operation: reject_eapproval_submission, only when they say reject. Cancel is cancel_eapproval_submission, only when they say cancel or withdraw. Do not put a cancel sentence on the reject operation.
+Table e_approval_forms holds every form: Document Control, cash advance, travel, and any other name. Table e_approval_submissions holds what was filed on a form. document_no identifies one request. status pending, draft, or returned can be cancelled by the requestor. Reject is reject_eapproval_submission, only when they say reject. Cancel is cancel_eapproval_submission, only when they say cancel or withdraw. Do not put a cancel sentence on the reject operation. Deleting a form is delete_eapproval_form. It applies to every form, not one kind. Set form_name to the exact name. Several forms in one request are joined with " | ". The operation does not delete yet. It lists every matching form, submission, and attachment and waits for confirmation. After a confirmed delete, revert or undo uses revert_last_admin_change, which lists the same data and waits again. Tenant administrator only. Do not DELETE those tables yourself. Never wipe every form unless they named each one.
 PROMPT,
             'ticketing' => <<<'PROMPT'
 TICKETING
@@ -103,11 +103,11 @@ CSV analyze suggests a column map, then you fill headers left as __ignore__ when
 PROMPT,
             'documents' => <<<'PROMPT'
 DOCUMENTS
-Table controlled_documents. update_controlled_document sets the title or department of a code that already exists. Do not publish, obsolete, or delete it from chat. Do not invent a document code.
+Table controlled_documents. update_controlled_document sets the title or department of a code that already exists. Do not publish or obsolete it from chat. Do not invent a document code. Deleting the form people submitted, whatever its name, is delete_eapproval_form.
 PROMPT,
             default => <<<'PROMPT'
 THIS TENANT DATABASE
-You control this tenant's data. TENANT_SCHEMA is the list of tables and columns you may read and change. Do not guess a column. A named catalog operation wins when one matches. Anything else that is a row in this database uses execute_sql and runs now. Up to 8 statements, separated by semicolons. A search uses LOWER(column) LIKE LOWER('%term%'). A SELECT includes the id column. A question about who or how many also selects the name, email, and role columns that exist, not COUNT(*) alone. Change the rows they named. A wipe of a whole table is rejected, and the audit log records the signed-in admin.
+You control this tenant across every module, not one module. TENANT_SCHEMA is the list of tables and columns. Do not guess a column. A named catalog operation wins when one matches. Anything else that changes rows uses confirm_tenant_sql with the statement in arguments.sql. It lists the rows and waits. SELECT still uses execute_sql and runs now. A search uses LOWER(column) LIKE LOWER('%term%'). A SELECT includes the id column. A question about who or how many also selects the name, email, and role columns that exist, not COUNT(*) alone. DELETE, revert, and customize are tenant administrator functions. revert_last_admin_change puts back the last confirmed delete or database write and lists what returns. Do not say a delete, customize, or revert already happened. A wipe of a whole table is rejected.
 PROMPT,
         };
     }
@@ -115,13 +115,13 @@ PROMPT,
     private static function core(): string
     {
         return <<<'PROMPT'
-You are the INFRA SUITE builder for a tenant administrator of this workspace. You control this tenant: its records and its database. You get the change done without ceremony.
+You are the INFRA SUITE builder for a tenant administrator of this workspace. You control this tenant across every module: records, forms, documents, tickets, assets, users, and the database. You can customize it. Delete and revert are admin functions and stay with this tenant administrator.
 
 Banned phrases, never use them: "Understood.", "Certainly!", "Of course!", "I will now execute...", "I am now processing...", "Acknowledged.", "As requested...", "Let me help you with that.", "Great question!".
 
-Just do the operation. The final message is the outcome: what changed, and the new state. A simple request does not get a master plan. Do not build unrelated screens, menus, or records around it.
+Prepare the change and list what it touches. A delete, a customize, and a revert all wait for the confirmation card. Do not say the change is already saved. A simple request does not get a master plan.
 
-Scope is this tenant database only. Do not edit application source, screens, or API code. Do not touch another tenant. Do not wipe a table.
+Scope is this tenant only. Do not edit application source or another tenant. Do not wipe a table.
 PROMPT;
     }
 
@@ -135,11 +135,11 @@ Return one JSON object and nothing else:
 
 Rules:
 1. Use only a name that appears in the catalog. A missing name is ignored.
-2. decision read loads data. decision write runs that operation now. Do not ask for a confirm card.
+2. decision read loads data. decision write runs that operation now, except delete_eapproval_form, which only prepares a confirmation list. Do not ask for a confirm card yourself.
 3. Put identifiers and field values from the question or prior results into arguments.
 4. If no catalog operation fits, and the request is data in this tenant, use {"decision":"read","name":"execute_sql","purpose":"Count active users","arguments":{"sql":"..."}}. A write decision for execute_sql is accepted. The statement runs immediately. Do not answer "nothing was saved" when execute_sql can do the change.
 5. Do not substitute a nearby write. Cancel is not reject. Reject is not cancel. If their verb is not the operation, return {"decision":"answer"}.
-6. Never name another database. Never read or write files from SQL. TRUNCATE, DROP TABLE, and UPDATE or DELETE without a real WHERE are rejected. Change the rows you mean. Do not wipe a table. Every change is audited as the signed-in admin.
+6. Never name another database. Never read or write files from SQL. TRUNCATE, DROP TABLE, and UPDATE or DELETE without a real WHERE are rejected. A database write is confirm_tenant_sql, not execute_sql. Delete and revert are tenant administrator functions. Do not wipe a table. Every change is audited as the signed-in admin.
 7. purpose is a short phrase the person can read, such as "Find role ID for Procurement Team". No SQL.
 8. note is one or two sentences of what a prior result showed and what you will do next. Leave note empty on the first step. No SQL and no JSON.
 9. A question about who, which people, or how many records returns the rows, not only a count. Select the identifying columns that exist in TENANT_SCHEMA, such as name, email, and role name, in that same statement. If PRIOR_RESULTS is only a count, the next step selects those rows. If PRIOR_RESULTS already lists them, return {"decision":"answer"}.

@@ -72,8 +72,15 @@ final class AssistantSetUserActiveTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.answer', 'appangandaman@alliancetowers.com is now inactive.')
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'set_user_active');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ])
+            ->assertOk();
 
         tenancy()->initialize($this->testTenant);
         $user = TenantUser::query()->where('email', 'appangandaman@alliancetowers.com')->first();

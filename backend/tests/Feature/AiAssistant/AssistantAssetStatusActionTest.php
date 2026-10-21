@@ -113,8 +113,15 @@ final class AssistantAssetStatusActionTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.answer', 'ATC-LAP-000001 is now LOST')
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'change_it_asset_status');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ])
+            ->assertOk();
 
         tenancy()->initialize($this->testTenant);
         $this->assertSame('LOST', Asset::query()->where('asset_tag', 'ATC-LAP-000001')->value('status'));
@@ -132,9 +139,16 @@ final class AssistantAssetStatusActionTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'seed_sample_it_assets');
 
-        $answer = (string) $ask->json('data.answer');
+        $confirmed = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ]);
+        $confirmed->assertOk();
+        $answer = (string) $confirmed->json('data.result.entity_label');
         $this->assertStringContainsString('Created 3 sample assets', $answer);
 
         tenancy()->initialize($this->testTenant);

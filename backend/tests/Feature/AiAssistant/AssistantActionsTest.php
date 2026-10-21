@@ -71,16 +71,12 @@ final class AssistantActionsTest extends TestCase
             ]);
 
         $response->assertOk()
-            ->assertJsonPath('data.proposed_action', null);
-
-        $this->assertStringNotContainsString(
-            'Nothing has been saved yet',
-            (string) $response->json('data.answer'),
-        );
+            ->assertJsonPath('data.proposed_action.action', 'draft_ticket');
+        $this->assertStringContainsString('Nothing has been saved yet', (string) $response->json('data.answer'));
 
         tenancy()->initialize($this->testTenant);
-        $this->assertSame(1, TicketingTicket::query()->count());
-        $this->assertSame(1, AiAssistantProposedAction::query()->where('action', 'draft_ticket')->where('status', 'confirmed')->count());
+        $this->assertSame(0, TicketingTicket::query()->count());
+        $this->assertSame(1, AiAssistantProposedAction::query()->where('action', 'draft_ticket')->where('status', 'pending')->count());
         $this->assertTrue(
             TenantActivityLog::query()
                 ->where('action', 'assistant.action.propose')
@@ -98,7 +94,15 @@ final class AssistantActionsTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'draft_ticket');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ])
+            ->assertOk();
 
         tenancy()->initialize($this->testTenant);
         $this->assertSame(1, TicketingTicket::query()->count());

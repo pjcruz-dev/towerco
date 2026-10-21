@@ -127,8 +127,20 @@ final class AssistantRejectEApprovalActionTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.answer', 'ATC-DOC-EAPPROVAL--X-004 is now rejected')
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'reject_eapproval_submission');
+        $this->assertStringContainsString('Nothing has been saved yet', (string) $ask->json('data.answer'));
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame('pending', EApprovalSubmission::query()->where('document_no', 'ATC-DOC-EAPPROVAL--X-004')->value('status'));
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ])
+            ->assertOk();
 
         tenancy()->initialize($this->testTenant);
         $this->assertSame('rejected', EApprovalSubmission::query()->where('document_no', 'ATC-DOC-EAPPROVAL--X-004')->value('status'));
@@ -162,8 +174,20 @@ final class AssistantRejectEApprovalActionTest extends TestCase
             ]);
 
         $ask->assertOk()
-            ->assertJsonPath('data.answer', 'ATC-DOC-EAPPROVAL--X-008 is now cancelled')
-            ->assertJsonPath('data.proposed_action', null);
+            ->assertJsonPath('data.proposed_action.action', 'cancel_eapproval_submission');
+        $this->assertStringContainsString('Nothing has been saved yet', (string) $ask->json('data.answer'));
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame('pending', EApprovalSubmission::query()->find($submission->id)?->status);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/assistant/actions/confirm', [
+                'proposal_id' => $ask->json('data.proposed_action.id'),
+                'payload' => $ask->json('data.proposed_action.payload'),
+            ])
+            ->assertOk();
 
         tenancy()->initialize($this->testTenant);
         $this->assertSame('cancelled', EApprovalSubmission::query()->find($submission->id)?->status);
