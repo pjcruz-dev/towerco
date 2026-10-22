@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { EApprovalSignaturePad } from "@/components/e-approval/e-approval-signature-pad";
 import { EApprovalSignaturePreview } from "@/components/e-approval/e-approval-signature-preview";
@@ -231,8 +231,11 @@ export function EApprovalApprovalSignatureField({
   );
 }
 
-export function validateApprovalSignature(signature: string | null): string | null {
-  return hasSignatureValue(signature) ? null : "Add your signature before approving.";
+export function validateApprovalSignature(
+  signature: string | null,
+  action: "approving" | "acknowledging" = "approving",
+): string | null {
+  return hasSignatureValue(signature) ? null : `Add your signature before ${action}.`;
 }
 
 type ConsentDialogProps = {
@@ -240,6 +243,9 @@ type ConsentDialogProps = {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   confirming?: boolean;
+  description?: string;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
 };
 
 export function EApprovalSignatureConsentDialog({
@@ -247,6 +253,9 @@ export function EApprovalSignatureConsentDialog({
   onOpenChange,
   onConfirm,
   confirming = false,
+  description = "Check both statements before you confirm this approval.",
+  confirmDisabled = false,
+  children,
 }: ConsentDialogProps) {
   const organizationLabel = useOrganizationLabel("Alliance Towers");
   const storageConsentLabel = signatureStorageConsentLabel(organizationLabel);
@@ -267,9 +276,10 @@ export function EApprovalSignatureConsentDialog({
       <DialogContent data-help="ea-decide-signature-consent">
         <DialogHeader>
           <DialogTitle>Confirm electronic signature</DialogTitle>
-          <DialogDescription>Check both statements before you confirm this approval.</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-3">
+          {children}
           <label className="flex cursor-pointer items-start gap-2.5 text-sm">
             <Checkbox
               className="mt-0.5"
@@ -305,7 +315,7 @@ export function EApprovalSignatureConsentDialog({
           <Button type="button" variant="outline" disabled={confirming} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={!ready || confirming} onClick={onConfirm}>
+          <Button type="button" disabled={!ready || confirming || confirmDisabled} onClick={onConfirm}>
             {confirming ? "Confirming…" : "Confirm"}
           </Button>
         </DialogFooter>

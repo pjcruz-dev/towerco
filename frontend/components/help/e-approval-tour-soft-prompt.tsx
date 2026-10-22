@@ -54,9 +54,9 @@ function EApprovalTourSoftPromptInner({ tourId = "e-approval" }: EApprovalTourSo
   }
 
   const description = canApprove
-    ? "Covers submissions (filters, Step Show), requestor flow, and approver decisions. Sample cards appear only during the tour and are not saved."
+    ? "Covers submissions (filters, Step Show), file marks, mentions, reviewers, and approver decisions. Sample cards appear only during the tour and are not saved."
     : canCreate
-      ? "Walks overview, submissions (filters / Step Show), and new requests for your role. Approver steps are skipped. Sample cards are not saved."
+      ? "Walks overview, submissions, file marks, mentions, and follow-up for your role. Approver steps are skipped. Sample cards are not saved."
       : "Walks overview and submissions for your role. Create and approve steps are skipped if you don’t have those permissions.";
 
   return (

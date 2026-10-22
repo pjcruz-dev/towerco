@@ -4,11 +4,17 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 
 type NotificationLevel = "info" | "success" | "warning" | "error";
 
+export type AppNotificationAction = {
+  href: string;
+  label: string;
+};
+
 export type AppNotification = {
   id: string;
   title: string;
   message?: string;
   level: NotificationLevel;
+  action?: AppNotificationAction;
 };
 
 export type NotificationState = {

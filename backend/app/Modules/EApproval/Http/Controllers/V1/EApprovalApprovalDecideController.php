@@ -21,7 +21,7 @@ class EApprovalApprovalDecideController extends AbstractApiController
         abort_unless($request->user()?->can('e_approval:approve'), 403);
 
         $data = $request->validate([
-            'decision' => ['required', 'string', 'in:approved,rejected'],
+            'decision' => ['required', 'string', 'in:approved,rejected,acknowledged'],
             'remarks' => ['nullable', 'string', 'max:5000'],
             'signature' => ['nullable', 'string', 'max:500000'],
             'signature_consent' => ['sometimes', 'boolean'],
@@ -31,17 +31,22 @@ class EApprovalApprovalDecideController extends AbstractApiController
             'settlement_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
         ]);
 
-        if ($data['decision'] === 'approved') {
+        if ($data['decision'] === 'approved' || $data['decision'] === 'acknowledged') {
             $signature = $data['signature'] ?? null;
             $hasSignature = is_string($signature) && trim($signature) !== '';
+            if ($data['decision'] === 'acknowledged' && ! $hasSignature) {
+                throw ValidationException::withMessages([
+                    'signature' => [__('Add your signature before acknowledging.')],
+                ]);
+            }
             if ($hasSignature && ! ($data['signature_consent'] ?? false)) {
                 throw ValidationException::withMessages([
-                    'signature_consent' => [__('You must accept the electronic signature consent before approving.')],
+                    'signature_consent' => [__('You must accept the electronic signature consent before confirming.')],
                 ]);
             }
             if ($hasSignature && ! ($data['signature_storage_consent'] ?? false)) {
                 throw ValidationException::withMessages([
-                    'signature_storage_consent' => [__('You must consent to storing your signature image before approving.')],
+                    'signature_storage_consent' => [__('You must consent to storing your signature image before confirming.')],
                 ]);
             }
         }

@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
@@ -34,13 +35,14 @@ final class EApprovalUserListStepExpander
                 (string) ($definition['type'] ?? $definition['approver_type'] ?? 'user'),
             );
 
-            if ($type !== 'user_list') {
+            $review = $type === 'reviewer_list';
+            if ($type !== 'user_list' && ! $review) {
                 $expanded[] = $definition;
 
                 continue;
             }
 
-            $members = $this->expandOne($definition, $values, $strict);
+            $members = $this->expandOne($definition, $values, $strict, $review);
             if ($members === []) {
                 // Soft preview mode: keep the template step so the UI can warn.
                 $expanded[] = $definition;
@@ -61,7 +63,7 @@ final class EApprovalUserListStepExpander
      * @param  array<string, mixed>  $values
      * @return list<array<string, mixed>>
      */
-    private function expandOne(array $definition, array $values, bool $strict): array
+    private function expandOne(array $definition, array $values, bool $strict, bool $review = false): array
     {
         $fieldName = trim((string) ($definition['approverId'] ?? $definition['approver_id'] ?? ''));
         $order = (int) ($definition['step_order'] ?? 1);
@@ -90,7 +92,11 @@ final class EApprovalUserListStepExpander
             }
 
             throw ValidationException::withMessages([
-                'workflow' => [__('A dynamic approver list step is missing its source field.')],
+                'workflow' => [__(
+                    $review
+                        ? 'A reviewer list step is missing its source field.'
+                        : 'A dynamic approver list step is missing its source field.',
+                )],
             ]);
         }
 
@@ -108,7 +114,9 @@ final class EApprovalUserListStepExpander
 
             throw ValidationException::withMessages([
                 'workflow' => [__(
-                    'Approver list ":field" is empty or has no active users. Add stakeholders or set a fallback approver.',
+                    $review
+                        ? 'Reviewer list ":field" is empty or has no active users. Add reviewers or set a fallback approver.'
+                        : 'Approver list ":field" is empty or has no active users. Add stakeholders or set a fallback approver.',
                     ['field' => $fieldName],
                 )],
             ]);
@@ -124,7 +132,9 @@ final class EApprovalUserListStepExpander
             if ($when !== []) {
                 $member['when'] = $when;
             }
-            if ($mode !== EApprovalParallelMode::ALL) {
+            if ($review) {
+                $member['duty'] = EApprovalReviewStep::DUTY;
+            } elseif ($mode !== EApprovalParallelMode::ALL) {
                 $member['parallel_mode'] = $mode;
                 if ($mode === EApprovalParallelMode::N_OF_M) {
                     $member['parallel_quorum'] = max(1, (int) ($quorumRaw ?? 1));

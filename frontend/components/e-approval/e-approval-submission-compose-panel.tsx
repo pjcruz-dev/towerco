@@ -25,7 +25,8 @@ import {
   updateEApprovalSubmissionDraft,
   uploadEApprovalSubmissionAttachmentsOrThrow,
 } from "@/lib/api/modules/e-approval-api";
-import { getErrorMessage } from "@/lib/api/error";
+import { getApiFieldErrors, getErrorMessage } from "@/lib/api/error";
+import { cashAdvanceBlockLinkFromFields } from "@/modules/e-approval/cash-advance-block-link";
 import { viewerCanStartFormRequest } from "@/modules/e-approval/form-request-access";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -44,6 +45,7 @@ import {
 import {
   clearControlledDocumentRevisionValues,
   controlledDocumentDraftLooksLikeRevision,
+  controlledDocumentSubmissionIsRegisterRevision,
   filterFieldsForControlledDocumentMode,
   validateControlledDocumentRequest,
   type ControlledDocumentRequestMode,
@@ -517,8 +519,9 @@ export function EApprovalSubmissionComposePanel({
 
       setControlledDocumentRequestMode(resolvedMode);
     } else if (sync && isResubmitMode) {
-      const looksLikeRevision = controlledDocumentDraftLooksLikeRevision(sync, mergedValues);
-      setControlledDocumentRequestMode(looksLikeRevision ? "revision" : "new");
+      setControlledDocumentRequestMode(
+        controlledDocumentSubmissionIsRegisterRevision(sync, mergedValues) ? "revision" : "new",
+      );
     }
 
     setValues(mergedValues);
@@ -977,7 +980,12 @@ export function EApprovalSubmissionComposePanel({
           ? "Resubmit failed"
           : "Submit failed";
 
-      push({ level: "error", title, message });
+      push({
+        level: "error",
+        title,
+        message,
+        action: cashAdvanceBlockLinkFromFields(getApiFieldErrors(error)) ?? undefined,
+      });
     },
   });
 

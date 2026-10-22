@@ -117,6 +117,7 @@ final class EApprovalNotificationDispatcher
         EApprovalSubmission $submission,
         string $approverUserId,
         string $requestorName,
+        bool $review = false,
     ): void {
         $user = TenantUser::query()->find($approverUserId);
         if ($user === null) {
@@ -125,7 +126,13 @@ final class EApprovalNotificationDispatcher
 
         $this->sendAfterResponse(
             $user,
-            new EApprovalSubmissionNotification($submission, 'manual_follow_up', $requestorName),
+            new EApprovalSubmissionNotification(
+                $submission,
+                'manual_follow_up',
+                $requestorName,
+                null,
+                $review ? 'review' : null,
+            ),
         );
     }
 
@@ -211,6 +218,28 @@ final class EApprovalNotificationDispatcher
         foreach ($users as $user) {
             $this->sendAfterResponse($user, new EApprovalSubmissionNotification($submission, 'sla_escalation'));
         }
+    }
+
+    public function dispatchCommentMention(
+        EApprovalSubmission $submission,
+        string $recipientUserId,
+        string $actorName,
+        string $comment,
+    ): void {
+        $user = TenantUser::query()->find($recipientUserId);
+        if ($user === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $user,
+            new EApprovalSubmissionNotification(
+                $submission,
+                'comment_mention',
+                $actorName,
+                detail: $comment,
+            ),
+        );
     }
 
     /**

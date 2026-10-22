@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fingerprint, Loader2 } from "lucide-react";
+import { ChevronDown, Fingerprint, KeyRound, Loader2, LockKeyhole, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useForm, type FieldErrors } from "react-hook-form";
@@ -377,7 +377,14 @@ function LoginPageContent() {
     <>
       {microsoftRedirecting ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-      ) : null}
+      ) : (
+        <svg viewBox="0 0 16 16" className="size-4" aria-hidden>
+          <rect x="1" y="1" width="6" height="6" fill="currentColor" />
+          <rect x="9" y="1" width="6" height="6" fill="currentColor" />
+          <rect x="1" y="9" width="6" height="6" fill="currentColor" />
+          <rect x="9" y="9" width="6" height="6" fill="currentColor" />
+        </svg>
+      )}
       {microsoftButtonLabel}
     </>
   );
@@ -408,7 +415,7 @@ function LoginPageContent() {
   return (
     <div className="w-full rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
       <h1 className="text-2xl font-semibold leading-tight tracking-tight text-foreground">Sign in</h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
         Welcome back. Sign in to continue to your workspace.
       </p>
 
@@ -460,23 +467,26 @@ function LoginPageContent() {
       ) : null}
 
       {passwordLoginRestricted && !showBreakGlassLogin ? (
-        <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          This organization requires <span className="font-medium text-foreground">Sign in with Microsoft</span>.
-          After your first sign-in, you can add a fingerprint under My profile → Security → Passkeys for next time.
-        </p>
+        <div className="mt-6 flex gap-3 rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-sm leading-relaxed text-muted-foreground">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
+          <p>
+            This organization requires <span className="font-medium text-foreground">Sign in with Microsoft</span>.
+            After your first sign-in, you can add a fingerprint under My profile → Security → Passkeys.
+          </p>
+        </div>
       ) : null}
 
       {!clientReady ? (
         <LoginFormSkeleton />
       ) : showMicrosoftPrimary ? (
-        <div className="mt-6 space-y-3">
+        <div className="mt-5 space-y-4">
           {authStatusQuery.isLoading ? (
             <Button className="w-full" type="button" disabled>
               Loading sign-in options…
             </Button>
           ) : (
             <Button
-              className="w-full gap-1.5"
+              className="w-full gap-2"
               type="button"
               disabled={authBusy || authStatusQuery.isLoading}
               onClick={redirectToMicrosoftSignIn}
@@ -485,33 +495,36 @@ function LoginPageContent() {
             </Button>
           )}
           {passkeysAvailable ? (
-            <details className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-                Already enrolled a passkey / fingerprint?
+            <details className="group rounded-lg border border-border px-3 py-2.5">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+                <Fingerprint className="size-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">Already enrolled a passkey?</span>
+                <ChevronDown className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180" aria-hidden />
               </summary>
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-muted-foreground">
+              <div className="mt-3 space-y-3">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Use this only if you already added a passkey under My profile → Security. First-time users
-                  should sign in with Microsoft above.
+                  sign in with Microsoft above.
                 </p>
                 {passkeySignInButton}
               </div>
             </details>
           ) : null}
           <Button
-            className="w-full"
+            className="w-full text-muted-foreground"
             type="button"
             variant="ghost"
             size="sm"
             disabled={microsoftRedirecting}
             onClick={() => setShowBreakGlassLogin(true)}
           >
+            <KeyRound className="size-3.5" aria-hidden />
             Use password instead
           </Button>
         </div>
       ) : (
         <form
-          className="mt-6 space-y-4"
+          className="mt-8 space-y-5"
           noValidate
           onSubmit={form.handleSubmit(onSubmit, onInvalid)}
         >
@@ -541,7 +554,8 @@ function LoginPageContent() {
                 inputMode="email"
                 autoComplete="email"
                 spellCheck={false}
-                placeholder="Email"
+                placeholder="name@company.com"
+                icon={<Mail />}
                 {...form.register("email")}
                 error={formErrors.email}
               />
@@ -549,15 +563,17 @@ function LoginPageContent() {
                 label="Password"
                 type="password"
                 autoComplete="current-password"
+                icon={<LockKeyhole />}
                 {...form.register("password")}
                 error={formErrors.password}
               />
 
               <Button
-                className="w-full"
+                className="mt-1 w-full gap-1.5"
                 type="submit"
                 disabled={authBusy || authStatusQuery.isLoading}
               >
+                <LogIn className="size-4" aria-hidden />
                 {mutation.isPending || isSubmitting ? "Signing in..." : "Sign in"}
               </Button>
             </>

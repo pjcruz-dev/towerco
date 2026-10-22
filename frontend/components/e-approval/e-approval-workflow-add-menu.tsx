@@ -1,41 +1,90 @@
 "use client";
 
-import { GitBranch, GitFork, Layers, Plus, Users } from "lucide-react";
+import { GitBranch, GitFork, Layers, Plus, UserRound, Users } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type WorkflowAddKind = "step" | "if_else" | "ladder" | "parallel";
+export type WorkflowAddKind =
+  | "step"
+  | "if_else"
+  | "ladder"
+  | "parallel"
+  | "review_step"
+  | "review_list"
+  | "review_if_else"
+  | "review_ladder"
+  | "review_parallel";
 
 const OPTIONS: Array<{
   kind: WorkflowAddKind;
+  section: string;
   label: string;
   description: string;
   icon: ReactNode;
 }> = [
   {
     kind: "step",
+    section: "Approve",
     label: "Approval step",
     description: "One approver in sequence",
     icon: <Plus className="h-3.5 w-3.5" />,
   },
   {
     kind: "if_else",
+    section: "Approve",
     label: "If / Else",
     description: "Two exclusive bands on one threshold",
     icon: <GitBranch className="h-3.5 w-3.5" />,
   },
   {
     kind: "ladder",
+    section: "Approve",
     label: "Threshold ladder",
     description: "3+ exclusive amount / field bands",
     icon: <Layers className="h-3.5 w-3.5" />,
   },
   {
     kind: "parallel",
+    section: "Approve",
     label: "Parallel group",
     description: "Same step order — all / any / N of M",
+    icon: <Users className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "review_step",
+    section: "Review",
+    label: "Fixed reviewer",
+    description: "One reviewer in sequence",
+    icon: <UserRound className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "review_list",
+    section: "Review",
+    label: "Reviewer list",
+    description: "Everyone selected acknowledges",
+    icon: <Users className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "review_if_else",
+    section: "Review",
+    label: "If / Else reviewers",
+    description: "Two exclusive reviewers on one threshold",
+    icon: <GitBranch className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "review_ladder",
+    section: "Review",
+    label: "Reviewer ladder",
+    description: "Exclusive reviewer bands",
+    icon: <Layers className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "review_parallel",
+    section: "Review",
+    label: "Parallel reviewers",
+    description: "Same step — all must acknowledge",
     icon: <Users className="h-3.5 w-3.5" />,
   },
 ];
@@ -121,34 +170,40 @@ export function EApprovalWorkflowAddMenu({
           id={menuId}
           role="menu"
           className={cn(
-            "absolute z-50 w-64 min-w-64 rounded-lg border border-border bg-card p-1 shadow-lg",
+            "absolute z-50 max-h-[min(70vh,28rem)] w-72 min-w-72 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-lg",
             side === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
             align === "end" && "right-0",
             align === "start" && "left-0",
             align === "center" && "left-1/2 -translate-x-1/2",
           )}
         >
-          <p className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">Insert into path</p>
-          {OPTIONS.map((option) => (
-            <button
-              key={option.kind}
-              type="button"
-              role="menuitem"
-              className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted/70"
-              onClick={() => {
-                setOpen(false);
-                onSelect(option.kind);
-              }}
-            >
-              <span className="mt-0.5 shrink-0 text-muted-foreground">{option.icon}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium leading-snug text-foreground">{option.label}</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                  {option.description}
-                </span>
-              </span>
-            </button>
-          ))}
+          {OPTIONS.map((option, index) => {
+            const showSection = index === 0 || OPTIONS[index - 1]?.section !== option.section;
+            return (
+              <div key={option.kind}>
+                {showSection ? (
+                  <p className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">{option.section}</p>
+                ) : null}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted/70"
+                  onClick={() => {
+                    setOpen(false);
+                    onSelect(option.kind);
+                  }}
+                >
+                  <span className="mt-0.5 shrink-0 text-muted-foreground">{option.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium leading-snug text-foreground">{option.label}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      {option.description}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

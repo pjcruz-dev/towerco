@@ -204,6 +204,19 @@ export const eApprovalTourSampleComments: EApprovalCommentRow[] = [
     created_at: eApprovalTourSampleSubmittedAt,
     replies: [],
   },
+  {
+    id: "tour-cmt-2",
+    message: "@James Rivera Please check the revision table on page 1 before you sign.",
+    user_name: "Alya Mendoza",
+    created_at: "2026-08-25T10:05:00+08:00",
+    attachment_id: "tour-att-1",
+    pin_page: 1,
+    pin_x: 0.18,
+    pin_y: 0.22,
+    pin_w: 0.42,
+    pin_h: 0.08,
+    replies: [],
+  },
 ];
 
 export const eApprovalTourSampleWorkflowSteps = [

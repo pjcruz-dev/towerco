@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { contrastForeground, cssColorToHex, resolveTenantChrome } from "@/lib/theme/tenant-chrome";
+import {
+  authPanelUsesBrandMark,
+  contrastForeground,
+  cssColorToHex,
+  resolveTenantChrome,
+} from "@/lib/theme/tenant-chrome";
 
 describe("tenant chrome", () => {
   it("turns computed rgb into hex", () => {
     expect(cssColorToHex("rgb(13, 148, 136)")).toBe("#0d9488");
+  });
+
+  it("keeps saturated brand marks on the dark auth panel and drops near-black", () => {
+    const panel = "#0f172a";
+    expect(authPanelUsesBrandMark("#171717", panel)).toBe(false);
+    expect(authPanelUsesBrandMark("#16a34a", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#0d9488", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#7367f0", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#e11d48", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#f59e0b", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#2563eb", panel)).toBe(true);
+    expect(authPanelUsesBrandMark("#052e16", panel)).toBe(false);
+    expect(authPanelUsesBrandMark("#f9fafb", "#111827")).toBe(true);
   });
 
   it("picks light text for teal and dark text for amber", () => {

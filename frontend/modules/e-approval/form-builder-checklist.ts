@@ -174,6 +174,32 @@ function appendWorkflowHealthChecks(
     }
   }
 
+  const reviewOnly =
+    steps.length > 0 &&
+    steps.every((step) => step.duty === "review" || step.type === "reviewer_list");
+  if (reviewOnly) {
+    items.push({
+      level: "warning",
+      message:
+        "This workflow is review only. The request is complete when the last reviewer acknowledges. There is no Approve step.",
+    });
+  }
+
+  if (steps.some((step) => step.type === "reviewer_list")) {
+    if (!fields.some((field) => field.type === "approver_list")) {
+      items.push({
+        level: "error",
+        message: "Reviewer list steps require an Approver list (multi) field on the form.",
+      });
+    } else {
+      items.push({
+        level: "warning",
+        message:
+          "Workflow includes a reviewer list. Each selected person comments on the file, signs, and acknowledges before the request continues. Acknowledgement is not an approval.",
+      });
+    }
+  }
+
   if (steps.length > 0 && steps.every((step) => !stepRunsAlways(step))) {
     items.push({
       level: "warning",
@@ -249,6 +275,7 @@ function appendWorkflowHealthChecks(
       (step.type === "manager" ||
         step.type === "field" ||
         step.type === "user_list" ||
+        step.type === "reviewer_list" ||
         step.type === "role") &&
       !step.fallback_approver_id?.trim(),
   );

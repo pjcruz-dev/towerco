@@ -24,8 +24,11 @@ export function controlledDocumentFieldsHiddenInNewMode(
     sync.fieldMap.change_summary ?? "change_summary",
     sync.fieldMap.next_review_date ?? "next_review_date",
     "previous_revision",
+    "revision",
+    "current_revision",
     "reason_for_change",
     "details_of_change",
+    "section_revision",
     "section_change",
     "next_review_date",
     "review_date",
@@ -124,6 +127,31 @@ export function controlledDocumentDraftLooksLikeRevision(
   values: Record<string, string>,
 ): boolean {
   return (values[sync.documentCodeField] ?? "").trim() !== "";
+}
+
+/** JSON null is stored as the four characters "null". That is an empty answer. */
+export function blankStoredControlledDocumentValue(value: string | null | undefined): string {
+  const raw = value ?? "";
+  return raw.trim().toLowerCase() === "null" ? "" : raw;
+}
+
+/**
+ * A rejected new request already has a document code. That code is not a register
+ * revision. Revision sections apply only when the request revised a published document.
+ */
+export function controlledDocumentSubmissionIsRegisterRevision(
+  sync: ControlledDocumentSyncMeta,
+  values: Record<string, string>,
+): boolean {
+  const previous = blankStoredControlledDocumentValue(values.previous_revision).trim();
+  if (previous !== "") {
+    return true;
+  }
+
+  const revision = blankStoredControlledDocumentValue(values[sync.revisionFieldName]).trim();
+  const revisionNumber = Number(revision);
+
+  return revision !== "" && Number.isFinite(revisionNumber) && revisionNumber > 0;
 }
 
 export function clearControlledDocumentRevisionValues(

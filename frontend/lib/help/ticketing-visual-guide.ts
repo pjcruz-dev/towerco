@@ -116,7 +116,7 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 1,
             title: "Title and description",
-            body: "Summarize the issue, then add enough detail for the team to reproduce or triage it.",
+            body: "Summarize the issue, then add enough detail to reproduce or triage it. Managers can file the ticket for someone else.",
             x: 45,
             y: 32,
           },
@@ -168,21 +168,21 @@ export const ticketingVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Description and attachments",
-            body: "Full issue text plus files the requester uploaded for triage.",
+            body: "Full issue text, extra fields, and files. On the ticket you can drag, paste, or browse to add more.",
             x: 40,
             y: 38,
           },
           {
             n: 3,
             title: "Comments and activity",
-            body: "Requestors and IT leave updates here. Managers can post internal notes.",
+            body: "Requestors and IT leave updates here. Managers can post internal notes. Audit activity under the thread records status and assignment changes.",
             x: 40,
             y: 66,
           },
           {
             n: 4,
             title: "Details and Manage",
-            body: "Requester, assignee, and SLA due stay on the right. Managers search assignees from the IT pool, update status/priority, and resolve. Resolved tickets auto-close after the grace window.",
+            body: "Requester, assignee, and SLA due stay on the right. Managers search an assignee, set category, and leave a resolution comment when resolving. Reopen is available until the ticket auto-closes.",
             x: 88,
             y: 55,
           },

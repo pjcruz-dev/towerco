@@ -410,7 +410,7 @@ class EApprovalSubmission extends Model
         }
 
         $type = $meta['approver_type'];
-        if (! in_array($type, ['field', 'user_list', 'field_map'], true)) {
+        if (! in_array($type, ['field', 'user_list', 'reviewer_list', 'field_map'], true)) {
             return false;
         }
 

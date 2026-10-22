@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { EApprovalApprovalSignatureField, EApprovalSignatureConsentDialog, validateApprovalSignature } from "@/components/e-approval/e-approval-approval-signature-field";
+import { hasSignatureValue } from "@/modules/e-approval/signature";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalSettlementVerdict } from "@/components/e-approval/e-approval-settlement-verdict";
@@ -25,10 +26,12 @@ import {
   buildWorkflowStepShowItems,
   workflowPreviewToStepShowItems,
 } from "@/components/e-approval/e-approval-workflow-step-show";
+import { EApprovalAttachmentComments } from "@/components/e-approval/e-approval-attachment-comments";
 import {
-  countStampedApprovals,
-  EApprovalSubmissionAttachmentsPanel,
-} from "@/components/e-approval/e-approval-submission-attachments-panel";
+  EApprovalMentionField,
+  mentionIdsInMessage,
+  type EApprovalMentionPerson,
+} from "@/components/e-approval/e-approval-mention-field";
 import { OperationalAlert } from "@/components/feedback/operational-alert";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { RaiseTicketButton } from "@/components/ticketing/raise-ticket-button";
@@ -89,6 +92,16 @@ import { useNotificationStore } from "@/stores/notification-store";
 
 type Props = { submissionId: string };
 
+function invalidateEApprovalDecisionQueries(queryClient: QueryClient, submissionId: string): void {
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId] });
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "submissions"] });
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "approvals"] });
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "dashboard"] });
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "workspace"] });
+  queryClient.invalidateQueries({ queryKey: ["e-approval", "notifications"] });
+  queryClient.invalidateQueries({ queryKey: ["workspace", "dashboard"] });
+}
+
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -134,7 +147,13 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const canManage = usePermission([permissions.eApprovalFormsManage]);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const [comment, setComment] = useState("");
+  const [replyParentId, setReplyParentId] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState("");
   const [decisionRemarks, setDecisionRemarks] = useState("");
+  const decisionRemarksRef = useRef(decisionRemarks);
+  decisionRemarksRef.current = decisionRemarks;
+  const [fileConsent, setFileConsent] = useState<null | "approved" | "acknowledged">(null);
+  const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
   const [releaseReference, setReleaseReference] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
   const [settlementReference, setSettlementReference] = useState("");
@@ -227,9 +246,22 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   });
 
   const commentMutation = useMutation({
-    mutationFn: () => postEApprovalComment(submissionId, { message: comment }),
+    mutationFn: (payload: {
+      message: string;
+      parent_id?: string;
+      attachment_id?: string;
+      pin_page?: number;
+      pin_x?: number;
+      pin_y?: number;
+      pin_w?: number;
+      pin_h?: number;
+      mention_user_ids?: string[];
+    }) =>
+      postEApprovalComment(submissionId, payload),
     onSuccess: () => {
       setComment("");
+      setReplyMessage("");
+      setReplyParentId(null);
       commentsQuery.refetch();
       queryClient.invalidateQueries({ queryKey: ["e-approval", "notifications"] });
       queryClient.invalidateQueries({ queryKey: ["tenant", "notifications"] });
@@ -238,8 +270,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   });
 
   const revisionMutation = useMutation({
-    mutationFn: () =>
-      requestEApprovalRevision(submissionId, decisionRemarks, {
+    mutationFn: (remarks?: string) =>
+      requestEApprovalRevision(submissionId, (remarks ?? decisionRemarksRef.current).trim(), {
         force_full_restart: forceFullRestart,
       }),
     onSuccess: () => {
@@ -320,7 +352,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     mutationFn: () =>
       rerouteEApprovalApproval(pendingApproval!.id, { new_approver_id: rerouteUserId, reason: rerouteReason }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["e-approval"] });
+      invalidateEApprovalDecisionQueries(queryClient, submissionId);
       push({ level: "success", title: "Approval rerouted" });
     },
     onError: (e) => push({ level: "error", title: "Reroute failed", message: getErrorMessage(e) }),
@@ -354,24 +386,27 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       signature,
     }: {
       approvalId: string;
-      decision: "approved" | "rejected";
+      decision: "approved" | "rejected" | "acknowledged";
       signature?: string | null;
     }) =>
       decideEApprovalApproval(approvalId, {
         decision,
-        remarks: decisionRemarks.trim() || undefined,
-        signature: decision === "approved" ? signature : undefined,
-        signature_consent: decision === "approved" ? true : undefined,
-        signature_storage_consent: decision === "approved" ? true : undefined,
+        remarks: decisionRemarksRef.current.trim() || undefined,
+        signature: decision === "approved" || decision === "acknowledged" ? signature : undefined,
+        signature_consent: decision === "approved" || decision === "acknowledged" ? true : undefined,
+        signature_storage_consent: decision === "approved" || decision === "acknowledged" ? true : undefined,
         release_reference: releaseReference.trim() || undefined,
         release_date: releaseDate || undefined,
         settlement_reference: settlementReference.trim() || undefined,
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["e-approval"] });
+    onSuccess: (_result, variables) => {
+      invalidateEApprovalDecisionQueries(queryClient, submissionId);
       queryClient.invalidateQueries({ queryKey: ["e-approval", "me", "profile"] });
       queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
-      push({ level: "success", title: "Decision recorded" });
+      push({
+        level: "success",
+        title: variables.decision === "acknowledged" ? "Review acknowledged" : "Decision recorded",
+      });
       setDecisionRemarks("");
       setReleaseReference("");
       setReleaseDate("");
@@ -388,7 +423,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
 
   const submitDecision = (payload: {
     approvalId: string;
-    decision: "approved" | "rejected";
+    decision: "approved" | "rejected" | "acknowledged";
     signature?: string | null;
   }) => {
     if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
@@ -409,6 +444,9 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     submissionStatus === "cancelled" ||
     submissionStatus === "approved" ||
     submissionStatus === "rejected";
+  const followUpTargetsReviewers = (data?.approvals ?? []).some(
+    (row) => row.duty === "review" && (row.approval_status ?? row.status) === "pending",
+  );
   const showDecideTab =
     !isTerminalSubmission &&
     (Boolean(canApprove && data?.viewer_pending_approval_id) ||
@@ -454,26 +492,72 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const visibleValues = (data?.values ?? []).filter(
     (v) => !shouldHideSubmissionAttachmentFieldValue(v, attachments),
   );
-  const attachmentFieldLabelsByName = useMemo(() => {
-    const labels: Record<string, string> = {};
-    for (const value of data?.values ?? []) {
-      const name = value.field_name?.trim();
-      if (!name) continue;
-      const label = (value.label ?? value.field_name)?.trim();
-      if (label) labels[name] = label;
-    }
-    for (const field of data?.form_fields ?? []) {
-      const name = field.name?.trim();
-      if (!name || labels[name]) continue;
-      const label = (field.label ?? field.name)?.trim();
-      if (label) labels[name] = label;
-    }
-    return labels;
-  }, [data?.values, data?.form_fields]);
   const duplicateApproverIds = useMemo(
     () => getDuplicateApproverIds(data?.values ?? []),
     [data?.values],
   );
+  const mentionPeople = useMemo((): EApprovalMentionPerson[] => {
+    if (!data) {
+      return [];
+    }
+    const people = new Map<string, EApprovalMentionPerson>();
+    if (data.requestor?.id && data.requestor.name) {
+      people.set(data.requestor.id, {
+        id: data.requestor.id,
+        name: data.requestor.name,
+        role: "Requestor",
+      });
+    }
+    for (const row of data.approvals ?? []) {
+      const person = row.approver;
+      if (!person?.id || !person.name) {
+        continue;
+      }
+      const role = row.duty === "review" ? "Reviewer" : "Approver";
+      const existing = people.get(person.id);
+      if (!existing) {
+        people.set(person.id, { id: person.id, name: person.name, role });
+      } else if (!existing.role.includes(role)) {
+        people.set(person.id, { ...existing, role: `${existing.role} · ${role}` });
+      }
+    }
+    return [...people.values()];
+  }, [data]);
+  const fileDecision =
+    canApprove && pendingApproval && !pendingApproval.finance_action
+      ? {
+          mode: pendingApproval.duty === "review" ? ("review" as const) : ("approval" as const),
+          busy: decideMutation.isPending || revisionMutation.isPending,
+          onAcknowledge: (message: string) => {
+            decisionRemarksRef.current = message;
+            setDecisionRemarks(message);
+            setFileConsent("acknowledged");
+          },
+          onApprove: (message: string) => {
+            decisionRemarksRef.current = message;
+            setDecisionRemarks(message);
+            setFileConsent("approved");
+          },
+          onReject: (message: string) => {
+            const note = message.trim();
+            if (note.length < 5) {
+              return;
+            }
+            decisionRemarksRef.current = note;
+            setDecisionRemarks(note);
+            submitDecision({ approvalId: pendingApproval.id, decision: "rejected" });
+          },
+          onRevision: (message: string) => {
+            const note = message.trim();
+            if (note.length < 5) {
+              return;
+            }
+            decisionRemarksRef.current = note;
+            setDecisionRemarks(note);
+            revisionMutation.mutate(note);
+          },
+        }
+      : null;
 
   const commentCount = commentsQuery.data?.length ?? 0;
   const hasWorkflowRemarkComment = (commentsQuery.data ?? []).some(
@@ -694,7 +778,11 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
 
         {data ? (
           <Tabs key={tabsKey} value={defaultTab} onValueChange={onTabChange}>
-            <TabsList data-help="ea-detail-tabs" variant="line" className="w-full justify-start gap-1 overflow-x-auto">
+            <TabsList
+              data-help="ea-detail-tabs"
+              variant="line"
+              className="sticky -top-4 z-20 h-auto w-full justify-start gap-1 overflow-x-auto border-b border-border bg-background py-1.5 print:static"
+            >
               <TabsTrigger value="request" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
                 Request
@@ -762,12 +850,60 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
 
                 {(data.attachments ?? []).length > 0 ? (
                   <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
-                    <EApprovalSubmissionAttachmentsPanel
+                    <EApprovalAttachmentComments
                       submissionId={submissionId}
                       attachments={data.attachments}
-                      stampedApprovalCount={countStampedApprovals(data.approvals)}
-                      fieldLabelsByName={attachmentFieldLabelsByName}
+                      comments={commentsQuery.data ?? []}
+                      posting={commentMutation.isPending}
+                      people={mentionPeople}
+                      decision={fileDecision}
+                      focusCommentId={focusCommentId}
+                      onFocusHandled={() => setFocusCommentId(null)}
+                      onPost={(payload) => commentMutation.mutate(payload)}
                     />
+                    <EApprovalSignatureConsentDialog
+                      open={fileConsent !== null}
+                      onOpenChange={(open) => {
+                        if (!open) {
+                          setFileConsent(null);
+                        }
+                      }}
+                      confirming={decideMutation.isPending}
+                      confirmDisabled={!hasSignatureValue(approvalSignature)}
+                      description={
+                        fileConsent === "acknowledged"
+                          ? "Sign, then check both statements before you confirm this acknowledgement."
+                          : "Sign, then check both statements before you confirm this approval."
+                      }
+                      onConfirm={() => {
+                        if (!pendingApproval || !fileConsent) {
+                          return;
+                        }
+                        const signatureError = validateApprovalSignature(
+                          approvalSignature,
+                          fileConsent === "acknowledged" ? "acknowledging" : "approving",
+                        );
+                        if (signatureError) {
+                          setApprovalSignatureError(signatureError);
+                          return;
+                        }
+                        const decision = fileConsent;
+                        setFileConsent(null);
+                        submitDecision({
+                          approvalId: pendingApproval.id,
+                          decision,
+                          signature: approvalSignature!.trim(),
+                        });
+                      }}
+                    >
+                      <EApprovalApprovalSignatureField
+                        value={approvalSignature}
+                        onChange={setApprovalSignature}
+                        disabled={decideMutation.isPending}
+                        error={approvalSignatureError}
+                        onErrorChange={setApprovalSignatureError}
+                      />
+                    </EApprovalSignatureConsentDialog>
                   </div>
                 ) : (
                   <div data-help="ea-detail-attachments" className="sr-only">
@@ -951,7 +1087,9 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             onClick={() => followUpMutation.mutate()}
                             disabled={followUpMutation.isPending || !!data.manual_follow_up_next_allowed_at}
                           >
-                            Send follow-up to approver
+                            {followUpTargetsReviewers
+                              ? "Send follow-up to reviewers"
+                              : "Send follow-up to approver"}
                           </Button>
                         </span>
                       </div>
@@ -962,15 +1100,74 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         </p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          Sends an email and in-app notification to every pending approver on the
-                          current step (including parallel peers).
+                          {followUpTargetsReviewers
+                            ? "Sends an email and in-app notification to every reviewer who has not acknowledged yet."
+                            : "Sends an email and in-app notification to every pending approver on the current step (including parallel peers)."}
                         </p>
                       )}
                     </div>
                   </EApprovalSectionCard>
                 ) : null}
 
-                {canApprove && pendingApproval ? (
+                {canApprove && pendingApproval && pendingApproval.duty === "review" ? (
+                  <EApprovalSectionCard
+                    dataHelp="ea-decide-panel"
+                    title="Your review"
+                    description="Sign to acknowledge. This records your review and does not approve or reject the request."
+                  >
+                    <div className="mt-4 space-y-4">
+                      <EApprovalApprovalSignatureField
+                        value={approvalSignature}
+                        onChange={setApprovalSignature}
+                        disabled={decideMutation.isPending}
+                        error={approvalSignatureError}
+                        onErrorChange={setApprovalSignatureError}
+                      />
+                      <div className="space-y-1.5">
+                        <Label htmlFor="review-remarks">Remarks</Label>
+                        <Textarea
+                          id="review-remarks"
+                          value={decisionRemarks}
+                          onChange={(event) => setDecisionRemarks(event.target.value)}
+                          placeholder="Optional note with your acknowledgement"
+                          rows={3}
+                          disabled={decideMutation.isPending}
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={decideMutation.isPending}
+                        onClick={() => {
+                          if (decideInFlightRef.current || decideMutation.isPending) {
+                            return;
+                          }
+                          const signatureError = validateApprovalSignature(approvalSignature, "acknowledging");
+                          if (signatureError) {
+                            setApprovalSignatureError(signatureError);
+                            return;
+                          }
+                          setSignatureConsentOpen(true);
+                        }}
+                      >
+                        Acknowledge
+                      </Button>
+                      <EApprovalSignatureConsentDialog
+                        open={signatureConsentOpen}
+                        onOpenChange={setSignatureConsentOpen}
+                        confirming={decideMutation.isPending}
+                        description="Check both statements before you confirm this acknowledgement."
+                        onConfirm={() => {
+                          setSignatureConsentOpen(false);
+                          submitDecision({
+                            approvalId: pendingApproval.id,
+                            decision: "acknowledged",
+                            signature: approvalSignature!.trim(),
+                          });
+                        }}
+                      />
+                    </div>
+                  </EApprovalSectionCard>
+                ) : canApprove && pendingApproval ? (
                   <EApprovalSectionCard
                     dataHelp="ea-decide-panel"
                     title="Your decision"
@@ -1268,6 +1465,22 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             </span>
                             <span className="text-xs text-muted-foreground">{formatTimestamp(c.created_at)}</span>
                           </div>
+                          {c.pin_x != null ? (
+                            <button
+                              type="button"
+                              className="mt-1 text-left text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
+                              onClick={() => {
+                                setFocusCommentId(c.id);
+                                onTabChange("request");
+                              }}
+                            >
+                              {/\.pdf$/i.test(
+                                data.attachments.find((file) => file.id === c.attachment_id)?.file_name ?? "",
+                              )
+                                ? `Page ${c.pin_page ?? 1} · Show on the file`
+                                : "Show on the picture"}
+                            </button>
+                          ) : null}
                           <p className="mt-1 whitespace-pre-wrap">{c.message}</p>
                           {(c.replies ?? []).length > 0 ? (
                             <ul className="mt-2 space-y-2 border-l-2 border-border pl-3">
@@ -1279,6 +1492,43 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               ))}
                             </ul>
                           ) : null}
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-primary hover:underline"
+                            onClick={() => {
+                              setReplyParentId(c.id);
+                              setReplyMessage("");
+                            }}
+                          >
+                            Reply
+                          </button>
+                          {replyParentId === c.id ? (
+                            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                              <EApprovalMentionField
+                                value={replyMessage}
+                                people={mentionPeople}
+                                placeholder="Reply. Use @ to notify someone."
+                                rows={2}
+                                className="flex-1"
+                                onChange={setReplyMessage}
+                              />
+                              <Button
+                                size="sm"
+                                type="button"
+                                className="self-end sm:self-auto"
+                                disabled={!replyMessage.trim() || commentMutation.isPending}
+                                onClick={() =>
+                                  commentMutation.mutate({
+                                    message: replyMessage.trim(),
+                                    parent_id: c.id,
+                                    mention_user_ids: mentionIdsInMessage(replyMessage, mentionPeople),
+                                  })
+                                }
+                              >
+                                Reply
+                              </Button>
+                            </div>
+                          ) : null}
                         </li>
                       );
                     })}
@@ -1287,18 +1537,24 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                   <p className="text-sm text-muted-foreground">No comments yet.</p>
                 )}
                 <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <Textarea
+                  <EApprovalMentionField
                     value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Add a comment"
+                    people={mentionPeople}
+                    placeholder="Add a comment. Use @ to notify someone on this request."
                     rows={2}
                     className="flex-1"
+                    onChange={setComment}
                   />
                   <Button
                     size="sm"
                     type="button"
                     className="self-end sm:self-auto"
-                    onClick={() => commentMutation.mutate()}
+                    onClick={() =>
+                      commentMutation.mutate({
+                        message: comment.trim(),
+                        mention_user_ids: mentionIdsInMessage(comment, mentionPeople),
+                      })
+                    }
                     disabled={!comment.trim() || commentMutation.isPending}
                   >
                     Post

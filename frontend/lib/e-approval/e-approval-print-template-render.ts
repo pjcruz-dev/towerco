@@ -1161,7 +1161,7 @@ export function documentDesignPreviewRecommendations(
   }
   tips.push("Live preview uses sample values. Real submissions fill tokens when you print.");
   tips.push(
-    "Approval history under the form is dynamic from this submission’s workflow (signed approve actions).",
+    "Approval history under the form is dynamic from this submission’s workflow (signed approvals and reviewer acknowledgements).",
   );
   return tips;
 }

@@ -33,6 +33,8 @@ export type EApprovalWorkflowStepInput = {
   label?: string | null;
   /** This approver must tick the surrender or payment line before Approve. */
   confirm_settlement?: boolean;
+  /** review = sign and acknowledge. The step does not approve or reject. */
+  duty?: "review";
   condition?: Record<string, unknown> | null;
 };
 
@@ -294,6 +296,8 @@ export type EApprovalApprovalRow = {
   /** Parallel band completion rule from the workflow step (when present). */
   parallel_mode?: "all" | "any" | "n_of_m" | null;
   parallel_quorum?: number | null;
+  /** review = comment and acknowledge. Not an approval. */
+  duty?: "review" | null;
   approver: { id: string; name: string; email: string } | null;
   submission: {
     id: string;
@@ -497,5 +501,16 @@ export type EApprovalCommentRow = {
   message: string;
   user_name: string;
   created_at: string | null;
-  replies: { id: string; message: string; user_name: string; created_at: string | null }[];
+  attachment_id?: string | null;
+  /** 1-based page when the note is pinned on a PDF preview. */
+  pin_page?: number | null;
+  /** Horizontal spot on that page, 0–1 from the left. */
+  pin_x?: number | null;
+  /** Vertical spot on that page, 0–1 from the top. */
+  pin_y?: number | null;
+  /** Highlight width on that page, 0–1. */
+  pin_w?: number | null;
+  /** Highlight height on that page, 0–1. */
+  pin_h?: number | null;
+  replies: { id: string; message: string; user_name: string; created_at: string | null; attachment_id?: string | null }[];
 };

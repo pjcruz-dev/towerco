@@ -197,8 +197,30 @@ final class EApprovalFinanceStageService
                 continue;
             }
 
+            $liveLiquidation = EApprovalSubmission::query()
+                ->where('parent_submission_id', $candidate->id)
+                ->whereIn('status', [
+                    EApprovalSubmissionStatus::DRAFT,
+                    ...EApprovalSubmissionStatus::open(),
+                ])
+                ->orderByDesc('updated_at')
+                ->first();
+            $target = $liveLiquidation ?? $candidate;
+            $kind = $liveLiquidation !== null
+                ? 'liquidation'
+                : ($this->stage($candidate) === 'for_return' ? 'for_return' : 'cash_advance');
+            $documentNo = trim((string) $candidate->document_no);
+            $targetDocumentNo = trim((string) ($target->document_no ?? ''));
+
             throw ValidationException::withMessages([
-                'form_id' => [__('Liquidate or return the open cash advance before requesting another.')],
+                'form_id' => [
+                    $documentNo !== ''
+                        ? __('Liquidate or return the open cash advance :document before requesting another.', ['document' => $documentNo])
+                        : __('Liquidate or return the open cash advance before requesting another.'),
+                ],
+                '_link_submission_id' => [(string) $target->id],
+                '_link_kind' => [$kind],
+                '_link_document_no' => [$targetDocumentNo !== '' ? $targetDocumentNo : $documentNo],
             ]);
         }
     }

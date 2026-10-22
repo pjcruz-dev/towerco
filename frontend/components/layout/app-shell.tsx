@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo } from "react";
 
 import { ProductReleaseDialog } from "@/components/product/product-release-dialog";
@@ -13,8 +14,6 @@ import { AppTopNav } from "@/components/layout/app-top-nav";
 import { TenantAppearanceCustomizer } from "@/components/layout/tenant-appearance-customizer";
 import { TenantChromeSync } from "@/components/layout/tenant-chrome-sync";
 import { WorkspaceAppearanceHydrator } from "@/components/layout/workspace-appearance-hydrator";
-import { AssistantDrawer } from "@/components/assistant/assistant-drawer";
-import { AssistantFloatingLauncher } from "@/components/assistant/assistant-floating-launcher";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useTenantNotificationRealtime } from "@/hooks/use-tenant-notification-realtime";
 import { hasPermission, permissions } from "@/lib/rbac/permissions";
@@ -28,6 +27,18 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useNavigationLayoutStore } from "@/stores/navigation-layout-store";
 import { useResolvedTenantChrome } from "@/stores/tenant-appearance-store";
 import { cn } from "@/lib/utils";
+
+const AssistantFloatingLauncher = dynamic(
+  () =>
+    import("@/components/assistant/assistant-floating-launcher").then(
+      (mod) => mod.AssistantFloatingLauncher,
+    ),
+  { ssr: false },
+);
+const AssistantDrawer = dynamic(
+  () => import("@/components/assistant/assistant-drawer").then((mod) => mod.AssistantDrawer),
+  { ssr: false },
+);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((state) => state.user);

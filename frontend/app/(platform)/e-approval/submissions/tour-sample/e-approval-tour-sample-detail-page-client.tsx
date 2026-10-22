@@ -98,7 +98,7 @@ function TourSampleAttachmentsPanel() {
     <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
       <AttachmentPreviewGallery
         title="Attachments"
-        hint="Photos show geotag details when captured. PDF/image can open with approval footer."
+        hint="Click or drag on a PDF or image to mark a spot. Each person has their own color. Type @ to notify someone on this request."
         items={items}
         fetchBlob={noopFetchBlob}
         onDownload={() => undefined}
@@ -141,8 +141,9 @@ function TourSampleDetailInner() {
             <div>
               <h2 className="text-base font-medium">Workflow path</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Who runs for this request, what is parallel, and where the approval stands. Hover an
-                approver name to view their signature.
+                Who runs for this request, what is parallel, and where it stands. A review step is
+                acknowledge: comment on the file, sign, and continue. That is not an approval. Hover a
+                name to view their signature.
               </p>
             </div>
           </div>
@@ -308,11 +309,16 @@ function TourSampleDetailInner() {
                     </p>
                   </div>
                   <p className="mt-1.5 text-muted-foreground">{comment.message}</p>
+                  {comment.pin_x != null ? (
+                    <p className="mt-1 text-xs font-medium text-primary">
+                      Page {comment.pin_page ?? 1} · Show on the file
+                    </p>
+                  ) : null}
                 </li>
               ))}
             </ul>
             <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
-              <Input disabled className="flex-1" placeholder="Write a comment…" />
+              <Input disabled className="flex-1" placeholder="Write a comment. Use @ to notify someone on this request." />
               <Button type="button" size="sm" disabled>
                 Post
               </Button>
@@ -326,7 +332,7 @@ function TourSampleDetailInner() {
               <EApprovalSectionCard
                 dataHelp="ea-detail-requestor-actions"
                 title="Requestor actions"
-                description="While pending, cancel the request or remind waiting approvers. Sample only — actions do not save."
+                description="While pending, cancel the request or remind whoever is waiting. Sample only — actions do not save."
               >
                 <div className="mt-3 space-y-2">
                   <div className="flex flex-wrap gap-2">
@@ -342,8 +348,8 @@ function TourSampleDetailInner() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Follow-up emails and notifies every pending approver on the current step
-                    (including parallel peers). A cooldown may apply between reminders.
+                    Follow-up emails and notifies everyone still waiting: pending approvers, or reviewers
+                    who have not acknowledged yet. A cooldown may apply between reminders.
                   </p>
                 </div>
               </EApprovalSectionCard>
@@ -353,7 +359,7 @@ function TourSampleDetailInner() {
             <EApprovalSectionCard
               dataHelp="ea-decide-panel"
               title="Your decision"
-              description="Sign to approve. Remarks are optional for approve, required for reject or revision. Sample only — actions do not save."
+              description="Sign to approve. Remarks are optional for approve, required for reject or revision. A review step is Acknowledge instead. Sample only — actions do not save."
             >
               <div className="mt-4 space-y-4">
                 <EApprovalApprovalSignatureField
@@ -401,7 +407,10 @@ function TourSampleDetailInner() {
                       Request revision
                     </Button>
                   </span>
-                  <p className="w-full text-xs text-muted-foreground">Sample only — actions do not save.</p>
+                  <p className="w-full text-xs text-muted-foreground">
+                    Sample only — actions do not save. When the current step is a review, this panel is
+                    Acknowledge and does not approve or reject.
+                  </p>
                 </div>
                 <EApprovalSignatureConsentDialog
                   open={signatureConsentOpen}

@@ -306,7 +306,7 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   await queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
                 }}
               />
-              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <section data-help="tk-detail-attachments" className="rounded-xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-sm font-medium text-foreground">Attachments</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Drag & drop, browse, or paste a screenshot. Progress shows while uploading.
@@ -423,11 +423,13 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                 </form>
               </section>
 
-              <WorkspaceEntityActivityPanel
-                entityType="ticket"
-                entityId={ticket.id}
-                title="Audit activity"
-              />
+              <div data-help="tk-detail-audit">
+                <WorkspaceEntityActivityPanel
+                  entityType="ticket"
+                  entityId={ticket.id}
+                  title="Audit activity"
+                />
+              </div>
             </div>
 
             <aside className="space-y-4">

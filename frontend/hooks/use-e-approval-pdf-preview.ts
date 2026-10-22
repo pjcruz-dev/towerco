@@ -2,7 +2,10 @@
 
 import { useCallback, useState } from "react";
 
-import { openEApprovalAttachmentPdfPreview } from "@/lib/e-approval/e-approval-attachment-pdf";
+import {
+  openEApprovalAttachmentPdfPreview,
+  openEApprovalPdfPreviewTab,
+} from "@/lib/e-approval/e-approval-attachment-pdf";
 import { shouldAppendPrintAttachments } from "@/lib/e-approval/e-approval-print-template-render";
 import { fetchEApprovalSubmissionPrint } from "@/lib/api/modules/e-approval-api";
 
@@ -21,24 +24,39 @@ export function useEApprovalPdfPreview() {
         return "fallback_print";
       }
 
+      const preview = openEApprovalPdfPreviewTab();
+      const printUrl = new URL(
+        `/e-approval/submissions/${submissionId}/print`,
+        window.location.origin,
+      ).href;
       setIsGenerating(true);
       try {
         const payload = await fetchEApprovalSubmissionPrint(submissionId);
         if (!shouldAppendPrintAttachments(payload.template)) {
-          window.open(`/e-approval/submissions/${submissionId}/print`, "_blank", "noopener,noreferrer");
+          if (preview && !preview.closed) {
+            preview.location.replace(printUrl);
+          } else {
+            window.open(printUrl, "_blank", "noopener,noreferrer");
+          }
           return "fallback_print";
         }
         try {
-          await openEApprovalAttachmentPdfPreview(payload, { attachmentId });
+          await openEApprovalAttachmentPdfPreview(payload, { attachmentId }, preview);
           return "opened";
         } catch (e) {
           const code = e instanceof Error ? e.message : "";
           if (code === "NO_PRINTABLE_ATTACHMENTS" || code === "EMPTY_PDF") {
-            window.open(`/e-approval/submissions/${submissionId}/print`, "_blank", "noopener,noreferrer");
+            const fallback = preview && !preview.closed ? preview : window.open("", "_blank");
+            fallback?.location.replace(printUrl);
             return "fallback_print";
           }
           throw e;
         }
+      } catch (error) {
+        if (preview && !preview.closed) {
+          preview.close();
+        }
+        throw error;
       } finally {
         setIsGenerating(false);
       }

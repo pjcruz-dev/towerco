@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
@@ -44,6 +45,9 @@ final class EApprovalFormWorkflowStepPreviewResolver
             'field' => $approverId !== '' ? __('Approver field: :field', ['field' => $approverId]) : __('Approver field'),
             'field_map' => $this->fieldMapLabel($definition, $values),
             'role' => $approverId !== '' ? __('Role: :role', ['role' => $approverId]) : __('Role'),
+            'reviewer_list' => $approverId !== ''
+                ? __('Reviewers: :field', ['field' => $approverId])
+                : __('Reviewer list'),
             default => $this->userLabel($approverId),
         };
 
@@ -101,6 +105,7 @@ final class EApprovalFormWorkflowStepPreviewResolver
             'parallel_quorum' => $parallelQuorum,
             'used_fallback' => $usedFallback,
             'confirm_settlement' => EApprovalWorkflowStepDefinitionSupport::confirmSettlementEnabled($definition),
+            'duty' => EApprovalReviewStep::isReviewDefinition($definition) ? EApprovalReviewStep::DUTY : null,
             'warning' => $this->warningForStep($type, $approverId, $user, $definition, $values, $form, $requestorEmail, $usedFallback),
         ];
     }
@@ -295,19 +300,25 @@ final class EApprovalFormWorkflowStepPreviewResolver
             return __('Approver field is empty in the preview sample.');
         }
 
-        if ($type === 'user_list') {
+        if ($type === 'user_list' || $type === 'reviewer_list') {
             $fieldName = $approverId !== '' ? $approverId : trim((string) ($definition['approver_id'] ?? ''));
             if ($fieldName === '') {
-                return __('Dynamic approver list step is missing its source field.');
+                return $type === 'reviewer_list'
+                    ? __('Reviewer list step is missing its source field.')
+                    : __('Dynamic approver list step is missing its source field.');
             }
 
             $ids = EApprovalUserListValueParser::parse($values[$fieldName] ?? null);
             if ($ids === []) {
-                return __('Approver list is empty in the preview sample. Select one or more stakeholders.');
+                return $type === 'reviewer_list'
+                    ? __('Reviewer list is empty in the preview sample. Select one or more reviewers.')
+                    : __('Approver list is empty in the preview sample. Select one or more stakeholders.');
             }
 
             return $user === null
-                ? __('Approver list did not resolve to active users in the preview sample.')
+                ? ($type === 'reviewer_list'
+                    ? __('Reviewer list did not resolve to active users in the preview sample.')
+                    : __('Approver list did not resolve to active users in the preview sample.'))
                 : null;
         }
 

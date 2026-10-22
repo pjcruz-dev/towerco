@@ -316,7 +316,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
               resolveActiveTenantId(parsed.user),
             pendingMfa: null,
             isHydrated: true,
-            permissionsReady: false,
+            permissionsReady: parsed.user != null,
           });
           if (parsed.accessToken) {
             setSessionCookie();

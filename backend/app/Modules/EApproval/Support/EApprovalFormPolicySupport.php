@@ -107,6 +107,7 @@ final class EApprovalFormPolicySupport
             'direct_manager', 'entra_manager' => 'manager',
             'field_map', 'map_field', 'mapped_field' => 'field_map',
             'user_list', 'field_list', 'approver_list', 'from_approver_list' => 'user_list',
+            'reviewer_list', 'reviewers', 'from_reviewer_list' => 'reviewer_list',
             default => strtolower(trim($type)),
         };
     }

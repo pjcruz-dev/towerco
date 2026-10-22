@@ -33,10 +33,14 @@ export function workflowStepTypeLabel(type: string): string {
 }
 
 export function describeParallelBandLabel(
-  members: Pick<EApprovalWorkflowPreviewStep, "parallel_mode" | "parallel_quorum">[],
+  members: Pick<EApprovalWorkflowPreviewStep, "parallel_mode" | "parallel_quorum" | "duty">[],
 ): string | null {
   if (members.length < 2) {
     return null;
+  }
+
+  if (members.some((row) => row.duty === "review")) {
+    return "Reviewers · All must acknowledge";
   }
 
   const mode = members.find((row) => row.parallel_mode)?.parallel_mode ?? "all";

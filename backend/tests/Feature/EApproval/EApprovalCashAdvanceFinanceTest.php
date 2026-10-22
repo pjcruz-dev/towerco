@@ -119,13 +119,65 @@ final class EApprovalCashAdvanceFinanceTest extends TestCase
         $first = $this->createSubmission($formId, ['requested_amount' => '800']);
         $this->approveSubmission($first);
 
+        $documentNo = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/submissions/{$first}")
+            ->json('data.document_no');
+
         $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->postJson('/api/v1/e-approval/submissions', [
                 'form_id' => $formId,
                 'values' => ['requested_amount' => '100'],
             ])
-            ->assertUnprocessable();
+            ->assertUnprocessable()
+            ->assertJsonPath('errors._link_submission_id.0', $first)
+            ->assertJsonPath('errors._link_kind.0', 'cash_advance')
+            ->assertJsonPath('errors._link_document_no.0', $documentNo);
+    }
+
+    public function test_block_new_cash_advance_links_to_the_pending_liquidation(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        app(EApprovalSettingsService::class)->setString(EApprovalSettingsService::BLOCK_NEW_CASH_ADVANCE, 'true');
+        tenancy()->end();
+
+        $formId = $this->createPublishedForm(
+            'Cash advance',
+            [
+                ['type' => 'currency', 'name' => 'requested_amount', 'label' => 'Requested amount', 'validation' => ['required' => true]],
+            ],
+            ['form_family' => 'cash_advance'],
+        );
+        $advance = $this->createSubmission($formId, ['requested_amount' => '800']);
+        $this->approveSubmission($advance);
+
+        $liquidationFormId = $this->createPublishedForm(
+            'Liquidation',
+            [
+                ['type' => 'currency', 'name' => 'total_reimbursement', 'label' => 'Total', 'validation' => ['required' => true]],
+            ],
+            ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
+        );
+        $liquidation = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $liquidationFormId,
+                'parent_submission_id' => $advance,
+                'values' => ['total_reimbursement' => '100'],
+            ]);
+        $liquidation->assertCreated();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => ['requested_amount' => '50'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors._link_submission_id.0', $liquidation->json('data.id'))
+            ->assertJsonPath('errors._link_kind.0', 'liquidation')
+            ->assertJsonPath('errors._link_document_no.0', $liquidation->json('data.document_no'));
     }
 
     public function test_per_diem_cap_rejects_the_line(): void
@@ -303,7 +355,14 @@ final class EApprovalCashAdvanceFinanceTest extends TestCase
         $inbox->assertOk();
 
         $approvalId = collect($inbox->json('data'))
-            ->firstWhere('submission_id', $submissionId)['id'] ?? null;
+            ->first(function (mixed $row) use ($submissionId): bool {
+                if (! is_array($row)) {
+                    return false;
+                }
+                $linked = $row['submission_id'] ?? ($row['submission']['id'] ?? null);
+
+                return (string) $linked === $submissionId;
+            })['id'] ?? null;
 
         $this->assertNotEmpty($approvalId);
 

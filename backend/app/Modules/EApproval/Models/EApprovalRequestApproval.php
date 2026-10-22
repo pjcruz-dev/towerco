@@ -102,6 +102,9 @@ class EApprovalRequestApproval extends Model
                 : null,
             'parallel_mode' => $this->parallelModeFromStep(),
             'parallel_quorum' => $this->parallelQuorumFromStep(),
+            'duty' => is_array($this->step?->condition) && ($this->step->condition['duty'] ?? null) === 'review'
+                ? 'review'
+                : null,
             'approver' => $this->approver ? [
                 'id' => (string) $this->approver->id,
                 'name' => $this->approver->name,

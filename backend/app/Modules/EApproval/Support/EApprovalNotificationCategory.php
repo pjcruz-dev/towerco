@@ -53,7 +53,7 @@ final class EApprovalNotificationCategory
                 'approved', 'rejected', 'cancelled', 'approval_no_longer_needed',
                 'approval_rerouted', 'workflow_steps_skipped',
                 'resubmitted_resume', 'resubmitted_restart' => 'approvals',
-                'comment_added', 'comment_replied' => 'activity',
+                'comment_added', 'comment_replied', 'comment_mention' => 'activity',
                 default => 'approvals',
             };
 

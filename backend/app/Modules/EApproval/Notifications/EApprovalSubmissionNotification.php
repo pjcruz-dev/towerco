@@ -71,6 +71,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'sla_reminder' => "{$prefix} Approval reminder — {$documentNo}",
                 'sla_escalation' => "{$prefix} Approval escalation — {$documentNo}",
                 'manual_follow_up' => "{$prefix} Follow-up reminder — {$documentNo}",
+                'comment_mention' => "{$prefix} You were mentioned — {$documentNo}",
                 'cancelled' => "{$prefix} Request cancelled — {$documentNo}",
                 'approval_no_longer_needed' => "{$prefix} Approval no longer needed — {$documentNo}",
                 'approval_rerouted' => "{$prefix} Approval reassigned — {$documentNo}",
@@ -87,7 +88,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 ? 'Open approval inbox'
                 : 'Open submission';
 
-            $message = (new MailMessage())
+            $message = (new MailMessage)
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
                 ->from((string) config('mail.from.address'), $brand)
                 ->subject($subject)
@@ -129,9 +130,18 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                     $message->line($line);
                 }
             } elseif ($this->event === 'manual_follow_up') {
-                $message->line(__('The requestor sent a follow-up reminder. Please review this approval when you can.'));
+                $message->line($this->detail === 'review'
+                    ? __('The requestor sent a follow-up reminder. Please acknowledge this review when you can.')
+                    : __('The requestor sent a follow-up reminder. Please review this approval when you can.'));
                 if ($this->actorName !== null) {
                     $message->line(__('From: :name', ['name' => $this->actorName]));
+                }
+            } elseif ($this->event === 'comment_mention') {
+                $message->line(__(':name mentioned you in a comment on this request.', [
+                    'name' => $this->actorName ?? __('Someone'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
                 }
             } elseif ($this->event === 'cancelled') {
                 $message->line(__('This request was cancelled. No further approval action is required.'));

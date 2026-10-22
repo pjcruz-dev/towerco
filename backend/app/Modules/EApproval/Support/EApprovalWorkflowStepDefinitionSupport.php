@@ -157,6 +157,10 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['confirm_settlement'] = true;
         }
 
+        if (($condition['duty'] ?? null) === 'review') {
+            $definition['duty'] = 'review';
+        }
+
         return $definition;
     }
 
@@ -172,6 +176,7 @@ final class EApprovalWorkflowStepDefinitionSupport
             'direct_manager', 'entra_manager' => 'manager',
             'field_map', 'map_field', 'mapped_field' => 'field_map',
             'user_list', 'field_list', 'approver_list', 'from_approver_list' => 'user_list',
+            'reviewer_list', 'reviewers', 'from_reviewer_list' => 'reviewer_list',
             default => strtolower(trim((string) ($step['type'] ?? $step['approver_type'] ?? 'user'))),
         };
 
@@ -224,6 +229,10 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (self::confirmSettlementEnabled($step)) {
             $definition['confirm_settlement'] = true;
+        }
+
+        if (self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list') {
+            $definition['duty'] = 'review';
         }
 
         return $definition;
@@ -346,6 +355,21 @@ final class EApprovalWorkflowStepDefinitionSupport
             }
         }
 
+        if (self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list') {
+            $condition['duty'] = 'review';
+        } else {
+            unset($condition['duty']);
+        }
+
         return $condition === [] ? null : $condition;
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     */
+    private static function reviewDutyEnabled(array $step, array $condition): bool
+    {
+        return ($step['duty'] ?? null) === 'review' || ($condition['duty'] ?? null) === 'review';
     }
 }

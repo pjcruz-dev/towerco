@@ -13,6 +13,7 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalSubmissionFollowup;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -246,6 +247,14 @@ final class EApprovalSubmissionLifecycleService
             $pendingRows = $pendingQuery->get();
         }
 
+        $pendingRows->loadMissing('step');
+        $reviewerIds = [];
+        foreach ($pendingRows as $row) {
+            if (EApprovalReviewStep::isReviewStep($row->step)) {
+                $reviewerIds[(string) $row->approver_id] = true;
+            }
+        }
+
         $approverIds = $pendingRows
             ->pluck('approver_id')
             ->map(static fn ($id) => (string) $id)
@@ -288,11 +297,17 @@ final class EApprovalSubmissionLifecycleService
         }
 
         $approverCount = count($approverIds);
+        $reviewerCount = count(array_intersect_key($reviewerIds, array_flip($approverIds)));
+        $allReviewers = $approverCount > 0 && $reviewerCount === $approverCount;
         $commentText = $note !== ''
             ? "[Manual follow-up] {$note}"
-            : ($approverCount > 1
-                ? '[Manual follow-up] Requestor sent a reminder to the current approvers.'
-                : '[Manual follow-up] Requestor sent a reminder to the current approver.');
+            : ($allReviewers
+                ? ($approverCount > 1
+                    ? '[Manual follow-up] Requestor sent a reminder to the current reviewers.'
+                    : '[Manual follow-up] Requestor sent a reminder to the current reviewer.')
+                : ($approverCount > 1
+                    ? '[Manual follow-up] Requestor sent a reminder to the current approvers.'
+                    : '[Manual follow-up] Requestor sent a reminder to the current approver.'));
         $this->comments->add($submission, $commentText, $actor, notifyStakeholders: false);
 
         foreach ($approverIds as $approverId) {
@@ -306,7 +321,12 @@ final class EApprovalSubmissionLifecycleService
                 bodyPreview: $note !== '' ? $note : null,
             );
 
-            $this->mail->dispatchManualFollowUp($submission, $approverId, $actor->name);
+            $this->mail->dispatchManualFollowUp(
+                $submission,
+                $approverId,
+                $actor->name,
+                isset($reviewerIds[$approverId]),
+            );
         }
 
         $this->audit->log(
@@ -419,7 +439,9 @@ final class EApprovalSubmissionLifecycleService
                 continue;
             }
 
-            $stored = is_scalar($raw) ? (string) $raw : json_encode($raw, JSON_THROW_ON_ERROR);
+            $stored = $raw === null
+                ? ''
+                : (is_scalar($raw) ? (string) $raw : json_encode($raw, JSON_THROW_ON_ERROR));
 
             EApprovalFormValue::query()
                 ->where('submission_id', $submission->id)

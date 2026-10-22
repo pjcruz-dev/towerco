@@ -60,5 +60,5 @@ export type ApprovalHistorySlot = {
   label: string;
   subtitle?: string;
   signature: string | null;
-  kind: "requestor" | "prepared_by" | "approver";
+  kind: "requestor" | "prepared_by" | "approver" | "reviewer";
 };

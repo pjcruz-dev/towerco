@@ -58,7 +58,7 @@ export function submissionDetailToValues(
   const values: Record<string, string> = {};
   for (const row of rows) {
     if (row.field_name && row.value != null) {
-      values[row.field_name] = row.value;
+      values[row.field_name] = row.value.trim().toLowerCase() === "null" ? "" : row.value;
     }
   }
   return values;

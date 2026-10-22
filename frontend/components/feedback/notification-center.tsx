@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -48,9 +49,12 @@ function NotificationToast({
   const Icon = config.icon;
 
   useEffect(() => {
+    if (item.action) {
+      return;
+    }
     const timer = window.setTimeout(() => onDismiss(item.id), AUTO_DISMISS_MS);
     return () => window.clearTimeout(timer);
-  }, [item.id, onDismiss]);
+  }, [item.action, item.id, onDismiss]);
 
   return (
     <div
@@ -63,6 +67,15 @@ function NotificationToast({
           <p className="text-sm font-medium">{item.title}</p>
           {item.message ? (
             <p className="mt-1 text-xs leading-relaxed opacity-90">{item.message}</p>
+          ) : null}
+          {item.action ? (
+            <Link
+              href={item.action.href}
+              className="mt-2 inline-flex min-h-6 items-center text-xs font-medium underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-current focus-visible:outline-none"
+              onClick={() => onDismiss(item.id)}
+            >
+              {item.action.label}
+            </Link>
           ) : null}
         </div>
         <Button

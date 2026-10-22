@@ -635,6 +635,7 @@ export type IfElseBranchStepInput = {
   threshold: string;
   ifApproverId: string;
   elseApproverId: string;
+  duty?: "review";
 };
 
 export type ThresholdLadderStepInput = {
@@ -642,6 +643,7 @@ export type ThresholdLadderStepInput = {
   /** Boundary values; length N creates N+1 bands. Must match approverIds length = N+1. */
   thresholds: string[];
   approverIds: string[];
+  duty?: "review";
 };
 
 /** Insert (or append) two fixed-user steps with complementary amount/threshold conditions. */
@@ -656,6 +658,7 @@ export function insertIfElseBranchSteps(
       field: input.field,
       thresholds: [input.threshold],
       approverIds: [input.ifApproverId, input.elseApproverId],
+      duty: input.duty,
     },
     atIndex,
   );
@@ -684,6 +687,7 @@ export function insertThresholdLadderSteps(
         type: "user",
         approverId: input.approverIds[offset]?.trim() ?? "",
         step_order: baseOrder + offset + 1,
+        ...(input.duty === "review" ? { duty: "review" as const } : {}),
       },
       when,
     ),
@@ -1032,6 +1036,7 @@ export function removeLadderValueCase(
 export type ValueMatchStepInput = {
   field: string;
   cases: Array<ValueMatchCase & { approverId: string }>;
+  duty?: "review";
 };
 
 /** Insert one fixed-user step per value case. Only the matching case runs. */
@@ -1058,6 +1063,7 @@ export function insertValueMatchSteps(
         type: "user",
         approverId: item.approverId.trim(),
         step_order: baseOrder + offset + 1,
+        ...(input.duty === "review" ? { duty: "review" as const } : {}),
       },
       [{ field: trimmedField, operator: item.operator, value: item.value.trim() }],
     ),

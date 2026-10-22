@@ -102,7 +102,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 6,
             title: "Status badge",
-            body: "Draft, Approved, Rejected, and other states are color-coded on each card.",
+            body: "Draft, Pending, Approved, Rejected, and other states are color-coded on each card. Step Show uses Acknowledged when a reviewer has signed.",
             x: 67,
             y: 37,
           },
@@ -207,7 +207,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Summary & Step Show",
-            body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, approved, skipped).",
+            body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, acknowledged, approved, skipped).",
             x: 50,
             y: 26,
           },
@@ -228,12 +228,12 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 5,
             title: "Attachments",
-            body: "Open previews to view files; stamps appear when approvals complete.",
+            body: "Open a PDF or image and click or drag to mark a spot. Each person has their own color. Type @ to notify someone on the request.",
             x: 40,
             y: 82,
           },
         ],
-        tip: "While the request is still Pending, open Decide as the requestor to Cancel the request or Send follow-up to approver (manual reminder with cooldown).",
+        tip: "While the request is still Pending, open Decide as the requestor to Cancel or send a follow-up. The button names approvers, or reviewers who have not acknowledged yet.",
       },
       {
         id: "detail-approvals",
@@ -253,7 +253,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Step status",
-            body: "Approved, pending, or skipped for each approver.",
+            body: "Approved, acknowledged, pending, or skipped. Acknowledged means a reviewer signed. That is not an approval.",
             x: 62,
             y: 55,
           },
@@ -283,7 +283,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Add a comment",
-            body: "Post a note for requestors and approvers on the same thread.",
+            body: "Type @ to notify a requestor, reviewer, or approver. A pinned note links back to the mark on the file.",
             x: 50,
             y: 66,
           },

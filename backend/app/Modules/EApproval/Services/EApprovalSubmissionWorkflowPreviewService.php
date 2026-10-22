@@ -225,7 +225,7 @@ final class EApprovalSubmissionWorkflowPreviewService
 
         // Empty dynamic approver field / list can never activate — show Skipped early.
         $type = (string) ($step['type'] ?? '');
-        if (in_array($type, ['field', 'user_list', 'field_map', 'role'], true)) {
+        if (in_array($type, ['field', 'user_list', 'reviewer_list', 'field_map', 'role'], true)) {
             return true;
         }
 
@@ -242,6 +242,7 @@ final class EApprovalSubmissionWorkflowPreviewService
         return match ($type) {
             'field' => __('Skipped — approver field was empty.'),
             'user_list' => __('Skipped — approver list was empty.'),
+            'reviewer_list' => __('Skipped — reviewer list was empty.'),
             'field_map' => __('Skipped — no approver mapping for the selected value.'),
             'role' => __('Skipped — no active approver found for this role.'),
             default => __('Skipped — no approver could be assigned.'),

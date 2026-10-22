@@ -167,9 +167,10 @@ async function applyApprovalHistoryFooter(pdfDoc: PDFDocument, rows: FooterRow[]
       color: rgb(0.35, 0.39, 0.45),
     });
 
-    const hiddenApprovalsCount = Math.max(0, embeddedSignatures.length - 4);
+    const visibleCap = width >= 700 ? 6 : 4;
+    const hiddenApprovalsCount = Math.max(0, embeddedSignatures.length - visibleCap);
     if (hiddenApprovalsCount > 0) {
-      page.drawText(`+${hiddenApprovalsCount} more approvals`, {
+      page.drawText(`+${hiddenApprovalsCount} more`, {
         x: Math.max(marginX + 8, width - marginX - 118),
         y: headerY,
         size: Math.max(5, Math.min(6.5, width / 155)),
@@ -178,7 +179,7 @@ async function applyApprovalHistoryFooter(pdfDoc: PDFDocument, rows: FooterRow[]
       });
     }
 
-    const slots = Math.max(2, Math.min(4, embeddedSignatures.length));
+    const slots = Math.max(2, Math.min(visibleCap, embeddedSignatures.length));
     const slotGap = 8;
     const usableW = Math.max(20, width - marginX * 2 - 16);
     const slotW = (usableW - slotGap * (slots - 1)) / slots;
@@ -307,15 +308,27 @@ async function appendAttachmentToPdf(
       ? await mainPdfDoc.embedPng(bytes)
       : await mainPdfDoc.embedJpg(bytes);
     const { width, height } = image.scale(1);
-    if (!reserveFooterBand) {
-      const page = mainPdfDoc.addPage([width, height]);
-      page.drawImage(image, { x: 0, y: 0, width, height });
-      return;
-    }
-
-    const reservedBottom = approvalHistoryFooterReserveForContent(height);
-    const page = mainPdfDoc.addPage([width, height + reservedBottom]);
-    page.drawImage(image, { x: 0, y: reservedBottom, width, height });
+    const landscape = width >= height;
+    const pageW = landscape ? 841.89 : 595.28;
+    const pageH = landscape ? 595.28 : 841.89;
+    const footerBand = reserveFooterBand
+      ? APPROVAL_HISTORY_FOOTER_Y +
+        approvalHistoryFooterHeight(pageH) +
+        APPROVAL_HISTORY_FOOTER_CONTENT_GAP
+      : 0;
+    const margin = 16;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - footerBand - margin;
+    const scale = Math.min(maxW / width, maxH / height);
+    const drawW = width * scale;
+    const drawH = height * scale;
+    const page = mainPdfDoc.addPage([pageW, pageH]);
+    page.drawImage(image, {
+      x: (pageW - drawW) / 2,
+      y: footerBand + Math.max(0, (maxH - drawH) / 2),
+      width: drawW,
+      height: drawH,
+    });
   }
 }
 
@@ -363,11 +376,42 @@ export async function buildEApprovalAttachmentPdfBlob(
   return new Blob([Uint8Array.from(mergedBytes)], { type: "application/pdf" });
 }
 
+function showPdfPreviewStatus(preview: Window, message: string): void {
+  preview.document.title = "Approval PDF";
+  preview.document.body.style.margin = "0";
+  preview.document.body.innerHTML = `<p style="font-family:system-ui,sans-serif;padding:24px;color:#334155">${message}</p>`;
+}
+
+/**
+ * Open the tab during the click. A blob URL opened after the downloads finish,
+ * or with noopener, leaves Chrome's PDF viewer on Loading.
+ */
+export function openEApprovalPdfPreviewTab(): Window | null {
+  const preview = window.open("", "_blank");
+  if (preview) {
+    showPdfPreviewStatus(preview, "Preparing PDF…");
+  }
+  return preview;
+}
+
 export async function openEApprovalAttachmentPdfPreview(
   payload: EApprovalPrintPayload,
   options?: EApprovalAttachmentPdfOptions,
+  preview?: Window | null,
 ): Promise<void> {
-  const blob = await buildEApprovalAttachmentPdfBlob(payload, options);
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener,noreferrer");
+  const tab = preview === undefined ? openEApprovalPdfPreviewTab() : preview;
+  try {
+    const blob = await buildEApprovalAttachmentPdfBlob(payload, options);
+    const url = URL.createObjectURL(blob);
+    if (tab && !tab.closed) {
+      tab.location.replace(url);
+      return;
+    }
+    window.location.assign(url);
+  } catch (error) {
+    if (tab && !tab.closed) {
+      tab.close();
+    }
+    throw error;
+  }
 }

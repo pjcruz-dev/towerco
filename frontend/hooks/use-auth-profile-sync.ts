@@ -23,7 +23,12 @@ export function useAuthProfileSync() {
     }
 
     let cancelled = false;
-    setPermissionsReady(false);
+    const hasCachedUser = Boolean(useAuthStore.getState().user);
+    if (hasCachedUser) {
+      setPermissionsReady(true);
+    } else {
+      setPermissionsReady(false);
+    }
 
     void me()
       .then((user) => {

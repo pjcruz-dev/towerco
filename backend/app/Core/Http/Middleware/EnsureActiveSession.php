@@ -7,12 +7,16 @@ namespace App\Core\Http\Middleware;
 use App\Modules\Identity\Models\TenantUser;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureActiveSession
 {
+    /** Presence timestamp. Revocation is still read on every request. */
+    private const TOUCH_INTERVAL_SECONDS = 60;
+
     public function handle(Request $request, Closure $next): Response
     {
         /** @var TenantUser|null $user */
@@ -35,26 +39,37 @@ class EnsureActiveSession
             return response()->json(['message' => __('Session is no longer active.')], 401);
         }
 
-        $now = now();
+        if ($this->shouldTouch($session->last_seen_at ?? null)) {
+            $now = now();
 
-        DB::connection('tenant')->table('auth_sessions')->where('id', $sessionId)->update([
-            'last_seen_at' => $now,
-            'updated_at' => $now,
-        ]);
+            DB::connection('tenant')->table('auth_sessions')->where('id', $sessionId)->update([
+                'last_seen_at' => $now,
+                'updated_at' => $now,
+            ]);
 
-        if ($session->device_id !== null) {
-            DB::connection('tenant')->table('auth_devices')
-                ->where('id', (string) $session->device_id)
-                ->update([
-                    'last_seen_at' => $now,
-                    'last_ip_address' => $request->ip(),
-                    'updated_at' => $now,
-                ]);
+            if ($session->device_id !== null) {
+                DB::connection('tenant')->table('auth_devices')
+                    ->where('id', (string) $session->device_id)
+                    ->update([
+                        'last_seen_at' => $now,
+                        'last_ip_address' => $request->ip(),
+                        'updated_at' => $now,
+                    ]);
+            }
         }
 
         $request->attributes->set('auth_session_id', $sessionId);
 
         return $next($request);
+    }
+
+    private function shouldTouch(mixed $lastSeenAt): bool
+    {
+        if ($lastSeenAt === null || $lastSeenAt === '') {
+            return true;
+        }
+
+        return Carbon::parse((string) $lastSeenAt)->lt(now()->subSeconds(self::TOUCH_INTERVAL_SECONDS));
     }
 
     private function resolveSessionId(Request $request, TenantUser $user): ?string

@@ -193,6 +193,10 @@ class EApprovalForm extends Model
                 $payload['confirm_settlement'] = true;
             }
 
+            if (($condition['duty'] ?? null) === 'review') {
+                $payload['duty'] = 'review';
+            }
+
             $mode = EApprovalParallelMode::fromCondition($condition);
             if ($mode !== EApprovalParallelMode::ALL) {
                 $payload['parallel_mode'] = $mode;

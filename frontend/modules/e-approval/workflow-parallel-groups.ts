@@ -109,6 +109,7 @@ export type ParallelApprovalStepInput = {
   approverIds: string[];
   mode?: ParallelCompletionMode;
   quorum?: number;
+  duty?: "review";
 };
 
 function withParallelMeta(
@@ -144,7 +145,7 @@ export function insertParallelApprovalSteps(
     return steps;
   }
 
-  const mode = normalizeParallelMode(input.mode);
+  const mode = input.duty === "review" ? "all" : normalizeParallelMode(input.mode);
   const quorum = resolveParallelQuorum(mode, approverIds.length, input.quorum);
   const insertAt = Math.max(0, Math.min(atIndex ?? steps.length, steps.length));
   const before = compactWorkflowStepOrdersPreservingTies(steps.slice(0, insertAt));
@@ -159,6 +160,7 @@ export function insertParallelApprovalSteps(
         type: "user",
         approverId,
         step_order: parallelOrder,
+        ...(input.duty === "review" ? { duty: "review" as const } : {}),
       },
       mode,
       quorum,

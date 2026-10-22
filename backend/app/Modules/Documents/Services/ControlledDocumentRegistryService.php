@@ -113,10 +113,7 @@ final class ControlledDocumentRegistryService
 
         return [
             'kpis' => [
-                'total' => (clone $counted)->count(),
-                'pending' => (clone $counted)->where('status', ControlledDocumentStatus::PENDING)->count(),
-                'published' => (clone $counted)->where('status', ControlledDocumentStatus::PUBLISHED)->count(),
-                'obsolete' => (clone $counted)->where('status', ControlledDocumentStatus::OBSOLETE)->count(),
+                ...$this->statusTotals($counted),
                 'incoming' => $this->incomingCount($counted, array_keys($incoming)),
             ],
             'incoming_by_code' => $incoming,
@@ -258,10 +255,7 @@ final class ControlledDocumentRegistryService
             'as_of' => $today->toDateString(),
             'published_from' => $publishedFrom->toDateString(),
             'counts' => [
-                'total' => (clone $scoped)->count(),
-                'pending' => (clone $scoped)->where('status', ControlledDocumentStatus::PENDING)->count(),
-                'published' => (clone $publishedScope)->count(),
-                'obsolete' => (clone $scoped)->where('status', ControlledDocumentStatus::OBSOLETE)->count(),
+                ...$this->statusTotals($scoped),
                 'published_last_30_days' => (clone $scoped)
                     ->where('status', ControlledDocumentStatus::PUBLISHED)
                     ->where('published_at', '>=', $publishedFrom)
@@ -543,14 +537,32 @@ final class ControlledDocumentRegistryService
     }
 
     /**
-     * @param  Builder<ControlledDocument>  $query
-     */
-    /**
      * Published rows with a revision still waiting in E-Forms, keyed by document code.
      *
      * @return array<string, array{submission_id: string, document_no: string, revision_number: int}>
      */
     private function openRevisionIndex(): array
+    {
+        if (app()->runningUnitTests()) {
+            return $this->queryOpenRevisionIndex();
+        }
+
+        $tenantId = (string) (tenant('id') ?? 'unknown');
+
+        /** @var array<string, array{submission_id: string, document_no: string, revision_number: int}> $index */
+        $index = TenantScopedCache::remember(
+            "documents:controlled:open-revisions:{$tenantId}",
+            30,
+            fn (): array => $this->queryOpenRevisionIndex(),
+        );
+
+        return $index;
+    }
+
+    /**
+     * @return array<string, array{submission_id: string, document_no: string, revision_number: int}>
+     */
+    private function queryOpenRevisionIndex(): array
     {
         $index = [];
         $submissions = EApprovalSubmission::query()
@@ -576,6 +588,30 @@ final class ControlledDocumentRegistryService
         }
 
         return $index;
+    }
+
+    /**
+     * @param  Builder<ControlledDocument>  $query
+     * @return array{total: int, pending: int, published: int, obsolete: int}
+     */
+    private function statusTotals(Builder $query): array
+    {
+        $rows = (clone $query)
+            ->reorder()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $pending = (int) ($rows[ControlledDocumentStatus::PENDING] ?? 0);
+        $published = (int) ($rows[ControlledDocumentStatus::PUBLISHED] ?? 0);
+        $obsolete = (int) ($rows[ControlledDocumentStatus::OBSOLETE] ?? 0);
+
+        return [
+            'total' => (int) $rows->sum(),
+            'pending' => $pending,
+            'published' => $published,
+            'obsolete' => $obsolete,
+        ];
     }
 
     /**

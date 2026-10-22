@@ -40,4 +40,34 @@ describe("rejected approval trail", () => {
     expect(steps[1]?.statusLabel).toBe("Rejected");
     expect(steps.map((step) => step.state)).not.toContain("current");
   });
+
+  it("keeps a unique key for each reviewer on the same step", () => {
+    const steps = workflowPreviewToStepShowItems(
+      [
+        {
+          step_order: 1,
+          duty: "review",
+          runtime_status: "acknowledged",
+          resolved_user_id: "aileen",
+          resolved_user_name: "Aileen Rosas",
+        },
+        {
+          step_order: 1,
+          duty: "review",
+          runtime_status: "pending",
+          resolved_user_id: "albino",
+          resolved_user_name: "Albino Manalo Jr.",
+        },
+        { step_order: 2, runtime_status: "pending", resolved_user_name: "Jerico Fortuna" },
+      ],
+      "pending",
+      [{ step_order: 3, label: "Skipped gate" }],
+    );
+
+    expect(new Set(steps.map((step) => step.key)).size).toBe(steps.length);
+    expect(steps[0]?.statusLabel).toBe("Acknowledged");
+    expect(steps[1]?.statusLabel).toBe("Pending");
+    expect(steps[2]?.statusLabel).toBe("Pending");
+    expect(steps[3]?.state).toBe("skipped");
+  });
 });

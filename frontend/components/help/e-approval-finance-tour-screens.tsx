@@ -391,7 +391,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
           <div data-help="ea-detail-attachments">
             <AttachmentPreviewGallery
               title={sample.fileLabel}
-              hint="Sample only. Live files open with the approval footer when the workflow is complete."
+              hint="Click or drag on a PDF or image to mark a spot. Each person has their own color. Type @ to notify someone on this request."
               items={attachmentItems}
               fetchBlob={noopFetchBlob}
               onDownload={() => undefined}
@@ -435,7 +435,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
               ))}
             </ul>
             <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
-              <Input disabled className="flex-1" placeholder="Write a comment…" />
+              <Input disabled className="flex-1" placeholder="Write a comment. Use @ to notify someone on this request." />
               <Button type="button" size="sm" disabled>
                 Post
               </Button>
@@ -449,7 +449,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
               <EApprovalSectionCard
                 dataHelp="ea-detail-requestor-actions"
                 title="Requestor actions"
-                description="While pending, cancel the request or remind waiting approvers. Sample only — actions do not save."
+                description="While pending, cancel the request or remind whoever is waiting. Sample only — actions do not save."
               >
                 <div className="mt-3 space-y-2">
                   <div className="flex flex-wrap gap-2">
@@ -465,7 +465,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Follow-up emails and notifies every pending approver on the current step. A cooldown may apply.
+                    Follow-up emails and notifies everyone still waiting: pending approvers, or reviewers who have not acknowledged yet. A cooldown may apply.
                   </p>
                 </div>
               </EApprovalSectionCard>
@@ -475,7 +475,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
               <EApprovalSectionCard
                 dataHelp="ea-decide-panel"
                 title="Your decision"
-                description="Sign to approve. Remarks are optional for approve, required for reject or revision. Sample only — actions do not save."
+                description="Sign to approve. Remarks are optional for approve, required for reject or revision. A review step is Acknowledge instead. Sample only — actions do not save."
               >
                 <div className="mt-4 space-y-4">
                   <EApprovalApprovalSignatureField
@@ -518,7 +518,10 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                         Request revision
                       </Button>
                     </span>
-                    <p className="w-full text-xs text-muted-foreground">Sample only — actions do not save.</p>
+                    <p className="w-full text-xs text-muted-foreground">
+                      Sample only — actions do not save. When the current step is a review, this panel is
+                      Acknowledge and does not approve or reject.
+                    </p>
                   </div>
                   <EApprovalSignatureConsentDialog
                     open={signatureConsentOpen}

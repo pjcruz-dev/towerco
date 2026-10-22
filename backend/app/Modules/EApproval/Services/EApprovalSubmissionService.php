@@ -1246,7 +1246,9 @@ final class EApprovalSubmissionService
                 continue;
             }
 
-            $stored = is_scalar($raw) ? (string) $raw : json_encode($raw, JSON_THROW_ON_ERROR);
+            $stored = $raw === null
+                ? ''
+                : (is_scalar($raw) ? (string) $raw : json_encode($raw, JSON_THROW_ON_ERROR));
 
             EApprovalFormValue::query()->create([
                 'id' => (string) Str::uuid(),

@@ -47,7 +47,7 @@ export function resolveEApprovalStatusTone(status: string, kind: EApprovalStatus
   }
 
   if (kind === "approval") {
-    if (key === "approved") return "success";
+    if (key === "approved" || key === "acknowledged") return "success";
     if (key === "rejected") return "danger";
     if (key === "pending") return "warning";
     if (

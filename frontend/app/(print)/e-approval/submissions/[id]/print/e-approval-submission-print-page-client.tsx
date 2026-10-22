@@ -6,7 +6,10 @@ import Link from "next/link";
 
 import { EApprovalGenericFormPrintView } from "@/components/e-approval/e-approval-generic-form-print-view";
 import { Button } from "@/components/ui/button";
-import { openEApprovalAttachmentPdfPreview } from "@/lib/e-approval/e-approval-attachment-pdf";
+import {
+  openEApprovalAttachmentPdfPreview,
+  openEApprovalPdfPreviewTab,
+} from "@/lib/e-approval/e-approval-attachment-pdf";
 import {
   hasCustomPrintDocumentDesign,
   shouldAppendPrintAttachments,
@@ -39,10 +42,11 @@ export function EApprovalSubmissionPrintPageClient({ submissionId }: Props) {
   const appendEnabled = shouldAppendPrintAttachments(data?.template);
 
   const openMergedPdf = useCallback(async (payload: EApprovalPrintPayload) => {
+    const preview = openEApprovalPdfPreviewTab();
     setIsGeneratingPdf(true);
     setPdfError(null);
     try {
-      await openEApprovalAttachmentPdfPreview(payload);
+      await openEApprovalAttachmentPdfPreview(payload, undefined, preview);
     } catch (e) {
       const code = e instanceof Error ? e.message : "";
       if (code === "NO_PRINTABLE_ATTACHMENTS" || code === "EMPTY_PDF") {

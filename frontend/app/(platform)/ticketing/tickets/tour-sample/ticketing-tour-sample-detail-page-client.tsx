@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Suspense, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { Paperclip } from "lucide-react";
 
 import {
   AttachmentPreviewGallery,
@@ -20,7 +19,7 @@ import {
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -31,7 +30,6 @@ import {
   ticketingTourSampleDetail,
 } from "@/lib/help/ticketing-tour-fixtures";
 import { permissions } from "@/lib/rbac/permissions";
-import { cn } from "@/lib/utils";
 
 /** Lightweight placeholder thumb for tour-only attachment cards (no API fetch). */
 const TOUR_SAMPLE_PREVIEW_URL =
@@ -130,18 +128,18 @@ function TicketingTourSampleDetailInner() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-dashed border-sky-300/80 bg-card p-5 shadow-sm dark:border-sky-800">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-foreground">Attachments</h2>
-                <span className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex opacity-60")}>
-                  <Paperclip className="mr-1.5 h-4 w-4" aria-hidden />
-                  Upload
-                </span>
-              </div>
+            <section
+              data-help="tk-detail-attachments"
+              className="rounded-xl border border-dashed border-sky-300/80 bg-card p-5 shadow-sm dark:border-sky-800"
+            >
+              <h2 className="text-sm font-medium text-foreground">Attachments</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Drag and drop, browse, or paste a screenshot. Progress shows while uploading.
+              </p>
               <div className="mt-3">
                 <AttachmentPreviewGallery
-                  title=""
-                  hint="Images show inline preview. PDF opens in a new tab."
+                  title="Saved files"
+                  hint="Images and PDFs open in the browser. Other files expand or download."
                   items={attachmentItems}
                   fetchBlob={noopFetchBlob}
                   onDownload={() => undefined}
@@ -199,6 +197,16 @@ function TicketingTourSampleDetailInner() {
                 </Button>
               </form>
             </section>
+
+            <section
+              data-help="tk-detail-audit"
+              className="rounded-xl border border-dashed border-sky-300/80 bg-card p-5 shadow-sm dark:border-sky-800"
+            >
+              <h2 className="text-sm font-medium text-foreground">Audit activity</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Status, assignee, and priority changes are recorded here after the ticket is saved.
+              </p>
+            </section>
           </div>
 
           <aside className="space-y-4">
@@ -251,11 +259,20 @@ function TicketingTourSampleDetailInner() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="tour-category">Category</Label>
+                  <Select id="tour-category" className="h-9" value="access" disabled>
+                    <option value="access">Access</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="tour-assignee">Assignee</Label>
                   <Select id="tour-assignee" className="h-9" value={ticket.assignee?.id ?? ""} disabled>
                     <option value={ticket.assignee?.id ?? ""}>{ticket.assignee?.name}</option>
                   </Select>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Resolving asks for a resolution comment. A resolved ticket can be reopened until it auto-closes.
+                </p>
                 <Button type="button" size="sm" className="w-full" disabled>
                   Save changes
                 </Button>

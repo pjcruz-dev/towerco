@@ -139,7 +139,7 @@ export function collectWorkflowPreviewFieldNames(
       names.add(sourceField);
     }
 
-    if ((step.type === "field" || step.type === "user_list") && step.approverId?.trim()) {
+    if ((step.type === "field" || step.type === "user_list" || step.type === "reviewer_list") && step.approverId?.trim()) {
       names.add(step.approverId.trim());
     }
 

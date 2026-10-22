@@ -10,6 +10,7 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
@@ -174,6 +175,22 @@ final class ApprovalDecisionService
             ]);
         }
 
+        if (EApprovalReviewStep::isReviewStep($approval->step)) {
+            if ($decision !== 'acknowledged') {
+                throw ValidationException::withMessages([
+                    'decision' => [__('Reviewers acknowledge the file. This step does not approve or reject the request.')],
+                ]);
+            }
+
+            return $this->acknowledge($approval, $submission, $remarks, $signature, $actor);
+        }
+
+        if ($decision === 'acknowledged') {
+            throw ValidationException::withMessages([
+                'decision' => [__('Only a reviewer step can be acknowledged.')],
+            ]);
+        }
+
         if ($decision === 'rejected') {
             $remarks = trim((string) $remarks);
             if (strlen($remarks) < 5) {
@@ -186,6 +203,67 @@ final class ApprovalDecisionService
         }
 
         return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput);
+    }
+
+    private function acknowledge(
+        EApprovalRequestApproval $approval,
+        EApprovalSubmission $submission,
+        ?string $remarks,
+        ?string $signature,
+        TenantUser $actor,
+    ): EApprovalRequestApproval {
+        $signature = trim((string) $signature);
+        if ($signature === '') {
+            throw ValidationException::withMessages([
+                'signature' => [__('Add your signature before acknowledging.')],
+            ]);
+        }
+
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor) {
+            $previousApprovalStatus = (string) $approval->status;
+            $note = trim((string) $remarks);
+
+            $approval->status = EApprovalApprovalStatus::ACKNOWLEDGED;
+            $approval->remarks = $note !== '' ? $note : null;
+            $approval->signature = $signature;
+            $approval->acted_at = now();
+            $approval->save();
+
+            $this->settings->setUserSignature((string) $actor->id, $signature);
+
+            if ($note !== '') {
+                $this->comments->add($submission, $note, $actor, notifyStakeholders: true);
+            }
+
+            $stepOrder = (int) ($approval->step?->step_order ?? $submission->current_step);
+            $hasMore = $this->workflow->triggerNextStep($submission, $stepOrder);
+            $submission->refresh();
+
+            if (! $hasMore && $submission->status === EApprovalSubmissionStatus::PENDING) {
+                $stillPending = $submission->approvals()->where('status', EApprovalApprovalStatus::PENDING)->exists();
+                if (! $stillPending) {
+                    $submission->status = EApprovalSubmissionStatus::APPROVED;
+                    $submission->save();
+                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
+                }
+            }
+
+            $this->audit->log(
+                'review_acknowledged',
+                $submission->id,
+                $note !== '' ? $note : 'Acknowledged',
+                $actor,
+                WorkspaceAuditChanges::of([
+                    'approval_status' => [
+                        'from' => $previousApprovalStatus,
+                        'to' => EApprovalApprovalStatus::ACKNOWLEDGED,
+                    ],
+                ]),
+                entityLabel: $submission->document_no,
+            );
+
+            return $approval->fresh(['submission.form', 'approver', 'step']);
+        });
     }
 
     /**

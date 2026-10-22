@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalWhenLogic;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Support\Collection;
@@ -52,6 +53,7 @@ final class EApprovalApprovalPolicyStepPersister
                 'direct_manager', 'entra_manager' => 'manager',
                 'field_map', 'map_field', 'mapped_field' => 'field_map',
                 'user_list', 'field_list', 'approver_list', 'from_approver_list' => 'user_list',
+                'reviewer_list', 'reviewers', 'from_reviewer_list' => 'reviewer_list',
                 default => strtolower(trim((string) ($definition['type'] ?? $definition['approver_type'] ?? 'user'))),
             };
             $approverId = isset($definition['approverId'])
@@ -112,6 +114,11 @@ final class EApprovalApprovalPolicyStepPersister
                 }
             } elseif (is_array($condition)) {
                 unset($condition['when'], $condition['when_logic']);
+            }
+
+            if (EApprovalReviewStep::isReviewDefinition($definition)) {
+                $condition = is_array($condition) ? $condition : [];
+                $condition['duty'] = EApprovalReviewStep::DUTY;
             }
 
             $approverId = $approverId === '' ? null : $approverId;

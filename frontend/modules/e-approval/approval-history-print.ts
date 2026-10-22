@@ -71,22 +71,24 @@ export function buildApprovalHistorySlots(
     });
   }
 
-  data.approvals
-    .filter((row) => row.status.toLowerCase() === "approved")
-    .forEach((row, index) => {
-      const signature = row.signature?.trim() ?? "";
-      if (!signature) {
-        return;
-      }
+  const signed = data.approvals
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => {
+      const status = row.status.toLowerCase();
+      return (status === "approved" || status === "acknowledged") && Boolean(row.signature?.trim());
+    })
+    .sort((a, b) => (a.row.step ?? 999) - (b.row.step ?? 999) || a.index - b.index);
 
-      slots.push({
-        key: `approver-${row.step ?? index}`,
-        label: row.approver ?? `Approver (Step ${row.step ?? "—"})`,
-        subtitle: `Approved · ${row.acted_at ?? "—"}`,
-        signature,
-        kind: "approver",
-      });
+  for (const { row, index } of signed) {
+    const acknowledged = row.status.toLowerCase() === "acknowledged";
+    slots.push({
+      key: `signed-${row.step ?? "x"}-${index}`,
+      label: row.approver ?? (acknowledged ? `Reviewer (Step ${row.step ?? "—"})` : `Approver (Step ${row.step ?? "—"})`),
+      subtitle: `${acknowledged ? "Acknowledged" : "Approved"} · ${row.acted_at ?? "—"}`,
+      signature: row.signature!.trim(),
+      kind: acknowledged ? "reviewer" : "approver",
     });
+  }
 
   return slots;
 }
@@ -102,15 +104,18 @@ export function buildPdfFooterRows(data: EApprovalPrintPayload): {
 
   return buildApprovalHistorySlots(data, template)
     .filter((slot) => Boolean(slot.signature?.trim()))
-    .map((slot) => ({
-      label:
-        slot.kind === "requestor"
-          ? `Requestor · ${slot.label}`
-          : slot.subtitle?.startsWith("Approved")
-            ? `${slot.label}`
-            : `${slot.subtitle ?? slot.label} · ${slot.label}`,
-      signature: slot.signature!.trim(),
-      status: slot.kind === "approver" ? "APPROVED" : slot.subtitle?.toUpperCase() ?? "SIGNED",
-      actedAt: slot.subtitle?.startsWith("Approved") ? slot.subtitle.replace(/^Approved ·\s*/, "") : "",
-    }));
+    .map((slot) => {
+      const stamped = /^(Approved|Acknowledged) ·\s*(.*)$/.exec(slot.subtitle ?? "");
+      return {
+        label:
+          slot.kind === "requestor"
+            ? `Requestor · ${slot.label}`
+            : stamped
+              ? slot.label
+              : `${slot.subtitle ?? slot.label} · ${slot.label}`,
+        signature: slot.signature!.trim(),
+        status: stamped ? stamped[1].toUpperCase() : slot.subtitle?.toUpperCase() ?? "SIGNED",
+        actedAt: stamped ? stamped[2] : "",
+      };
+    });
 }

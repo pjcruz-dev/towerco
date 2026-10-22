@@ -114,7 +114,7 @@ export function GlobalCommandPalette() {
   );
 
   // Same Manage Sidebar tree as the left aside / top nav.
-  const { groups: workspaceNavGroups } = useWorkspaceNavGroups();
+  const { groups: workspaceNavGroups } = useWorkspaceNavGroups({ enabled: open });
 
   const index = useMemo(
     () => buildWorkspaceCommandIndex(scopedUser, enabledModules, workspaceNavGroups),

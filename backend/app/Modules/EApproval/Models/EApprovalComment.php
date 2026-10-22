@@ -21,7 +21,27 @@ class EApprovalComment extends Model
         'user_id',
         'message',
         'parent_id',
+        'attachment_id',
+        'pin_page',
+        'pin_x',
+        'pin_y',
+        'pin_w',
+        'pin_h',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'pin_page' => 'integer',
+            'pin_x' => 'float',
+            'pin_y' => 'float',
+            'pin_w' => 'float',
+            'pin_h' => 'float',
+        ];
+    }
 
     /** @return BelongsTo<EApprovalSubmission, $this> */
     public function submission(): BelongsTo

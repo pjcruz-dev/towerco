@@ -65,6 +65,45 @@ final class TenantUserLastActiveTest extends TestCase
         $this->assertTrue(Carbon::parse((string) $lastSeen)->greaterThan(now()->subMinutes(2)));
     }
 
+    public function test_recent_session_last_seen_is_not_rewritten_on_every_request(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $user = TenantUser::query()->create([
+            'name' => 'Recent Session User',
+            'email' => 'recent.session@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $user->assignRole('viewer');
+
+        $sessionId = app(AuthSessionService::class)->start((string) $user->id, 'azure_sso');
+        app(AuthSessionService::class)->markMfaVerified($sessionId);
+
+        $stamp = now()->subSeconds(20)->startOfSecond();
+        DB::connection('tenant')->table('auth_sessions')
+            ->where('id', $sessionId)
+            ->update(['last_seen_at' => $stamp]);
+
+        $token = $user->createToken('access', ['*', 'session:'.$sessionId])->plainTextToken;
+
+        tenancy()->end();
+
+        $this->withHeaders(array_merge($this->tenantApiHeaders(), [
+            'Authorization' => 'Bearer '.$token,
+            'X-Session-Id' => $sessionId,
+        ]))->getJson('/api/v1/me')->assertOk();
+
+        tenancy()->initialize($this->testTenant);
+        $lastSeen = DB::connection('tenant')->table('auth_sessions')
+            ->where('id', $sessionId)
+            ->value('last_seen_at');
+        tenancy()->end();
+
+        $this->assertNotNull($lastSeen);
+        $this->assertTrue(Carbon::parse((string) $lastSeen)->lessThan(now()->subSeconds(10)));
+    }
+
     public function test_microsoft_session_last_seen_updates_from_session_header_when_token_is_not_loaded(): void
     {
         tenancy()->initialize($this->testTenant);

@@ -158,6 +158,8 @@ export type EApprovalWorkflowPreviewStep = {
   used_fallback?: boolean;
   /** When true, this approver must tick the surrender or payment line. */
   confirm_settlement?: boolean;
+  /** review = this band comments and acknowledges instead of approving. */
+  duty?: "review" | null;
   warning: string | null;
   runtime_status?: string | null;
   approval_id?: string | null;
@@ -555,7 +557,7 @@ export async function fetchEApprovalApprovalsIndex(params: {
 export async function decideEApprovalApproval(
   id: string,
   payload: {
-    decision: "approved" | "rejected";
+    decision: "approved" | "rejected" | "acknowledged";
     remarks?: string;
     signature?: string | null;
     signature_consent?: boolean;
@@ -595,7 +597,17 @@ export async function fetchEApprovalComments(submissionId: string): Promise<EApp
 
 export async function postEApprovalComment(
   submissionId: string,
-  payload: { message: string; parent_id?: string },
+  payload: {
+    message: string;
+    parent_id?: string;
+    attachment_id?: string;
+    pin_page?: number;
+    pin_x?: number;
+    pin_y?: number;
+    pin_w?: number;
+    pin_h?: number;
+    mention_user_ids?: string[];
+  },
 ): Promise<void> {
   await apiClient.post(`/e-approval/submissions/${submissionId}/comments`, payload);
 }

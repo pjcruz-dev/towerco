@@ -10,6 +10,9 @@ final class EApprovalApprovalStatus
 
     public const APPROVED = 'approved';
 
+    /** Reviewer finished. This is not an approval and does not sign the request. */
+    public const ACKNOWLEDGED = 'acknowledged';
+
     public const REJECTED = 'rejected';
 
     public const CANCELLED = 'cancelled';
@@ -27,6 +30,7 @@ final class EApprovalApprovalStatus
     {
         return [
             self::APPROVED,
+            self::ACKNOWLEDGED,
             self::REJECTED,
             self::CANCELLED,
             self::INVALIDATED,

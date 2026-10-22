@@ -143,8 +143,15 @@ function approverLabelForStep(
     const field = approverFieldOptions.find((item) => item.id === step.approverId);
     return field ? `Approver field: ${field.label}` : "Approver field";
   }
-  if (step.type === "user_list") {
+  if (step.type === "user" && step.duty === "review") {
+    const user = approverOptions.find((item) => item.id === step.approverId);
+    return user ? `Reviewer: ${user.label}` : "Fixed reviewer";
+  }
+  if (step.type === "user_list" || step.type === "reviewer_list") {
     const field = approverListFieldOptions.find((item) => item.id === step.approverId);
+    if (step.type === "reviewer_list") {
+      return field ? `Reviewers: ${field.label}` : "Reviewer list";
+    }
     const mode = step.parallel_mode ?? "all";
     const modeHint =
       mode === "any"
@@ -235,10 +242,20 @@ function WorkflowStepCard({
         <label className="space-y-1">
           <span className="text-xs font-medium text-muted-foreground">Step type</span>
           <Select
-            value={step.type}
+            value={step.duty === "review" && step.type === "user" ? "reviewer" : step.type}
             onChange={(e) => {
               const type = e.target.value;
-              let nextStep: EApprovalWorkflowStepInput = { ...step, type };
+              let nextStep: EApprovalWorkflowStepInput =
+                type === "reviewer"
+                  ? {
+                      ...step,
+                      type: "user",
+                      duty: "review",
+                      parallel_mode: undefined,
+                      parallel_quorum: undefined,
+                      approverId: step.approverId || approverOptions[0]?.id || "",
+                    }
+                  : { ...step, type, duty: undefined };
               if (type === "manager") {
                 nextStep = { ...nextStep, approverId: undefined };
               } else if (type === "field") {
@@ -248,11 +265,12 @@ function WorkflowStepCard({
                   parallel_mode: undefined,
                   parallel_quorum: undefined,
                 };
-              } else if (type === "user_list") {
+              } else if (type === "user_list" || type === "reviewer_list") {
                 nextStep = {
                   ...nextStep,
                   approverId: pickNextApproverListFieldId(fields, steps, index) || step.approverId || "",
-                  parallel_mode: step.parallel_mode ?? "all",
+                  parallel_mode: type === "reviewer_list" ? undefined : (step.parallel_mode ?? "all"),
+                  parallel_quorum: type === "reviewer_list" ? undefined : step.parallel_quorum,
                 };
               } else if (type === "field_map") {
                 const sourceField = fieldMapSourceOptions[0]?.id ?? "";
@@ -294,6 +312,16 @@ function WorkflowStepCard({
               Expands the selected multi-approver field into a parallel band at submit.
             </p>
           ) : null}
+          {step.type === "reviewer_list" ? (
+            <p className="text-[11px] text-muted-foreground">
+              Each selected person comments on the file, signs, and acknowledges. The request continues only after every reviewer is done. Acknowledgement is not an approval.
+            </p>
+          ) : null}
+          {step.type === "user" && step.duty === "review" ? (
+            <p className="text-[11px] text-muted-foreground">
+              This person signs and acknowledges before the next step opens. A path of only reviewers is complete when the last one acknowledges.
+            </p>
+          ) : null}
         </label>
 
         {step.type === "manager" ? (
@@ -320,9 +348,11 @@ function WorkflowStepCard({
                 ))}
             </Select>
           </label>
-        ) : step.type === "user_list" ? (
+        ) : step.type === "user_list" || step.type === "reviewer_list" ? (
           <label className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground">Approver list field</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {step.type === "reviewer_list" ? "Reviewer list field" : "Approver list field"}
+            </span>
             <Select
               value={step.approverId ?? ""}
               onChange={(e) => onUpdate({ approverId: e.target.value })}
@@ -372,7 +402,9 @@ function WorkflowStepCard({
           </label>
         ) : (
           <label className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground">Approver</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {step.duty === "review" ? "Reviewer" : "Approver"}
+            </span>
             <Select
               value={step.approverId ?? ""}
               onChange={(e) => onUpdate({ approverId: e.target.value })}
@@ -595,6 +627,7 @@ export function EApprovalWorkflowEditor({
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [branchInsertAt, setBranchInsertAt] = useState<number | null>(null);
   const [branchMode, setBranchMode] = useState<"if_else" | "ladder" | "parallel">("if_else");
+  const [branchReviews, setBranchReviews] = useState(false);
   const [branchField, setBranchField] = useState("");
   const [branchThreshold, setBranchThreshold] = useState("5000");
   const [branchIfApproverId, setBranchIfApproverId] = useState("");
@@ -648,6 +681,13 @@ export function EApprovalWorkflowEditor({
     const nextStep = suggestNextWorkflowStep(fields, steps, approverOptions);
     const insertAt = atIndex ?? steps.length;
     const next = insertWorkflowStepAt(steps, nextStep, insertAt);
+    onStepsChange(next);
+    setSelectedStepIndex(Math.max(0, Math.min(insertAt, next.length - 1)));
+  };
+
+  const insertPlainStep = (step: EApprovalWorkflowStepInput, atIndex?: number) => {
+    const insertAt = atIndex ?? steps.length;
+    const next = insertWorkflowStepAt(steps, step, insertAt);
     onStepsChange(next);
     setSelectedStepIndex(Math.max(0, Math.min(insertAt, next.length - 1)));
   };
@@ -756,10 +796,43 @@ export function EApprovalWorkflowEditor({
 
   const handleInsert = (kind: WorkflowAddKind, insertAt: number) => {
     if (kind === "step") {
+      setBranchReviews(false);
       addSuggestedStep(insertAt);
       return;
     }
-    openBranchDialog(insertAt, kind);
+    if (kind === "review_step") {
+      insertPlainStep(
+        {
+          type: "user",
+          duty: "review",
+          approverId: approverOptions[0]?.id ?? "",
+          step_order: insertAt + 1,
+        },
+        insertAt,
+      );
+      return;
+    }
+    if (kind === "review_list") {
+      insertPlainStep(
+        {
+          type: "reviewer_list",
+          approverId: pickNextApproverListFieldId(fields, steps),
+          step_order: insertAt + 1,
+        },
+        insertAt,
+      );
+      return;
+    }
+    const review =
+      kind === "review_if_else" || kind === "review_ladder" || kind === "review_parallel";
+    const mode =
+      kind === "review_if_else" || kind === "if_else"
+        ? "if_else"
+        : kind === "review_ladder" || kind === "ladder"
+          ? "ladder"
+          : "parallel";
+    setBranchReviews(review);
+    openBranchDialog(insertAt, mode);
   };
 
   const syncLadderApproverSlots = (thresholdCount: number, current: string[]): string[] => {
@@ -799,7 +872,11 @@ export function EApprovalWorkflowEditor({
       }
 
       onStepsChange(
-        insertValueMatchSteps(steps, { field: branchField, cases }, branchInsertAt ?? steps.length),
+        insertValueMatchSteps(
+          steps,
+          { field: branchField, cases, duty: branchReviews ? "review" : undefined },
+          branchInsertAt ?? steps.length,
+        ),
       );
       setBranchDialogOpen(false);
       setBranchInsertAt(null);
@@ -830,6 +907,7 @@ export function EApprovalWorkflowEditor({
               { operator: "equals", value: branchThreshold.trim(), approverId: branchIfApproverId },
               { operator: "not_equals", value: branchThreshold.trim(), approverId: branchElseApproverId },
             ],
+            duty: branchReviews ? "review" : undefined,
           },
           branchInsertAt ?? steps.length,
         ),
@@ -862,6 +940,7 @@ export function EApprovalWorkflowEditor({
             threshold: branchThreshold,
             ifApproverId: branchIfApproverId,
             elseApproverId: branchElseApproverId,
+            duty: branchReviews ? "review" : undefined,
           },
           branchInsertAt ?? steps.length,
         ),
@@ -882,7 +961,9 @@ export function EApprovalWorkflowEditor({
         push({
           level: "warning",
           title: "Parallel group incomplete",
-          message: "Choose at least two approvers who must all approve.",
+          message: branchReviews
+            ? "Choose at least two reviewers. Every one must acknowledge."
+            : "Choose at least two approvers who must all approve.",
         });
         return;
       }
@@ -890,7 +971,12 @@ export function EApprovalWorkflowEditor({
       onStepsChange(
         insertParallelApprovalSteps(
           steps,
-          { approverIds, mode: parallelMode, quorum: parallelQuorum },
+          {
+            approverIds,
+            mode: branchReviews ? "all" : parallelMode,
+            quorum: parallelQuorum,
+            duty: branchReviews ? "review" : undefined,
+          },
           branchInsertAt ?? steps.length,
         ),
       );
@@ -925,6 +1011,7 @@ export function EApprovalWorkflowEditor({
           field: branchField,
           thresholds,
           approverIds: ladderApproverIds,
+          duty: branchReviews ? "review" : undefined,
         },
         branchInsertAt ?? steps.length,
       ),
@@ -1688,8 +1775,9 @@ export function EApprovalWorkflowEditor({
           <DialogHeader>
             <DialogTitle>Add routing group</DialogTitle>
             <DialogDescription>
-              Insert exclusive If/Else or a threshold ladder, or a parallel group with a completion rule
-              (all, any one, or at least N of M).
+              {branchReviews
+                ? "Each person signs and acknowledges. The request continues only after that review is done."
+                : "Insert exclusive If/Else or a threshold ladder, or a parallel group with a completion rule (all, any one, or at least N of M)."}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-3">
@@ -1800,7 +1888,9 @@ export function EApprovalWorkflowEditor({
             ) : branchMode === "parallel" ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Parallel approvers</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {branchReviews ? "Parallel reviewers" : "Parallel approvers"}
+                  </span>
                   <Button
                     type="button"
                     size="sm"
@@ -1813,7 +1903,7 @@ export function EApprovalWorkflowEditor({
                     }
                   >
                     <Plus className="mr-1 h-3.5 w-3.5" />
-                    Add approver
+                    {branchReviews ? "Add reviewer" : "Add approver"}
                   </Button>
                 </div>
                 {parallelApproverIds.map((approverId, index) => (
@@ -1847,6 +1937,11 @@ export function EApprovalWorkflowEditor({
                     ) : null}
                   </div>
                 ))}
+                {branchReviews ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Everyone in this band signs and acknowledges. The next step opens only after all of them are done.
+                  </p>
+                ) : (
                 <label className="block space-y-1">
                   <span className="text-xs font-medium text-muted-foreground">Completion rule</span>
                   <Select
@@ -1858,7 +1953,8 @@ export function EApprovalWorkflowEditor({
                     <option value="n_of_m">At least N of M</option>
                   </Select>
                 </label>
-                {parallelMode === "n_of_m" ? (
+                )}
+                {!branchReviews && parallelMode === "n_of_m" ? (
                   <label className="block space-y-1">
                     <span className="text-xs font-medium text-muted-foreground">Required approvals (N)</span>
                     <Select
@@ -1873,10 +1969,12 @@ export function EApprovalWorkflowEditor({
                     </Select>
                   </label>
                 ) : null}
+                {branchReviews ? null : (
                 <p className="text-[11px] text-muted-foreground">
                   All listed approvers are notified together. Remaining pending members are cleared once the
                   completion rule is met.
                 </p>
+                )}
               </div>
             ) : branchMode === "if_else" ? (
               <>

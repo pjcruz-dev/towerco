@@ -483,7 +483,7 @@ function formSteps(family: EApprovalFinanceTourFamily): LiveTourStep[] {
         query: { tab: "request" },
         target: "ea-detail-attachments",
         title: "Attachments",
-        body: "Open previews from the request. Stamps appear on the printed copy when approvals complete.",
+        body: "Open a PDF or image, then click or drag to mark a spot. Each person has their own color. Type @ to notify someone on this request. Printed copies pick up the approval footer when approvals complete.",
       },
       {
         id: id("detail-workflow"),
@@ -493,7 +493,7 @@ function formSteps(family: EApprovalFinanceTourFamily): LiveTourStep[] {
         query: { tab: "approvals" },
         target: "ea-detail-workflow-path",
         title: "Workflow path",
-        body: "Department Head is current. Finance, the CFO, and Release cash are still ahead.",
+        body: "Department Head is current. Finance, the CFO, and Release cash are still ahead. A review step is acknowledge: the person comments on the file and signs. That is not an approval.",
       },
       {
         id: id("detail-activity"),
@@ -503,7 +503,7 @@ function formSteps(family: EApprovalFinanceTourFamily): LiveTourStep[] {
         query: { tab: "activity" },
         target: "ea-detail-comment",
         title: "Activity",
-        body: "Comments stay on the submission for audit and handoff.",
+        body: "Comments stay on the submission. Type @ to notify someone on the request. A note pinned on a file shows Page N · Show on the file and jumps back to that mark.",
       },
     );
   }
@@ -632,7 +632,7 @@ const trackSteps: LiveTourStep[] = [
     path: "/e-approval/submissions",
     target: "ea-submissions-step-show",
     title: "Step Show",
-    body: "Which step is current — Department Head, Finance, CFO, then release, settlement, or payment.",
+    body: "Which step is current — Department Head, Finance, CFO, then release, settlement, or payment. A finished review step reads Acknowledged. Acknowledgement is not an approval.",
     listViewMode: "gallery",
     missingHint: "Step Show appears on gallery cards and in the table Step column.",
   },
@@ -731,7 +731,7 @@ const followUpSteps: LiveTourStep[] = [
     query: { tab: "decide" },
     target: "ea-detail-follow-up",
     title: "Manual follow-up",
-    body: "Send follow-up notifies every pending approver on the current step by email and in-app. A cooldown may apply.",
+    body: "Follow-up emails and notifies everyone still waiting on the current step: pending approvers, or reviewers who have not acknowledged yet. A cooldown may apply.",
     audience: "requestor",
     skipIfMissing: true,
   },
@@ -877,7 +877,7 @@ const decideSteps: LiveTourStep[] = [
     query: { tab: "decide" },
     target: "ea-detail-decide-tab",
     title: "Decide tab",
-    body: "On a pending cash advance, liquidation, or reimbursement, Decide is where you sign and choose an action.",
+    body: "On a pending cash advance, liquidation, or reimbursement, Decide is where you sign. An approval step is Approve, Reject, or Request revision. A review step is Acknowledge.",
     missingHint: "Decide appears when this document is waiting on you (or on the tour sample).",
     audience: "approver",
   },
@@ -889,7 +889,7 @@ const decideSteps: LiveTourStep[] = [
     query: { tab: "decide" },
     target: "ea-decide-panel",
     title: "Your decision",
-    body: "Signature, remarks, and the action buttons. Sample UI during the tour is not saved.",
+    body: "Signature, remarks, and the action for this step. On a review step the title is Your review and the action is Acknowledge. Sample UI during the tour is not saved.",
     audience: "approver",
   },
   {
@@ -957,7 +957,7 @@ const decideSteps: LiveTourStep[] = [
     query: { tab: "decide" },
     target: "ea-decide-actions",
     title: "Approve, Reject, Revision",
-    body: "Approve moves the cash advance toward release (or a liquidation toward settlement, or a reimbursement toward payment). Reject ends it. Request revision sends it back.",
+    body: "Approve moves the cash advance toward release (or a liquidation toward settlement, or a reimbursement toward payment). Reject ends it. Request revision sends it back. A review step replaces these three with Acknowledge.",
     audience: "approver",
   },
 ];

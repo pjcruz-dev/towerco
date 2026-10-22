@@ -12,6 +12,7 @@ use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\EApproval\Support\EApprovalWorkflowConditionEvaluator;
@@ -126,7 +127,12 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->notifyApproverAssigned($submission, $approverId, revised: $notifyMode === 'restart');
+            $this->notifyApproverAssigned(
+                $submission,
+                $approverId,
+                revised: $notifyMode === 'restart',
+                review: EApprovalReviewStep::isReviewStep($step),
+            );
         }
 
         if ($activated > 0) {
@@ -203,7 +209,12 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->notifyApproverAssigned($submission, $approverId, revised: true);
+            $this->notifyApproverAssigned(
+                $submission,
+                $approverId,
+                revised: true,
+                review: EApprovalReviewStep::isReviewStep($step),
+            );
         }
 
         if ($activated > 0) {
@@ -338,11 +349,16 @@ final class SubmissionWorkflowService
         EApprovalSubmission $submission,
         string $approverId,
         bool $revised = false,
+        bool $review = false,
     ): void {
         $event = $revised ? 'approval_assigned_revised' : 'approval_assigned';
-        $message = $revised
-            ? __('You have a revised approval request for :doc.', ['doc' => $submission->document_no])
-            : __('You have a new approval request for :doc.', ['doc' => $submission->document_no]);
+        $message = $review
+            ? ($revised
+                ? __('You have a revised review for :doc. Comment on the file, then acknowledge.', ['doc' => $submission->document_no])
+                : __('You have a review for :doc. Comment on the file, then acknowledge.', ['doc' => $submission->document_no]))
+            : ($revised
+                ? __('You have a revised approval request for :doc.', ['doc' => $submission->document_no])
+                : __('You have a new approval request for :doc.', ['doc' => $submission->document_no]));
 
         $this->inApp->notify(
             $approverId,
@@ -546,7 +562,12 @@ final class SubmissionWorkflowService
             ]);
 
             $activated++;
-            $this->notifyApproverAssigned($submission, $approverId, revised: $revisedAssign);
+            $this->notifyApproverAssigned(
+                $submission,
+                $approverId,
+                revised: $revisedAssign,
+                review: EApprovalReviewStep::isReviewStep($step),
+            );
         }
 
         if ($activated > 0) {
@@ -832,6 +853,9 @@ final class SubmissionWorkflowService
             'user_list' => $step->approver_id
                 ? __('Step :order: approver list ":field" is empty or invalid.', ['order' => $order, 'field' => $step->approver_id])
                 : __('Step :order: dynamic approver list step is missing a field mapping.', ['order' => $order]),
+            'reviewer_list' => $step->approver_id
+                ? __('Step :order: reviewer list ":field" is empty or invalid.', ['order' => $order, 'field' => $step->approver_id])
+                : __('Step :order: reviewer list step is missing a field mapping.', ['order' => $order]),
             'field_map' => __('Step :order: no approver mapping found for the selected field value.', ['order' => $order]),
             'role' => __('Step :order: no active user found for role.', ['order' => $order]),
             default => __('Step :order: fixed approver is missing or inactive.', ['order' => $order]),

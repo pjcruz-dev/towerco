@@ -219,9 +219,9 @@ export function EApprovalWorkflowStepShow({
         >
           <p className="text-[11px] font-medium text-background/80">Approval trail</p>
           <ul className="space-y-0.5">
-            {lines.map((line) => (
-              <li key={line} className="text-xs leading-snug text-background">
-                {line}
+            {steps.map((step, index) => (
+              <li key={step.key} className="text-xs leading-snug text-background">
+                {lines[index]}
               </li>
             ))}
           </ul>
@@ -389,8 +389,10 @@ export function workflowPreviewToStepShowItems(
     step_order?: number | null;
     label?: string | null;
     runtime_status?: string | null;
+    duty?: "review" | null;
+    resolved_user_id?: string | null;
     resolved_user_name?: string | null;
-    runtime_approver?: { name?: string | null } | null;
+    runtime_approver?: { id?: string | null; name?: string | null } | null;
   }>,
   submissionStatus?: string | null,
   skippedSteps?: Array<{ step_order?: number | null; label?: string | null }> | null,
@@ -402,12 +404,13 @@ export function workflowPreviewToStepShowItems(
   const resolved = steps.map((step, index) => {
     const order = step.step_order ?? index + 1;
     const runtime = (step.runtime_status ?? "").toLowerCase();
+    const review = step.duty === "review" || runtime === "acknowledged";
     let state: WorkflowStepShowItem["state"] = "upcoming";
 
     // Skipped must never render as completed/green "Done".
     if (runtime === "skipped") {
       state = "skipped";
-    } else if (runtime === "approved") {
+    } else if (runtime === "approved" || runtime === "acknowledged") {
       state = "completed";
     } else if (cancelled || runtime === "cancelled") {
       state = "cancelled";
@@ -425,51 +428,63 @@ export function workflowPreviewToStepShowItems(
 
     const approverName =
       step.runtime_approver?.name?.trim() || step.resolved_user_name?.trim() || null;
+    const personKey =
+      step.runtime_approver?.id?.trim() ||
+      step.resolved_user_id?.trim() ||
+      approverName ||
+      String(index);
 
     return {
-      key: `preview-${order}`,
-      label: humanWorkflowStepLabel(step.label, order, state === "skipped" ? null : approverName),
-      description: undefined,
-      state,
-      statusLabel:
-        state === "rejected"
-          ? "Rejected"
-          : state === "current"
-            ? "Pending"
-            : state === "completed"
-              ? "Approved"
-              : state === "cancelled"
-                ? "Cancelled"
-                : state === "skipped"
-                  ? "Skipped"
-                  : "Upcoming",
-      approverName: state === "skipped" ? null : approverName,
-      approverNames: state === "skipped" || !approverName ? [] : [approverName],
-    } satisfies WorkflowStepShowItem;
+      sortOrder: order,
+      sortIndex: index,
+      item: {
+        key: `preview-${order}-${personKey}`,
+        label: humanWorkflowStepLabel(step.label, order, state === "skipped" ? null : approverName),
+        description: undefined,
+        state,
+        statusLabel:
+          review && state === "completed"
+            ? "Acknowledged"
+            : state === "rejected"
+              ? "Rejected"
+              : state === "current"
+                ? "Pending"
+                : state === "completed"
+                  ? "Approved"
+                  : state === "cancelled"
+                    ? "Cancelled"
+                    : state === "skipped"
+                      ? "Skipped"
+                      : "Upcoming",
+        approverName: state === "skipped" ? null : approverName,
+        approverNames: state === "skipped" || !approverName ? [] : [approverName],
+      } satisfies WorkflowStepShowItem,
+    };
   });
 
-  const existingOrders = new Set(resolved.map((step) => step.key));
+  const occupiedOrders = new Set(resolved.map((row) => row.sortOrder));
   const extras = (skippedSteps ?? []).flatMap((step, index) => {
     const order = step.step_order ?? index + 1;
-    const key = `preview-${order}`;
-    if (existingOrders.has(key)) {
+    if (occupiedOrders.has(order)) {
       return [];
     }
     return [
       {
-        key,
-        label: humanWorkflowStepLabel(step.label, order),
-        state: "skipped" as const,
-        statusLabel: "Skipped",
-        approverName: null,
-        approverNames: [],
-      } satisfies WorkflowStepShowItem,
+        sortOrder: order,
+        sortIndex: steps.length + index,
+        item: {
+          key: `preview-skipped-${order}-${index}`,
+          label: humanWorkflowStepLabel(step.label, order),
+          state: "skipped" as const,
+          statusLabel: "Skipped",
+          approverName: null,
+          approverNames: [],
+        } satisfies WorkflowStepShowItem,
+      },
     ];
   });
 
-  return [...resolved, ...extras].sort((a, b) => {
-    const aOrder = Number(a.key.replace(/\D/g, "")) || 0;
-    const bOrder = Number(b.key.replace(/\D/g, "")) || 0;
-    return aOrder - bOrder;
-  });
+  return [...resolved, ...extras]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.sortIndex - b.sortIndex)
+    .map((row) => row.item);
 }

@@ -73,6 +73,27 @@ export function contrastForeground(hex: string): string {
     : rgbToHex(250, 250, 250);
 }
 
+/** UI-component contrast. Below this, a brand mark disappears on the dark auth panel. */
+const AUTH_PANEL_MARK_MIN_CONTRAST = 3;
+
+/**
+ * The auth panel is a dark field. Saturated workspace colors (green, teal, violet,
+ * rose, blue, amber, and a light custom color) stay on the rings and the label.
+ * The default near-black primary, and any custom color too close to that field, does not.
+ */
+export function authPanelUsesBrandMark(primaryHex: string, panelHex: string): boolean {
+  const primary = hexToRgb(primaryHex);
+  const panel = hexToRgb(panelHex);
+  if (!primary || !panel) {
+    return false;
+  }
+  const primaryLuminance = relativeLuminance(primary[0], primary[1], primary[2]);
+  const panelLuminance = relativeLuminance(panel[0], panel[1], panel[2]);
+  const lighter = Math.max(primaryLuminance, panelLuminance);
+  const darker = Math.min(primaryLuminance, panelLuminance);
+  return (lighter + 0.05) / (darker + 0.05) >= AUTH_PANEL_MARK_MIN_CONTRAST;
+}
+
 export function productPrimaryHex(): string {
   return rgbToHex(23, 23, 23);
 }

@@ -29,10 +29,11 @@ export type WorkspaceNavGroupView = {
  * Shared filtered workspace navigation for sidebar and top navbar layouts.
  * Prefers tenant Manage Sidebar DB tree; falls back to static config.
  */
-export function useWorkspaceNavGroups(): {
+export function useWorkspaceNavGroups(options?: { enabled?: boolean }): {
   groups: WorkspaceNavGroupView[];
   notificationUnread: number;
 } {
+  const enabled = options?.enabled ?? true;
   const user = useAuthStore((state) => state.user);
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const effectivePermissions = useAuthStore((state) => state.effectivePermissions);
@@ -52,7 +53,7 @@ export function useWorkspaceNavGroups(): {
   const sidebarQuery = useQuery({
     queryKey: ["workspace-sidebar", activeTenantId],
     queryFn: fetchWorkspaceSidebar,
-    enabled: Boolean(user && activeTenantId),
+    enabled: enabled && Boolean(user && activeTenantId),
     staleTime: 60_000,
     retry: 1,
   });
@@ -142,7 +143,7 @@ export function useWorkspaceNavGroups(): {
       hasPermission(scopedUser, [permissions.eApprovalView]),
     [enabledModules, scopedUser],
   );
-  const unreadQuery = useTenantNotificationUnreadCount(canViewNotifications);
+  const unreadQuery = useTenantNotificationUnreadCount(enabled && canViewNotifications);
   const notificationUnread = unreadQuery.data ?? 0;
 
   const canViewEApproval = useMemo(
@@ -152,7 +153,7 @@ export function useWorkspaceNavGroups(): {
   const workspacesQuery = useQuery({
     queryKey: [...EAPPROVAL_FORM_WORKSPACES_QUERY_KEY],
     queryFn: fetchEApprovalFormWorkspaces,
-    enabled: canViewEApproval,
+    enabled: enabled && canViewEApproval,
     staleTime: 60_000,
   });
 
