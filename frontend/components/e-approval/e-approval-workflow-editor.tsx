@@ -474,6 +474,20 @@ function WorkflowStepCard({
         </label>
       ) : null}
 
+      <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={step.optional === true || step.condition?.optional === true}
+          onCheckedChange={(checked) => onUpdate({ optional: checked === true })}
+        />
+        <span>
+          <span className="font-medium">Optional step</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            The approver on the previous step chooses whether this step runs. Approve finishes without it. Approve and send opens it.
+          </span>
+        </span>
+      </label>
+
       {settlementFamily ? (
         <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
           <Checkbox
@@ -723,6 +737,24 @@ export function EApprovalWorkflowEditor({
   });
 
   const updateStep = (index: number, patch: Partial<EApprovalWorkflowStepInput>) => {
+    if ("optional" in patch) {
+      const order = steps[index]?.step_order;
+      onStepsChange(
+        steps.map((step, itemIndex) => {
+          if (itemIndex !== index && step.step_order !== order) {
+            return step;
+          }
+          const condition = { ...(step.condition ?? {}) };
+          if (patch.optional) {
+            condition.optional = true;
+          } else {
+            delete condition.optional;
+          }
+          return { ...step, optional: Boolean(patch.optional), condition };
+        }),
+      );
+      return;
+    }
     const next = [...steps];
     next[index] = { ...steps[index], ...patch };
     onStepsChange(next);

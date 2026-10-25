@@ -1,4 +1,4 @@
-FROM php:8.3-cli-bookworm
+FROM php:8.3.36-cli-bookworm
 
 # Some networks block plain HTTP to Debian mirrors; HTTPS works (see LAN deploy).
 RUN set -eux; \

@@ -423,6 +423,7 @@ export async function uploadEApprovalSubmissionAttachment(
   file: File,
   fieldName?: string,
   metadata?: Record<string, unknown> | null,
+  replaceAttachmentId?: string,
 ): Promise<EApprovalUploadedAttachment> {
   const form = new FormData();
   form.append("file", file);
@@ -431,6 +432,9 @@ export async function uploadEApprovalSubmissionAttachment(
   }
   if (metadata && Object.keys(metadata).length > 0) {
     form.append("metadata", JSON.stringify(metadata));
+  }
+  if (replaceAttachmentId) {
+    form.append("replace_attachment_id", replaceAttachmentId);
   }
 
   const response = await apiClient.post<{
@@ -538,6 +542,13 @@ export async function resubmitEApprovalSubmission(
   return response.data.data;
 }
 
+export async function sendEApprovalOptionalPreview(
+  id: string,
+  payload: { approver_id: string; duty: "review" | "approve"; reason: string },
+): Promise<void> {
+  await apiClient.post(`/e-approval/submissions/${id}/preview`, payload);
+}
+
 export async function fetchEApprovalApprovalsIndex(params: {
   page?: number;
   per_page?: number;
@@ -565,6 +576,8 @@ export async function decideEApprovalApproval(
     release_reference?: string;
     release_date?: string;
     settlement_reference?: string;
+    proceed_optional?: boolean;
+    file_audience?: "department_teams" | "everyone";
   },
 ): Promise<void> {
   await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);

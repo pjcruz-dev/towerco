@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalDelegation;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\Carbon;
 
@@ -129,5 +130,53 @@ final class EApprovalSlaRunnerService
         $this->settings->setString('sla_last_check_at', now()->toIso8601String());
 
         return ['reminders' => $reminders, 'escalations' => $escalations];
+    }
+
+    /**
+     * One reminder per pending reviewer or approver each calendar day.
+     *
+     * @return array{reminders: int}
+     */
+    public function runDailyFollowUp(): array
+    {
+        $today = Carbon::today();
+        $pending = EApprovalRequestApproval::query()
+            ->with(['submission.requestor', 'step'])
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->whereNotNull('approver_id')
+            ->where(function ($query) use ($today): void {
+                $query->whereNull('last_reminder_at')
+                    ->orWhere('last_reminder_at', '<', $today);
+            })
+            ->get();
+
+        $reminders = 0;
+        foreach ($pending as $approval) {
+            $submission = $approval->submission;
+            if ($submission === null) {
+                continue;
+            }
+
+            $review = EApprovalReviewStep::isReviewStep($approval->step);
+            $submittedAt = $submission->created_at;
+            $days = $submittedAt !== null ? max(0, (int) $submittedAt->copy()->startOfDay()->diffInDays($today)) : 0;
+            $requestorName = (string) ($submission->requestor?->name ?? 'Requestor');
+
+            $this->mail->dispatchManualFollowUp($submission, (string) $approval->approver_id, $requestorName, $review);
+            $this->inApp->notify(
+                (string) $approval->approver_id,
+                'manual_follow_up',
+                (string) $submission->id,
+                $review
+                    ? __('Daily reminder: review for :doc has been waiting :days days.', ['doc' => $submission->document_no, 'days' => $days])
+                    : __('Daily reminder: approval for :doc has been waiting :days days.', ['doc' => $submission->document_no, 'days' => $days]),
+                submission: $submission,
+            );
+            $approval->last_reminder_at = now();
+            $approval->save();
+            $reminders++;
+        }
+
+        return ['reminders' => $reminders];
     }
 }

@@ -29,6 +29,7 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
 
         $canViewAll = $request->user()->can('e_approval:forms:manage');
         $submissions->assertCanView($submission, $request->user(), $canViewAll);
+        $submissions->assertCanEditAttachments($submission, $request->user());
 
         $maxKb = max(1, (int) config('toweros.tenant_files.max_size_kb', 25600));
 
@@ -36,13 +37,17 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
             'file' => ['required', 'file', 'max:'.$maxKb],
             'field_name' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable'],
+            'replace_attachment_id' => ['nullable', 'uuid'],
         ]);
 
         $fieldName = $data['field_name'] ?? null;
         $rawMetadata = $this->parseMetadataInput($request->input('metadata'));
         $metadata = $attachmentValidator->normalizeMetadata($rawMetadata);
 
-        $existing = $files->findExistingByOriginalName($submission, $data['file']->getClientOriginalName(), $fieldName);
+        $replaceId = isset($data['replace_attachment_id']) ? (string) $data['replace_attachment_id'] : null;
+        $existing = $replaceId === null
+            ? $files->findExistingByOriginalName($submission, $data['file']->getClientOriginalName(), $fieldName)
+            : null;
         if ($existing !== null) {
             if ($metadata !== null && empty($existing->metadata)) {
                 $existing->metadata = $metadata;
@@ -57,9 +62,15 @@ class EApprovalSubmissionAttachmentStoreController extends AbstractApiController
             ]);
         }
 
-        $attachmentValidator->assertCanStore($submission, $data['file'], $fieldName, $metadata);
+        $attachmentValidator->assertCanStore($submission, $data['file'], $fieldName, $metadata, $replaceId);
 
         $attachment = $files->store($submission, $data['file'], $fieldName, $metadata);
+        if ($replaceId !== null) {
+            $previous = $submission->attachments()->whereKey($replaceId)->first();
+            if ($previous !== null && ! $previous->isSuperseded()) {
+                $files->deleteAttachment($previous);
+            }
+        }
 
         return $this->created([
             'id' => (string) $attachment->id,

@@ -93,6 +93,9 @@ final class EApprovalFileStorageService
         $submission->loadMissing('attachments');
 
         return $submission->attachments->first(static function (EApprovalAttachment $attachment) use ($originalFileName, $fieldName): bool {
+            if ($attachment->isSuperseded()) {
+                return false;
+            }
             if ((string) $attachment->file_name !== $originalFileName) {
                 return false;
             }
@@ -681,8 +684,10 @@ final class EApprovalFileStorageService
 
     public function deleteAttachment(EApprovalAttachment $attachment): void
     {
-        $this->deleteIfExists((string) $attachment->file_path);
-        $attachment->delete();
+        $metadata = is_array($attachment->metadata) ? $attachment->metadata : [];
+        $metadata['superseded_at'] = now()->toIso8601String();
+        $attachment->metadata = $metadata;
+        $attachment->save();
     }
 
     private function assertAllowedMime(UploadedFile $file): void

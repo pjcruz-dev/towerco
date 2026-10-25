@@ -31,7 +31,7 @@ export function FilterSelect({
   touchFriendly = false,
 }: FilterSelectProps) {
   return (
-    <div className={cn("min-w-0 space-y-1.5", className)}>
+    <div data-slot="filter-field" className={cn("min-w-0 space-y-1", className)}>
       {label && !hideLabel ? (
         <Label htmlFor={id} className="text-xs font-medium text-muted-foreground">
           {label}

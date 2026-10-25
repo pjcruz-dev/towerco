@@ -61,6 +61,7 @@ import {
 import { mapVisibleExportColumns } from "@/lib/ui/module-list-visible-columns";
 import { TICKETING_TICKETS_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
 import { permissions } from "@/lib/rbac/permissions";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 import type { TicketingTicketListRow } from "@/modules/ticketing/types";
 import { useTicketingWorkspacePrefs } from "@/modules/ticketing/workspace-prefs";
@@ -255,15 +256,18 @@ export function TicketingTicketsPageClient() {
         render: () => (
           <div
             data-help="tk-tickets-filters"
-            className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+            className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm"
           >
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search or status:open priority=high title~outage…"
-                className="max-w-md"
-              />
+            <div className={filterBarFieldsClassName}>
+              <div>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search or status:open priority=high title~outage…"
+                  className="w-full"
+                  aria-label="Search tickets"
+                />
+              </div>
               <FilterSelect
                 id="ticketing-status"
                 label="Status"
@@ -272,7 +276,6 @@ export function TicketingTicketsPageClient() {
                   patchPrefs({ status: value });
                   setPage(1);
                 }}
-                className="w-full min-w-[10rem] sm:w-auto"
               >
                 <option value="">All statuses</option>
                 <option value="open,in_progress">Open / in progress</option>
@@ -290,7 +293,6 @@ export function TicketingTicketsPageClient() {
                   patchPrefs({ priority: value });
                   setPage(1);
                 }}
-                className="w-full min-w-[9rem] sm:w-auto"
               >
                 <option value="">All priorities</option>
                 {priorityOptions.map((item) => (
@@ -307,7 +309,6 @@ export function TicketingTicketsPageClient() {
                   patchPrefs({ slaStatus: value });
                   setPage(1);
                 }}
-                className="w-full min-w-[10rem] sm:w-auto"
               >
                 <option value="">Any SLA</option>
                 <option value="at_risk,breached">At risk / breached</option>
@@ -323,7 +324,6 @@ export function TicketingTicketsPageClient() {
                   patchPrefs({ category: value });
                   setPage(1);
                 }}
-                className="w-full min-w-[12rem] sm:w-auto"
               >
                 <option value="">All categories</option>
                 {categoryOptions.map((item) => (
@@ -341,7 +341,6 @@ export function TicketingTicketsPageClient() {
                     patchPrefs({ department: value });
                     setPage(1);
                   }}
-                  className="w-full min-w-[11rem] sm:w-auto"
                 >
                   <option value="">All departments</option>
                   {departmentOptions.map((code) => (

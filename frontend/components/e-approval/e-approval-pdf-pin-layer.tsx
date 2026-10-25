@@ -74,6 +74,7 @@ type Props = {
   } | null;
   focusCommentId?: string | null;
   onFocusHandled?: () => void;
+  markingEnabled?: boolean;
   onPost: (payload: {
     message: string;
     parent_id?: string;
@@ -485,6 +486,7 @@ export function EApprovalPdfPinLayer({
   decision = null,
   focusCommentId = null,
   onFocusHandled,
+  markingEnabled = true,
   onPost,
 }: Props) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
@@ -492,6 +494,11 @@ export function EApprovalPdfPinLayer({
   const [status, setStatus] = useState("Downloading the file…");
   const [spot, setSpot] = useState<Omit<Draft, "message"> | null>(null);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setSpot(null);
+    setMessage("");
+  }, [attachmentId]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -506,6 +513,9 @@ export function EApprovalPdfPinLayer({
   const { openPdfPreview, isGenerating } = useEApprovalPdfPreview();
 
   const placeMark = (next: Omit<Draft, "message">) => {
+    if (!markingEnabled) {
+      return;
+    }
     setSpot(next);
     setActiveId(null);
     noteRef.current?.focus();
@@ -747,7 +757,9 @@ export function EApprovalPdfPinLayer({
           </Button>
         </span>
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          Click or drag on a page to mark it. Each person has their own color.
+          {markingEnabled
+            ? "Click or drag on a page to mark it. Each person has their own color."
+            : "Previous file. Its marks stay on this copy."}
         </p>
         <button
           type="button"

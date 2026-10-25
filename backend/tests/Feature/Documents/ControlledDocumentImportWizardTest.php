@@ -217,6 +217,46 @@ final class ControlledDocumentImportWizardTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_import_status_obsolete_or_superseded_is_stored_as_obsolete(): void
+    {
+        $csv = "document_code,title,status\nATC-OLD-P-010,Retired manual,superseded\nATC-OLD-P-011,Withdrawn form,obsolete\n";
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/documents/controlled/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('register.csv', $csv),
+                'column_map' => json_encode([
+                    'document_code' => 'document_code',
+                    'title' => 'title',
+                    'status' => 'status',
+                ]),
+                'available_paths' => json_encode([]),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.created', 2);
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame('obsolete', ControlledDocument::query()->where('document_code', 'ATC-OLD-P-010')->value('status'));
+        $this->assertSame('obsolete', ControlledDocument::query()->where('document_code', 'ATC-OLD-P-011')->value('status'));
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/documents/controlled/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('register.csv', "document_code,title\nATC-OLD-P-010,Retired manual\n"),
+                'column_map' => json_encode([
+                    'document_code' => 'document_code',
+                    'title' => 'title',
+                ]),
+                'available_paths' => json_encode([]),
+            ])
+            ->assertOk();
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame('obsolete', ControlledDocument::query()->where('document_code', 'ATC-OLD-P-010')->value('status'));
+        tenancy()->end();
+    }
+
     public function test_rev_n_header_maps_to_revision_number(): void
     {
         $csv = "document_code,title,Rev. N\nATC-EDD-F-002,Pre Delivery,1\n";

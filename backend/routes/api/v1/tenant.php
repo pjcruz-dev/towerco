@@ -230,6 +230,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionExportColumnsCo
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionExportController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionManualFollowUpController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionPreviewController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionPrintDataController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionResubmitController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionRevisionController;
@@ -638,6 +639,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::put('e-approval/me/signature', EApprovalMeSignatureUpdateController::class)->name('api.tenant.v1.e_approval.me.signature');
     Route::post('e-approval/me/attachments', EApprovalMeAttachmentStoreController::class)->name('api.tenant.v1.e_approval.me.attachments.store');
     Route::delete('e-approval/me/attachments/{attachment}', EApprovalMeAttachmentDestroyController::class)->name('api.tenant.v1.e_approval.me.attachments.destroy');
+    Route::post('e-approval/submissions/{submission}/preview', EApprovalSubmissionPreviewController::class)->name('api.tenant.v1.e_approval.submissions.preview');
     Route::post('e-approval/submissions/{submission}/revision', EApprovalSubmissionRevisionController::class)->name('api.tenant.v1.e_approval.submissions.revision');
     Route::put('e-approval/submissions/{submission}/dcf-resubmit', EApprovalSubmissionDcfResubmitController::class)->name('api.tenant.v1.e_approval.submissions.dcf_resubmit');
     Route::post('e-approval/submissions/{submission}/manual-follow-up', EApprovalSubmissionManualFollowUpController::class)->name('api.tenant.v1.e_approval.submissions.manual_follow_up');

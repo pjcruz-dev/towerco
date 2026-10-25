@@ -15,6 +15,7 @@ import { getErrorMessage } from "@/lib/api/error";
 import {
   downloadEApprovalAttachment,
   downloadEApprovalAttachmentFile,
+  uploadEApprovalSubmissionAttachment,
 } from "@/lib/api/modules/e-approval-api";
 import type { EApprovalCommentRow } from "@/modules/e-approval/types";
 import { useNotificationStore } from "@/stores/notification-store";
@@ -23,14 +24,50 @@ import { cn } from "@/lib/utils";
 type Attachment = {
   id: string;
   file_name: string;
+  field_name?: string | null;
+  created_at?: string | null;
   metadata?: {
     lat?: number;
     lng?: number;
     captured_at?: string;
     caption?: string;
     slot?: string;
+    superseded_at?: string;
   } | null;
 };
+
+function isSuperseded(attachment: Attachment): boolean {
+  return Boolean(attachment.metadata?.superseded_at);
+}
+
+function formatVersionWhen(value?: string | null): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function versionKind(version: Attachment, versions: Attachment[]): string {
+  if (isSuperseded(version)) {
+    return "Previous";
+  }
+  const live = versions.filter((item) => !isSuperseded(item));
+  if (live.length < 2) {
+    return "Current";
+  }
+  const newest = [...live].sort((left, right) => (right.created_at ?? "").localeCompare(left.created_at ?? ""))[0];
+  return version.id === newest?.id ? "New" : "Earlier";
+}
+
+function versionGroupKey(attachment: Attachment): string {
+  const field = attachment.field_name?.trim() ?? "";
+  const slot = attachment.metadata?.slot?.trim() ?? "";
+  return field !== "" ? `${field}::${slot}` : `file:${attachment.id}`;
+}
 
 function isPdfFile(fileName: string): boolean {
   return /\.pdf$/i.test(fileName);
@@ -74,6 +111,7 @@ function ImageMarkLayer({
   decision,
   focusCommentId,
   onFocusHandled,
+  markingEnabled = true,
   onPost,
 }: {
   attachmentId: string;
@@ -84,6 +122,7 @@ function ImageMarkLayer({
   decision: Props["decision"];
   focusCommentId: string | null;
   onFocusHandled?: () => void;
+  markingEnabled?: boolean;
   onPost: Props["onPost"];
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -92,6 +131,11 @@ function ImageMarkLayer({
   const [failed, setFailed] = useState(false);
   const [spot, setSpot] = useState<ImageSpot | null>(null);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setSpot(null);
+    setMessage("");
+  }, [attachmentId]);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -174,13 +218,18 @@ function ImageMarkLayer({
   return (
     <div className="mt-3">
       <p className="mb-2 text-xs text-muted-foreground">
-        Click or drag on the picture to mark a spot. Hover a mark to read it.
+        {markingEnabled
+          ? "Click or drag on the picture to mark a spot. Hover a mark to read it."
+          : "Previous file. Its marks stay on this copy."}
       </p>
       <div ref={frameRef} className="relative inline-block max-w-full align-top">
         <img src={url} alt={fileName} className="block max-h-[32rem] max-w-full rounded-md border border-border" />
         <div
-          className="absolute inset-0 cursor-crosshair"
+          className={cn("absolute inset-0", markingEnabled ? "cursor-crosshair" : "")}
           onPointerDown={(event) => {
+            if (!markingEnabled) {
+              return;
+            }
             const point = pointOnImage(event);
             if (!point) {
               return;
@@ -417,6 +466,8 @@ type Props = {
   } | null;
   focusCommentId?: string | null;
   onFocusHandled?: () => void;
+  canReplace?: boolean;
+  onReplaced?: () => void;
   onPost: (payload: {
     message: string;
     parent_id?: string;
@@ -440,30 +491,157 @@ export function EApprovalAttachmentComments({
   decision = null,
   focusCommentId = null,
   onFocusHandled,
+  canReplace = false,
+  onReplaced,
 }: Props) {
   const push = useNotificationStore((state) => state.push);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
+  const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!focusCommentId) {
+      return;
+    }
+    const comment = comments.find((row) => row.id === focusCommentId);
+    const owner = attachments.find((file) => file.id === comment?.attachment_id);
+    if (!owner) {
+      return;
+    }
+    setSelectedByGroup((current) => ({ ...current, [versionGroupKey(owner)]: owner.id }));
+  }, [attachments, comments, focusCommentId]);
 
   if (attachments.length === 0) {
     return null;
   }
 
+  const groups = new Map<string, Attachment[]>();
+  for (const file of attachments) {
+    const key = versionGroupKey(file);
+    const list = groups.get(key) ?? [];
+    list.push(file);
+    groups.set(key, list);
+  }
+  const cards = [...groups.values()].map((files) => {
+    const current = files.filter((file) => !isSuperseded(file));
+    const previous = files
+      .filter((file) => isSuperseded(file))
+      .sort((left, right) => (right.metadata?.superseded_at ?? "").localeCompare(left.metadata?.superseded_at ?? ""));
+    const newestLive = [...current].sort((left, right) => (right.created_at ?? "").localeCompare(left.created_at ?? ""))[0];
+    const head = newestLive ?? previous[0];
+    const versions = current.length > 0 ? [...current, ...previous] : previous;
+    return { head, versions };
+  }).filter((card): card is { head: Attachment; versions: Attachment[] } => card.head !== undefined);
+
   return (
     <div className="mt-4 space-y-4">
-      {attachments.map((attachment) => {
+      {cards.map(({ head, versions }) => {
+        const group = versionGroupKey(head);
+        const selected = versions.find((file) => file.id === selectedByGroup[group]) ?? head;
+        const attachment = selected;
+        const markingEnabled = !isSuperseded(attachment);
         const thread = comments.filter((comment) => comment.attachment_id === attachment.id);
         const isPdf = isPdfFile(attachment.file_name);
         const isImage = isImageFile(attachment.file_name);
         const loose = isImage ? thread.filter((comment) => comment.pin_x == null) : thread;
         const geotag = attachment.metadata ? formatGeotag(attachment.metadata) : null;
         return (
-          <div key={attachment.id} className="rounded-lg border border-border bg-muted/20 p-3">
+          <div key={group} className="rounded-lg border border-border bg-muted/20 p-3">
             <p className="text-sm font-medium text-foreground">{attachment.file_name}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Comments stay on this file. They do not approve or reject the request.
+              {markingEnabled
+                ? "Comments stay on this file. They do not approve or reject the request."
+                : "Previous file. Its marks stay on this copy."}
             </p>
+            {canReplace && !isSuperseded(attachment) ? (
+              <div className="mt-2">
+                <input
+                  id={`replace-file-${attachment.id}`}
+                  type="file"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) {
+                      return;
+                    }
+                    const slot = attachment.metadata?.slot;
+                    setReplacingId(attachment.id);
+                    void uploadEApprovalSubmissionAttachment(
+                      submissionId,
+                      file,
+                      attachment.field_name ?? undefined,
+                      slot ? { slot } : null,
+                      attachment.id,
+                    )
+                      .then(() => {
+                        push({
+                          level: "success",
+                          title: "File replaced",
+                          message: "The previous file stays, with its marks. This upload is the current file.",
+                        });
+                        onReplaced?.();
+                      })
+                      .catch((error: unknown) => {
+                        push({ level: "error", title: "Could not replace the file", message: getErrorMessage(error) });
+                      })
+                      .finally(() => setReplacingId(null));
+                  }}
+                />
+                <label htmlFor={`replace-file-${attachment.id}`}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={replacingId === attachment.id}
+                    onClick={() => document.getElementById(`replace-file-${attachment.id}`)?.click()}
+                  >
+                    {replacingId === attachment.id ? "Uploading…" : "Replace file"}
+                  </Button>
+                </label>
+              </div>
+            ) : null}
+            {versions.length > 1 ? (
+              <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="File versions">
+                {versions
+                  .slice()
+                  .sort((left, right) => {
+                    const rank = (item: Attachment) => (versionKind(item, versions) === "New" ? 0 : isSuperseded(item) ? 2 : 1);
+                    return rank(left) - rank(right);
+                  })
+                  .map((version) => {
+                  const kind = versionKind(version, versions);
+                  const when = formatVersionWhen(version.created_at);
+                  const label = [version.file_name, when].filter((part) => part !== "").join(" · ");
+                  const pressed = version.id === attachment.id;
+                  const isNew = kind === "New";
+                  return (
+                    <button
+                      key={version.id}
+                      type="button"
+                      aria-pressed={pressed}
+                      className={cn(
+                        "inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2 text-xs",
+                        isNew
+                          ? "border-success bg-success/15 font-medium text-foreground"
+                          : pressed
+                            ? "border-foreground bg-card font-medium text-foreground"
+                            : "border-border bg-transparent text-muted-foreground hover:text-foreground",
+                        pressed && isNew && "ring-2 ring-success/40",
+                      )}
+                      onClick={() => setSelectedByGroup((current) => ({ ...current, [group]: version.id }))}
+                    >
+                      <span className={cn("rounded px-1 py-0.5 text-[10px] font-medium", isNew ? "bg-success text-white" : "bg-muted text-muted-foreground")}>
+                        {kind}
+                      </span>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             {geotag ? <p className="mt-0.5 text-xs text-muted-foreground">{geotag}</p> : null}
             {isPdf ? null : (
               <button
@@ -492,6 +670,7 @@ export function EApprovalAttachmentComments({
                 decision={decision}
                 focusCommentId={focusCommentId}
                 onFocusHandled={onFocusHandled}
+                markingEnabled={markingEnabled}
                 onPost={onPost}
               />
             ) : null}
@@ -508,6 +687,7 @@ export function EApprovalAttachmentComments({
                   decision={decision}
                   focusCommentId={focusCommentId}
                   onFocusHandled={onFocusHandled}
+                  markingEnabled={markingEnabled}
                 />
               </div>
             ) : isImage ? null : loose.length === 0 ? (
@@ -575,7 +755,7 @@ export function EApprovalAttachmentComments({
                 ))}
               </ul>
             ) : null}
-            {isPdf || isImage ? null : (
+            {isPdf || isImage || !markingEnabled ? null : (
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <EApprovalMentionField
                 value={drafts[attachment.id] ?? ""}

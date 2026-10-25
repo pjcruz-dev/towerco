@@ -25,6 +25,8 @@ export type DashboardLineChartProps = {
   valueLabel?: string;
   height?: number;
   className?: string;
+  /** `latest` is the last point. `total` is the sum of the series. */
+  headline?: "latest" | "total";
 };
 
 export function DashboardLineChartImpl({
@@ -35,6 +37,7 @@ export function DashboardLineChartImpl({
   valueLabel = "Count",
   height = 220,
   className,
+  headline = "latest",
 }: DashboardLineChartProps) {
   const gradientId = `analytics-area-${useId().replace(/:/g, "")}`;
   const chartData = useMemo(
@@ -47,6 +50,8 @@ export function DashboardLineChartImpl({
   );
   const hasData = chartData.some((row) => row.value > 0);
   const latest = chartData.length > 0 ? chartData[chartData.length - 1]!.value : 0;
+  const periodTotal = chartData.reduce((sum, row) => sum + row.value, 0);
+  const headlineValue = headline === "total" ? periodTotal : latest;
   const first = chartData.length > 0 ? chartData[0]!.value : 0;
   const deltaPct =
     chartData.length > 1 && first !== 0 ? ((latest - first) / Math.abs(first)) * 100 : null;
@@ -62,8 +67,8 @@ export function DashboardLineChartImpl({
       description={description}
       className={className}
       contentClassName="pt-2"
-      stat={hasData ? latest.toLocaleString() : undefined}
-      delta={hasData ? delta : null}
+      stat={hasData ? headlineValue.toLocaleString() : undefined}
+      delta={hasData && headline === "latest" ? delta : null}
       deltaTone={deltaTone}
     >
         {!hasData ? (

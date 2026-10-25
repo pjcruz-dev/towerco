@@ -20,6 +20,15 @@ export type ControlledDocumentRow = {
   incoming_revision?: number | null;
   incoming_submission_id?: string | null;
   incoming_document_no?: string | null;
+  aging?: Array<{
+    name: string;
+    role: string;
+    requestor_department: string | null;
+    age_days: number;
+    submitted_at: string | null;
+    submission_id: string;
+    document_no: string;
+  }>;
 };
 
 export type ControlledDocumentRevision = {
@@ -184,9 +193,38 @@ export type ControlledDocumentOverview = {
     due_30: number;
     due_90: number;
     no_review: number;
+    incoming: number;
+    versioned: number;
+    ongoing: number;
   };
   by_department: ControlledDocumentChartPoint[];
   by_document_type: ControlledDocumentChartPoint[];
+  facets: { departments: string[]; document_types: string[] };
+  mix: { pending: number; approved: number; obsolete: number };
+  aging_summary: { documents: number; people: number; oldest_days: number };
+  departments: Array<{
+    key: string;
+    label: string;
+    controlled: number;
+    pending: number;
+    approved: number;
+    versioned: number;
+    obsolete: number;
+    obsolete_published: number;
+    incoming: number;
+    ongoing: number;
+  }>;
+  aging: Array<{
+    document_code: string;
+    name: string;
+    role: string;
+    requestor_department: string | null;
+    age_days: number;
+    submitted_at: string | null;
+    submission_id: string;
+    document_no: string;
+  }>;
+  published_over_time: ControlledDocumentChartPoint[];
   recent: Array<{
     id: string;
     document_code: string;
@@ -194,6 +232,7 @@ export type ControlledDocumentOverview = {
     department: string | null;
     document_type: string | null;
     status: string;
+    current_revision: number;
     published_at: string | null;
   }>;
 };
@@ -207,11 +246,20 @@ export type ControlledDocumentReport = {
   by_department: ControlledDocumentChartPoint[];
   by_document_type: ControlledDocumentChartPoint[];
   review: ControlledDocumentChartPoint[];
+  mix: { pending: number; approved: number; obsolete: number };
+  aging: ControlledDocumentOverview["aging"];
+  aging_summary: ControlledDocumentOverview["aging_summary"];
 };
 
-export async function fetchControlledDocumentOverview(): Promise<ControlledDocumentOverview> {
+export async function fetchControlledDocumentOverview(params?: {
+  department?: string;
+  document_type?: string;
+  status?: string;
+  file?: string;
+}): Promise<ControlledDocumentOverview> {
   const response = await apiClient.get<{ data: ControlledDocumentOverview }>(
     "/documents/controlled/overview",
+    { params },
   );
   return response.data.data;
 }

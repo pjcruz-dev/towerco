@@ -129,6 +129,9 @@ final class EApprovalUserListStepExpander
                 'approverId' => $userId,
                 'step_order' => $order,
             ];
+            if (! empty($definition['optional'])) {
+                $member['optional'] = true;
+            }
             if ($when !== []) {
                 $member['when'] = $when;
             }

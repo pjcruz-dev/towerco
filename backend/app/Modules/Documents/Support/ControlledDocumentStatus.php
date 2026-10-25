@@ -19,4 +19,14 @@ final class ControlledDocumentStatus
     {
         return [self::PENDING, self::PUBLISHED, self::OBSOLETE];
     }
+
+    /**
+     * Document rows stored as superseded are obsolete. Older revisions still use that word.
+     *
+     * @return list<string>
+     */
+    public static function obsoleteValues(): array
+    {
+        return [self::OBSOLETE, 'superseded'];
+    }
 }

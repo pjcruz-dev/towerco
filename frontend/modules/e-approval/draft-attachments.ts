@@ -3,12 +3,19 @@ export type EApprovalSavedAttachmentRef = {
   file_name: string;
 };
 
+function isCurrentAttachment(attachment: { metadata?: { superseded_at?: string } | null }): boolean {
+  return !attachment.metadata?.superseded_at;
+}
+
 export function groupSavedAttachmentsByField(
-  attachments: { id: string; field_name: string | null; file_name: string }[],
+  attachments: { id: string; field_name: string | null; file_name: string; metadata?: { superseded_at?: string } | null }[],
 ): Record<string, EApprovalSavedAttachmentRef[]> {
   const grouped: Record<string, EApprovalSavedAttachmentRef[]> = {};
 
   for (const attachment of attachments) {
+    if (!isCurrentAttachment(attachment)) {
+      continue;
+    }
     const fieldName = attachment.field_name?.trim();
     if (!fieldName) {
       continue;
@@ -24,11 +31,11 @@ export function groupSavedAttachmentsByField(
 /** Skip files already stored on the draft (same field + original file name). */
 export function pendingAttachmentsNotYetSaved(
   attachmentFiles: Record<string, File[]>,
-  existingAttachments: { field_name: string | null; file_name: string }[],
+  existingAttachments: { field_name: string | null; file_name: string; metadata?: { superseded_at?: string } | null }[],
 ): Record<string, File[]> {
   const savedKeys = new Set(
     existingAttachments
-      .filter((attachment) => attachment.field_name?.trim())
+      .filter((attachment) => isCurrentAttachment(attachment) && attachment.field_name?.trim())
       .map((attachment) => `${attachment.field_name!.trim()}::${attachment.file_name}`),
   );
 

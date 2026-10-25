@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\DocExtract\Http\Controllers\V1;
 
 use App\Core\Http\Controllers\AbstractApiController;
+use App\Core\Support\ExcelWorkbookWriter;
 use App\Core\Support\ModuleListExportQuery;
 use App\Modules\DocExtract\Services\DocExtractBatchService;
 use App\Modules\DocExtract\Services\DocExtractPlanFeaturesService;

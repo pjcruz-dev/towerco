@@ -86,6 +86,7 @@ import { fieldVisibleOnSurface } from "@/lib/rbac/field-surface-access";
 import type { RoleAccessMatrix } from "@/lib/api/modules/admin-roles-api";
 import { notify } from "@/lib/ui/notify";
 import { adminPageShellClass } from "@/lib/ui/page-shell";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 import type { AssetPerson, AssetRecord, AssetSchemaField } from "@/modules/assets/types";
 import { useAuthStore } from "@/stores/auth-store";
@@ -834,21 +835,21 @@ export function AssetsPageClient() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search tag, serial, hostname, name"
-          aria-label="Search assets"
-          className="w-full max-w-sm"
-        />
+      <div className={filterBarFieldsClassName}>
+        <div>
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search tag, serial, hostname, name"
+            aria-label="Search assets"
+            className="w-full"
+          />
+        </div>
         <FilterSelect
           id="assets-status"
           label="Status"
           value={status}
           onChange={(value) => setFilter("status", value)}
-          className="w-auto"
-          selectClassName="w-auto max-w-xs"
         >
           <option value="">All statuses</option>
           {status.includes(",") ? (
@@ -865,8 +866,6 @@ export function AssetsPageClient() {
           label="Type"
           value={assetType}
           onChange={(value) => setFilter("asset_type", value)}
-          className="w-auto"
-          selectClassName="w-auto max-w-xs"
         >
           <option value="">All types</option>
           {["laptop", "desktop", "monitor", "dock", "phone", "peripheral"].map((item) => (

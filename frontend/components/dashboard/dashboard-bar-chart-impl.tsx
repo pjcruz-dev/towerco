@@ -34,6 +34,8 @@ export type DashboardBarChartProps = {
   valueLabel?: string;
   height?: number;
   className?: string;
+  /** Width of the category labels when `layout` is horizontal. */
+  categoryWidth?: number;
 };
 
 export function DashboardBarChartImpl({
@@ -47,6 +49,7 @@ export function DashboardBarChartImpl({
   valueLabel = "Count",
   height = 220,
   className,
+  categoryWidth = 120,
 }: DashboardBarChartProps) {
   const gradientId = useId().replace(/:/g, "");
   const chartData = useMemo(
@@ -113,8 +116,8 @@ export function DashboardBarChartImpl({
                   <YAxis
                     type="category"
                     dataKey="label"
-                    width={100}
-                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    width={categoryWidth}
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -147,7 +150,7 @@ export function DashboardBarChartImpl({
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value) => [`${value}`, valueLabel]}
+                formatter={(value, name) => [`${value ?? 0}`, String(name || valueLabel)]}
               />
               {useGroups && groups
                 ? groups.series.map((series) => (

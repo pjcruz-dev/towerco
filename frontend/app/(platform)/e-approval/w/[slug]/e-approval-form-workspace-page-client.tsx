@@ -61,6 +61,7 @@ import {
 } from "@/lib/ui/build-dynamic-board-widgets";
 import { normalizeEApprovalWorkspace } from "@/lib/ui/normalize-dashboard-data";
 import { E_APPROVAL_WORKSPACE_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/notification-store";
 import { workspaceDisplayTitle } from "@/modules/e-approval/form-workspace";
@@ -571,14 +572,17 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                     </Button>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-end gap-3">
-                  <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search or tokens: status:pending subsidiary:HQ vendor~acme"
-                    className="max-w-md"
-                    title="Tokens: status:, document~, requestor~, subsidiary:, department:, plus visible form field names (eq / != / ~ / pipe OR)."
-                  />
+                <div className={filterBarFieldsClassName}>
+                  <div>
+                    <Input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search or tokens: status:pending subsidiary:HQ vendor~acme"
+                      className="w-full"
+                      aria-label="Search requests"
+                      title="Tokens: status:, document~, requestor~, subsidiary:, department:, plus visible form field names (eq / != / ~ / pipe OR)."
+                    />
+                  </div>
                   <FilterSelect
                     id="workspace-status-filter"
                     label="Status"
@@ -587,7 +591,6 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                       patchPrefs({ statusFilter: value });
                       setPage(1);
                     }}
-                    className="w-[10.5rem]"
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
                       <option key={option.value || "all"} value={option.value}>
@@ -603,7 +606,6 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                       patchPrefs({ subsidiary: value });
                       setPage(1);
                     }}
-                    className="w-[9.5rem]"
                   >
                     <option value="">All subsidiaries</option>
                     {subsidiaryOptions.map((code) => (
@@ -620,7 +622,6 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                       patchPrefs({ department: value });
                       setPage(1);
                     }}
-                    className="w-[11rem]"
                   >
                     <option value="">All departments</option>
                     {departmentOptions.map((code) => (

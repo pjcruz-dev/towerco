@@ -13,6 +13,7 @@ import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list
 import { EApprovalSubmissionGalleryCard } from "@/components/e-approval/e-approval-submission-gallery-card";
 import { eApprovalSubmissionTableColumns } from "@/components/e-approval/e-approval-submission-table-columns";
 import { FilterSelect } from "@/components/forms/filter-select";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
 import { EApprovalTourSubmissionFixtures, EApprovalTourSubmissionTableFixtures } from "@/components/help/e-approval-tour-fixtures";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
@@ -396,7 +397,7 @@ export function EApprovalSubmissionsPageClient() {
                 </Button>
               ) : null}
             </div>
-            <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+            <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div data-help="ea-submissions-search" className="min-w-0 flex-1">
@@ -421,7 +422,7 @@ export function EApprovalSubmissionsPageClient() {
                     dataHelp="ea-submissions-view"
                   />
                 </div>
-                <div className="flex flex-wrap items-end gap-3" data-help="ea-submissions-advanced-filters">
+                <div className={filterBarFieldsClassName} data-help="ea-submissions-advanced-filters">
                   <FilterSelect
                     id="submissions-form-filter"
                     label="Form"
@@ -430,7 +431,6 @@ export function EApprovalSubmissionsPageClient() {
                       setFormId(value);
                       setPage(1);
                     }}
-                    className="w-[14rem]"
                   >
                     <option value="">All forms</option>
                     {formOptions.map((form) => (
@@ -447,7 +447,6 @@ export function EApprovalSubmissionsPageClient() {
                       setSubsidiary(value);
                       setPage(1);
                     }}
-                    className="w-[9.5rem]"
                   >
                     <option value="">All subsidiaries</option>
                     {subsidiaryOptions.map((code) => (
@@ -464,7 +463,6 @@ export function EApprovalSubmissionsPageClient() {
                       setDepartment(value);
                       setPage(1);
                     }}
-                    className="w-[11rem]"
                   >
                     <option value="">All departments</option>
                     {departmentOptions.map((code) => (
@@ -484,7 +482,7 @@ export function EApprovalSubmissionsPageClient() {
                         setFrom(value);
                         setPage(1);
                       }}
-                      className="h-9 w-[140px]"
+                      className="h-9 w-full"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -498,7 +496,7 @@ export function EApprovalSubmissionsPageClient() {
                         setTo(value);
                         setPage(1);
                       }}
-                      className="h-9 w-[140px]"
+                      className="h-9 w-full"
                     />
                   </div>
                   {hasAdvancedFilters ? (

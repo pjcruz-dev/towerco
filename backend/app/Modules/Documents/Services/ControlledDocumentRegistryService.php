@@ -7,10 +7,16 @@ namespace App\Modules\Documents\Services;
 use App\Core\Support\AllowlistedSort;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Models\ControlledDocumentRevision;
+use App\Modules\Documents\Support\ControlledDocumentMasterLabel;
+use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
+use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
+use App\Modules\Tenancy\Support\TenantScopedCache;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Carbon\Carbon;
@@ -36,6 +42,7 @@ final class ControlledDocumentRegistryService
     public function __construct(
         private readonly ControlledDocumentAccessService $access,
         private readonly TenantActivityLogger $activity,
+        private readonly ControlledDocumentMasterLabel $labels,
     ) {}
 
     /**
@@ -84,9 +91,22 @@ final class ControlledDocumentRegistryService
         $this->applyFilters($counted, $filters, includeStatus: false);
 
         $incoming = $this->openRevisionIndex();
+        $incomingCodes = array_keys($incoming);
         $list = clone $counted;
         if ($statusFilter === 'incoming') {
-            $this->applyIncomingFilter($list, array_keys($incoming));
+            $this->applyIncomingFilter($list, $incomingCodes);
+        } elseif ($statusFilter === ControlledDocumentStatus::PENDING) {
+            $list->where(function (Builder $inner) use ($incomingCodes): void {
+                $inner->where('status', ControlledDocumentStatus::PENDING);
+                if ($incomingCodes !== []) {
+                    $inner->orWhere(function (Builder $published) use ($incomingCodes): void {
+                        $published->where('status', ControlledDocumentStatus::PUBLISHED)
+                            ->whereIn('document_code', $incomingCodes);
+                    });
+                }
+            });
+        } elseif (is_string($statusFilter) && trim($statusFilter) === ControlledDocumentStatus::OBSOLETE) {
+            $this->applyObsoleteDocumentScope($list);
         } elseif (is_string($statusFilter) && trim($statusFilter) !== '') {
             $list->where('status', trim($statusFilter));
         }
@@ -111,12 +131,17 @@ final class ControlledDocumentRegistryService
         );
         $list->orderBy($column, $direction);
 
+        $totals = $this->statusTotals($counted);
+        $incomingCount = $this->incomingCount($counted, $incomingCodes);
+        $totals['pending'] += $incomingCount;
+
         return [
             'kpis' => [
-                ...$this->statusTotals($counted),
-                'incoming' => $this->incomingCount($counted, array_keys($incoming)),
+                ...$totals,
+                'incoming' => $incomingCount,
             ],
             'incoming_by_code' => $incoming,
+            'aging_by_code' => $this->agingByDocumentCode($scoped),
             'facets' => $this->facets($scoped),
             'documents' => $list->paginate(perPage: $perPage, page: $page),
         ];
@@ -224,7 +249,7 @@ final class ControlledDocumentRegistryService
         $total = (clone $query)->count();
         $pending = (clone $query)->where('status', ControlledDocumentStatus::PENDING)->count();
         $published = (clone $query)->where('status', ControlledDocumentStatus::PUBLISHED)->count();
-        $obsolete = (clone $query)->where('status', ControlledDocumentStatus::OBSOLETE)->count();
+        $obsolete = $this->obsoleteDocumentCount($query);
 
         return [
             'total' => $total,
@@ -235,28 +260,40 @@ final class ControlledDocumentRegistryService
     }
 
     /**
+     * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    public function overview(TenantUser $actor): array
+    public function overview(TenantUser $actor, array $filters = []): array
     {
         $scoped = $this->scoped($actor);
+        $filtered = clone $scoped;
+        $this->applyFilters($filtered, $filters);
         $today = Carbon::today();
         $publishedFrom = $today->copy()->subDays(30)->startOfDay();
 
-        $recent = (clone $scoped)
-            ->orderByRaw('CASE WHEN published_at IS NULL THEN 1 ELSE 0 END')
+        $recent = (clone $filtered)
+            ->where('status', ControlledDocumentStatus::PUBLISHED)
+            ->whereNotNull('published_at')
             ->orderByDesc('published_at')
             ->limit(8)
-            ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'published_at']);
+            ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'current_revision', 'published_at']);
 
-        $publishedScope = (clone $scoped)->where('status', ControlledDocumentStatus::PUBLISHED);
+        $publishedScope = (clone $filtered)->where('status', ControlledDocumentStatus::PUBLISHED);
+        $incomingIndex = $this->openRevisionIndex();
+        $incomingCodes = array_keys($incomingIndex);
+        $incoming = $this->incomingCount($filtered, $incomingCodes);
+        $versioned = (clone $filtered)->where('current_revision', '>', 0)->count();
+        $ongoing = (clone $publishedScope)
+            ->whereNotNull('next_review_date')
+            ->whereDate('next_review_date', '<=', $today->copy()->addDays(90))
+            ->count();
 
         return [
             'as_of' => $today->toDateString(),
             'published_from' => $publishedFrom->toDateString(),
             'counts' => [
-                ...$this->statusTotals($scoped),
-                'published_last_30_days' => (clone $scoped)
+                ...$this->statusTotals($filtered),
+                'published_last_30_days' => (clone $filtered)
                     ->where('status', ControlledDocumentStatus::PUBLISHED)
                     ->where('published_at', '>=', $publishedFrom)
                     ->count(),
@@ -264,9 +301,17 @@ final class ControlledDocumentRegistryService
                 'due_30' => $this->reviewCount($publishedScope, 'due_30'),
                 'due_90' => $this->reviewCount($publishedScope, 'due_90'),
                 'no_review' => $this->reviewCount($publishedScope, 'none'),
+                'incoming' => $incoming,
+                'versioned' => $versioned,
+                'ongoing' => $ongoing,
             ],
             'by_department' => $this->countGroups($publishedScope, 'department'),
             'by_document_type' => $this->countGroups($publishedScope, 'document_type'),
+            'departments' => $this->departmentBreakdown($filtered, $incomingCodes),
+            'facets' => $this->facets($scoped),
+            'mix' => $this->registerMix($filtered, $incomingCodes),
+            'aging' => $this->agingRowsFrom($agingGrouped = $this->agingByDocumentCode($filtered)),
+            'aging_summary' => $this->agingSummary($agingGrouped),
             'recent' => $recent->map(static fn (ControlledDocument $document): array => [
                 'id' => (string) $document->id,
                 'document_code' => $document->document_code,
@@ -274,21 +319,22 @@ final class ControlledDocumentRegistryService
                 'department' => $document->department,
                 'document_type' => $document->document_type,
                 'status' => $document->status,
+                'current_revision' => (int) $document->current_revision,
                 'published_at' => $document->published_at?->toIso8601String(),
             ])->values()->all(),
-            'published_over_time' => $this->publishedOverTime($scoped),
+            'published_over_time' => $this->publishedOverTime($filtered),
         ];
     }
 
     /**
-     * Real 14-day published counts for the register the viewer can see.
+     * Real 30-day published counts for the register the viewer can see.
      *
      * @return list<array{key: string, label: string, value: int}>
      */
     private function publishedOverTime(Builder $scoped): array
     {
         $to = Carbon::now()->startOfDay();
-        $from = $to->copy()->subDays(13);
+        $from = $to->copy()->subDays(29);
         $counts = (clone $scoped)
             ->selectRaw('DATE(published_at) as day_key, COUNT(*) as total')
             ->where('status', ControlledDocumentStatus::PUBLISHED)
@@ -298,7 +344,7 @@ final class ControlledDocumentRegistryService
             ->pluck('total', 'day_key');
 
         $series = [];
-        for ($i = 0; $i < 14; $i++) {
+        for ($i = 0; $i < 30; $i++) {
             $day = $from->copy()->addDays($i);
             $key = $day->toDateString();
             $series[] = [
@@ -332,12 +378,15 @@ final class ControlledDocumentRegistryService
             'counts' => [
                 'total' => (clone $filtered)->count(),
                 'published' => (clone $filtered)->where('status', ControlledDocumentStatus::PUBLISHED)->count(),
-                'obsolete' => (clone $filtered)->where('status', ControlledDocumentStatus::OBSOLETE)->count(),
+                'obsolete' => $this->obsoleteDocumentCount($filtered),
             ],
             'publications' => $this->publicationSeries($filtered, $from, $to),
             'by_department' => $this->countGroups($filtered, 'department'),
             'by_document_type' => $this->countGroups($filtered, 'document_type'),
             'review' => $this->reviewHorizon($filtered),
+            'mix' => $this->registerMix($filtered, array_keys($this->openRevisionIndex())),
+            'aging' => $this->agingRows($filtered),
+            'aging_summary' => $this->agingSummary($this->agingByDocumentCode($filtered)),
         ];
     }
 
@@ -469,7 +518,9 @@ final class ControlledDocumentRegistryService
 
         if ($includeStatus) {
             $status = $filters['status'] ?? null;
-            if (is_string($status) && trim($status) !== '') {
+            if (is_string($status) && trim($status) === ControlledDocumentStatus::OBSOLETE) {
+                $this->applyObsoleteDocumentScope($query);
+            } elseif (is_string($status) && trim($status) !== '') {
                 $query->where('status', trim($status));
             }
         }
@@ -560,6 +611,182 @@ final class ControlledDocumentRegistryService
     }
 
     /**
+     * Pending reviewers and approvers, aged from when they were assigned this round.
+     *
+     * @param  Builder<ControlledDocument>  $scoped
+     * @return array<string, list<array{name: string, role: string, requestor_department: string|null, age_days: int, submitted_at: string|null, submission_id: string, document_no: string}>>
+     */
+    private function agingByDocumentCode(Builder $scoped): array
+    {
+        $documentDepartments = (clone $scoped)->pluck('department', 'document_code');
+        $known = array_fill_keys($documentDepartments->keys()->map(static fn ($code): string => (string) $code)->all(), true);
+        $grouped = [];
+
+        $approvals = EApprovalRequestApproval::query()
+            ->with([
+                'approver:id,name',
+                'step',
+                'submission:id,document_no,created_at,status,requestor_id',
+                'submission.requestor:id,name,department',
+                'submission.values.field:id,name',
+            ])
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->whereNotNull('approver_id')
+            ->get();
+
+        foreach ($approvals as $approval) {
+            $submission = $approval->submission;
+            if ($submission === null || (string) $submission->status !== EApprovalSubmissionStatus::PENDING) {
+                continue;
+            }
+            $number = (string) $submission->document_no;
+            $code = preg_match('/^(.+)-R\d+$/', $number, $matches) === 1 ? $matches[1] : $number;
+            if (! isset($known[$code])) {
+                continue;
+            }
+            $submitted = $approval->created_at ?? $submission->created_at;
+            $documentDepartment = $documentDepartments->get($code);
+            $grouped[$code][] = [
+                'name' => (string) ($approval->approver?->name ?? '—'),
+                'role' => EApprovalReviewStep::isReviewStep($approval->step) ? 'Reviewer' : 'Approver',
+                'requestor_department' => $this->requestorDepartment(
+                    $submission,
+                    is_string($documentDepartment) ? $documentDepartment : null,
+                ),
+                'age_days' => $submitted !== null
+                    ? max(0, (int) $submitted->copy()->startOfDay()->diffInDays(now()->startOfDay()))
+                    : 0,
+                'submitted_at' => $submitted?->toIso8601String(),
+                'submission_id' => (string) $submission->id,
+                'document_no' => $number,
+            ];
+        }
+
+        return $grouped;
+    }
+
+    private function requestorDepartment(EApprovalSubmission $submission, ?string $documentDepartment): ?string
+    {
+        $fromUser = trim((string) ($submission->requestor?->department ?? ''));
+        if ($fromUser !== '') {
+            return $this->labels->department($fromUser);
+        }
+
+        if ($submission->relationLoaded('values')) {
+            foreach ($submission->values as $value) {
+                $name = $value->relationLoaded('field') ? $value->field?->name : null;
+                if ($name !== 'department') {
+                    continue;
+                }
+                $fromField = trim((string) ($value->value ?? ''));
+                if ($fromField !== '') {
+                    return $this->labels->department($fromField);
+                }
+            }
+        }
+
+        $fromDocument = trim((string) $documentDepartment);
+
+        return $fromDocument !== '' ? $this->labels->department($fromDocument) : null;
+    }
+
+    /**
+     * @param  Builder<ControlledDocument>  $scoped
+     * @return list<array{document_code: string, name: string, role: string, requestor_department: string|null, age_days: int, submitted_at: string|null, submission_id: string, document_no: string}>
+     */
+    private function agingRows(Builder $scoped): array
+    {
+        return $this->agingRowsFrom($this->agingByDocumentCode($scoped));
+    }
+
+    /**
+     * @param  array<string, list<array{name: string, role: string, requestor_department: string|null, age_days: int, submitted_at: string|null, submission_id: string, document_no: string}>>  $grouped
+     * @return list<array{document_code: string, name: string, role: string, requestor_department: string|null, age_days: int, submitted_at: string|null, submission_id: string, document_no: string}>
+     */
+    private function agingRowsFrom(array $grouped): array
+    {
+        $rows = [];
+        foreach ($grouped as $code => $people) {
+            foreach ($people as $person) {
+                $rows[] = ['document_code' => $code, ...$person];
+            }
+        }
+        usort($rows, static fn (array $left, array $right): int => $right['age_days'] <=> $left['age_days']);
+
+        return array_slice($rows, 0, 20);
+    }
+
+    /**
+     * @param  array<string, list<array{age_days: int}>>  $grouped
+     * @return array{documents: int, people: int, oldest_days: int}
+     */
+    private function agingSummary(array $grouped): array
+    {
+        $people = 0;
+        $oldest = 0;
+        foreach ($grouped as $rows) {
+            $people += count($rows);
+            foreach ($rows as $row) {
+                $oldest = max($oldest, (int) ($row['age_days'] ?? 0));
+            }
+        }
+
+        return [
+            'documents' => count($grouped),
+            'people' => $people,
+            'oldest_days' => $oldest,
+        ];
+    }
+
+    /**
+     * Each document lands in one slice. Obsolete wins, then a revision still in approval, then approved.
+     *
+     * @param  Builder<ControlledDocument>  $scoped
+     * @param  list<string>  $incomingCodes
+     * @return array{pending: int, approved: int, obsolete: int}
+     */
+    private function registerMix(Builder $scoped, array $incomingCodes): array
+    {
+        $obsolete = clone $scoped;
+        $this->applyObsoleteDocumentScope($obsolete);
+        $obsoleteIds = $obsolete->pluck('id');
+
+        $pending = (clone $scoped)
+            ->where(function (Builder $inner) use ($incomingCodes): void {
+                $inner->where('status', ControlledDocumentStatus::PENDING);
+                if ($incomingCodes !== []) {
+                    $inner->orWhere(function (Builder $published) use ($incomingCodes): void {
+                        $published->where('status', ControlledDocumentStatus::PUBLISHED)
+                            ->whereIn('document_code', $incomingCodes);
+                    });
+                }
+            })
+            ->when(
+                $obsoleteIds->isNotEmpty(),
+                fn (Builder $query) => $query->whereNotIn('id', $obsoleteIds->all()),
+            )
+            ->count();
+
+        $approved = (clone $scoped)
+            ->where('status', ControlledDocumentStatus::PUBLISHED)
+            ->when(
+                $incomingCodes !== [],
+                fn (Builder $query) => $query->whereNotIn('document_code', $incomingCodes),
+            )
+            ->when(
+                $obsoleteIds->isNotEmpty(),
+                fn (Builder $query) => $query->whereNotIn('id', $obsoleteIds->all()),
+            )
+            ->count();
+
+        return [
+            'pending' => $pending,
+            'approved' => $approved,
+            'obsolete' => $obsoleteIds->count(),
+        ];
+    }
+
+    /**
      * @return array<string, array{submission_id: string, document_no: string, revision_number: int}>
      */
     private function queryOpenRevisionIndex(): array
@@ -604,14 +831,49 @@ final class ControlledDocumentRegistryService
 
         $pending = (int) ($rows[ControlledDocumentStatus::PENDING] ?? 0);
         $published = (int) ($rows[ControlledDocumentStatus::PUBLISHED] ?? 0);
-        $obsolete = (int) ($rows[ControlledDocumentStatus::OBSOLETE] ?? 0);
 
         return [
             'total' => (int) $rows->sum(),
             'pending' => $pending,
             'published' => $published,
-            'obsolete' => $obsolete,
+            'obsolete' => $this->obsoleteDocumentCount($query),
         ];
+    }
+
+    /**
+     * Withdrawn documents, plus published documents that still have an older revision.
+     * Those older revisions are stored as superseded and shown as obsolete.
+     *
+     * @param  Builder<ControlledDocument>  $query
+     */
+    private function applyObsoleteDocumentScope(Builder $query): void
+    {
+        $statuses = $this->obsoleteRevisionStatuses();
+        $query->where(function (Builder $inner) use ($statuses): void {
+            $inner->whereIn('status', ControlledDocumentStatus::obsoleteValues())
+                ->orWhereHas('revisions', static function (Builder $revisions) use ($statuses): void {
+                    $revisions->whereIn('status', $statuses);
+                });
+        });
+    }
+
+    /**
+     * @param  Builder<ControlledDocument>  $query
+     */
+    private function obsoleteDocumentCount(Builder $query): int
+    {
+        $counted = clone $query;
+        $this->applyObsoleteDocumentScope($counted);
+
+        return $counted->count();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function obsoleteRevisionStatuses(): array
+    {
+        return [ControlledDocumentRevisionStatus::SUPERSEDED, 'obsolete'];
     }
 
     /**
@@ -803,6 +1065,118 @@ final class ControlledDocumentRegistryService
         }
 
         return $items;
+    }
+
+    /**
+     * @param  Builder<ControlledDocument>  $scoped
+     * @param  list<string>  $incomingCodes
+     * @return list<array{key: string, label: string, controlled: int, pending: int, approved: int, versioned: int, obsolete: int, obsolete_published: int, incoming: int, ongoing: int}>
+     */
+    private function departmentBreakdown(Builder $scoped, array $incomingCodes): array
+    {
+        $pending = ControlledDocumentStatus::PENDING;
+        $published = ControlledDocumentStatus::PUBLISHED;
+        $horizon = Carbon::today()->addDays(90)->toDateString();
+
+        $rows = (clone $scoped)
+            ->reorder()
+            ->selectRaw("COALESCE(NULLIF(TRIM(department), ''), 'Unassigned') as bucket")
+            ->selectRaw('COUNT(*) as controlled')
+            ->selectRaw("SUM(CASE WHEN status = '{$pending}' THEN 1 ELSE 0 END) as pending")
+            ->selectRaw("SUM(CASE WHEN status = '{$published}' THEN 1 ELSE 0 END) as approved")
+            ->selectRaw('SUM(CASE WHEN current_revision > 0 THEN 1 ELSE 0 END) as versioned')
+            ->selectRaw("SUM(CASE WHEN status = '{$published}' AND next_review_date IS NOT NULL AND next_review_date <= '{$horizon}' THEN 1 ELSE 0 END) as ongoing")
+            ->groupBy('bucket')
+            ->orderByDesc('controlled')
+            ->limit(12)
+            ->get();
+
+        $obsoleteByDepartment = $this->obsoleteRevisionsByDepartment($scoped);
+        $obsoletePublishedByDepartment = $this->documentsByDepartment(
+            (clone $scoped)
+                ->where('status', ControlledDocumentStatus::PUBLISHED)
+                ->whereHas('revisions', function (Builder $revisions): void {
+                    $revisions->whereIn('status', $this->obsoleteRevisionStatuses());
+                }),
+        );
+
+        $incomingByDepartment = [];
+        if ($incomingCodes !== []) {
+            $incomingByDepartment = (clone $scoped)
+                ->reorder()
+                ->where('status', ControlledDocumentStatus::PUBLISHED)
+                ->whereIn('document_code', $incomingCodes)
+                ->selectRaw("COALESCE(NULLIF(TRIM(department), ''), 'Unassigned') as bucket")
+                ->selectRaw('COUNT(*) as total')
+                ->groupBy('bucket')
+                ->pluck('total', 'bucket')
+                ->all();
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $label = (string) $row->getAttribute('bucket');
+            $items[] = [
+                'key' => $label === 'Unassigned' ? '' : $label,
+                'label' => $label,
+                'controlled' => (int) $row->getAttribute('controlled'),
+                'pending' => (int) $row->getAttribute('pending'),
+                'approved' => (int) $row->getAttribute('approved'),
+                'versioned' => (int) $row->getAttribute('versioned'),
+                'obsolete' => (int) ($obsoleteByDepartment[$label] ?? 0),
+                'obsolete_published' => (int) ($obsoletePublishedByDepartment[$label] ?? 0),
+                'incoming' => (int) ($incomingByDepartment[$label] ?? 0),
+                'ongoing' => (int) $row->getAttribute('ongoing'),
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  Builder<ControlledDocument>  $query
+     * @return array<string, int>
+     */
+    private function documentsByDepartment(Builder $query): array
+    {
+        $counts = $query
+            ->reorder()
+            ->selectRaw("COALESCE(NULLIF(TRIM(department), ''), 'Unassigned') as bucket")
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('bucket')
+            ->pluck('total', 'bucket');
+
+        $byDepartment = [];
+        foreach ($counts as $bucket => $total) {
+            $byDepartment[(string) $bucket] = (int) $total;
+        }
+
+        return $byDepartment;
+    }
+
+    /**
+     * Older revisions the file calls obsolete, counted once per revision.
+     *
+     * @param  Builder<ControlledDocument>  $scoped
+     * @return array<string, int>
+     */
+    private function obsoleteRevisionsByDepartment(Builder $scoped): array
+    {
+        $counts = ControlledDocumentRevision::query()
+            ->join('controlled_documents', 'controlled_documents.id', '=', 'controlled_document_revisions.controlled_document_id')
+            ->whereIn('controlled_document_revisions.status', $this->obsoleteRevisionStatuses())
+            ->whereIn('controlled_documents.id', (clone $scoped)->select('controlled_documents.id'))
+            ->selectRaw("COALESCE(NULLIF(TRIM(controlled_documents.department), ''), 'Unassigned') as bucket")
+            ->selectRaw('COUNT(*) as total')
+            ->groupBy('bucket')
+            ->pluck('total', 'bucket');
+
+        $byDepartment = [];
+        foreach ($counts as $bucket => $total) {
+            $byDepartment[(string) $bucket] = (int) $total;
+        }
+
+        return $byDepartment;
     }
 
     /**

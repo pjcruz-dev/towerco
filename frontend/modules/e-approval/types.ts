@@ -33,8 +33,8 @@ export type EApprovalWorkflowStepInput = {
   label?: string | null;
   /** This approver must tick the surrender or payment line before Approve. */
   confirm_settlement?: boolean;
-  /** review = sign and acknowledge. The step does not approve or reject. */
-  duty?: "review";
+  /** The previous approver chooses whether this step runs. */
+  optional?: boolean;
   condition?: Record<string, unknown> | null;
 };
 
@@ -223,6 +223,11 @@ export type EApprovalRelatedFormNavigation = {
 export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
   viewer_is_requestor?: boolean;
   viewer_pending_approval_id?: string | null;
+  optional_next?: {
+    step_order: number;
+    duty: "review" | "approve";
+  } | null;
+  send_approved_files?: boolean;
   /** Approver feedback when status is returned or rejected. */
   revision_remarks?: string | null;
   revision_remarks_at?: string | null;
@@ -271,12 +276,14 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
     field_name: string | null;
     file_name: string;
     file_path: string;
+    created_at?: string | null;
     metadata?: {
       lat?: number;
       lng?: number;
       captured_at?: string;
       caption?: string;
       slot?: string;
+      superseded_at?: string;
     } | null;
   }[];
 };
@@ -332,6 +339,9 @@ export type EApprovalDashboardQueueItem = {
   requestor_name?: string | null;
   status: string;
   step_order?: number | null;
+  duty?: "review" | "approve" | null;
+  age_days?: number | null;
+  submitted_at?: string | null;
   waiting_since: string | null;
   href: string;
 };
@@ -451,6 +461,7 @@ export type EApprovalPrintAttachmentRow = {
     captured_at?: string;
     caption?: string;
     slot?: string;
+    superseded_at?: string;
   } | null;
 };
 

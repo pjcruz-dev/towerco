@@ -102,6 +102,12 @@ final class EApprovalSubmissionWorkflowPreviewService
                 $warning = null;
             }
 
+            if ($match === null && $this->optionalStepWasNotSent($submission, $order, $currentStep, $isTerminal)) {
+                $runtimeStatus = 'not_sent';
+                $pathReason = __('Not sent. The previous approver finished without this step.');
+                $warning = null;
+            }
+
             // Cancelled submissions must not keep "Pending" / open-step chrome on the path.
             if ($submissionStatus === 'cancelled') {
                 $runtimeStatus = $this->runtimeStatusWhenSubmissionCancelled($runtimeStatus);
@@ -230,6 +236,25 @@ final class EApprovalSubmissionWorkflowPreviewService
         }
 
         return false;
+    }
+
+    private function optionalStepWasNotSent(
+        EApprovalSubmission $submission,
+        int $order,
+        int $currentStep,
+        bool $isTerminal,
+    ): bool {
+        if (! $isTerminal && ! ($currentStep > 0 && $order < $currentStep)) {
+            return false;
+        }
+
+        $steps = app(EApprovalSubmissionWorkflowResolver::class)->stepsForAdvance($submission);
+
+        return $steps->contains(static function ($step) use ($order): bool {
+            return (int) $step->step_order === $order
+                && is_array($step->condition)
+                && ! empty($step->condition['optional']);
+        });
     }
 
     /**

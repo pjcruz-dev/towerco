@@ -61,10 +61,12 @@ class ControlledDocumentIndexController extends AbstractApiController
         );
 
         $incoming = is_array($result['incoming_by_code'] ?? null) ? $result['incoming_by_code'] : [];
+        $aging = is_array($result['aging_by_code'] ?? null) ? $result['aging_by_code'] : [];
         $defaultFormId = $forms->resolveRevisionFormFor($user)?->id;
-        $documents = $result['documents']->through(function (ControlledDocument $doc) use ($incoming, $defaultFormId): array {
+        $documents = $result['documents']->through(function (ControlledDocument $doc) use ($incoming, $aging, $defaultFormId): array {
             $open = $incoming[(string) $doc->document_code] ?? null;
             $formId = $doc->e_approval_form_id ?: $defaultFormId;
+            $people = $aging[(string) $doc->document_code] ?? [];
 
             return [
                 'id' => (string) $doc->id,
@@ -85,6 +87,7 @@ class ControlledDocumentIndexController extends AbstractApiController
                 'incoming_revision' => is_array($open) ? $open['revision_number'] : null,
                 'incoming_submission_id' => is_array($open) ? $open['submission_id'] : null,
                 'incoming_document_no' => is_array($open) ? $open['document_no'] : null,
+                'aging' => is_array($people) ? array_values($people) : [],
             ];
         });
 

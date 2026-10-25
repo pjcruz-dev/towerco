@@ -6,6 +6,7 @@ namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Models\ControlledDocumentRevision;
+use App\Modules\Documents\Support\ControlledDocumentMasterLabel;
 use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\Documents\Support\ControlledDocumentSyncConfig;
@@ -25,6 +26,7 @@ final class ControlledDocumentSyncService
     public function __construct(
         private readonly ControlledDocumentStorageService $storage,
         private readonly ControlledDocumentDcfNumberService $dcfNumbers,
+        private readonly ControlledDocumentMasterLabel $labels,
     ) {}
 
     public function syncApprovedSubmission(EApprovalSubmission $submission, ?TenantUser $actor = null): ?ControlledDocument
@@ -520,7 +522,7 @@ final class ControlledDocumentSyncService
         $value = trim((string) ($values[$fieldName] ?? ''));
 
         if ($value !== '') {
-            return $value;
+            return $this->registerLabel($key, $value);
         }
 
         $fallbacks = match ($key) {
@@ -533,11 +535,22 @@ final class ControlledDocumentSyncService
         foreach ($fallbacks as $fallback) {
             $candidate = trim((string) ($values[$fallback] ?? ''));
             if ($candidate !== '') {
-                return $candidate;
+                return $this->registerLabel($key, $candidate);
             }
         }
 
         return null;
+    }
+
+    private function registerLabel(string $key, string $value): string
+    {
+        $label = match ($key) {
+            'document_type' => $this->labels->documentType($value),
+            'department' => $this->labels->department($value),
+            default => $value,
+        };
+
+        return $label ?? $value;
     }
 
     /**

@@ -426,7 +426,7 @@ export function ControlledDocumentImportDialog({
                 className="gap-1.5"
                 onClick={() => void onAnalyze()}
               >
-                {busy ? "Analyzing…" : "Analyze and Map Columns"}
+                {busy ? "Analyzing…" : "Analyze and map columns"}
                 <ArrowRight className="size-3.5" />
               </Button>
             </>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Check, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { TourExportPdfButton } from "@/components/help/tour-export-pdf-button";
 import { VisualGuideFigure } from "@/components/help/visual-guide-figure";
 import { VisualGuidePrintButton } from "@/components/help/visual-guide-print-button";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -21,6 +22,7 @@ import {
   eApprovalTourChaptersForCapabilities,
   liveTourChapterStartHref,
   liveTourStartHref,
+  resolveEApprovalTourSteps,
   type LiveTourAudience,
   type LiveTourChapterId,
 } from "@/lib/help/e-approval-live-tour";
@@ -137,6 +139,11 @@ export function EApprovalVisualGuidePageClient() {
               <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               Start full tour
             </Link>
+            <TourExportPdfButton
+              title="E-Forms tour"
+              fileName="e-forms-tour.pdf"
+              steps={resolveEApprovalTourSteps(capabilities)}
+            />
             <VisualGuidePrintButton />
           </div>
         </div>

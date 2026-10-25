@@ -86,7 +86,7 @@ function runNodeFromStep(step: EApprovalWorkflowPreviewStep, memberIndex: number
     detail: step.path_reason ?? null,
     // Keep order on the main path; render like condition-skipped cards.
     kind: isRuntimeSkipped ? "skipped" : "run",
-    status: isRuntimeSkipped ? "skipped" : runtimeStatus,
+    status: runtimeStatus,
     warning: isRuntimeSkipped
       ? null
       : (step.warning ?? (step.used_fallback ? "Used fallback approver" : null)),

@@ -17,6 +17,37 @@ type Props = {
   compactDetails?: boolean;
 };
 
+const FINISHED_STEP = new Set(["approved", "acknowledged"]);
+
+function bandWasNotSent(band: { nodes: { status?: string | null }[] }): boolean {
+  return band.nodes.length > 0 && band.nodes.every((node) => {
+    const status = (node.status ?? "").trim().toLowerCase();
+    return status === "not_sent" || status === "skipped";
+  });
+}
+
+function bandIsFinished(band: { nodes: { status?: string | null }[] }): boolean {
+  return band.nodes.length > 0 && band.nodes.every((node) => FINISHED_STEP.has((node.status ?? "").trim().toLowerCase()));
+}
+
+function bandLineTone(
+  band: { nodes: { status?: string | null }[] },
+  earlierFinished: boolean,
+): "done" | "flow" | "idle" | "returned" {
+  const statuses = band.nodes.map((node) => (node.status ?? "").trim().toLowerCase());
+  if (statuses.some((status) => status === "returned" || status === "rejected")) {
+    return "returned";
+  }
+  if (bandIsFinished(band)) {
+    return "done";
+  }
+  if (earlierFinished && statuses.some((status) => status === "pending" || status === "")) {
+    return "flow";
+  }
+
+  return "idle";
+}
+
 export function EApprovalWorkflowPathDiagram({ preview, className, compactDetails = false }: Props) {
   const { runBands, skippedBands } = buildWorkflowPathDiagram(
     compactDetails
@@ -58,18 +89,36 @@ export function EApprovalWorkflowPathDiagram({ preview, className, compactDetail
       <div role="img" aria-label="Workflow path diagram" className="flex w-full flex-col items-center">
         <WorkflowDiagramTerminal label="Start" />
 
-        {runBands.map((band) => (
-          <div key={band.id} className="flex w-full flex-col items-center">
-            <WorkflowDiagramConnector />
-            <WorkflowDiagramBandBlock band={band} />
-          </div>
-        ))}
+        {runBands.filter((band) => !bandWasNotSent(band)).map((band, index, bands) => {
+          const earlierFinished = bands.slice(0, index).every(bandIsFinished);
+          const tone = bandLineTone(band, earlierFinished);
 
-        {runBands.length > 0 ? (
+          return (
+            <div key={band.id} className="flex w-full flex-col items-center">
+              {band.nodes.length > 1 ? null : <WorkflowDiagramConnector tone={tone} />}
+              <WorkflowDiagramBandBlock band={band} lineTone={tone} />
+            </div>
+          );
+        })}
+
+        {runBands.some((band) => !bandWasNotSent(band)) ? (
           <>
-            <WorkflowDiagramConnector />
+            <WorkflowDiagramConnector
+              tone={runBands.filter((band) => !bandWasNotSent(band)).every(bandIsFinished) ? "done" : "idle"}
+            />
             <WorkflowDiagramTerminal label="End" />
           </>
+        ) : null}
+
+        {runBands.some(bandWasNotSent) ? (
+          <div className="mt-5 w-full border-t border-dashed border-border pt-4">
+            <p className="mb-2 text-center text-xs font-medium text-muted-foreground">Not sent</p>
+            {runBands.filter(bandWasNotSent).map((band) => (
+              <div key={band.id} className="flex w-full flex-col items-center">
+                <WorkflowDiagramBandBlock band={band} lineTone="idle" />
+              </div>
+            ))}
+          </div>
         ) : null}
 
         {skippedBands.length > 0 ? (

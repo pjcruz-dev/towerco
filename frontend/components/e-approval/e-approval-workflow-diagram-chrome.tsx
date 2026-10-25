@@ -7,17 +7,77 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import type { WorkflowDiagramBand, WorkflowDiagramNode } from "@/modules/e-approval/workflow-path-diagram";
 import { cn } from "@/lib/utils";
 
-export function WorkflowDiagramConnector({ muted = false }: { muted?: boolean }) {
+export function WorkflowDiagramConnector({
+  muted = false,
+  tone = "flow",
+}: {
+  muted?: boolean;
+  /** done = already approved or acknowledged. flow = dashes marching along the curve. idle = not reached. */
+  tone?: "done" | "flow" | "idle" | "returned";
+}) {
   return (
-    <div className="flex justify-center py-1" aria-hidden>
-      <div
-        className={cn(
-          "h-5 w-px",
-          muted ? "border-l border-dashed border-border" : "bg-sky-500/70 dark:bg-sky-400/60",
-        )}
+    <svg className="h-14 w-8 shrink-0" viewBox="0 0 32 56" aria-hidden>
+      <path
+        d="M16 0 C 26 18, 6 38, 16 56"
+        pathLength={100}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+        className={workflowLineClass(muted ? "idle" : tone)}
       />
-    </div>
+    </svg>
   );
+}
+
+export function WorkflowDiagramFan({
+  nodes,
+  fallbackTone = "flow",
+}: {
+  nodes: { status?: string | null }[];
+  fallbackTone?: "done" | "flow" | "idle" | "returned";
+}) {
+  const count = Math.max(nodes.length, 1);
+
+  return (
+    <svg className="h-16 w-full overflow-visible" viewBox="0 0 100 64" preserveAspectRatio="none" aria-hidden>
+      {nodes.map((node, index) => {
+        const x = ((index + 0.5) / count) * 100;
+        return (
+          <path
+            key={`${node.status ?? "open"}-${index}`}
+            d={`M 50 0 C 50 26, ${x} 38, ${x} 64`}
+            pathLength={100}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+            vectorEffect="non-scaling-stroke"
+            className={workflowLineClass(toneFromStatus(node.status, fallbackTone))}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function workflowLineClass(tone: "done" | "flow" | "idle" | "returned"): string {
+  return cn(
+    tone === "done" && "stroke-success",
+    tone === "flow" && "workflow-line-flow stroke-sky-500 dark:stroke-sky-400",
+    tone === "returned" && "stroke-amber-500 [stroke-dasharray:4_5]",
+    tone === "idle" && "stroke-muted-foreground/40 [stroke-dasharray:4_5]",
+  );
+}
+
+function toneFromStatus(
+  status: string | null | undefined,
+  fallback: "done" | "flow" | "idle" | "returned",
+): "done" | "flow" | "idle" | "returned" {
+  const value = (status ?? "").trim().toLowerCase();
+  if (value === "approved" || value === "acknowledged") return "done";
+  if (value === "pending") return "flow";
+  if (value === "returned" || value === "rejected") return "returned";
+  if (value === "") return fallback;
+  return "idle";
 }
 
 export function WorkflowDiagramTerminal({ label }: { label: string }) {
@@ -95,6 +155,7 @@ export function WorkflowDiagramNodeCard({
     status === "rejected" && "border-destructive/40",
     status === "returned" &&
       "border-dashed border-amber-300 bg-amber-500/5 text-foreground dark:border-amber-800",
+    status === "not_sent" && "border-dashed border-border bg-muted/20 text-muted-foreground",
     (status === "invalidated" || status === "superseded" || status === "cancelled") &&
       "border-dashed border-border bg-muted/20 text-muted-foreground",
     selected && "ring-2 ring-sky-500/60 border-sky-400 dark:border-sky-600",
@@ -117,9 +178,10 @@ type BandBlockProps = {
   renderNode?: (node: WorkflowDiagramNode) => ReactNode;
   trailing?: ReactNode;
   className?: string;
+  lineTone?: "done" | "flow" | "idle" | "returned";
 };
 
-export function WorkflowDiagramBandBlock({ band, renderNode, trailing, className }: BandBlockProps) {
+export function WorkflowDiagramBandBlock({ band, renderNode, trailing, className, lineTone = "flow" }: BandBlockProps) {
   const parallel = band.nodes.length > 1;
 
   return (
@@ -138,24 +200,26 @@ export function WorkflowDiagramBandBlock({ band, renderNode, trailing, className
       ) : null}
       <div
         className={cn(
-          "flex max-w-full flex-wrap items-stretch justify-center gap-2",
-          // Hug cards so parallel bands do not stretch empty margins across the panel.
+          "flex max-w-full flex-col items-stretch",
           parallel && "w-fit",
           parallel &&
             band.kind === "run" &&
             "rounded-xl border border-violet-200/80 bg-violet-50/40 p-2 dark:border-violet-900/50 dark:bg-violet-950/20",
         )}
       >
-        {band.nodes.map((node) =>
-          renderNode ? (
-            <div key={node.id} className="contents">
-              {renderNode(node)}
-            </div>
-          ) : (
-            <WorkflowDiagramNodeCard key={node.id} node={node} wide={parallel} />
-          ),
-        )}
-        {trailing}
+        {parallel ? <WorkflowDiagramFan nodes={band.nodes} fallbackTone={lineTone} /> : null}
+        <div className="flex max-w-full flex-wrap items-stretch justify-center gap-2">
+          {band.nodes.map((node) =>
+            renderNode ? (
+              <div key={node.id} className="contents">
+                {renderNode(node)}
+              </div>
+            ) : (
+              <WorkflowDiagramNodeCard key={node.id} node={node} wide={parallel} />
+            ),
+          )}
+          {trailing}
+        </div>
       </div>
     </div>
   );
@@ -166,6 +230,7 @@ export function WorkflowDiagramShell({
   description,
   legend,
   actions,
+  banner,
   children,
   className,
 }: {
@@ -173,6 +238,7 @@ export function WorkflowDiagramShell({
   description?: string;
   legend?: ReactNode;
   actions?: ReactNode;
+  banner?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -193,6 +259,7 @@ export function WorkflowDiagramShell({
           {actions}
         </div>
       </div>
+      {banner}
       <div className="flex w-full flex-col items-center overflow-visible px-1 sm:px-2">
         {children}
       </div>

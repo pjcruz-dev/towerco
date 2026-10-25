@@ -348,3 +348,20 @@ html[data-skin="bordered"] [data-slot="sidebar-inset"] {
   overflow: hidden;
   background: var(--background);
 }
+
+@keyframes workflow-line-march {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.workflow-line-flow {
+  stroke-dasharray: 6 5;
+  animation: workflow-line-march 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-line-flow {
+    animation: none;
+  }
+}

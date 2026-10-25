@@ -103,7 +103,7 @@ function TrailRow({
         </p>
       ) : null}
       {compact && systemSupersede ? (
-        <p className="mt-1 text-[11px] text-muted-foreground">Superseded by full workflow restart</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">Obsolete after a full workflow restart</p>
       ) : null}
       {alwaysShowSignatures && hasSignatureValue(approval.signature) ? (
         <div className="mt-3 max-w-xs">

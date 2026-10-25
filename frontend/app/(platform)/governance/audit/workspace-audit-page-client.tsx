@@ -24,6 +24,7 @@ import {
   type WorkspaceAuditRow,
 } from "@/lib/api/modules/workspace-audit-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { filterBarClassName } from "@/lib/ui/field-control";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const PER_PAGE = 50;
@@ -155,7 +156,7 @@ export function WorkspaceAuditPageClient() {
           </Button>
         </header>
 
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className={filterBarClassName}>
           <div className="min-w-[180px] flex-1 space-y-1.5">
             <Label htmlFor="audit-search" className="text-xs font-medium text-muted-foreground">
               Search
@@ -167,7 +168,7 @@ export function WorkspaceAuditPageClient() {
               placeholder="Action, entity, reason…"
             />
           </div>
-          <div className="min-w-[160px] flex-1 space-y-1.5 sm:max-w-[200px]">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-actor" className="text-xs font-medium text-muted-foreground">
               Actor
             </Label>
@@ -178,7 +179,7 @@ export function WorkspaceAuditPageClient() {
               placeholder="Name or email…"
             />
           </div>
-          <div className="w-full min-w-[140px] space-y-1.5 sm:w-auto">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-module" className="text-xs font-medium text-muted-foreground">
               Module
             </Label>
@@ -193,7 +194,7 @@ export function WorkspaceAuditPageClient() {
               <option value="ai_assistant">AI Assistant</option>
             </Select>
           </div>
-          <div className="w-full min-w-[140px] space-y-1.5 sm:w-auto">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-category" className="text-xs font-medium text-muted-foreground">
               Category
             </Label>
@@ -205,7 +206,7 @@ export function WorkspaceAuditPageClient() {
               <option value="lifecycle">Lifecycle</option>
             </Select>
           </div>
-          <div className="w-full min-w-[140px] space-y-1.5 sm:w-auto">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-severity" className="text-xs font-medium text-muted-foreground">
               Severity
             </Label>
@@ -217,7 +218,7 @@ export function WorkspaceAuditPageClient() {
               <option value="low">Low</option>
             </Select>
           </div>
-          <div className="min-w-[140px] space-y-1.5 sm:max-w-[160px]">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-family" className="text-xs font-medium text-muted-foreground">
               Action family
             </Label>
@@ -228,7 +229,7 @@ export function WorkspaceAuditPageClient() {
               placeholder="auth, ticket, rbac…"
             />
           </div>
-          <div className="min-w-[120px] space-y-1.5 sm:max-w-[140px]">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-entity-type" className="text-xs font-medium text-muted-foreground">
               Entity type
             </Label>
@@ -239,7 +240,7 @@ export function WorkspaceAuditPageClient() {
               placeholder="ticket, form…"
             />
           </div>
-          <div className="min-w-[140px] flex-1 space-y-1.5 sm:max-w-[200px]">
+          <div className="min-w-0 flex-1 space-y-1">
             <Label htmlFor="audit-entity-id" className="text-xs font-medium text-muted-foreground">
               Entity ID
             </Label>
@@ -254,15 +255,15 @@ export function WorkspaceAuditPageClient() {
             <Label htmlFor="audit-from" className="text-xs font-medium text-muted-foreground">
               From
             </Label>
-            <DatePicker id="audit-from" value={from} onChange={setFrom} className="h-9 w-[148px]" />
+            <DatePicker id="audit-from" value={from} onChange={setFrom} className="h-9 w-full" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="audit-to" className="text-xs font-medium text-muted-foreground">
               To
             </Label>
-            <DatePicker id="audit-to" value={to} onChange={setTo} className="h-9 w-[148px]" />
+            <DatePicker id="audit-to" value={to} onChange={setTo} className="h-9 w-full" />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div data-filter-fixed className="flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={applyDateRange}>
               Apply dates
             </Button>

@@ -613,7 +613,7 @@ export function UsersPageClient() {
         </header>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="space-y-3 border-b border-border px-4 py-3">
+          <div className="space-y-2 border-b border-border px-3 py-2">
             <div className="max-w-md">
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground" htmlFor="users-search">
                 Search
@@ -626,7 +626,7 @@ export function UsersPageClient() {
                 className="h-11 w-full text-base sm:h-9 sm:text-sm"
               />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FilterSelect
               id="users-status"
               label="Status"

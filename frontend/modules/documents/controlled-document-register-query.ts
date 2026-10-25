@@ -13,7 +13,22 @@ export const controlledRegisterParams = {
   publishedFrom: "filter[published_from]",
   publishedTo: "filter[published_to]",
   document: "document",
+  page: "page",
 } as const;
+
+const LIST_QUERY_KEYS = new Set<string>([
+  controlledRegisterParams.q,
+  controlledRegisterParams.sort,
+  controlledRegisterParams.department,
+  controlledRegisterParams.documentType,
+  controlledRegisterParams.status,
+  controlledRegisterParams.review,
+  controlledRegisterParams.file,
+  controlledRegisterParams.effectiveFrom,
+  controlledRegisterParams.effectiveTo,
+  controlledRegisterParams.publishedFrom,
+  controlledRegisterParams.publishedTo,
+]);
 
 export type ControlledRegisterQuery = {
   q: string;
@@ -28,7 +43,18 @@ export type ControlledRegisterQuery = {
   publishedFrom: string;
   publishedTo: string;
   documentId: string | null;
+  page: number;
 };
+
+export function readControlledRegisterPage(raw: string | null): number {
+  if (!raw || !/^[1-9]\d*$/.test(raw)) {
+    return 1;
+  }
+
+  const page = Number(raw);
+
+  return page > 10_000 ? 1 : page;
+}
 
 const REVIEW_LABELS: Record<string, string> = {
   overdue: "Overdue",
@@ -74,6 +100,7 @@ export function readControlledRegisterQuery(
     publishedFrom: params.get(keys.publishedFrom) ?? "",
     publishedTo: params.get(keys.publishedTo) ?? "",
     documentId: params.get(keys.document),
+    page: readControlledRegisterPage(params.get(keys.page)),
   };
 }
 
@@ -94,6 +121,16 @@ export function controlledRegisterHref(
 
   if ((next.get(controlledRegisterParams.sort) ?? "") === defaultSort) {
     next.delete(controlledRegisterParams.sort);
+  }
+
+  const listChanged = Object.keys(patch).some((key) => LIST_QUERY_KEYS.has(key));
+  if (listChanged && !Object.prototype.hasOwnProperty.call(patch, controlledRegisterParams.page)) {
+    next.delete(controlledRegisterParams.page);
+  }
+
+  const pageValue = next.get(controlledRegisterParams.page);
+  if (pageValue !== null && (pageValue === "1" || !/^[1-9]\d*$/.test(pageValue))) {
+    next.delete(controlledRegisterParams.page);
   }
 
   const qs = next.toString();
@@ -178,6 +215,38 @@ export function controlledRegisterFilterChips(query: ControlledRegisterQuery): C
   }
 
   return chips;
+}
+
+export function controlledRegisterCountLabel(
+  documents:
+    | {
+        current_page: number;
+        per_page: number;
+        total: number;
+        data: readonly unknown[];
+      }
+    | undefined,
+  isLoading: boolean,
+): string {
+  if (isLoading && !documents) {
+    return "Loading documents";
+  }
+
+  const total = documents?.total ?? 0;
+  if (!documents || total === 0 || documents.data.length === 0) {
+    return `${total} documents`;
+  }
+
+  const from = (documents.current_page - 1) * documents.per_page + 1;
+  const to = from + documents.data.length - 1;
+  if (from === 1 && to === total) {
+    return total === 1 ? "1 document" : `${total} documents`;
+  }
+  if (from === to) {
+    return `Showing ${from} of ${total}`;
+  }
+
+  return `Showing ${from}–${to} of ${total}`;
 }
 
 export function controlledRegisterClearFilters(): Record<string, null> {

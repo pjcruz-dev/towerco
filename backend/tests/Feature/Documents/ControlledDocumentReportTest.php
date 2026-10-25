@@ -54,15 +54,19 @@ final class ControlledDocumentReportTest extends TestCase
             'status' => ControlledDocumentStatus::OBSOLETE,
             'published_at' => now()->subDays(10),
         ]);
+        $this->document('ATC-OLD-P-004', 'Withdrawn', [
+            'status' => 'superseded',
+            'published_at' => now()->subDays(12),
+        ]);
         tenancy()->end();
 
         $response = $this->actingAsTenantAdmin()
             ->withHeaders($this->tenantApiHeaders())
             ->getJson('/api/v1/documents/controlled/overview')
             ->assertOk()
-            ->assertJsonPath('data.counts.total', 3)
+            ->assertJsonPath('data.counts.total', 4)
             ->assertJsonPath('data.counts.published', 2)
-            ->assertJsonPath('data.counts.obsolete', 1)
+            ->assertJsonPath('data.counts.obsolete', 2)
             ->assertJsonPath('data.counts.published_last_30_days', 1)
             ->assertJsonPath('data.counts.overdue', 1)
             ->assertJsonPath('data.counts.due_30', 1)
@@ -70,9 +74,9 @@ final class ControlledDocumentReportTest extends TestCase
             ->assertJsonFragment(['key' => 'OMD', 'label' => 'OMD', 'value' => 1]);
 
         $series = $response->json('data.published_over_time');
-        $this->assertCount(14, $series);
+        $this->assertCount(30, $series);
         $this->assertSame(1, (int) collect($series)->sum('value'));
-        $this->assertSame(1, (int) $series[13]['value']);
+        $this->assertSame(1, (int) $series[29]['value']);
     }
 
     public function test_report_period_excludes_older_publications_and_export_lists_the_row(): void

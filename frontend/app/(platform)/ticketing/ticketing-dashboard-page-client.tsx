@@ -47,6 +47,7 @@ import {
 import { normalizeTicketingDashboard } from "@/lib/ui/normalize-dashboard-data";
 import { resolvePageChrome, TICKETING_DASHBOARD_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
 import { syncHeroWithPageChrome } from "@/lib/ui/sync-hero-with-page-chrome";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 import {
   expandTicketingDashboardWidgetIds,
@@ -568,14 +569,13 @@ export function TicketingDashboardPageClient() {
         <TicketingTourSoftPrompt />
         <TicketingTourCompleteAnchor />
 
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
+          <div className={filterBarFieldsClassName}>
             <FilterSelect
               id="ticketing-dash-status"
               label="Status"
               value={status}
               onChange={(value) => patchPrefs({ status: value })}
-              className="w-[10rem]"
             >
               <option value="">All statuses</option>
               {statusOptions.map((item) => (
@@ -589,7 +589,6 @@ export function TicketingDashboardPageClient() {
               label="Priority"
               value={priority}
               onChange={(value) => patchPrefs({ priority: value })}
-              className="w-[9rem]"
             >
               <option value="">All priorities</option>
               {priorityOptions.map((item) => (
@@ -603,7 +602,6 @@ export function TicketingDashboardPageClient() {
               label="Category"
               value={category}
               onChange={(value) => patchPrefs({ category: value })}
-              className="w-[12rem]"
             >
               <option value="">All categories</option>
               {categoryOptions.map((item) => (
@@ -618,7 +616,6 @@ export function TicketingDashboardPageClient() {
                 label="Department"
                 value={department}
                 onChange={(value) => patchPrefs({ department: value })}
-                className="w-[11rem]"
               >
                 <option value="">All departments</option>
                 {departmentOptions.map((code) => (
@@ -628,7 +625,7 @@ export function TicketingDashboardPageClient() {
                 ))}
               </FilterSelect>
             ) : null}
-            <div className="min-w-0 space-y-1.5">
+            <div data-filter-fixed className="min-w-0 space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Scope</p>
               <div className="inline-flex h-9 items-center gap-0.5 rounded-lg border border-input bg-card p-0.5 shadow-xs">
                 <button

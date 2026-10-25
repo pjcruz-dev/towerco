@@ -9,6 +9,7 @@ use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\Carbon;
@@ -212,6 +213,11 @@ final class EApprovalDashboardService
             ->get()
             ->map(static function (EApprovalRequestApproval $approval): array {
                 $submission = $approval->submission;
+                $submittedAt = $approval->created_at ?? $submission?->created_at;
+                $ageDays = $submittedAt !== null
+                    ? max(0, (int) $submittedAt->copy()->startOfDay()->diffInDays(now()->startOfDay()))
+                    : null;
+                $review = EApprovalReviewStep::isReviewStep($approval->step);
 
                 return [
                     'id' => (string) $approval->id,
@@ -221,6 +227,9 @@ final class EApprovalDashboardService
                     'requestor_name' => $submission?->requestor?->name,
                     'status' => (string) ($submission?->status ?? $approval->status),
                     'step_order' => $approval->step?->step_order,
+                    'duty' => $review ? 'review' : 'approve',
+                    'age_days' => $ageDays,
+                    'submitted_at' => $submittedAt?->toIso8601String(),
                     'waiting_since' => $approval->created_at?->toIso8601String(),
                     'href' => $submission ? '/e-approval/submissions/'.$submission->id : '/e-approval/approvals?awaiting_me=1',
                 ];

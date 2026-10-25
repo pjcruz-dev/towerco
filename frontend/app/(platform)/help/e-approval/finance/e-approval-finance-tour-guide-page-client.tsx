@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Check, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { TourExportPdfButton } from "@/components/help/tour-export-pdf-button";
 import { VisualGuidePrintButton } from "@/components/help/visual-guide-print-button";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
   financeTourChapterStartHref,
   financeTourChaptersForCapabilities,
   financeTourStartHref,
+  resolveEApprovalFinanceTourSteps,
 } from "@/lib/help/e-approval-finance-tour";
 import {
   getCompletedEApprovalFinanceTourChapters,
@@ -187,6 +189,11 @@ export function EApprovalFinanceTourGuidePageClient() {
               <Play className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               Start full tour
             </Link>
+            <TourExportPdfButton
+              title="E-Forms finance tour"
+              fileName="e-forms-finance-tour.pdf"
+              steps={resolveEApprovalFinanceTourSteps(capabilities)}
+            />
             <VisualGuidePrintButton />
           </div>
         </div>

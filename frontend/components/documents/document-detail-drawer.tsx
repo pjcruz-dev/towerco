@@ -300,7 +300,7 @@ export function DocumentDetailDrawer({
                         >
                           <option value="draft">Draft</option>
                           <option value="final">Final</option>
-                          <option value="superseded">Superseded</option>
+                          <option value="superseded">Obsolete</option>
                         </Select>
                       </div>
                       <div>

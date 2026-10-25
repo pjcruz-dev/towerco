@@ -16,6 +16,7 @@ import { EApprovalFormPublishChecklistDialog } from "@/components/e-approval/e-a
 import { EApprovalFormCreateWizard } from "@/components/e-approval/e-approval-form-create-wizard";
 import { EApprovalFormComposeSettingsCard } from "@/components/e-approval/e-approval-form-compose-settings-card";
 import { EApprovalFormRevisionSettingsCard } from "@/components/e-approval/e-approval-form-revision-settings-card";
+import { EApprovalFormWorkflowOptionsCard } from "@/components/e-approval/e-approval-form-workflow-options-card";
 import { EApprovalFormControlledDocumentSyncCard } from "@/components/e-approval/e-approval-form-controlled-document-sync-card";
 import { EApprovalFormBrandLogoPreview } from "@/components/e-approval/e-approval-form-brand-logo-preview";
 import { EApprovalFormWorkspaceSettingsCard } from "@/components/e-approval/e-approval-form-workspace-settings-card";
@@ -101,6 +102,11 @@ import {
   mergeFormRevisionIntoMetadata,
   type FormRevisionEditorSettings,
 } from "@/modules/e-approval/form-revision-config";
+import {
+  formWorkflowOptionsFromMetadata,
+  mergeFormWorkflowOptionsIntoMetadata,
+  type FormWorkflowOptionSettings,
+} from "@/modules/e-approval/form-workflow-options";
 import {
   mergeFormOutboundIntoMetadata,
   parseFormOutboundConfig,
@@ -250,6 +256,11 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
     [metadataJson],
   );
 
+  const workflowOptions = useMemo(
+    () => formWorkflowOptionsFromMetadata(parseFormMetadataJson(metadataJson)),
+    [metadataJson],
+  );
+
   const outboundSettings = useMemo(
     () => parseFormOutboundConfig(parseFormMetadataJson(metadataJson)),
     [metadataJson],
@@ -290,6 +301,13 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
     setMetadataJson((prev) => {
       const meta = parseFormMetadataJson(prev);
       return JSON.stringify(mergeFormRevisionIntoMetadata(meta, settings), null, 2);
+    });
+  };
+
+  const setWorkflowOptions = (settings: FormWorkflowOptionSettings) => {
+    setMetadataJson((prev) => {
+      const meta = parseFormMetadataJson(prev);
+      return JSON.stringify(mergeFormWorkflowOptionsIntoMetadata(meta, settings), null, 2);
     });
   };
 
@@ -1094,6 +1112,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
               formId={formId}
               formFamily={typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null}
             />
+            <EApprovalFormWorkflowOptionsCard value={workflowOptions} onChange={setWorkflowOptions} />
             <EApprovalFormRevisionSettingsCard
               value={revisionSettings}
               onChange={setRevisionSettings}

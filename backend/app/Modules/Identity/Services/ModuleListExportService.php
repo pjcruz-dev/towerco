@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Services;
 
 use App\Core\Services\AbstractDomainService;
+use App\Core\Support\ExcelWorkbookWriter;
 use App\Core\Support\ModuleListPrintableHtml;
 use App\Modules\DocExtract\Services\DocExtractBatchService;
 use App\Modules\Identity\Jobs\ProcessModuleListExportJob;

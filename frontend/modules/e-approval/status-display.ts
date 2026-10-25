@@ -17,6 +17,7 @@ const labelOverrides: Record<string, string> = {
   awaiting_dcf: "Awaiting document control",
   awaiting_me: "Awaiting me",
   invalidated: "Not needed",
+  not_sent: "Not sent",
   returned: "Needs revision",
   superseded: "Prior cycle",
 };
@@ -52,6 +53,7 @@ export function resolveEApprovalStatusTone(status: string, kind: EApprovalStatus
     if (key === "pending") return "warning";
     if (
       key === "skipped" ||
+      key === "not_sent" ||
       key === "invalidated" ||
       key === "returned" ||
       key === "superseded" ||

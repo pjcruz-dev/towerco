@@ -157,6 +157,10 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['confirm_settlement'] = true;
         }
 
+        if (! empty($condition['optional'])) {
+            $definition['optional'] = true;
+        }
+
         if (($condition['duty'] ?? null) === 'review') {
             $definition['duty'] = 'review';
         }
@@ -229,6 +233,10 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (self::confirmSettlementEnabled($step)) {
             $definition['confirm_settlement'] = true;
+        }
+
+        if (! empty($step['optional']) || ! empty($condition['optional'])) {
+            $definition['optional'] = true;
         }
 
         if (self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list') {
@@ -359,6 +367,12 @@ final class EApprovalWorkflowStepDefinitionSupport
             $condition['duty'] = 'review';
         } else {
             unset($condition['duty']);
+        }
+
+        if (! empty($step['optional']) || ! empty($condition['optional'])) {
+            $condition['optional'] = true;
+        } else {
+            unset($condition['optional']);
         }
 
         return $condition === [] ? null : $condition;

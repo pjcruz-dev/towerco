@@ -42,4 +42,11 @@ class EApprovalAttachment extends Model
     {
         return 'id';
     }
+
+    public function isSuperseded(): bool
+    {
+        $metadata = is_array($this->metadata) ? $this->metadata : [];
+
+        return trim((string) ($metadata['superseded_at'] ?? '')) !== '';
+    }
 }

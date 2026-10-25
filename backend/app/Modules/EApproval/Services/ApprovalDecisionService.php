@@ -144,6 +144,8 @@ final class ApprovalDecisionService
         ?string $signature,
         TenantUser $actor,
         array $financeInput = [],
+        bool $proceedOptional = false,
+        ?string $fileAudience = null,
     ): EApprovalRequestApproval {
         if ($approval->status !== EApprovalApprovalStatus::PENDING) {
             throw ValidationException::withMessages([
@@ -182,7 +184,7 @@ final class ApprovalDecisionService
                 ]);
             }
 
-            return $this->acknowledge($approval, $submission, $remarks, $signature, $actor);
+            return $this->acknowledge($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience);
         }
 
         if ($decision === 'acknowledged') {
@@ -202,7 +204,7 @@ final class ApprovalDecisionService
             return $this->reject($approval, $submission, $remarks, $actor);
         }
 
-        return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput);
+        return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience);
     }
 
     private function acknowledge(
@@ -211,6 +213,8 @@ final class ApprovalDecisionService
         ?string $remarks,
         ?string $signature,
         TenantUser $actor,
+        bool $proceedOptional = false,
+        ?string $fileAudience = null,
     ): EApprovalRequestApproval {
         $signature = trim((string) $signature);
         if ($signature === '') {
@@ -219,7 +223,8 @@ final class ApprovalDecisionService
             ]);
         }
 
-        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor) {
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience) {
+            $this->rememberFileAudience($submission, $fileAudience);
             $previousApprovalStatus = (string) $approval->status;
             $note = trim((string) $remarks);
 
@@ -236,7 +241,7 @@ final class ApprovalDecisionService
             }
 
             $stepOrder = (int) ($approval->step?->step_order ?? $submission->current_step);
-            $hasMore = $this->workflow->triggerNextStep($submission, $stepOrder);
+            $hasMore = $this->workflow->triggerNextStep($submission, $stepOrder, skipOptional: ! $proceedOptional);
             $submission->refresh();
 
             if (! $hasMore && $submission->status === EApprovalSubmissionStatus::PENDING) {
@@ -245,6 +250,7 @@ final class ApprovalDecisionService
                     $submission->status = EApprovalSubmissionStatus::APPROVED;
                     $submission->save();
                     $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
+                    app(EApprovalApprovedFileDistributionService::class)->send($submission);
                 }
             }
 
@@ -266,6 +272,28 @@ final class ApprovalDecisionService
         });
     }
 
+    private function rememberFileAudience(EApprovalSubmission $submission, ?string $audience): void
+    {
+        if ($audience !== 'everyone' && $audience !== 'department_teams') {
+            return;
+        }
+
+        $decoded = [];
+        $raw = $submission->workflow_snapshot_json;
+        if (is_string($raw) && trim($raw) !== '') {
+            try {
+                $parsed = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                $decoded = is_array($parsed) ? $parsed : [];
+            } catch (\Throwable) {
+                $decoded = [];
+            }
+        }
+
+        $decoded['approved_file_audience'] = $audience;
+        $submission->workflow_snapshot_json = json_encode($decoded, JSON_THROW_ON_ERROR);
+        $submission->save();
+    }
+
     /**
      * @param  array<string, mixed>  $financeInput
      */
@@ -276,8 +304,11 @@ final class ApprovalDecisionService
         ?string $signature,
         TenantUser $actor,
         array $financeInput = [],
+        bool $proceedOptional = false,
+        ?string $fileAudience = null,
     ): EApprovalRequestApproval {
-        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput) {
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience) {
+            $this->rememberFileAudience($submission, $fileAudience);
             $this->financeStage->captureOnApprove($submission, $approval->step, $financeInput);
 
             $previousApprovalStatus = (string) $approval->status;
@@ -294,7 +325,7 @@ final class ApprovalDecisionService
             }
 
             $stepOrder = (int) ($approval->step?->step_order ?? $submission->current_step);
-            $hasMore = $this->workflow->triggerNextStep($submission, $stepOrder);
+            $hasMore = $this->workflow->triggerNextStep($submission, $stepOrder, skipOptional: ! $proceedOptional);
 
             $submission->refresh();
 
@@ -312,6 +343,7 @@ final class ApprovalDecisionService
                         actor: $actor,
                     );
                     $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
+                    app(EApprovalApprovedFileDistributionService::class)->send($submission);
                     if ($submission->isExternalSubmission() && $this->settings->notifyExternalOnApproved()) {
                         $package = $this->externalPackages->mintPackageLinks($submission);
                         $this->mail->dispatchToExternalSubmitter(

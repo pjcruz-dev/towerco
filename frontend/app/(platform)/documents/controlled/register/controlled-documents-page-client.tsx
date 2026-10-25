@@ -16,6 +16,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { FilterSelect } from "@/components/forms/filter-select";
+import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { DataListCard } from "@/components/ui/data-list-card";
 import { RefreshingHint } from "@/components/ui/refreshing-hint";
@@ -26,6 +27,7 @@ import { sortParamFromSortingState, sortingStateFromSortParam } from "@/lib/tabl
 import { controlledDocumentSubmissionUrl } from "@/modules/documents/controlled-document-submission-url";
 import {
   controlledRegisterClearFilters,
+  controlledRegisterCountLabel,
   controlledRegisterFilterChips,
   controlledRegisterHasFilters,
   controlledRegisterHref,
@@ -33,9 +35,11 @@ import {
   readControlledRegisterQuery,
 } from "@/modules/documents/controlled-document-register-query";
 import { usePermission } from "@/hooks/use-permission";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_SORT = "document_code:asc";
+const REGISTER_PAGE_SIZE = 50;
 const SORTABLE = [
   "document_code",
   "dcf_number",
@@ -94,22 +98,42 @@ export function ControlledDocumentsPageClient() {
         department: queryState.department || undefined,
         status: queryState.status || undefined,
         document_type: queryState.documentType || undefined,
-        review: queryState.review || undefined,
         file: queryState.file || undefined,
         effective_from: queryState.effectiveFrom || undefined,
         effective_to: queryState.effectiveTo || undefined,
         published_from: queryState.publishedFrom || undefined,
         published_to: queryState.publishedTo || undefined,
-        per_page: 50,
+        page: queryState.page,
+        per_page: REGISTER_PAGE_SIZE,
         sort: queryState.sort,
       }),
     placeholderData: keepPreviousData,
   });
 
   const kpis = listQuery.data?.kpis;
-  const documentRows = listQuery.data?.documents.data;
+  const documentsPage = listQuery.data?.documents;
+  const documentRows = documentsPage?.data;
+
+  useEffect(() => {
+    if (!documentsPage || listQuery.isPlaceholderData) {
+      return;
+    }
+
+    const pageKey = controlledRegisterParams.page;
+    if (documentsPage.total === 0) {
+      if (queryState.page !== 1) {
+        replace({ [pageKey]: null });
+      }
+      return;
+    }
+
+    if (queryState.page > documentsPage.last_page) {
+      replace({
+        [pageKey]: documentsPage.last_page <= 1 ? null : String(documentsPage.last_page),
+      });
+    }
+  }, [documentsPage, listQuery.isPlaceholderData, queryState.page, replace]);
   const rows = useMemo(() => documentRows ?? [], [documentRows]);
-  const total = listQuery.data?.documents.total ?? rows.length;
   const departments = useMemo(() => {
     const values = new Set(listQuery.data?.facets?.departments ?? []);
     if (queryState.department) {
@@ -177,7 +201,7 @@ export function ControlledDocumentsPageClient() {
       <div className="space-y-6">
         <WorkspacePageHeader
           title="Controlled Document Register"
-          description="ISO master list. Pending rows have never been published. Incoming rows are published, with a revision still in approval."
+          description="ISO master list. Pending includes documents that have never been published and approved documents with a revision still in approval. Obsolete includes withdrawn documents and published documents that still have an older revision."
           actions={
             <>
               <Link
@@ -209,7 +233,7 @@ export function ControlledDocumentsPageClient() {
           }
         />
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" role="group" aria-label="Register status">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" role="group" aria-label="Register status">
           <StatusMetric
             label="Documents in register"
             value={kpis?.total}
@@ -238,18 +262,11 @@ export function ControlledDocumentsPageClient() {
             pressed={queryState.status === "obsolete"}
             onClick={() => selectStatus("obsolete")}
           />
-          <StatusMetric
-            label="Incoming"
-            value={kpis?.incoming}
-            accent="sky"
-            pressed={queryState.status === "incoming"}
-            onClick={() => selectStatus("incoming")}
-          />
         </div>
 
         <DataListCard>
-          <div className="space-y-3 border-b border-border p-4">
-            <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-2 border-b border-border px-3 py-2">
+            <div className={filterBarFieldsClassName}>
               <div className="min-w-[220px] flex-1 space-y-1.5">
                 <label htmlFor="cdr-search" className="text-xs font-medium text-muted-foreground">
                   Search
@@ -265,7 +282,7 @@ export function ControlledDocumentsPageClient() {
                   />
                 </div>
               </div>
-              <div className="w-full min-w-[140px] sm:w-44">
+              <div>
                 <FilterSelect
                   id="cdr-dept"
                   label="Department"
@@ -280,7 +297,7 @@ export function ControlledDocumentsPageClient() {
                   ))}
                 </FilterSelect>
               </div>
-              <div className="w-full min-w-[140px] sm:w-44">
+              <div>
                 <FilterSelect
                   id="cdr-type"
                   label="Document type"
@@ -295,21 +312,7 @@ export function ControlledDocumentsPageClient() {
                   ))}
                 </FilterSelect>
               </div>
-              <div className="w-full min-w-[140px] sm:w-44">
-                <FilterSelect
-                  id="cdr-review"
-                  label="Review"
-                  value={queryState.review}
-                  onChange={(value) => replace({ [controlledRegisterParams.review]: value || null })}
-                >
-                  <option value="">Any review date</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="due_30">Due in 30 days</option>
-                  <option value="due_90">Due in 90 days</option>
-                  <option value="none">No review date</option>
-                </FilterSelect>
-              </div>
-              <div className="w-full min-w-[140px] sm:w-40">
+              <div>
                 <FilterSelect
                   id="cdr-file"
                   label="File"
@@ -321,7 +324,7 @@ export function ControlledDocumentsPageClient() {
                   <option value="missing">Missing file</option>
                 </FilterSelect>
               </div>
-              <div className="w-full min-w-[140px] space-y-1.5 sm:w-40">
+              <div>
                 <label htmlFor="cdr-effective-from" className="text-xs font-medium text-muted-foreground">
                   Effective from
                 </label>
@@ -331,7 +334,7 @@ export function ControlledDocumentsPageClient() {
                   onChange={(value) => replace({ [controlledRegisterParams.effectiveFrom]: value || null })}
                 />
               </div>
-              <div className="w-full min-w-[140px] space-y-1.5 sm:w-40">
+              <div>
                 <label htmlFor="cdr-effective-to" className="text-xs font-medium text-muted-foreground">
                   Effective to
                 </label>
@@ -402,12 +405,28 @@ export function ControlledDocumentsPageClient() {
               onSortingChange={onSortingChange}
               manualSorting
               toolbarStart={
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {listQuery.isLoading ? "Loading documents" : `${total} documents`}
+                <p className="text-xs text-muted-foreground tabular-nums" aria-live="polite">
+                  {controlledRegisterCountLabel(documentsPage, listQuery.isLoading)}
                 </p>
               }
             />
           )}
+          {!listQuery.isError && documentsPage && documentsPage.last_page > 1 ? (
+            <PaginatedListFooter
+              meta={{
+                total: documentsPage.total,
+                per_page: documentsPage.per_page,
+                current_page: documentsPage.current_page,
+                last_page: documentsPage.last_page,
+              }}
+              onPageChange={(page) =>
+                replace({
+                  [controlledRegisterParams.page]: page <= 1 ? null : String(page),
+                })
+              }
+              isPending={listQuery.isFetching}
+            />
+          ) : null}
         </DataListCard>
       </div>
 

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { ControlledDocumentOverviewPageClient } from "./controlled-document-overview-page-client";
@@ -25,5 +26,9 @@ export default async function ControlledDocumentsPage({
     redirect(`/documents/controlled/register?${query.toString()}`);
   }
 
-  return <ControlledDocumentOverviewPageClient />;
+  return (
+    <Suspense fallback={null}>
+      <ControlledDocumentOverviewPageClient />
+    </Suspense>
+  );
 }

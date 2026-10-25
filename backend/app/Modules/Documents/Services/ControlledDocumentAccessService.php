@@ -6,6 +6,7 @@ namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Support\ControlledDocumentAccessPolicy;
+use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -42,6 +43,10 @@ final class ControlledDocumentAccessService
         }
 
         if ($this->shouldScopeToOwnDocuments($user, $policy)) {
+            if (in_array((string) $document->status, ControlledDocumentStatus::obsoleteValues(), true)) {
+                return true;
+            }
+
             return $this->userOwnsOrRevisedDocument($user, $document);
         }
 
@@ -126,6 +131,7 @@ final class ControlledDocumentAccessService
 
         $query->where(static function (Builder $inner) use ($userId): void {
             $inner->where('created_by_id', $userId)
+                ->orWhereIn('status', ControlledDocumentStatus::obsoleteValues())
                 ->orWhereHas('revisions', static function (Builder $revisions) use ($userId): void {
                     $revisions->where('created_by_id', $userId)
                         ->orWhereHas('submission', static function (Builder $submission) use ($userId): void {

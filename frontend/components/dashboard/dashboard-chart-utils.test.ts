@@ -14,6 +14,7 @@ describe("status chart colors", () => {
   it("keeps pending, approved, and draft on their status hues", () => {
     expect(statusChartColor("pending")).toBe(DASHBOARD_CHART.warning);
     expect(statusChartColor("approved")).toBe(DASHBOARD_CHART.success);
+    expect(statusChartColor("obsolete")).toBe(DASHBOARD_CHART.muted);
     expect(statusChartColor("draft")).toBe(DASHBOARD_CHART.sky);
   });
 

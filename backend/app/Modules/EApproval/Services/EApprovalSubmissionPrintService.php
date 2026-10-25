@@ -89,7 +89,7 @@ final class EApprovalSubmissionPrintService
                 'signature' => $a->signature,
                 'acted_at' => $a->acted_at?->format('Y-m-d H:i'),
             ])->values()->all(),
-            'attachments' => $submission->attachments->map(static fn ($a) => [
+            'attachments' => $submission->attachments->reject(static fn ($a) => $a->isSuperseded())->map(static fn ($a) => [
                 'id' => (string) $a->id,
                 'file_name' => $a->file_name,
                 'field_name' => $a->field_name,

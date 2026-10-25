@@ -301,10 +301,7 @@ final class DynScheduledTaskService
         DynScheduledTask::query()
             ->where('command_key', 'documents_expiry')
             ->where('is_system', true)
-            ->where('description', 'Notify owners when controlled documents are near expiry.')
-            ->update([
-                'description' => 'Notify document controllers when a published controlled document is due for review in 90, 60, or 30 days.',
-            ]);
+            ->delete();
     }
 
     /**

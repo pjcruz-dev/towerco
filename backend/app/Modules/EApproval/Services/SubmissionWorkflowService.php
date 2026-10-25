@@ -10,7 +10,9 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalFinalPreview;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
+use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
 use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
@@ -467,6 +469,7 @@ final class SubmissionWorkflowService
         int $completedStepOrder,
         bool $revisedAssign = false,
         array $conditionSkippedOrders = [],
+        bool $skipOptional = false,
     ): bool {
         $this->settleParallelBandIfQuorumMet($submission, $completedStepOrder);
 
@@ -491,6 +494,10 @@ final class SubmissionWorkflowService
         }
 
         if ($pendingSameOrderQuery->exists()) {
+            return true;
+        }
+
+        if ($this->resumeFinalApproverAfterPreview($submission, $workflowSteps, $completedStepOrder)) {
             return true;
         }
 
@@ -535,6 +542,17 @@ final class SubmissionWorkflowService
         foreach ($nextSteps as $step) {
             if ($step->step_order !== $nextOrder) {
                 break;
+            }
+
+            if ($this->previewStepAlreadyFinished($submission, $step, $cycle)) {
+                continue;
+            }
+
+            if ($skipOptional && $this->optionalStepCanBeSkipped($submission, $step)) {
+                $conditionSkipsInBand++;
+                $this->audit->log('skip_step', $submission->id, "Optional step {$step->step_order} was not sent.");
+
+                continue;
             }
 
             if (! $this->evaluateCondition($step->condition, $values)) {
@@ -589,7 +607,319 @@ final class SubmissionWorkflowService
             $nextOrder,
             revisedAssign: $revisedAssign,
             conditionSkippedOrders: $conditionSkippedOrders,
+            skipOptional: $skipOptional,
         );
+    }
+
+    /**
+     * @return array{step_order: int, duty: string}|null
+     */
+    public function optionalContinuation(EApprovalSubmission $submission): ?array
+    {
+        $steps = $this->workflowResolver->stepsForAdvance($submission);
+        $current = (int) $submission->current_step;
+        $later = $steps
+            ->filter(static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order > $current)
+            ->sortBy(static fn (EApprovalWorkflowStep $step): int => (int) $step->step_order)
+            ->groupBy(static fn (EApprovalWorkflowStep $step): int => (int) $step->step_order)
+            ->first();
+
+        if ($later === null || $later->isEmpty()) {
+            return null;
+        }
+
+        $optional = $later->every(
+            static fn (EApprovalWorkflowStep $step): bool => is_array($step->condition) && ! empty($step->condition['optional']),
+        );
+        if (! $optional) {
+            return null;
+        }
+
+        $review = $later->contains(
+            static fn (EApprovalWorkflowStep $step): bool => EApprovalReviewStep::isReviewStep($step),
+        );
+
+        return [
+            'step_order' => (int) $later->first()->step_order,
+            'duty' => $review ? 'review' : 'approve',
+        ];
+    }
+
+    private function optionalStepCanBeSkipped(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
+    {
+        if (! is_array($step->condition) || empty($step->condition['optional'])) {
+            return false;
+        }
+
+        $submission->loadMissing('form');
+
+        return EApprovalFormWorkflowOptions::optionalApproverEnabled(
+            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+        );
+    }
+
+    public function viewerCanSendPreview(EApprovalSubmission $submission, ?TenantUser $viewer): bool
+    {
+        if (! $viewer instanceof TenantUser || (string) $submission->status !== EApprovalSubmissionStatus::PENDING) {
+            return false;
+        }
+
+        $submission->loadMissing('form');
+        $config = EApprovalFinalPreview::fromMetadata(
+            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+        );
+        if (! $config['enabled'] || (int) $submission->current_step !== $config['step_order']) {
+            return false;
+        }
+
+        if ($this->openPreviewApproval($submission) instanceof EApprovalRequestApproval) {
+            return false;
+        }
+
+        return $this->viewerPendingOnStep($submission, $viewer, $config['step_order']) instanceof EApprovalRequestApproval;
+    }
+
+    public function sendOptionalPreview(
+        EApprovalSubmission $submission,
+        TenantUser $actor,
+        string $assigneeId,
+        string $duty,
+        string $reason,
+    ): void {
+        if (! $this->viewerCanSendPreview($submission, $actor)) {
+            throw ValidationException::withMessages([
+                'submission' => [__('Only the final approver on step 3 can send this for a preview.')],
+            ]);
+        }
+
+        $assigneeId = trim($assigneeId);
+        if ($assigneeId === '' || $assigneeId === (string) $actor->id) {
+            throw ValidationException::withMessages([
+                'approver_id' => [__('Choose someone else for the preview.')],
+            ]);
+        }
+
+        $assignee = TenantUser::query()->whereKey($assigneeId)->where('is_active', true)->first();
+        if (! $assignee instanceof TenantUser) {
+            throw ValidationException::withMessages([
+                'approver_id' => [__('That person is not an active user.')],
+            ]);
+        }
+
+        $steps = $this->workflowResolver->stepsForAdvance($submission);
+        $templateId = (string) ($steps->first()?->template_id ?? '');
+        if ($templateId === '') {
+            $submission->loadMissing('form.workflowTemplate');
+            $templateId = (string) ($submission->form?->workflowTemplate?->id ?? '');
+        }
+        if ($templateId === '') {
+            throw ValidationException::withMessages([
+                'submission' => [__('This request has no workflow to extend.')],
+            ]);
+        }
+
+        $duty = $duty === 'review' ? 'review' : 'approve';
+        $reason = trim($reason);
+        $finalStep = EApprovalFinalPreview::fromMetadata(
+            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+        )['step_order'];
+        $order = ((int) $steps->max('step_order')) + 1;
+        $step = EApprovalWorkflowStep::query()->create([
+            'id' => (string) Str::uuid(),
+            'template_id' => $templateId,
+            'step_order' => $order,
+            'approver_type' => 'user',
+            'approver_id' => (string) $assignee->id,
+            'label' => $duty === 'review' ? 'Optional preview' : 'Optional preview approval',
+            'condition' => [
+                'optional_preview' => true,
+                'preview_for_step' => $finalStep,
+                'reason' => $reason,
+                ...($duty === 'review' ? ['duty' => 'review'] : []),
+            ],
+            'compiled_for_submission_id' => (string) $submission->id,
+        ]);
+
+        $this->appendPreviewToSnapshot($submission, $steps, $step);
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        EApprovalRequestApproval::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $submission->id,
+            'step_id' => $step->id,
+            'approver_id' => (string) $assignee->id,
+            'status' => EApprovalApprovalStatus::PENDING,
+            'approval_cycle' => $cycle,
+        ]);
+        $submission->current_step = $order;
+        $submission->save();
+        $this->notifyApproverAssigned($submission, (string) $assignee->id, review: $duty === 'review');
+        $this->audit->log(
+            'optional_preview_sent',
+            (string) $submission->id,
+            sprintf('Preview for %s. %s', $assignee->name, $reason),
+            $actor,
+            entityLabel: $submission->document_no,
+        );
+    }
+
+    /**
+     * @param  Collection<int, EApprovalWorkflowStep>  $workflowSteps
+     */
+    private function resumeFinalApproverAfterPreview(
+        EApprovalSubmission $submission,
+        Collection $workflowSteps,
+        int $completedStepOrder,
+    ): bool {
+        $previewFor = 0;
+        foreach ($workflowSteps as $step) {
+            if ((int) $step->step_order !== $completedStepOrder || ! is_array($step->condition)) {
+                continue;
+            }
+            if (! empty($step->condition['optional_preview'])) {
+                $previewFor = (int) ($step->condition['preview_for_step'] ?? 0);
+            }
+        }
+        if ($previewFor <= 0) {
+            return false;
+        }
+
+        $waiting = EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->whereHas('step', static fn ($query) => $query->where('step_order', $previewFor))
+            ->exists();
+        if (! $waiting) {
+            return false;
+        }
+
+        $submission->current_step = $previewFor;
+        $submission->status = EApprovalSubmissionStatus::PENDING;
+        $submission->save();
+
+        return true;
+    }
+
+    private function previewStepAlreadyFinished(
+        EApprovalSubmission $submission,
+        EApprovalWorkflowStep $step,
+        int $cycle,
+    ): bool {
+        if (! is_array($step->condition) || empty($step->condition['optional_preview'])) {
+            return false;
+        }
+
+        return EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where('step_id', $step->id)
+            ->where(function ($query) use ($cycle): void {
+                $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+            })
+            ->whereIn('status', [EApprovalApprovalStatus::APPROVED, EApprovalApprovalStatus::ACKNOWLEDGED])
+            ->exists();
+    }
+
+    private function viewerPendingOnStep(
+        EApprovalSubmission $submission,
+        TenantUser $viewer,
+        int $stepOrder,
+    ): ?EApprovalRequestApproval {
+        $submission->loadMissing('approvals.step');
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $activeStepIds = array_fill_keys($this->workflowResolver->currentCompiledStepIds($submission), true);
+        $delegation = app(EApprovalDelegationService::class);
+        $viewerId = (string) $viewer->id;
+
+        $pending = $submission->approvals->first(function (EApprovalRequestApproval $approval) use ($viewer, $stepOrder, $cycle, $activeStepIds, $delegation, $viewerId): bool {
+            if ((string) $approval->status !== EApprovalApprovalStatus::PENDING) {
+                return false;
+            }
+            if ((int) ($approval->step?->step_order ?? 0) !== $stepOrder) {
+                return false;
+            }
+            if ((int) ($approval->approval_cycle ?: 1) !== $cycle) {
+                return false;
+            }
+            if ($activeStepIds !== [] && ! isset($activeStepIds[(string) $approval->step_id])) {
+                return false;
+            }
+
+            $assignedId = (string) ($approval->approver_id ?? '');
+            if ($assignedId !== '' && ($assignedId === $viewerId || $delegation->canActForApprover($viewer, $assignedId))) {
+                return true;
+            }
+
+            return $viewer->can('e_approval:forms:manage');
+        });
+
+        return $pending instanceof EApprovalRequestApproval ? $pending : null;
+    }
+
+    public function hasOpenOptionalPreview(EApprovalSubmission $submission): bool
+    {
+        return $this->openPreviewApproval($submission) instanceof EApprovalRequestApproval;
+    }
+
+    private function openPreviewApproval(EApprovalSubmission $submission): ?EApprovalRequestApproval
+    {
+        $submission->loadMissing('approvals.step');
+        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+        $open = $submission->approvals->first(function (EApprovalRequestApproval $approval) use ($cycle): bool {
+            if ((string) $approval->status !== EApprovalApprovalStatus::PENDING) {
+                return false;
+            }
+            if ((int) ($approval->approval_cycle ?: 1) !== $cycle) {
+                return false;
+            }
+            $condition = $approval->step?->condition;
+
+            return is_array($condition) && ! empty($condition['optional_preview']);
+        });
+
+        return $open instanceof EApprovalRequestApproval ? $open : null;
+    }
+
+    /**
+     * @param  Collection<int, EApprovalWorkflowStep>  $steps
+     */
+    private function appendPreviewToSnapshot(
+        EApprovalSubmission $submission,
+        Collection $steps,
+        EApprovalWorkflowStep $added,
+    ): void {
+        $decoded = [];
+        $raw = $submission->workflow_snapshot_json;
+        if (is_string($raw) && trim($raw) !== '') {
+            try {
+                $parsed = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+                $decoded = is_array($parsed) ? $parsed : [];
+            } catch (\Throwable) {
+                $decoded = [];
+            }
+        }
+
+        $snapshotSteps = is_array($decoded['steps'] ?? null) ? $decoded['steps'] : [];
+        if ($snapshotSteps === []) {
+            $snapshotSteps = $steps->map(static fn (EApprovalWorkflowStep $step): array => [
+                'id' => (string) $step->id,
+                'step_order' => (int) $step->step_order,
+                'approver_type' => $step->approver_type,
+                'approver_id' => $step->approver_id,
+                'label' => $step->label,
+                'condition' => $step->condition,
+            ])->values()->all();
+        }
+
+        $snapshotSteps[] = [
+            'id' => (string) $added->id,
+            'step_order' => (int) $added->step_order,
+            'approver_type' => $added->approver_type,
+            'approver_id' => $added->approver_id,
+            'label' => $added->label,
+            'condition' => $added->condition,
+        ];
+        $decoded['steps'] = array_values($snapshotSteps);
+        $submission->workflow_snapshot_json = json_encode($decoded, JSON_THROW_ON_ERROR);
+        $submission->save();
     }
 
     /**

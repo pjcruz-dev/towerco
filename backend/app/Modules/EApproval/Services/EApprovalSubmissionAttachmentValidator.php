@@ -20,6 +20,7 @@ final class EApprovalSubmissionAttachmentValidator
         UploadedFile $file,
         ?string $fieldName,
         ?array $metadata = null,
+        ?string $replaceAttachmentId = null,
     ): void {
         $this->files->assertUploadAllowed($file);
 
@@ -67,7 +68,17 @@ final class EApprovalSubmissionAttachmentValidator
         }
 
         $existing = $submission->attachments
-            ->filter(static fn ($attachment) => (string) ($attachment->field_name ?? '') === $fieldName)
+            ->filter(static function ($attachment) use ($fieldName, $replaceAttachmentId): bool {
+                if ((string) ($attachment->field_name ?? '') !== $fieldName) {
+                    return false;
+                }
+                if ($replaceAttachmentId !== null && (string) $attachment->id === $replaceAttachmentId) {
+                    return false;
+                }
+                $metadata = is_array($attachment->metadata) ? $attachment->metadata : [];
+
+                return trim((string) ($metadata['superseded_at'] ?? '')) === '';
+            })
             ->count();
 
         if ($existing >= $maxFiles) {

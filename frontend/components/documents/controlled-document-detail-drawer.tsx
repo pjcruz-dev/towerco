@@ -28,6 +28,15 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { controlledDocumentStatusTone, statusToneClasses } from "@/components/ui/status-tone";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -67,7 +76,7 @@ function DocumentStatusChip({ status }: { status: string }) {
 
 function RevisionStatusPill({ status }: { status: string }) {
   const tone = status === "published" ? "success" : "neutral";
-  const label = status === "superseded" ? "Superseded" : status === "published" ? "Published" : status;
+  const label = status === "superseded" ? "Obsolete" : status === "published" ? "Published" : status;
   return (
     <StatusBadge tone={tone} className="capitalize text-[10px]">
       {label}
@@ -121,6 +130,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadRevisionId, setUploadRevisionId] = useState<string | null>(null);
+  const [confirmForId, setConfirmForId] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["documents", "controlled", documentId],
@@ -131,6 +141,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
   const obsoleteMutation = useMutation({
     mutationFn: markControlledDocumentObsolete,
     onSuccess: () => {
+      setConfirmForId(null);
       void queryClient.invalidateQueries({ queryKey: ["documents", "controlled"] });
       push({ level: "success", title: "Document marked obsolete" });
     },
@@ -154,8 +165,10 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
 
   const doc = query.data;
   const isObsolete = doc?.status === "obsolete";
+  const confirmObsolete = documentId !== null && confirmForId === documentId;
 
   return (
+    <>
     <Sheet open={documentId !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
         {/* ── Header ── */}
@@ -232,7 +245,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
 
               {doc.incoming_submission_id && doc.incoming_revision != null ? (
                 <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
-                  <p className="text-foreground">Revision {doc.incoming_revision} is in approval.</p>
+                  <p className="text-foreground">Revision {doc.incoming_revision} is pending.</p>
                   <Link
                     href={`/e-approval/submissions/${doc.incoming_submission_id}`}
                     className="mt-1 inline-flex items-center gap-1 font-medium text-foreground underline-offset-2 hover:underline"
@@ -265,7 +278,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                       variant="outline"
                       size="sm"
                       disabled={obsoleteMutation.isPending}
-                      onClick={() => obsoleteMutation.mutate(doc.id)}
+                      onClick={() => setConfirmForId(doc.id)}
                     >
                       <Archive className="mr-1.5 h-3.5 w-3.5" />
                       {obsoleteMutation.isPending ? "Updating…" : "Mark obsolete"}
@@ -446,5 +459,47 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
         />
       </SheetContent>
     </Sheet>
+    {doc ? (
+      <Dialog
+        open={confirmObsolete}
+        onOpenChange={(open) => {
+          if (!obsoleteMutation.isPending) {
+            setConfirmForId(open ? doc.id : null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="break-words">Mark {doc.document_code} obsolete</DialogTitle>
+            <DialogDescription className="break-words">
+              {doc.document_code} leaves active use. The register will keep the record, and it will no longer be a current controlled document.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-muted-foreground break-words">
+              {doc.title}
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmForId(null)}
+              disabled={obsoleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => obsoleteMutation.mutate(doc.id)}
+              disabled={obsoleteMutation.isPending}
+            >
+              {obsoleteMutation.isPending ? "Updating…" : "Mark obsolete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    ) : null}
+    </>
   );
 }

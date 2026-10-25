@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\DocExtract\Services;
 
+use App\Core\Support\ExcelWorkbookWriter;
 use App\Modules\DocExtract\Models\DocExtractBatch;
 use App\Modules\DocExtract\Models\DocExtractDocument;
 use Symfony\Component\HttpFoundation\StreamedResponse;

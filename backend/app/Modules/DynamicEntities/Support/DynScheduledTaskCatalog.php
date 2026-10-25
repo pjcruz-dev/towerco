@@ -105,17 +105,6 @@ final class DynScheduledTaskCatalog
                 'module' => 'document_register',
             ],
             [
-                'key' => 'documents_expiry',
-                'name' => 'Document expiry',
-                'description' => 'Notify document controllers when a published controlled document is due for review in 90, 60, or 30 days.',
-                'schedule' => 'daily',
-                'cron_expression' => '0 7 * * *',
-                'artisan' => 'documents:expiry-notify',
-                'execution_label' => 'documents:expiry-notify',
-                'tenant_scoped' => true,
-                'module' => 'document_register',
-            ],
-            [
                 'key' => 'doc_extract_prune',
                 'name' => 'DocExtract cleanup',
                 'description' => 'Remove expired DocExtract working files.',

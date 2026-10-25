@@ -17,10 +17,11 @@ export type DashboardDonutChartProps = {
   data: DashboardChartDatum[];
   emptyMessage?: string;
   valueLabel?: string;
-  /** donut = ring with center total, pie = full disc, semi = half ring. */
   shape?: "donut" | "pie" | "semi";
   height?: number;
   className?: string;
+  /** Keep zero slices in the legend. The ring still draws only slices above zero. */
+  showZeroInLegend?: boolean;
 };
 
 export function DashboardDonutChartImpl({
@@ -32,6 +33,7 @@ export function DashboardDonutChartImpl({
   shape = "donut",
   height = 220,
   className,
+  showZeroInLegend = false,
 }: DashboardDonutChartProps) {
   const chartData = useMemo(
     () =>
@@ -43,6 +45,9 @@ export function DashboardDonutChartImpl({
         })),
     [data],
   );
+  const legendRows = showZeroInLegend
+    ? data.map((row, index) => ({ ...row, fill: row.fill ?? resolveChartFill(row, index) }))
+    : chartData;
   const total = useMemo(() => chartData.reduce((sum, row) => sum + row.value, 0), [chartData]);
 
   return (
@@ -103,7 +108,7 @@ export function DashboardDonutChartImpl({
             ) : null}
             </div>
             <ul className="mt-1 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-              {chartData.map((row) => {
+              {legendRows.map((row) => {
                 const pct = total > 0 ? Math.round((row.value / total) * 100) : 0;
                 return (
                   <li key={row.key} className="flex items-center gap-1.5">

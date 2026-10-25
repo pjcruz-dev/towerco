@@ -121,6 +121,13 @@ final class EApprovalApprovalPolicyStepPersister
                 $condition['duty'] = EApprovalReviewStep::DUTY;
             }
 
+            $optional = ! empty($definition['optional'])
+                || (is_array($definition['condition'] ?? null) && ! empty($definition['condition']['optional']));
+            if ($optional) {
+                $condition = is_array($condition) ? $condition : [];
+                $condition['optional'] = true;
+            }
+
             $approverId = $approverId === '' ? null : $approverId;
 
             $step = EApprovalWorkflowStep::query()->create([

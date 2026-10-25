@@ -14,6 +14,7 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
+use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
@@ -673,6 +674,7 @@ final class EApprovalSubmissionService
                     ->where('submission_id', $submission->id)
                     ->whereIn('status', [
                         EApprovalApprovalStatus::APPROVED,
+                        EApprovalApprovalStatus::ACKNOWLEDGED,
                         EApprovalApprovalStatus::PENDING,
                         EApprovalApprovalStatus::INVALIDATED,
                         EApprovalApprovalStatus::CANCELLED,
@@ -873,10 +875,20 @@ final class EApprovalSubmissionService
                 'field_name' => $a->field_name,
                 'file_name' => $a->file_name,
                 'file_path' => $a->file_path,
+                'created_at' => $a->created_at?->toIso8601String(),
                 'metadata' => is_array($a->metadata) ? $a->metadata : null,
             ])->values()->all(),
             'viewer_is_requestor' => $viewerContext['viewer_is_requestor'],
             'viewer_pending_approval_id' => $viewerContext['viewer_pending_approval_id'],
+            'optional_next' => $viewerContext['viewer_pending_approval_id']
+                && EApprovalFormWorkflowOptions::optionalApproverEnabled(
+                    is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+                )
+                ? $this->workflow->optionalContinuation($submission)
+                : null,
+            'send_approved_files' => EApprovalFormWorkflowOptions::sendApprovedFiles(
+                is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+            ),
             'revision_config' => EApprovalRevisionRouting::fromFormMetadata(
                 is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [],
             ),
@@ -1108,12 +1120,14 @@ final class EApprovalSubmissionService
     }
 
     /**
-     * Drafts plus returned/rejected requests (requestor may update attachments before resubmit).
+     * The requestor can replace a file while the request is still in review.
+     * The previous file stays, with its marks. The new file starts clean.
      */
     public function assertCanEditAttachments(EApprovalSubmission $submission, TenantUser $actor): void
     {
         $editable = [
             EApprovalSubmissionStatus::DRAFT,
+            EApprovalSubmissionStatus::PENDING,
             EApprovalSubmissionStatus::RETURNED,
             EApprovalSubmissionStatus::REJECTED,
         ];
@@ -1301,6 +1315,9 @@ final class EApprovalSubmissionService
         $counts = [];
 
         foreach ($submission->attachments as $attachment) {
+            if ($attachment->isSuperseded()) {
+                continue;
+            }
             $fieldName = trim((string) ($attachment->field_name ?? ''));
             if ($fieldName === '') {
                 continue;
@@ -1321,6 +1338,9 @@ final class EApprovalSubmissionService
         $slots = [];
 
         foreach ($submission->attachments as $attachment) {
+            if ($attachment->isSuperseded()) {
+                continue;
+            }
             $fieldName = trim((string) ($attachment->field_name ?? ''));
             if ($fieldName === '') {
                 continue;

@@ -31,7 +31,8 @@ export function createControlledDocumentsTableColumns(options: {
       (row) => (
         <button
           type="button"
-          className="text-left font-medium text-foreground hover:text-primary"
+          className="rounded-md text-left font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          aria-label={`Open ${row.title}`}
           onClick={() => options.onOpen(row.id)}
         >
           {row.title}
@@ -63,7 +64,7 @@ export function createControlledDocumentsTableColumns(options: {
               href={`/e-approval/submissions/${row.incoming_submission_id}`}
               className={statusToneClassName("warning")}
             >
-              Rev {row.incoming_revision} incoming
+              Rev {row.incoming_revision} pending
             </Link>
           ) : null}
         </span>
@@ -71,13 +72,32 @@ export function createControlledDocumentsTableColumns(options: {
       { enableSorting: true },
     ),
     createTextColumn("effective_date", "Effective", (row) => row.effective_date ?? "—", {
-      className: "text-muted-foreground",
+      className: "text-muted-foreground tabular-nums",
       enableSorting: true,
     }),
     createTextColumn("next_review_date", "Next review", (row) => row.next_review_date ?? "—", {
       className: "text-muted-foreground tabular-nums",
       enableSorting: true,
     }),
+    createTextColumn(
+      "aging",
+      "Aging",
+      (row) => {
+        const people = row.aging ?? [];
+        if (people.length === 0) {
+          return "—";
+        }
+        return (
+          <span className="flex flex-col gap-0.5">
+            {people.map((person) => (
+              <span key={`${person.submission_id}-${person.name}`} className="text-xs text-muted-foreground">
+                {person.name} · {person.role} · {person.requestor_department ?? "—"} · {person.age_days}d
+              </span>
+            ))}
+          </span>
+        );
+      },
+    ),
     createTextColumn(
       "has_file",
       "File",

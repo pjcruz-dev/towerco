@@ -10,6 +10,7 @@ use App\Modules\Documents\Models\ControlledDocumentRevision;
 use App\Modules\Documents\Support\ControlledDocumentImportArchive;
 use App\Modules\Documents\Support\ControlledDocumentImportFields;
 use App\Modules\Documents\Support\ControlledDocumentImportPathMatcher;
+use App\Modules\Documents\Support\ControlledDocumentMasterLabel;
 use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -32,6 +33,7 @@ final class ControlledDocumentImportService
         private readonly ControlledDocumentPendingImportService $pending,
         private readonly ExcelWorkbookReader $workbooks,
         private readonly ControlledDocumentDcfNumberService $dcfNumbers,
+        private readonly ControlledDocumentMasterLabel $labels,
     ) {}
 
     /**
@@ -348,8 +350,9 @@ final class ControlledDocumentImportService
                     && $target->stored_path !== '';
                 if (! $document instanceof ControlledDocument || ! $target instanceof ControlledDocumentRevision || ! $file instanceof UploadedFile || $targetHasFile) {
                     if ($document instanceof ControlledDocument) {
+                        $statusChanged = $this->applyImportedDocumentStatus($document, $data);
                         $this->supersedeRevisionsBelowCurrent($document);
-                        if ($this->applyImportedDcf($document, $revisionNumber, $dcfNumber)) {
+                        if ($statusChanged || $this->applyImportedDcf($document, $revisionNumber, $dcfNumber)) {
                             return 'updated';
                         }
                     }
@@ -366,31 +369,34 @@ final class ControlledDocumentImportService
 
             $effectiveDate = $this->parseDate($data['effective_date'] ?? null);
             $nextReviewDate = $this->parseDate($data['next_review_date'] ?? null);
+            $documentStatus = $this->resolveImportedDocumentStatus($data, $document);
 
             if ($document === null) {
                 $document = ControlledDocument::query()->create([
                     'id' => (string) Str::uuid(),
                     'document_code' => $code,
                     'title' => $title,
-                    'document_type' => $this->nullableString($data['document_type'] ?? null),
-                    'department' => $this->nullableString($data['department'] ?? null),
+                    'document_type' => $this->labels->documentType($this->nullableString($data['document_type'] ?? null)),
+                    'department' => $this->labels->department($this->nullableString($data['department'] ?? null)),
                     'current_revision' => $revisionNumber,
-                    'status' => ControlledDocumentStatus::PUBLISHED,
+                    'status' => $documentStatus,
                     'effective_date' => $effectiveDate,
                     'next_review_date' => $nextReviewDate,
                     'created_by_id' => $actor->id,
-                    'published_at' => now(),
+                    'published_at' => $documentStatus === ControlledDocumentStatus::PUBLISHED ? now() : null,
                 ]);
             } else {
                 $document->fill([
                     'title' => $title,
-                    'document_type' => $this->nullableString($data['document_type'] ?? null) ?? $document->document_type,
-                    'department' => $this->nullableString($data['department'] ?? null) ?? $document->department,
+                    'document_type' => $this->labels->documentType($this->nullableString($data['document_type'] ?? null)) ?? $document->document_type,
+                    'department' => $this->labels->department($this->nullableString($data['department'] ?? null)) ?? $document->department,
                     'current_revision' => max((int) $document->current_revision, $revisionNumber),
-                    'status' => ControlledDocumentStatus::PUBLISHED,
+                    'status' => $documentStatus,
                     'effective_date' => $effectiveDate ?? $document->effective_date,
                     'next_review_date' => $nextReviewDate ?? $document->next_review_date,
-                    'published_at' => now(),
+                    'published_at' => $documentStatus === ControlledDocumentStatus::PUBLISHED
+                        ? ($document->published_at ?? now())
+                        : $document->published_at,
                 ]);
                 $document->save();
             }
@@ -747,8 +753,8 @@ final class ControlledDocumentImportService
         }
 
         $status = strtolower(trim((string) ($data['status'] ?? '')));
-        if ($status !== '' && ! in_array($status, ['pending', 'published'], true)) {
-            return __('status must be pending or published.');
+        if ($status !== '' && ! in_array($status, ['pending', 'published', 'obsolete', 'superseded'], true)) {
+            return __('status must be pending, published, or obsolete.');
         }
 
         $dcfProblem = $this->dcfNumbers->importProblem($data['dcf_number'] ?? null, $status === 'pending');
@@ -762,6 +768,43 @@ final class ControlledDocumentImportService
             'invalid_type' => __('This file type is not allowed.'),
             default => null,
         };
+    }
+
+    /**
+     * Blank status keeps an obsolete document obsolete. superseded in the file means obsolete.
+     *
+     * @param  array<string, string|null>  $data
+     */
+    private function resolveImportedDocumentStatus(array $data, ?ControlledDocument $existing): string
+    {
+        $status = strtolower(trim((string) ($data['status'] ?? '')));
+        if (in_array($status, ['obsolete', 'superseded'], true)) {
+            return ControlledDocumentStatus::OBSOLETE;
+        }
+        if ($status === '' && $existing?->status === ControlledDocumentStatus::OBSOLETE) {
+            return ControlledDocumentStatus::OBSOLETE;
+        }
+        if ($status === '' && (string) $existing?->status === 'superseded') {
+            return ControlledDocumentStatus::OBSOLETE;
+        }
+
+        return ControlledDocumentStatus::PUBLISHED;
+    }
+
+    /**
+     * @param  array<string, string|null>  $data
+     */
+    private function applyImportedDocumentStatus(ControlledDocument $document, array $data): bool
+    {
+        $next = $this->resolveImportedDocumentStatus($data, $document);
+        if ((string) $document->status === $next) {
+            return false;
+        }
+
+        $document->status = $next;
+        $document->save();
+
+        return true;
     }
 
     /**
@@ -798,6 +841,10 @@ final class ControlledDocumentImportService
             $hasFile = is_string($revision->stored_path) && $revision->stored_path !== '';
             if (! $hasFile && $fileStatus === 'matched') {
                 return 'attached';
+            }
+
+            if ($this->resolveImportedDocumentStatus($data, $document) !== (string) $document->status) {
+                return 'updated';
             }
 
             return 'skipped';

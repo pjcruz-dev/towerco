@@ -246,8 +246,8 @@ export function TicketingReportsPageClient() {
           ))}
         </div>
 
-        <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <section className="rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <h2 className="text-sm font-medium text-foreground">Filters</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -271,7 +271,7 @@ export function TicketingReportsPageClient() {
               </Button>
             ) : null}
           </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <FilterSelect id="ticket-report-scope" label="Scope" value={scope} onChange={(value) => setScope(value as typeof scope)}>
               <option value="all">All visible tickets</option>
               <option value="mine">Requested by me</option>

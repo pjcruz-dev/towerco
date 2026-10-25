@@ -504,7 +504,7 @@ function DocumentFileTableRow({
           >
             <option value="draft">Draft</option>
             <option value="final">Final</option>
-            <option value="superseded">Superseded</option>
+            <option value="superseded">Obsolete</option>
           </Select>
         ) : (
           <span className="text-muted-foreground">{file.status}</span>

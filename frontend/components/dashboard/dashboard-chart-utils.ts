@@ -136,7 +136,9 @@ export function statusChartColor(value: string): string | null {
   }
 
   if (key === "draft") return DASHBOARD_CHART.sky;
-  if (key === "closed") return DASHBOARD_CHART.muted;
+  if (key === "closed" || key === "obsolete" || key === "superseded" || key === "archived") {
+    return DASHBOARD_CHART.muted;
+  }
 
   if (
     key === "pending" ||

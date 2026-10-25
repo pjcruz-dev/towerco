@@ -75,10 +75,10 @@ export function ControlledDocumentSavedReportsCard({
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+    <section className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">Saved reports</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h2 className="text-sm font-medium text-foreground">Saved reports</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
           Save the filters on this page. Run downloads the CSV now. A schedule stores the latest file once each due day.
         </p>
       </div>
@@ -118,7 +118,7 @@ export function ControlledDocumentSavedReportsCard({
       ) : (savedQuery.data ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">No saved reports yet.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {(savedQuery.data ?? []).map((report) => (
             <SavedReportRow key={report.id} report={report} onApply={() => apply(report)} onError={setError} />
           ))}

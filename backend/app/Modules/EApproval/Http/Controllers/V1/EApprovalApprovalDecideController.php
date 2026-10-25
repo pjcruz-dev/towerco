@@ -29,6 +29,8 @@ class EApprovalApprovalDecideController extends AbstractApiController
             'release_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
             'release_date' => ['sometimes', 'nullable', 'date'],
             'settlement_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'proceed_optional' => ['sometimes', 'boolean'],
+            'file_audience' => ['sometimes', 'nullable', 'string', 'in:department_teams,everyone'],
         ]);
 
         if ($data['decision'] === 'approved' || $data['decision'] === 'acknowledged') {
@@ -62,6 +64,8 @@ class EApprovalApprovalDecideController extends AbstractApiController
                 'release_date' => $data['release_date'] ?? null,
                 'settlement_reference' => $data['settlement_reference'] ?? null,
             ],
+            (bool) ($data['proceed_optional'] ?? false),
+            isset($data['file_audience']) ? (string) $data['file_audience'] : null,
         );
 
         return $this->ok(['approval' => $updated->toListRow()]);

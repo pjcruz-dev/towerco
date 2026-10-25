@@ -111,9 +111,12 @@ function QueueList({
               <p className="text-xs text-muted-foreground">
                 {formatEApprovalStatusLabel(row.status)}
                 {row.step_order != null ? ` · Step ${row.step_order}` : ""}
-                {metaLabel === "requestor" && row.requestor_name
-                  ? ` · ${row.requestor_name}`
-                  : ` · ${formatWhen(row.waiting_since)}`}
+                {row.duty === "review" ? " · Reviewer" : row.duty === "approve" ? " · Approver" : ""}
+                {row.age_days != null
+                  ? ` · ${row.age_days} day${row.age_days === 1 ? "" : "s"} this round`
+                  : metaLabel === "requestor" && row.requestor_name
+                    ? ` · ${row.requestor_name}`
+                    : ` · ${formatWhen(row.waiting_since)}`}
               </p>
             </div>
             <ArrowRight className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden />

@@ -4,7 +4,7 @@ import { ControlledDocumentsPageClient } from "./controlled-documents-page-clien
 
 export default function ControlledDocumentsRegisterPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading documents…</p>}>
       <ControlledDocumentsPageClient />
     </Suspense>
   );

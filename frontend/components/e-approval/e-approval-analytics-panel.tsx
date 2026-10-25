@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DashboardKindWidget } from "@/components/dashboard/widgets/dashboard-kind-widget";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { FilterSelect } from "@/components/forms/filter-select";
+import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
@@ -227,13 +228,12 @@ function AnalyticsFiltersCard({ title, description, compact }: AnalyticsSectionC
       className={compact ? "shadow-none" : undefined}
       bodyClassName={compact ? "p-3" : undefined}
       actions={
-        <div className="flex flex-wrap items-end gap-2" data-help="ea-analytics-advanced-filters">
+        <div className={filterBarFieldsClassName} data-help="ea-analytics-advanced-filters">
           <FilterSelect
             id="analytics-form-filter"
             label="Form"
             value={props.formId}
             onChange={props.setFormId}
-            className="w-[12rem]"
           >
             <option value="">All forms</option>
             {props.formOptions.map((form) => (
@@ -247,7 +247,6 @@ function AnalyticsFiltersCard({ title, description, compact }: AnalyticsSectionC
             label="Subsidiary"
             value={props.subsidiary}
             onChange={props.setSubsidiary}
-            className="w-[9.5rem]"
           >
             <option value="">All subsidiaries</option>
             {props.subsidiaryOptions.map((code) => (
@@ -261,7 +260,6 @@ function AnalyticsFiltersCard({ title, description, compact }: AnalyticsSectionC
             label="Department"
             value={props.department}
             onChange={props.setDepartment}
-            className="w-[11rem]"
           >
             <option value="">All departments</option>
             {props.departmentOptions.map((code) => (

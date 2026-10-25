@@ -14,7 +14,7 @@ export const CONTROLLED_REPORT_WIDGETS: readonly ControlledReportWidget[] = [
   {
     id: "cdr_filters",
     label: "Filters",
-    description: "Period, department, type, status, review, and file.",
+    description: "Period, department, type, status, and file.",
     defaultSpan: "full",
     removable: false,
   },
@@ -48,8 +48,8 @@ export const CONTROLLED_REPORT_WIDGETS: readonly ControlledReportWidget[] = [
   },
   {
     id: "cdr_review",
-    label: "Review horizon",
-    description: "Overdue, the next 30 days, and days 31 to 90.",
+    label: "Register mix and aging",
+    description: "Pending, approved, and obsolete, plus who is still waiting.",
     defaultSpan: "full",
     removable: true,
   },
