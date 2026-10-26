@@ -233,8 +233,31 @@ export type ControlledDocumentOverview = {
     document_type: string | null;
     status: string;
     current_revision: number;
+    effective_date: string | null;
     published_at: string | null;
   }>;
+};
+
+export type ControlledDocumentObsoleteRow = {
+  document_id: string;
+  revision_id: string | null;
+  document_code: string;
+  title: string;
+  department: string | null;
+  document_type: string | null;
+  revision_number: number | null;
+  standing: "current" | "obsolete" | "pending";
+  effective_date: string | null;
+  approved_at: string | null;
+  filename: string | null;
+  has_file: boolean;
+};
+
+export type ControlledDocumentObsoleteBoard = {
+  counts: { obsolete: number; approved: number; pending: number };
+  obsolete: ControlledDocumentObsoleteRow[];
+  approved: ControlledDocumentObsoleteRow[];
+  pending: ControlledDocumentObsoleteRow[];
 };
 
 export type ControlledDocumentReport = {
@@ -260,6 +283,13 @@ export async function fetchControlledDocumentOverview(params?: {
   const response = await apiClient.get<{ data: ControlledDocumentOverview }>(
     "/documents/controlled/overview",
     { params },
+  );
+  return response.data.data;
+}
+
+export async function fetchControlledDocumentObsoleteBoard(): Promise<ControlledDocumentObsoleteBoard> {
+  const response = await apiClient.get<{ data: ControlledDocumentObsoleteBoard }>(
+    "/documents/controlled/obsolete",
   );
   return response.data.data;
 }

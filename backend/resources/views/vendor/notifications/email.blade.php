@@ -41,7 +41,7 @@
 {{ $salutation }}
 @else
 @lang('Regards,')<br>
-{{ config('app.name') }}
+{{ $urlResolver->mailBrandLabel() }}
 @endif
 
 {{-- Subcopy --}}

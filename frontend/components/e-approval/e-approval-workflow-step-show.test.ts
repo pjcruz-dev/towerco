@@ -65,7 +65,7 @@ describe("rejected approval trail", () => {
     );
 
     expect(new Set(steps.map((step) => step.key)).size).toBe(steps.length);
-    expect(steps[0]?.statusLabel).toBe("Acknowledged");
+    expect(steps[0]?.statusLabel).toBe("Reviewed");
     expect(steps[1]?.statusLabel).toBe("Pending");
     expect(steps[2]?.statusLabel).toBe("Pending");
     expect(steps[3]?.state).toBe("skipped");

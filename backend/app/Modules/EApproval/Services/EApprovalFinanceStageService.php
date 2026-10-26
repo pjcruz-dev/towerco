@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Validation\ValidationException;
@@ -33,10 +34,13 @@ final class EApprovalFinanceStageService
         $status = (string) $submission->status;
         $family = $this->family($submission->form);
 
+        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+
         if ($status === EApprovalSubmissionStatus::PENDING) {
             $stepLabel = $this->currentStepLabel($submission);
+            $word = EApprovalFormMailConfig::statusWord($metadata, EApprovalSubmissionStatus::PENDING);
 
-            return $stepLabel !== '' ? 'Pending — '.$stepLabel : 'Pending';
+            return $stepLabel !== '' ? $word.' — '.$stepLabel : $word;
         }
 
         if ($status === EApprovalSubmissionStatus::APPROVED) {
@@ -51,7 +55,7 @@ final class EApprovalFinanceStageService
             }
         }
 
-        return EApprovalSubmissionStatus::label($status);
+        return EApprovalFormMailConfig::statusWord($metadata, $status);
     }
 
     /**

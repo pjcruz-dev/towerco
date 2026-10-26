@@ -21,7 +21,7 @@ export function EApprovalFormWorkflowOptionsCard({ value, onChange, disabled }: 
         <div className="space-y-1">
           <Label htmlFor="ea-optional-approver">Optional approver</Label>
           <p className="text-xs text-muted-foreground">
-            When a step is marked Optional, the approver before it can finish the request or send it into that step. While this is off, every step on the path runs.
+            Mark the step Optional on the path, then save. The approver before that step can finish the request or send it on. While this is off, that step still runs. Requests already in progress pick this up after you save.
           </p>
         </div>
         <Switch

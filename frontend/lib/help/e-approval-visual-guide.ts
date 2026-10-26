@@ -102,7 +102,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 6,
             title: "Status badge",
-            body: "Draft, Pending, Approved, Rejected, and other states are color-coded on each card. Step Show uses Acknowledged when a reviewer has signed.",
+            body: "Draft, Pending, Approved, Rejected, and other states are color-coded on each card. Step Show uses Reviewed when a reviewer has signed.",
             x: 67,
             y: 37,
           },
@@ -207,7 +207,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Summary & Step Show",
-            body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, acknowledged, approved, skipped).",
+            body: "Form, requestor, subsidiary, and submitted time — plus the full Step Show trail (pending, reviewed, approved, skipped).",
             x: 50,
             y: 26,
           },
@@ -253,7 +253,7 @@ export const eApprovalVisualGuideTabs: VisualGuideTab[] = [
           {
             n: 2,
             title: "Step status",
-            body: "Approved, acknowledged, pending, or skipped. Acknowledged means a reviewer signed. That is not an approval.",
+            body: "Approved, reviewed, pending, or skipped. Reviewed means a reviewer signed. That is not an approval.",
             x: 62,
             y: 55,
           },

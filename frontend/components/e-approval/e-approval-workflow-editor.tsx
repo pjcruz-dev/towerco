@@ -15,6 +15,7 @@ import { EApprovalWorkflowOrderDiagram } from "@/components/e-approval/e-approva
 import { EApprovalWorkflowPathDiagram } from "@/components/e-approval/e-approval-workflow-path-diagram";
 import { EApprovalWorkflowPreviewFields } from "@/components/e-approval/e-approval-workflow-preview-fields";
 import { EApprovalWorkflowStepConditions } from "@/components/e-approval/e-approval-workflow-step-conditions";
+import { EApprovalWorkflowStepMail } from "@/components/e-approval/e-approval-workflow-step-mail";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -96,6 +97,7 @@ import {
   workflowFieldRoutingKind,
 } from "@/modules/e-approval/workflow-rules";
 import { E_APPROVAL_WORKFLOW_SHELL_CLASS } from "@/modules/e-approval/form-layout";
+import { formMailSettingsFromMetadata, type FormMailSettings } from "@/modules/e-approval/form-mail-config";
 import { useNotificationStore } from "@/stores/notification-store";
 
 type Props = {
@@ -104,8 +106,10 @@ type Props = {
   onStepsChange: (steps: EApprovalWorkflowStepInput[]) => void;
   approverOptions: { id: string; label: string }[];
   formId?: string;
+  formName?: string;
   /** Liquidation and reimbursement only. Other forms never show the settlement tick. */
   formFamily?: string | null;
+  mailSettings?: FormMailSettings;
 };
 
 type StepCardProps = {
@@ -127,6 +131,8 @@ type StepCardProps = {
   /** Hide free-form when editor (If/Else / ladder thresholds are edited at group level). */
   hideWhenEditor?: boolean;
   settlementFamily?: "liquidation" | "reimbursement" | null;
+  mailSettings: FormMailSettings;
+  formName: string;
 };
 
 function approverLabelForStep(
@@ -191,6 +197,8 @@ function WorkflowStepCard({
   compactHeader,
   hideWhenEditor = false,
   settlementFamily = null,
+  mailSettings,
+  formName,
 }: StepCardProps) {
   const alwaysRuns = stepRunsAlways(step);
   const nextStep = steps[index + 1];
@@ -314,12 +322,12 @@ function WorkflowStepCard({
           ) : null}
           {step.type === "reviewer_list" ? (
             <p className="text-[11px] text-muted-foreground">
-              Each selected person comments on the file, signs, and acknowledges. The request continues only after every reviewer is done. Acknowledgement is not an approval.
+              Each selected person comments on the file, signs, and reviews. The request continues only after every reviewer is done. Reviewed is not an approval.
             </p>
           ) : null}
           {step.type === "user" && step.duty === "review" ? (
             <p className="text-[11px] text-muted-foreground">
-              This person signs and acknowledges before the next step opens. A path of only reviewers is complete when the last one acknowledges.
+              This person signs and reviews before the next step opens. A path of only reviewers is complete when the last one reviews.
             </p>
           ) : null}
         </label>
@@ -529,6 +537,14 @@ function WorkflowStepCard({
         </div>
       ) : null}
 
+      <EApprovalWorkflowStepMail
+        step={step}
+        approverOptions={approverOptions}
+        mailSettings={mailSettings}
+        formName={formName}
+        onUpdate={onUpdate}
+      />
+
       {hideWhenEditor ? null : (
         <div className="mt-4">
           <button
@@ -629,6 +645,8 @@ export function EApprovalWorkflowEditor({
   approverOptions,
   formId,
   formFamily,
+  formName = "",
+  mailSettings,
 }: Props) {
   const settlementFamily =
     formFamily === "liquidation" || formFamily === "reimbursement" ? formFamily : null;
@@ -737,6 +755,18 @@ export function EApprovalWorkflowEditor({
   });
 
   const updateStep = (index: number, patch: Partial<EApprovalWorkflowStepInput>) => {
+    if ("label" in patch || "mail" in patch) {
+      const order = steps[index]?.step_order;
+      onStepsChange(
+        steps.map((step, itemIndex) => {
+          if (itemIndex !== index && step.step_order !== order) {
+            return step;
+          }
+          return { ...step, ...patch };
+        }),
+      );
+      return;
+    }
     if ("optional" in patch) {
       const order = steps[index]?.step_order;
       onStepsChange(
@@ -994,7 +1024,7 @@ export function EApprovalWorkflowEditor({
           level: "warning",
           title: "Parallel group incomplete",
           message: branchReviews
-            ? "Choose at least two reviewers. Every one must acknowledge."
+            ? "Choose at least two reviewers. Every one must review."
             : "Choose at least two approvers who must all approve.",
         });
         return;
@@ -1099,6 +1129,8 @@ export function EApprovalWorkflowEditor({
         compactHeader={options?.compactHeader}
         hideWhenEditor={options?.hideWhenEditor}
         settlementFamily={settlementFamily}
+        mailSettings={mailSettings ?? formMailSettingsFromMetadata({})}
+        formName={formName}
       />
     );
   };
@@ -1808,7 +1840,7 @@ export function EApprovalWorkflowEditor({
             <DialogTitle>Add routing group</DialogTitle>
             <DialogDescription>
               {branchReviews
-                ? "Each person signs and acknowledges. The request continues only after that review is done."
+                ? "Each person signs and reviews. The request continues only after that review is done."
                 : "Insert exclusive If/Else or a threshold ladder, or a parallel group with a completion rule (all, any one, or at least N of M)."}
             </DialogDescription>
           </DialogHeader>
@@ -1971,7 +2003,7 @@ export function EApprovalWorkflowEditor({
                 ))}
                 {branchReviews ? (
                   <p className="text-[11px] text-muted-foreground">
-                    Everyone in this band signs and acknowledges. The next step opens only after all of them are done.
+                    Everyone in this band signs and reviews. The next step opens only after all of them are done.
                   </p>
                 ) : (
                 <label className="block space-y-1">

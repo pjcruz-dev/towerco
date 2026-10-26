@@ -276,7 +276,7 @@ final class ControlledDocumentRegistryService
             ->whereNotNull('published_at')
             ->orderByDesc('published_at')
             ->limit(8)
-            ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'current_revision', 'published_at']);
+            ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'current_revision', 'effective_date', 'published_at']);
 
         $publishedScope = (clone $filtered)->where('status', ControlledDocumentStatus::PUBLISHED);
         $incomingIndex = $this->openRevisionIndex();
@@ -320,9 +320,167 @@ final class ControlledDocumentRegistryService
                 'document_type' => $document->document_type,
                 'status' => $document->status,
                 'current_revision' => (int) $document->current_revision,
+                'effective_date' => $document->effective_date?->toDateString(),
                 'published_at' => $document->published_at?->toIso8601String(),
             ])->values()->all(),
             'published_over_time' => $this->publishedOverTime($filtered),
+        ];
+    }
+
+    /**
+     * File rows for the Files page: obsolete revisions, the live approved file, and pending revisions.
+     *
+     * @return array{
+     *     counts: array{obsolete: int, approved: int, pending: int},
+     *     obsolete: list<array<string, mixed>>,
+     *     approved: list<array<string, mixed>>,
+     *     pending: list<array<string, mixed>>
+     * }
+     */
+    public function obsoleteBoard(TenantUser $actor): array
+    {
+        $documents = $this->scoped($actor)
+            ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'current_revision']);
+        $byId = $documents->keyBy(static fn (ControlledDocument $document): string => (string) $document->id);
+
+        $revisions = $byId->isEmpty()
+            ? collect()
+            : ControlledDocumentRevision::query()
+                ->whereIn('controlled_document_id', $byId->keys()->all())
+                ->orderByDesc('approved_at')
+                ->orderByDesc('revision_number')
+                ->get();
+
+        $obsolete = [];
+        $approved = [];
+        $pending = [];
+        $documentsWithRevisions = [];
+
+        foreach ($revisions as $revision) {
+            $document = $byId->get((string) $revision->controlled_document_id);
+            if (! $document instanceof ControlledDocument) {
+                continue;
+            }
+
+            $documentsWithRevisions[(string) $document->id] = true;
+
+            if ((string) $revision->status === ControlledDocumentRevisionStatus::PENDING) {
+                $row = $this->obsoleteBoardRow($document, $revision);
+                $row['standing'] = 'pending';
+                $pending[] = $row;
+
+                continue;
+            }
+
+            if ($this->approvedObsoleteFile($document, $revision)) {
+                $row = $this->obsoleteBoardRow($document, $revision);
+                $row['standing'] = 'obsolete';
+                $obsolete[] = $row;
+
+                continue;
+            }
+
+            if ($this->liveApprovedFile($document, $revision)) {
+                $row = $this->obsoleteBoardRow($document, $revision);
+                $row['standing'] = 'current';
+                $approved[] = $row;
+            }
+        }
+
+        foreach ($documents as $document) {
+            if ((string) $document->status !== ControlledDocumentStatus::PENDING) {
+                continue;
+            }
+            if (isset($documentsWithRevisions[(string) $document->id])) {
+                continue;
+            }
+
+            $row = $this->obsoleteBoardRow($document, null);
+            $row['standing'] = 'pending';
+            $pending[] = $row;
+        }
+
+        $byApproval = static function (array $left, array $right): int {
+            return strcmp((string) ($right['approved_at'] ?? ''), (string) ($left['approved_at'] ?? ''));
+        };
+        $missingFirst = static function (array $left, array $right) use ($byApproval): int {
+            $missing = ((int) $left['has_file']) <=> ((int) $right['has_file']);
+
+            return $missing !== 0 ? $missing : $byApproval($left, $right);
+        };
+
+        usort($obsolete, $missingFirst);
+        usort($pending, $missingFirst);
+        usort($approved, $byApproval);
+
+        return [
+            'counts' => [
+                'obsolete' => count($obsolete),
+                'approved' => count($approved),
+                'pending' => count($pending),
+            ],
+            'obsolete' => $obsolete,
+            'approved' => $approved,
+            'pending' => $pending,
+        ];
+    }
+
+    private function approvedObsoleteFile(ControlledDocument $document, ControlledDocumentRevision $revision): bool
+    {
+        $wasApproved = $revision->approved_at !== null
+            || in_array((string) $revision->status, [
+                ControlledDocumentRevisionStatus::PUBLISHED,
+                ControlledDocumentRevisionStatus::SUPERSEDED,
+            ], true);
+        if (! $wasApproved) {
+            return false;
+        }
+
+        $live = (string) $document->status === ControlledDocumentStatus::PUBLISHED
+            && (int) $revision->revision_number === (int) $document->current_revision
+            && (string) $revision->status === ControlledDocumentRevisionStatus::PUBLISHED;
+
+        return ! $live;
+    }
+
+    private function liveApprovedFile(ControlledDocument $document, ControlledDocumentRevision $revision): bool
+    {
+        $live = (string) $document->status === ControlledDocumentStatus::PUBLISHED
+            && (int) $revision->revision_number === (int) $document->current_revision
+            && (string) $revision->status === ControlledDocumentRevisionStatus::PUBLISHED;
+        if (! $live) {
+            return false;
+        }
+
+        return is_string($revision->stored_path) && $revision->stored_path !== '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function obsoleteBoardRow(ControlledDocument $document, ?ControlledDocumentRevision $revision): array
+    {
+        $hasFile = $revision !== null
+            && is_string($revision->stored_path)
+            && $revision->stored_path !== '';
+        $current = $revision !== null
+            && (string) $document->status === ControlledDocumentStatus::PUBLISHED
+            && (int) $revision->revision_number === (int) $document->current_revision
+            && (string) $revision->status === ControlledDocumentRevisionStatus::PUBLISHED;
+
+        return [
+            'document_id' => (string) $document->id,
+            'revision_id' => $revision !== null ? (string) $revision->id : null,
+            'document_code' => (string) $document->document_code,
+            'title' => (string) $document->title,
+            'department' => $document->department,
+            'document_type' => $document->document_type,
+            'revision_number' => $revision !== null ? (int) $revision->revision_number : null,
+            'standing' => $current ? 'current' : 'obsolete',
+            'effective_date' => ($revision?->effective_date ?? $document->effective_date)?->toDateString(),
+            'approved_at' => $revision?->approved_at?->toIso8601String(),
+            'filename' => $hasFile ? (string) $revision->original_filename : null,
+            'has_file' => $hasFile,
         ];
     }
 

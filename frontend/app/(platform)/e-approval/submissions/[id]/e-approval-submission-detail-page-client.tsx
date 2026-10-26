@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 
 import { EApprovalApprovalSignatureField, EApprovalSignatureConsentDialog, validateApprovalSignature } from "@/components/e-approval/e-approval-approval-signature-field";
+import {
+  EApprovalFileAudiencePicker,
+  type EApprovalFileAudience,
+} from "@/components/e-approval/e-approval-file-audience-picker";
 import { hasSignatureValue } from "@/modules/e-approval/signature";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -102,6 +106,12 @@ function invalidateEApprovalDecisionQueries(queryClient: QueryClient, submission
   queryClient.invalidateQueries({ queryKey: ["workspace", "dashboard"] });
 }
 
+function fileAudienceReady(audience: EApprovalFileAudience, recipientIds: string[]): boolean {
+  if (audience === "everyone") return true;
+  if (audience === "specific_person") return recipientIds.length === 1;
+  return recipientIds.length > 0;
+}
+
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -163,7 +173,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
-  const [fileAudience, setFileAudience] = useState<"department_teams" | "everyone">("department_teams");
+  const [fileAudience, setFileAudience] = useState<EApprovalFileAudience>("everyone");
+  const [fileRecipientIds, setFileRecipientIds] = useState<string[]>([]);
   const [rerouteUserId, setRerouteUserId] = useState("");
   const [rerouteReason, setRerouteReason] = useState("");
   const [linkTargetId, setLinkTargetId] = useState("");
@@ -173,6 +184,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
+  const showFileAudience = Boolean(data?.optional_next);
 
   const workflowPreviewQuery = useQuery({
     queryKey: ["e-approval", "submission", submissionId, "workflow-preview", data?.status ?? ""],
@@ -388,12 +400,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       signature,
       proceedOptional,
       fileAudience,
+      fileRecipientIds,
     }: {
       approvalId: string;
       decision: "approved" | "rejected" | "acknowledged";
       signature?: string | null;
       proceedOptional?: boolean;
-      fileAudience?: "department_teams" | "everyone";
+      fileAudience?: EApprovalFileAudience;
+      fileRecipientIds?: string[];
     }) =>
       decideEApprovalApproval(approvalId, {
         decision,
@@ -405,7 +419,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         release_date: releaseDate || undefined,
         settlement_reference: settlementReference.trim() || undefined,
         proceed_optional: proceedOptional,
-        file_audience: decision === "approved" ? fileAudience : undefined,
+        file_audience: decision === "rejected" ? undefined : fileAudience,
+        file_recipient_ids: decision === "rejected" ? undefined : fileRecipientIds,
       }),
     onSuccess: (_result, variables) => {
       invalidateEApprovalDecisionQueries(queryClient, submissionId);
@@ -413,7 +428,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
       push({
         level: "success",
-        title: variables.decision === "acknowledged" ? "Review acknowledged" : "Decision recorded",
+        title: variables.decision === "acknowledged" ? "Reviewed" : "Decision recorded",
       });
       setDecisionRemarks("");
       setReleaseReference("");
@@ -434,7 +449,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     decision: "approved" | "rejected" | "acknowledged";
     signature?: string | null;
     proceedOptional?: boolean;
-    fileAudience?: "department_teams" | "everyone";
+    fileAudience?: EApprovalFileAudience;
+    fileRecipientIds?: string[];
   }) => {
     if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
       return;
@@ -886,7 +902,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       confirmDisabled={!hasSignatureValue(approvalSignature)}
                       description={
                         fileConsent === "acknowledged"
-                          ? "Sign, then check both statements before you confirm this acknowledgement."
+                          ? "Sign, then check both statements before you confirm this review."
                           : "Sign, then check both statements before you confirm this approval."
                       }
                       onConfirm={() => {
@@ -895,7 +911,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         }
                         const signatureError = validateApprovalSignature(
                           approvalSignature,
-                          fileConsent === "acknowledged" ? "acknowledging" : "approving",
+                          fileConsent === "acknowledged" ? "reviewing" : "approving",
                         );
                         if (signatureError) {
                           setApprovalSignatureError(signatureError);
@@ -1143,7 +1159,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           id="review-remarks"
                           value={decisionRemarks}
                           onChange={(event) => setDecisionRemarks(event.target.value)}
-                          placeholder="Optional note with your acknowledgement"
+                          placeholder="Optional note with your review"
                           rows={3}
                           disabled={decideMutation.isPending}
                         />
@@ -1155,7 +1171,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           if (decideInFlightRef.current || decideMutation.isPending) {
                             return;
                           }
-                          const signatureError = validateApprovalSignature(approvalSignature, "acknowledging");
+                          const signatureError = validateApprovalSignature(approvalSignature, "reviewing");
                           if (signatureError) {
                             setApprovalSignatureError(signatureError);
                             return;
@@ -1164,7 +1180,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           setSignatureConsentOpen(true);
                         }}
                         >
-                          Acknowledge
+                          Review
                         </Button>
                         {data.optional_next ? (
                           <Button
@@ -1175,7 +1191,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               if (decideInFlightRef.current || decideMutation.isPending) {
                                 return;
                               }
-                              const signatureError = validateApprovalSignature(approvalSignature, "acknowledging");
+                              const signatureError = validateApprovalSignature(approvalSignature, "reviewing");
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
                                 return;
@@ -1185,15 +1201,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             }}
                           >
                             {data.optional_next.duty === "review"
-                              ? "Acknowledge and send to reviewers"
-                              : "Acknowledge and send to approvers"}
+                              ? "Review and send to reviewers"
+                              : "Review and send to approvers"}
                           </Button>
                         ) : null}
                       <EApprovalSignatureConsentDialog
                         open={signatureConsentOpen}
                         onOpenChange={setSignatureConsentOpen}
                         confirming={decideMutation.isPending}
-                        description="Check both statements before you confirm this acknowledgement."
+                        description="Check both statements before you confirm this review."
                         onConfirm={() => {
                           setSignatureConsentOpen(false);
                           submitDecision({
@@ -1319,23 +1335,19 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           </span>
                         </label>
                       ) : null}
-                      {data.send_approved_files ? (
-                        <div className="max-w-md space-y-1.5">
-                          <Label htmlFor="ea-file-audience">Who receives the files</Label>
-                          <Select
-                            id="ea-file-audience"
-                            value={fileAudience}
-                            onChange={(event) =>
-                              setFileAudience(event.target.value === "everyone" ? "everyone" : "department_teams")
-                            }
-                          >
-                            <option value="department_teams">Step 1 department heads and their teams</option>
-                            <option value="everyone">Everyone</option>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Sent when this request is fully approved. Step 1 people are the department heads. Their teams are everyone under them on the organization chart.
-                          </p>
-                        </div>
+                      {showFileAudience ? (
+                        <EApprovalFileAudiencePicker
+                          audience={fileAudience}
+                          recipientIds={fileRecipientIds}
+                          onAudienceChange={setFileAudience}
+                          onRecipientIdsChange={setFileRecipientIds}
+                          disabled={decideMutation.isPending || revisionMutation.isPending}
+                          timingNote={
+                            data.optional_next
+                              ? "Approve publishes now and sends the files. Approve and send waits until that step finishes, then sends them."
+                              : undefined
+                          }
+                        />
                       ) : null}
                       <div
                         data-help="ea-decide-actions"
@@ -1375,6 +1387,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               });
                                 return;
                               }
+                              if (showFileAudience && !fileAudienceReady(fileAudience, fileRecipientIds)) {
+                                push({
+                                  level: "error",
+                                  title: "Choose who receives the files",
+                                  message: "Pick everyone, one person, or the people who should get the published files.",
+                                });
+                                return;
+                              }
                               proceedOptionalRef.current = false;
                               setSignatureConsentOpen(true);
                             }}
@@ -1402,6 +1422,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                   level: "error",
                                   title: "Confirm the settlement",
                                   message: settlementVerdict?.title ?? "Read the settlement before approving.",
+                                });
+                                return;
+                              }
+                              if (showFileAudience && !fileAudienceReady(fileAudience, fileRecipientIds)) {
+                                push({
+                                  level: "error",
+                                  title: "Choose who receives the files",
+                                  message: "Pick everyone, one person, or the people who should get the published files.",
                                 });
                                 return;
                               }
@@ -1457,7 +1485,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             decision: "approved",
                             signature: approvalSignature!.trim(),
                             proceedOptional: proceedOptionalRef.current,
-                            fileAudience: data.send_approved_files ? fileAudience : undefined,
+                            fileAudience: showFileAudience ? fileAudience : undefined,
+                            fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
                           });
                         }}
                       />

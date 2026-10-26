@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
 use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalWhenLogic;
@@ -130,12 +131,22 @@ final class EApprovalApprovalPolicyStepPersister
 
             $approverId = $approverId === '' ? null : $approverId;
 
+            $mail = EApprovalFormMailConfig::normalizeMail(
+                is_array($definition['mail'] ?? null) ? $definition['mail'] : null,
+            );
+            if (! EApprovalFormMailConfig::isDefaultMail($mail)) {
+                $condition = is_array($condition) ? $condition : [];
+                $condition['mail'] = $mail;
+            }
+            $label = EApprovalFormMailConfig::cleanPublicLabel($definition['label'] ?? '');
+
             $step = EApprovalWorkflowStep::query()->create([
                 'id' => (string) Str::uuid(),
                 'template_id' => $templateId,
                 'step_order' => (int) ($definition['step_order'] ?? $index + 1),
                 'approver_type' => $type,
                 'approver_id' => $approverId,
+                'label' => $label !== '' ? $label : null,
                 'condition' => $condition,
                 'compiled_for_submission_id' => $submissionId,
             ]);

@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Notifications;
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
-use App\Modules\EApproval\Support\EApprovalNotificationCategory;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 
 final class EApprovalSubmissionNotification extends Notification implements ShouldQueue
 {
@@ -25,6 +26,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
         private readonly ?string $actorName = null,
         ?string $tenantId = null,
         private readonly ?string $detail = null,
+        private readonly ?int $stepOrder = null,
     ) {
         $this->tenantId = $tenantId ?? (tenant()?->getTenantKey());
         $this->onQueue(config('toweros.queues.notifications', 'toweros-notifications'));
@@ -72,21 +74,35 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'sla_escalation' => "{$prefix} Approval escalation — {$documentNo}",
                 'manual_follow_up' => "{$prefix} Follow-up reminder — {$documentNo}",
                 'comment_mention' => "{$prefix} You were mentioned — {$documentNo}",
+                'comment_added' => "{$prefix} Comment on — {$documentNo}",
+                'comment_replied' => "{$prefix} Reply on — {$documentNo}",
+                'reviewed' => "{$prefix} Reviewed — {$documentNo}",
                 'cancelled' => "{$prefix} Request cancelled — {$documentNo}",
                 'approval_no_longer_needed' => "{$prefix} Approval no longer needed — {$documentNo}",
                 'approval_rerouted' => "{$prefix} Approval reassigned — {$documentNo}",
                 'workflow_steps_skipped' => "{$prefix} Workflow path update — {$documentNo}",
+                'step_approved' => "{$prefix} Step approved — {$documentNo}",
                 default => "{$prefix} E-Forms update — {$documentNo}",
             };
 
-            $actionPath = EApprovalNotificationCategory::hrefFor(
+            $decoration = EApprovalFormMailConfig::mailDecoration(
+                $this->submission,
                 $this->event,
-                (string) $this->submission->id,
+                $this->actorName,
+                $this->stepOrder,
+                $prefix,
+                (string) $documentNo,
+                (string) ($submitter['name'] ?? ''),
+                (string) $formName,
             );
+            if ($decoration['subject'] !== null) {
+                $subject = $decoration['subject'];
+            }
 
-            $actionLabel = str_contains($actionPath, '/approvals')
-                ? 'Open approval inbox'
-                : 'Open submission';
+            $submissionId = (string) $this->submission->id;
+            $commentEvent = in_array($this->event, ['comment_added', 'comment_replied', 'comment_mention'], true);
+            $actionPath = "/e-approval/submissions/{$submissionId}?tab=".($commentEvent ? 'activity' : 'approvals');
+            $actionLabel = $commentEvent ? 'Open comment' : 'Open review';
 
             $message = (new MailMessage)
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
@@ -108,7 +124,15 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 $message->line(__('Requestor: :name', ['name' => $submitter['name']]));
             }
 
-            if ($this->event === 'approval_assigned') {
+            if ($decoration['custom_body']) {
+                if ($decoration['html_body']) {
+                    $message->line(new HtmlString($decoration['lines'][0] ?? ''));
+                } else {
+                    foreach ($decoration['lines'] as $line) {
+                        $message->line($line);
+                    }
+                }
+            } elseif ($this->event === 'approval_assigned') {
                 $message->line(__('You have a pending approval step. Please review and decide when ready.'));
             } elseif ($this->event === 'approval_assigned_revised') {
                 $message->line(__('This request was revised and needs your approval again. Please review the latest version and decide when ready.'));
@@ -143,6 +167,18 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 if ($this->detail !== null && trim($this->detail) !== '') {
                     $message->line($this->detail);
                 }
+            } elseif ($this->event === 'comment_added' || $this->event === 'comment_replied') {
+                $message->line($this->event === 'comment_replied'
+                    ? __(':name replied on this request.', ['name' => $this->actorName ?? __('Someone')])
+                    : __(':name commented on this request.', ['name' => $this->actorName ?? __('Someone')]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'reviewed') {
+                $message->line(__(':name reviewed this request.', ['name' => $this->actorName ?? __('A reviewer')]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
             } elseif ($this->event === 'cancelled') {
                 $message->line(__('This request was cancelled. No further approval action is required.'));
                 if ($this->actorName !== null) {
@@ -163,13 +199,38 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 if ($this->detail !== null && trim($this->detail) !== '') {
                     $message->line($this->detail);
                 }
+            } elseif ($this->event === 'step_approved') {
+                $message->line(__('This step was approved. The request continues to the next step.'));
+                if ($this->actorName !== null) {
+                    $message->line(__('By: :name', ['name' => $this->actorName]));
+                }
             } elseif ($this->actorName !== null) {
                 $message->line(__('By: :name', ['name' => $this->actorName]));
             }
 
-            return $message
-                ->action($actionLabel, $resolver->urlForCurrentTenant($actionPath))
-                ->salutation(__('Regards,')."\n".$brand);
+            if (! $decoration['custom_body']) {
+                foreach ($decoration['lines'] as $line) {
+                    $message->line($line);
+                }
+            }
+
+            $buttons = $decoration['buttons'];
+            if ($buttons === null || $buttons === []) {
+                $message->action($actionLabel, $resolver->urlForCurrentTenant($actionPath));
+            } else {
+                $first = $buttons[0];
+                $message->action(
+                    $first['label'],
+                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($first['target'], $submissionId)),
+                );
+                if (isset($buttons[1])) {
+                    $second = $buttons[1];
+                    $secondUrl = $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($second['target'], $submissionId));
+                    $message->line('['.$second['label'].']('.$secondUrl.')');
+                }
+            }
+
+            return $message->salutation(__('Regards,')."\n".$brand);
         });
     }
 

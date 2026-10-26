@@ -129,7 +129,9 @@ final class EApprovalUserListStepExpander
                 'approverId' => $userId,
                 'step_order' => $order,
             ];
-            if (! empty($definition['optional'])) {
+            $memberOptional = ! empty($definition['optional'])
+                || (is_array($definition['condition'] ?? null) && ! empty($definition['condition']['optional']));
+            if ($memberOptional) {
                 $member['optional'] = true;
             }
             if ($when !== []) {
@@ -142,6 +144,13 @@ final class EApprovalUserListStepExpander
                 if ($mode === EApprovalParallelMode::N_OF_M) {
                     $member['parallel_quorum'] = max(1, (int) ($quorumRaw ?? 1));
                 }
+            }
+            $label = trim((string) ($definition['label'] ?? ''));
+            if ($label !== '') {
+                $member['label'] = $label;
+            }
+            if (is_array($definition['mail'] ?? null)) {
+                $member['mail'] = $definition['mail'];
             }
             $members[] = $member;
         }

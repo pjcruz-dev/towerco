@@ -71,7 +71,7 @@ describe("workflow-path-diagram", () => {
         { duty: "review" },
         { duty: "review" },
       ]),
-    ).toBe("Reviewers · All must acknowledge");
+    ).toBe("Reviewers · All must review");
     expect(
       describeParallelBandLabel([
         { parallel_mode: "n_of_m", parallel_quorum: 2 },

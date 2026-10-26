@@ -444,7 +444,7 @@ export function workflowPreviewToStepShowItems(
         state,
         statusLabel:
           review && state === "completed"
-            ? "Acknowledged"
+            ? "Reviewed"
             : state === "rejected"
               ? "Rejected"
               : state === "current"

@@ -32,6 +32,11 @@
     box-shadow: none !important;
   }
 
+  .eapproval-approval-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .eapproval-print-attachment-page:not(:last-child) {
     page-break-after: always;
     break-after: page;

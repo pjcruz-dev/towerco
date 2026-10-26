@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
-use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Notifications\EApprovalApprovedFilesNotification;
-use App\Modules\EApproval\Support\EApprovalApprovalStatus;
-use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\SafeMailNotificationSender;
 use Illuminate\Support\Facades\Log;
@@ -18,22 +16,26 @@ final class EApprovalApprovedFileDistributionService
     public function send(EApprovalSubmission $submission): void
     {
         $submission->loadMissing('form');
-        if (! EApprovalFormWorkflowOptions::sendApprovedFiles(
-            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
-        )) {
+        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+        if (! EApprovalFormMailConfig::eventEnabled($metadata, 'approved_files')) {
             return;
         }
 
-        $audience = $this->audienceChosenOnSubmission($submission);
-        if ($audience === null) {
+        $choice = $this->choiceOnSubmission($submission);
+        if ($choice === null) {
             return;
         }
 
-        $recipients = $audience === 'everyone'
+        $recipients = $choice['audience'] === 'everyone'
             ? $this->everyone()
-            : $this->departmentTeams($submission);
+            : $this->selectedPeople($choice['ids']);
 
         if ($recipients === []) {
+            Log::warning('e_approval.approved_files_no_recipients', [
+                'submission_id' => (string) $submission->id,
+                'audience' => $choice['audience'],
+            ]);
+
             return;
         }
 
@@ -46,12 +48,15 @@ final class EApprovalApprovedFileDistributionService
 
         Log::info('e_approval.approved_files_sent', [
             'submission_id' => (string) $submission->id,
-            'audience' => $audience,
+            'audience' => $choice['audience'],
             'recipients' => count($recipients),
         ]);
     }
 
-    private function audienceChosenOnSubmission(EApprovalSubmission $submission): ?string
+    /**
+     * @return array{audience: string, ids: list<string>}|null
+     */
+    private function choiceOnSubmission(EApprovalSubmission $submission): ?array
     {
         $raw = $submission->workflow_snapshot_json;
         if (! is_string($raw) || trim($raw) === '') {
@@ -64,9 +69,27 @@ final class EApprovalApprovedFileDistributionService
             return null;
         }
 
-        $audience = is_array($decoded) ? ($decoded['approved_file_audience'] ?? null) : null;
+        if (! is_array($decoded)) {
+            return null;
+        }
 
-        return $audience === 'everyone' || $audience === 'department_teams' ? $audience : null;
+        $audience = $decoded['approved_file_audience'] ?? null;
+        if (! in_array($audience, ['everyone', 'specific_person', 'selected_users'], true)) {
+            return null;
+        }
+
+        $ids = [];
+        foreach (is_array($decoded['approved_file_recipient_ids'] ?? null) ? $decoded['approved_file_recipient_ids'] : [] as $id) {
+            $id = trim((string) $id);
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+
+        return [
+            'audience' => $audience,
+            'ids' => array_values(array_unique($ids)),
+        ];
     }
 
     /**
@@ -83,54 +106,17 @@ final class EApprovalApprovedFileDistributionService
     }
 
     /**
-     * Step 1 reviewers and approvers, plus everyone under them on the organization chart.
-     *
+     * @param  list<string>  $ids
      * @return list<TenantUser>
      */
-    private function departmentTeams(EApprovalSubmission $submission): array
+    private function selectedPeople(array $ids): array
     {
-        $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
-        $headIds = EApprovalRequestApproval::query()
-            ->where('submission_id', $submission->id)
-            ->where(function ($query) use ($cycle): void {
-                $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
-            })
-            ->whereNotIn('status', [
-                EApprovalApprovalStatus::SUPERSEDED,
-                EApprovalApprovalStatus::INVALIDATED,
-                EApprovalApprovalStatus::CANCELLED,
-            ])
-            ->whereHas('step', static fn ($query) => $query->where('step_order', 1))
-            ->pluck('approver_id')
-            ->map(static fn ($id): string => (string) $id)
-            ->filter(static fn (string $id): bool => $id !== '')
-            ->unique()
-            ->values()
-            ->all();
-
-        $ids = [];
-        $queue = $headIds;
-        while ($queue !== []) {
-            $id = array_shift($queue);
-            if ($id === null || isset($ids[$id])) {
-                continue;
-            }
-            $ids[$id] = true;
-            $children = TenantUser::query()
-                ->where('manager_id', $id)
-                ->where('is_active', true)
-                ->pluck('id');
-            foreach ($children as $child) {
-                $queue[] = (string) $child;
-            }
-        }
-
         if ($ids === []) {
             return [];
         }
 
         return TenantUser::query()
-            ->whereIn('id', array_keys($ids))
+            ->whereIn('id', $ids)
             ->where('is_active', true)
             ->whereNotNull('email')
             ->where('email', '!=', '')

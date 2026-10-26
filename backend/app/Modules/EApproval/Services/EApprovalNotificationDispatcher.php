@@ -8,7 +8,9 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Notifications\EApprovalExternalSubmissionNotification;
 use App\Modules\EApproval\Notifications\EApprovalSubmissionNotification;
+use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalExternalMailEvent;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\SafeMailNotificationSender;
 use Illuminate\Support\Facades\Notification;
@@ -24,19 +26,81 @@ final class EApprovalNotificationDispatcher
         string $approverUserId,
         bool $revised = false,
     ): void {
-        $user = TenantUser::query()->find($approverUserId);
-        if ($user === null) {
+        $submission->loadMissing('form');
+        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+        if (! EApprovalFormMailConfig::eventEnabled($metadata, 'approval_assigned')) {
             return;
         }
 
+        $order = $this->pendingStepOrder($submission, $approverUserId);
+        $presentation = EApprovalFormMailConfig::stepPresentation($submission, $order);
         $event = $revised ? 'approval_assigned_revised' : 'approval_assigned';
-        $this->sendAfterResponse($user, new EApprovalSubmissionNotification($submission, $event));
+
+        if ($presentation['mail']['notify_assignee']) {
+            $user = TenantUser::query()->find($approverUserId);
+            if ($user !== null) {
+                $this->sendAfterResponse($user, new EApprovalSubmissionNotification(
+                    $submission,
+                    $event,
+                    stepOrder: $order,
+                ));
+            }
+        }
+
+        foreach ($presentation['mail']['cc_user_ids'] as $ccUserId) {
+            if ($ccUserId === $approverUserId) {
+                continue;
+            }
+            $cc = TenantUser::query()->find($ccUserId);
+            if ($cc === null) {
+                continue;
+            }
+            $this->sendAfterResponse($cc, new EApprovalSubmissionNotification(
+                $submission,
+                $event,
+                stepOrder: $order,
+            ));
+        }
+    }
+
+    public function dispatchStepApproved(EApprovalSubmission $submission, int $stepOrder, ?string $actorName = null): void
+    {
+        $submission->loadMissing('form');
+        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+        if (! EApprovalFormMailConfig::eventEnabled($metadata, 'step_approved')) {
+            return;
+        }
+
+        $presentation = EApprovalFormMailConfig::stepPresentation($submission, $stepOrder);
+        if (! $presentation['mail']['notify_requestor_on_approve']) {
+            return;
+        }
+
+        $submission->loadMissing('requestor');
+        if ($submission->requestor === null) {
+            return;
+        }
+
+        $this->sendAfterResponse(
+            $submission->requestor,
+            new EApprovalSubmissionNotification(
+                $submission,
+                'step_approved',
+                $actorName,
+                stepOrder: $stepOrder,
+            ),
+        );
     }
 
     public function dispatchToRequestor(EApprovalSubmission $submission, string $event, ?string $actorName = null): void
     {
-        $submission->loadMissing('requestor');
+        $submission->loadMissing(['requestor', 'form']);
         if ($submission->requestor === null) {
+            return;
+        }
+
+        $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+        if (! EApprovalFormMailConfig::eventEnabled($metadata, $event)) {
             return;
         }
 
@@ -220,6 +284,55 @@ final class EApprovalNotificationDispatcher
         }
     }
 
+    public function dispatchReviewed(EApprovalSubmission $submission, TenantUser $actor, ?string $note, int $stepOrder): void
+    {
+        $actorId = (string) $actor->id;
+        $recipientIds = [];
+        $requestorId = (string) $submission->requestor_id;
+        if ($requestorId !== '' && $requestorId !== $actorId) {
+            $recipientIds[] = $requestorId;
+        }
+
+        $peers = EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->whereIn('status', [EApprovalApprovalStatus::PENDING, EApprovalApprovalStatus::ACKNOWLEDGED])
+            ->whereNotNull('approver_id')
+            ->whereHas('step', static fn ($query) => $query->where('step_order', $stepOrder))
+            ->pluck('approver_id');
+
+        foreach ($peers as $peerId) {
+            $peerId = (string) $peerId;
+            if ($peerId !== '' && $peerId !== $actorId) {
+                $recipientIds[] = $peerId;
+            }
+        }
+
+        $this->sendEventToUsers(
+            $submission,
+            array_values(array_unique($recipientIds)),
+            'reviewed',
+            $actor->name,
+            $note,
+            $stepOrder,
+        );
+    }
+
+    public function dispatchComment(
+        EApprovalSubmission $submission,
+        string $recipientUserId,
+        string $actorName,
+        string $comment,
+        bool $reply,
+    ): void {
+        $this->sendEventToUsers(
+            $submission,
+            [$recipientUserId],
+            $reply ? 'comment_replied' : 'comment_added',
+            $actorName,
+            $comment,
+        );
+    }
+
     public function dispatchCommentMention(
         EApprovalSubmission $submission,
         string $recipientUserId,
@@ -246,6 +359,48 @@ final class EApprovalNotificationDispatcher
      * Send approval emails after the HTTP response so submit/create APIs return quickly
      * (sync queue + ShouldQueue notifications otherwise block the browser until mail finishes).
      */
+    private function pendingStepOrder(EApprovalSubmission $submission, string $approverUserId): int
+    {
+        $approval = EApprovalRequestApproval::query()
+            ->where('submission_id', $submission->id)
+            ->where('approver_id', $approverUserId)
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->with('step')
+            ->first();
+
+        $order = (int) ($approval?->step?->step_order ?? 0);
+
+        return $order > 0 ? $order : max(1, (int) $submission->current_step);
+    }
+
+    /**
+     * @param  list<string>  $userIds
+     */
+    private function sendEventToUsers(
+        EApprovalSubmission $submission,
+        array $userIds,
+        string $event,
+        ?string $actorName,
+        ?string $detail = null,
+        ?int $stepOrder = null,
+    ): void {
+        $userIds = array_values(array_unique(array_filter($userIds, static fn (string $id): bool => $id !== '')));
+        if ($userIds === []) {
+            return;
+        }
+
+        $users = TenantUser::query()->whereIn('id', $userIds)->get();
+        foreach ($users as $user) {
+            $this->sendAfterResponse($user, new EApprovalSubmissionNotification(
+                $submission,
+                $event,
+                $actorName,
+                detail: $detail !== null && trim($detail) !== '' ? $detail : null,
+                stepOrder: $stepOrder,
+            ));
+        }
+    }
+
     private function sendAfterResponse(TenantUser $user, EApprovalSubmissionNotification $notification): void
     {
         SafeMailNotificationSender::sendAfterResponse([$user], $notification);

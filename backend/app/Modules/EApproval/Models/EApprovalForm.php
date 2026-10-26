@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Models;
 
 use App\Modules\EApproval\Services\EApprovalFileStorageService;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalFormSnapshotSanitizer;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
@@ -195,6 +196,11 @@ class EApprovalForm extends Model
 
             if (($condition['duty'] ?? null) === 'review') {
                 $payload['duty'] = 'review';
+            }
+
+            $mail = EApprovalFormMailConfig::mailFromCondition($condition);
+            if (! EApprovalFormMailConfig::isDefaultMail($mail)) {
+                $payload['mail'] = $mail;
             }
 
             $mode = EApprovalParallelMode::fromCondition($condition);

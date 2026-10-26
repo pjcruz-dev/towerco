@@ -44,6 +44,7 @@ class TenantEnvironmentClone extends Model
         'target_tenant_id',
         'status',
         'pause_source',
+        'preserve_target',
         'cancel_requested',
         'source_access_mode_before',
         'snapshot_counts',
@@ -62,6 +63,7 @@ class TenantEnvironmentClone extends Model
     {
         return [
             'pause_source' => 'boolean',
+            'preserve_target' => 'boolean',
             'cancel_requested' => 'boolean',
             'snapshot_counts' => 'array',
             'result_counts' => 'array',

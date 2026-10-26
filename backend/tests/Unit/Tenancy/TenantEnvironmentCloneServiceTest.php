@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
 
 final class TenantEnvironmentCloneServiceTest extends TestCase
@@ -39,6 +40,9 @@ final class TenantEnvironmentCloneServiceTest extends TestCase
         Config::set('toweros.tenant_files.disk', 'tenant_files');
         Config::set('queue.default', 'sync');
         Config::set('cache.default', 'array');
+
+        DB::purge('central');
+        DB::setDefaultConnection('central');
 
         Schema::connection('central')->create('tenants', function (Blueprint $table): void {
             $table->string('id')->primary();
@@ -80,6 +84,7 @@ final class TenantEnvironmentCloneServiceTest extends TestCase
             $table->string('target_tenant_id')->nullable();
             $table->string('status', 32);
             $table->boolean('pause_source')->default(false);
+            $table->boolean('preserve_target')->default(false);
             $table->boolean('cancel_requested')->default(false);
             $table->string('source_access_mode_before', 32)->nullable();
             $table->json('snapshot_counts')->nullable();
@@ -218,6 +223,210 @@ final class TenantEnvironmentCloneServiceTest extends TestCase
             'environment' => 'local',
             'copy_data' => true,
         ]);
+    }
+
+    public function test_copy_again_queues_a_new_job_and_keeps_the_target_tenant(): void
+    {
+        Bus::fake();
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+
+        $next = app(TenantEnvironmentCloneService::class)->copyAgain(
+            $target,
+            $previous,
+            false,
+            'TEST.alliancetowers.com',
+            null,
+            'ops@toweros.test',
+        );
+
+        $this->assertNotSame((string) $previous->id, (string) $next->id);
+        $this->assertSame(TenantEnvironmentClone::STATUS_QUEUED, $next->status);
+        $this->assertTrue($next->preserve_target);
+        $this->assertFalse($next->pause_source);
+        $this->assertSame('ops@toweros.test', $next->actor_email);
+        $this->assertSame(TenantEnvironmentClone::STATUS_READY, $previous->fresh()?->status);
+        $this->assertSame((string) $target->id, (string) $next->target_tenant_id);
+        $this->assertSame('blocked', $target->fresh()?->operator_access_mode);
+        $this->assertNull($source->fresh()?->operator_access_mode);
+        $this->assertNotNull(Tenant::query()->find($target->id));
+        Bus::assertDispatched(CloneTenantEnvironmentJob::class);
+    }
+
+    public function test_copy_again_can_pause_the_source_until_the_job_finishes(): void
+    {
+        Bus::fake();
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+
+        $next = app(TenantEnvironmentCloneService::class)->copyAgain(
+            $source,
+            $previous,
+            true,
+            'test.alliancetowers.com',
+            null,
+            null,
+        );
+
+        $this->assertTrue($next->pause_source);
+        $this->assertSame('read_only', $source->fresh()?->operator_access_mode);
+        $this->assertSame('blocked', $target->fresh()?->operator_access_mode);
+    }
+
+    public function test_copy_again_rejects_the_wrong_target_domain_without_blocking_it(): void
+    {
+        Bus::fake();
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+
+        try {
+            app(TenantEnvironmentCloneService::class)->copyAgain(
+                $target,
+                $previous,
+                false,
+                'staging.alliancetowers.com',
+                null,
+                null,
+            );
+            $this->fail('Expected the target domain confirmation to reject the copy.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('confirm_domain', $e->errors());
+        }
+
+        $this->assertNull($target->fresh()?->operator_access_mode);
+        $this->assertSame(1, TenantEnvironmentClone::query()->count());
+        Bus::assertNotDispatched(CloneTenantEnvironmentJob::class);
+    }
+
+    public function test_copy_again_rejects_a_failed_first_copy(): void
+    {
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $failed = $this->createReadyClone($source, $target);
+        $failed->forceFill([
+            'status' => TenantEnvironmentClone::STATUS_FAILED,
+            'preserve_target' => false,
+        ])->save();
+
+        $this->expectException(ValidationException::class);
+
+        app(TenantEnvironmentCloneService::class)->copyAgain(
+            $target,
+            $failed->fresh() ?? $failed,
+            false,
+            'test.alliancetowers.com',
+            null,
+            null,
+        );
+    }
+
+    public function test_copy_again_rejects_a_tenant_that_does_not_own_the_copy(): void
+    {
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $other = $this->createLinkedTenant('local', 'local.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+
+        $this->expectException(NotFoundHttpException::class);
+
+        app(TenantEnvironmentCloneService::class)->copyAgain(
+            $other,
+            $previous,
+            false,
+            'test.alliancetowers.com',
+            null,
+            null,
+        );
+    }
+
+    public function test_copy_again_is_rejected_while_another_copy_is_running(): void
+    {
+        Bus::fake();
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+        TenantEnvironmentClone::query()->create([
+            'id' => (string) Str::uuid(),
+            'source_tenant_id' => (string) $source->id,
+            'target_tenant_id' => (string) $target->id,
+            'status' => TenantEnvironmentClone::STATUS_QUEUED,
+            'pause_source' => false,
+            'preserve_target' => true,
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(TenantEnvironmentCloneService::class)->copyAgain(
+            $target,
+            $previous,
+            false,
+            'test.alliancetowers.com',
+            null,
+            null,
+        );
+    }
+
+    public function test_cancelling_a_refresh_keeps_the_target_tenant_blocked(): void
+    {
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $target->forceFill(['operator_access_mode' => 'blocked'])->save();
+        $clone = TenantEnvironmentClone::query()->create([
+            'id' => (string) Str::uuid(),
+            'source_tenant_id' => (string) $source->id,
+            'target_tenant_id' => (string) $target->id,
+            'status' => TenantEnvironmentClone::STATUS_QUEUED,
+            'pause_source' => false,
+            'preserve_target' => true,
+            'cancel_requested' => true,
+        ]);
+
+        app(TenantEnvironmentCloneService::class)->run((string) $clone->id);
+
+        $this->assertNotNull(Tenant::query()->find($target->id));
+        $this->assertSame('test.alliancetowers.com', $target->fresh()?->domains()->first()?->domain);
+        $this->assertSame('blocked', $target->fresh()?->operator_access_mode);
+        $fresh = $clone->fresh();
+        $this->assertSame(TenantEnvironmentClone::STATUS_CANCELLED, $fresh?->status);
+        $this->assertNotNull($fresh?->error_message);
+    }
+
+    private function createReadyClone(Tenant $source, Tenant $target): TenantEnvironmentClone
+    {
+        return TenantEnvironmentClone::query()->create([
+            'id' => (string) Str::uuid(),
+            'source_tenant_id' => (string) $source->id,
+            'target_tenant_id' => (string) $target->id,
+            'status' => TenantEnvironmentClone::STATUS_READY,
+            'pause_source' => false,
+            'preserve_target' => false,
+            'files_copied' => 3,
+            'files_total' => 3,
+            'started_at' => now()->subDay(),
+            'finished_at' => now()->subDay(),
+        ]);
+    }
+
+    private function createLinkedTenant(string $environment, string $domain): Tenant
+    {
+        return Tenant::withoutEvents(function () use ($environment, $domain): Tenant {
+            $record = Tenant::query()->create([
+                'id' => (string) Str::uuid(),
+                'slug' => 'atc',
+                'brand_domain' => 'alliancetowers.com',
+                'environment' => $environment,
+                'plan_tier' => 'starter',
+                'subscription_status' => 'active',
+                'seat_limit' => 25,
+                'mfa_required' => false,
+            ]);
+            $record->createDomain($domain);
+
+            return $record;
+        });
     }
 
     private function createSourceTenant(): Tenant

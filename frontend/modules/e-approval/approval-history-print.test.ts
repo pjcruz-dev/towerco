@@ -38,12 +38,12 @@ describe("print approval history", () => {
 
     const slots = buildApprovalHistorySlots(data);
     expect(slots.map((slot) => slot.label)).toEqual(["Norelyn Munoz", "CFO"]);
-    expect(slots[0]).toMatchObject({ kind: "reviewer", subtitle: "Acknowledged · 2026-10-22 09:00" });
+    expect(slots[0]).toMatchObject({ kind: "reviewer", subtitle: "Reviewed · 2026-10-22 09:00" });
     expect(slots[1]).toMatchObject({ kind: "approver", subtitle: "Approved · 2026-10-22 12:00" });
 
     const footer = buildPdfFooterRows(data);
     expect(footer.map((row) => ({ label: row.label, status: row.status, actedAt: row.actedAt }))).toEqual([
-      { label: "Norelyn Munoz", status: "ACKNOWLEDGED", actedAt: "2026-10-22 09:00" },
+      { label: "Norelyn Munoz", status: "REVIEWED", actedAt: "2026-10-22 09:00" },
       { label: "CFO", status: "APPROVED", actedAt: "2026-10-22 12:00" },
     ]);
   });

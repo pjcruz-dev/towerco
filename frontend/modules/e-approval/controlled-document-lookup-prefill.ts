@@ -36,7 +36,10 @@ export function applyControlledDocumentLookupPrefill(
   assign("title", lookup.title);
   assign("document_type", lookup.document_type);
   assign("department", lookup.department);
-  assign("effective_date", lookup.effective_date ?? undefined);
+  const effectiveName = sync.fieldMap.effective_date ?? "effective_date";
+  if ((values[effectiveName] ?? "").trim() === "") {
+    assign("effective_date", lookup.effective_date ?? undefined);
+  }
   assign("next_review_date", lookup.next_review_date ?? undefined);
 
   const previousRevisionField = fields.find((field) => field.name === "previous_revision");

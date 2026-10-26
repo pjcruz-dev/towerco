@@ -628,10 +628,8 @@ final class SubmissionWorkflowService
             return null;
         }
 
-        $optional = $later->every(
-            static fn (EApprovalWorkflowStep $step): bool => is_array($step->condition) && ! empty($step->condition['optional']),
-        );
-        if (! $optional) {
+        $order = (int) $later->first()->step_order;
+        if (! $this->bandMarkedOptional($submission, $order, $later)) {
             return null;
         }
 
@@ -647,7 +645,7 @@ final class SubmissionWorkflowService
 
     private function optionalStepCanBeSkipped(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
     {
-        if (! is_array($step->condition) || empty($step->condition['optional'])) {
+        if (! $this->stepMarkedOptional($submission, $step)) {
             return false;
         }
 
@@ -655,6 +653,44 @@ final class SubmissionWorkflowService
 
         return EApprovalFormWorkflowOptions::optionalApproverEnabled(
             is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+        );
+    }
+
+    /**
+     * Compiled rows sometimes lost condition.optional. The live form step at the same order still counts.
+     *
+     * @param  Collection<int, EApprovalWorkflowStep>  $band
+     */
+    private function bandMarkedOptional(EApprovalSubmission $submission, int $order, Collection $band): bool
+    {
+        $compiled = $band->every(
+            static fn (EApprovalWorkflowStep $step): bool => is_array($step->condition) && ! empty($step->condition['optional']),
+        );
+        if ($compiled) {
+            return true;
+        }
+
+        return $this->templateOrderIsOptional($submission, $order);
+    }
+
+    private function stepMarkedOptional(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
+    {
+        if (is_array($step->condition) && ! empty($step->condition['optional'])) {
+            return true;
+        }
+
+        return $this->templateOrderIsOptional($submission, (int) $step->step_order);
+    }
+
+    private function templateOrderIsOptional(EApprovalSubmission $submission, int $order): bool
+    {
+        $submission->loadMissing('form.workflowTemplate.steps');
+        $templateSteps = $submission->form?->workflowTemplate?->steps ?? collect();
+
+        return $templateSteps->contains(
+            static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order === $order
+                && is_array($step->condition)
+                && ! empty($step->condition['optional']),
         );
     }
 

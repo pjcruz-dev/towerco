@@ -30,7 +30,9 @@ class EApprovalApprovalDecideController extends AbstractApiController
             'release_date' => ['sometimes', 'nullable', 'date'],
             'settlement_reference' => ['sometimes', 'nullable', 'string', 'max:120'],
             'proceed_optional' => ['sometimes', 'boolean'],
-            'file_audience' => ['sometimes', 'nullable', 'string', 'in:department_teams,everyone'],
+            'file_audience' => ['sometimes', 'nullable', 'string', 'in:everyone,specific_person,selected_users'],
+            'file_recipient_ids' => ['sometimes', 'array', 'max:100'],
+            'file_recipient_ids.*' => ['uuid'],
         ]);
 
         if ($data['decision'] === 'approved' || $data['decision'] === 'acknowledged') {
@@ -38,7 +40,7 @@ class EApprovalApprovalDecideController extends AbstractApiController
             $hasSignature = is_string($signature) && trim($signature) !== '';
             if ($data['decision'] === 'acknowledged' && ! $hasSignature) {
                 throw ValidationException::withMessages([
-                    'signature' => [__('Add your signature before acknowledging.')],
+                    'signature' => [__('Add your signature before reviewing.')],
                 ]);
             }
             if ($hasSignature && ! ($data['signature_consent'] ?? false)) {
@@ -66,6 +68,7 @@ class EApprovalApprovalDecideController extends AbstractApiController
             ],
             (bool) ($data['proceed_optional'] ?? false),
             isset($data['file_audience']) ? (string) $data['file_audience'] : null,
+            array_values(array_map(static fn ($id): string => (string) $id, $data['file_recipient_ids'] ?? [])),
         );
 
         return $this->ok(['approval' => $updated->toListRow()]);

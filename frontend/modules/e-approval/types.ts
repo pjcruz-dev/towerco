@@ -31,6 +31,19 @@ export type EApprovalWorkflowStepInput = {
   step_order?: number;
   /** Shown on the submission badge, for example "Pending — Release cash". */
   label?: string | null;
+  /** Per-step email. Omitted means the standard approval email. */
+  mail?: {
+    notify_assignee?: boolean;
+    note?: string;
+    subject?: string;
+    body?: string;
+    buttons?: { label: string; target: "open_submission" | "open_approval" }[] | null;
+    cc_user_ids?: string[];
+    notify_requestor_on_approve?: boolean;
+    requestor_subject?: string;
+    requestor_body?: string;
+    requestor_buttons?: { label: string; target: "open_submission" | "open_approval" }[] | null;
+  } | null;
   /** This approver must tick the surrender or payment line before Approve. */
   confirm_settlement?: boolean;
   /** The previous approver chooses whether this step runs. */

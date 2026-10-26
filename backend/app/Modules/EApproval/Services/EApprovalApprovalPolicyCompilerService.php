@@ -98,6 +98,7 @@ final class EApprovalApprovalPolicyCompilerService
                 'step_order' => $step->step_order,
                 'approver_type' => $step->approver_type,
                 'approver_id' => $step->approver_id,
+                'label' => $step->label,
                 'condition' => $step->condition,
             ])->values()->all(),
         ];
@@ -126,6 +127,7 @@ final class EApprovalApprovalPolicyCompilerService
                 'step_order' => $step->step_order,
                 'approver_type' => $step->approver_type,
                 'approver_id' => $step->approver_id,
+                'label' => $step->label,
                 'condition' => $step->condition,
             ])->values()->all(),
         ];

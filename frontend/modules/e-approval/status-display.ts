@@ -14,6 +14,7 @@ const toneClass: Record<EApprovalStatusTone, string> = {
 }
 
 const labelOverrides: Record<string, string> = {
+  acknowledged: "Reviewed",
   awaiting_dcf: "Awaiting document control",
   awaiting_me: "Awaiting me",
   invalidated: "Not needed",

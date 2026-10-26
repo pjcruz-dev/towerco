@@ -63,7 +63,7 @@ const OPTIONS: Array<{
     kind: "review_list",
     section: "Review",
     label: "Reviewer list",
-    description: "Everyone selected acknowledges",
+    description: "Everyone selected reviews",
     icon: <Users className="h-3.5 w-3.5" />,
   },
   {
@@ -84,7 +84,7 @@ const OPTIONS: Array<{
     kind: "review_parallel",
     section: "Review",
     label: "Parallel reviewers",
-    description: "Same step — all must acknowledge",
+    description: "Same step — all must review",
     icon: <Users className="h-3.5 w-3.5" />,
   },
 ];

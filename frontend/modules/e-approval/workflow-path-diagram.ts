@@ -40,7 +40,7 @@ export function describeParallelBandLabel(
   }
 
   if (members.some((row) => row.duty === "review")) {
-    return "Reviewers · All must acknowledge";
+    return "Reviewers · All must review";
   }
 
   const mode = members.find((row) => row.parallel_mode)?.parallel_mode ?? "all";

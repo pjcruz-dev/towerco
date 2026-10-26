@@ -3,6 +3,15 @@ set -e
 
 cd /var/www/html
 
+# Public DNS (8.8.8.8) cannot resolve host.docker.internal. Mailpit is published on the host.
+if ! getent hosts host.docker.internal >/dev/null 2>&1; then
+  gateway="$(ip route 2>/dev/null | awk '/default/ {print $3; exit}')"
+  if [ -n "$gateway" ]; then
+    echo "$gateway host.docker.internal" >> /etc/hosts
+    echo "[api] Mapped host.docker.internal to ${gateway}"
+  fi
+fi
+
 # Apply tuned OPcache config at boot so existing images pick it up without a rebuild.
 if [ -f docker/opcache.ini ]; then
   target_dir="$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR ?: "/usr/local/etc/php/conf.d";' 2>/dev/null || echo /usr/local/etc/php/conf.d)"

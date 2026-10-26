@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Eye } from "lucide-react";
 
 import { EApprovalFormComposePreviewDialog } from "@/components/e-approval/e-approval-form-compose-preview-dialog";
@@ -47,6 +48,10 @@ export function EApprovalFormComposeSettingsCard({
   onRevisionSettingsChange,
 }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setHeaderSlot(document.getElementById("e-approval-form-header-tools"));
+  }, []);
   const patch = (partial: Partial<FormComposeEditorSettings>) => {
     onChange({ ...value, ...partial });
   };
@@ -204,18 +209,20 @@ export function EApprovalFormComposeSettingsCard({
         ) : null}
       </EApprovalSectionCard>
 
-      <div className="pointer-events-none fixed top-20 right-5 z-40 sm:top-24 sm:right-6">
-        <Button
-          type="button"
-          size="sm"
-          className="pointer-events-auto h-10 shadow-lg"
-          disabled={disabled || fields.length === 0}
-          onClick={() => setPreviewOpen(true)}
-        >
-          <Eye className="mr-1.5 h-4 w-4" />
-          Preview requestor view
-        </Button>
-      </div>
+      {headerSlot
+        ? createPortal(
+            <Button
+              type="button"
+              size="sm"
+              disabled={disabled || fields.length === 0}
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="mr-1.5 h-4 w-4" />
+              Preview requestor view
+            </Button>,
+            headerSlot,
+          )
+        : null}
 
       {revisionSettings && onRevisionSettingsChange ? (
         <div className="mt-4">

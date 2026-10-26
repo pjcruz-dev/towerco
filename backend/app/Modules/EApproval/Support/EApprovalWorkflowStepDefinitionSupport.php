@@ -165,6 +165,16 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['duty'] = 'review';
         }
 
+        $label = EApprovalFormMailConfig::cleanPublicLabel($step->label);
+        if ($label !== '') {
+            $definition['label'] = $label;
+        }
+
+        $mail = EApprovalFormMailConfig::mailFromCondition($condition);
+        if (! EApprovalFormMailConfig::isDefaultMail($mail)) {
+            $definition['mail'] = $mail;
+        }
+
         return $definition;
     }
 
@@ -241,6 +251,19 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list') {
             $definition['duty'] = 'review';
+        }
+
+        $label = EApprovalFormMailConfig::cleanPublicLabel($step['label'] ?? '');
+        if ($label !== '') {
+            $definition['label'] = $label;
+        }
+
+        $mailSource = array_key_exists('mail', $step)
+            ? (is_array($step['mail']) ? $step['mail'] : null)
+            : ($condition['mail'] ?? null);
+        $mail = EApprovalFormMailConfig::normalizeMail(is_array($mailSource) ? $mailSource : null);
+        if (! EApprovalFormMailConfig::isDefaultMail($mail)) {
+            $definition['mail'] = $mail;
         }
 
         return $definition;
@@ -373,6 +396,16 @@ final class EApprovalWorkflowStepDefinitionSupport
             $condition['optional'] = true;
         } else {
             unset($condition['optional']);
+        }
+
+        $mailSource = array_key_exists('mail', $step)
+            ? (is_array($step['mail']) ? $step['mail'] : null)
+            : ($condition['mail'] ?? null);
+        $mail = EApprovalFormMailConfig::normalizeMail(is_array($mailSource) ? $mailSource : null);
+        if (EApprovalFormMailConfig::isDefaultMail($mail)) {
+            unset($condition['mail']);
+        } else {
+            $condition['mail'] = $mail;
         }
 
         return $condition === [] ? null : $condition;

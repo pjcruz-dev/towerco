@@ -13,6 +13,17 @@ import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
 import { EnvironmentCloneProgress } from "@/components/platform/environment-clone-progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { FormInput } from "@/components/forms/form-input";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -28,6 +39,7 @@ import { DashboardContentSkeleton, PageHeaderSkeleton } from "@/components/ui/pa
 import { getErrorMessage, isApiTimeoutError, isNotFoundApiError } from "@/lib/api/error";
 import {
   platformCancelEnvironmentClone,
+  platformCopyAgainEnvironmentClone,
   platformDiscardEnvironmentClone,
   platformFetchTenant,
   platformFetchTenantAudit,
@@ -83,6 +95,9 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
   const [billingDowngradeWarnings, setBillingDowngradeWarnings] = useState<string[]>([]);
   const [confirmPlanDowngrade, setConfirmPlanDowngrade] = useState(false);
   const [removalNotice, setRemovalNotice] = useState<"removing" | "cancelling" | "removed" | null>(null);
+  const [copyAgainOpen, setCopyAgainOpen] = useState(false);
+  const [copyAgainDomain, setCopyAgainDomain] = useState("");
+  const [copyAgainPause, setCopyAgainPause] = useState(false);
   const removalTold = useRef(false);
 
   const tenantQuery = useQuery({
@@ -136,8 +151,17 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
         return;
       }
       if (action === "cancel") {
-        setRemovalNotice("cancelling");
         queryClient.setQueryData(["platform", "tenants", tenantId, "environment-clone"], data);
+        if (data.preserve_target) {
+          notify({
+            level: "success",
+            title: "Cancel requested",
+            message:
+              "The copy will stop. This environment stays blocked until a copy finishes. The source workspace is not deleted.",
+          });
+          return;
+        }
+        setRemovalNotice("cancelling");
         notify({
           level: "success",
           title: "Cancel requested",
@@ -162,6 +186,36 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
         message: isApiTimeoutError(error)
           ? "The browser stopped waiting. Refresh this page — the copy may still be running."
           : getErrorMessage(error),
+      });
+    },
+  });
+
+  const copyAgainMutation = useMutation({
+    mutationFn: async (payload: { confirm_domain: string; pause_source: boolean }) => {
+      const clone = cloneQuery.data;
+      if (!clone) {
+        throw new Error("No environment copy is recorded for this tenant.");
+      }
+      return platformCopyAgainEnvironmentClone(tenantId, clone.id, payload);
+    },
+    onSuccess: async (data) => {
+      const sourceName = data.source_environment ?? "the source";
+      const targetName = data.environment ?? "this environment";
+      queryClient.setQueryData(["platform", "tenants", tenantId, "environment-clone"], data);
+      setCopyAgainDomain("");
+      setCopyAgainPause(false);
+      void queryClient.invalidateQueries({ queryKey: ["platform", "tenants", tenantId] });
+      notify({
+        level: "success",
+        title: "Copy started",
+        message: `${targetName} stays blocked until the copy finishes. Its domain is unchanged. ${sourceName} stays open unless you paused it.`,
+      });
+    },
+    onError: (error) => {
+      notify({
+        level: "error",
+        title: "Could not start the copy",
+        message: getErrorMessage(error),
       });
     },
   });
@@ -386,6 +440,20 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
   }
 
   const primaryDomain = tenant.domains[0];
+  const copyTargetDomain = cloneQuery.data?.domain?.trim() ?? "";
+  const copyConfirmed =
+    copyTargetDomain !== "" && copyAgainDomain.trim().toLowerCase() === copyTargetDomain.toLowerCase();
+  const copyAgainLive =
+    cloneQuery.data && copyAgainMutation.data && cloneQuery.data.id === copyAgainMutation.data.id
+      ? cloneQuery.data
+      : (copyAgainMutation.data ?? null);
+  const cloneIsCopying =
+    cloneQuery.data != null &&
+    ["queued", "copying_database", "copying_files", "verifying"].includes(cloneQuery.data.status);
+  const showCopyProgress = copyAgainMutation.isPending || copyAgainLive !== null || cloneIsCopying;
+  const progressClone = copyAgainMutation.isPending
+    ? null
+    : (copyAgainLive ?? (cloneIsCopying ? cloneQuery.data : null));
   const loginUrl = primaryDomain ? tenantLoginUrl(primaryDomain) : null;
   const moduleBadges = formatTenantModuleBadges(tenant);
 
@@ -450,12 +518,38 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
           </CardHeader>
           <CardContent>
             <EnvironmentCloneProgress
-              clone={cloneQuery.data}
-              pending={cloneAction.isPending}
-              phase={removalNotice === "removing" || removalNotice === "removed" ? removalNotice : undefined}
+              clone={
+                copyAgainMutation.isPending
+                  ? {
+                      ...cloneQuery.data,
+                      status: "queued",
+                      files_copied: 0,
+                      files_total: null,
+                      snapshot_at: null,
+                      counts: null,
+                      error_message: null,
+                      preserve_target: true,
+                      cancel_requested: false,
+                    }
+                  : cloneQuery.data
+              }
+              pending={cloneAction.isPending || copyAgainMutation.isPending}
+              phase={removalNotice === "removing" ? "removing" : undefined}
               onRetry={canManageTenants ? () => cloneAction.mutate("retry") : undefined}
               onCancel={canManageTenants ? () => cloneAction.mutate("cancel") : undefined}
               onDiscard={canManageTenants && removalNotice === null ? () => cloneAction.mutate("discard") : undefined}
+              onCopyAgain={
+                canManageTenants && removalNotice === null
+                  ? () => {
+                      if (!cloneIsCopying) {
+                        copyAgainMutation.reset();
+                        setCopyAgainDomain("");
+                        setCopyAgainPause(false);
+                      }
+                      setCopyAgainOpen(true);
+                    }
+                  : undefined
+              }
             />
           </CardContent>
         </Card>
@@ -730,6 +824,134 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
           void queryClient.invalidateQueries({ queryKey: ["platform", "dashboard"] });
         }}
       />
+
+      <Dialog
+        open={copyAgainOpen}
+        onOpenChange={(open) => {
+          setCopyAgainOpen(open);
+          if (!open) {
+            setCopyAgainDomain("");
+            setCopyAgainPause(false);
+            if (!cloneIsCopying) {
+              copyAgainMutation.reset();
+            }
+          }
+        }}
+      >
+        <DialogContent className="gap-0">
+          <DialogHeader>
+            <DialogTitle>
+              {showCopyProgress
+                ? "Copy progress"
+                : cloneQuery.data?.source_environment
+                  ? `Copy again from ${cloneQuery.data.source_environment}`
+                  : "Copy again"}
+            </DialogTitle>
+            {showCopyProgress ? null : (
+              <DialogDescription>
+                This replaces the {cloneQuery.data?.environment ?? "target"} workspace
+                {copyTargetDomain ? ` at ${copyTargetDomain}` : ""} with{" "}
+                {cloneQuery.data?.source_environment ?? "the source"} as of the moment the job starts.
+                The domain stays. People using {cloneQuery.data?.environment ?? "that workspace"} are
+                signed out, and it stays blocked until the copy finishes. Work that exists only there is
+                removed.
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            {showCopyProgress ? (
+              progressClone ? (
+                <EnvironmentCloneProgress
+                  clone={progressClone}
+                  pending={cloneAction.isPending}
+                  onCancel={canManageTenants ? () => cloneAction.mutate("cancel") : undefined}
+                />
+              ) : (
+                <div className="space-y-2 text-sm text-foreground">
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-muted"
+                    role="progressbar"
+                    aria-valuenow={5}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Environment copy"
+                  >
+                    <div className="h-full bg-primary" style={{ width: "5%" }} />
+                  </div>
+                  <p className="tabular-nums">5% · Starting the copy</p>
+                  <p className="text-muted-foreground">
+                    The percent moves to the database copy, then to the file count, as soon as the job starts.
+                  </p>
+                </div>
+              )
+            ) : (
+              <>
+                {copyTargetDomain ? (
+                  <FormInput
+                    label={`Type ${copyTargetDomain} to confirm`}
+                    value={copyAgainDomain}
+                    onChange={(event) => setCopyAgainDomain(event.target.value)}
+                    autoComplete="off"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    This environment has no domain, so the copy cannot be confirmed.
+                  </p>
+                )}
+                <label className="flex items-start gap-2 text-sm text-foreground">
+                  <Checkbox
+                    checked={copyAgainPause}
+                    onCheckedChange={(checked) => setCopyAgainPause(checked === true)}
+                    aria-label={`Pause changes on ${cloneQuery.data?.source_environment ?? "the source"} until the copy finishes`}
+                  />
+                  <span>
+                    <span className="font-medium">
+                      Pause changes on {cloneQuery.data?.source_environment ?? "the source"} until the copy finishes
+                    </span>
+                    <span className="mt-1 block text-muted-foreground">
+                      Sign-in stays open there. New uploads and approvals wait, so the copy matches it exactly.
+                      Leave this off for a rehearsal.
+                    </span>
+                  </span>
+                </label>
+              </>
+            )}
+          </DialogBody>
+          {showCopyProgress ? (
+            progressClone && !["queued", "copying_database", "copying_files", "verifying"].includes(progressClone.status) ? (
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setCopyAgainOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            ) : null
+          ) : (
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={copyAgainMutation.isPending}
+                onClick={() => setCopyAgainOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={copyAgainMutation.isPending || !copyConfirmed}
+                onClick={() =>
+                  copyAgainMutation.mutate({
+                    confirm_domain: copyAgainDomain.trim(),
+                    pause_source: copyAgainPause,
+                  })
+                }
+              >
+                {copyAgainMutation.isPending ? "Starting…" : "Copy again"}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

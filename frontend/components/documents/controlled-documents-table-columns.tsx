@@ -88,15 +88,16 @@ export function createControlledDocumentsTableColumns(options: {
           return "—";
         }
         return (
-          <span className="flex flex-col gap-0.5">
+          <span className="flex max-w-sm flex-col gap-0.5 whitespace-normal">
             {people.map((person) => (
               <span key={`${person.submission_id}-${person.name}`} className="text-xs text-muted-foreground">
-                {person.name} · {person.role} · {person.requestor_department ?? "—"} · {person.age_days}d
+                {person.age_days}d · {person.name} · {person.requestor_department ?? "—"}
               </span>
             ))}
           </span>
         );
       },
+      { className: "whitespace-normal align-top" },
     ),
     createTextColumn(
       "has_file",

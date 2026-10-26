@@ -102,7 +102,7 @@ const GUIDE_TABS: Array<{ id: string; label: string; sections: Array<{ title: st
         body: "While a request is pending, the requestor can cancel it or send a follow-up to whoever is waiting. Approvers and reviewers sign on Decide.",
         points: [
           "Follow-up notifies pending approvers, or reviewers who have not acknowledged yet. A cooldown may apply.",
-          "Approve moves the request to the next step. Reject ends it. Request revision sends it back. A review step is Acknowledge, which does not approve or reject.",
+          "Approve moves the request to the next step. Reject ends it. Request revision sends it back. A review step is Review, which does not approve or reject.",
           "The printed page is landscape and includes the expense grid. Liquidation also prints the settlement.",
         ],
       },

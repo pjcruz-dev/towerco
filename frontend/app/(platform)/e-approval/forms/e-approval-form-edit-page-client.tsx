@@ -17,6 +17,7 @@ import { EApprovalFormCreateWizard } from "@/components/e-approval/e-approval-fo
 import { EApprovalFormComposeSettingsCard } from "@/components/e-approval/e-approval-form-compose-settings-card";
 import { EApprovalFormRevisionSettingsCard } from "@/components/e-approval/e-approval-form-revision-settings-card";
 import { EApprovalFormWorkflowOptionsCard } from "@/components/e-approval/e-approval-form-workflow-options-card";
+import { EApprovalFormMailCard } from "@/components/e-approval/e-approval-form-mail-card";
 import { EApprovalFormControlledDocumentSyncCard } from "@/components/e-approval/e-approval-form-controlled-document-sync-card";
 import { EApprovalFormBrandLogoPreview } from "@/components/e-approval/e-approval-form-brand-logo-preview";
 import { EApprovalFormWorkspaceSettingsCard } from "@/components/e-approval/e-approval-form-workspace-settings-card";
@@ -36,7 +37,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Eye, FileJson, GitBranch, LayoutDashboard, PenLine, Printer, Settings2, Trash2, Workflow } from "lucide-react";
+import { Eye, FileJson, GitBranch, LayoutDashboard, Mail, PenLine, Printer, Settings2, Trash2, Workflow } from "lucide-react";
 import { EApprovalFormPreview } from "@/components/e-approval/e-approval-form-preview";
 import { EApprovalPublicLinksPanel } from "@/components/e-approval/e-approval-public-links-panel";
 import {
@@ -108,6 +109,11 @@ import {
   type FormWorkflowOptionSettings,
 } from "@/modules/e-approval/form-workflow-options";
 import {
+  formMailSettingsFromMetadata,
+  mergeFormMailSettingsIntoMetadata,
+  type FormMailSettings,
+} from "@/modules/e-approval/form-mail-config";
+import {
   mergeFormOutboundIntoMetadata,
   parseFormOutboundConfig,
   type FormOutboundEditorSettings,
@@ -158,6 +164,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
   const defaultTab =
     initialTab === "design" ||
     initialTab === "workflow" ||
+    initialTab === "email" ||
     initialTab === "preview" ||
     initialTab === "workspace"
       ? initialTab
@@ -261,6 +268,11 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
     [metadataJson],
   );
 
+  const mailSettings = useMemo(
+    () => formMailSettingsFromMetadata(parseFormMetadataJson(metadataJson)),
+    [metadataJson],
+  );
+
   const outboundSettings = useMemo(
     () => parseFormOutboundConfig(parseFormMetadataJson(metadataJson)),
     [metadataJson],
@@ -301,6 +313,13 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
     setMetadataJson((prev) => {
       const meta = parseFormMetadataJson(prev);
       return JSON.stringify(mergeFormRevisionIntoMetadata(meta, settings), null, 2);
+    });
+  };
+
+  const setMailSettings = (settings: FormMailSettings) => {
+    setMetadataJson((prev) => {
+      const meta = parseFormMetadataJson(prev);
+      return JSON.stringify(mergeFormMailSettingsIntoMetadata(meta, settings), null, 2);
     });
   };
 
@@ -717,16 +736,20 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
 
   const revisions = revisionsQuery.data ?? [];
 
-  const currentSnapshot = useMemo(
-    () => ({
+  const currentSnapshot = useMemo(() => {
+    const metadata = parseFormMetadataJson(metadataJson);
+    delete metadata.revisions;
+    delete metadata.effective_workflow_source;
+
+    return {
       name,
       description,
       status,
       fields,
       steps,
-    }),
-    [name, description, status, fields, steps],
-  );
+      metadata,
+    };
+  }, [name, description, status, fields, steps, metadataJson]);
 
   const checklistTitle =
     pendingAction === "publish" ? "Publish checklist" : status === "published" ? "Save published form" : "Save checklist";
@@ -765,14 +788,14 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
   return (
     <PermissionGate requiredPermissions={[permissions.eApprovalFormsManage]}>
       <div className="space-y-6">
-        <header className="flex flex-wrap items-start justify-between gap-4">
+        <header className="sticky -top-6 z-20 -mx-6 -mt-6 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-6 py-3 lg:-top-8 lg:-mx-8 lg:-mt-8 lg:px-8">
           <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground">E-Forms form</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
               {isNew ? "New form" : name.trim() || "Untitled form"}
             </h1>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {autosaveState === "saving" ? (
             <Badge variant="outline" className="h-8 text-muted-foreground">
               Saving draft…
@@ -828,6 +851,7 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
           >
             Save
           </Button>
+          <div id="e-approval-form-header-tools" className="flex shrink-0 items-center" />
         </div>
         </header>
 
@@ -845,6 +869,10 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
                   !
                 </Badge>
               ) : null}
+            </TabsTrigger>
+            <TabsTrigger value="email" className="gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              Email
             </TabsTrigger>
             <TabsTrigger value="workflow" className="gap-1.5">
               <Workflow className="h-3.5 w-3.5" />
@@ -1088,6 +1116,10 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
             ) : null}
           </TabsContent>
 
+          <TabsContent value="email" className="mt-0 space-y-4">
+            <EApprovalFormMailCard value={mailSettings} formName={name} fields={fields} onChange={setMailSettings} />
+          </TabsContent>
+
           <TabsContent value="workflow" className="mt-0 space-y-4">
             {!workflowReady ? (
               <div
@@ -1111,6 +1143,8 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
               approverOptions={approverOptions}
               formId={formId}
               formFamily={typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null}
+              formName={name}
+              mailSettings={mailSettings}
             />
             <EApprovalFormWorkflowOptionsCard value={workflowOptions} onChange={setWorkflowOptions} />
             <EApprovalFormRevisionSettingsCard

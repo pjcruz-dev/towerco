@@ -81,16 +81,52 @@ export function filterFieldsForControlledDocumentMode(
     return removeEmptySectionHeadings(withoutHiddenFields);
   }
 
-  // Revision mode: hide the document code field (chosen via the registry alert/banner above)
-  // and next_review_date (managed post-approval by document controllers, not on the form).
-  const revisionHidden = new Set([
-    sync.documentCodeField,
-    sync.fieldMap.next_review_date ?? "next_review_date",
-    "next_review_date",
-    "review_date",
-  ]);
+  // Revision: the requestor only fills the date, the change, who authorizes it, and the file.
+  // Title, department, and document numbers stay on the saved request from the registry.
+  const effectiveName = sync.fieldMap.effective_date ?? "effective_date";
+  const changeName = sync.fieldMap.change_summary ?? "change_summary";
+  const attachmentName = sync.attachmentField || "attachments";
 
-  return removeEmptySectionHeadings(requestFields.filter((field) => !revisionHidden.has(field.name)));
+  const visible = requestFields.filter((field) =>
+    revisionFieldIsFilledByRequestor(field, effectiveName, changeName, attachmentName),
+  );
+
+  return removeEmptySectionHeadings(visible);
+}
+
+function revisionFieldIsFilledByRequestor(
+  field: EApprovalFormFieldInput,
+  effectiveName: string,
+  changeName: string,
+  attachmentName: string,
+): boolean {
+  const label = field.label?.trim().toLowerCase() ?? "";
+
+  if (field.name === effectiveName || field.name === "effective_date" || label === "effective date") {
+    return true;
+  }
+
+  if (
+    field.name === changeName ||
+    field.name === "change_summary" ||
+    field.name === "reason_for_change" ||
+    field.name === "section_change" ||
+    label === "details of change" ||
+    label === "reason for change" ||
+    label === "reason of change"
+  ) {
+    return true;
+  }
+
+  if (field.name === attachmentName || field.name === "attachments" || field.type === "file") {
+    return true;
+  }
+
+  if (field.name === "section_approval" || label === "authorization") {
+    return true;
+  }
+
+  return field.type === "approver" || field.type === "approver_list";
 }
 
 /** Drop section headings that have no remaining fields in their group. */

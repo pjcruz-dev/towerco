@@ -34,7 +34,7 @@ import { getErrorMessage } from "@/lib/api/error";
 import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-params";
 
 export async function fetchEApprovalAssignableUsers(
-  audience: "approvers" | "requestors" = "approvers",
+  audience: "approvers" | "requestors" | "recipients" = "approvers",
 ): Promise<EApprovalAssignableUser[]> {
   const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users", {
     params: audience === "requestors" ? { audience } : undefined,
@@ -577,7 +577,8 @@ export async function decideEApprovalApproval(
     release_date?: string;
     settlement_reference?: string;
     proceed_optional?: boolean;
-    file_audience?: "department_teams" | "everyone";
+    file_audience?: "everyone" | "specific_person" | "selected_users";
+    file_recipient_ids?: string[];
   },
 ): Promise<void> {
   await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);

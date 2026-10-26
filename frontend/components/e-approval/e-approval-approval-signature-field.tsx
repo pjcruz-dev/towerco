@@ -233,7 +233,7 @@ export function EApprovalApprovalSignatureField({
 
 export function validateApprovalSignature(
   signature: string | null,
-  action: "approving" | "acknowledging" = "approving",
+  action: "approving" | "acknowledging" | "reviewing" = "approving",
 ): string | null {
   return hasSignatureValue(signature) ? null : `Add your signature before ${action}.`;
 }

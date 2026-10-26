@@ -906,6 +906,9 @@ export type EnvironmentCloneSnapshot = {
   domain?: string | null;
   environment?: string | null;
   pause_source: boolean;
+  preserve_target?: boolean;
+  source_environment?: string | null;
+  source_domain?: string | null;
   cancel_requested?: boolean;
   snapshot_at: string | null;
   files_copied: number;
@@ -985,6 +988,18 @@ export async function platformRetryEnvironmentClone(
 ): Promise<EnvironmentCloneSnapshot> {
   const response = await centralApiClient.post<{ data: EnvironmentCloneSnapshot }>(
     `/platform/tenants/${tenantId}/environment-clones/${cloneId}/retry`,
+  );
+  return response.data.data;
+}
+
+export async function platformCopyAgainEnvironmentClone(
+  tenantId: string,
+  cloneId: string,
+  payload: { confirm_domain: string; pause_source?: boolean },
+): Promise<EnvironmentCloneSnapshot> {
+  const response = await centralApiClient.post<{ data: EnvironmentCloneSnapshot }>(
+    `/platform/tenants/${tenantId}/environment-clones/${cloneId}/copy-again`,
+    payload,
   );
   return response.data.data;
 }

@@ -352,14 +352,16 @@ final class EApprovalSubmissionWorkflowPreviewService
 
     private function approvalMatchRank(EApprovalRequestApproval $approval): int
     {
-        // Prefer terminal / decided rows over stale pending when duplicates exist.
+        // A finished decision wins. A new pending row wins over the invalidated row it replaced.
         return match ((string) $approval->status) {
             'cancelled' => 0,
-            'approved' => 1,
+            'approved', 'acknowledged' => 1,
             'rejected' => 2,
             'returned' => 3,
-            'invalidated' => 4,
-            'pending' => 5,
+            // A resumed step has a new pending row and an older invalidated row.
+            // The open assignment is the one on the path.
+            'pending' => 4,
+            'invalidated' => 5,
             default => 9,
         };
     }

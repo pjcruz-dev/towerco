@@ -475,7 +475,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
               <EApprovalSectionCard
                 dataHelp="ea-decide-panel"
                 title="Your decision"
-                description="Sign to approve. Remarks are optional for approve, required for reject or revision. A review step is Acknowledge instead. Sample only — actions do not save."
+                description="Sign to approve. Remarks are optional for approve, required for reject or revision. A review step is Review instead. Sample only — actions do not save."
               >
                 <div className="mt-4 space-y-4">
                   <EApprovalApprovalSignatureField
@@ -520,7 +520,7 @@ function FinanceTourDetailScreen({ family }: { family: EApprovalFinanceTourFamil
                     </span>
                     <p className="w-full text-xs text-muted-foreground">
                       Sample only — actions do not save. When the current step is a review, this panel is
-                      Acknowledge and does not approve or reject.
+                      Review and does not approve or reject.
                     </p>
                   </div>
                   <EApprovalSignatureConsentDialog

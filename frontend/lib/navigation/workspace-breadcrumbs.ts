@@ -50,6 +50,7 @@ const NEW_SEGMENT_LABELS: Record<string, string> = {
 
 const PATH_LABELS: Record<string, string> = {
   "documents/controlled/reports": "Reports",
+  "documents/controlled/obsolete": "Files",
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -12,6 +12,24 @@ const CLONE_STEPS = [
 
 const ACTIVE = new Set(["queued", "copying_database", "copying_files", "verifying"]);
 
+export function environmentCloneCanCopyAgain(clone: EnvironmentCloneSnapshot): boolean {
+  if (ACTIVE.has(clone.status)) {
+    return false;
+  }
+  if (clone.status === "ready") {
+    return true;
+  }
+  return Boolean(clone.preserve_target) && (clone.status === "failed" || clone.status === "cancelled");
+}
+
+export function environmentCloneCopyAgainLabel(clone: EnvironmentCloneSnapshot): string {
+  const source = clone.source_environment?.trim();
+  if (source) {
+    return `Copy again from ${source}`;
+  }
+  return "Copy again";
+}
+
 export function environmentCloneFilePercent(clone: EnvironmentCloneSnapshot): number {
   const total = clone.files_total ?? 0;
   if (total <= 0) {
@@ -64,6 +82,7 @@ export function EnvironmentCloneProgress({
   onRetry,
   onCancel,
   onDiscard,
+  onCopyAgain,
 }: {
   clone: EnvironmentCloneSnapshot;
   pending?: boolean;
@@ -71,14 +90,21 @@ export function EnvironmentCloneProgress({
   onRetry?: () => void;
   onCancel?: () => void;
   onDiscard?: () => void;
+  onCopyAgain?: () => void;
 }) {
   const failed = clone.status === "failed";
   const filePct = environmentCloneFilePercent(clone);
   const overallPct = environmentCloneOverallPercent(clone);
+  const replacesExisting = clone.preserve_target === true;
   const removing =
-    phase === "removing" || (Boolean(clone.cancel_requested) && ACTIVE.has(clone.status));
+    !replacesExisting &&
+    (phase === "removing" || (Boolean(clone.cancel_requested) && ACTIVE.has(clone.status)));
   const removed =
-    phase === "removed" || clone.status === "cancelled" || clone.status === "discarded";
+    !replacesExisting &&
+    (phase === "removed" || clone.status === "cancelled" || clone.status === "discarded");
+  const stoppingRefresh =
+    replacesExisting && Boolean(clone.cancel_requested) && ACTIVE.has(clone.status);
+  const refreshStopped = replacesExisting && clone.status === "cancelled";
   const activeIndex = failed
     ? CLONE_STEPS.findIndex((step) => step.id === "verifying")
     : CLONE_STEPS.findIndex((step) => step.id === clone.status);
@@ -86,7 +112,12 @@ export function EnvironmentCloneProgress({
 
   return (
     <div className="space-y-3 text-sm text-foreground">
-      {removing || removed ? (
+      {refreshStopped ? (
+        <p>
+          {clone.error_message ??
+            "Copy stopped. This environment stays blocked until you copy again."}
+        </p>
+      ) : removing || removed ? (
         <ol className="space-y-1">
           <li className="text-foreground">Done · Stop requested</li>
           <li className="text-foreground">
@@ -156,16 +187,28 @@ export function EnvironmentCloneProgress({
       {removed ? (
         <p>The new environment and its database were removed. Staging was not changed.</p>
       ) : null}
+      {stoppingRefresh ? (
+        <p>The copy will stop. This environment stays blocked until a copy finishes. The source workspace is not deleted.</p>
+      ) : null}
       {clone.status === "ready" && !removed ? (
-        <p>Database counts match the snapshot, and every copied attachment is on the new environment.</p>
+        <p>
+          Database counts match the snapshot, and every copied attachment is on this environment. Work
+          saved on the source after this snapshot is not included. Copy again replaces this environment
+          and keeps its domain.
+        </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        {failed && onRetry ? (
+        {onCopyAgain && environmentCloneCanCopyAgain(clone) && !removing && !removed ? (
+          <Button type="button" size="sm" disabled={pending} onClick={onCopyAgain}>
+            {environmentCloneCopyAgainLabel(clone)}
+          </Button>
+        ) : null}
+        {failed && !replacesExisting && onRetry ? (
           <Button type="button" size="sm" disabled={pending} onClick={onRetry}>
             Retry
           </Button>
         ) : null}
-        {ACTIVE.has(clone.status) && !removing && onCancel ? (
+        {ACTIVE.has(clone.status) && !removing && !stoppingRefresh && onCancel ? (
           <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onCancel}>
             Cancel copy
           </Button>

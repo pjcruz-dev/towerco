@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Models;
 
 use App\Modules\EApproval\Services\EApprovalFinanceStageService;
+use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -216,6 +217,8 @@ class EApprovalSubmission extends Model
         $activeOrders = [];
         /** @var array<int, array{approver_type: string, approver_id: string|null}> $snapshotStepMeta */
         $snapshotStepMeta = [];
+        /** @var array<int, string> $snapshotLabels */
+        $snapshotLabels = [];
 
         $snapshot = $this->decodedWorkflowSnapshot();
         $policyContext = is_array($snapshot['policy_context'] ?? null) ? $snapshot['policy_context'] : [];
@@ -234,6 +237,10 @@ class EApprovalSubmission extends Model
                 'approver_type' => strtolower(trim((string) ($step['approver_type'] ?? ''))),
                 'approver_id' => isset($step['approver_id']) ? trim((string) $step['approver_id']) : null,
             ];
+            $snapshotLabel = EApprovalFormMailConfig::cleanPublicLabel($step['label'] ?? '');
+            if ($snapshotLabel !== '' && ! isset($snapshotLabels[$order])) {
+                $snapshotLabels[$order] = $snapshotLabel;
+            }
         }
         $snapshotOrders = array_values(array_unique($snapshotOrders));
 
@@ -289,6 +296,9 @@ class EApprovalSubmission extends Model
         }
 
         $rows = [];
+        $metadata = $this->relationLoaded('form') && is_array($this->form?->metadata_json)
+            ? $this->form->metadata_json
+            : [];
         for ($order = 1; $order <= $total; $order++) {
             $actors = $byOrder[$order] ?? [];
             $pendingNames = [];
@@ -367,9 +377,9 @@ class EApprovalSubmission extends Model
             $primary = $names[0] ?? null;
             $rows[] = [
                 'step_order' => $order,
-                'label' => 'Step '.$order,
+                'label' => $snapshotLabels[$order] ?? ('Step '.$order),
                 'state' => $state,
-                'status_label' => $statusLabel,
+                'status_label' => EApprovalFormMailConfig::trailLabel($metadata, $statusLabel),
                 'approver_name' => $primary,
                 'approver_names' => $names,
             ];

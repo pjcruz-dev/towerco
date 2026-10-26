@@ -51,6 +51,7 @@ export function EApprovalFormRevisionDiffDialog({ open, onOpenChange, title, des
     form: diff.filter((d) => d.section === "form"),
     field: diff.filter((d) => d.section === "field"),
     workflow: diff.filter((d) => d.section === "workflow"),
+    email: diff.filter((d) => d.section === "email"),
   };
 
   return (
@@ -75,6 +76,12 @@ export function EApprovalFormRevisionDiffDialog({ open, onOpenChange, title, des
                 <section className="space-y-2">
                   <h3 className="text-xs font-medium text-muted-foreground">Fields</h3>
                   <ul className="space-y-2">{grouped.field.map((item) => <DiffRow key={item.key} item={item} />)}</ul>
+                </section>
+              ) : null}
+              {grouped.email.length > 0 ? (
+                <section className="space-y-2">
+                  <h3 className="text-xs font-medium text-muted-foreground">Email and status</h3>
+                  <ul className="space-y-2">{grouped.email.map((item) => <DiffRow key={item.key} item={item} />)}</ul>
                 </section>
               ) : null}
               {grouped.workflow.length > 0 ? (

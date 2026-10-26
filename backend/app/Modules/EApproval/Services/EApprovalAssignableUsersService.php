@@ -39,6 +39,35 @@ final class EApprovalAssignableUsersService
     }
 
     /**
+     * Active people the final approver can send published files to.
+     *
+     * @return list<array{id: string, name: string, email: string, roles: list<string>}>
+     */
+    public function listRecipients(): array
+    {
+        return TenantUser::query()
+            ->where('is_active', true)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->where(static function ($query): void {
+                $query->where('password_login_exempt', false)
+                    ->orWhereNull('password_login_exempt');
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(static function (TenantUser $user): array {
+                return [
+                    'id' => (string) $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'roles' => $user->getRoleNames()->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * Active users who can start a submission, for the form Setup access list.
      *
      * @return list<array{id: string, name: string, email: string, roles: list<string>}>

@@ -226,6 +226,7 @@ final class EApprovalCommentService
         $documentNo = (string) $submission->document_no;
 
         $type = $isReply ? 'comment_replied' : 'comment_added';
+        $preview = mb_strlen($message) > 300 ? mb_substr($message, 0, 297).'...' : $message;
 
         foreach ($recipientIds as $userId) {
             if (in_array($userId, $mentionedIds, true)) {
@@ -242,9 +243,9 @@ final class EApprovalCommentService
                 actor: $actor,
                 bodyPreview: $message,
             );
+            $this->mail->dispatchComment($submission, $userId, (string) $actor->name, $preview, $isReply);
         }
 
-        $preview = mb_strlen($message) > 300 ? mb_substr($message, 0, 297).'...' : $message;
         foreach ($mentionedIds as $userId) {
             $this->inApp->notify(
                 $userId,

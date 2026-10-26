@@ -136,6 +136,7 @@ final class ApprovalDecisionService
 
     /**
      * @param  array<string, mixed>  $financeInput
+     * @param  list<string>  $fileRecipientIds
      */
     public function decide(
         EApprovalRequestApproval $approval,
@@ -146,6 +147,7 @@ final class ApprovalDecisionService
         array $financeInput = [],
         bool $proceedOptional = false,
         ?string $fileAudience = null,
+        array $fileRecipientIds = [],
     ): EApprovalRequestApproval {
         if ($approval->status !== EApprovalApprovalStatus::PENDING) {
             throw ValidationException::withMessages([
@@ -180,16 +182,16 @@ final class ApprovalDecisionService
         if (EApprovalReviewStep::isReviewStep($approval->step)) {
             if ($decision !== 'acknowledged') {
                 throw ValidationException::withMessages([
-                    'decision' => [__('Reviewers acknowledge the file. This step does not approve or reject the request.')],
+                    'decision' => [__('Reviewers review the file. This step does not approve or reject the request.')],
                 ]);
             }
 
-            return $this->acknowledge($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience);
+            return $this->acknowledge($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience, $fileRecipientIds);
         }
 
         if ($decision === 'acknowledged') {
             throw ValidationException::withMessages([
-                'decision' => [__('Only a reviewer step can be acknowledged.')],
+                'decision' => [__('Only a reviewer step can be reviewed.')],
             ]);
         }
 
@@ -204,7 +206,7 @@ final class ApprovalDecisionService
             return $this->reject($approval, $submission, $remarks, $actor);
         }
 
-        return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience);
+        return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds);
     }
 
     private function acknowledge(
@@ -215,16 +217,17 @@ final class ApprovalDecisionService
         TenantUser $actor,
         bool $proceedOptional = false,
         ?string $fileAudience = null,
+        array $fileRecipientIds = [],
     ): EApprovalRequestApproval {
         $signature = trim((string) $signature);
         if ($signature === '') {
             throw ValidationException::withMessages([
-                'signature' => [__('Add your signature before acknowledging.')],
+                'signature' => [__('Add your signature before reviewing.')],
             ]);
         }
 
-        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience) {
-            $this->rememberFileAudience($submission, $fileAudience);
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $proceedOptional, $fileAudience, $fileRecipientIds) {
+            $this->rememberFileAudience($submission, $fileAudience, $fileRecipientIds);
             $previousApprovalStatus = (string) $approval->status;
             $note = trim((string) $remarks);
 
@@ -249,15 +252,28 @@ final class ApprovalDecisionService
                 if (! $stillPending) {
                     $submission->status = EApprovalSubmissionStatus::APPROVED;
                     $submission->save();
+                    $this->inApp->notify(
+                        (string) $submission->requestor_id,
+                        'approved',
+                        $submission->id,
+                        __('Your request :doc was approved.', ['doc' => $submission->document_no]),
+                        submission: $submission,
+                        actor: $actor,
+                    );
+                    $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
                     $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                     app(EApprovalApprovedFileDistributionService::class)->send($submission);
                 }
             }
 
+            if ($submission->status !== EApprovalSubmissionStatus::APPROVED) {
+                $this->mail->dispatchReviewed($submission, $actor, $note !== '' ? $note : null, $stepOrder);
+            }
+
             $this->audit->log(
                 'review_acknowledged',
                 $submission->id,
-                $note !== '' ? $note : 'Acknowledged',
+                $note !== '' ? $note : 'Reviewed',
                 $actor,
                 WorkspaceAuditChanges::of([
                     'approval_status' => [
@@ -272,10 +288,34 @@ final class ApprovalDecisionService
         });
     }
 
-    private function rememberFileAudience(EApprovalSubmission $submission, ?string $audience): void
+    /**
+     * @param  list<string>  $recipientIds
+     */
+    private function rememberFileAudience(EApprovalSubmission $submission, ?string $audience, array $recipientIds = []): void
     {
-        if ($audience !== 'everyone' && $audience !== 'department_teams') {
+        if (! in_array($audience, ['everyone', 'specific_person', 'selected_users'], true)) {
             return;
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn ($id): string => trim((string) $id), $recipientIds),
+            static fn (string $id): bool => $id !== '',
+        )));
+
+        if ($audience === 'specific_person' && count($ids) !== 1) {
+            throw ValidationException::withMessages([
+                'file_recipient_ids' => [__('Choose one person to receive the files.')],
+            ]);
+        }
+
+        if ($audience === 'selected_users' && $ids === []) {
+            throw ValidationException::withMessages([
+                'file_recipient_ids' => [__('Choose at least one person to receive the files.')],
+            ]);
+        }
+
+        if ($audience === 'everyone') {
+            $ids = [];
         }
 
         $decoded = [];
@@ -290,6 +330,7 @@ final class ApprovalDecisionService
         }
 
         $decoded['approved_file_audience'] = $audience;
+        $decoded['approved_file_recipient_ids'] = $ids;
         $submission->workflow_snapshot_json = json_encode($decoded, JSON_THROW_ON_ERROR);
         $submission->save();
     }
@@ -306,9 +347,10 @@ final class ApprovalDecisionService
         array $financeInput = [],
         bool $proceedOptional = false,
         ?string $fileAudience = null,
+        array $fileRecipientIds = [],
     ): EApprovalRequestApproval {
-        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience) {
-            $this->rememberFileAudience($submission, $fileAudience);
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds) {
+            $this->rememberFileAudience($submission, $fileAudience, $fileRecipientIds);
             $this->financeStage->captureOnApprove($submission, $approval->step, $financeInput);
 
             $previousApprovalStatus = (string) $approval->status;
@@ -388,6 +430,16 @@ final class ApprovalDecisionService
                     ]),
                     entityLabel: $submission->document_no,
                 );
+            }
+
+            if ($submission->status !== EApprovalSubmissionStatus::APPROVED) {
+                $bandStillPending = $submission->approvals()
+                    ->where('status', EApprovalApprovalStatus::PENDING)
+                    ->whereHas('step', static fn ($query) => $query->where('step_order', $stepOrder))
+                    ->exists();
+                if (! $bandStillPending) {
+                    $this->mail->dispatchStepApproved($submission, $stepOrder, $actor->name);
+                }
             }
 
             return $approval->fresh(['submission.form', 'approver', 'step']);

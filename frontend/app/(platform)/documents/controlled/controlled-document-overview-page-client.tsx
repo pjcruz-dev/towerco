@@ -14,7 +14,7 @@ import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   fetchControlledDocumentOverview,
   type ControlledDocumentOverview,
@@ -68,6 +68,13 @@ function readOverviewQuery(params: URLSearchParams) {
 
 function displayTitle(title: string): string {
   return title.replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function formatWait(days: number): string {
+  if (days === 1) {
+    return "1 day";
+  }
+  return `${days} days`;
 }
 
 function formatDay(value: string | null): string {
@@ -126,6 +133,9 @@ export function ControlledDocumentOverviewPageClient() {
             <div className="flex flex-wrap items-center justify-end gap-1.5">
               <Button size="sm" render={<Link href="/documents/controlled/register" />}>
                 Open register
+              </Button>
+              <Button size="sm" variant="outline" render={<Link href="/documents/controlled/obsolete" />}>
+                Files
               </Button>
               <Button size="sm" variant="outline" render={<Link href="/documents/controlled/reports" />}>
                 Reports
@@ -250,6 +260,14 @@ function OverviewBody({
 }) {
   const counts = data.counts;
   const departments = data.departments ?? [];
+  const departmentTotals = departments.reduce(
+    (sum, row) => ({
+      controlled: sum.controlled + row.controlled,
+      pending: sum.pending + row.pending + row.incoming,
+      obsolete: sum.obsolete + row.obsolete,
+    }),
+    { controlled: 0, pending: 0, obsolete: 0 },
+  );
   const mix = data.mix ?? { pending: counts.pending + counts.incoming, approved, obsolete: counts.obsolete };
   const agingSummary = data.aging_summary ?? { documents: 0, people: 0, oldest_days: 0 };
   const agingDetail = agingSummary.people === 0
@@ -333,7 +351,7 @@ function OverviewBody({
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-medium text-foreground">By department</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Controlled is the row total. Approved is the live document. Obsolete counts each older revision, so one approved document can have more than one obsolete revision.
+            Controlled is the row total. Pending is still in approval. Obsolete counts each older revision, so one live document can have more than one obsolete revision.
           </p>
         </div>
         {departments.length === 0 ? (
@@ -346,7 +364,6 @@ function OverviewBody({
                 <TableHead>Department</TableHead>
                 <TableHead className="text-right">Controlled</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
-                <TableHead className="text-right">Approved</TableHead>
                 <TableHead className="text-right">Obsolete</TableHead>
               </TableRow>
             </TableHeader>
@@ -364,11 +381,18 @@ function OverviewBody({
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{row.controlled}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.pending + row.incoming}</TableCell>
-                  <TableCell className="text-right tabular-nums">{row.approved}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.obsolete}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right tabular-nums">{departmentTotals.controlled}</TableCell>
+                <TableCell className="text-right tabular-nums">{departmentTotals.pending}</TableCell>
+                <TableCell className="text-right tabular-nums">{departmentTotals.obsolete}</TableCell>
+              </TableRow>
+            </TableFooter>
           </Table>
           </div>
         )}
@@ -378,7 +402,7 @@ function OverviewBody({
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-medium text-foreground">Aging</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Days since this person was asked on the current round. A revision starts the count again.
+            How long the next reviewer or approver has been waiting. The count starts when they were asked on this round, and a revision starts it again.
           </p>
         </div>
         {(data.aging ?? []).length === 0 ? (
@@ -389,11 +413,11 @@ function OverviewBody({
               <TableHeader>
                 <TableRow>
                   <TableHead>Document</TableHead>
-                  <TableHead>Person</TableHead>
+                  <TableHead>Next reviewer / approver</TableHead>
                   <TableHead>Requestor department</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Days</TableHead>
-                  <TableHead>Submitted</TableHead>
+                  <TableHead className="text-right">Waiting</TableHead>
+                  <TableHead className="pl-8">Asked</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -407,8 +431,8 @@ function OverviewBody({
                     <TableCell>{row.name}</TableCell>
                     <TableCell>{row.requestor_department ?? "—"}</TableCell>
                     <TableCell>{row.role}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.age_days}</TableCell>
-                    <TableCell className="tabular-nums">{formatDay(row.submitted_at)}</TableCell>
+                    <TableCell className="pr-4 text-right tabular-nums whitespace-nowrap">{formatWait(row.age_days)}</TableCell>
+                    <TableCell className="pl-8 tabular-nums whitespace-nowrap">{formatDay(row.submitted_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -434,6 +458,7 @@ function OverviewBody({
                 <TableHead>Department</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Revision</TableHead>
+                <TableHead>Effective</TableHead>
                 <TableHead>Published</TableHead>
               </TableRow>
             </TableHeader>
@@ -451,6 +476,7 @@ function OverviewBody({
                   <TableCell>{row.department || "—"}</TableCell>
                   <TableCell>{row.document_type || "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.current_revision}</TableCell>
+                  <TableCell className="tabular-nums">{formatDay(row.effective_date)}</TableCell>
                   <TableCell className="tabular-nums">{formatDay(row.published_at)}</TableCell>
                 </TableRow>
               ))}

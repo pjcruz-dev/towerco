@@ -57,7 +57,7 @@ export function ApprovalHistoryPrintBlock({
           {signedSlots.map((slot) => (
             <div
               key={slot.key}
-              className="rounded border border-slate-300 bg-white p-2 text-center"
+              className="eapproval-approval-card break-inside-avoid rounded border border-slate-300 bg-white p-2 text-center"
             >
               <p className="text-[10px] font-medium text-slate-700">
                 {slot.subtitle ? `${slot.subtitle}` : slot.label}
@@ -65,7 +65,7 @@ export function ApprovalHistoryPrintBlock({
               {slot.subtitle && slot.label !== slot.subtitle ? (
                 <p className="text-[10px] text-slate-800">{slot.label}</p>
               ) : null}
-              {/^(Approved|Acknowledged) ·/.test(slot.subtitle ?? "") ? null : (
+              {/^(Approved|Reviewed) ·/.test(slot.subtitle ?? "") ? null : (
                 <p className="text-[9px] text-slate-500">
                   {slot.kind === "approver" ? slot.subtitle : isTypedSignature(slot.signature) ? "Typed signature" : "Signature"}
                 </p>

@@ -102,8 +102,9 @@ final class TenantEnvironmentCloneService
      */
     public function present(TenantEnvironmentClone $clone): array
     {
-        $clone->loadMissing('targetTenant.domains');
+        $clone->loadMissing(['targetTenant.domains', 'sourceTenant.domains']);
         $target = $clone->targetTenant;
+        $source = $clone->sourceTenant;
 
         return [
             'id' => (string) $clone->id,
@@ -112,7 +113,10 @@ final class TenantEnvironmentCloneService
             'target_tenant_id' => $clone->target_tenant_id,
             'domain' => $target?->domains->first()?->domain,
             'environment' => $target?->environment,
+            'source_domain' => $source?->domains->first()?->domain,
+            'source_environment' => $source?->environment,
             'pause_source' => (bool) $clone->pause_source,
+            'preserve_target' => (bool) $clone->preserve_target,
             'cancel_requested' => (bool) $clone->cancel_requested,
             'snapshot_at' => $clone->started_at?->toIso8601String(),
             'files_copied' => (int) $clone->files_copied,
@@ -280,6 +284,71 @@ final class TenantEnvironmentCloneService
             'finished_at' => null,
             'started_at' => null,
         ])->save();
+
+        $this->dispatchClone($clone);
+
+        return $clone->fresh() ?? $clone;
+    }
+
+    public function copyAgain(
+        Tenant $tenant,
+        TenantEnvironmentClone $previous,
+        bool $pauseSource,
+        string $confirmDomain,
+        ?string $actorUserId,
+        ?string $actorEmail,
+    ): TenantEnvironmentClone {
+        $this->assertOwned($tenant, $previous);
+
+        if (! $this->canRefresh($previous)) {
+            throw ValidationException::withMessages([
+                'clone' => [__('Only a finished environment copy can be run again. Retry a failed first copy.')],
+            ]);
+        }
+
+        $source = Tenant::query()->find($previous->source_tenant_id);
+        $target = $previous->target_tenant_id !== null
+            ? Tenant::query()->find($previous->target_tenant_id)
+            : null;
+        if ($source === null || $target === null || (string) $source->id === (string) $target->id) {
+            throw ValidationException::withMessages([
+                'clone' => [__('The source or target workspace for this copy no longer exists.')],
+            ]);
+        }
+
+        $expected = strtolower((string) ($target->domains()->first()?->domain ?? ''));
+        $given = strtolower(trim($confirmDomain));
+        if ($expected === '' || $given !== $expected) {
+            throw ValidationException::withMessages([
+                'confirm_domain' => [__('Type the target domain exactly. This copy replaces that workspace.')],
+            ]);
+        }
+
+        if ($this->orgHasActiveClone($source)) {
+            throw ValidationException::withMessages([
+                'clone' => [__('An environment copy is already running for this organization.')],
+            ]);
+        }
+
+        $this->assertPreflight();
+
+        $previousMode = TenantOperatorAccessMode::normalize($source->operator_access_mode);
+        $target->forceFill(['operator_access_mode' => TenantOperatorAccessMode::BLOCKED])->save();
+        if ($pauseSource) {
+            $source->forceFill(['operator_access_mode' => TenantOperatorAccessMode::READ_ONLY])->save();
+        }
+
+        $clone = TenantEnvironmentClone::query()->create([
+            'id' => (string) Str::uuid(),
+            'source_tenant_id' => (string) $source->id,
+            'target_tenant_id' => (string) $target->id,
+            'status' => TenantEnvironmentClone::STATUS_QUEUED,
+            'pause_source' => $pauseSource,
+            'preserve_target' => true,
+            'source_access_mode_before' => $previousMode,
+            'actor_user_id' => $actorUserId,
+            'actor_email' => $actorEmail,
+        ]);
 
         $this->dispatchClone($clone);
 
@@ -577,6 +646,18 @@ final class TenantEnvironmentCloneService
 
     private function finishCancelled(TenantEnvironmentClone $clone): void
     {
+        if ($clone->preserve_target) {
+            // A stopped refresh may already have replaced part of the database. Keep the
+            // target blocked until a later copy finishes, and keep the tenant row and domain.
+            $clone->forceFill([
+                'status' => TenantEnvironmentClone::STATUS_CANCELLED,
+                'finished_at' => now(),
+                'error_message' => 'Copy stopped. This environment stays blocked until a copy finishes.',
+            ])->save();
+
+            return;
+        }
+
         $this->deleteTargetTenant($clone);
         $clone->forceFill([
             'status' => TenantEnvironmentClone::STATUS_CANCELLED,
@@ -668,9 +749,27 @@ final class TenantEnvironmentCloneService
                 'files_copied' => $clone->files_copied,
                 'files_total' => $clone->files_total,
                 'paused_schedules' => $clone->paused_schedules,
+                'preserve_target' => (bool) $clone->preserve_target,
                 'actor_email' => $clone->actor_email,
             ],
         );
+    }
+
+    private function canRefresh(TenantEnvironmentClone $clone): bool
+    {
+        if ($clone->target_tenant_id === null) {
+            return false;
+        }
+
+        if ($clone->status === TenantEnvironmentClone::STATUS_READY) {
+            return true;
+        }
+
+        return (bool) $clone->preserve_target
+            && in_array($clone->status, [
+                TenantEnvironmentClone::STATUS_FAILED,
+                TenantEnvironmentClone::STATUS_CANCELLED,
+            ], true);
     }
 
     private function assertOwned(Tenant $tenant, TenantEnvironmentClone $clone): void

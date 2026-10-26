@@ -84,7 +84,7 @@ export function buildApprovalHistorySlots(
     slots.push({
       key: `signed-${row.step ?? "x"}-${index}`,
       label: row.approver ?? (acknowledged ? `Reviewer (Step ${row.step ?? "—"})` : `Approver (Step ${row.step ?? "—"})`),
-      subtitle: `${acknowledged ? "Acknowledged" : "Approved"} · ${row.acted_at ?? "—"}`,
+      subtitle: `${acknowledged ? "Reviewed" : "Approved"} · ${row.acted_at ?? "—"}`,
       signature: row.signature!.trim(),
       kind: acknowledged ? "reviewer" : "approver",
     });
@@ -105,7 +105,7 @@ export function buildPdfFooterRows(data: EApprovalPrintPayload): {
   return buildApprovalHistorySlots(data, template)
     .filter((slot) => Boolean(slot.signature?.trim()))
     .map((slot) => {
-      const stamped = /^(Approved|Acknowledged) ·\s*(.*)$/.exec(slot.subtitle ?? "");
+      const stamped = /^(Approved|Reviewed) ·\s*(.*)$/.exec(slot.subtitle ?? "");
       return {
         label:
           slot.kind === "requestor"

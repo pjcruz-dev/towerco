@@ -181,7 +181,7 @@ function appendWorkflowHealthChecks(
     items.push({
       level: "warning",
       message:
-        "This workflow is review only. The request is complete when the last reviewer acknowledges. There is no Approve step.",
+        "This workflow is review only. The request is complete when the last reviewer reviews. There is no Approve step.",
     });
   }
 
@@ -195,7 +195,7 @@ function appendWorkflowHealthChecks(
       items.push({
         level: "warning",
         message:
-          "Workflow includes a reviewer list. Each selected person comments on the file, signs, and acknowledges before the request continues. Acknowledgement is not an approval.",
+          "Workflow includes a reviewer list. Each selected person comments on the file, signs, and reviews before the request continues. Reviewed is not an approval.",
       });
     }
   }

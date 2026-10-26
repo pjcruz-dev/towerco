@@ -28,6 +28,7 @@ const sync: ControlledDocumentSyncMeta = {
 const fields: EApprovalFormFieldInput[] = [
   { type: "section", name: "iso", label: "ISO" },
   { type: "text", name: "title", label: "Document title" },
+  { type: "date", name: "effective_date", label: "Effective date" },
   { type: "section", name: "section_revision", label: "Document identification" },
   { type: "number", name: "previous_revision", label: "Previous revision" },
   { type: "number", name: "revision", label: "Current revision (auto)" },
@@ -37,24 +38,48 @@ const fields: EApprovalFormFieldInput[] = [
   { type: "textarea", name: "reason_for_change", label: "Reason for change" },
   { type: "section", name: "section_approval", label: "Process Owner" },
   { type: "approver", name: "head_approval", label: "Review Authorities" },
+  { type: "file", name: "attachments", label: "Controlled document file" },
 ];
 
 describe("controlled document compose mode", () => {
   it("hides document identification and details of change on a new request", () => {
     const labels = filterFieldsForControlledDocumentMode(fields, sync, "new").map((field) => field.label);
 
-    expect(labels).toEqual(["ISO", "Document title", "Process Owner", "Review Authorities"]);
+    expect(labels).toEqual([
+      "ISO",
+      "Document title",
+      "Effective date",
+      "Process Owner",
+      "Review Authorities",
+      "Controlled document file",
+    ]);
   });
 
-  it("keeps document identification and details of change on a register revision", () => {
+  it("shows only the date, the change, authorization, and the file on a revision", () => {
     const labels = filterFieldsForControlledDocumentMode(fields, sync, "revision").map((field) => field.label);
 
-    expect(labels).toContain("Document identification");
-    expect(labels).toContain("Previous revision");
-    expect(labels).toContain("Current revision (auto)");
-    expect(labels).toContain("Details of change");
-    expect(labels).toContain("Reason for change");
-    expect(labels).not.toContain("Document number");
+    expect(labels).toEqual([
+      "Effective date",
+      "Details of change",
+      "Details of change",
+      "Reason for change",
+      "Process Owner",
+      "Review Authorities",
+      "Controlled document file",
+    ]);
+  });
+
+  it("keeps a required reviewer list on a revision", () => {
+    const withReviewers: EApprovalFormFieldInput[] = [
+      ...fields,
+      { type: "approver_list", name: "head_approval", label: "Reviewers" },
+    ];
+
+    const labels = filterFieldsForControlledDocumentMode(withReviewers, sync, "revision").map(
+      (field) => field.label,
+    );
+
+    expect(labels).toContain("Reviewers");
   });
 
   it("does not treat an issued document code as a register revision", () => {

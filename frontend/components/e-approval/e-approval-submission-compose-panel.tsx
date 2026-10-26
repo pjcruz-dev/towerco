@@ -1001,7 +1001,7 @@ export function EApprovalSubmissionComposePanel({
       return;
     }
 
-    const validationIssues = validateSubmissionValues(fields, computedValues, attachmentFiles, {
+    const validationIssues = validateSubmissionValues(composeFields, computedValues, attachmentFiles, {
       approverOptions,
       requiredApproverFieldNames,
       existingAttachmentCountsByField: draftExistingAttachmentCounts,

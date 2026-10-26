@@ -191,13 +191,17 @@ final class EApprovalFormImportExportService
             }
 
             $label = trim((string) ($step['label'] ?? ''));
-            $normalized[] = [
+            $row = [
                 'type' => $type,
                 'step_order' => (int) ($step['step_order'] ?? $index + 1),
                 'approverId' => $approverId !== null ? (string) $approverId : null,
                 'label' => $label !== '' ? $label : null,
                 'condition' => is_array($condition) ? $condition : null,
             ];
+            if (is_array($step['mail'] ?? null) || array_key_exists('mail', $step)) {
+                $row['mail'] = $step['mail'];
+            }
+            $normalized[] = $row;
         }
 
         return $normalized;

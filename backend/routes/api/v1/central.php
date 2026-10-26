@@ -54,6 +54,7 @@ use App\Modules\Platform\Http\Controllers\V1\CentralTenantBrandingAssetStoreCont
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantDestroyController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantDirectoryController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentCloneCancelController;
+use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentCloneCopyAgainController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentCloneDiscardController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentCloneLatestController;
 use App\Modules\Platform\Http\Controllers\V1\CentralTenantEnvironmentCloneRetryController;
@@ -191,6 +192,9 @@ Route::middleware(['auth:api', 'platform.admin', 'platform.mfa'])->prefix('platf
     Route::post('tenants/{tenant}/environment-clones/{clone}/retry', CentralTenantEnvironmentCloneRetryController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
         ->name('api.central.v1.platform.tenants.environment_clones.retry');
+    Route::post('tenants/{tenant}/environment-clones/{clone}/copy-again', CentralTenantEnvironmentCloneCopyAgainController::class)
+        ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
+        ->name('api.central.v1.platform.tenants.environment_clones.copy_again');
     Route::post('tenants/{tenant}/environment-clones/{clone}/cancel', CentralTenantEnvironmentCloneCancelController::class)
         ->middleware('platform.permission:'.PlatformRoleCatalog::PERM_TENANTS_MANAGE)
         ->name('api.central.v1.platform.tenants.environment_clones.cancel');
