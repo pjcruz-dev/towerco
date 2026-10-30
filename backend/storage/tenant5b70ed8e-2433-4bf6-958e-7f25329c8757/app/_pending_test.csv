@@ -1,2 +1,0 @@
-document_code,title,document_type,department,revision_number,effective_date,next_review_date,change_summary,folder_path,status,approver_email,pending_since
-ATC-PEND-IMPORT-TEST,Pending import check,F,IT,,2026-10-06,,,,pending,admin@staging.myapp.localhost,2026-10-06
