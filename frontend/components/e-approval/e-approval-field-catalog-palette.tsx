@@ -57,8 +57,7 @@ export function EApprovalFieldCatalogPalette({ className, compact }: Props) {
       <div className="mb-2 shrink-0">
         <h2 className="text-sm font-medium text-foreground">Field catalog</h2>
         <p className="text-[11px] text-muted-foreground">
-          Drag fields onto the canvas or row slots. Drag row layouts to add multi-column rows. Use finance shortcuts for
-          auto-total forms.
+          Drag a field or a finance grid onto the canvas. Grids can total a column, hold several sites, and flag an expense type.
         </p>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-0.5">

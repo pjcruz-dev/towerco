@@ -14,6 +14,7 @@ import type {
 } from "@/modules/e-approval/types";
 import {
   createEmptyCondition,
+  markStepOwnedCondition,
   parseStepWhen,
   parseStepWhenLogic,
   patchStepWhen,
@@ -40,11 +41,12 @@ export function EApprovalWorkflowStepConditions({ fields, step, onChange }: Prop
 
   const when = parseStepWhen(step);
   const whenLogic = parseStepWhenLogic(step);
+  const emit = (next: EApprovalWorkflowStepInput) => onChange(markStepOwnedCondition(next));
 
   const updateCondition = (index: number, patch: Partial<EApprovalWorkflowCondition>) => {
     const next = [...when];
     next[index] = { ...next[index], ...patch };
-    onChange(patchStepWhen(step, next, whenLogic));
+    emit(patchStepWhen(step, next, whenLogic));
   };
 
   return (
@@ -56,7 +58,7 @@ export function EApprovalWorkflowStepConditions({ fields, step, onChange }: Prop
             <Select
               value={whenLogic}
               className="h-8 w-auto min-w-[9.5rem] text-xs"
-              onChange={(e) => onChange(patchStepWhenLogic(step, e.target.value as "and" | "or"))}
+              onChange={(e) => emit(patchStepWhenLogic(step, e.target.value as "and" | "or"))}
             >
               <option value="and">Match all (AND)</option>
               <option value="or">Match any (OR)</option>
@@ -66,7 +68,7 @@ export function EApprovalWorkflowStepConditions({ fields, step, onChange }: Prop
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => onChange(patchStepWhen(step, [...when, createEmptyCondition(fields)], whenLogic))}
+            onClick={() => emit(patchStepWhen(step, [...when, createEmptyCondition(fields)], whenLogic))}
           >
             <Plus className="mr-1 h-3.5 w-3.5" />
             Add condition
@@ -127,7 +129,7 @@ export function EApprovalWorkflowStepConditions({ fields, step, onChange }: Prop
                 size="sm"
                 variant="ghost"
                 onClick={() =>
-                  onChange(patchStepWhen(step, when.filter((_, itemIndex) => itemIndex !== index), whenLogic))
+                  emit(patchStepWhen(step, when.filter((_, itemIndex) => itemIndex !== index), whenLogic))
                 }
               >
                 <Trash2 className="h-4 w-4" />

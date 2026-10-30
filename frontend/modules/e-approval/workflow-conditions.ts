@@ -113,6 +113,38 @@ export function patchStepWhenLogic(
   return patchStepWhen(step, parseStepWhen(step), logic);
 }
 
+/** A condition edited on this step. It is not a case of the previous If/Else. */
+export function markStepOwnedCondition(step: EApprovalWorkflowStepInput): EApprovalWorkflowStepInput {
+  const when = parseStepWhen(step);
+  const condition: Record<string, unknown> = { ...(step.condition ?? {}) };
+
+  if (when.length === 0) {
+    delete condition.when_scope;
+    return {
+      ...step,
+      when_scope: undefined,
+      condition: Object.keys(condition).length > 0 ? condition : null,
+    };
+  }
+
+  condition.when_scope = "step";
+  return {
+    ...step,
+    when_scope: "step",
+    condition,
+  };
+}
+
+export function isStepOwnedCondition(step: EApprovalWorkflowStepInput | undefined): boolean {
+  if (!step) {
+    return false;
+  }
+  if (step.when_scope === "step") {
+    return true;
+  }
+  return step.condition?.when_scope === "step";
+}
+
 function normalizeCondition(raw: EApprovalWorkflowCondition): EApprovalWorkflowCondition {
   return {
     field: String(raw.field ?? ""),

@@ -266,7 +266,7 @@ export function normalizeEApprovalWorkspace(
       subsidiary: (data?.subsidiary_breakdown ?? []).map((row, index) => ({
         key: row.key ?? row.label,
         label: row.label,
-        value: row.count,
+        value: typeof row.amount === "number" ? row.amount : row.count,
         fill: chartColorAt(index),
       })),
     },

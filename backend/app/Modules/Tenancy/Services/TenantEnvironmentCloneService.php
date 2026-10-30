@@ -300,6 +300,12 @@ final class TenantEnvironmentCloneService
     ): TenantEnvironmentClone {
         $this->assertOwned($tenant, $previous);
 
+        if ((string) $tenant->id !== (string) $previous->target_tenant_id) {
+            throw ValidationException::withMessages([
+                'clone' => [__('Copy again only replaces the copied environment. The source workspace is left as it is.')],
+            ]);
+        }
+
         if (! $this->canRefresh($previous)) {
             throw ValidationException::withMessages([
                 'clone' => [__('Only a finished environment copy can be run again. Retry a failed first copy.')],

@@ -12,7 +12,10 @@ import { TenantOperatorAccessCard } from "@/components/platform/tenant-operator-
 import { TenantBillingSheet } from "@/components/platform/tenant-billing-sheet";
 import { TenantBrandingSheet } from "@/components/platform/tenant-branding-sheet";
 import { TenantModulesSheet } from "@/components/platform/tenant-modules-sheet";
-import { EnvironmentCloneProgress } from "@/components/platform/environment-clone-progress";
+import {
+  EnvironmentCloneProgress,
+  environmentCloneCopyAgainLabel,
+} from "@/components/platform/environment-clone-progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -537,9 +540,16 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
               phase={removalNotice === "removing" ? "removing" : undefined}
               onRetry={canManageTenants ? () => cloneAction.mutate("retry") : undefined}
               onCancel={canManageTenants ? () => cloneAction.mutate("cancel") : undefined}
-              onDiscard={canManageTenants && removalNotice === null ? () => cloneAction.mutate("discard") : undefined}
+              viewingTenantId={tenantId}
+              onDiscard={
+                canManageTenants && removalNotice === null && tenantId !== cloneQuery.data.source_tenant_id
+                  ? () => cloneAction.mutate("discard")
+                  : undefined
+              }
               onCopyAgain={
-                canManageTenants && removalNotice === null
+                canManageTenants &&
+                removalNotice === null &&
+                tenantId === cloneQuery.data.target_tenant_id
                   ? () => {
                       if (!cloneIsCopying) {
                         copyAgainMutation.reset();
@@ -843,8 +853,8 @@ export function PlatformTenantDetailPageClient({ tenantId }: Props) {
             <DialogTitle>
               {showCopyProgress
                 ? "Copy progress"
-                : cloneQuery.data?.source_environment
-                  ? `Copy again from ${cloneQuery.data.source_environment}`
+                : cloneQuery.data
+                  ? environmentCloneCopyAgainLabel(cloneQuery.data)
                   : "Copy again"}
             </DialogTitle>
             {showCopyProgress ? null : (

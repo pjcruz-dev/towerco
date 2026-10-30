@@ -51,6 +51,8 @@ import {
   insertThresholdLadderSteps,
   insertValueMatchSteps,
   ladderCaseLabel,
+  ladderCaseMemberIndexes,
+  ladderCasePrimaryIndex,
   ladderGroupLabel,
   ladderMatchCases,
   removeLadderValueCase,
@@ -135,6 +137,80 @@ type StepCardProps = {
   formName: string;
 };
 
+const DECISION_BUTTON_DEFAULTS = {
+  approve: "Approve",
+  reject: "Reject",
+  revision: "Request revision",
+} as const;
+
+function stepDecisionLabel(
+  step: EApprovalWorkflowStepInput,
+  key: keyof typeof DECISION_BUTTON_DEFAULTS,
+): string {
+  const direct = step.decision_labels?.[key]?.trim();
+  if (direct) {
+    return direct;
+  }
+  const stored = step.condition?.decision_labels;
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const value = (stored as { approve?: string; reject?: string; revision?: string })[key];
+    if (typeof value === "string" && value.trim() !== "") {
+      return value.trim();
+    }
+  }
+  return DECISION_BUTTON_DEFAULTS[key];
+}
+
+function StepDecisionButtons({
+  step,
+  onUpdate,
+}: {
+  step: EApprovalWorkflowStepInput;
+  onUpdate: (patch: Partial<EApprovalWorkflowStepInput>) => void;
+}) {
+  const current = {
+    approve: stepDecisionLabel(step, "approve"),
+    reject: stepDecisionLabel(step, "reject"),
+    revision: stepDecisionLabel(step, "revision"),
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/20 px-3 py-3">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">Decision buttons</p>
+        <p className="text-xs text-muted-foreground">
+          The words this step shows on Decide. Approve can read Validated. Leave a box as the default to keep that word. The request still records the same decision.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {(
+          [
+            ["approve", "Approve"],
+            ["reject", "Reject"],
+            ["revision", "Request revision"],
+          ] as const
+        ).map(([key, fallback]) => (
+          <label key={key} className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">{fallback}</span>
+            <Input
+              value={current[key]}
+              maxLength={40}
+              onChange={(event) =>
+                onUpdate({
+                  decision_labels: {
+                    ...current,
+                    [key]: event.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function approverLabelForStep(
   step: EApprovalWorkflowStepInput,
   approverOptions: { id: string; label: string }[],
@@ -157,6 +233,10 @@ function approverLabelForStep(
     const field = approverListFieldOptions.find((item) => item.id === step.approverId);
     if (step.type === "reviewer_list") {
       return field ? `Reviewers: ${field.label}` : "Reviewer list";
+    }
+    if (step.list_source === "fixed") {
+      const count = (step.fixed_approver_ids ?? []).filter((id) => id.trim() !== "").length;
+      return count > 0 ? `Fixed approvers (${count})` : "Fixed approvers";
     }
     const mode = step.parallel_mode ?? "all";
     const modeHint =
@@ -274,9 +354,14 @@ function WorkflowStepCard({
                   parallel_quorum: undefined,
                 };
               } else if (type === "user_list" || type === "reviewer_list") {
+                const keepFixed = type === "user_list" && step.list_source === "fixed";
                 nextStep = {
                   ...nextStep,
-                  approverId: pickNextApproverListFieldId(fields, steps, index) || step.approverId || "",
+                  list_source: keepFixed ? "fixed" : undefined,
+                  fixed_approver_ids: keepFixed ? step.fixed_approver_ids : undefined,
+                  approverId: keepFixed
+                    ? undefined
+                    : pickNextApproverListFieldId(fields, steps, index) || step.approverId || "",
                   parallel_mode: type === "reviewer_list" ? undefined : (step.parallel_mode ?? "all"),
                   parallel_quorum: type === "reviewer_list" ? undefined : step.parallel_quorum,
                 };
@@ -301,6 +386,10 @@ function WorkflowStepCard({
                   nextStep = { ...nextStep, approverId: "" };
                 }
               }
+              if (type !== "user_list") {
+                delete nextStep.list_source;
+                delete nextStep.fixed_approver_ids;
+              }
               onUpdate(nextStep);
             }}
           >
@@ -317,7 +406,9 @@ function WorkflowStepCard({
           ) : null}
           {step.type === "user_list" ? (
             <p className="text-[11px] text-muted-foreground">
-              Expands the selected multi-approver field into a parallel band at submit.
+              {step.list_source === "fixed"
+                ? "Expands the named people into a parallel band at submit."
+                : "Expands the selected multi-approver field into a parallel band at submit."}
             </p>
           ) : null}
           {step.type === "reviewer_list" ? (
@@ -357,10 +448,130 @@ function WorkflowStepCard({
             </Select>
           </label>
         ) : step.type === "user_list" || step.type === "reviewer_list" ? (
+          step.type === "user_list" ? (
+            <div className="grid gap-3">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Approvers come from</span>
+                <Select
+                  value={step.list_source === "fixed" ? "fixed" : "field"}
+                  onChange={(e) => {
+                    const source = e.target.value === "fixed" ? "fixed" : "field";
+                    if (source === "fixed") {
+                      onUpdate({
+                        list_source: "fixed",
+                        approverId: undefined,
+                        fixed_approver_ids:
+                          step.fixed_approver_ids && step.fixed_approver_ids.length > 0
+                            ? step.fixed_approver_ids
+                            : [""],
+                      });
+                      return;
+                    }
+                    onUpdate({
+                      list_source: undefined,
+                      fixed_approver_ids: undefined,
+                      approverId: pickNextApproverListFieldId(fields, steps, index) || "",
+                    });
+                  }}
+                >
+                  <option value="field">Approver list field</option>
+                  <option value="fixed">Fixed approvers</option>
+                </Select>
+              </label>
+              {step.list_source === "fixed" ? (
+                <div className="grid gap-2">
+                  {(step.fixed_approver_ids && step.fixed_approver_ids.length > 0
+                    ? step.fixed_approver_ids
+                    : [""]
+                  ).map((approverId, offset) => {
+                    const ids = step.fixed_approver_ids ?? [""];
+                    const taken = new Set(ids.filter((value, itemIndex) => itemIndex !== offset && value.trim() !== ""));
+                    return (
+                      <div key={`list-fixed-${offset}`} className="flex items-end gap-2">
+                        <label className="min-w-0 flex-1 space-y-1">
+                          <span className="text-xs font-medium text-muted-foreground">Approver {offset + 1}</span>
+                          <Select
+                            value={approverId}
+                            onChange={(e) => {
+                              const next = [...ids];
+                              next[offset] = e.target.value;
+                              onUpdate({ list_source: "fixed", fixed_approver_ids: next, approverId: undefined });
+                            }}
+                          >
+                            <option value="">Select user</option>
+                            {approverOptions
+                              .filter((user) => user.id === approverId || !taken.has(user.id))
+                              .map((user) => (
+                                <option key={user.id} value={user.id}>
+                                  {user.label}
+                                </option>
+                              ))}
+                          </Select>
+                        </label>
+                        {ids.length > 1 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              const next = ids.filter((_, itemIndex) => itemIndex !== offset);
+                              onUpdate({
+                                list_source: "fixed",
+                                fixed_approver_ids: next.length > 0 ? next : [""],
+                                approverId: undefined,
+                              });
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onUpdate({
+                        list_source: "fixed",
+                        approverId: undefined,
+                        fixed_approver_ids: [...(step.fixed_approver_ids ?? [""]), ""],
+                      })
+                    }
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add approver
+                  </Button>
+                </div>
+              ) : (
+                <label className="space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">Approver list field</span>
+                  <Select
+                    value={step.approverId ?? ""}
+                    onChange={(e) => onUpdate({ approverId: e.target.value, list_source: undefined })}
+                  >
+                    <option value="" disabled>
+                      {approverListFieldOptions.length === 0 ? "Add an Approver list field first" : "Select field"}
+                    </option>
+                    {approverListFieldOptions
+                      .filter(
+                        (field) =>
+                          field.id === step.approverId || !getUsedApproverFieldIds(steps, index).has(field.id),
+                      )
+                      .map((field) => (
+                        <option key={field.id} value={field.id}>
+                          {field.label}
+                        </option>
+                      ))}
+                  </Select>
+                </label>
+              )}
+            </div>
+          ) : (
           <label className="space-y-1">
-            <span className="text-xs font-medium text-muted-foreground">
-              {step.type === "reviewer_list" ? "Reviewer list field" : "Approver list field"}
-            </span>
+            <span className="text-xs font-medium text-muted-foreground">Reviewer list field</span>
             <Select
               value={step.approverId ?? ""}
               onChange={(e) => onUpdate({ approverId: e.target.value })}
@@ -380,6 +591,7 @@ function WorkflowStepCard({
                 ))}
             </Select>
           </label>
+          )
         ) : step.type === "field_map" ? (
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Source field</span>
@@ -482,6 +694,74 @@ function WorkflowStepCard({
         </label>
       ) : null}
 
+      {step.duty !== "review" && step.type !== "reviewer_list" ? (
+        <div className="mt-3 space-y-2">
+          <StepDecisionButtons step={step} onUpdate={onUpdate} />
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={step.auto_approve_enabled === true || step.condition?.auto_approve_enabled === true}
+              onCheckedChange={(checked) =>
+                onUpdate({
+                  auto_approve_enabled: checked === true,
+                  auto_approve_days:
+                    checked === true
+                      ? (step.auto_approve_days ??
+                        (typeof step.condition?.auto_approve_days === "number"
+                          ? step.condition.auto_approve_days
+                          : 1))
+                      : undefined,
+                })
+              }
+            />
+            <span>
+              <span className="font-medium">Auto-approve</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                If this person has not decided after this many working days, the step is approved for them. Weekends do not count. The clock starts when the request reaches them.
+              </span>
+            </span>
+          </label>
+          {step.auto_approve_enabled === true || step.condition?.auto_approve_enabled === true ? (
+            <div className="grid gap-2 pl-6">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">Working days</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={
+                    step.auto_approve_days ??
+                    (typeof step.condition?.auto_approve_days === "number" ? step.condition.auto_approve_days : 1)
+                  }
+                  onChange={(e) =>
+                    onUpdate({
+                      auto_approve_enabled: true,
+                      auto_approve_days: Math.max(1, Math.min(30, Number(e.target.value) || 1)),
+                    })
+                  }
+                />
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Any one: the first timer finishes the band and the others are not needed. All: each person is approved on their own timer, and the band waits for everyone. At least N: each auto-approval counts toward N. A step that releases cash or confirms a settlement stays a manual decision, including the final release.
+              </p>
+            </div>
+          ) : null}
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={step.proof_of_payment === true || step.condition?.proof_of_payment === true}
+              onCheckedChange={(checked) => onUpdate({ proof_of_payment: checked === true })}
+            />
+            <span>
+              <span className="font-medium">Proof of payment</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Approving opens a proof of payment. Released continues the request. Hold keeps it on this step. Auto-approve does not run while this is on.
+              </span>
+            </span>
+          </label>
+        </div>
+      ) : null}
+
       <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
         <Checkbox
           className="mt-0.5"
@@ -542,6 +822,7 @@ function WorkflowStepCard({
         approverOptions={approverOptions}
         mailSettings={mailSettings}
         formName={formName}
+        fields={fields.map((field) => ({ name: field.name, label: field.label }))}
         onUpdate={onUpdate}
       />
 
@@ -785,15 +1066,45 @@ export function EApprovalWorkflowEditor({
       );
       return;
     }
+    if ("proof_of_payment" in patch) {
+      const order = steps[index]?.step_order;
+      onStepsChange(
+        steps.map((step, itemIndex) => {
+          if (itemIndex !== index && step.step_order !== order) {
+            return step;
+          }
+          const condition = { ...(step.condition ?? {}) };
+          if (patch.proof_of_payment) {
+            condition.proof_of_payment = true;
+          } else {
+            delete condition.proof_of_payment;
+          }
+          return { ...step, proof_of_payment: Boolean(patch.proof_of_payment), condition };
+        }),
+      );
+      return;
+    }
     const next = [...steps];
     next[index] = { ...steps[index], ...patch };
     onStepsChange(next);
   };
 
   const removeStep = (index: number) => {
+    const primary = ladderCasePrimaryIndex(steps, index);
+    const members = ladderCaseMemberIndexes(steps, primary);
     const next = compactWorkflowStepOrdersPreservingTies(
       steps.filter((_, itemIndex) => itemIndex !== index),
     );
+    if (members.length === 2 && members.includes(index)) {
+      const survivor = members.find((member) => member !== index);
+      if (survivor != null) {
+        const adjusted = survivor > index ? survivor - 1 : survivor;
+        const step = { ...next[adjusted] };
+        delete step.parallel_mode;
+        delete step.parallel_quorum;
+        next[adjusted] = step;
+      }
+    }
     onStepsChange(next);
     setSelectedStepIndex((prev) => {
       if (prev == null) {
@@ -817,7 +1128,9 @@ export function EApprovalWorkflowEditor({
   };
 
   const removeLadder = (ladder: ExclusiveThresholdLadder) => {
-    const remove = new Set(ladder.bandIndexes);
+    const remove = new Set(
+      ladder.bandIndexes.flatMap((bandIndex) => ladderCaseMemberIndexes(steps, bandIndex)),
+    );
     onStepsChange(
       compactWorkflowStepOrdersPreservingTies(steps.filter((_, itemIndex) => !remove.has(itemIndex))),
     );
@@ -1254,7 +1567,8 @@ export function EApprovalWorkflowEditor({
       >
         <SheetContent
           side="right"
-          className="w-full gap-0 p-0 sm:max-w-xl md:max-w-2xl"
+          className="w-[min(920px,100vw)] !max-w-none gap-0 p-0 data-[side=right]:w-[min(920px,100vw)]"
+          style={{ width: "min(920px, 100vw)", maxWidth: "none" }}
           showCloseButton
         >
           {selectedStepIndex != null && steps[selectedStepIndex] ? (

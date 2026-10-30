@@ -42,7 +42,10 @@ export function EApprovalLineItemsTable({
   /** Expense lines on the request page use the print table: numbers under the column, no repeated names. */
   printLayout?: boolean;
 }) {
-  const totalRows = placeReviewTotals(table.headers, totals ?? []);
+  const placed = placeReviewTotals(table.headers, totals ?? []);
+  // Totals with no column of their own used to spill onto a second row (VAT, Non-VATable, net).
+  // The print layout only keeps a figure that sits under a column on this table.
+  const totalRows = printLayout ? placed.slice(0, 1).filter((row) => row.some(Boolean)) : placed;
   const moneyColumns = table.headers.map((header) => isReviewMoneyColumn(header));
 
   return (
@@ -79,7 +82,7 @@ export function EApprovalLineItemsTable({
                   key={`review-cell-${rowIndex}-${cellIndex}`}
                   className={cn(
                     "border border-border align-top break-words",
-                    printLayout ? "px-2 py-1" : "px-3 py-2 whitespace-pre-line",
+                    printLayout ? "px-2 py-1 whitespace-pre-line" : "px-3 py-2 whitespace-pre-line",
                     moneyColumns[cellIndex] && "min-w-[5.5rem] text-right whitespace-nowrap tabular-nums",
                     cell === "—" && "text-muted-foreground",
                   )}

@@ -284,7 +284,7 @@ function buildCashAdvance(): FinanceTourSample {
     columns: CA_COLUMNS,
     rows: CA_ROWS,
     files: ["batangas-itinerary.pdf"],
-    fileLabel: "Supporting documents",
+    fileLabel: "Forecast support",
     submittedAt,
   };
   return {

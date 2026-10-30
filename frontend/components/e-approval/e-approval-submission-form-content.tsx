@@ -11,29 +11,37 @@ import {
   type SubmissionFormValueRow,
 } from "@/modules/e-approval/submission-form-content";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 type Props = {
   values: SubmissionFormValueRow[];
   formFields?: SubmissionFormFieldSnapshot[];
   attachments?: SubmissionFormAttachment[];
   className?: string;
+  /** File and camera fields stay in place. Return the review for that field, or null to show the stored name. */
+  renderFileReview?: (fieldName: string) => ReactNode;
 };
 
 function ContentItem({
   item,
   duplicateApproverIds,
+  renderFileReview,
 }: {
   item: SubmissionFormContentItem;
   duplicateApproverIds: Set<string>;
+  renderFileReview?: (fieldName: string) => ReactNode;
 }) {
   const label = item.value.label ?? item.value.field_name ?? "Field";
+  const fieldName = item.value.field_name?.trim() || item.formField?.name || "";
+  const fileReview = item.fileReview && fieldName && renderFileReview ? renderFileReview(fieldName) : null;
 
   return (
-    <div className={cn(item.fullWidth && "md:col-span-2")}>
+    <div className={cn((item.fullWidth || fileReview) && "md:col-span-2")}>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1">
-        {item.table ? (
+        {fileReview ? (
+          fileReview
+        ) : item.table ? (
           <EApprovalLineItemsTable
             table={item.table}
             totals={item.totals}
@@ -55,10 +63,14 @@ export function EApprovalSubmissionFormContent({
   formFields,
   attachments = [],
   className,
+  renderFileReview,
 }: Props) {
   const groups = useMemo(
-    () => buildSubmissionFormContentGroups(values, formFields, attachments),
-    [attachments, formFields, values],
+    () =>
+      buildSubmissionFormContentGroups(values, formFields, attachments, {
+        keepFileFields: Boolean(renderFileReview),
+      }),
+    [attachments, formFields, renderFileReview, values],
   );
   const duplicateApproverIds = useMemo(() => getDuplicateApproverIds(values), [values]);
 
@@ -81,6 +93,7 @@ export function EApprovalSubmissionFormContent({
                 key={item.key}
                 item={item}
                 duplicateApproverIds={duplicateApproverIds}
+                renderFileReview={renderFileReview}
               />
             ))}
           </dl>

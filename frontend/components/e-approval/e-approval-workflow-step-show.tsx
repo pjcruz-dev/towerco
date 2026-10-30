@@ -19,6 +19,8 @@ export type WorkflowStepShowItem = {
   description?: string;
   /** completed | current | upcoming | cancelled | skipped | rejected */
   state: "completed" | "current" | "upcoming" | "cancelled" | "skipped" | "rejected";
+  /** Shared by everyone asked together on one band. */
+  stepOrder?: number;
   /** Primary approver display name for this step */
   approverName?: string | null;
   /** Parallel / multi-approver names */
@@ -43,6 +45,27 @@ function formatApproverLine(step: WorkflowStepShowItem): string | null {
   if (names.length === 1) return names[0] ?? null;
   if (names.length === 2) return `${names[0]} + ${names[1]}`;
   return `${names[0]} +${names.length - 1}`;
+}
+
+function orderOf(step: WorkflowStepShowItem, index: number): number {
+  return step.stepOrder != null && step.stepOrder > 0 ? step.stepOrder : index + 1;
+}
+
+function lastOrder(steps: WorkflowStepShowItem[]): number {
+  return steps.reduce((max, step, index) => Math.max(max, orderOf(step, index)), 1);
+}
+
+/** One pip per step. A finished band stays approved when the other people were not needed. */
+function bandState(states: WorkflowStepShowItem["state"][]): WorkflowStepShowItem["state"] {
+  const rank: Record<WorkflowStepShowItem["state"], number> = {
+    rejected: 5,
+    current: 4,
+    upcoming: 3,
+    completed: 2,
+    cancelled: 1,
+    skipped: 0,
+  };
+  return states.reduce((best, state) => (rank[state] > rank[best] ? state : best), "skipped");
 }
 
 function statusForStep(step: WorkflowStepShowItem): string {
@@ -75,7 +98,7 @@ export function workflowStepCompactCaption(steps: WorkflowStepShowItem[]): {
       steps.findIndex((step) => step.state === "rejected"),
     );
     return {
-      progress: `Rejected · step ${index + 1} of ${steps.length}`,
+      progress: `Rejected · step ${orderOf(rejected, index)} of ${lastOrder(steps)}`,
       waiting: who ? `Rejected · ${who}` : "Rejected",
     };
   }
@@ -91,7 +114,7 @@ export function workflowStepCompactCaption(steps: WorkflowStepShowItem[]): {
     actionable.length > 0 && actionable.every((step) => step.state === "completed");
 
   const progress = current
-    ? `Step ${currentIndex + 1} of ${steps.length}`
+    ? `Step ${orderOf(current, currentIndex)} of ${lastOrder(steps)}`
     : allActionableDone
       ? `Complete · ${doneCount} steps`
       : `${doneCount}/${steps.length} steps`;
@@ -120,7 +143,7 @@ function tooltipLines(steps: WorkflowStepShowItem[]): string[] {
   return steps.map((step, index) => {
     const who = formatApproverLine(step);
     const status = statusForStep(step);
-    const order = index + 1;
+    const order = orderOf(step, index);
     return who ? `Step ${order} · ${who} · ${status}` : `Step ${order} · ${status}`;
   });
 }
@@ -192,21 +215,32 @@ export function EApprovalWorkflowStepShow({
           }
         >
           <span className="flex items-center gap-1">
-            {steps.map((step) => (
+            {Array.from(
+              steps.reduce((bands, step, index) => {
+                const order = orderOf(step, index);
+                const states = bands.get(order) ?? [];
+                states.push(step.state);
+                bands.set(order, states);
+                return bands;
+              }, new Map<number, WorkflowStepShowItem["state"][]>()),
+            ).map(([order, states]) => {
+              const state = bandState(states);
+              return (
               <span
-                key={step.key}
+                key={`band-${order}`}
                 className={cn(
                   "h-1.5 flex-1 rounded-full",
-                  step.state === "completed" && "bg-emerald-500",
+                  state === "completed" && "bg-emerald-500",
                   // Pending / in-progress — amber (not primary charcoal)
-                  step.state === "current" && "bg-amber-500",
-                  step.state === "rejected" && "bg-rose-500",
-                  step.state === "upcoming" && "bg-muted",
-                  (step.state === "cancelled" || step.state === "skipped") && "bg-muted-foreground/25",
+                  state === "current" && "bg-amber-500",
+                  state === "rejected" && "bg-rose-500",
+                  state === "upcoming" && "bg-muted",
+                  (state === "cancelled" || state === "skipped") && "bg-muted-foreground/25",
                 )}
                 aria-hidden
               />
-            ))}
+              );
+            })}
           </span>
           <span className="block text-[11px] tabular-nums text-muted-foreground">{progress}</span>
           {waiting ? (
@@ -327,7 +361,8 @@ export function buildWorkflowStepShowItems(input: {
       const names = (step.approver_names ?? []).filter(Boolean);
       const primary = step.approver_name ?? names[0] ?? null;
       return {
-        key: `api-step-${order}`,
+        key: `api-step-${order}-${primary ?? index}`,
+        stepOrder: order,
         label: humanWorkflowStepLabel(step.label, order, primary),
         description: statusForStep({
           key: "",
@@ -406,24 +441,43 @@ export function workflowPreviewToStepShowItems(
     const runtime = (step.runtime_status ?? "").toLowerCase();
     const review = step.duty === "review" || runtime === "acknowledged";
     let state: WorkflowStepShowItem["state"] = "upcoming";
+    let statusLabel = "Upcoming";
 
     // Skipped must never render as completed/green "Done".
     if (runtime === "skipped") {
       state = "skipped";
+      statusLabel = "Skipped";
+    } else if (runtime === "invalidated" || runtime === "superseded") {
+      state = "skipped";
+      statusLabel = "Not needed";
+    } else if (runtime === "not_sent") {
+      state = "skipped";
+      statusLabel = "Not sent";
     } else if (runtime === "approved" || runtime === "acknowledged") {
       state = "completed";
+      statusLabel = review && runtime === "acknowledged" ? "Reviewed" : "Approved";
     } else if (cancelled || runtime === "cancelled") {
       state = "cancelled";
+      statusLabel = "Cancelled";
     } else if (runtime === "rejected") {
       state = "rejected";
+      statusLabel = "Rejected";
     } else if (status === "rejected" && (runtime === "pending" || runtime === "waiting" || runtime === "in_progress")) {
       state = "skipped";
+      statusLabel = "Skipped";
     } else if (runtime === "pending" || runtime === "waiting" || runtime === "in_progress") {
       state = "current";
+      statusLabel = "Pending";
     } else if (runtime === "returned") {
       state = "current";
+      statusLabel = "Pending";
     } else if (approved) {
       state = "completed";
+      statusLabel = "Approved";
+    }
+
+    if (review && state === "completed") {
+      statusLabel = "Reviewed";
     }
 
     const approverName =
@@ -433,31 +487,20 @@ export function workflowPreviewToStepShowItems(
       step.resolved_user_id?.trim() ||
       approverName ||
       String(index);
+    const unnamed = state === "skipped" && statusLabel === "Skipped";
 
     return {
       sortOrder: order,
       sortIndex: index,
       item: {
         key: `preview-${order}-${personKey}`,
-        label: humanWorkflowStepLabel(step.label, order, state === "skipped" ? null : approverName),
+        stepOrder: order,
+        label: humanWorkflowStepLabel(step.label, order, unnamed ? null : approverName),
         description: undefined,
         state,
-        statusLabel:
-          review && state === "completed"
-            ? "Reviewed"
-            : state === "rejected"
-              ? "Rejected"
-              : state === "current"
-                ? "Pending"
-                : state === "completed"
-                  ? "Approved"
-                  : state === "cancelled"
-                    ? "Cancelled"
-                    : state === "skipped"
-                      ? "Skipped"
-                      : "Upcoming",
-        approverName: state === "skipped" ? null : approverName,
-        approverNames: state === "skipped" || !approverName ? [] : [approverName],
+        statusLabel,
+        approverName: unnamed ? null : approverName,
+        approverNames: unnamed || !approverName ? [] : [approverName],
       } satisfies WorkflowStepShowItem,
     };
   });
@@ -474,6 +517,7 @@ export function workflowPreviewToStepShowItems(
         sortIndex: steps.length + index,
         item: {
           key: `preview-skipped-${order}-${index}`,
+          stepOrder: order,
           label: humanWorkflowStepLabel(step.label, order),
           state: "skipped" as const,
           statusLabel: "Skipped",

@@ -21,6 +21,10 @@ export type EApprovalWorkflowStepInput = {
   default_approver_id?: string;
   /** Used when manager / field / role (or fixed user) primary resolution fails. */
   fallback_approver_id?: string;
+  /** user_list people come from a form field, or from named approvers on the step. */
+  list_source?: "field" | "fixed";
+  /** Named people when list_source is fixed. */
+  fixed_approver_ids?: string[];
   /** Parallel band completion: all (default) | any | n_of_m */
   parallel_mode?: "all" | "any" | "n_of_m";
   /** Required approvals when parallel_mode is n_of_m */
@@ -28,6 +32,8 @@ export type EApprovalWorkflowStepInput = {
   /** How `when` conditions combine: and (default) | or */
   when_logic?: "and" | "or";
   when?: EApprovalWorkflowCondition[];
+  /** Set when this step's conditions were edited on the step. Keeps them off an earlier If/Else. */
+  when_scope?: "step";
   step_order?: number;
   /** Shown on the submission badge, for example "Pending — Release cash". */
   label?: string | null;
@@ -48,6 +54,17 @@ export type EApprovalWorkflowStepInput = {
   confirm_settlement?: boolean;
   /** The previous approver chooses whether this step runs. */
   optional?: boolean;
+  /** Approve this person automatically after auto_approve_days with no decision. */
+  auto_approve_enabled?: boolean;
+  auto_approve_days?: number;
+  /** Approving opens a proof of payment. Released continues. Hold stays on this step. */
+  proof_of_payment?: boolean;
+  /** Words on Decide for this step. Blank keeps Approve, Reject, and Request revision. */
+  decision_labels?: {
+    approve?: string;
+    reject?: string;
+    revision?: string;
+  };
   condition?: Record<string, unknown> | null;
 };
 
@@ -241,6 +258,7 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
     duty: "review" | "approve";
   } | null;
   send_approved_files?: boolean;
+  publishes_on_approve?: boolean;
   /** Approver feedback when status is returned or rejected. */
   revision_remarks?: string | null;
   revision_remarks_at?: string | null;
@@ -313,6 +331,14 @@ export type EApprovalApprovalRow = {
   acted_at: string | null;
   step_order: number | null;
   finance_action?: string | null;
+  /** This step asks for a proof of payment before it can approve. */
+  proof_of_payment?: boolean;
+  /** Words on this step's Decide buttons. */
+  decision_labels?: {
+    approve?: string;
+    reject?: string;
+    revision?: string;
+  };
   /** Parallel band completion rule from the workflow step (when present). */
   parallel_mode?: "all" | "any" | "n_of_m" | null;
   parallel_quorum?: number | null;
@@ -323,7 +349,15 @@ export type EApprovalApprovalRow = {
     id: string;
     document_no: string;
     status: string;
+    status_label?: string | null;
+    form_id?: string;
     form_name?: string;
+    subsidiary?: string | null;
+    current_step?: number;
+    step_count?: number | null;
+    workflow_steps?: EApprovalSubmissionListRow["workflow_steps"];
+    requestor?: { id: string | null; name: string; email: string } | null;
+    created_at?: string | null;
   } | null;
 };
 
@@ -462,6 +496,14 @@ export type EApprovalPrintApprovalRow = {
   remarks?: string | null;
   signature?: string | null;
   acted_at: string | null;
+  /** Workflow step title, for example Release cash. */
+  step_label?: string | null;
+  /** release, settlement, or payment when the step moves money. */
+  finance_action?: string | null;
+  /** The Approve button word for this step. Blank keeps Approved. */
+  decision_label?: string | null;
+  /** Proof of payment choice on this step: released or hold. */
+  proof_status?: string | null;
 };
 
 export type EApprovalPrintAttachmentRow = {
@@ -483,6 +525,10 @@ export type EApprovalPrintGrid = {
   label: string;
   columns: string[];
   rows: string[][];
+  /** Column labels the form builder turned off. Print must not add them back. */
+  hidden_columns?: string[];
+  /** Column labels included in the printed total row. */
+  total_columns?: string[];
 };
 
 export type EApprovalPrintPayload = {
@@ -536,5 +582,13 @@ export type EApprovalCommentRow = {
   pin_w?: number | null;
   /** Highlight height on that page, 0–1. */
   pin_h?: number | null;
-  replies: { id: string; message: string; user_name: string; created_at: string | null; attachment_id?: string | null }[];
+  images?: { id: string; file_name: string }[];
+  replies: {
+    id: string;
+    message: string;
+    user_name: string;
+    created_at: string | null;
+    attachment_id?: string | null;
+    images?: { id: string; file_name: string }[];
+  }[];
 };

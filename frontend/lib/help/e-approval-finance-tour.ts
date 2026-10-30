@@ -260,10 +260,10 @@ function formSteps(family: EApprovalFinanceTourFamily): LiveTourStep[] {
       path: compose,
       entryPath: compose,
       target: "ea-compose-upload",
-      title: family === "cash_advance" ? "Supporting documents" : "Receipts",
+      title: family === "cash_advance" ? "Forecast support" : "Receipts",
       body:
         family === "cash_advance"
-          ? "Attach the itinerary or other support. Drag and drop, paste, or browse. This sample file is not uploaded."
+          ? "Attach the itinerary, quotation, or other support for the forecast. This is not the proof that cash was released."
           : "Receipts are required. The sample shows a PDF already attached — it is not uploaded.",
       audience: "requestor",
     },

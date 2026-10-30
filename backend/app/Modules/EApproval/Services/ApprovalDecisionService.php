@@ -79,7 +79,15 @@ final class ApprovalDecisionService
 
         $order = array_flip($pageIds);
         $items = EApprovalRequestApproval::query()
-            ->with(['submission.form', 'approver', 'step'])
+            ->with([
+                'approver',
+                'step',
+                'submission.form.workflowTemplate.steps',
+                'submission.requestor',
+                'submission.approvals.step',
+                'submission.approvals.approver',
+                'submission.values.field',
+            ])
             ->whereIn('id', $pageIds)
             ->get()
             ->sortBy(static fn (EApprovalRequestApproval $approval): int => $order[(string) $approval->id] ?? PHP_INT_MAX)
@@ -204,6 +212,11 @@ final class ApprovalDecisionService
             }
 
             return $this->reject($approval, $submission, $remarks, $actor);
+        }
+
+        $proof = is_array($financeInput['payment_proof'] ?? null) ? $financeInput['payment_proof'] : null;
+        if (is_array($proof) && ($proof['status'] ?? '') === 'hold') {
+            return $this->holdPayment($approval, $submission, $proof, $actor);
         }
 
         return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds);
@@ -336,6 +349,145 @@ final class ApprovalDecisionService
     }
 
     /**
+     * @param  array<string, mixed>  $proof
+     */
+    private function holdPayment(
+        EApprovalRequestApproval $approval,
+        EApprovalSubmission $submission,
+        array $proof,
+        TenantUser $actor,
+    ): EApprovalRequestApproval {
+        $approval->setRelation('submission', $submission);
+        if (! $approval->requiresProofOfPayment()) {
+            throw ValidationException::withMessages([
+                'payment_proof' => [__('This step does not record a proof of payment.')],
+            ]);
+        }
+
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $proof, $actor) {
+            $this->assertPaymentProof($proof);
+            $this->financeStage->recordPaymentProof($submission, $proof, $actor);
+            $this->comments->add(
+                $submission,
+                $this->paymentProofNote($proof),
+                $actor,
+                notifyStakeholders: false,
+                imageAttachmentIds: $this->paymentProofFileIds($proof),
+            );
+            $comment = trim((string) ($proof['comment'] ?? ''));
+            $this->inApp->notify(
+                (string) $submission->requestor_id,
+                'payment_held',
+                $submission->id,
+                __(':name put :doc on hold.', ['name' => $actor->name, 'doc' => $submission->document_no]),
+                submission: $submission,
+                actor: $actor,
+                bodyPreview: $comment !== '' ? $comment : null,
+            );
+            $this->mail->dispatchPaymentProof($submission, $actor, 'hold', $comment);
+
+            return $approval->fresh(['submission.form', 'approver', 'step']);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $financeInput
+     */
+    private function captureReleasedProof(
+        EApprovalRequestApproval $approval,
+        EApprovalSubmission $submission,
+        array $financeInput,
+        TenantUser $actor,
+    ): void {
+        $approval->setRelation('submission', $submission);
+        if (! $approval->requiresProofOfPayment()) {
+            return;
+        }
+
+        $proof = is_array($financeInput['payment_proof'] ?? null) ? $financeInput['payment_proof'] : null;
+        if (! is_array($proof) || ($proof['status'] ?? '') !== 'released') {
+            throw ValidationException::withMessages([
+                'payment_proof' => [__('Record the proof of payment before approving.')],
+            ]);
+        }
+
+        $this->assertPaymentProof($proof);
+        $this->financeStage->recordPaymentProof($submission, $proof, $actor);
+        $this->comments->add(
+            $submission,
+            $this->paymentProofNote($proof),
+            $actor,
+            notifyStakeholders: false,
+            imageAttachmentIds: $this->paymentProofFileIds($proof),
+        );
+        $comment = trim((string) ($proof['comment'] ?? ''));
+        $this->inApp->notify(
+            (string) $submission->requestor_id,
+            'payment_released',
+            $submission->id,
+            __(':name released payment for :doc.', ['name' => $actor->name, 'doc' => $submission->document_no]),
+            submission: $submission,
+            actor: $actor,
+            bodyPreview: $comment !== '' ? $comment : null,
+        );
+        $this->mail->dispatchPaymentProof($submission, $actor, 'released', $comment);
+    }
+
+    /**
+     * Hold needs a comment and stays on this step. Released needs a file and continues.
+     *
+     * @param  array<string, mixed>  $proof
+     */
+    private function assertPaymentProof(array $proof): void
+    {
+        $status = strtolower(trim((string) ($proof['status'] ?? '')));
+        $comment = trim((string) ($proof['comment'] ?? ''));
+        $files = is_array($proof['attachment_ids'] ?? null) ? $proof['attachment_ids'] : [];
+        if ($status === 'hold' && $comment === '') {
+            throw ValidationException::withMessages([
+                'payment_proof.comment' => [__('A comment is required to hold this step.')],
+            ]);
+        }
+        if ($status === 'released' && $files === []) {
+            throw ValidationException::withMessages([
+                'payment_proof.attachment_ids' => [__('Attach the proof of payment before releasing.')],
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $proof
+     */
+    private function paymentProofNote(array $proof): string
+    {
+        $status = ($proof['status'] ?? '') === 'hold' ? 'Hold' : 'Released';
+        $comment = trim((string) ($proof['comment'] ?? ''));
+        $note = 'Proof of payment — '.$status.'.';
+        if ($comment !== '') {
+            $note .= ' '.$comment;
+        }
+
+        return $note;
+    }
+
+    /**
+     * @param  array<string, mixed>  $proof
+     * @return list<string>
+     */
+    private function paymentProofFileIds(array $proof): array
+    {
+        $ids = [];
+        foreach (is_array($proof['attachment_ids'] ?? null) ? $proof['attachment_ids'] : [] as $id) {
+            $id = trim((string) $id);
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
      * @param  array<string, mixed>  $financeInput
      */
     private function approve(
@@ -351,6 +503,7 @@ final class ApprovalDecisionService
     ): EApprovalRequestApproval {
         return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds) {
             $this->rememberFileAudience($submission, $fileAudience, $fileRecipientIds);
+            $this->captureReleasedProof($approval, $submission, $financeInput, $actor);
             $this->financeStage->captureOnApprove($submission, $approval->step, $financeInput);
 
             $previousApprovalStatus = (string) $approval->status;

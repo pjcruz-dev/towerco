@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 
+import { EApprovalMailButtonsEditor } from "@/components/e-approval/e-approval-mail-buttons-editor";
+import { EApprovalMailBodyField, EApprovalMailSubjectField, mailTokensForFields } from "@/components/e-approval/e-approval-mail-compose-field";
 import { EApprovalMailPreviewDialog } from "@/components/e-approval/e-approval-mail-preview-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  DEFAULT_APPROVER_BUTTON,
+  DEFAULT_REQUESTOR_BUTTON,
   defaultMailSample,
+  previewEventMail,
   previewStepOpenMail,
   stepStatusPreview,
   type FormMailSettings,
@@ -68,17 +72,19 @@ function mailOrUndefined(mail: StepMail): EApprovalWorkflowStepInput["mail"] | u
 type Props = {
   step: EApprovalWorkflowStepInput;
   formName: string;
+  fields: { name: string; label: string }[];
   approverOptions: { id: string; label: string }[];
   mailSettings: FormMailSettings;
   onUpdate: (patch: Partial<EApprovalWorkflowStepInput>) => void;
 };
 
-export function EApprovalWorkflowStepMail({ step, formName, approverOptions, mailSettings, onUpdate }: Props) {
-  const [open, setOpen] = useState(false);
+export function EApprovalWorkflowStepMail({ step, formName, fields, approverOptions, mailSettings, onUpdate }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [requestorPreviewOpen, setRequestorPreviewOpen] = useState(false);
   const mail = mailFromStep(step);
   const statusLabel = step.label ?? "";
   const sample = defaultMailSample(formName, statusLabel);
+  const tokens = mailTokensForFields(fields);
   const ccLabels = mail.cc_user_ids
     .map((id) => approverOptions.find((option) => option.id === id)?.label ?? id)
     .join(", ");
@@ -90,110 +96,166 @@ export function EApprovalWorkflowStepMail({ step, formName, approverOptions, mai
   const preview = previewStepOpenMail(mailSettings, sample);
 
   return (
-    <div className="mt-4 space-y-3">
-      <label className="block space-y-1">
-        <span className="text-xs font-medium text-muted-foreground">Status label</span>
-        <Input
-          value={statusLabel}
-          maxLength={60}
-          placeholder="Pending"
-          onChange={(event) => onUpdate({ label: event.target.value })}
-        />
-        <p className="text-[11px] text-muted-foreground">
-          Badge and approval email use “{stepStatusPreview(mailSettings, statusLabel)}”. Leave blank to keep{" "}
-          {stepStatusPreview(mailSettings, "")}.
-        </p>
-      </label>
+    <div className="mt-4 space-y-4">
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-foreground">Status names</h3>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">This step</span>
+          <Input
+            value={statusLabel}
+            maxLength={60}
+            placeholder="Pending"
+            onChange={(event) => onUpdate({ label: event.target.value })}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            The badge and this step’s email use “{stepStatusPreview(mailSettings, statusLabel)}”. Leave blank to keep{" "}
+            {stepStatusPreview(mailSettings, "")}.
+          </p>
+        </label>
+      </div>
 
-      <div>
-        <button
-          type="button"
-          className="flex items-center gap-1 text-xs font-medium text-primary"
-          onClick={() => setOpen((current) => !current)}
-        >
-          {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          {open ? "Hide email" : "Email"}
-        </button>
-        {open ? (
-          <div className="mt-2 space-y-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Notify the approver</p>
-                <p className="text-xs text-muted-foreground">
-                  On by default. Subject, body, and buttons are set on the Email tab. Subject: {preview.subject}
-                </p>
-              </div>
-              <Switch
-                aria-label="Notify the approver"
-                checked={mail.notify_assignee}
-                onCheckedChange={(checked) => setMail({ notify_assignee: Boolean(checked) })}
-              />
-            </div>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Also copy</span>
-              <Select
-                value=""
-                onChange={(event) => {
-                  const id = event.target.value;
-                  if (!id || mail.cc_user_ids.includes(id) || mail.cc_user_ids.length >= 10) {
-                    return;
-                  }
-                  setMail({ cc_user_ids: [...mail.cc_user_ids, id] });
-                }}
-              >
-                <option value="">Add a person</option>
-                {approverOptions.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.label}
-                  </option>
-                ))}
-              </Select>
-              {ccLabels !== "" ? (
-                <ul className="space-y-1 pt-1">
-                  {mail.cc_user_ids.map((id) => (
-                    <li key={id} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate">{approverOptions.find((option) => option.id === id)?.label ?? id}</span>
-                      <button
-                        type="button"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => setMail({ cc_user_ids: mail.cc_user_ids.filter((item) => item !== id) })}
-                      >
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">No extra copies. Up to 10 people.</p>
-              )}
-            </label>
-            <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)}>
-              Preview email
-            </Button>
-            <div className="space-y-3 border-t border-border pt-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Email the requestor when this step is approved</p>
-                  <p className="text-xs text-muted-foreground">Off by default. The final approval email is unchanged.</p>
-                </div>
-                <Switch
-                  aria-label="Email the requestor when this step is approved"
-                  checked={mail.notify_requestor_on_approve}
-                  onCheckedChange={(checked) => setMail({ notify_requestor_on_approve: Boolean(checked) })}
-                />
-              </div>
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-foreground">Form emails</h3>
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Approval required</p>
               <p className="text-xs text-muted-foreground">
-                The wording for that mail is Step approved on the Email tab.
+                Sent when the request reaches this step. A blank subject, body, or button keeps the form email.
               </p>
             </div>
+            <Switch
+              aria-label="Notify the approver"
+              checked={mail.notify_assignee}
+              onCheckedChange={(checked) => setMail({ notify_assignee: Boolean(checked) })}
+            />
           </div>
-        ) : null}
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Subject</span>
+            <EApprovalMailSubjectField
+              value={mail.subject}
+              disabled={!mail.notify_assignee}
+              placeholder={preview.subject}
+              tokens={tokens}
+              onChange={(subject) => setMail({ subject })}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Body</span>
+            <EApprovalMailBodyField
+              value={mail.body}
+              disabled={!mail.notify_assignee}
+              tokens={tokens}
+              onChange={(body) => setMail({ body: body.slice(0, 8000) })}
+            />
+          </label>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Buttons</p>
+            <EApprovalMailButtonsEditor
+              value={mail.buttons}
+              fallback={DEFAULT_APPROVER_BUTTON}
+              onChange={(buttons) => setMail({ buttons })}
+            />
+          </div>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Also copy</span>
+            <Select
+              value=""
+              onChange={(event) => {
+                const id = event.target.value;
+                if (!id || mail.cc_user_ids.includes(id) || mail.cc_user_ids.length >= 10) {
+                  return;
+                }
+                setMail({ cc_user_ids: [...mail.cc_user_ids, id] });
+              }}
+            >
+              <option value="">Add a person</option>
+              {approverOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.label}
+                </option>
+              ))}
+            </Select>
+            {ccLabels !== "" ? (
+              <ul className="space-y-1 pt-1">
+                {mail.cc_user_ids.map((id) => (
+                  <li key={id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate">{approverOptions.find((option) => option.id === id)?.label ?? id}</span>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setMail({ cc_user_ids: mail.cc_user_ids.filter((item) => item !== id) })}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">No extra copies. Up to 10 people.</p>
+            )}
+          </label>
+          <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)}>
+            Preview email
+          </Button>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Step approved</p>
+              <p className="text-xs text-muted-foreground">
+                Emails the requestor when this step is approved. Off until you turn it on. A blank field keeps the form email.
+              </p>
+            </div>
+            <Switch
+              aria-label="Email the requestor when this step is approved"
+              checked={mail.notify_requestor_on_approve}
+              onCheckedChange={(checked) => setMail({ notify_requestor_on_approve: Boolean(checked) })}
+            />
+          </div>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Subject</span>
+            <EApprovalMailSubjectField
+              value={mail.requestor_subject}
+              disabled={!mail.notify_requestor_on_approve}
+              tokens={tokens}
+              onChange={(requestor_subject) => setMail({ requestor_subject })}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Body</span>
+            <EApprovalMailBodyField
+              value={mail.requestor_body}
+              disabled={!mail.notify_requestor_on_approve}
+              tokens={tokens}
+              onChange={(requestor_body) => setMail({ requestor_body: requestor_body.slice(0, 8000) })}
+            />
+          </label>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Buttons</p>
+            <EApprovalMailButtonsEditor
+              value={mail.requestor_buttons}
+              fallback={DEFAULT_REQUESTOR_BUTTON}
+              onChange={(requestor_buttons) => setMail({ requestor_buttons })}
+            />
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={() => setRequestorPreviewOpen(true)}>
+            Preview email
+          </Button>
+        </div>
       </div>
       <EApprovalMailPreviewDialog
         open={previewOpen}
-        title="Step email"
+        title="Approval required"
         preview={preview}
         onOpenChange={setPreviewOpen}
+      />
+      <EApprovalMailPreviewDialog
+        open={requestorPreviewOpen}
+        title="Step approved"
+        preview={previewEventMail(mailSettings, "step_approved", sample)}
+        onOpenChange={setRequestorPreviewOpen}
       />
     </div>
   );

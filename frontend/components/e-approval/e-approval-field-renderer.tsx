@@ -38,7 +38,8 @@ import {
 import { formatInstructionBodyForDisplay, parseInstructionBody } from "@/modules/e-approval/field-instruction";
 import { parseSelectChoices, resolveFieldDisplayLabel } from "@/modules/e-approval/field-options";
 import { computedFieldHelpText, isFieldComputedReadOnly } from "@/modules/e-approval/field-computed";
-import { fieldHelpText, fieldMaxLength, fieldPlaceholder } from "@/modules/e-approval/field-validation";
+import { earliestIsoDate, fieldLockedByFilledGrid, parseDateBound } from "@/modules/e-approval/date-bounds";
+import { fieldHelpText, fieldMaxLength, fieldPlaceholder, parseFieldValidation } from "@/modules/e-approval/field-validation";
 import {
   parseDateRangeValue,
   serializeDateRangeValue,
@@ -486,10 +487,14 @@ export function EApprovalFieldRenderer({
   const placeholder = fieldPlaceholder(field);
   const maxLength = fieldMaxLength(field);
   const helpText = helpTextOverride ?? fieldHelpText(field) ?? computedFieldHelpText(field, allFields);
-  const help = helpText ? <p className="text-xs text-muted-foreground">{helpText}</p> : null;
   const computedReadOnly = isFieldComputedReadOnly(field, allFields);
-  const readOnlyLocked = prefillLocked || computedReadOnly;
-  const inputDisabled = (disabled && !prefillLocked) || computedReadOnly;
+  const gridLocked = fieldLockedByFilledGrid(field, allFields, allValues);
+  const lockNote = gridLocked ? "Clear the lines to change this." : "";
+  const helpBody = [helpText, lockNote].filter((line) => line && line.trim() !== "").join(" ");
+  const help = helpBody ? <p className="text-xs text-muted-foreground">{helpBody}</p> : null;
+  const readOnlyLocked = prefillLocked || computedReadOnly || gridLocked;
+  const inputDisabled = (disabled && !prefillLocked) || computedReadOnly || gridLocked;
+  const dateMin = earliestIsoDate(parseDateBound(parseFieldValidation(field)), allValues) ?? undefined;
   const lockedInputClassName = readOnlyLocked ? "bg-muted/40 text-foreground" : undefined;
   const label = (
     <Label>
@@ -524,10 +529,11 @@ export function EApprovalFieldRenderer({
             field={field}
             value={value}
             onChange={onChange}
-            disabled={disabled}
+            disabled={inputDisabled}
             variant="select"
             allowRemoteLookups={allowRemoteLookups}
           />
+          {help}
         </div>
       );
     case "radio":
@@ -901,6 +907,7 @@ export function EApprovalFieldRenderer({
             <DateRangePicker
               disabled={disabled && !prefillLocked}
               readOnly={readOnlyLocked}
+              minDate={dateMin}
               placeholder="Select date range"
               value={range}
               onChange={(next) => onChange(serializeDateRangeValue(next))}
@@ -916,8 +923,9 @@ export function EApprovalFieldRenderer({
           <div className="space-y-2">
             {label}
             <DatePicker
-              disabled={disabled && !prefillLocked}
+              disabled={inputDisabled}
               readOnly={readOnlyLocked}
+              minDate={dateMin}
               placeholder={placeholder || "Select date"}
               value={value}
               onChange={onChange}

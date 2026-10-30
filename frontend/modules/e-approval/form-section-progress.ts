@@ -1,4 +1,4 @@
-import { isFieldVisible } from "@/modules/e-approval/field-visibility";
+import { fieldsPassingVisibility } from "@/modules/e-approval/field-visibility";
 import { buildFieldDisplayGroups } from "@/modules/e-approval/form-field-groups";
 import { gridHasContent, parseGridColumns, parseGridValue } from "@/modules/e-approval/field-options";
 import { parseFieldValidation } from "@/modules/e-approval/field-validation";
@@ -34,7 +34,7 @@ function isFieldComplete(field: EApprovalFormFieldInput, values: Record<string, 
 }
 
 function countVisibleFillable(fields: EApprovalFormFieldInput[], values: Record<string, string>): number {
-  return fields.filter((f) => isComposeFillableFieldType(f.type) && isFieldVisible(f, values)).length;
+  return fieldsPassingVisibility(fields, values).filter((f) => isComposeFillableFieldType(f.type)).length;
 }
 
 export function buildFormSectionProgress(
@@ -61,7 +61,8 @@ export function buildFormSectionProgress(
         inGroup.push(item.field);
       }
 
-      const fillable = inGroup.filter((f) => isComposeFillableFieldType(f.type) && isFieldVisible(f, values));
+      const visibleNames = new Set(fieldsPassingVisibility(fields, values).map((field) => field.name));
+      const fillable = inGroup.filter((f) => isComposeFillableFieldType(f.type) && visibleNames.has(f.name));
       if (fillable.length === 0) {
         return null;
       }

@@ -10,7 +10,7 @@ export const eApprovalAssignableUsersQueryKey = ["e-approval", "assignable-users
 export function useEApprovalAssignableUsers(enabled = true) {
   return useQuery({
     queryKey: eApprovalAssignableUsersQueryKey,
-    queryFn: fetchEApprovalAssignableUsers,
+    queryFn: () => fetchEApprovalAssignableUsers(),
     enabled,
     staleTime: 120_000,
   });

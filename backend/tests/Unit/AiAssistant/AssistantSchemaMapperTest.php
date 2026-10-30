@@ -66,6 +66,20 @@ final class AssistantSchemaMapperTest extends TestCase
             $this->assertTrue(true);
         }
 
+        try {
+            $sql->guard('ALTER TABLE it_assets DROP COLUMN asset_tag', 'tenant_a', ['mysql']);
+            $this->fail('DROP COLUMN was accepted.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Schema changes', (string) collect($e->errors())->flatten()->first());
+        }
+
+        try {
+            $sql->guard('DELETE FROM it_assets WHERE id IS NOT NULL', 'tenant_a', ['mysql']);
+            $this->fail('A delete of every row was accepted.');
+        } catch (ValidationException $e) {
+            $this->assertStringContainsString('Name the rows', (string) collect($e->errors())->flatten()->first());
+        }
+
         $kept = $sql->guard(
             "DELETE FROM it_assets WHERE asset_tag = 'ATC-LAP-000001'",
             'tenant_a',

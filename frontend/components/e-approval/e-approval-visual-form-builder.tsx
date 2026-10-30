@@ -387,6 +387,7 @@ function FieldRowCard({
     field.type === "instruction"
       ? formatInstructionBodyForDisplay(parseInstructionBody(field)).trim()
       : "";
+  const inLayoutRow = Boolean(parseFieldLayout(field).row_id);
 
   return (
     <div
@@ -397,11 +398,12 @@ function FieldRowCard({
         selected ? "border-foreground/25 bg-muted/40" : "border-border",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className={cn("flex gap-2", inLayoutRow ? "flex-col items-stretch" : "items-center")}>
+        <div className="flex min-w-0 items-start gap-2">
         {dragHandle ?? <div className="w-6 shrink-0" aria-hidden />}
         <button type="button" className="min-w-0 flex-1 text-left" onClick={onSelect}>
-          <span className="font-medium">{field.label}</span>
-          <span className="ml-2 text-xs text-muted-foreground">
+          <span className={cn("font-medium", inLayoutRow && "block")}>{field.label}</span>
+          <span className={cn("text-xs text-muted-foreground", inLayoutRow ? "mt-0.5 block break-all" : "ml-2")}>
             {formatEApprovalFieldTypeLabel(field.type)} · {field.name}
           </span>
           {(() => {
@@ -428,6 +430,8 @@ function FieldRowCard({
             );
           })()}
         </button>
+        </div>
+        <div className={cn("flex shrink-0", inLayoutRow && "flex-wrap justify-end")}>
         <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={onDuplicate} aria-label="Duplicate">
           <Copy className="h-4 w-4" />
         </Button>
@@ -447,6 +451,7 @@ function FieldRowCard({
         >
           <Trash2 className="h-4 w-4" />
         </Button>
+        </div>
       </div>
       {instructionBody ? (
         <button

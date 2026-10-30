@@ -20,6 +20,7 @@ import {
   fetchEApprovalSettingsPublic,
   normalizeSiteSearchScope,
 } from "@/lib/api/modules/e-approval-api";
+import { earliestIsoDate, parseDateBound } from "@/modules/e-approval/date-bounds";
 import {
   gridColumnAsSelectField,
   type GridColumnDef,
@@ -40,6 +41,8 @@ type Props = {
   allowRemoteLookups?: boolean;
   /** Cash-advance subsidiary. From site and To site only list that subsidiary's site IDs. */
   subsidiary?: string;
+  /** Other answers, used when a date column must fall on or after a form field. */
+  values?: Record<string, string>;
 };
 
 function isSubsidiarySiteColumn(column: GridColumnDef): boolean {
@@ -54,6 +57,7 @@ export function EApprovalGridCell({
   comfortable,
   allowRemoteLookups = true,
   subsidiary = "",
+  values = {},
 }: Props) {
   const inputClass = comfortable
     ? "h-10 w-full min-w-[8rem] text-sm"
@@ -64,6 +68,7 @@ export function EApprovalGridCell({
       <GridSiteCell
         value={value}
         showFields={column.show_fields}
+        multiple={column.multiple === true}
         onChange={onChange}
         disabled={disabled}
         inputClass={inputClass}
@@ -123,6 +128,7 @@ export function EApprovalGridCell({
     return (
       <DatePicker
         disabled={disabled}
+        minDate={earliestIsoDate(parseDateBound(column), values) ?? undefined}
         value={value}
         onChange={onChange}
         className={inputClass}
@@ -137,6 +143,7 @@ export function EApprovalGridCell({
       <DateRangePicker
         withTime={includeTime}
         disabled={disabled}
+        minDate={earliestIsoDate(parseDateBound(column), values) ?? undefined}
         value={parseDateRangeValue(value)}
         onChange={(next) => onChange(serializeDateRangeValue(next))}
         className={inputClass}
@@ -277,6 +284,48 @@ function parseSiteStop(value: string): { site: string; location: string; fields:
   return { site: trimmed, location: "", fields: {} };
 }
 
+function parseSiteStops(value: string): Array<{ site: string; location: string; fields: Record<string, string> }> {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as { sites?: unknown };
+      if (parsed && Array.isArray(parsed.sites)) {
+        return parsed.sites
+          .map((entry) => parseSiteStop(typeof entry === "string" ? entry : JSON.stringify(entry)))
+          .filter((stop) => stop.site !== "");
+      }
+    } catch {
+      return [];
+    }
+  }
+  const one = parseSiteStop(trimmed);
+  return one.site !== "" ? [one] : [];
+}
+
+function serializeSiteStops(
+  stops: Array<{ site: string; location: string; fields: Record<string, string> }>,
+  showFields: string[],
+): string {
+  const payloads = stops
+    .map((stop) => serializeSiteStop(stop.site, showFields, { ...stop.fields, address: stop.location || stop.fields.address || "" }))
+    .filter((payload) => payload !== "");
+  if (payloads.length === 0) {
+    return "";
+  }
+  if (payloads.length === 1) {
+    return payloads[0] ?? "";
+  }
+  return JSON.stringify({
+    sites: payloads.map((payload) => {
+      try {
+        return JSON.parse(payload) as unknown;
+      } catch {
+        return { site: payload };
+      }
+    }),
+  });
+}
+
 function serializeSiteStop(site: string, showFields: string[], fields: Record<string, string>): string {
   const id = site.trim();
   if (id === "") {
@@ -294,6 +343,10 @@ function serializeSiteStop(site: string, showFields: string[], fields: Record<st
   const location = picked.address ?? "";
   const extras = { ...picked };
   delete extras.address;
+  const subsidiary = (fields.subsidiary ?? "").trim();
+  if (subsidiary !== "") {
+    extras.subsidiary = subsidiary;
+  }
   const payload: { site: string; location?: string; fields?: Record<string, string> } = { site: id };
   if (location !== "") {
     payload.location = location;
@@ -338,6 +391,7 @@ function siteLineValues(showFields: string[] | undefined, fields: Record<string,
 function GridSiteCell({
   value,
   showFields,
+  multiple = false,
   onChange,
   disabled,
   inputClass,
@@ -346,13 +400,15 @@ function GridSiteCell({
 }: {
   value: string;
   showFields?: string[];
+  multiple?: boolean;
   onChange: (value: string, meta?: GridCellMeta) => void;
   disabled?: boolean;
   inputClass: string;
   allowRemoteLookups?: boolean;
   subsidiary?: string;
 }) {
-  const stop = parseSiteStop(value);
+  const stops = multiple ? parseSiteStops(value) : [];
+  const stop = multiple ? { site: "", location: "", fields: {} } : parseSiteStop(value);
   const lines = siteLineValues(showFields, stop.fields, stop.location);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(stop.site);
@@ -371,8 +427,10 @@ function GridSiteCell({
   const waitingForRequest = scope === "request" && formSubsidiary === "";
 
   useEffect(() => {
-    setQuery(parseSiteStop(value).site);
-  }, [value]);
+    if (!multiple) {
+      setQuery(parseSiteStop(value).site);
+    }
+  }, [multiple, value]);
 
   const typedQuery = query.trim();
   const [debouncedQuery, setDebouncedQuery] = useState(typedQuery);
@@ -452,7 +510,7 @@ function GridSiteCell({
                 const fields = optionSiteFields(option.data);
                 const address = fields.address || option.subtitle || "";
                 const picked = address !== "" ? { ...fields, address } : { ...fields };
-                const preview = siteLineValues(showFields, picked, address);
+                const preview = siteLineValues(showFields, picked, address).filter((line) => line !== option.value);
                 return (
                   <li key={option.value}>
                     <button
@@ -460,10 +518,21 @@ function GridSiteCell({
                       className="w-full rounded-md px-2 py-1 text-left hover:bg-muted"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
+                        const fieldsToShow = showFields ?? ["address"];
+                        if (multiple) {
+                          const next = parseSiteStops(value);
+                          if (!next.some((pickedStop) => pickedStop.site === option.value)) {
+                            next.push({ site: option.value, location: address, fields: picked });
+                          }
+                          setQuery("");
+                          setOpen(false);
+                          onChange(serializeSiteStops(next, fieldsToShow));
+                          return;
+                        }
                         setQuery(option.value);
                         setOpen(false);
-                        onChange(serializeSiteStop(option.value, showFields ?? ["address"], picked), {
-                          address: (showFields ?? ["address"]).includes("address") ? address : "",
+                        onChange(serializeSiteStop(option.value, fieldsToShow, picked), {
+                          address: fieldsToShow.includes("address") ? address : "",
                         });
                       }}
                     >
@@ -485,7 +554,40 @@ function GridSiteCell({
 
   return (
     <div ref={anchorRef} className="relative min-w-[8.5rem]">
-      {showPicked ? (
+      {multiple && stops.length > 0 ? (
+        <ul className="mb-1 space-y-1">
+          {stops.map((pickedStop) => (
+            <li key={pickedStop.site} className="flex items-start justify-between gap-1 rounded-md border border-border px-1.5 py-1">
+              <span className="min-w-0">
+                <span className="block text-[12px] font-medium leading-4 text-foreground">{pickedStop.site}</span>
+                {siteLineValues(showFields, pickedStop.fields, pickedStop.location)
+                  .filter((line) => line !== pickedStop.site)
+                  .map((line) => (
+                  <span key={line} className="block text-[11px] leading-4 text-muted-foreground">
+                    {line}
+                  </span>
+                ))}
+              </span>
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground"
+                disabled={disabled}
+                onClick={() =>
+                  onChange(
+                    serializeSiteStops(
+                      stops.filter((pickedStopItem) => pickedStopItem.site !== pickedStop.site),
+                      showFields ?? ["address"],
+                    ),
+                  )
+                }
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {!multiple && showPicked ? (
         <button
           type="button"
           disabled={disabled || waitingForRequest}
@@ -496,7 +598,7 @@ function GridSiteCell({
           }}
         >
           <span className="block text-[12px] font-medium leading-4 text-foreground">{stop.site}</span>
-          {lines.map((line) => (
+          {lines.filter((line) => line !== stop.site).map((line) => (
             <span key={line} className="block text-[11px] leading-4 text-muted-foreground">
               {line}
             </span>
@@ -514,7 +616,7 @@ function GridSiteCell({
           onChange={(event) => {
             setQuery(event.target.value);
             setOpen(true);
-            if (event.target.value.trim() === "") {
+            if (!multiple && event.target.value.trim() === "") {
               onChange("");
             }
           }}

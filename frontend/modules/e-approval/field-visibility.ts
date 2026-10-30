@@ -3,13 +3,15 @@ import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
 export type EApprovalVisibilityMode = "show_when" | "hide_when";
 
-export type EApprovalVisibilityOperator = "equals" | "not_equals" | "filled" | "empty" | "contains";
+export type EApprovalVisibilityOperator = "equals" | "not_equals" | "filled" | "empty" | "contains" | "all_filled";
 
 export type EApprovalFieldVisibilityRule = {
   mode: EApprovalVisibilityMode;
   field: string;
   operator: EApprovalVisibilityOperator;
   value?: string;
+  /** Every named field must be filled. Used by `all_filled`. */
+  fields?: string[];
 };
 
 function normalizeOptions(options: EApprovalFormFieldInput["options"]): Record<string, unknown> {
@@ -36,9 +38,21 @@ export function parseFieldVisibility(field: EApprovalFormFieldInput): EApprovalF
     operatorRaw === "not_equals" ||
     operatorRaw === "filled" ||
     operatorRaw === "empty" ||
-    operatorRaw === "contains"
+    operatorRaw === "contains" ||
+    operatorRaw === "all_filled"
       ? operatorRaw
       : null;
+  const filledFields = Array.isArray(v.fields)
+    ? v.fields.map((name) => (typeof name === "string" ? name.trim() : "")).filter((name) => name !== "")
+    : [];
+
+  if (mode && operator === "all_filled") {
+    const names = filledFields.length > 0 ? filledFields : whenField !== "" ? [whenField] : [];
+    if (names.length === 0) {
+      return null;
+    }
+    return { mode, field: names[0] ?? "", operator, fields: names };
+  }
 
   if (!mode || !whenField || !operator) {
     return null;
@@ -58,6 +72,23 @@ export function patchFieldVisibility(
   rule: EApprovalFieldVisibilityRule | null,
 ): Record<string, unknown> {
   const opts = normalizeOptions(field.options);
+
+  if (rule?.operator === "all_filled") {
+    const names = (rule.fields ?? [rule.field]).map((name) => name.trim()).filter((name) => name !== "");
+    if (!rule || names.length === 0) {
+      const { visibility: _removed, ...rest } = opts;
+      return { ...rest, visibility: undefined };
+    }
+    return {
+      ...opts,
+      visibility: {
+        mode: rule.mode,
+        operator: "all_filled",
+        field: names[0],
+        fields: names,
+      },
+    };
+  }
 
   if (!rule || !rule.field.trim()) {
     const { visibility: _removed, ...rest } = opts;
@@ -85,6 +116,10 @@ export function patchFieldVisibility(
 }
 
 export function fieldSupportsVisibilityRules(type: string): boolean {
+  return type === "section" || !isComposeStructuralFieldType(type);
+}
+
+export function fieldCanControlVisibility(type: string): boolean {
   return !isComposeStructuralFieldType(type);
 }
 
@@ -112,14 +147,48 @@ function conditionMatches(
   }
 }
 
+function valueIsFilled(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== "" && trimmed !== "false";
+}
+
 export function evaluateFieldVisibility(
   rule: EApprovalFieldVisibilityRule,
   values: Record<string, string>,
 ): boolean {
+  if (rule.operator === "all_filled") {
+    const names = rule.fields && rule.fields.length > 0 ? rule.fields : [rule.field];
+    const matches = names.every((name) => valueIsFilled(values[name] ?? ""));
+    return rule.mode === "show_when" ? matches : !matches;
+  }
+
   const controlValue = values[rule.field] ?? "";
   const matches = conditionMatches(rule.operator, controlValue, rule.value);
 
   return rule.mode === "show_when" ? matches : !matches;
+}
+
+/** A section rule hides that heading and every field until the next section. */
+export function fieldsPassingVisibility(
+  fields: EApprovalFormFieldInput[],
+  values: Record<string, string>,
+): EApprovalFormFieldInput[] {
+  let sectionOpen = true;
+  const kept: EApprovalFormFieldInput[] = [];
+  for (const field of fields) {
+    if (field.type === "section") {
+      sectionOpen = isFieldVisible(field, values);
+      if (sectionOpen) {
+        kept.push(field);
+      }
+      continue;
+    }
+    if (!sectionOpen || !isFieldVisible(field, values)) {
+      continue;
+    }
+    kept.push(field);
+  }
+  return kept;
 }
 
 export function isFieldVisible(field: EApprovalFormFieldInput, values: Record<string, string>): boolean {
@@ -135,8 +204,7 @@ export function visibleFormFields(
   fields: EApprovalFormFieldInput[],
   values: Record<string, string>,
 ): EApprovalFormFieldInput[] {
-  const visible = fields.filter((field) => isFieldVisible(field, values));
-  return omitRedundantExpenseTotalScalars(visible);
+  return omitRedundantExpenseTotalScalars(fieldsPassingVisibility(fields, values));
 }
 
 /**
@@ -172,6 +240,22 @@ export function omitRedundantExpenseTotalScalars(
     return fields;
   }
 
+  const gridOwnsColumnTotals = fields.some((field) => {
+    if (field.type !== "grid" || !field.options || typeof field.options !== "object" || Array.isArray(field.options)) {
+      return false;
+    }
+    const columns = (field.options as { columns?: unknown }).columns;
+    if (!Array.isArray(columns)) {
+      return false;
+    }
+    return columns.some(
+      (column) =>
+        column &&
+        typeof column === "object" &&
+        (column as { show_total?: unknown }).show_total === true,
+    );
+  });
+
   return fields.filter((field) => {
     const key = field.name.trim().toLowerCase();
     const label = field.label.trim().toLowerCase();
@@ -185,7 +269,7 @@ export function omitRedundantExpenseTotalScalars(
       key === "non_vatable_total" ||
       key === "vatable_net"
     ) {
-      return true;
+      return !gridOwnsColumnTotals;
     }
     // Keep cash overage / advance — only omit document total scalars mirrored by the footer.
     if (key.includes("overage") || key.includes("shortage") || key.includes("cash_advance")) {
@@ -207,4 +291,5 @@ export const E_APPROVAL_VISIBILITY_OPERATORS: { value: EApprovalVisibilityOperat
   { value: "contains", label: "Contains" },
   { value: "filled", label: "Is filled" },
   { value: "empty", label: "Is empty" },
+  { value: "all_filled", label: "All of these are filled" },
 ];

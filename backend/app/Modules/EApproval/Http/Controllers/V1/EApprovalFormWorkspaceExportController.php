@@ -62,6 +62,7 @@ class EApprovalFormWorkspaceExportController extends AbstractApiController
         $layout = $validated['layout'] ?? 'submissions';
         $forceAsync = (bool) ($validated['async'] ?? false);
         $forceOwn = filter_var($request->query('mine', false), FILTER_VALIDATE_BOOLEAN);
+        $awaitingMe = filter_var($request->query('awaiting_me', false), FILTER_VALIDATE_BOOLEAN);
         $includeFields = ! $request->has('include_fields')
             || filter_var($request->query('include_fields'), FILTER_VALIDATE_BOOLEAN);
         $canViewAll = $workspaces->viewerCanSeeAllInWorkspace($user, $workspace) && ! $forceOwn;
@@ -83,6 +84,7 @@ class EApprovalFormWorkspaceExportController extends AbstractApiController
             'viewer_scope' => $forceOwn ? 'mine' : 'all',
             'workspace_can_view_all' => $canViewAll,
             'include_fields' => $includeFields,
+            'awaiting_approver_id' => $awaitingMe ? (string) $user->id : null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         $scope = [
@@ -112,6 +114,7 @@ class EApprovalFormWorkspaceExportController extends AbstractApiController
             'subsidiary' => $filters['subsidiary'] ?? null,
             'department' => $filters['department'] ?? null,
             'ids' => $filters['ids'] ?? null,
+            'awaiting_approver_id' => $filters['awaiting_approver_id'] ?? null,
         ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
 
         $totalMatching = $export->countMatching($queryFilters, $scope);
@@ -237,7 +240,7 @@ class EApprovalFormWorkspaceExportController extends AbstractApiController
         string $filename,
         array $exportHeaders,
     ): Response {
-        $writer = new SimpleXlsxWriter();
+        $writer = new SimpleXlsxWriter;
 
         $isLineItems = $layout === 'line_items' && $form !== null && $gridField !== null;
 

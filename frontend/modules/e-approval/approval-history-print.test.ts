@@ -47,4 +47,48 @@ describe("print approval history", () => {
       { label: "CFO", status: "APPROVED", actedAt: "2026-10-22 12:00" },
     ]);
   });
+
+  it("labels a signed release step as Released", () => {
+    const data = payload([
+      row({ step: 1, approver: "Carlo Traya", status: "approved", acted_at: "2026-10-30 04:12" }),
+      row({
+        step: 4,
+        approver: "Treasury",
+        status: "approved",
+        acted_at: "2026-10-30 09:00",
+        finance_action: "release",
+      }),
+    ]);
+
+    const slots = buildApprovalHistorySlots(data);
+    expect(slots.map((slot) => slot.subtitle)).toEqual([
+      "Approved · 2026-10-30 04:12",
+      "Released · 2026-10-30 09:00",
+    ]);
+    expect(buildPdfFooterRows(data).map((entry) => entry.status)).toEqual(["APPROVED", "RELEASED"]);
+  });
+
+  it("uses the proof of payment status and a custom decision word", () => {
+    const data = payload([
+      row({
+        step: 2,
+        approver: "Carlo Traya",
+        status: "approved",
+        acted_at: "2026-10-30 04:12",
+        proof_status: "released",
+      }),
+      row({
+        step: 1,
+        approver: "Finance",
+        status: "approved",
+        acted_at: "2026-10-30 03:00",
+        decision_label: "Validated",
+      }),
+    ]);
+
+    expect(buildApprovalHistorySlots(data).map((slot) => slot.subtitle)).toEqual([
+      "Validated · 2026-10-30 03:00",
+      "Released · 2026-10-30 04:12",
+    ]);
+  });
 });

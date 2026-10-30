@@ -30,22 +30,33 @@ $expenseTypeChoices = [
     ['value' => 'sea', 'label' => 'Transportation - Sea', 'data' => ['vatable' => true]],
     ['value' => 'air', 'label' => 'Transportation - Air', 'data' => ['vatable' => true]],
     ['value' => 'gasoline', 'label' => 'Gasoline', 'data' => ['vatable' => true]],
-    ['value' => 'lodging', 'label' => 'Lodging', 'data' => ['vatable' => true]],
+    ['value' => 'lodging', 'label' => 'Lodging', 'data' => ['vatable' => true, 'hotel' => true]],
     ['value' => 'per_diem', 'label' => 'Per Diem', 'data' => ['vatable' => false, 'per_diem' => true]],
+    ['value' => 'car_rental', 'label' => 'Car Rental', 'data' => ['vatable' => true]],
+    ['value' => 'others', 'label' => 'Others', 'data' => ['vatable' => true]],
 ];
 
 $tripColumns = [
     ['label' => 'From date – To date', 'type' => 'date_range'],
-    ['label' => 'From site / location', 'type' => 'select', 'master_data_key' => 'sites'],
-    ['label' => 'To site / location', 'type' => 'select', 'master_data_key' => 'sites'],
+    ['label' => 'From site / location', 'type' => 'select', 'master_data_key' => 'sites', 'multiple' => true],
+    ['label' => 'To site / location', 'type' => 'select', 'master_data_key' => 'sites', 'multiple' => true],
 ];
 
+$forecastTripColumns = $tripColumns;
+$forecastTripColumns[0]['date_min'] = 'field';
+$forecastTripColumns[0]['date_min_field'] = 'needed_by';
+$forecastTripColumns[1]['subsidiary_field'] = 'subsidiary';
+$forecastTripColumns[2]['subsidiary_field'] = 'subsidiary';
+
 $forecastExpenseColumns = [
-    ...$tripColumns,
+    ...$forecastTripColumns,
     ['label' => 'Expense type', 'type' => 'select', 'choices' => $expenseTypeChoices],
     ['label' => 'Amount', 'type' => 'currency'],
+    ['label' => 'Nature of Activity', 'type' => 'text', 'required' => true],
     ['label' => 'VAT treatment', 'type' => 'select', 'choices' => $vatTreatmentChoices],
     ['label' => 'VAT', 'type' => 'currency', 'locked' => true],
+    ['label' => 'Non-VATable', 'type' => 'currency', 'locked' => true],
+    ['label' => 'VATable, net of VAT', 'type' => 'currency', 'locked' => true],
 ];
 
 $reimbursementExpenseColumns = [
@@ -75,6 +86,18 @@ array_splice($actualExpenseColumns, (int) $amountColumnAt + 1, 0, [[
     'type' => 'currency',
     'locked' => true,
 ]]);
+array_splice($actualExpenseColumns, (int) $amountColumnAt + 2, 0, [[
+    'label' => 'Nature of Activity',
+    'type' => 'text',
+    'locked' => true,
+]]);
+$supplierColumnAt = array_search('Supplier/Payee', array_column($actualExpenseColumns, 'label'), true);
+if ($supplierColumnAt !== false) {
+    array_splice($actualExpenseColumns, (int) $supplierColumnAt + 1, 0, [[
+        'label' => 'TIN',
+        'type' => 'text',
+    ]]);
+}
 $actualExpenseColumns[] = ['label' => 'Variance reason', 'type' => 'textarea'];
 
 $moneyFooters = static function (string $totalName, string $totalLabel, int $stepOrder, bool $withSettlement, string $sumColumn = 'Amount'): array {
@@ -226,14 +249,19 @@ return [
                 'label' => 'Cash advance request',
                 'step_order' => 1,
             ],
-            $subsidiaryField(2, ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 0]),
+            array_replace_recursive($subsidiaryField(2, ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 0]), [
+                'options' => ['lock_when_grid' => 'expense_lines'],
+            ]),
             [
                 'type' => 'date',
                 'name' => 'needed_by',
                 'label' => 'Funds needed by',
                 'step_order' => 3,
-                'validation' => ['required' => true],
-                'options' => ['layout' => ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 1]],
+                'validation' => ['required' => true, 'date_min' => 'lead', 'lead_days' => 3],
+                'options' => [
+                    'layout' => ['width' => 'half', 'row_id' => 'ca_org', 'slot' => 1],
+                    'lock_when_grid' => 'expense_lines',
+                ],
             ],
             [
                 'type' => 'text',
@@ -247,6 +275,14 @@ return [
                 'name' => 'section_expenses',
                 'label' => 'Forecast expenses',
                 'step_order' => 6,
+                'options' => [
+                    'visibility' => [
+                        'mode' => 'show_when',
+                        'operator' => 'all_filled',
+                        'field' => 'needed_by',
+                        'fields' => ['needed_by', 'subsidiary', 'purpose'],
+                    ],
+                ],
             ],
             [
                 'type' => 'grid',
@@ -260,7 +296,7 @@ return [
             [
                 'type' => 'file',
                 'name' => 'supporting_documents',
-                'label' => 'Supporting documents',
+                'label' => 'Forecast support',
                 'step_order' => 15,
             ],
             [

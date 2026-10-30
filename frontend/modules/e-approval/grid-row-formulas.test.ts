@@ -9,6 +9,8 @@ import {
   expenseColumnVisible,
   expenseGridKeepsTypedAmount,
   expenseLineMoney,
+  expenseRowCapMessage,
+  gridColumnFooterValue,
   inclusiveDays,
   isMoneyGridColumn,
   perDiemDaysBetweenTrips,
@@ -148,6 +150,16 @@ describe("expense column visibility", () => {
     expect(expenseLineMoney(columns, row)).toBe(600);
   });
 
+  it("hides a column the form builder turned off without shifting the others", () => {
+    const columns: GridColumnDef[] = [
+      { label: "From date – To date", type: "date_range" },
+      { label: "Amount", type: "currency", hidden: true },
+    ];
+
+    expect(expenseColumnVisible(columns, [], columns[0]!)).toBe(true);
+    expect(expenseColumnVisible(columns, [], columns[1]!)).toBe(false);
+  });
+
   it("keeps a reimbursement per diem amount as typed when there is no rate column", () => {
     const columns: GridColumnDef[] = [
       { label: "From date – To date", type: "date_range" },
@@ -164,6 +176,24 @@ describe("expense column visibility", () => {
 
     expect(expenseGridKeepsTypedAmount(columns)).toBe(true);
     expect(expenseLineMoney(columns, row)).toBe(350);
+  });
+
+  it("rejects a forecast per diem or lodging rate above the daily max", () => {
+    const columns: GridColumnDef[] = [
+      { label: "From date – To date", type: "date_range" },
+      { label: "Expense type", type: "select" },
+      { label: "Amount", type: "currency" },
+    ];
+    const dates = JSON.stringify({ from: "2026-11-02", to: "2026-11-04" });
+
+    expect(
+      expenseRowCapMessage(columns, { "0": dates, "1": "per_diem", "2": "400" }, 350, 2000),
+    ).toBe("Per diem cannot exceed ₱350.00 per day.");
+    expect(
+      expenseRowCapMessage(columns, { "0": dates, "1": "lodging", "2": "2500" }, 350, 2000),
+    ).toBe("Lodging cannot exceed ₱2,000.00 per day.");
+    expect(expenseRowCapMessage(columns, { "0": dates, "1": "per_diem", "2": "350" }, 350, 2000)).toBeNull();
+    expect(expenseRowCapMessage(columns, { "0": dates, "1": "lodging", "2": "2000" }, 350, 2000)).toBeNull();
   });
 });
 
@@ -376,5 +406,29 @@ describe("per diem days from activities", () => {
     expect(grid.rows[0]?.["4"]).toBe("");
     expect(grid.rows[1]?.["3"]).toBe("2000.00");
     expect(grid.rows[1]?.["4"]).toBe("");
+  });
+});
+
+describe("gridColumnFooterValue", () => {
+  it("totals a forecast amount as the daily rate times the dates", () => {
+    const columns: GridColumnDef[] = [
+      { label: "From date – To date", type: "date_range" },
+      {
+        label: "Expense type",
+        type: "select",
+        choices: [
+          { value: "per_diem", label: "Per Diem", data: { per_diem: true } },
+          { value: "car_rental", label: "Car Rental", data: { vatable: true } },
+        ],
+      },
+      { label: "Amount", type: "currency", show_total: true },
+    ];
+    const range = (from: string, to: string) => JSON.stringify({ from, to });
+    const rows = [
+      { "0": range("2026-11-16", "2026-11-17"), "1": "per_diem", "2": "350" },
+      { "0": range("2026-11-16", "2026-11-16"), "1": "car_rental", "2": "3500" },
+    ];
+
+    expect(gridColumnFooterValue(columns, rows, 2)).toBe(4200);
   });
 });

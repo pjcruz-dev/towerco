@@ -4,6 +4,7 @@ import type { EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
 import {
   buildWorkflowEditorDiagram,
   removeWorkflowVisualBandAt,
+  reorderWorkflowVisualBands,
 } from "@/modules/e-approval/workflow-editor-diagram";
 
 function step(
@@ -122,6 +123,55 @@ describe("buildWorkflowEditorDiagram", () => {
     });
     const next = removeWorkflowVisualBandAt(steps, bands, 0);
     expect(next.map((s) => s.approverId)).toEqual(["c"]);
+  });
+
+  it("shows two fixed approvers on one subsidiary case as first to approve", () => {
+    const steps = [
+      step({
+        id: "atc-1",
+        approverId: "christian",
+        step_order: 2,
+        parallel_mode: "any",
+        when: [{ field: "subsidiary", operator: "equals", value: "ATC" }],
+      }),
+      step({
+        id: "atc-2",
+        approverId: "second",
+        step_order: 2,
+        parallel_mode: "any",
+        when: [{ field: "subsidiary", operator: "equals", value: "ATC" }],
+      }),
+      step({
+        id: "adic",
+        approverId: "norelyn",
+        step_order: 3,
+        when: [{ field: "subsidiary", operator: "equals", value: "ADIC" }],
+      }),
+    ];
+    const fields = [{ type: "select", name: "subsidiary", label: "Subsidiary" }];
+    const bands = buildWorkflowEditorDiagram(steps, fields, {
+      titleForStep: (row) => row.approverId ?? "?",
+    });
+
+    expect(bands).toHaveLength(1);
+    expect(bands[0].nodes).toHaveLength(2);
+    expect(bands[0].nodes[0].title).toBe("christian or second");
+    expect(bands[0].nodes[0].subtitle).toBe("First to approve");
+    expect(bands[0].memberIndexes).toEqual([0, 1, 2]);
+
+    const withLead = [
+      step({ id: "lead", approverId: "lead", step_order: 1 }),
+      ...steps,
+    ];
+    const leadBands = buildWorkflowEditorDiagram(withLead, fields, {
+      titleForStep: (row) => row.approverId ?? "?",
+    });
+    const moved = reorderWorkflowVisualBands(withLead, leadBands, 1, 0);
+    expect(moved[0].approverId).toBe("christian");
+    expect(moved[0].step_order).toBe(moved[1].step_order);
+    expect(moved[2].approverId).toBe("norelyn");
+    expect(moved[2].step_order).not.toBe(moved[0].step_order);
+    expect(moved[3].approverId).toBe("lead");
   });
 
   it("flags incomplete steps with a warning", () => {

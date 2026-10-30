@@ -169,6 +169,116 @@ describe("submission form content", () => {
     ]);
   });
 
+  it("drops stored VAT totals when those columns are not on the table", () => {
+    const groups = buildSubmissionFormContentGroups(
+      [
+        {
+          field_id: "g1",
+          field_name: "expense_lines",
+          field_type: "grid",
+          label: "Forecast lines",
+          value: JSON.stringify({
+            rows: [{ "0": "2026-11-16", "1": "Car Rental", "2": "3500", "3": "500" }],
+          }),
+        },
+        {
+          field_id: "t1",
+          field_name: "requested_amount",
+          field_type: "currency",
+          label: "Requested amount",
+          value: "3500.00",
+        },
+        {
+          field_id: "t2",
+          field_name: "vat_total",
+          field_type: "currency",
+          label: "VAT",
+          value: "375.00",
+        },
+        {
+          field_id: "t3",
+          field_name: "non_vatable_total",
+          field_type: "currency",
+          label: "Non-VATable",
+          value: "0.00",
+        },
+        {
+          field_id: "t4",
+          field_name: "vatable_net",
+          field_type: "currency",
+          label: "VATable, net of VAT",
+          value: "3125.00",
+        },
+      ],
+      [
+        {
+          id: "g1",
+          type: "grid",
+          name: "expense_lines",
+          label: "Forecast lines",
+          options: {
+            columns: [
+              { label: "From date – To date", type: "date" },
+              { label: "Expense type", type: "select" },
+              { label: "Amount", type: "currency", show_total: true },
+              { label: "Nature of Activity", type: "text" },
+              { label: "VAT", type: "currency", hidden: true, show_total: true },
+              { label: "Non-VATable", type: "currency", hidden: true, show_total: true },
+              { label: "VATable, net of VAT", type: "currency", hidden: true, show_total: true },
+            ],
+          },
+        },
+        { id: "t1", type: "currency", name: "requested_amount", label: "Requested amount" },
+        { id: "t2", type: "currency", name: "vat_total", label: "VAT" },
+        { id: "t3", type: "currency", name: "non_vatable_total", label: "Non-VATable" },
+        { id: "t4", type: "currency", name: "vatable_net", label: "VATable, net of VAT" },
+      ],
+      [],
+    );
+
+    const items = groups.flatMap((group) => group.items);
+    expect(items.map((item) => item.value.field_name)).toEqual(["expense_lines"]);
+    expect(items[0]?.table?.headers).toEqual([
+      "From date – To date",
+      "Expense type",
+      "Amount",
+      "Nature of Activity",
+    ]);
+    expect(items[0]?.totals).toEqual([{ label: "Requested amount", value: "3,500.00" }]);
+  });
+
+  it("keeps a file field in place so every form can review that file", () => {
+    const groups = buildSubmissionFormContentGroups(
+      [
+        {
+          field_id: "file",
+          field_name: "supporting_documents",
+          field_type: "file",
+          label: "Supporting documents",
+          value: "a.pdf",
+        },
+        {
+          field_id: "notes",
+          field_name: "notes",
+          field_type: "textarea",
+          label: "Notes",
+          value: "asdasda",
+        },
+      ],
+      [
+        { id: "file", type: "file", name: "supporting_documents", label: "Supporting documents" },
+        { id: "notes", type: "textarea", name: "notes", label: "Notes" },
+      ],
+      [{ id: "file-1", field_name: "supporting_documents", file_name: "a.pdf", file_path: "a.pdf" }],
+      { keepFileFields: true },
+    );
+
+    const items = groups.flatMap((group) => group.items);
+    expect(items.map((item) => item.value.field_name)).toEqual(["supporting_documents", "notes"]);
+    expect(items[0]?.fileReview).toBe(true);
+    expect(items[1]?.fileReview).toBeUndefined();
+  });
+
   it("hides file fields when attachments panel will show them", () => {
     expect(
       shouldHideSubmissionAttachmentFieldValue(

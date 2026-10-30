@@ -200,8 +200,8 @@ export function EApprovalMasterDataPageClient() {
       push({ level: "error", title: "That column already exists" });
       return;
     }
-    if (extraColumns.length >= 12) {
-      push({ level: "error", title: "A set can have 12 extra columns" });
+    if (extraColumns.length >= 40) {
+      push({ level: "error", title: "A set can have 40 extra columns" });
       return;
     }
     saveColumnsMutation.mutate([

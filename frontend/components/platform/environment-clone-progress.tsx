@@ -12,7 +12,17 @@ const CLONE_STEPS = [
 
 const ACTIVE = new Set(["queued", "copying_database", "copying_files", "verifying"]);
 
-export function environmentCloneCanCopyAgain(clone: EnvironmentCloneSnapshot): boolean {
+export function environmentCloneCanCopyAgain(
+  clone: EnvironmentCloneSnapshot,
+  viewingTenantId?: string,
+): boolean {
+  if (
+    viewingTenantId != null &&
+    viewingTenantId === clone.source_tenant_id &&
+    viewingTenantId !== clone.target_tenant_id
+  ) {
+    return false;
+  }
   if (ACTIVE.has(clone.status)) {
     return false;
   }
@@ -83,6 +93,7 @@ export function EnvironmentCloneProgress({
   onCancel,
   onDiscard,
   onCopyAgain,
+  viewingTenantId,
 }: {
   clone: EnvironmentCloneSnapshot;
   pending?: boolean;
@@ -91,6 +102,7 @@ export function EnvironmentCloneProgress({
   onCancel?: () => void;
   onDiscard?: () => void;
   onCopyAgain?: () => void;
+  viewingTenantId?: string;
 }) {
   const failed = clone.status === "failed";
   const filePct = environmentCloneFilePercent(clone);
@@ -105,6 +117,8 @@ export function EnvironmentCloneProgress({
   const stoppingRefresh =
     replacesExisting && Boolean(clone.cancel_requested) && ACTIVE.has(clone.status);
   const refreshStopped = replacesExisting && clone.status === "cancelled";
+  const viewingSource = viewingTenantId != null && viewingTenantId === clone.source_tenant_id;
+  const targetName = clone.environment?.trim() || "the other environment";
   const activeIndex = failed
     ? CLONE_STEPS.findIndex((step) => step.id === "verifying")
     : CLONE_STEPS.findIndex((step) => step.id === clone.status);
@@ -173,7 +187,7 @@ export function EnvironmentCloneProgress({
         <p className="text-muted-foreground">
           Users {clone.counts.users ?? 0}, pending approvals {clone.counts.pending_approvals ?? 0}, documents{" "}
           {clone.counts.controlled_documents ?? 0}, automation rows {clone.counts.automation_schedules ?? 0}.
-          {clone.status === "ready"
+          {clone.status === "ready" && !viewingSource
             ? ` Automation is paused until you enable it (${clone.paused_schedules} schedule${clone.paused_schedules === 1 ? "" : "s"}).`
             : null}
         </p>
@@ -191,14 +205,20 @@ export function EnvironmentCloneProgress({
         <p>The copy will stop. This environment stays blocked until a copy finishes. The source workspace is not deleted.</p>
       ) : null}
       {clone.status === "ready" && !removed ? (
-        <p>
-          Database counts match the snapshot, and every copied attachment is on this environment. Work
-          saved on the source after this snapshot is not included. Copy again replaces this environment
-          and keeps its domain.
-        </p>
+        viewingSource ? (
+          <p>
+            This snapshot was copied into {targetName}. This workspace was not replaced.
+          </p>
+        ) : (
+          <p>
+            Database counts match the snapshot, and every copied attachment is on this environment. Work
+            saved on the source after this snapshot is not included. Copy again replaces this environment
+            and keeps its domain.
+          </p>
+        )
       ) : null}
       <div className="flex flex-wrap gap-2">
-        {onCopyAgain && environmentCloneCanCopyAgain(clone) && !removing && !removed ? (
+        {onCopyAgain && environmentCloneCanCopyAgain(clone, viewingTenantId) && !removing && !removed ? (
           <Button type="button" size="sm" disabled={pending} onClick={onCopyAgain}>
             {environmentCloneCopyAgainLabel(clone)}
           </Button>

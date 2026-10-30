@@ -2,6 +2,7 @@ import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modu
 import {
   branchGroupLabel,
   ladderCaseLabel,
+  ladderCaseMemberIndexes,
   ladderGroupLabel,
   toWorkflowEditorSegments,
 } from "@/modules/e-approval/workflow-branch-groups";
@@ -19,6 +20,8 @@ export type WorkflowEditorBandVariant = "single" | "parallel" | "exclusive";
 
 export type WorkflowEditorDiagramNode = WorkflowDiagramNode & {
   stepIndex: number;
+  /** Other steps that belong to this case card, including stepIndex. */
+  peerIndexes?: number[];
   /** Short case label for If/Else / ladder cards (e.g. Non-PO ≤ 5000). */
   caseLabel?: string | null;
 };
@@ -144,7 +147,8 @@ export function buildWorkflowEditorDiagram(
         const caseLabel =
           ladderCaseLabel(steps[stepIndex], fieldLabel(fields, ladder.field)) ||
           whenSummary(steps[stepIndex], fields);
-        return nodeFromStep(
+        const members = ladderCaseMemberIndexes(steps, stepIndex);
+        const node = nodeFromStep(
           steps,
           fields,
           resolve,
@@ -152,6 +156,23 @@ export function buildWorkflowEditorDiagram(
           steps[stepIndex].step_order ?? stepIndex + 1,
           caseLabel,
         );
+        if (members.length > 1) {
+          const names = members.map((index) => resolve.titleForStep(steps[index], index));
+          const mode = steps[members[0]]?.parallel_mode ?? "all";
+          const quorum = steps[members[0]]?.parallel_quorum ?? 1;
+          node.title = mode === "any" ? names.join(" or ") : names.join(", ");
+          node.subtitle =
+            mode === "any"
+              ? "First to approve"
+              : mode === "n_of_m"
+                ? `${quorum} of ${members.length}`
+                : "All must approve";
+          node.peerIndexes = members;
+          node.warning = members.some((index) => !isStepComplete(steps[index]))
+            ? "Needs approver assignment"
+            : null;
+        }
+        return node;
       });
       return {
         id: `visual-ladder-${ladder.startIndex}`,
@@ -162,7 +183,7 @@ export function buildWorkflowEditorDiagram(
           ? `If / Else · ${fieldLabel(fields, ladder.field)}`
           : `Threshold ladder · ${fieldLabel(fields, ladder.field)}`,
         orderLabel,
-        memberIndexes: [...ladder.bandIndexes],
+        memberIndexes: ladder.bandIndexes.flatMap((bandIndex) => ladderCaseMemberIndexes(steps, bandIndex)),
         nodes,
       };
     }
@@ -212,6 +233,19 @@ export function reorderWorkflowVisualBands(
     const members = [...band.memberIndexes].sort((a, b) => a - b);
     if (band.variant === "parallel") {
       for (const memberIndex of members) {
+        next.push({ ...steps[memberIndex], step_order: order });
+      }
+      order += 1;
+      continue;
+    }
+    if (band.variant === "exclusive") {
+      let tied = steps[members[0]]?.step_order ?? members[0] + 1;
+      for (const memberIndex of members) {
+        const original = steps[memberIndex]?.step_order ?? memberIndex + 1;
+        if (original !== tied) {
+          order += 1;
+          tied = original;
+        }
         next.push({ ...steps[memberIndex], step_order: order });
       }
       order += 1;

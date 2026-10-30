@@ -18,6 +18,20 @@ final class EApprovalFieldVisibilityEvaluator
             return true;
         }
 
+        if ($rule['operator'] === 'all_filled') {
+            $matches = true;
+            foreach ($rule['fields'] as $name) {
+                $raw = $values[$name] ?? '';
+                $text = $this->normalizeValue($raw);
+                if ($text === '' || $text === 'false') {
+                    $matches = false;
+                    break;
+                }
+            }
+
+            return $rule['mode'] === 'show_when' ? $matches : ! $matches;
+        }
+
         $controlName = $rule['field'];
         $raw = $values[$controlName] ?? $values[(string) $field->id] ?? '';
         $controlValue = $this->normalizeValue($raw);
@@ -27,7 +41,7 @@ final class EApprovalFieldVisibilityEvaluator
     }
 
     /**
-     * @return array{mode: string, field: string, operator: string, value?: string}|null
+     * @return array{mode: string, field: string, operator: string, value?: string, fields: list<string>}|null
      */
     private function parseRule(EApprovalFormField $field): ?array
     {
@@ -40,9 +54,30 @@ final class EApprovalFieldVisibilityEvaluator
         $mode = ($visibility['mode'] ?? '') === 'hide_when' ? 'hide_when' : (($visibility['mode'] ?? '') === 'show_when' ? 'show_when' : null);
         $whenField = trim((string) ($visibility['field'] ?? ''));
         $operator = (string) ($visibility['operator'] ?? '');
-        $allowed = ['equals', 'not_equals', 'filled', 'empty', 'contains'];
+        $allowed = ['equals', 'not_equals', 'filled', 'empty', 'contains', 'all_filled'];
+        $names = [];
+        if (isset($visibility['fields']) && is_array($visibility['fields'])) {
+            foreach ($visibility['fields'] as $name) {
+                $text = trim((string) $name);
+                if ($text !== '') {
+                    $names[] = $text;
+                }
+            }
+        }
+        if ($names === [] && $whenField !== '') {
+            $names[] = $whenField;
+        }
 
-        if ($mode === null || $whenField === '' || ! in_array($operator, $allowed, true)) {
+        if ($mode !== null && $operator === 'all_filled' && $names !== []) {
+            return [
+                'mode' => $mode,
+                'field' => $names[0],
+                'operator' => $operator,
+                'fields' => $names,
+            ];
+        }
+
+        if ($mode === null || $whenField === '' || ! in_array($operator, $allowed, true) || $operator === 'all_filled') {
             return null;
         }
 
@@ -51,6 +86,7 @@ final class EApprovalFieldVisibilityEvaluator
             'field' => $whenField,
             'operator' => $operator,
             'value' => isset($visibility['value']) ? (string) $visibility['value'] : '',
+            'fields' => [$whenField],
         ];
     }
 

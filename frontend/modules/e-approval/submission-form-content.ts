@@ -4,6 +4,7 @@ import {
   buildGridReviewTable,
   isGridMoneyTotalField,
   moneyTotalSourceField,
+  totalsForMarkedColumns,
   type ComposeReviewTable,
   type ComposeReviewTotal,
 } from "@/modules/e-approval/form-compose-review";
@@ -23,6 +24,8 @@ export type SubmissionFormContentItem = {
   table: ComposeReviewTable | null;
   totals?: ComposeReviewTotal[];
   fullWidth: boolean;
+  /** This file field keeps its place so the request can review the file here. */
+  fileReview?: boolean;
 };
 
 export type SubmissionFormContentGroup = {
@@ -154,6 +157,7 @@ export function buildSubmissionFormContentGroups(
   values: SubmissionFormValueRow[],
   formFields: SubmissionFormFieldSnapshot[] | undefined,
   attachments: SubmissionFormAttachment[],
+  options?: { keepFileFields?: boolean },
 ): SubmissionFormContentGroup[] {
   const fields = formFields ?? [];
   const fieldByName = new Map<string, EApprovalFormFieldInput>();
@@ -182,7 +186,19 @@ export function buildSubmissionFormContentGroups(
     if (isHiddenValueType(type)) {
       return;
     }
-    if (shouldHideSubmissionAttachmentFieldValue(value, attachments)) {
+    const coveredByFileReview = shouldHideSubmissionAttachmentFieldValue(value, attachments);
+    if (coveredByFileReview && options?.keepFileFields && (type === "file" || type === "camera")) {
+      current.items.push({
+        key: value.field_id,
+        value,
+        formField,
+        table: null,
+        fullWidth: true,
+        fileReview: true,
+      });
+      return;
+    }
+    if (coveredByFileReview) {
       return;
     }
 
@@ -310,7 +326,10 @@ function alignGridMoneyTotals(groups: SubmissionFormContentGroup[]): SubmissionF
   );
 
   for (const binding of bindings) {
-    binding.item.totals = binding.totals;
+    const field = binding.item.formField;
+    binding.item.totals = field
+      ? totalsForMarkedColumns(field, binding.table?.headers ?? [], binding.totals)
+      : binding.totals;
   }
 
   const hidden = new Set(

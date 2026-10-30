@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Support;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
+use Carbon\Carbon;
 
 final class EApprovalWorkflowStepDefinitionSupport
 {
@@ -122,6 +123,12 @@ final class EApprovalWorkflowStepDefinitionSupport
             'step_order' => (int) $step->step_order,
         ];
 
+        if ($step->approver_type === 'user_list' && self::listSource([], $condition) === 'fixed') {
+            $definition['list_source'] = 'fixed';
+            $definition['fixed_approver_ids'] = self::fixedApproverIds([], $condition);
+            $definition['approverId'] = null;
+        }
+
         if ($step->approver_type === 'field_map') {
             $definition['source_field'] = $step->approver_id;
             $definition['mappings'] = is_array($condition['mappings'] ?? null) ? $condition['mappings'] : [];
@@ -151,6 +158,9 @@ final class EApprovalWorkflowStepDefinitionSupport
             if ($logic === EApprovalWhenLogic::OR) {
                 $definition['when_logic'] = EApprovalWhenLogic::OR;
             }
+            if (($condition['when_scope'] ?? null) === 'step') {
+                $definition['when_scope'] = 'step';
+            }
         }
 
         if (self::confirmSettlementEnabled($condition)) {
@@ -159,6 +169,21 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (! empty($condition['optional'])) {
             $definition['optional'] = true;
+        }
+
+        $autoApproveDays = self::autoApproveDays([], $condition);
+        if ($autoApproveDays !== null) {
+            $definition['auto_approve_enabled'] = true;
+            $definition['auto_approve_days'] = $autoApproveDays;
+        }
+
+        if (self::proofOfPaymentEnabled($condition)) {
+            $definition['proof_of_payment'] = true;
+        }
+
+        $decisionLabels = self::storedDecisionLabels(['condition' => $condition]);
+        if ($decisionLabels !== null) {
+            $definition['decision_labels'] = $decisionLabels;
         }
 
         if (($condition['duty'] ?? null) === 'review') {
@@ -205,6 +230,12 @@ final class EApprovalWorkflowStepDefinitionSupport
             'step_order' => (int) ($step['step_order'] ?? $fallbackOrder),
         ];
 
+        if ($type === 'user_list' && self::listSource($step, $condition) === 'fixed') {
+            $definition['list_source'] = 'fixed';
+            $definition['fixed_approver_ids'] = self::fixedApproverIds($step, $condition);
+            $definition['approverId'] = null;
+        }
+
         if ($type === 'field_map') {
             $sourceField = trim((string) ($step['source_field'] ?? $approverId));
             $definition['source_field'] = $sourceField !== '' ? $sourceField : null;
@@ -239,6 +270,9 @@ final class EApprovalWorkflowStepDefinitionSupport
             if ($logic === EApprovalWhenLogic::OR) {
                 $definition['when_logic'] = EApprovalWhenLogic::OR;
             }
+            if (self::stepOwnedWhen($step, $condition)) {
+                $definition['when_scope'] = 'step';
+            }
         }
 
         if (self::confirmSettlementEnabled($step)) {
@@ -247,6 +281,21 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (! empty($step['optional']) || ! empty($condition['optional'])) {
             $definition['optional'] = true;
+        }
+
+        $autoApproveDays = self::autoApproveDays($step, $condition);
+        if ($autoApproveDays !== null) {
+            $definition['auto_approve_enabled'] = true;
+            $definition['auto_approve_days'] = $autoApproveDays;
+        }
+
+        if (self::proofOfPaymentEnabled($step)) {
+            $definition['proof_of_payment'] = true;
+        }
+
+        $decisionLabels = self::storedDecisionLabels($step);
+        if ($decisionLabels !== null) {
+            $definition['decision_labels'] = $decisionLabels;
         }
 
         if (self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list') {
@@ -267,6 +316,67 @@ final class EApprovalWorkflowStepDefinitionSupport
         }
 
         return $definition;
+    }
+
+    /**
+     * Words on Decide for this step. Defaults stay Approve, Reject, and Request revision.
+     *
+     * @param  array<string, mixed>  $source
+     * @return array{approve: string, reject: string, revision: string}
+     */
+    public static function decisionLabels(array $source): array
+    {
+        $raw = $source['decision_labels'] ?? null;
+        if (! is_array($raw)) {
+            $condition = is_array($source['condition'] ?? null) ? $source['condition'] : [];
+            $raw = $condition['decision_labels'] ?? [];
+        }
+        if (! is_array($raw)) {
+            $raw = [];
+        }
+
+        return [
+            'approve' => self::buttonLabel($raw['approve'] ?? null, 'Approve'),
+            'reject' => self::buttonLabel($raw['reject'] ?? null, 'Reject'),
+            'revision' => self::buttonLabel($raw['revision'] ?? null, 'Request revision'),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     * @return array{approve: string, reject: string, revision: string}|null
+     */
+    public static function storedDecisionLabels(array $source): ?array
+    {
+        $labels = self::decisionLabels($source);
+        if ($labels === ['approve' => 'Approve', 'reject' => 'Reject', 'revision' => 'Request revision']) {
+            return null;
+        }
+
+        return $labels;
+    }
+
+    private static function buttonLabel(mixed $value, string $fallback): string
+    {
+        $text = trim((string) $value);
+
+        return $text === '' ? $fallback : mb_substr($text, 0, 40);
+    }
+
+    public static function proofOfPaymentEnabled(array $source): bool
+    {
+        if (array_key_exists('proof_of_payment', $source)) {
+            return self::flagTruthy($source['proof_of_payment']);
+        }
+
+        $condition = is_array($source['condition'] ?? null) ? $source['condition'] : [];
+
+        return self::flagTruthy($condition['proof_of_payment'] ?? false);
+    }
+
+    private static function flagTruthy(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1' || $value === 'true';
     }
 
     /**
@@ -374,8 +484,13 @@ final class EApprovalWorkflowStepDefinitionSupport
             } else {
                 unset($condition['when_logic']);
             }
+            if (self::stepOwnedWhen($step, $condition)) {
+                $condition['when_scope'] = 'step';
+            } else {
+                unset($condition['when_scope']);
+            }
         } else {
-            unset($condition['when'], $condition['when_logic']);
+            unset($condition['when'], $condition['when_logic'], $condition['when_scope']);
         }
 
         if (array_key_exists('confirm_settlement', $step) || array_key_exists('confirm_settlement', $condition)) {
@@ -398,6 +513,38 @@ final class EApprovalWorkflowStepDefinitionSupport
             unset($condition['optional']);
         }
 
+        $autoApproveDays = self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list'
+            ? null
+            : self::autoApproveDays($step, $condition);
+        if ($autoApproveDays !== null) {
+            $condition['auto_approve_enabled'] = true;
+            $condition['auto_approve_days'] = $autoApproveDays;
+        } else {
+            unset($condition['auto_approve_enabled'], $condition['auto_approve_days']);
+        }
+
+        if (! self::reviewDutyEnabled($step, $condition) && $type !== 'reviewer_list' && self::proofOfPaymentEnabled($step)) {
+            $condition['proof_of_payment'] = true;
+        } else {
+            unset($condition['proof_of_payment']);
+        }
+
+        $decisionLabels = self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list'
+            ? null
+            : self::storedDecisionLabels($step);
+        if ($decisionLabels !== null) {
+            $condition['decision_labels'] = $decisionLabels;
+        } else {
+            unset($condition['decision_labels']);
+        }
+
+        if ($type === 'user_list' && self::listSource($step, $condition) === 'fixed') {
+            $condition['list_source'] = 'fixed';
+            $condition['fixed_approver_ids'] = self::fixedApproverIds($step, $condition);
+        } else {
+            unset($condition['list_source'], $condition['fixed_approver_ids']);
+        }
+
         $mailSource = array_key_exists('mail', $step)
             ? (is_array($step['mail']) ? $step['mail'] : null)
             : ($condition['mail'] ?? null);
@@ -418,5 +565,91 @@ final class EApprovalWorkflowStepDefinitionSupport
     private static function reviewDutyEnabled(array $step, array $condition): bool
     {
         return ($step['duty'] ?? null) === 'review' || ($condition['duty'] ?? null) === 'review';
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     */
+    private static function stepOwnedWhen(array $step, array $condition): bool
+    {
+        return ($step['when_scope'] ?? null) === 'step' || ($condition['when_scope'] ?? null) === 'step';
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     */
+    /**
+     * Days after which a pending approver is approved for them. Null when the step has it off.
+     *
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     */
+    public static function autoApproveDays(array $step, array $condition = []): ?int
+    {
+        $enabled = filter_var(
+            $step['auto_approve_enabled'] ?? $condition['auto_approve_enabled'] ?? false,
+            FILTER_VALIDATE_BOOLEAN,
+        );
+        if ($enabled !== true) {
+            return null;
+        }
+
+        $raw = $step['auto_approve_days'] ?? $condition['auto_approve_days'] ?? 0;
+        $days = is_numeric($raw) ? (int) $raw : 0;
+        if ($days < 1) {
+            return null;
+        }
+
+        return min(30, $days);
+    }
+
+    public static function approvalIsDue(?\DateTimeInterface $askedAt, int $days, \DateTimeInterface $now): bool
+    {
+        if ($askedAt === null || $days < 1) {
+            return false;
+        }
+
+        $elapsed = (new WorkingDaysCalendar)->workingDaysBetween(
+            Carbon::parse($askedAt),
+            Carbon::parse($now),
+        );
+
+        return $elapsed >= $days;
+    }
+
+    public static function listSource(array $step, array $condition = []): string
+    {
+        $raw = strtolower(trim((string) ($step['list_source'] ?? $condition['list_source'] ?? 'field')));
+
+        return $raw === 'fixed' ? 'fixed' : 'field';
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     * @return list<string>
+     */
+    public static function fixedApproverIds(array $step, array $condition = []): array
+    {
+        $raw = $step['fixed_approver_ids'] ?? $condition['fixed_approver_ids'] ?? [];
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($raw as $id) {
+            if (! is_scalar($id)) {
+                continue;
+            }
+            $trimmed = trim((string) $id);
+            if ($trimmed === '') {
+                continue;
+            }
+            $ids[$trimmed] = $trimmed;
+        }
+
+        return array_values($ids);
     }
 }

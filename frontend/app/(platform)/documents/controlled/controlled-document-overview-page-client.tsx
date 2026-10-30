@@ -443,7 +443,7 @@ function OverviewBody({
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-medium text-foreground">Latest approved</h2>
+          <h2 className="text-sm font-medium text-foreground">Publication and Implementation</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">The eight most recently published documents.</p>
         </div>
         {data.recent.length === 0 ? (
@@ -458,7 +458,7 @@ function OverviewBody({
                 <TableHead>Department</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Revision</TableHead>
-                <TableHead>Effective</TableHead>
+                <TableHead>Effective Date</TableHead>
                 <TableHead>Published</TableHead>
               </TableRow>
             </TableHeader>

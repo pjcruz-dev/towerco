@@ -1,4 +1,4 @@
-import type { EApprovalPrintPayload } from "@/modules/e-approval/types";
+import type { EApprovalPrintApprovalRow, EApprovalPrintPayload } from "@/modules/e-approval/types";
 import type { ApprovalHistorySlot, EApprovalPrintTemplate } from "@/modules/e-approval/print-template-types";
 import { printFieldValueMap } from "@/modules/e-approval/print-utils";
 
@@ -18,6 +18,32 @@ export function shouldShowApprovalHistory(template: EApprovalPrintTemplate | nul
 }
 
 export { shouldAppendPrintAttachments } from "@/lib/e-approval/e-approval-print-template-render";
+
+/** History word for a signed step. Proof of payment and the step's own button word win over Approved. */
+export function approvalHistoryVerb(row: EApprovalPrintApprovalRow, acknowledged: boolean): string {
+  const proof = (row.proof_status ?? "").toLowerCase();
+  if (proof === "released") {
+    return "Released";
+  }
+  if (proof === "hold") {
+    return "Hold";
+  }
+  const action = (row.finance_action ?? "").toLowerCase();
+  if (action === "release") {
+    return "Released";
+  }
+  if (action === "settlement" || action === "payment") {
+    return "Settled";
+  }
+  if (acknowledged) {
+    return "Reviewed";
+  }
+  const label = (row.decision_label ?? "").trim();
+  if (label !== "" && label.toLowerCase() !== "approve") {
+    return label;
+  }
+  return "Approved";
+}
 
 /** Shared approval + requestor signature slots for browser print and pdf-lib footer. */
 export function buildApprovalHistorySlots(
@@ -75,17 +101,26 @@ export function buildApprovalHistorySlots(
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => {
       const status = row.status.toLowerCase();
-      return (status === "approved" || status === "acknowledged") && Boolean(row.signature?.trim());
+      const acted = status === "approved" || status === "acknowledged";
+      if (!acted) {
+        return false;
+      }
+      if (row.signature?.trim()) {
+        return true;
+      }
+      const action = (row.finance_action ?? "").toLowerCase();
+      return action === "release" || action === "settlement" || action === "payment";
     })
     .sort((a, b) => (a.row.step ?? 999) - (b.row.step ?? 999) || a.index - b.index);
 
   for (const { row, index } of signed) {
     const acknowledged = row.status.toLowerCase() === "acknowledged";
+    const verb = approvalHistoryVerb(row, acknowledged);
     slots.push({
       key: `signed-${row.step ?? "x"}-${index}`,
       label: row.approver ?? (acknowledged ? `Reviewer (Step ${row.step ?? "—"})` : `Approver (Step ${row.step ?? "—"})`),
-      subtitle: `${acknowledged ? "Reviewed" : "Approved"} · ${row.acted_at ?? "—"}`,
-      signature: row.signature!.trim(),
+      subtitle: `${verb} · ${row.acted_at ?? "—"}`,
+      signature: row.signature?.trim() || null,
       kind: acknowledged ? "reviewer" : "approver",
     });
   }
@@ -105,7 +140,7 @@ export function buildPdfFooterRows(data: EApprovalPrintPayload): {
   return buildApprovalHistorySlots(data, template)
     .filter((slot) => Boolean(slot.signature?.trim()))
     .map((slot) => {
-      const stamped = /^(Approved|Reviewed) ·\s*(.*)$/.exec(slot.subtitle ?? "");
+      const stamped = /^(.*?) ·\s*(.*)$/.exec(slot.subtitle ?? "");
       return {
         label:
           slot.kind === "requestor"

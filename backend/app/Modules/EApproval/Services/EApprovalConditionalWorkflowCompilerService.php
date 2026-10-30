@@ -91,8 +91,8 @@ final class EApprovalConditionalWorkflowCompilerService
             'matched_rule_label' => $activeDefinitions === []
                 ? null
                 : __('Matched :count of :total approval steps', [
-                    'count' => count($activeDefinitions),
-                    'total' => count($definitions),
+                    'count' => self::distinctStepOrders($activeDefinitions),
+                    'total' => self::distinctStepOrders($definitions),
                 ]),
             'step_definitions' => $definitions,
             'active_step_definitions' => $activeDefinitions,
@@ -206,5 +206,23 @@ final class EApprovalConditionalWorkflowCompilerService
         }
 
         return $skipped;
+    }
+
+    /**
+     * Parallel people share one step, so the count is bands, not people.
+     *
+     * @param  list<array<string, mixed>>  $definitions
+     */
+    private static function distinctStepOrders(array $definitions): int
+    {
+        $orders = [];
+        foreach ($definitions as $definition) {
+            if (! is_array($definition)) {
+                continue;
+            }
+            $orders[(int) ($definition['step_order'] ?? 0)] = true;
+        }
+
+        return count($orders);
     }
 }

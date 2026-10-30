@@ -3,7 +3,7 @@ import type {
   EApprovalWorkflowConditionOperator,
   EApprovalWorkflowStepInput,
 } from "@/modules/e-approval/types";
-import { parseStepWhen, patchStepWhen } from "@/modules/e-approval/workflow-conditions";
+import { isStepOwnedCondition, parseStepWhen, patchStepWhen } from "@/modules/e-approval/workflow-conditions";
 import {
   compactWorkflowStepOrdersPreservingTies,
   detectParallelApprovalGroups,
@@ -197,6 +197,11 @@ export function detectExclusiveBranchGroups(
   let index = 0;
 
   while (index < steps.length - 1) {
+    if (isStepOwnedCondition(steps[index]) || isStepOwnedCondition(steps[index + 1])) {
+      index += 1;
+      continue;
+    }
+
     const left = getExclusiveThresholdCondition(steps[index]);
     const right = getExclusiveThresholdCondition(steps[index + 1]);
 
@@ -348,7 +353,7 @@ export function detectExclusiveThresholdLadders(
 
   while (index < steps.length) {
     const first = parseThresholdBand(steps[index]);
-    if (!first) {
+    if (!first || isStepOwnedCondition(steps[index])) {
       index += 1;
       continue;
     }
@@ -357,8 +362,13 @@ export function detectExclusiveThresholdLadders(
     let cursor = index + 1;
     while (cursor < steps.length) {
       const next = parseThresholdBand(steps[cursor]);
-      if (!next || next.field !== first.field) {
+      if (!next || next.field !== first.field || isStepOwnedCondition(steps[cursor])) {
         break;
+      }
+      const primary = bandIndexes[bandIndexes.length - 1];
+      if (ladderCaseMemberIndexes(steps, primary).includes(cursor) && cursor !== primary) {
+        cursor += 1;
+        continue;
       }
       bandIndexes.push(cursor);
       cursor += 1;
@@ -512,7 +522,9 @@ export function updateExclusiveLadderThresholds(
   }
 
   return steps.map((step, index) => {
-    const bandOffset = ladder.bandIndexes.indexOf(index);
+    const bandOffset = ladder.bandIndexes.findIndex((primary) =>
+      ladderCaseMemberIndexes(steps, primary).includes(index),
+    );
     if (bandOffset < 0) {
       return step;
     }
@@ -533,7 +545,11 @@ export function toWorkflowEditorSegments(
     ),
   ];
   const ladderByStart = new Map(ladders.map((ladder) => [ladder.startIndex, ladder]));
-  const coveredByLadder = new Set(ladders.flatMap((ladder) => ladder.bandIndexes));
+  const coveredByLadder = new Set(
+    ladders.flatMap((ladder) =>
+      ladder.bandIndexes.flatMap((bandIndex) => ladderCaseMemberIndexes(steps, bandIndex)),
+    ),
+  );
 
   const parallels = detectParallelApprovalGroups(steps).filter(
     (group) => group.memberIndexes.every((index) => !coveredByLadder.has(index)),
@@ -571,7 +587,11 @@ export function toWorkflowEditorSegments(
     const ladder = ladderByStart.get(index);
     if (ladder) {
       segments.push({ type: "ladder", ladder });
-      index = ladder.endIndex + 1;
+      const tail = ladderCaseMemberIndexes(
+        steps,
+        ladder.bandIndexes[ladder.bandIndexes.length - 1] ?? ladder.endIndex,
+      );
+      index = Math.max(ladder.endIndex, tail[tail.length - 1] ?? ladder.endIndex) + 1;
       continue;
     }
 
@@ -835,6 +855,232 @@ export function ladderMatchCases(
   });
 }
 
+function whenKey(step: EApprovalWorkflowStepInput): string {
+  return JSON.stringify(
+    parseStepWhen(step).map((condition) => ({
+      field: condition.field.trim(),
+      operator: condition.operator,
+      value: String(condition.value ?? "").trim(),
+    })),
+  );
+}
+
+/** First step of a case, walking back over same-order siblings with the same when. */
+export function ladderCasePrimaryIndex(
+  steps: EApprovalWorkflowStepInput[],
+  index: number,
+): number {
+  const step = steps[index];
+  if (!step) {
+    return index;
+  }
+  const key = whenKey(step);
+  const order = step.step_order ?? index + 1;
+  let primary = index;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const previous = steps[cursor];
+    if ((previous.step_order ?? cursor + 1) !== order || whenKey(previous) !== key) {
+      break;
+    }
+    primary = cursor;
+  }
+  return primary;
+}
+
+/**
+ * The case step plus later fixed approvers that share its step order and when.
+ * Two people on one case: the first approval finishes that case.
+ */
+export function ladderCaseMemberIndexes(
+  steps: EApprovalWorkflowStepInput[],
+  primaryIndex: number,
+): number[] {
+  const primary = steps[primaryIndex];
+  if (!primary) {
+    return [];
+  }
+  const order = primary.step_order ?? primaryIndex + 1;
+  const key = whenKey(primary);
+  const members = [primaryIndex];
+  for (let index = primaryIndex + 1; index < steps.length; index += 1) {
+    const step = steps[index];
+    if ((step.step_order ?? index + 1) !== order || whenKey(step) !== key) {
+      break;
+    }
+    members.push(index);
+  }
+  return members;
+}
+
+function clearParallelMode(step: EApprovalWorkflowStepInput): EApprovalWorkflowStepInput {
+  const next = { ...step };
+  delete next.parallel_mode;
+  delete next.parallel_quorum;
+  return next;
+}
+
+/** Add one more fixed approver on a case. The first extra person defaults to first-to-approve. */
+export function addFixedApproverToLadderCase(
+  steps: EApprovalWorkflowStepInput[],
+  primaryIndex: number,
+  approverId: string,
+): EApprovalWorkflowStepInput[] {
+  const trimmed = approverId.trim();
+  const primary = ladderCasePrimaryIndex(steps, primaryIndex);
+  const members = ladderCaseMemberIndexes(steps, primary);
+  if (members.length === 0) {
+    return steps;
+  }
+  if (trimmed && members.some((index) => steps[index]?.approverId === trimmed)) {
+    return steps;
+  }
+
+  const source = steps[primary];
+  const order = source.step_order ?? primary + 1;
+  const existingMode = members.length >= 2 ? (source.parallel_mode ?? "all") : "any";
+  const quorum = source.parallel_quorum;
+  const { id: _id, ...rest } = source;
+  const created = {
+    ...clearParallelMode({
+      ...rest,
+      type: "user",
+      approverId: trimmed,
+      step_order: order,
+    }),
+    ...(existingMode === "all"
+      ? {}
+      : {
+          parallel_mode: existingMode,
+          ...(existingMode === "n_of_m" ? { parallel_quorum: quorum ?? 1 } : {}),
+        }),
+  };
+  const insertAt = members[members.length - 1] + 1;
+  const next = [...steps.slice(0, insertAt), created, ...steps.slice(insertAt)];
+  const memberSet = new Set([...members, insertAt]);
+
+  return next.map((step, index) => {
+    if (!memberSet.has(index)) {
+      return step;
+    }
+    if (existingMode === "all") {
+      return clearParallelMode({ ...step, step_order: order });
+    }
+    const marked = {
+      ...step,
+      step_order: order,
+      parallel_mode: existingMode,
+      ...(existingMode === "n_of_m" ? { parallel_quorum: quorum ?? 1 } : {}),
+    };
+    if (existingMode !== "n_of_m") {
+      delete marked.parallel_quorum;
+    }
+    return marked;
+  });
+}
+
+/** Set or clear the second fixed approver. Empty removes them. Two people default to first-to-approve. */
+export function setLadderCaseSecondApprover(
+  steps: EApprovalWorkflowStepInput[],
+  primaryIndex: number,
+  approverId: string,
+): EApprovalWorkflowStepInput[] {
+  const trimmed = approverId.trim();
+  const primary = ladderCasePrimaryIndex(steps, primaryIndex);
+  const members = ladderCaseMemberIndexes(steps, primary);
+  if (members.length === 0) {
+    return steps;
+  }
+  if (!trimmed) {
+    return members.length < 2 ? steps : removeFixedApproverFromLadderCase(steps, members[1]);
+  }
+  if (members.length < 2) {
+    return addFixedApproverToLadderCase(steps, primary, trimmed);
+  }
+  if (steps[members[0]]?.approverId === trimmed) {
+    return steps;
+  }
+
+  return steps.map((step, index) =>
+    index === members[1] ? { ...step, type: "user", approverId: trimmed, parallel_mode: step.parallel_mode ?? "any" } : step,
+  );
+}
+
+/** Completion rule for the two fixed approvers on one case. */
+export function setLadderCaseCompletion(
+  steps: EApprovalWorkflowStepInput[],
+  primaryIndex: number,
+  mode: "all" | "any" | "n_of_m",
+  quorum?: number,
+): EApprovalWorkflowStepInput[] {
+  const primary = ladderCasePrimaryIndex(steps, primaryIndex);
+  const members = ladderCaseMemberIndexes(steps, primary);
+  if (members.length < 2) {
+    return steps;
+  }
+  const resolvedQuorum = Math.max(1, Math.min(members.length, Math.floor(quorum ?? 1)));
+
+  return steps.map((step, index) => {
+    if (!members.includes(index)) {
+      return step;
+    }
+    if (mode === "all") {
+      return clearParallelMode(step);
+    }
+    const next = {
+      ...step,
+      parallel_mode: mode,
+      ...(mode === "n_of_m" ? { parallel_quorum: resolvedQuorum } : {}),
+    };
+    if (mode !== "n_of_m") {
+      delete next.parallel_quorum;
+    }
+    return next;
+  });
+}
+
+/** Drop one person from a two-approver case. The remaining person approves alone. */
+export function removeFixedApproverFromLadderCase(
+  steps: EApprovalWorkflowStepInput[],
+  memberIndex: number,
+): EApprovalWorkflowStepInput[] {
+  const primary = ladderCasePrimaryIndex(steps, memberIndex);
+  const members = ladderCaseMemberIndexes(steps, primary);
+  if (members.length < 2 || !members.includes(memberIndex)) {
+    return steps;
+  }
+
+  const next = steps.filter((_, index) => index !== memberIndex);
+  if (members.length === 2) {
+    const survivor = members.find((index) => index !== memberIndex);
+    if (survivor != null) {
+      const adjusted = survivor > memberIndex ? survivor - 1 : survivor;
+      next[adjusted] = clearParallelMode(next[adjusted]);
+    }
+  }
+
+  return next;
+}
+
+/**
+ * A blank condition is an unfinished row on its own step.
+ * Two blank cases still belong together while an If/Else is being retargeted.
+ */
+function continuesValueMatchLadder(
+  first: { field: string; value: string },
+  next: { field: string; value: string },
+): boolean {
+  if (next.field !== first.field) {
+    return false;
+  }
+  if (first.value === "" && next.value === "") {
+    return true;
+  }
+  if (first.value === "" || next.value === "") {
+    return false;
+  }
+  return true;
+}
+
 /** Adjacent steps that each match one value of the same field. */
 export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): ExclusiveThresholdLadder[] {
   const ladders: ExclusiveThresholdLadder[] = [];
@@ -842,7 +1088,7 @@ export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): Ex
 
   while (index < steps.length) {
     const first = parseValueMatchBand(steps[index]);
-    if (!first) {
+    if (!first || isStepOwnedCondition(steps[index])) {
       index += 1;
       continue;
     }
@@ -851,8 +1097,13 @@ export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): Ex
     let cursor = index + 1;
     while (cursor < steps.length) {
       const next = parseValueMatchBand(steps[cursor]);
-      if (!next || next.field !== first.field) {
+      if (!next || !continuesValueMatchLadder(first, next) || isStepOwnedCondition(steps[cursor])) {
         break;
+      }
+      const primary = bandIndexes[bandIndexes.length - 1];
+      if (ladderCaseMemberIndexes(steps, primary).includes(cursor) && cursor !== primary) {
+        cursor += 1;
+        continue;
       }
       bandIndexes.push(cursor);
       cursor += 1;
@@ -890,7 +1141,9 @@ export function applyValueMatchCases(
   }
 
   return steps.map((step, index) => {
-    const offset = bandIndexes.indexOf(index);
+    const offset = bandIndexes.findIndex((primary) =>
+      ladderCaseMemberIndexes(steps, primary).includes(index),
+    );
     if (offset < 0) {
       return step;
     }
@@ -915,30 +1168,44 @@ export function replaceLadderConditions(
     return steps;
   }
 
-  const start = bandIndexes[0];
-  const end = bandIndexes[bandIndexes.length - 1];
-  if (end - start + 1 !== bandIndexes.length || end >= steps.length) {
+  const groups = bandIndexes.map((index) => ladderCaseMemberIndexes(steps, index));
+  if (groups.some((group) => group.length === 0)) {
     return steps;
   }
+  const start = groups[0][0];
+  const lastGroup = groups[groups.length - 1];
+  const end = lastGroup[lastGroup.length - 1];
+  if (end >= steps.length) {
+    return steps;
+  }
+  const covered = new Set(groups.flat());
+  for (let cursor = start; cursor <= end; cursor += 1) {
+    if (!covered.has(cursor)) {
+      return steps;
+    }
+  }
 
-  const existing = bandIndexes.map((index) => steps[index]);
   const before = compactWorkflowStepOrdersPreservingTies(steps.slice(0, start));
   const afterSource = steps.slice(end + 1);
   const baseOrder =
     before.length > 0 ? Math.max(...before.map((step, index) => step.step_order ?? index + 1)) : 0;
 
-  const nextBands = whens.map((when, offset) => {
-    const source = existing[offset] ?? existing[existing.length - 1];
-    const base = existing[offset]
-      ? source
-      : (() => {
-          const { id: _id, ...rest } = source;
-          return { ...rest, approverId: "" };
-        })();
+  const nextBands = whens.flatMap((when, offset) => {
+    const order = baseOrder + offset + 1;
+    const group = groups[offset];
+    if (!group) {
+      const source = steps[groups[groups.length - 1][0]];
+      const {
+        id: _id,
+        parallel_mode: _mode,
+        parallel_quorum: _quorum,
+        ...rest
+      } = source;
+      return [patchStepWhen({ ...rest, approverId: "", step_order: order }, when)];
+    }
 
-    return patchStepWhen(
-      { ...base, step_order: baseOrder + offset + 1 },
-      when,
+    return group.map((memberIndex) =>
+      patchStepWhen({ ...steps[memberIndex], step_order: order }, when),
     );
   });
 

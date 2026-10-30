@@ -171,7 +171,13 @@ function formatSiteStopDisplay(raw: string): string | null {
     return null;
   }
 
-  const record = parsed as { site?: unknown; location?: unknown; fields?: unknown };
+  const record = parsed as { site?: unknown; location?: unknown; fields?: unknown; sites?: unknown };
+  if (Array.isArray(record.sites)) {
+    const lines = record.sites
+      .map((entry) => formatSiteStopDisplay(typeof entry === "string" ? entry : JSON.stringify(entry)))
+      .filter((line): line is string => line !== null && line !== "—");
+    return lines.length > 0 ? lines.join("\n") : "—";
+  }
   if (!("site" in record) && !("location" in record)) {
     return null;
   }
@@ -180,7 +186,10 @@ function formatSiteStopDisplay(raw: string): string | null {
   const location = String(record.location ?? "").trim();
   const extras: string[] = [];
   if (record.fields && typeof record.fields === "object" && !Array.isArray(record.fields)) {
-    for (const value of Object.values(record.fields as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(record.fields as Record<string, unknown>)) {
+      if (key === "subsidiary") {
+        continue;
+      }
       const text = String(value ?? "").trim();
       if (text !== "" && text !== location && text !== site) {
         extras.push(text);
@@ -310,6 +319,16 @@ function moneyReviewCell(value: number): string {
 }
 
 /** Line columns for the two VAT totals, so each total sits under its own figures. */
+function splitColumnRole(label: string): "non" | "net" | null {
+  if (/^non-?vatable$/i.test(label.trim())) {
+    return "non";
+  }
+  if (/net of vat/i.test(label.trim())) {
+    return "net";
+  }
+  return null;
+}
+
 function appendVatSplitReviewColumns(
   columns: GridColumnDef[],
   dataRows: Array<Record<string, string>>,
@@ -319,6 +338,27 @@ function appendVatSplitReviewColumns(
   const parts = dataRows.map((row) => expenseLineVatParts(columns, row));
   if (parts.every((part) => part === null)) {
     return { headers, rows };
+  }
+
+  const ownsNon = columns.some((column) => splitColumnRole(column.label) === "non");
+  const ownsNet = columns.some((column) => splitColumnRole(column.label) === "net");
+  if (ownsNon || ownsNet) {
+    return {
+      headers,
+      rows: rows.map((row, index) => {
+        const part = parts[index];
+        return row.map((cell, cellIndex) => {
+          const role = splitColumnRole(headers[cellIndex] ?? "");
+          if (role === "non") {
+            return moneyReviewCell(part?.nonVatable ?? 0);
+          }
+          if (role === "net") {
+            return moneyReviewCell(part?.vatableNet ?? 0);
+          }
+          return cell;
+        });
+      }),
+    };
   }
 
   return {
@@ -547,6 +587,55 @@ export function bindMoneyTotalsToGrids<
   }
 
   return unmatched;
+}
+
+/**
+ * A grid that opts into column totals only shows those columns.
+ * Stored VAT figures with no visible column stay off the footer.
+ */
+export function totalsForMarkedColumns(
+  field: EApprovalFormFieldInput,
+  headers: string[],
+  totals: ComposeReviewTotal[] | undefined,
+): ComposeReviewTotal[] | undefined {
+  const columns = parseGridColumnDefs(field);
+  if (!columns.some((column) => column.show_total === true)) {
+    return totals;
+  }
+
+  const visible = new Set(headers.map((header) => header.trim().toLowerCase()));
+  const marked = new Set(
+    columns
+      .filter((column) => column.show_total === true && visible.has(column.label.trim().toLowerCase()))
+      .map((column) => column.label.trim().toLowerCase()),
+  );
+  if (marked.size === 0) {
+    return [];
+  }
+
+  return (totals ?? []).filter((total) => markedColumnOwnsTotal(marked, total.label));
+}
+
+function markedColumnOwnsTotal(marked: Set<string>, label: string): boolean {
+  const name = label.trim().toLowerCase();
+  if (marked.has("amount") && /requested amount|total expenses|total reimbursement|liquidation amount|^amount$/.test(name)) {
+    return true;
+  }
+  if (marked.has("vat") && name === "vat") {
+    return true;
+  }
+  for (const header of marked) {
+    if (header === name) {
+      return true;
+    }
+    if (/^non-?vatable$/.test(header) && /^non-?vatable$/.test(name)) {
+      return true;
+    }
+    if (/net of vat/.test(header) && /net of vat/.test(name)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const SPLIT_REVIEW_TOTALS: Array<{ header: RegExp; label: string }> = [

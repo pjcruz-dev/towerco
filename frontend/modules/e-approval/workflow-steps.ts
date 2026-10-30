@@ -13,6 +13,9 @@ export function getValidEApprovalWorkflowSteps(
     if (step.type === "field") {
       return Boolean(step.approverId?.trim());
     }
+    if (step.type === "user_list" && step.list_source === "fixed") {
+      return (step.fixed_approver_ids ?? []).some((id) => id.trim() !== "");
+    }
     if (step.type === "user_list" || step.type === "reviewer_list") {
       return Boolean(step.approverId?.trim());
     }
@@ -63,7 +66,10 @@ export function getUsedApproverFieldIds(
     if (step.type === "field" && step.approverId?.trim()) {
       used.add(step.approverId.trim());
     }
-    if ((step.type === "user_list" || step.type === "reviewer_list") && step.approverId?.trim()) {
+    if (
+      (step.type === "reviewer_list" || (step.type === "user_list" && step.list_source !== "fixed")) &&
+      step.approverId?.trim()
+    ) {
       used.add(step.approverId.trim());
     }
   });

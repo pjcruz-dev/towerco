@@ -159,7 +159,9 @@ function appendWorkflowHealthChecks(
     });
   }
 
-  if (steps.some((step) => step.type === "user_list")) {
+  const fieldListSteps = steps.filter((step) => step.type === "user_list" && step.list_source !== "fixed");
+  const fixedListSteps = steps.filter((step) => step.type === "user_list" && step.list_source === "fixed");
+  if (fieldListSteps.length > 0) {
     if (!fields.some((field) => field.type === "approver_list")) {
       items.push({
         level: "error",
@@ -172,6 +174,13 @@ function appendWorkflowHealthChecks(
           "Workflow includes a dynamic approver list — at submit it expands into a parallel band from the selected users (all / any / N of M).",
       });
     }
+  }
+  if (fixedListSteps.length > 0) {
+    items.push({
+      level: "warning",
+      message:
+        "Workflow includes fixed approvers on a list step — at submit those people form a parallel band (all / any / N of M).",
+    });
   }
 
   const reviewOnly =

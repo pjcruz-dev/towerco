@@ -5,6 +5,7 @@ import type {
   EApprovalWorkflowStepInput,
 } from "@/modules/e-approval/types";
 import {
+  addFixedApproverToLadderCase,
   alignNearMissBranchThresholds,
   appendIfElseBranchSteps,
   applyValueMatchCases,
@@ -21,6 +22,10 @@ import {
   insertThresholdLadderSteps,
   isCanonicalThresholdLadder,
   ladderCaseLabel,
+  ladderCaseMemberIndexes,
+  removeFixedApproverFromLadderCase,
+  setLadderCaseCompletion,
+  setLadderCaseSecondApprover,
   parseThresholdBand,
   toWorkflowEditorSegments,
   updateExclusiveBranchThreshold,
@@ -373,5 +378,76 @@ describe("workflow branch groups", () => {
     ]);
     expect(parseStepWhen(next[2])).toEqual([{ field: "non_po", operator: "gt", value: "20000" }]);
     expect(detectExclusiveThresholdLadders(next)).toHaveLength(1);
+  });
+
+  it("keeps two fixed approvers on one subsidiary case and finishes on the first approval", () => {
+    const steps = [
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "christian"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ADIC" }], "norelyn"),
+    ].map((step, index) => ({ ...step, step_order: index + 2 }));
+
+    const next = addFixedApproverToLadderCase(steps, 0, "second");
+
+    expect(next.map((step) => step.approverId)).toEqual(["christian", "second", "norelyn"]);
+    expect(next[0].step_order).toBe(next[1].step_order);
+    expect(next[0].parallel_mode).toBe("any");
+    expect(next[1].parallel_mode).toBe("any");
+    expect(next[2].step_order).not.toBe(next[0].step_order);
+    expect(parseStepWhen(next[1])).toEqual([{ field: "subsidiary", operator: "equals", value: "ATC" }]);
+    expect(detectValueMatchLadders(next)[0]?.bandIndexes).toEqual([0, 2]);
+    expect(toWorkflowEditorSegments(next).map((segment) => segment.type)).toEqual(["ladder"]);
+    expect(ladderCaseMemberIndexes(next, 0)).toEqual([0, 1]);
+
+    const removed = removeFixedApproverFromLadderCase(next, 1);
+    expect(removed.map((step) => step.approverId)).toEqual(["christian", "norelyn"]);
+    expect(removed[0].parallel_mode).toBeUndefined();
+
+    const paired = setLadderCaseSecondApprover(steps, 0, "second");
+    const both = setLadderCaseCompletion(paired, 0, "all");
+    expect(both[0].parallel_mode).toBeUndefined();
+    expect(both[1].parallel_mode).toBeUndefined();
+    const cleared = setLadderCaseSecondApprover(both, 0, "");
+    expect(cleared.map((step) => step.approverId)).toEqual(["christian", "norelyn"]);
+
+    const third = addFixedApproverToLadderCase(next, 0, "third");
+    expect(third.map((step) => step.approverId)).toEqual(["christian", "second", "third", "norelyn"]);
+    expect(third[0].step_order).toBe(third[1].step_order);
+    expect(third[1].step_order).toBe(third[2].step_order);
+    expect(detectValueMatchLadders(third)[0]?.bandIndexes).toEqual([0, 3]);
+    expect(ladderCaseMemberIndexes(third, 0)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps a condition added on the next step out of the subsidiary If/Else", () => {
+    const steps = [
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "atc"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ADIC" }], "adic"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "" }], "denver"),
+      stepWithWhen([], "peter"),
+    ];
+
+    expect(detectValueMatchLadders(steps)[0]?.bandIndexes).toEqual([0, 1]);
+    expect(toWorkflowEditorSegments(steps).map((segment) => segment.type)).toEqual([
+      "ladder",
+      "single",
+      "single",
+    ]);
+
+    const owned = [
+      steps[0],
+      steps[1],
+      { ...stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "denver"), when_scope: "step" as const },
+    ];
+    expect(detectValueMatchLadders(owned)[0]?.bandIndexes).toEqual([0, 1]);
+    expect(toWorkflowEditorSegments(owned).map((segment) => segment.type)).toEqual(["ladder", "single"]);
+  });
+
+  it("keeps a value ladder together while its cases are still blank", () => {
+    const steps = [
+      stepWithWhen([{ field: "purpose", operator: "equals", value: "" }], "a"),
+      stepWithWhen([{ field: "purpose", operator: "not_equals", value: "" }], "b"),
+    ];
+
+    expect(detectValueMatchLadders(steps)).toHaveLength(1);
+    expect(detectValueMatchLadders(steps)[0]?.bandIndexes).toEqual([0, 1]);
   });
 });

@@ -51,10 +51,12 @@ final class AssistantAdminPromptTest extends TestCase
     {
         $prompt = AssistantAdminPrompt::forPlanner('Close ticket TKT-00001');
 
-        $this->assertStringContainsString('You control this tenant', $prompt);
+        $this->assertStringContainsString('You manage this tenant', $prompt);
         $this->assertStringContainsString('THIS TENANT DATABASE', $prompt);
         $this->assertStringContainsString('execute_sql', $prompt);
+        $this->assertStringContainsString('confirm_tenant_sql', $prompt);
         $this->assertStringContainsString('not COUNT(*) alone', $prompt);
+        $this->assertStringContainsString('Do not wipe a table', $prompt);
         $this->assertStringContainsString('DELETE, revert, and customize are tenant administrator functions', $prompt);
         $this->assertStringNotContainsString('PLAN_SYSTEM', $prompt);
     }
@@ -65,6 +67,23 @@ final class AssistantAdminPromptTest extends TestCase
 
         $this->assertStringContainsString('Just do the operation', $prompt);
         $this->assertStringContainsString('list each row', $prompt);
+        $this->assertStringContainsString('Ada Lopez', $prompt);
+        $this->assertStringContainsString('Apply runs it', $prompt);
         $this->assertStringNotContainsString('confirm the card', $prompt);
+    }
+
+    public function test_people_question_loads_the_user_section_and_the_protocol_is_last(): void
+    {
+        $prompt = AssistantAdminPrompt::forPlanner('How many users have admin rights?');
+
+        $this->assertStringContainsString('Table users', $prompt);
+        $this->assertStringContainsString('set_user_active', $prompt);
+        $schema = strpos($prompt, 'THIS TENANT DATABASE');
+        $protocol = strpos($prompt, 'Return one JSON object');
+        $this->assertIsInt($schema);
+        $this->assertIsInt($protocol);
+        $this->assertGreaterThan($schema, $protocol);
+        $this->assertStringNotContainsString('You may build tenant structure', $prompt);
+        $this->assertStringNotContainsString('Great question', $prompt);
     }
 }

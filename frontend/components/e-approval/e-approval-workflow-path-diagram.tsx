@@ -27,7 +27,12 @@ function bandWasNotSent(band: { nodes: { status?: string | null }[] }): boolean 
 }
 
 function bandIsFinished(band: { nodes: { status?: string | null }[] }): boolean {
-  return band.nodes.length > 0 && band.nodes.every((node) => FINISHED_STEP.has((node.status ?? "").trim().toLowerCase()));
+  const statuses = band.nodes.map((node) => (node.status ?? "").trim().toLowerCase());
+  if (statuses.some((status) => status === "pending" || status === "")) {
+    return false;
+  }
+
+  return statuses.some((status) => FINISHED_STEP.has(status));
 }
 
 function bandLineTone(

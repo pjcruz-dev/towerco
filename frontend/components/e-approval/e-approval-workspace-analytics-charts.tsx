@@ -23,23 +23,24 @@ export function EApprovalWorkspaceStatusBreakdownChart({ statusItems }: StatusPr
 }
 
 export function EApprovalWorkspaceSubsidiaryChart({ subsidiaryItems }: SubsidiaryProps) {
+  const useAmount = subsidiaryItems.some((item) => typeof item.amount === "number");
   const subsidiarySeries = useMemo(
     () =>
       subsidiaryItems.map((item, index) => ({
         key: item.key,
         label: item.label,
-        value: item.count,
+        value: useAmount ? (item.amount ?? 0) : item.count,
         fill: [DASHBOARD_CHART.brand, DASHBOARD_CHART.brandSoft, DASHBOARD_CHART.sky, DASHBOARD_CHART.muted][
           index % 4
         ],
       })),
-    [subsidiaryItems],
+    [subsidiaryItems, useAmount],
   );
 
   return (
     <DashboardBarChart
       title="By subsidiary"
-      description="Submission volume keyed from the subsidiary field"
+      description={useAmount ? "Amount by subsidiary" : "Submission volume keyed from the subsidiary field"}
       data={subsidiarySeries}
       layout="horizontal"
       emptyMessage="No subsidiary values found for the current filters."

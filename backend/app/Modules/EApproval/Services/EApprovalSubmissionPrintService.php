@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
 use App\Modules\EApproval\Support\EApprovalSiteStop;
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 
 final class EApprovalSubmissionPrintService
 {
@@ -81,14 +82,26 @@ final class EApprovalSubmissionPrintService
             'print_template_kind' => $printTemplateKind !== '' ? $printTemplateKind : null,
             'fields' => $fields,
             'grids' => $this->buildGridPrintModels($submission),
-            'approvals' => $submission->approvals->map(static fn ($a) => [
-                'step' => $a->step?->step_order,
-                'approver' => $a->approver?->name,
-                'status' => $a->status,
-                'remarks' => $a->remarks,
-                'signature' => $a->signature,
-                'acted_at' => $a->acted_at?->format('Y-m-d H:i'),
-            ])->values()->all(),
+            'approvals' => $submission->approvals->map(function ($a) use ($submission) {
+                $condition = is_array($a->step?->condition) ? $a->step->condition : [];
+                $labels = EApprovalWorkflowStepDefinitionSupport::decisionLabels(
+                    $condition === [] ? [] : ['condition' => $condition],
+                );
+                $stepOrder = (int) ($a->step?->step_order ?? 0);
+
+                return [
+                    'step' => $a->step?->step_order,
+                    'approver' => $a->approver?->name,
+                    'status' => $a->status,
+                    'remarks' => $a->remarks,
+                    'signature' => $a->signature,
+                    'acted_at' => $a->acted_at?->format('Y-m-d H:i'),
+                    'step_label' => $a->step?->label,
+                    'finance_action' => trim((string) ($condition['finance_action'] ?? '')) ?: null,
+                    'decision_label' => $labels['approve'],
+                    'proof_status' => $this->paymentProofStatus($submission, $stepOrder),
+                ];
+            })->values()->all(),
             'attachments' => $submission->attachments->reject(static fn ($a) => $a->isSuperseded())->map(static fn ($a) => [
                 'id' => (string) $a->id,
                 'file_name' => $a->file_name,
@@ -98,6 +111,28 @@ final class EApprovalSubmissionPrintService
             'template' => $template,
             'show_approval_trail' => count($submission->approvals) > 0,
         ];
+    }
+
+    /** Latest proof-of-payment status recorded on this step. Released and Hold are the choices. */
+    private function paymentProofStatus(EApprovalSubmission $submission, int $stepOrder): ?string
+    {
+        if ($stepOrder < 1) {
+            return null;
+        }
+        $finance = is_array($submission->finance_json) ? $submission->finance_json : [];
+        $entries = is_array($finance['payment_proofs'] ?? null) ? $finance['payment_proofs'] : [];
+        $status = null;
+        foreach ($entries as $entry) {
+            if (! is_array($entry) || (int) ($entry['step_order'] ?? 0) !== $stepOrder) {
+                continue;
+            }
+            $next = strtolower(trim((string) ($entry['status'] ?? '')));
+            if ($next === 'released' || $next === 'hold') {
+                $status = $next;
+            }
+        }
+
+        return $status;
     }
 
     /**
@@ -157,19 +192,24 @@ final class EApprovalSubmissionPrintService
 
             $key = (string) ($row->field?->name ?? $row->field_id);
             $options = is_array($row->field?->options) ? $row->field->options : [];
-            $columns = EApprovalFieldOptionsParser::gridColumns($options);
-            if ($columns === []) {
+            $layout = $this->gridPrintLayout($options);
+            if ($layout['columns'] === [] && $layout['hidden'] === []) {
                 continue;
             }
 
             $raw = is_scalar($row->value) ? trim((string) $row->value) : '';
-            $parsedRows = $this->parseGridRowsForPrint($raw, $columns);
+            $parsedRows = $this->keepPrintColumns(
+                $this->parseGridRowsForPrint($raw, $layout['all']),
+                $layout['indexes'],
+            );
 
             // Include empty grids so dynamic print body can still show column headers.
             $grids[] = [
                 'key' => $key,
                 'label' => (string) ($row->field?->label ?? $key),
-                'columns' => $columns,
+                'columns' => $layout['columns'],
+                'hidden_columns' => $layout['hidden'],
+                'total_columns' => $layout['totals'],
                 'rows' => $parsedRows,
             ];
             $seen[$key] = true;
@@ -185,20 +225,87 @@ final class EApprovalSubmissionPrintService
                 continue;
             }
             $options = is_array($field->options) ? $field->options : [];
-            $columns = EApprovalFieldOptionsParser::gridColumns($options);
-            if ($columns === []) {
+            $layout = $this->gridPrintLayout($options);
+            if ($layout['columns'] === [] && $layout['hidden'] === []) {
                 continue;
             }
             $grids[] = [
                 'key' => $key,
                 'label' => (string) ($field->label ?? $key),
-                'columns' => $columns,
+                'columns' => $layout['columns'],
+                'hidden_columns' => $layout['hidden'],
+                'total_columns' => $layout['totals'],
                 'rows' => [],
             ];
             $seen[$key] = true;
         }
 
         return $grids;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $options
+     * @return array{all: list<string>, columns: list<string>, hidden: list<string>, totals: list<string>, indexes: list<int>}
+     */
+    private function gridPrintLayout(?array $options): array
+    {
+        $all = EApprovalFieldOptionsParser::gridColumns($options);
+        $raw = is_array($options) && is_array($options['columns'] ?? null) ? $options['columns'] : [];
+        $hidden = [];
+        $totals = [];
+        foreach ($raw as $column) {
+            if (! is_array($column)) {
+                continue;
+            }
+            $label = trim((string) ($column['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            if (! empty($column['hidden'])) {
+                $hidden[] = $label;
+
+                continue;
+            }
+            if (! empty($column['show_total'])) {
+                $totals[] = $label;
+            }
+        }
+        $columns = [];
+        $indexes = [];
+        foreach ($all as $index => $label) {
+            if (in_array($label, $hidden, true)) {
+                continue;
+            }
+            $columns[] = $label;
+            $indexes[] = (int) $index;
+        }
+
+        return [
+            'all' => $all,
+            'columns' => $columns,
+            'hidden' => $hidden,
+            'totals' => $totals,
+            'indexes' => $indexes,
+        ];
+    }
+
+    /**
+     * @param  list<list<string>>  $rows
+     * @param  list<int>  $indexes
+     * @return list<list<string>>
+     */
+    private function keepPrintColumns(array $rows, array $indexes): array
+    {
+        $kept = [];
+        foreach ($rows as $row) {
+            $cells = [];
+            foreach ($indexes as $index) {
+                $cells[] = $row[$index] ?? '';
+            }
+            $kept[] = $cells;
+        }
+
+        return $kept;
     }
 
     /**
@@ -232,12 +339,52 @@ final class EApprovalSubmissionPrintService
                 $cells[] = $value;
             }
 
+            $cells = $this->fillVatSplitCells($columns, $cells);
             if ($hasContent) {
                 $normalized[] = $cells;
             }
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @param  list<string>  $cells
+     * @return list<string>
+     */
+    private function fillVatSplitCells(array $columns, array $cells): array
+    {
+        $indexOf = static function (array $columns, callable $match): ?int {
+            foreach ($columns as $index => $label) {
+                if ($match(strtolower(trim((string) $label)))) {
+                    return (int) $index;
+                }
+            }
+
+            return null;
+        };
+        $nonIndex = $indexOf($columns, static fn (string $label): bool => $label === 'non-vatable' || $label === 'nonvatable');
+        $netIndex = $indexOf($columns, static fn (string $label): bool => str_contains($label, 'net of vat'));
+        if ($nonIndex === null && $netIndex === null) {
+            return $cells;
+        }
+        $amountIndex = $indexOf($columns, static fn (string $label): bool => $label === 'amount');
+        $treatmentIndex = $indexOf($columns, static fn (string $label): bool => $label === 'vat treatment');
+        $vatIndex = $indexOf($columns, static fn (string $label): bool => $label === 'vat');
+        $amount = $amountIndex !== null ? (float) str_replace([',', '₱', ' '], '', (string) ($cells[$amountIndex] ?? '0')) : 0.0;
+        $treatment = $treatmentIndex !== null ? strtolower((string) ($cells[$treatmentIndex] ?? '')) : '';
+        $nonVatable = str_contains($treatment, 'non');
+        $vat = $vatIndex !== null ? (float) str_replace([',', '₱', ' '], '', (string) ($cells[$vatIndex] ?? '0')) : 0.0;
+        $net = $nonVatable ? 0.0 : max(0, round($amount - $vat, 2));
+        if ($nonIndex !== null) {
+            $cells[$nonIndex] = number_format($nonVatable ? $amount : 0, 2, '.', '');
+        }
+        if ($netIndex !== null) {
+            $cells[$netIndex] = number_format($net, 2, '.', '');
+        }
+
+        return $cells;
     }
 
     /**

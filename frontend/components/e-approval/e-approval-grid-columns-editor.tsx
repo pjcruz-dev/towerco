@@ -22,6 +22,8 @@ import {
 } from "@/modules/e-approval/field-options";
 
 const BUILTIN_SITE_FIELDS: EApprovalMasterDataColumnDef[] = [
+  { key: "label", label: "Label", type: "text" },
+  { key: "code", label: "Code", type: "text" },
   { key: "address", label: "Address", type: "text" },
   { key: "name", label: "Name", type: "text" },
 ];
@@ -64,11 +66,12 @@ type Props = {
   columns: GridColumnDef[];
   onChange: (columns: GridColumnDef[]) => void;
   disabled?: boolean;
+  formFields?: { name: string; label: string; type: string }[];
 };
 
 const GRID_COLUMN_TYPES = Object.keys(GRID_COLUMN_TYPE_LABELS) as GridColumnType[];
 
-export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Props) {
+export function EApprovalGridColumnsEditor({ columns, onChange, disabled, formFields = [] }: Props) {
   const setsQuery = useQuery({
     queryKey: ["e-approval", "master-data-sets"],
     queryFn: fetchEApprovalMasterDataSets,
@@ -120,6 +123,28 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
     }
     if (merged.type !== "select" || merged.master_data_key !== "sites") {
       delete merged.show_fields;
+      delete merged.multiple;
+      delete merged.subsidiary_field;
+    }
+    if (merged.type !== "currency" && merged.type !== "number") {
+      delete merged.show_total;
+    }
+    if (merged.type !== "date" && merged.type !== "date_range") {
+      delete merged.date_min;
+      delete merged.lead_days;
+      delete merged.date_min_field;
+    } else if (!merged.date_min) {
+      delete merged.date_min;
+      delete merged.lead_days;
+      delete merged.date_min_field;
+    } else if (merged.date_min !== "lead") {
+      delete merged.lead_days;
+    }
+    if (merged.date_min !== "field") {
+      delete merged.date_min_field;
+    }
+    if (merged.locked) {
+      delete merged.required;
     }
     next[index] = merged;
     onChange(next);
@@ -176,9 +201,8 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Liquidation and reimbursement link an activity, then the cost columns. Date and site stay on the activity
-          report. Per diem uses those dates. VAT treatment and VAT show only for a VATable type. PO lines use Qty ×
-          unit price.
+          Amount, VAT, Non-VATable, and VATable net can join the total row. A site column can hold several sites.
+          Expense type flags mark VATable, per diem, and lodging. Per diem and lodging use the dates on the line.
         </p>
       </div>
 
@@ -264,16 +288,107 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                 </div>
               </div>
 
-              {col.type === "date_range" ? (
-                <label className="flex items-center gap-2 border-t border-border/40 pt-2 text-sm">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  disabled={disabled}
+                  checked={col.hidden !== true}
+                  onCheckedChange={(checked) => updateColumn(index, { hidden: checked !== true })}
+                  className="size-4"
+                />
+                Show this column
+              </label>
+              {col.type === "currency" || col.type === "number" ? (
+                <label className="flex items-center gap-2 text-sm">
                   <Checkbox
                     disabled={disabled}
-                    checked={col.include_time !== false}
-                    onCheckedChange={(checked) => updateColumn(index, { include_time: checked === true })}
+                    checked={col.show_total === true}
+                    onCheckedChange={(checked) => updateColumn(index, { show_total: checked === true })}
                     className="size-4"
                   />
-                  Include time
+                  Add to the total row
                 </label>
+              ) : null}
+              {col.locked ? null : (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    disabled={disabled}
+                    checked={col.required === true}
+                    onCheckedChange={(checked) => updateColumn(index, { required: checked === true })}
+                    className="size-4"
+                  />
+                  Required
+                </label>
+              )}
+
+              {col.type === "date" || col.type === "date_range" ? (
+                <div className="space-y-2 border-t border-border/40 pt-2">
+                  {col.type === "date_range" ? (
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        disabled={disabled}
+                        checked={col.include_time !== false}
+                        onCheckedChange={(checked) => updateColumn(index, { include_time: checked === true })}
+                        className="size-4"
+                      />
+                      Include time
+                    </label>
+                  ) : null}
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Earliest date</Label>
+                    <Select
+                      disabled={disabled}
+                      value={col.date_min ?? ""}
+                      onChange={(e) => {
+                        const dateMin = e.target.value;
+                        if (dateMin === "today" || dateMin === "lead" || dateMin === "field") {
+                          updateColumn(index, {
+                            date_min: dateMin,
+                            lead_days: dateMin === "lead" ? col.lead_days ?? 3 : undefined,
+                            date_min_field: dateMin === "field" ? col.date_min_field ?? "" : undefined,
+                          });
+                          return;
+                        }
+                        updateColumn(index, { date_min: undefined, lead_days: undefined, date_min_field: undefined });
+                      }}
+                    >
+                      <option value="">Any day</option>
+                      <option value="today">Today — past dates disabled</option>
+                      <option value="lead">Today plus a lead</option>
+                      <option value="field">On or after a form date</option>
+                    </Select>
+                  </div>
+                  {col.date_min === "lead" ? (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Lead days</Label>
+                      <Input
+                        disabled={disabled}
+                        type="number"
+                        min={1}
+                        value={col.lead_days ?? 3}
+                        onChange={(e) => updateColumn(index, { lead_days: Number(e.target.value) || 3 })}
+                      />
+                    </div>
+                  ) : null}
+                  {col.date_min === "field" ? (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">On or after</Label>
+                      <Select
+                        disabled={disabled}
+                        value={col.date_min_field ?? ""}
+                        onChange={(e) => updateColumn(index, { date_min_field: e.target.value })}
+                      >
+                        <option value="">Choose a date field</option>
+                        {formFields
+                          .filter((candidate) => candidate.type === "date" || candidate.type === "date_range")
+                          .map((candidate) => (
+                            <option key={candidate.name} value={candidate.name}>
+                              {candidate.label}
+                            </option>
+                          ))}
+                      </Select>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {col.type === "select" ? (
@@ -323,7 +438,37 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                       </div>
                       {col.master_data_key === "sites" ? (
                         <div className="space-y-1.5">
-                          <p className="text-xs text-muted-foreground">Include on the line</p>
+                          <label className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              disabled={disabled}
+                              checked={col.multiple === true}
+                              onCheckedChange={(checked) => updateColumn(index, { multiple: checked === true })}
+                              className="size-4"
+                            />
+                            Allow multiple sites
+                          </label>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Must match</Label>
+                            <Select
+                              disabled={disabled}
+                              value={col.subsidiary_field ?? ""}
+                              onChange={(e) =>
+                                updateColumn(index, { subsidiary_field: e.target.value.trim() || undefined })
+                              }
+                            >
+                              <option value="">Do not check</option>
+                              {formFields
+                                .filter((candidate) => candidate.type !== "grid" && candidate.type !== "section")
+                                .map((candidate) => (
+                                  <option key={candidate.name} value={candidate.name}>
+                                    {candidate.label}
+                                  </option>
+                                ))}
+                            </Select>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Include on the line. Label and Code are on every site and turn on by themselves. Address, Site Code, and the other columns are separate.
+                          </p>
                           {siteFieldsForSet(siteSet).map((field) => {
                             const allowed = new Set(siteFieldKeys);
                             const selected = (col.show_fields ?? (allowed.has("address") ? ["address"] : [])).filter(
@@ -364,8 +509,24 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                           Add
                         </Button>
                       </div>
-                      {(col.choices ?? []).map((choice, choiceIndex) => (
-                        <div key={choiceIndex} className="flex gap-1">
+                      {(col.choices ?? []).map((choice, choiceIndex) => {
+                        const setFlag = (key: "vatable" | "per_diem" | "hotel", on: boolean) => {
+                          const choices = [...(col.choices ?? [])];
+                          const data = { ...(choice.data ?? {}) };
+                          if (on) {
+                            data[key] = true;
+                          } else {
+                            delete data[key];
+                          }
+                          choices[choiceIndex] = {
+                            ...choice,
+                            data: Object.keys(data).length > 0 ? data : undefined,
+                          };
+                          updateColumn(index, { choices });
+                        };
+                        return (
+                        <div key={choiceIndex} className="space-y-1 rounded-md border border-border/50 p-2">
+                          <div className="flex gap-1">
                           <Input
                             disabled={disabled}
                             className="h-8 flex-1 text-sm"
@@ -388,8 +549,42 @@ export function EApprovalGridColumnsEditor({ columns, onChange, disabled }: Prop
                             }}
                             placeholder="Value"
                           />
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            <label className="flex items-center gap-1.5 text-xs">
+                              <Checkbox
+                                disabled={disabled}
+                                checked={choice.data?.vatable === true}
+                                onCheckedChange={(checked) => setFlag("vatable", checked === true)}
+                                className="size-3.5"
+                              />
+                              VATable
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs">
+                              <Checkbox
+                                disabled={disabled}
+                                checked={choice.data?.per_diem === true}
+                                onCheckedChange={(checked) => setFlag("per_diem", checked === true)}
+                                className="size-3.5"
+                              />
+                              Per diem cap
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs">
+                              <Checkbox
+                                disabled={disabled}
+                                checked={choice.data?.hotel === true}
+                                onCheckedChange={(checked) => setFlag("hotel", checked === true)}
+                                className="size-3.5"
+                              />
+                              Lodging cap
+                            </label>
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        VATable puts the line in the VAT split. Per diem and Lodging use the daily caps and multiply the rate by the dates. A master data row uses the same three flags.
+                      </p>
                     </div>
                   )}
                 </div>

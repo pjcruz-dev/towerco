@@ -31,6 +31,8 @@ import {
   workflowPreviewToStepShowItems,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import { EApprovalAttachmentComments } from "@/components/e-approval/e-approval-attachment-comments";
+import { EApprovalProofOfPaymentDialog } from "@/components/e-approval/e-approval-proof-of-payment-dialog";
+import { EApprovalCommentImages } from "@/components/e-approval/e-approval-comment-images";
 import {
   EApprovalMentionField,
   mentionIdsInMessage,
@@ -157,6 +159,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const canManage = usePermission([permissions.eApprovalFormsManage]);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const [comment, setComment] = useState("");
+  const [commentImages, setCommentImages] = useState<File[]>([]);
   const [replyParentId, setReplyParentId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
   const [decisionRemarks, setDecisionRemarks] = useState("");
@@ -173,6 +176,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
+  const [proofOpen, setProofOpen] = useState(false);
+  const queuedDecisionRef = useRef<{
+    approvalId: string;
+    decision: "approved" | "rejected" | "acknowledged";
+    signature?: string | null;
+    proceedOptional?: boolean;
+    fileAudience?: EApprovalFileAudience;
+    fileRecipientIds?: string[];
+  } | null>(null);
   const [fileAudience, setFileAudience] = useState<EApprovalFileAudience>("everyone");
   const [fileRecipientIds, setFileRecipientIds] = useState<string[]>([]);
   const [rerouteUserId, setRerouteUserId] = useState("");
@@ -184,7 +196,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
-  const showFileAudience = Boolean(data?.optional_next);
+  const showFileAudience = Boolean(data?.publishes_on_approve);
 
   const workflowPreviewQuery = useQuery({
     queryKey: ["e-approval", "submission", submissionId, "workflow-preview", data?.status ?? ""],
@@ -269,10 +281,12 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       pin_w?: number;
       pin_h?: number;
       mention_user_ids?: string[];
+      images?: File[];
     }) =>
       postEApprovalComment(submissionId, payload),
     onSuccess: () => {
       setComment("");
+      setCommentImages([]);
       setReplyMessage("");
       setReplyParentId(null);
       commentsQuery.refetch();
@@ -338,6 +352,19 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     return data.approvals.find((approval) => approval.id === data.viewer_pending_approval_id);
   }, [data]);
 
+  const decisionLabels = useMemo(
+    () => ({
+      approve: pendingApproval?.decision_labels?.approve?.trim() || "Approve",
+      reject: pendingApproval?.decision_labels?.reject?.trim() || "Reject",
+      revision: pendingApproval?.decision_labels?.revision?.trim() || "Request revision",
+    }),
+    [
+      pendingApproval?.decision_labels?.approve,
+      pendingApproval?.decision_labels?.reject,
+      pendingApproval?.decision_labels?.revision,
+    ],
+  );
+
   const settlementVerdict = useMemo(() => {
     if (!data?.values) {
       return null;
@@ -401,6 +428,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       proceedOptional,
       fileAudience,
       fileRecipientIds,
+      paymentProof,
     }: {
       approvalId: string;
       decision: "approved" | "rejected" | "acknowledged";
@@ -408,27 +436,49 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       proceedOptional?: boolean;
       fileAudience?: EApprovalFileAudience;
       fileRecipientIds?: string[];
-    }) =>
-      decideEApprovalApproval(approvalId, {
+      paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
+    }) => {
+      const signing = (decision === "approved" || decision === "acknowledged") && paymentProof?.status !== "hold";
+      return decideEApprovalApproval(approvalId, {
         decision,
         remarks: decisionRemarksRef.current.trim() || undefined,
-        signature: decision === "approved" || decision === "acknowledged" ? signature : undefined,
-        signature_consent: decision === "approved" || decision === "acknowledged" ? true : undefined,
-        signature_storage_consent: decision === "approved" || decision === "acknowledged" ? true : undefined,
+        signature: signing ? signature : undefined,
+        signature_consent: signing ? true : undefined,
+        signature_storage_consent: signing ? true : undefined,
         release_reference: releaseReference.trim() || undefined,
         release_date: releaseDate || undefined,
         settlement_reference: settlementReference.trim() || undefined,
         proceed_optional: proceedOptional,
         file_audience: decision === "rejected" ? undefined : fileAudience,
         file_recipient_ids: decision === "rejected" ? undefined : fileRecipientIds,
-      }),
+        payment_proof: paymentProof
+          ? { status: paymentProof.status, comment: paymentProof.comment || undefined }
+          : undefined,
+        payment_files: paymentProof?.files,
+      });
+    },
     onSuccess: (_result, variables) => {
       invalidateEApprovalDecisionQueries(queryClient, submissionId);
       queryClient.invalidateQueries({ queryKey: ["e-approval", "me", "profile"] });
       queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
+      queuedDecisionRef.current = null;
+      setProofOpen(false);
       push({
         level: "success",
-        title: variables.decision === "acknowledged" ? "Reviewed" : "Decision recorded",
+        title:
+          variables.paymentProof?.status === "hold"
+            ? "Payment on hold"
+            : variables.paymentProof?.status === "released"
+              ? "Payment released"
+              : variables.decision === "acknowledged"
+                ? "Reviewed"
+                : "Decision recorded",
+        message:
+          variables.paymentProof?.status === "hold"
+            ? "The request stays on this step. The requestor is notified."
+            : variables.paymentProof?.status === "released"
+              ? "The request continues. The requestor is notified."
+              : undefined,
       });
       setDecisionRemarks("");
       setReleaseReference("");
@@ -451,8 +501,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     proceedOptional?: boolean;
     fileAudience?: EApprovalFileAudience;
     fileRecipientIds?: string[];
+    paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
   }) => {
     if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+      return;
+    }
+    if (payload.decision === "approved" && pendingApproval?.proof_of_payment && !payload.paymentProof) {
+      queuedDecisionRef.current = payload;
+      setProofOpen(true);
       return;
     }
     decideInFlightRef.current = true;
@@ -515,6 +571,18 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   );
   const { openPdfPreview, isGenerating: isPdfGenerating } = useEApprovalPdfPreview();
   const attachments = data?.attachments ?? [];
+  const reviewAttachments = attachments.filter(
+    (file) => !file.metadata?.superseded_at && !file.metadata?.comment_image,
+  );
+  const inlineFileFieldNames = new Set(
+    (data?.form_fields ?? [])
+      .filter((field) => field.type === "file" || field.type === "camera")
+      .map((field) => field.name?.trim() ?? "")
+      .filter((name) => name !== "" && (data?.values ?? []).some((value) => value.field_name === name)),
+  );
+  const leftoverAttachments = reviewAttachments.filter(
+    (file) => !inlineFileFieldNames.has(file.field_name?.trim() ?? ""),
+  );
   const visibleValues = (data?.values ?? []).filter(
     (v) => !shouldHideSubmissionAttachmentFieldValue(v, attachments),
   );
@@ -807,7 +875,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             <TabsList
               data-help="ea-detail-tabs"
               variant="line"
-              className="sticky -top-4 z-20 h-auto w-full justify-start gap-1 overflow-x-auto border-b border-border bg-background py-1.5 print:static"
+              className="sticky -top-6 z-20 h-auto w-full justify-start gap-1 overflow-x-auto border-b border-border bg-background py-2 lg:-top-8 print:static"
             >
               <TabsTrigger value="request" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
@@ -869,16 +937,39 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     <EApprovalSubmissionFormContent
                       values={data.values}
                       formFields={data.form_fields}
-                      attachments={(data.attachments ?? []).filter((file) => !file.metadata?.superseded_at)}
+                      attachments={reviewAttachments}
+                      renderFileReview={(fieldName) => {
+                        const files = reviewAttachments.filter((file) => file.field_name === fieldName);
+                        if (files.length === 0) {
+                          return null;
+                        }
+                        return (
+                          <EApprovalAttachmentComments
+                            submissionId={submissionId}
+                            attachments={files}
+                            comments={commentsQuery.data ?? []}
+                            posting={commentMutation.isPending}
+                            people={mentionPeople}
+                            canReplace={data.status === "pending" && Boolean(data.viewer_is_requestor || canManage)}
+                            onReplaced={() => {
+                              void queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId] });
+                            }}
+                            decision={fileDecision}
+                            focusCommentId={focusCommentId}
+                            onFocusHandled={() => setFocusCommentId(null)}
+                            onPost={(payload) => commentMutation.mutate(payload)}
+                          />
+                        );
+                      }}
                     />
                   </>
                 )}
 
-                {(data.attachments ?? []).length > 0 ? (
+                {leftoverAttachments.length > 0 ? (
                   <div data-help="ea-detail-attachments" className="mt-6 border-t border-border pt-4">
                     <EApprovalAttachmentComments
                       submissionId={submissionId}
-                      attachments={data.attachments}
+                      attachments={leftoverAttachments}
                       comments={commentsQuery.data ?? []}
                       posting={commentMutation.isPending}
                       people={mentionPeople}
@@ -891,6 +982,12 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       onFocusHandled={() => setFocusCommentId(null)}
                       onPost={(payload) => commentMutation.mutate(payload)}
                     />
+                  </div>
+                ) : reviewAttachments.length === 0 ? (
+                  <div data-help="ea-detail-attachments" className="sr-only">
+                    No attachments on this submission
+                  </div>
+                ) : null}
                     <EApprovalSignatureConsentDialog
                       open={fileConsent !== null}
                       onOpenChange={(open) => {
@@ -934,12 +1031,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         onErrorChange={setApprovalSignatureError}
                       />
                     </EApprovalSignatureConsentDialog>
-                  </div>
-                ) : (
-                  <div data-help="ea-detail-attachments" className="sr-only">
-                    No attachments on this submission
-                  </div>
-                )}
               </EApprovalSectionCard>
 
               {data.form_family === "cash_advance" && data.status === "approved" ? (
@@ -1310,7 +1401,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         <Label htmlFor="decision-remarks">Remarks</Label>
                         <Textarea
                           id="decision-remarks"
-                          placeholder="Optional for approve · required for reject or revision (min 5 characters)"
+                          placeholder={`Optional for ${decisionLabels.approve}. Required for ${decisionLabels.reject} or ${decisionLabels.revision} (min 5 characters).`}
                           value={decisionRemarks}
                           onChange={(e) => setDecisionRemarks(e.target.value)}
                           rows={3}
@@ -1396,11 +1487,22 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                 return;
                               }
                               proceedOptionalRef.current = false;
+                              if (pendingApproval.proof_of_payment) {
+                                queuedDecisionRef.current = {
+                                  approvalId: pendingApproval.id,
+                                  decision: "approved",
+                                  proceedOptional: false,
+                                  fileAudience: showFileAudience ? fileAudience : undefined,
+                                  fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+                                };
+                                setProofOpen(true);
+                                return;
+                              }
                               setSignatureConsentOpen(true);
                             }}
                             disabled={decideMutation.isPending || revisionMutation.isPending}
                           >
-                            Approve
+                            {decisionLabels.approve}
                           </Button>
                         </span>
                         {data.optional_next ? (
@@ -1434,13 +1536,24 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                 return;
                               }
                               proceedOptionalRef.current = true;
+                              if (pendingApproval.proof_of_payment) {
+                                queuedDecisionRef.current = {
+                                  approvalId: pendingApproval.id,
+                                  decision: "approved",
+                                  proceedOptional: true,
+                                  fileAudience: showFileAudience ? fileAudience : undefined,
+                                  fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+                                };
+                                setProofOpen(true);
+                                return;
+                              }
                               setSignatureConsentOpen(true);
                             }}
                             disabled={decideMutation.isPending || revisionMutation.isPending}
                           >
                             {data.optional_next.duty === "review"
-                              ? "Approve and send to reviewers"
-                              : "Approve and send to approvers"}
+                              ? `${decisionLabels.approve} and send to reviewers`
+                              : `${decisionLabels.approve} and send to approvers`}
                           </Button>
                         ) : null}
                         <span data-help="ea-decide-reject" className="inline-flex">
@@ -1456,7 +1569,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               decisionRemarks.trim().length < 5
                             }
                           >
-                            Reject
+                            {decisionLabels.reject}
                           </Button>
                         </span>
                         <span data-help="ea-decide-revision" className="inline-flex">
@@ -1470,7 +1583,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               decisionRemarks.trim().length < 5
                             }
                           >
-                            Request revision
+                            {decisionLabels.revision}
                           </Button>
                         </span>
                       </div>
@@ -1480,6 +1593,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         confirming={decideMutation.isPending}
                         onConfirm={() => {
                           setSignatureConsentOpen(false);
+                          const queued = queuedDecisionRef.current;
                           submitDecision({
                             approvalId: pendingApproval.id,
                             decision: "approved",
@@ -1487,6 +1601,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             proceedOptional: proceedOptionalRef.current,
                             fileAudience: showFileAudience ? fileAudience : undefined,
                             fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+                            paymentProof: queued?.paymentProof,
                           });
                         }}
                       />
@@ -1606,13 +1721,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               })()}
                             </button>
                           ) : null}
-                          <p className="mt-1 whitespace-pre-wrap">{c.message}</p>
+                          {c.message.trim() !== "" ? <p className="mt-1 whitespace-pre-wrap">{c.message}</p> : null}
+                          <EApprovalCommentImages images={c.images ?? []} />
                           {(c.replies ?? []).length > 0 ? (
                             <ul className="mt-2 space-y-2 border-l-2 border-border pl-3">
                               {c.replies.map((reply) => (
                                 <li key={reply.id}>
                                   <span className="font-medium">{reply.user_name}: </span>
                                   {reply.message}
+                                  <EApprovalCommentImages images={reply.images ?? []} />
                                 </li>
                               ))}
                             </ul>
@@ -1661,7 +1778,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                 ) : (
                   <p className="text-sm text-muted-foreground">No comments yet.</p>
                 )}
-                <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <div data-help="ea-detail-comment" className="mt-4 flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                   <EApprovalMentionField
                     value={comment}
                     people={mentionPeople}
@@ -1677,19 +1795,66 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     onClick={() =>
                       commentMutation.mutate({
                         message: comment.trim(),
+                        images: commentImages,
                         mention_user_ids: mentionIdsInMessage(comment, mentionPeople),
                       })
                     }
-                    disabled={!comment.trim() || commentMutation.isPending}
+                    disabled={(comment.trim() === "" && commentImages.length === 0) || commentMutation.isPending}
                   >
                     Post
                   </Button>
+                  </div>
+                  <label className="text-xs text-muted-foreground">
+                    <span className="mr-2 font-medium text-foreground">Add image</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      multiple
+                      className="text-xs"
+                      onChange={(event) => {
+                        const next = Array.from(event.target.files ?? []).slice(0, 4);
+                        setCommentImages(next);
+                        event.target.value = "";
+                      }}
+                    />
+                    {commentImages.length > 0 ? (
+                      <span className="mt-1 block">
+                        {commentImages.map((file) => file.name).join(", ")}
+                      </span>
+                    ) : null}
+                  </label>
                 </div>
               </EApprovalSectionCard>
             </TabsContent>
           </Tabs>
         ) : null}
       </div>
+      <EApprovalProofOfPaymentDialog
+        open={proofOpen}
+        submitting={decideMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open && !decideMutation.isPending && !queuedDecisionRef.current?.paymentProof) {
+            queuedDecisionRef.current = null;
+          }
+          if (!decideMutation.isPending) {
+            setProofOpen(open);
+          }
+        }}
+        onConfirm={(proof) => {
+          const queued = queuedDecisionRef.current;
+          if (!queued) {
+            return;
+          }
+          if (proof.status === "hold") {
+            setProofOpen(false);
+            submitDecision({ ...queued, paymentProof: proof });
+            return;
+          }
+          queuedDecisionRef.current = { ...queued, paymentProof: proof };
+          setProofOpen(false);
+          setSignatureConsentOpen(true);
+        }}
+      />
     </PermissionGate>
   );
 }

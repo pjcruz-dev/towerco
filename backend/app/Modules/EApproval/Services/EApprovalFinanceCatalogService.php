@@ -22,6 +22,8 @@ final class EApprovalFinanceCatalogService
             ['code' => 'gasoline', 'label' => 'Gasoline', 'data' => ['vatable' => true], 'sort' => 4],
             ['code' => 'lodging', 'label' => 'Lodging', 'data' => ['vatable' => true], 'sort' => 5],
             ['code' => 'per_diem', 'label' => 'Per Diem', 'data' => ['vatable' => false, 'per_diem' => true], 'sort' => 6],
+            ['code' => 'car_rental', 'label' => 'Car Rental', 'data' => ['vatable' => true], 'sort' => 7],
+            ['code' => 'others', 'label' => 'Others', 'data' => ['vatable' => true], 'sort' => 8],
         ]);
 
         $this->seedSet('departments', 'Departments', [

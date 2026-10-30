@@ -6,7 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
-use App\Modules\EApproval\Support\EApprovalSiteStop;
+use App\Modules\EApproval\Support\EApprovalGridCellText;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Carbon;
@@ -227,7 +227,7 @@ final class EApprovalFormValueDisplayService
             $cells = [];
             foreach ($columns as $index => $columnLabel) {
                 $key = (string) $index;
-                $cell = EApprovalSiteStop::display(trim((string) ($row[$key] ?? $row[$columnLabel] ?? '')));
+                $cell = EApprovalGridCellText::present($row[$key] ?? $row[$columnLabel] ?? '');
                 if ($cell !== '') {
                     $cells[] = $columnLabel.': '.$cell;
                 }

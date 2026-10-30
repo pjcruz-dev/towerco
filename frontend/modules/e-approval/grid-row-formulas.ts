@@ -199,6 +199,40 @@ function dateRangeOnRow(
   return range;
 }
 
+/**
+ * Inclusive days from the earliest start to the latest end across every line.
+ * Overlapping rows count once. A one-day range counts as one day.
+ */
+export function forecastActivitySpanDays(
+  columns: GridColumnDef[],
+  rows: Array<Record<string, string>>,
+): number | null {
+  let earliest: string | null = null;
+  let latest: string | null = null;
+  for (const row of rows) {
+    const range = dateRangeOnRow(columns, row);
+    if (!range?.from || !range.to) {
+      continue;
+    }
+    const from = calendarDate(range.from);
+    const to = calendarDate(range.to);
+    if (!isIsoDateString(from) || !isIsoDateString(to) || from > to) {
+      continue;
+    }
+    if (earliest === null || from < earliest) {
+      earliest = from;
+    }
+    if (latest === null || to > latest) {
+      latest = to;
+    }
+  }
+  if (!earliest || !latest) {
+    return null;
+  }
+
+  return inclusiveDays(earliest, latest);
+}
+
 /** Per diem days on this line. A one-day range counts as one day. */
 export function perDiemDaysOnRow(columns: GridColumnDef[], row: Record<string, string>): number | null {
   const range = dateRangeOnRow(columns, row);
@@ -231,6 +265,74 @@ export function lodgingNightsOnRow(columns: GridColumnDef[], row: Record<string,
   }
 
   return lodgingNights(range.from, range.to);
+}
+
+function cellAmount(columns: GridColumnDef[], row: Record<string, string>, pattern: RegExp): number {
+  const index = columns.findIndex((column) => pattern.test(column.label.trim()));
+  if (index < 0) {
+    return 0;
+  }
+
+  return Math.max(0, parseSubmissionAmount(row[columnKey(index, columns.length)] ?? "") ?? 0);
+}
+
+/** First per-diem or lodging cap break on a line. Empty when the line is within the daily max. */
+export function expenseRowCapMessage(
+  columns: GridColumnDef[],
+  row: Record<string, string>,
+  perDiemMaxPerDay: number | null,
+  lodgingMaxPerDay: number | null,
+): string | null {
+  const typedActual = expenseGridKeepsTypedAmount(columns);
+  if (expenseRowNeeds(columns, row).perDiem) {
+    const daily = typedActual
+      ? cellAmount(columns, row, /^amount$/i)
+      : cellAmount(columns, row, /^rate$/i) || cellAmount(columns, row, /^amount$/i);
+    if (daily > 0) {
+      const days = perDiemDaysOnRow(columns, row);
+      if (days === null || days < 1) {
+        return "Per diem needs the date on the line.";
+      }
+      const perDay = typedActual ? daily / days : daily;
+      if (perDiemMaxPerDay !== null && perDay > perDiemMaxPerDay + 0.001) {
+        return `Per diem cannot exceed ${formatGridCurrencyDisplay(perDiemMaxPerDay.toFixed(2))} per day.`;
+      }
+    }
+  }
+
+  if (rowIsLodging(columns, row)) {
+    const daily = typedActual
+      ? cellAmount(columns, row, /^amount$/i)
+      : cellAmount(columns, row, /^rate$/i) || cellAmount(columns, row, /^amount$/i);
+    if (daily > 0) {
+      const nights = lodgingNightsOnRow(columns, row);
+      if (nights === null || nights < 1) {
+        return "Lodging needs the date on the line.";
+      }
+      const perDay = typedActual ? daily / nights : daily;
+      if (lodgingMaxPerDay !== null && perDay > lodgingMaxPerDay + 0.001) {
+        return `Lodging cannot exceed ${formatGridCurrencyDisplay(lodgingMaxPerDay.toFixed(2))} per day.`;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function expenseLinesCapMessage(
+  columns: GridColumnDef[],
+  rows: Array<Record<string, string>>,
+  perDiemMaxPerDay: number | null,
+  lodgingMaxPerDay: number | null,
+): string | null {
+  for (const row of rows) {
+    const message = expenseRowCapMessage(columns, row, perDiemMaxPerDay, lodgingMaxPerDay);
+    if (message) {
+      return message;
+    }
+  }
+
+  return null;
 }
 
 export function rowIsLodging(columns: GridColumnDef[], row: Record<string, string>): boolean {
@@ -622,6 +724,9 @@ export function expenseColumnVisible(
   rows: Array<Record<string, string>>,
   column: GridColumnDef,
 ): boolean {
+  if (column.hidden) {
+    return false;
+  }
   if (
     expenseGridKeepsTypedAmount(columns) &&
     /^(quantity|rate)$/i.test(column.label.trim())
@@ -712,9 +817,18 @@ export function isHighlightedTotalColumn(column: GridColumnDef): boolean {
   return isRowTotalLabel(column.label) || column.type === "currency" && /^total$/i.test(column.label.trim());
 }
 
-/** Column indexes that should show footer sums (money columns). */
+/** Column indexes that should show footer sums. A checked total wins over the automatic money columns. */
 export function summableGridColumnIndexes(columns: GridColumnDef[]): boolean[] {
+  const explicit = columns.some((column) => column.show_total === true);
+  if (explicit) {
+    return columns.map((column) => column.show_total === true && column.hidden !== true);
+  }
+
   return columns.map((column) => isMoneyGridColumn(column, columns));
+}
+
+export function gridColumnsRequestTotals(columns: GridColumnDef[]): boolean {
+  return columns.some((column) => column.show_total === true && column.hidden !== true);
 }
 
 export function leadingNonSummableColSpan(summable: boolean[]): number {
@@ -734,5 +848,46 @@ export function sumGridColumnValues(
   return rows.reduce((sum, row) => {
     const parsed = parseSubmissionAmount(row[columnKey(colIndex, columnCount)] ?? "");
     return parsed === null ? sum : sum + parsed;
+  }, 0);
+}
+
+/**
+ * Footer figure for one column.
+ * Amount, VAT, Non-VATable, and VATable net use the line math (daily rate × days, then the VAT split).
+ * Any other checked column is a straight sum of its cells.
+ */
+export function gridColumnFooterValue(
+  columns: GridColumnDef[],
+  rows: Array<Record<string, string>>,
+  colIndex: number,
+): number {
+  const column = columns[colIndex];
+  if (!column) {
+    return 0;
+  }
+  const label = column.label.trim();
+  const amount = /^amount$/i.test(label);
+  const vat = /^vat$/i.test(label);
+  const nonVatable = /^non-?vatable$/i.test(label);
+  const net = /net of vat/i.test(label);
+  if (!amount && !vat && !nonVatable && !net) {
+    return sumGridColumnValues(rows, colIndex, columns.length);
+  }
+
+  return rows.reduce((sum, row) => {
+    if (amount) {
+      return sum + expenseLineMoney(columns, row);
+    }
+    const parts = expenseLineVatParts(columns, row);
+    if (!parts) {
+      return sum + (parseSubmissionAmount(row[columnKey(colIndex, columns.length)] ?? "") ?? 0);
+    }
+    if (vat) {
+      return sum + parts.vat;
+    }
+    if (nonVatable) {
+      return sum + parts.nonVatable;
+    }
+    return sum + parts.vatableNet;
   }, 0);
 }

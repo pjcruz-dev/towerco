@@ -32,9 +32,10 @@ final class EApprovalCommentService
             ->orderBy('created_at')
             ->get();
 
-        return $comments->map(static fn (EApprovalComment $c) => [
+        return $comments->map(fn (EApprovalComment $c) => [
             'id' => (string) $c->id,
             'message' => $c->message,
+            'images' => $this->imagePayload($c),
             'user_name' => $c->user?->name ?? '—',
             'created_at' => $c->created_at?->toIso8601String(),
             'attachment_id' => $c->attachment_id !== null ? (string) $c->attachment_id : null,
@@ -43,9 +44,10 @@ final class EApprovalCommentService
             'pin_y' => $c->pin_y !== null ? (float) $c->pin_y : null,
             'pin_w' => $c->pin_w !== null ? (float) $c->pin_w : null,
             'pin_h' => $c->pin_h !== null ? (float) $c->pin_h : null,
-            'replies' => $c->replies->map(static fn (EApprovalComment $r) => [
+            'replies' => $c->replies->map(fn (EApprovalComment $r) => [
                 'id' => (string) $r->id,
                 'message' => $r->message,
+                'images' => $this->imagePayload($r),
                 'user_name' => $r->user?->name ?? '—',
                 'created_at' => $r->created_at?->toIso8601String(),
                 'attachment_id' => $r->attachment_id !== null ? (string) $r->attachment_id : null,
@@ -66,6 +68,7 @@ final class EApprovalCommentService
         ?float $pinW = null,
         ?float $pinH = null,
         array $mentionUserIds = [],
+        array $imageAttachmentIds = [],
     ): EApprovalComment {
         $trimmed = trim($message);
         $attachmentId = $this->attachmentOnSubmission($submission, $attachmentId);
@@ -99,13 +102,37 @@ final class EApprovalCommentService
             'pin_y' => $pinY,
             'pin_w' => $pinW,
             'pin_h' => $pinH,
+            'image_attachment_ids' => $imageAttachmentIds === [] ? null : array_values($imageAttachmentIds),
         ]);
 
-        if ($notifyStakeholders && $trimmed !== '') {
-            $this->notifyStakeholders($submission, $actor, $trimmed, $parentId, $mentionUserIds);
+        $notice = $trimmed !== '' ? $trimmed : ($imageAttachmentIds !== [] ? __('Shared an image.') : '');
+        if ($notifyStakeholders && $notice !== '') {
+            $this->notifyStakeholders($submission, $actor, $notice, $parentId, $mentionUserIds);
         }
 
         return $comment;
+    }
+
+    /**
+     * @return list<array{id: string, file_name: string}>
+     */
+    private function imagePayload(EApprovalComment $comment): array
+    {
+        $ids = is_array($comment->image_attachment_ids) ? $comment->image_attachment_ids : [];
+        $ids = array_values(array_filter($ids, static fn ($id) => is_string($id) && $id !== ''));
+        if ($ids === []) {
+            return [];
+        }
+
+        return EApprovalAttachment::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->map(static fn (EApprovalAttachment $file): array => [
+                'id' => (string) $file->id,
+                'file_name' => (string) $file->file_name,
+            ])
+            ->values()
+            ->all();
     }
 
     private function attachmentOnSubmission(EApprovalSubmission $submission, ?string $attachmentId): ?string

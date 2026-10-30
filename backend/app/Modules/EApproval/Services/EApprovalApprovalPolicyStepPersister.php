@@ -138,6 +138,12 @@ final class EApprovalApprovalPolicyStepPersister
                 $condition = is_array($condition) ? $condition : [];
                 $condition['mail'] = $mail;
             }
+
+            $decisionLabels = EApprovalWorkflowStepDefinitionSupport::storedDecisionLabels($definition);
+            if ($decisionLabels !== null && ! EApprovalReviewStep::isReviewDefinition($definition)) {
+                $condition = is_array($condition) ? $condition : [];
+                $condition['decision_labels'] = $decisionLabels;
+            }
             $label = EApprovalFormMailConfig::cleanPublicLabel($definition['label'] ?? '');
 
             $step = EApprovalWorkflowStep::query()->create([

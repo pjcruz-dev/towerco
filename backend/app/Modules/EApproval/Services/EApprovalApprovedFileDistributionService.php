@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Notifications\EApprovalApprovedFilesNotification;
 use App\Modules\EApproval\Support\EApprovalFormMailConfig;
+use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Support\SafeMailNotificationSender;
 use Illuminate\Support\Facades\Log;
@@ -17,13 +18,21 @@ final class EApprovalApprovedFileDistributionService
     {
         $submission->loadMissing('form');
         $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
+        if (! EApprovalFormWorkflowOptions::sendApprovedFiles($metadata)) {
+            return;
+        }
         if (! EApprovalFormMailConfig::eventEnabled($metadata, 'approved_files')) {
+            Log::warning('e_approval.approved_files_skipped', [
+                'submission_id' => (string) $submission->id,
+                'reason' => 'mail_event_off',
+            ]);
+
             return;
         }
 
         $choice = $this->choiceOnSubmission($submission);
         if ($choice === null) {
-            return;
+            $choice = ['audience' => 'everyone', 'ids' => []];
         }
 
         $recipients = $choice['audience'] === 'everyone'
@@ -44,9 +53,10 @@ final class EApprovalApprovedFileDistributionService
             tenant()?->getTenantKey(),
         );
 
-        SafeMailNotificationSender::sendAfterResponse($recipients, $notification);
+        SafeMailNotificationSender::sendNow($recipients, $notification);
 
-        Log::info('e_approval.approved_files_sent', [
+        // Production keeps warnings. Info from this send was invisible there.
+        Log::warning('e_approval.approved_files_sent', [
             'submission_id' => (string) $submission->id,
             'audience' => $choice['audience'],
             'recipients' => count($recipients),

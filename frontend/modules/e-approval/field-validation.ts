@@ -1,4 +1,5 @@
-import { gridHasContent, parseGridColumns, parseGridValue, parseSelectChoices } from "@/modules/e-approval/field-options";
+import { gridHasContent, parseGridColumnDefs, parseGridColumns, parseGridValue, parseSelectChoices } from "@/modules/e-approval/field-options";
+import { expenseGridKeepsTypedAmount, expenseLinesCapMessage, forecastActivitySpanDays } from "@/modules/e-approval/grid-row-formulas";
 import {
   isCheckboxMulti,
   isCheckboxTruthy,
@@ -28,7 +29,14 @@ import {
   type EApprovalCameraPhotoMetadata,
 } from "@/modules/e-approval/field-camera-options";
 import { validateSelectedFiles } from "@/modules/e-approval/field-file-options";
-import { isFieldVisible } from "@/modules/e-approval/field-visibility";
+import { fieldsPassingVisibility } from "@/modules/e-approval/field-visibility";
+import {
+  dateBoundMessage,
+  dateValueBreaksBound,
+  gridColumnDateIssue,
+  gridColumnSubsidiaryIssue,
+  parseDateBound,
+} from "@/modules/e-approval/date-bounds";
 import {
   parseLocationValue,
   parseRatingMaxStars,
@@ -45,6 +53,9 @@ export type EApprovalFieldValidationRules = {
   max_length?: number;
   default?: string;
   help_text?: string;
+  date_min?: "today" | "lead" | "field";
+  lead_days?: number;
+  date_min_field?: string;
 };
 
 export function parseFieldValidation(field: EApprovalFormFieldInput): EApprovalFieldValidationRules {
@@ -62,6 +73,9 @@ export function parseFieldValidation(field: EApprovalFormFieldInput): EApprovalF
       typeof v.max_length === "number" && Number.isFinite(v.max_length) ? Math.max(1, v.max_length) : undefined,
     default: typeof v.default === "string" ? v.default : undefined,
     help_text: typeof v.help_text === "string" ? v.help_text : undefined,
+    date_min: v.date_min === "today" || v.date_min === "lead" || v.date_min === "field" ? v.date_min : undefined,
+    lead_days: typeof v.lead_days === "number" && Number.isFinite(v.lead_days) ? Math.max(1, Math.floor(v.lead_days)) : undefined,
+    date_min_field: typeof v.date_min_field === "string" ? v.date_min_field : undefined,
   };
 }
 
@@ -96,6 +110,15 @@ export function patchFieldValidation(
   if (patch.help_text !== undefined) {
     next.help_text = patch.help_text.trim() || undefined;
   }
+  if (patch.date_min !== undefined) {
+    next.date_min = patch.date_min;
+  }
+  if (patch.lead_days !== undefined) {
+    next.lead_days = patch.lead_days > 0 ? Math.floor(patch.lead_days) : undefined;
+  }
+  if (patch.date_min_field !== undefined) {
+    next.date_min_field = patch.date_min_field.trim() || undefined;
+  }
 
   const out: Record<string, unknown> = { ...readValidationRecord(field) };
 
@@ -129,6 +152,24 @@ export function patchFieldValidation(
     delete out.help_text;
   }
 
+  if (next.date_min) {
+    out.date_min = next.date_min;
+    if (next.date_min === "lead" && next.lead_days) {
+      out.lead_days = next.lead_days;
+    } else {
+      delete out.lead_days;
+    }
+    if (next.date_min === "field" && next.date_min_field) {
+      out.date_min_field = next.date_min_field;
+    } else {
+      delete out.date_min_field;
+    }
+  } else if ("date_min" in patch) {
+    delete out.date_min;
+    delete out.lead_days;
+    delete out.date_min_field;
+  }
+
   return Object.keys(out).length > 0 ? out : null;
 }
 
@@ -142,6 +183,9 @@ export type ValidateSubmissionValuesOptions = {
   existingAttachmentCountsByField?: Record<string, number>;
   /** Pending camera photo metadata keyed by field name then file name. */
   cameraMetadataByField?: Record<string, Record<string, EApprovalCameraPhotoMetadata>>;
+  /** Daily caps from E-Forms settings. Null leaves that cap unchecked. */
+  perDiemMaxPerDay?: number | null;
+  lodgingMaxPerDay?: number | null;
 };
 
 export function validateSubmissionValues(
@@ -152,13 +196,14 @@ export function validateSubmissionValues(
 ): SubmissionValidationIssue[] {
   const issues: SubmissionValidationIssue[] = [];
   const approverOptions = options.approverOptions ?? [];
+  const visibleNames = new Set(fieldsPassingVisibility(fields, values).map((field) => field.name));
 
   for (const field of fields) {
     if (isComposeStructuralFieldType(field.type)) {
       continue;
     }
 
-    if (!isFieldVisible(field, values)) {
+    if (!visibleNames.has(field.name)) {
       continue;
     }
 
@@ -188,12 +233,71 @@ export function validateSubmissionValues(
     }
 
     if (field.type === "grid") {
-      if (rules.required) {
-        const columns = parseGridColumns(field);
-        const grid = parseGridValue(values[field.name] ?? "", columns.length);
-        if (!gridHasContent(grid)) {
-          issues.push({ fieldName: field.name, message: `${label} is required.` });
+      const columnDefs = parseGridColumnDefs(field);
+      const grid = parseGridValue(values[field.name] ?? "", Math.max(columnDefs.length, parseGridColumns(field).length));
+      if (rules.required && !gridHasContent(grid)) {
+        issues.push({ fieldName: field.name, message: `${label} is required.` });
+      }
+      if (field.name === "expense_lines") {
+        const capMessage = expenseLinesCapMessage(
+          columnDefs,
+          grid.rows,
+          options.perDiemMaxPerDay ?? null,
+          options.lodgingMaxPerDay ?? null,
+        );
+        if (capMessage) {
+          issues.push({ fieldName: field.name, message: capMessage });
         }
+      }
+      if (field.name === "expense_lines" && !expenseGridKeepsTypedAmount(columnDefs)) {
+        const span = forecastActivitySpanDays(columnDefs, grid.rows);
+        if (span !== null && span > 15) {
+          issues.push({
+            fieldName: field.name,
+            message: "Forecast activities can cover at most 15 days, from the earliest start to the latest end.",
+          });
+        }
+      }
+      columnDefs.forEach((column, index) => {
+        if (!column.required || column.hidden) {
+          return;
+        }
+        const missing = grid.rows.some((row) => {
+          const valuesInRow = Object.values(row).some((cell) => cell.trim() !== "");
+          return valuesInRow && (row[String(index)] ?? "").trim() === "";
+        });
+        if (missing) {
+          issues.push({
+            fieldName: field.name,
+            message: `${column.label} is required on each line.`,
+          });
+        }
+      });
+      let gridRuleMessage: string | null = null;
+      let subsidiaryIssue: SubmissionValidationIssue | null = null;
+      for (const [index, column] of columnDefs.entries()) {
+        if (column.hidden) {
+          continue;
+        }
+        for (const row of grid.rows) {
+          const cell = row[String(index)] ?? "";
+          if (!gridRuleMessage) {
+            gridRuleMessage = gridColumnDateIssue(column, cell, values, fields);
+          }
+          if (!subsidiaryIssue) {
+            const siteMessage = gridColumnSubsidiaryIssue(column, cell, values);
+            const matchField = column.subsidiary_field?.trim() ?? "";
+            if (siteMessage && matchField !== "") {
+              subsidiaryIssue = { fieldName: matchField, message: siteMessage };
+            }
+          }
+        }
+      }
+      if (gridRuleMessage) {
+        issues.push({ fieldName: field.name, message: gridRuleMessage });
+      }
+      if (subsidiaryIssue) {
+        issues.push(subsidiaryIssue);
       }
       continue;
     }
@@ -292,6 +396,13 @@ export function validateSubmissionValues(
       const existingCount = options.existingAttachmentCountsByField?.[field.name] ?? 0;
       const total = files.length + existingCount;
 
+      if (value !== "" && total === 0) {
+        issues.push({
+          fieldName: field.name,
+          message: `${label}: choose the file again. The name is saved without the file.`,
+        });
+      }
+
       if (field.type === "camera") {
         const cameraOpts = parseCameraFieldOptions(field);
         const min = cameraOpts.min;
@@ -377,10 +488,20 @@ export function validateSubmissionValues(
       continue;
     }
 
-    if (field.type === "date_range") {
-      const rangeError = validateDateRangeValue(value, rules.required === true, label);
-      if (rangeError) {
-        issues.push({ fieldName: field.name, message: rangeError });
+    if (field.type === "date" || field.type === "date_range") {
+      if (field.type === "date_range") {
+        const rangeError = validateDateRangeValue(value, rules.required === true, label);
+        if (rangeError) {
+          issues.push({ fieldName: field.name, message: rangeError });
+          continue;
+        }
+      } else if (rules.required && !value) {
+        issues.push({ fieldName: field.name, message: `${label} is required.` });
+        continue;
+      }
+      const bound = parseDateBound(rules);
+      if (value && bound.kind !== "none" && dateValueBreaksBound(value, bound, values)) {
+        issues.push({ fieldName: field.name, message: dateBoundMessage(label, bound, fields) });
       }
       continue;
     }
@@ -444,7 +565,16 @@ export function validateSubmissionValues(
     }
   }
 
-  return issues;
+  const seen = new Set<string>();
+  const unique: SubmissionValidationIssue[] = [];
+  for (const issue of issues) {
+    if (seen.has(issue.fieldName)) {
+      continue;
+    }
+    seen.add(issue.fieldName);
+    unique.push(issue);
+  }
+  return unique;
 }
 
 export function fieldSupportsValidationRules(type: string): boolean {

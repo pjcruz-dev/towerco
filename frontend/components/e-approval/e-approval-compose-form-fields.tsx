@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EApprovalComposeReviewSummary } from "@/components/e-approval/e-approval-compose-review-summary";
 import { EApprovalComposeStepNav } from "@/components/e-approval/e-approval-compose-step-nav";
@@ -66,6 +66,8 @@ type Props = {
   onCurrentStepChange?: (step: number) => void;
   onStepMetaChange?: (meta: ComposeFormStepMeta) => void;
   onStepValidationIssues?: (issues: SubmissionValidationIssue[]) => void;
+  /** Errors for fields the requestor has already edited. Does not scroll. */
+  onLiveValidationIssues?: (issues: SubmissionValidationIssue[]) => void;
   className?: string;
   /** Fields pre-filled from registry — shown locked with an unlock toggle. */
   prefillReadOnlyFields?: Set<string>;
@@ -99,11 +101,13 @@ export function EApprovalComposeFormFields({
   onCurrentStepChange,
   onStepMetaChange,
   onStepValidationIssues,
+  onLiveValidationIssues,
   className,
   prefillReadOnlyFields,
   hidePrefillFieldBadges,
 }: Props) {
   const composeConfig = composeConfigOverride ?? parseFormComposeConfig(formMetadata);
+  const touchedFields = useRef(new Set<string>());
   const contentSteps = useMemo(
     () => buildFormComposeSteps(fields, composeConfig.stepSource),
     [fields, composeConfig.stepSource],
@@ -253,13 +257,38 @@ export function EApprovalComposeFormFields({
 
   const handleFieldChange = useCallback(
     (fieldName: string, value: string) => {
+      touchedFields.current.add(fieldName);
       const stepIndex = findComposeStepIndexForFieldName(contentSteps, fieldName);
       if (stepIndex >= 0) {
         invalidateFromStep(stepIndex);
       }
       onChange(fieldName, value);
+      if (!onLiveValidationIssues || isReviewStep) {
+        return;
+      }
+      const stepFields = stepped && activeStep ? activeStep.fields : fields;
+      const nextValues = { ...values, [fieldName]: value };
+      const issues = validateSubmissionValues(
+        stepFields,
+        nextValues,
+        fileSelections ?? {},
+        validationOptions ?? {},
+      ).filter((issue) => touchedFields.current.has(issue.fieldName));
+      onLiveValidationIssues(issues);
     },
-    [contentSteps, invalidateFromStep, onChange],
+    [
+      activeStep,
+      contentSteps,
+      fields,
+      fileSelections,
+      invalidateFromStep,
+      isReviewStep,
+      onChange,
+      onLiveValidationIssues,
+      stepped,
+      validationOptions,
+      values,
+    ],
   );
 
   const handleFileChange = useCallback(

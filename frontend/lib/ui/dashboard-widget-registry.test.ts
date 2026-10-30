@@ -23,6 +23,26 @@ describe("dashboard-widget-registry", () => {
     expect(visible.map((w) => w.id)).toEqual(["a", "b"]);
   });
 
+  it("keeps order when PHP encodes empty span and option maps as arrays", () => {
+    expect(
+      normalizeDashboardLayoutPrefs({
+        widgetOrder: ["recent_activity", "kpis", "submissions_table"],
+        hiddenWidgetIds: ["audit_log"],
+        enabledWidgetIds: ["kpis", "recent_activity", "submissions_table"],
+        spans: [],
+        widgetOptions: [],
+        pageChrome: [],
+      }),
+    ).toEqual({
+      widgetOrder: ["recent_activity", "kpis", "submissions_table"],
+      hiddenWidgetIds: ["audit_log"],
+      enabledWidgetIds: ["kpis", "recent_activity", "submissions_table"],
+      spans: {},
+      widgetOptions: {},
+      pageChrome: {},
+    });
+  });
+
   it("normalizes partial layout prefs", () => {
     expect(normalizeDashboardLayoutPrefs({ widgetOrder: ["x"] })).toEqual({
       widgetOrder: ["x"],

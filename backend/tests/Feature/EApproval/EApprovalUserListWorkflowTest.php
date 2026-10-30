@@ -178,6 +178,77 @@ final class EApprovalUserListWorkflowTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_fixed_approver_list_expands_named_people_and_round_trips(): void
+    {
+        $formRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/forms', [
+                'name' => 'Fixed stakeholder list',
+                'description' => 'Named people on a list step',
+                'status' => 'published',
+                'fields' => [
+                    ['type' => 'text', 'name' => 'reason', 'label' => 'Reason'],
+                ],
+                'steps' => [[
+                    'type' => 'user_list',
+                    'list_source' => 'fixed',
+                    'fixed_approver_ids' => [
+                        (string) $this->legal->id,
+                        '',
+                        (string) $this->finance->id,
+                    ],
+                    'parallel_mode' => 'any',
+                    'step_order' => 1,
+                ]],
+            ]);
+
+        $formRes->assertCreated();
+        $formId = (string) $formRes->json('data.form.id');
+
+        $show = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson("/api/v1/e-approval/forms/{$formId}");
+
+        $show->assertOk();
+        $show->assertJsonPath('data.steps.0.list_source', 'fixed');
+        $show->assertJsonPath('data.steps.0.fixed_approver_ids', [
+            (string) $this->legal->id,
+            (string) $this->finance->id,
+        ]);
+        $show->assertJsonPath('data.steps.0.parallel_mode', 'any');
+
+        $subRes = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/e-approval/submissions', [
+                'form_id' => $formId,
+                'values' => [
+                    'reason' => 'Named approvers',
+                ],
+            ]);
+
+        $subRes->assertCreated();
+        $submissionId = $subRes->json('data.id');
+
+        $pending = EApprovalRequestApproval::query()
+            ->where('submission_id', $submissionId)
+            ->where('status', EApprovalApprovalStatus::PENDING)
+            ->get();
+
+        $this->assertCount(2, $pending);
+        $this->assertNotNull($pending->firstWhere('approver_id', (string) $this->legal->id));
+        $this->assertNotNull($pending->firstWhere('approver_id', (string) $this->finance->id));
+
+        $legalApproval = $pending->firstWhere('approver_id', (string) $this->legal->id);
+        $this->actingAs($this->legal, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson("/api/v1/e-approval/approvals/{$legalApproval->id}/decide", [
+                'decision' => 'approved',
+            ])
+            ->assertOk();
+
+        $this->assertSame('approved', EApprovalSubmission::query()->findOrFail($submissionId)->status);
+    }
+
     public function test_workflow_preview_expands_user_list(): void
     {
         $formId = $this->createUserListForm(mode: 'n_of_m', quorum: 2);

@@ -36,6 +36,7 @@ final class TowerOsSchedule
             self::job('dyn:run-scheduled-tasks', 'Platform', 'Saved cron jobs', 'Every minute'),
             self::job('assets:accountability-reminders', 'Asset management', 'Unsigned accountability reminders', 'Daily at 08:00'),
             self::job('e-approval:liquidation-reminders', 'E-Forms', 'Cash advance liquidation reminders', 'Daily at 08:15'),
+            self::job('e-approval:auto-approve', 'E-Forms', 'Auto-approve idle workflow steps', 'Hourly'),
         ];
     }
 
@@ -56,6 +57,7 @@ final class TowerOsSchedule
         $schedule->command('dyn:run-scheduled-tasks')->everyMinute()->withoutOverlapping();
         $schedule->command('assets:accountability-reminders')->dailyAt('08:00')->withoutOverlapping();
         $schedule->command('e-approval:liquidation-reminders')->dailyAt('08:15')->withoutOverlapping();
+        $schedule->command('e-approval:auto-approve')->hourly()->withoutOverlapping();
     }
 
     /**

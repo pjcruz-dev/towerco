@@ -299,6 +299,33 @@ export function EApprovalFieldPropertiesPanel({
         />
       ) : null}
 
+      {field.type !== "grid" && field.type !== "section" && allFields.some((candidate) => candidate.type === "grid") ? (
+        <div className="space-y-1 rounded-lg border border-border/60 bg-muted/10 p-3">
+          <Label htmlFor="ea-lock-when-grid">Lock when a grid has a line</Label>
+          <Select
+            id="ea-lock-when-grid"
+            value={
+              field.options && typeof field.options === "object" && !Array.isArray(field.options)
+                ? String((field.options as { lock_when_grid?: unknown }).lock_when_grid ?? "")
+                : ""
+            }
+            onChange={(e) => updateOptions({ lock_when_grid: e.target.value.trim() || undefined })}
+          >
+            <option value="">Do not lock</option>
+            {allFields
+              .filter((candidate) => candidate.type === "grid")
+              .map((candidate) => (
+                <option key={candidate.name} value={candidate.name}>
+                  {candidate.label}
+                </option>
+              ))}
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Once that grid has a line, this field stays as it was. Clear the lines to change it.
+          </p>
+        </div>
+      ) : null}
+
       {showRules ? (
         <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-3">
           <p className="text-xs font-medium text-foreground">Validation & display</p>
@@ -318,6 +345,65 @@ export function EApprovalFieldPropertiesPanel({
                   ? "Required (select at least one row)"
                 : "Required field"}
           </label>
+          {field.type === "date" || field.type === "date_range" ? (
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label htmlFor="ea-field-date-min">Earliest date</Label>
+                <Select
+                  id="ea-field-date-min"
+                  value={validation.date_min ?? ""}
+                  onChange={(e) => {
+                    const dateMin = e.target.value;
+                    if (dateMin === "today" || dateMin === "lead" || dateMin === "field") {
+                      updateValidation({
+                        date_min: dateMin,
+                        lead_days: dateMin === "lead" ? validation.lead_days ?? 3 : undefined,
+                        date_min_field: dateMin === "field" ? validation.date_min_field ?? "" : undefined,
+                      });
+                      return;
+                    }
+                    updateValidation({ date_min: undefined, lead_days: undefined, date_min_field: undefined });
+                  }}
+                >
+                  <option value="">Any day</option>
+                  <option value="today">Today — past dates disabled</option>
+                  <option value="lead">Today plus a lead</option>
+                  <option value="field">On or after another date</option>
+                </Select>
+              </div>
+              {validation.date_min === "lead" ? (
+                <div className="space-y-1">
+                  <Label htmlFor="ea-field-lead-days">Lead days</Label>
+                  <Input
+                    id="ea-field-lead-days"
+                    type="number"
+                    min={1}
+                    value={validation.lead_days ?? 3}
+                    onChange={(e) => updateValidation({ lead_days: Number(e.target.value) || 3 })}
+                  />
+                </div>
+              ) : null}
+              {validation.date_min === "field" ? (
+                <div className="space-y-1">
+                  <Label htmlFor="ea-field-date-min-field">On or after</Label>
+                  <Select
+                    id="ea-field-date-min-field"
+                    value={validation.date_min_field ?? ""}
+                    onChange={(e) => updateValidation({ date_min_field: e.target.value })}
+                  >
+                    <option value="">Choose a date field</option>
+                    {allFields
+                      .filter((candidate, index) => index !== fieldIndex && (candidate.type === "date" || candidate.type === "date_range"))
+                      .map((candidate) => (
+                        <option key={candidate.name} value={candidate.name}>
+                          {candidate.label}
+                        </option>
+                      ))}
+                  </Select>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {field.type !== "checkbox" &&
           field.type !== "matrix" &&
           field.type !== "size_matrix" &&
@@ -420,6 +506,11 @@ export function EApprovalFieldPropertiesPanel({
       {field.type === "grid" && (
         <EApprovalGridColumnsEditor
           columns={parseGridColumnDefs(field)}
+          formFields={allFields.map((candidate) => ({
+            name: candidate.name,
+            label: candidate.label,
+            type: candidate.type,
+          }))}
           onChange={(columns) => updateOptions(setGridColumnDefs(columns) as Record<string, unknown>)}
         />
       )}

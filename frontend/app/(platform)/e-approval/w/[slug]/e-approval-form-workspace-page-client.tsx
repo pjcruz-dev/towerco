@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,7 +19,13 @@ import {
   EApprovalWorkspaceSubsidiaryChart,
 } from "@/components/e-approval/e-approval-workspace-analytics-charts";
 import { EApprovalWorkspaceAuditLog } from "@/components/e-approval/e-approval-workspace-audit-log";
+import { EApprovalWorkspaceDraftQueue } from "@/components/e-approval/e-approval-workspace-draft-queue";
 import { EApprovalWorkspaceRecentActivity } from "@/components/e-approval/e-approval-workspace-recent-activity";
+import {
+  EApprovalWorkspaceLinesTable,
+  EApprovalWorkspaceViewSwitch,
+  type WorkspaceListMode,
+} from "@/components/e-approval/e-approval-workspace-lines-table";
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { FilterSelect } from "@/components/forms/filter-select";
@@ -42,6 +49,7 @@ import {
   downloadEApprovalWorkspaceExport,
   fetchEApprovalFormWorkspaceDashboard,
   fetchEApprovalSubmissionsExportColumns,
+  fetchEApprovalWorkspaceLines,
   fetchEApprovalWorkspaceSubmissions,
   type EApprovalWorkspaceSubmissionRow,
 } from "@/lib/api/modules/e-approval-api";
@@ -86,7 +94,9 @@ const SOFT_HIDEABLE_WIDGET_TYPES = new Set<WorkspaceWidgetType>([
   "audit_log",
 ]);
 
-type Props = { slug: string };
+type Props = { slug: string; queue?: string | null };
+
+type WorkspaceExportLayout = "submissions" | "line_items";
 
 type WorkspacePrefs = {
   activeViewId: string;
@@ -94,6 +104,10 @@ type WorkspacePrefs = {
   department: string;
   statusFilter: string;
   density: "comfortable" | "compact";
+  exportLayout: WorkspaceExportLayout;
+  gridFieldId: string;
+  listMode: WorkspaceListMode;
+  awaitingMe: boolean;
 } & DashboardLayoutPrefs;
 
 const PER_PAGE = 25;
@@ -115,6 +129,10 @@ const DEFAULT_PREFS: WorkspacePrefs = {
   department: "",
   statusFilter: "",
   density: "comfortable",
+  exportLayout: "submissions",
+  gridFieldId: "",
+  listMode: "requests",
+  awaitingMe: false,
   ...EMPTY_DASHBOARD_LAYOUT_PREFS,
   spans: {},
   widgetOptions: {},
@@ -143,7 +161,11 @@ function isWorkspacePrefs(value: unknown): value is WorkspacePrefs {
     typeof row.subsidiary === "string" &&
     typeof row.department === "string" &&
     typeof row.statusFilter === "string" &&
-    (row.density === "comfortable" || row.density === "compact")
+    (row.density === "comfortable" || row.density === "compact") &&
+    (row.exportLayout === undefined || row.exportLayout === "submissions" || row.exportLayout === "line_items") &&
+    (row.gridFieldId === undefined || typeof row.gridFieldId === "string") &&
+    (row.listMode === undefined || row.listMode === "requests" || row.listMode === "lines") &&
+    (row.awaitingMe === undefined || typeof row.awaitingMe === "boolean")
   );
 }
 
@@ -169,13 +191,12 @@ function renderColumnValue(row: EApprovalWorkspaceSubmissionRow, column: Workspa
   }
 }
 
-export function EApprovalFormWorkspacePageClient({ slug }: Props) {
+export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) {
+  const router = useRouter();
   const push = useNotificationStore((s) => s.push);
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [exportLayout, setExportLayout] = useState<"submissions" | "line_items">("submissions");
-  const [gridFieldId, setGridFieldId] = useState("");
   const [prefs, setPrefs] = useLocalStorageJsonState<WorkspacePrefs>(
     `toweros.e-approval.workspace.prefs.${slug}`,
     DEFAULT_PREFS,
@@ -197,6 +218,10 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const department = prefs.department;
   const statusFilter = prefs.statusFilter;
   const density = prefs.density;
+  const exportLayout: WorkspaceExportLayout = prefs.exportLayout === "line_items" ? "line_items" : "submissions";
+  const gridFieldId = typeof prefs.gridFieldId === "string" ? prefs.gridFieldId : "";
+  const listMode: WorkspaceListMode = prefs.listMode === "lines" ? "lines" : "requests";
+  const awaitingMe = prefs.awaitingMe === true;
   const legacyLayout = useMemo(() => normalizeDashboardLayoutPrefs(prefs), [prefs]);
   const expandedBundlesRef = useRef(false);
   const debouncedSearch = useDebouncedValue(search, 350, () => setPage(1));
@@ -263,6 +288,31 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const patchPrefs = (patch: Partial<WorkspacePrefs>) => {
     setPrefs((current: WorkspacePrefs) => ({ ...current, ...patch }));
   };
+  const clearQueue = () => {
+    if (queue) {
+      router.replace(`/e-approval/w/${slug}`);
+    }
+  };
+  const setListMode = (mode: WorkspaceListMode) => {
+    patchPrefs({
+      listMode: mode,
+      exportLayout: mode === "lines" ? "line_items" : "submissions",
+    });
+  };
+
+  useEffect(() => {
+    if (queue === "awaiting") {
+      patchPrefs({ awaitingMe: true, statusFilter: "pending", activeViewId: "awaiting" });
+      return;
+    }
+    if (queue === "drafts" || queue === "pending" || queue === "returned") {
+      patchPrefs({
+        awaitingMe: false,
+        statusFilter: queue === "drafts" ? "draft" : queue,
+        activeViewId: queue,
+      });
+    }
+  }, [queue]);
 
   const dashboardQuery = useQuery({
     queryKey: ["e-approval", "workspace", slug, "dashboard-shell"],
@@ -318,13 +368,16 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   const hasGrids = gridFields.length > 0;
 
   useEffect(() => {
-    if (!hasGrids && exportLayout === "line_items") {
-      setExportLayout("submissions");
+    if (!exportColumnsQuery.isFetched) return;
+    if (!hasGrids && (exportLayout === "line_items" || listMode === "lines")) {
+      patchPrefs({ exportLayout: "submissions", listMode: "requests" });
+      return;
     }
-    if (hasGrids && !gridFieldId && gridFields[0]?.key) {
-      setGridFieldId(gridFields[0].key);
+    const selectedStillExists = gridFields.some((grid) => grid.key === gridFieldId);
+    if (hasGrids && gridFields[0]?.key && !selectedStillExists) {
+      patchPrefs({ gridFieldId: gridFields[0].key });
     }
-  }, [exportLayout, gridFieldId, gridFields, hasGrids]);
+  }, [exportColumnsQuery.isFetched, exportLayout, gridFieldId, gridFields, hasGrids, listMode]);
 
   const tableColumns = useMemo(() => {
     const base = visibleTableColumns(
@@ -375,6 +428,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
       subsidiary,
       department,
       resolvedMine ? 1 : 0,
+      awaitingMe ? 1 : 0,
     ],
     queryFn: () =>
       fetchEApprovalWorkspaceSubmissions(slug, {
@@ -387,8 +441,39 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
         sort,
         subsidiary: subsidiary || undefined,
         department: department || undefined,
+        awaiting_me: awaitingMe || undefined,
       }),
     enabled: Boolean(dashboardShell),
+  });
+
+  const linesQuery = useQuery({
+    queryKey: [
+      "e-approval",
+      "workspace",
+      slug,
+      "lines",
+      page,
+      debouncedSearch,
+      resolvedStatus ?? "all",
+      activeFilters.from ?? "",
+      subsidiary,
+      department,
+      resolvedMine ? 1 : 0,
+      awaitingMe ? 1 : 0,
+    ],
+    queryFn: () =>
+      fetchEApprovalWorkspaceLines(slug, {
+        page,
+        per_page: PER_PAGE,
+        search: debouncedSearch.trim() || undefined,
+        status: resolvedStatus,
+        mine: resolvedMine,
+        from: activeFilters.from,
+        subsidiary: subsidiary || undefined,
+        department: department || undefined,
+        awaiting_me: awaitingMe || undefined,
+      }),
+    enabled: Boolean(dashboardShell) && listMode === "lines",
   });
 
   const title = dashboard ? workspaceDisplayTitle(dashboard.workspace, dashboard.form.name) : "Form workspace";
@@ -472,7 +557,9 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
     patchPrefs({
       activeViewId: view.id,
       statusFilter: view.status && view.status !== "all" ? view.status : "",
+      awaitingMe: false,
     });
+    clearQueue();
     setPage(1);
   };
 
@@ -482,11 +569,13 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
       department: "",
       statusFilter: "",
       activeViewId: "all",
+      awaitingMe: false,
     });
+    clearQueue();
     setPage(1);
   };
 
-  const hasColumnFilters = Boolean(subsidiary || department || statusFilter || activeViewId !== "all");
+  const hasColumnFilters = Boolean(subsidiary || department || statusFilter || activeViewId !== "all" || awaitingMe);
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
     return adminEnabledWidgets.flatMap((widget) => {
@@ -564,13 +653,28 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                       key={view.id}
                       type="button"
                       size="sm"
-                      variant={activeViewId === view.id ? "secondary" : "ghost"}
+                      variant={activeViewId === view.id && !awaitingMe ? "secondary" : "ghost"}
                       className="h-8"
                       onClick={() => applySavedView(view)}
                     >
                       {view.label}
                     </Button>
                   ))}
+                    {canApprove ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={awaitingMe ? "secondary" : "ghost"}
+                        className="h-8"
+                        onClick={() => {
+                          patchPrefs({ awaitingMe: true, statusFilter: "pending", activeViewId: "awaiting" });
+                          clearQueue();
+                          setPage(1);
+                        }}
+                      >
+                        Awaiting you
+                      </Button>
+                    ) : null}
                 </div>
                 <div className={filterBarFieldsClassName}>
                   <div>
@@ -588,7 +692,8 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                     label="Status"
                     value={statusFilter}
                     onChange={(value) => {
-                      patchPrefs({ statusFilter: value });
+                      patchPrefs({ statusFilter: value, awaitingMe: false });
+                      clearQueue();
                       setPage(1);
                     }}
                   >
@@ -639,7 +744,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
               </div>
             }
             footer={
-              meta ? (
+              listMode === "lines" ? null : meta ? (
                 <PaginatedListFooter
                   meta={meta}
                   onPageChange={setPage}
@@ -648,6 +753,23 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
               ) : null
             }
           >
+            {listMode === "lines" ? (
+              <EApprovalWorkspaceLinesTable
+                rows={linesQuery.data?.data ?? []}
+                meta={linesQuery.data?.meta}
+                isLoading={linesQuery.isFetching}
+                isError={linesQuery.isError}
+                onRetry={() => {
+                  void linesQuery.refetch();
+                }}
+                onPageChange={setPage}
+                toolbarStart={
+                  hasGrids || listMode === "lines" ? (
+                    <EApprovalWorkspaceViewSwitch mode={listMode} onChange={setListMode} />
+                  ) : null
+                }
+              />
+            ) : (
             <RegistryDataTableView
               columns={columns}
               data={rows}
@@ -662,7 +784,9 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
               manualSorting={manualSorting}
               scrollClassName={cn(density === "compact" && "[&_td]:py-1.5 [&_th]:h-9 [&_th]:py-1.5")}
               toolbarStart={
-                <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-0.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasGrids ? <EApprovalWorkspaceViewSwitch mode={listMode} onChange={setListMode} /> : null}
+                  <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-0.5">
                   <Button
                     type="button"
                     size="sm"
@@ -681,9 +805,11 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                   >
                     Compact
                   </Button>
+                  </div>
                 </div>
               }
             />
+            )}
           </EApprovalListShell>
         ),
       },
@@ -692,13 +818,20 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
   }, [
     activeViewId,
     adminEnabledWidgets,
+    awaitingMe,
+    canApprove,
     columns,
     dashboard,
     density,
     department,
     departmentOptions,
     hasColumnFilters,
+    hasGrids,
     isEmpty,
+    linesQuery.data,
+    linesQuery.isError,
+    linesQuery.isFetching,
+    listMode,
     manualSorting,
     meta,
     onSortingChange,
@@ -833,9 +966,10 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                         <Select
                           value={exportLayout}
                           onChange={(event) =>
-                            setExportLayout(
-                              event.target.value === "line_items" ? "line_items" : "submissions",
-                            )
+                            patchPrefs({
+                              exportLayout: event.target.value === "line_items" ? "line_items" : "submissions",
+                              listMode: event.target.value === "line_items" ? "lines" : "requests",
+                            })
                           }
                           className="h-8 w-[9.5rem] text-xs"
                           aria-label="Export layout"
@@ -846,7 +980,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                         {exportLayout === "line_items" && gridFields.length > 1 ? (
                           <Select
                             value={gridFieldId}
-                            onChange={(event) => setGridFieldId(event.target.value)}
+                            onChange={(event) => patchPrefs({ gridFieldId: event.target.value })}
                             className="h-8 max-w-[10rem] text-xs"
                             aria-label="Line-item grid field"
                           >
@@ -862,7 +996,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                   }
                   onExport={async (format) => {
                     try {
-                      const useLineItems = exportLayout === "line_items" && hasGrids;
+                      const useLineItems = listMode === "lines" || (exportLayout === "line_items" && hasGrids);
                       const result = await downloadEApprovalWorkspaceExport(slug, {
                         status: resolvedStatus,
                         search: debouncedSearch.trim() || undefined,
@@ -876,6 +1010,7 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
                         ),
                         layout: useLineItems ? "line_items" : "submissions",
                         grid_field: useLineItems ? gridFieldId || undefined : undefined,
+                        awaiting_me: awaitingMe || undefined,
                       });
                       if (result.mode === "async") {
                         push({
@@ -915,6 +1050,11 @@ export function EApprovalFormWorkspacePageClient({ slug }: Props) {
         {dashboardQuery.isError ? (
           <p className="text-sm text-destructive">Could not load workspace. Confirm the form is published and workspace is enabled.</p>
         ) : null}
+
+        <EApprovalWorkspaceDraftQueue
+          items={dashboardShell?.continue_drafts ?? []}
+          listHref={`/e-approval/w/${slug}?queue=drafts`}
+        />
 
         <DashboardWidgetBoard
           widgets={catalogBoardWidgets}

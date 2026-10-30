@@ -13,6 +13,7 @@ use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalAwaitingApproverFilter;
 use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
@@ -72,6 +73,7 @@ final class EApprovalSubmissionService
         ?string $sort = null,
         ?string $subsidiary = null,
         ?string $department = null,
+        ?string $awaitingApproverId = null,
     ): LengthAwarePaginator {
         $query = EApprovalSubmission::query();
 
@@ -122,6 +124,10 @@ final class EApprovalSubmissionService
             'subsidiary' => $subsidiary,
             'department' => $department,
         ]);
+
+        if ($awaitingApproverId !== null && trim($awaitingApproverId) !== '') {
+            EApprovalAwaitingApproverFilter::apply($query, $awaitingApproverId);
+        }
 
         $query->with([
             'form:id,name',
@@ -889,6 +895,11 @@ final class EApprovalSubmissionService
             'send_approved_files' => EApprovalFormWorkflowOptions::sendApprovedFiles(
                 is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
             ),
+            'publishes_on_approve' => (bool) $viewerContext['viewer_pending_approval_id']
+                && EApprovalFormWorkflowOptions::sendApprovedFiles(
+                    is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+                )
+                && $this->workflow->publishesOnThisStep($submission),
             'revision_config' => EApprovalRevisionRouting::fromFormMetadata(
                 is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [],
             ),

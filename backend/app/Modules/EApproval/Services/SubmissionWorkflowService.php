@@ -643,6 +643,24 @@ final class SubmissionWorkflowService
         ];
     }
 
+    /**
+     * The approver on this step can finish the request, so published files can be sent now.
+     */
+    public function publishesOnThisStep(EApprovalSubmission $submission): bool
+    {
+        $steps = $this->workflowResolver->stepsForAdvance($submission);
+        $current = (int) $submission->current_step;
+        $hasLater = $steps->contains(
+            static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order > $current,
+        );
+
+        if (! $hasLater) {
+            return true;
+        }
+
+        return $this->optionalContinuation($submission) !== null;
+    }
+
     private function optionalStepCanBeSkipped(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
     {
         if (! $this->stepMarkedOptional($submission, $step)) {

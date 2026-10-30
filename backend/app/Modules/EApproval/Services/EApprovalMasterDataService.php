@@ -450,7 +450,7 @@ final class EApprovalMasterDataService
                 'type' => $type,
             ];
             $seen[$key] = true;
-            if (count($clean) >= 12) {
+            if (count($clean) >= 40) {
                 break;
             }
         }
@@ -496,13 +496,15 @@ final class EApprovalMasterDataService
 
     /**
      * @param  array<string, mixed>  $extra
-     * @return array{address: string, name: string, fields: array<string, string>}
+     * @return array{address: string, name: string, label: string, code: string, fields: array<string, string>}
      */
-    private function siteOptionData(string $address, string $name, array $extra = []): array
+    private function siteOptionData(string $address, string $name, array $extra = [], string $label = '', string $code = ''): array
     {
         $fields = [];
         $address = trim($address);
         $name = trim($name);
+        $label = trim($label);
+        $code = trim($code);
         if ($address !== '') {
             $fields['address'] = $address;
         }
@@ -510,14 +512,25 @@ final class EApprovalMasterDataService
             $fields['name'] = $name;
         }
         foreach ($this->scalarMasterFields($extra) as $key => $value) {
+            if (in_array($key, ['label', 'code'], true)) {
+                continue;
+            }
             if (($fields[$key] ?? '') === '') {
                 $fields[$key] = $value;
             }
         }
+        if ($label !== '') {
+            $fields['label'] = $label;
+        }
+        if ($code !== '') {
+            $fields['code'] = $code;
+        }
 
         return [
-            'address' => $address,
-            'name' => $name,
+            'address' => $fields['address'] ?? '',
+            'name' => $fields['name'] ?? '',
+            'label' => $fields['label'] ?? '',
+            'code' => $fields['code'] ?? '',
             'fields' => $fields,
         ];
     }
@@ -553,8 +566,7 @@ final class EApprovalMasterDataService
 
     /**
      * Extra columns stored on the Sites master data set, keyed by site ID.
-     * The row label is the site ID. The row code is the place line when the
-     * site record itself has no address.
+     * Label and code stay on the row itself. Address stays the address column.
      *
      * @return array<string, array<string, string>>
      */
@@ -572,10 +584,13 @@ final class EApprovalMasterDataService
             }
             $data = is_array($row->data_json) ? $row->data_json : [];
             $fields = $this->scalarMasterFields($data);
-            $place = trim(str_replace('_', ' ', (string) ($row->code ?? '')));
             $label = trim((string) $row->label);
-            if ($place !== '' && ($fields['address'] ?? '') === '' && strcasecmp($place, $label) !== 0) {
-                $fields['address'] = $place;
+            $code = trim((string) ($row->code ?? ''));
+            if ($label !== '') {
+                $fields['label'] = $label;
+            }
+            if ($code !== '') {
+                $fields['code'] = $code;
             }
 
             $keys = [];
@@ -641,6 +656,8 @@ final class EApprovalMasterDataService
                     (string) ($site->full_address ?? ''),
                     $name,
                     $masterByCode[strtoupper($code)] ?? [],
+                    $name !== '' ? $name : $code,
+                    $code,
                 ),
             ];
         })->values()->all();
@@ -690,18 +707,21 @@ final class EApprovalMasterDataService
                     continue;
                 }
                 $data = is_array($row->data_json) ? $row->data_json : [];
-                $siteId = trim((string) ($row->label !== '' ? $row->label : ($data['name'] ?? $row->code)));
+                $label = trim((string) $row->label);
+                $code = trim((string) ($row->code ?? ''));
+                $address = trim((string) ($data['address'] ?? ''));
+                $name = trim((string) ($data['name'] ?? ''));
+                $siteId = $label !== '' ? $label : ($name !== '' ? $name : $code);
                 if ($siteId === '') {
                     continue;
                 }
-                $place = trim(str_replace('_', ' ', (string) ($row->code ?? '')));
                 $options[] = [
                     'id' => (string) $row->id,
-                    'code' => $siteId,
+                    'code' => $code !== '' ? $code : $siteId,
                     'label' => $siteId,
-                    'subtitle' => $place !== '' && strcasecmp($place, $siteId) !== 0 ? $place : null,
+                    'subtitle' => $code !== '' && strcasecmp($code, $siteId) !== 0 ? $code : null,
                     'value' => $siteId,
-                    'data' => $this->siteOptionData($place, trim((string) ($data['name'] ?? '')), $data),
+                    'data' => $this->siteOptionData($address, $name, $data, $label, $code),
                 ];
                 if (count($options) >= $limit) {
                     break;
@@ -739,18 +759,20 @@ final class EApprovalMasterDataService
             }
             $data = is_array($row->data_json) ? $row->data_json : [];
             $address = trim((string) ($data['address'] ?? ''));
-            $haystack = strtolower($row->code.' '.$row->label.' '.$address);
+            $label = trim((string) $row->label);
+            $code = trim((string) ($row->code ?? ''));
+            $haystack = strtolower($code.' '.$label.' '.$address);
             if ($needle !== '' && ! str_contains($haystack, $needle)) {
                 continue;
             }
-            $code = (string) ($row->code ?: $row->label);
+            $value = $code !== '' ? $code : $label;
             $options[] = [
                 'id' => (string) $row->id,
-                'code' => $code,
-                'label' => (string) $row->label,
+                'code' => $value,
+                'label' => $label !== '' ? $label : $value,
                 'subtitle' => $address !== '' ? $address : null,
-                'value' => $code,
-                'data' => $this->siteOptionData($address, trim((string) ($data['name'] ?? '')), $data),
+                'value' => $value,
+                'data' => $this->siteOptionData($address, trim((string) ($data['name'] ?? '')), $data, $label, $code),
                 'sort_order' => $row->sort_order,
             ];
             if (count($options) >= $limit) {
@@ -836,7 +858,7 @@ final class EApprovalMasterDataService
                 'label' => $site['site_code'].' — '.$site['name'],
                 'subtitle' => $site['full_address'],
                 'value' => $site['site_code'],
-                'data' => $this->siteOptionData($site['full_address'], $site['name']),
+                'data' => $this->siteOptionData($site['full_address'], $site['name'], [], (string) $site['name'], (string) $site['site_code']),
             ];
             if (count($matches) >= $limit) {
                 break;

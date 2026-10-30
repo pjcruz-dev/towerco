@@ -143,6 +143,16 @@ function isWidePrintFieldType(type: string | null | undefined): boolean {
 }
 
 /** Scalar "Total personal / Total expenses" style fields — print below grids, not in Request details. */
+function gridsOwnColumnTotals(payload: EApprovalPrintPayload): boolean {
+  return (payload.grids ?? []).some((grid) => (grid.total_columns?.length ?? 0) > 0);
+}
+
+function isStoredFinanceTotalField(field: { key: string }): boolean {
+  return ["requested_amount", "total_reimbursement", "vat_total", "non_vatable_total", "vatable_net"].includes(
+    field.key.trim().toLowerCase(),
+  );
+}
+
 export function isPrintTotalScalarField(field: {
   key: string;
   label?: string | null;
@@ -224,6 +234,7 @@ function partitionPrintScalarFields(payload: EApprovalPrintPayload): {
     if (EXCLUDED_DYNAMIC_BODY_TYPES.has(type)) continue;
     // When line-item grids print with column footers, omit redundant Total* scalars.
     if (hasGrids && isPrintTotalScalarField(field)) continue;
+    if (hasGrids && gridsOwnColumnTotals(payload) && isStoredFinanceTotalField(field)) continue;
     detailFields.push(field);
   }
 
@@ -266,6 +277,53 @@ ${scalarRows.join("\n")}
   }
   parts.push(...checklistBlocks);
   return parts.join("\n");
+}
+
+function formatPrintSiteLine(record: { site?: unknown; location?: unknown; fields?: unknown }): string {
+  const site = String(record.site ?? "").trim();
+  const location = String(record.location ?? "").trim();
+  let code = "";
+  if (record.fields && typeof record.fields === "object" && !Array.isArray(record.fields)) {
+    code = String((record.fields as Record<string, unknown>).code ?? "").trim();
+  }
+  const secondary = location !== "" && location !== site ? location : code !== "" && code !== site ? code : "";
+  if (site !== "" && secondary !== "") {
+    return `${site} — ${secondary}`;
+  }
+  return site || secondary || "—";
+}
+
+/** One line per site. Multiple sites stay on separate lines instead of the stored JSON. */
+export function formatPrintSiteCell(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const record = parsed as { site?: unknown; location?: unknown; fields?: unknown; sites?: unknown };
+  if (Array.isArray(record.sites)) {
+    const lines = record.sites
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return "";
+        }
+        return formatPrintSiteLine(entry as { site?: unknown; location?: unknown; fields?: unknown });
+      })
+      .filter((line) => line !== "" && line !== "—");
+    return lines.length > 0 ? lines.join("\n") : "—";
+  }
+  if (!("site" in record) && !("location" in record)) {
+    return null;
+  }
+  return formatPrintSiteLine(record);
 }
 
 function printGridTotalLabel(label: string): string {
@@ -315,6 +373,72 @@ function renderPrintGridTotalsFooterHtml(grid: {
   return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
 }
 
+function renderMarkedPrintTotalsFooter(
+  columns: string[],
+  rows: string[][],
+  marked: string[],
+  fields?: EApprovalPrintPayload["fields"],
+): string {
+  if (rows.length === 0) {
+    return "";
+  }
+  const summable = columns.map((column) => marked.includes(column.trim().toLowerCase()));
+  if (!summable.some(Boolean)) {
+    return "";
+  }
+  let labelSpan = 0;
+  for (const flag of summable) {
+    if (flag) {
+      break;
+    }
+    labelSpan += 1;
+  }
+  labelSpan = Math.max(labelSpan, 1);
+  const cells: string[] = [
+    `<td class="ea-print-table-total-label" colspan="${labelSpan}"><strong>Totals</strong></td>`,
+  ];
+  for (let index = labelSpan; index < columns.length; index += 1) {
+    if (!summable[index]) {
+      cells.push("<td></td>");
+      continue;
+    }
+    const stored = storedFinanceTotalForColumn(columns[index] ?? "", fields);
+    const total = stored ?? rows.reduce((sum, row) => {
+      const parsed = parsePrintNumericCell(row[index] ?? "");
+      return parsed === null ? sum : sum + parsed;
+    }, 0);
+    cells.push(
+      `<td class="ea-print-table-total-value"><strong>${escapeHtml(formatPrintNumericTotal(total))}</strong></td>`,
+    );
+  }
+  return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
+}
+
+function storedFinanceTotalForColumn(
+  column: string,
+  fields: EApprovalPrintPayload["fields"] | undefined,
+): number | null {
+  const label = column.trim().toLowerCase();
+  const key =
+    label === "amount"
+      ? "requested_amount"
+      : label === "vat"
+        ? "vat_total"
+        : /^non-?vatable$/.test(label)
+          ? "non_vatable_total"
+          : /net of vat/.test(label)
+            ? "vatable_net"
+            : "";
+  if (key === "") {
+    return null;
+  }
+  const raw =
+    (fields ?? []).find(
+      (field) => field.key === key || (key === "requested_amount" && field.key === "total_reimbursement"),
+    )?.value ?? "";
+  return raw.trim() === "" ? null : parsePrintNumericCell(raw);
+}
+
 function isCashAdvanceForecastGrid(
   grid: { key: string; columns: string[] },
   formName: string,
@@ -342,11 +466,16 @@ function isCashAdvanceForecastGrid(
 function appendCashAdvanceSplitColumns(
   columns: string[],
   rows: string[][],
+  hiddenColumns: string[] = [],
 ): { columns: string[]; rows: string[][] } {
   const nextColumns = [...columns];
-  const needNon = !nextColumns.some((column) => /^non-?vatable$/i.test(column.trim()));
-  const needNet = !nextColumns.some((column) => /net of vat/i.test(column.trim()));
-  if (!needNon && !needNet) {
+  const hidden = hiddenColumns.map((column) => column.trim().toLowerCase());
+  const isHidden = (label: string) => hidden.includes(label.trim().toLowerCase());
+  const needNon = !nextColumns.some((column) => /^non-?vatable$/i.test(column.trim())) && !isHidden("Non-VATable");
+  const needNet = !nextColumns.some((column) => /net of vat/i.test(column.trim())) && !isHidden("VATable, net of VAT");
+  const nonIndex = nextColumns.findIndex((column) => /^non-?vatable$/i.test(column.trim()));
+  const netIndex = nextColumns.findIndex((column) => /net of vat/i.test(column.trim()));
+  if (!needNon && !needNet && nonIndex < 0 && netIndex < 0) {
     return { columns, rows };
   }
   if (needNon) nextColumns.push("Non-VATable");
@@ -361,10 +490,14 @@ function appendCashAdvanceSplitColumns(
     const nonVatable = /non/.test(treatment);
     const vat = vatIndex >= 0 ? (parsePrintNumericCell(row[vatIndex] ?? "") ?? 0) : 0;
     const net = nonVatable ? 0 : Math.max(0, Math.round((amount - vat) * 100) / 100);
-    const extra: string[] = [];
-    if (needNon) extra.push(formatPrintNumericTotal(nonVatable ? amount : 0));
-    if (needNet) extra.push(formatPrintNumericTotal(net));
-    return [...row, ...extra];
+    const nonValue = formatPrintNumericTotal(nonVatable ? amount : 0);
+    const netValue = formatPrintNumericTotal(net);
+    const next = [...row];
+    if (amountIndex >= 0 && nonIndex >= 0) next[nonIndex] = nonValue;
+    if (amountIndex >= 0 && netIndex >= 0) next[netIndex] = netValue;
+    if (needNon) next.push(nonValue);
+    if (needNet) next.push(netValue);
+    return next;
   });
 
   return { columns: nextColumns, rows: nextRows };
@@ -459,8 +592,11 @@ export function renderPrintGridTableHtml(
     key: string;
     label: string;
     columns: string[];
-    rows: string[][];
-  },
+  rows: string[][];
+  hidden_columns?: string[];
+  /** Column labels the form builder included in the total row. */
+  total_columns?: string[];
+},
   options?: {
     formName?: string;
     fields?: EApprovalPrintPayload["fields"];
@@ -473,7 +609,11 @@ export function renderPrintGridTableHtml(
   );
   const wantsVatSplit = cashAdvanceGrid || expenseGridWantsVatSplit(visible.columns);
   const expanded = wantsVatSplit
-    ? appendCashAdvanceSplitColumns(visible.columns.length > 0 ? visible.columns : ["Value"], visible.rows)
+    ? appendCashAdvanceSplitColumns(
+        visible.columns.length > 0 ? visible.columns : ["Value"],
+        visible.rows,
+        grid.hidden_columns ?? [],
+      )
     : null;
   const columns = expanded?.columns ?? (visible.columns.length > 0 ? visible.columns : ["Value"]);
   const sourceRows = expanded?.rows ?? visible.rows;
@@ -496,26 +636,31 @@ export function renderPrintGridTableHtml(
               const classes = [printGridColumnClass(column), isTotalCol ? "ea-print-table-total-col" : ""]
                 .filter(Boolean)
                 .join(" ");
-              const isMoney = shouldSumPrintGridColumn(
-                column,
-                sourceRows.map((r) => r[index] ?? ""),
-              );
+              const moneyClass = printGridColumnClass(column);
+              const isMoney = moneyClass === "ea-print-col-money" || moneyClass === "ea-print-col-vat";
+              const siteLines = classes.includes("ea-print-col-site") ? formatPrintSiteCell(cell) : null;
               let display = cell.trim() !== "" ? cell : isMoney ? "₱0.00" : "—";
-              if (isMoney && cell.trim() !== "") {
+              if (siteLines) {
+                display = siteLines;
+              } else if (isMoney && cell.trim() !== "") {
                 const parsed = parsePrintNumericCell(cell);
                 if (parsed !== null) {
                   display = formatPrintNumericTotal(parsed);
                 }
               }
-              return `<td class="${classes}">${escapeHtml(display)}</td>`;
+              const html = escapeHtml(display).replaceAll("\n", "<br>");
+              return `<td class="${classes}">${html}</td>`;
             });
             return `<tr>${cells.join("")}</tr>`;
           })
           .join("")
       : `<tr><td colspan="${columns.length}">No line items</td></tr>`;
-  const foot = wantsVatSplit
-    ? renderCashAdvanceReviewFooter(columns, options?.fields)
-    : renderPrintGridTotalsFooterHtml({ label: grid.label, columns, rows: sourceRows });
+  const markedTotals = (grid.total_columns ?? []).map((label) => label.trim().toLowerCase()).filter((label) => label !== "");
+  const foot = markedTotals.length > 0
+    ? renderMarkedPrintTotalsFooter(columns, sourceRows, markedTotals, options?.fields)
+    : wantsVatSplit
+      ? renderCashAdvanceReviewFooter(columns, options?.fields)
+      : renderPrintGridTotalsFooterHtml({ label: grid.label, columns, rows: sourceRows });
 
   return `<section class="ea-form-section ea-form-grid-section" data-grid-key="${escapeHtml(grid.key)}">
   <h2 class="ea-form-section-title">${escapeHtml(grid.label || grid.key)}</h2>

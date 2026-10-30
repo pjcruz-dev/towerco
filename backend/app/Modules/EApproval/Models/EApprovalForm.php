@@ -179,6 +179,12 @@ class EApprovalForm extends Model
                 'condition' => $condition === [] ? new \stdClass : $condition,
             ];
 
+            if ($s->approver_type === 'user_list' && ($condition['list_source'] ?? null) === 'fixed') {
+                $payload['list_source'] = 'fixed';
+                $payload['fixed_approver_ids'] = EApprovalWorkflowStepDefinitionSupport::fixedApproverIds([], $condition);
+                $payload['approverId'] = null;
+            }
+
             if ($s->approver_type === 'field_map') {
                 $payload['source_field'] = $s->approver_id;
                 $payload['mappings'] = is_array($condition['mappings'] ?? null) ? $condition['mappings'] : [];
@@ -192,6 +198,21 @@ class EApprovalForm extends Model
 
             if (! empty($condition['confirm_settlement'])) {
                 $payload['confirm_settlement'] = true;
+            }
+
+            $autoApproveDays = EApprovalWorkflowStepDefinitionSupport::autoApproveDays([], $condition);
+            if ($autoApproveDays !== null) {
+                $payload['auto_approve_enabled'] = true;
+                $payload['auto_approve_days'] = $autoApproveDays;
+            }
+
+            if (EApprovalWorkflowStepDefinitionSupport::proofOfPaymentEnabled($condition)) {
+                $payload['proof_of_payment'] = true;
+            }
+
+            $decisionLabels = EApprovalWorkflowStepDefinitionSupport::storedDecisionLabels(['condition' => $condition]);
+            if ($decisionLabels !== null) {
+                $payload['decision_labels'] = $decisionLabels;
             }
 
             if (($condition['duty'] ?? null) === 'review') {
@@ -216,6 +237,9 @@ class EApprovalForm extends Model
                 $payload['when'] = $when;
                 if (EApprovalWhenLogic::fromDefinition(null, $condition) === EApprovalWhenLogic::OR) {
                     $payload['when_logic'] = EApprovalWhenLogic::OR;
+                }
+                if (($condition['when_scope'] ?? null) === 'step') {
+                    $payload['when_scope'] = 'step';
                 }
             }
 

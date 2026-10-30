@@ -105,6 +105,23 @@ export type EApprovalFormWorkspaceDashboard = {
     value: string;
     change?: string | null;
     tone?: "default" | "success" | "warning" | "danger";
+    href?: string | null;
+  }>;
+  money?: {
+    family: "cash_advance" | "liquidation";
+    outstanding: number;
+    forecast_total: number;
+    actual_total: number;
+  } | null;
+  continue_drafts?: Array<{
+    id: string;
+    document_no: string;
+    form_id: string;
+    form_name?: string;
+    requestor_name: string;
+    created_at: string | null;
+    can_continue: boolean;
+    href: string;
   }>;
   status_breakdown: Array<{
     status: string;
@@ -115,6 +132,7 @@ export type EApprovalFormWorkspaceDashboard = {
     key: string;
     label: string;
     count: number;
+    amount?: number;
   }>;
   recent_activity: Array<{
     id: string;

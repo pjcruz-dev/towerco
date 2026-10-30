@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\DB;
 
 final class EApprovalFormWorkspaceService
 {
+    public function __construct(private readonly EApprovalFormWorkspaceInsightService $insights) {}
+
     public function findPublishedFormBySlug(string $slug): ?EApprovalForm
     {
         $slug = trim($slug);
@@ -259,6 +261,10 @@ final class EApprovalFormWorkspaceService
             $awaitingMyApproval = (int) $awaitingQuery->count();
         }
 
+        $pendingHref = $this->insights->queueHref($workspace, 'pending');
+        $returnedHref = $this->insights->queueHref($workspace, 'returned');
+        $awaitingHref = $this->insights->queueHref($workspace, 'awaiting');
+
         $kpis = [
             [
                 'key' => 'pending',
@@ -266,6 +272,7 @@ final class EApprovalFormWorkspaceService
                 'value' => (string) $pending,
                 'change' => 'Awaiting approval',
                 'tone' => $pending > 0 ? 'warning' : 'success',
+                'href' => $pendingHref,
             ],
             [
                 'key' => 'returned',
@@ -273,6 +280,7 @@ final class EApprovalFormWorkspaceService
                 'value' => (string) $returned,
                 'change' => 'Returned to requestor',
                 'tone' => $returned > 0 ? 'warning' : 'default',
+                'href' => $returnedHref,
             ],
             [
                 'key' => 'approved_30d',
@@ -280,6 +288,7 @@ final class EApprovalFormWorkspaceService
                 'value' => (string) $approved30d,
                 'change' => 'Last 30 days',
                 'tone' => 'success',
+                'href' => null,
             ],
             [
                 'key' => 'rejected_30d',
@@ -287,6 +296,7 @@ final class EApprovalFormWorkspaceService
                 'value' => (string) $rejected30d,
                 'change' => 'Last 30 days',
                 'tone' => $rejected30d > 0 ? 'danger' : 'default',
+                'href' => null,
             ],
         ];
 
@@ -297,8 +307,52 @@ final class EApprovalFormWorkspaceService
                 'value' => (string) $awaitingMyApproval,
                 'change' => 'Your approval queue for this form',
                 'tone' => $awaitingMyApproval > 0 ? 'warning' : 'success',
+                'href' => $awaitingHref,
             ];
         }
+
+        $money = $this->insights->moneySummary($form, $scopedQuery);
+        if ($money !== null) {
+            $kpis = [
+                [
+                    'key' => 'outstanding',
+                    'label' => 'Outstanding',
+                    'value' => EApprovalFormWorkspaceInsightService::formatMoney($money['outstanding']),
+                    'change' => $money['family'] === 'cash_advance'
+                        ? 'Approved advances not fully liquidated'
+                        : 'Forecast still above actual',
+                    'tone' => $money['outstanding'] > 0 ? 'warning' : 'success',
+                    'href' => null,
+                ],
+                [
+                    'key' => 'forecast_total',
+                    'label' => 'Forecast',
+                    'value' => EApprovalFormWorkspaceInsightService::formatMoney($money['forecast_total']),
+                    'change' => $money['family'] === 'cash_advance'
+                        ? 'Requested on this workspace'
+                        : 'Cash advance amount on these liquidations',
+                    'tone' => 'default',
+                    'href' => null,
+                ],
+                [
+                    'key' => 'actual_total',
+                    'label' => 'Actual',
+                    'value' => EApprovalFormWorkspaceInsightService::formatMoney($money['actual_total']),
+                    'change' => $money['family'] === 'cash_advance'
+                        ? 'Liquidated against these advances'
+                        : 'Reimbursement total',
+                    'tone' => 'default',
+                    'href' => null,
+                ],
+            ];
+        }
+
+        $draftFilters = $filters;
+        $draftFilters['status'] = null;
+        $continueDrafts = $this->insights->continueDrafts(
+            $this->scopedSubmissionsQuery($formIds, $viewer, $canViewAll, $draftFilters),
+            $viewer,
+        );
 
         $newRequestMode = (string) ($workspace['actions']['new_request_mode'] ?? 'focused');
         $newRequestHref = $newRequestMode === 'standard'
@@ -306,7 +360,12 @@ final class EApprovalFormWorkspaceService
             : '/e-approval/focus/'.$formId.'?controlled_mode=new';
 
         $statusBreakdown = $this->statusBreakdown(clone $scopedQuery);
-        $subsidiaryBreakdown = $this->subsidiaryBreakdown(clone $scopedQuery, $formIds);
+        $amountBreakdown = $money !== null
+            ? $this->insights->subsidiaryAmounts($form, $scopedQuery)
+            : [];
+        $subsidiaryBreakdown = $amountBreakdown !== []
+            ? $amountBreakdown
+            : $this->subsidiaryBreakdown(clone $scopedQuery, $formIds);
         $recentActivity = $this->recentActivity(clone $scopedQuery);
         $recentAudit = $this->recentWorkspaceAudit($formIds);
 
@@ -343,6 +402,8 @@ final class EApprovalFormWorkspaceService
                 'mine' => (bool) ($filters['mine'] ?? false),
             ],
             'kpis' => $kpis,
+            'money' => $money,
+            'continue_drafts' => $continueDrafts,
             'status_breakdown' => $statusBreakdown,
             'subsidiary_breakdown' => $subsidiaryBreakdown,
             'recent_activity' => $recentActivity,

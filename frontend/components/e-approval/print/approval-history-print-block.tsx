@@ -65,7 +65,7 @@ export function ApprovalHistoryPrintBlock({
               {slot.subtitle && slot.label !== slot.subtitle ? (
                 <p className="text-[10px] text-slate-800">{slot.label}</p>
               ) : null}
-              {/^(Approved|Reviewed) ·/.test(slot.subtitle ?? "") ? null : (
+              {/ · /.test(slot.subtitle ?? "") ? null : (
                 <p className="text-[9px] text-slate-500">
                   {slot.kind === "approver" ? slot.subtitle : isTypedSignature(slot.signature) ? "Typed signature" : "Signature"}
                 </p>

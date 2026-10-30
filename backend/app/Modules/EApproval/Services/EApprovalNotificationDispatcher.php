@@ -284,6 +284,26 @@ final class EApprovalNotificationDispatcher
         }
     }
 
+    public function dispatchPaymentProof(
+        EApprovalSubmission $submission,
+        TenantUser $actor,
+        string $status,
+        string $comment,
+    ): void {
+        $requestorId = (string) $submission->requestor_id;
+        if ($requestorId === '') {
+            return;
+        }
+
+        $this->sendEventToUsers(
+            $submission,
+            [$requestorId],
+            $status === 'hold' ? 'payment_held' : 'payment_released',
+            $actor->name,
+            $comment !== '' ? $comment : null,
+        );
+    }
+
     public function dispatchReviewed(EApprovalSubmission $submission, TenantUser $actor, ?string $note, int $stepOrder): void
     {
         $actorId = (string) $actor->id;

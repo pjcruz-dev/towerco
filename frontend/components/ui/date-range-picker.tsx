@@ -39,6 +39,8 @@ type Props = {
   id?: string;
   /** Each end stores `yyyy-MM-ddTHH:mm`. A date with no time stays `yyyy-MM-dd`. */
   withTime?: boolean;
+  /** Days before this `yyyy-MM-dd` cannot be chosen. */
+  minDate?: string;
   "aria-invalid"?: boolean;
 };
 
@@ -236,6 +238,7 @@ function MonthGrid({
   hover,
   selectingEnd,
   today,
+  minDate,
   onSelectDay,
   onHoverDay,
 }: {
@@ -245,6 +248,7 @@ function MonthGrid({
   hover: Date | null;
   selectingEnd: boolean;
   today: Date;
+  minDate?: string;
   onSelectDay: (day: Date) => void;
   onHoverDay: (day: Date | null) => void;
 }) {
@@ -286,19 +290,31 @@ function MonthGrid({
             !isBeforeDay(cell, rangeStart) &&
             !isAfterDay(cell, rangeEnd);
           const isToday = sameDay(cell, today);
+          const iso = toIsoDate(cell);
+          const tooEarly = Boolean(minDate && iso < minDate);
 
           return (
             <button
-              key={`${month.getFullYear()}-${month.getMonth()}-${toIsoDate(cell)}`}
+              key={`${month.getFullYear()}-${month.getMonth()}-${iso}`}
               type="button"
-              onClick={() => onSelectDay(cell)}
-              onMouseEnter={() => onHoverDay(cell)}
+              disabled={tooEarly}
+              onClick={() => {
+                if (!tooEarly) {
+                  onSelectDay(cell);
+                }
+              }}
+              onMouseEnter={() => {
+                if (!tooEarly) {
+                  onHoverDay(cell);
+                }
+              }}
               onMouseLeave={() => onHoverDay(null)}
               className={cn(
                 "relative flex h-8 w-full items-center justify-center text-sm transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:z-10",
-                !inMonth && "text-muted-foreground/40",
-                inMonth && !isEndpoint && "text-foreground",
+                tooEarly && "cursor-not-allowed text-muted-foreground/30",
+                !inMonth && !tooEarly && "text-muted-foreground/40",
+                inMonth && !isEndpoint && !tooEarly && "text-foreground",
                 inRange && !isEndpoint && "bg-primary/15",
                 isFrom && rangeEnd && !sameDay(rangeStart!, rangeEnd) && "rounded-l-md bg-primary/15",
                 isTo && rangeStart && !sameDay(rangeStart, rangeEnd!) && "rounded-r-md bg-primary/15",
@@ -332,6 +348,7 @@ export function DateRangePicker({
   className,
   id,
   withTime = false,
+  minDate,
   "aria-invalid": ariaInvalid,
 }: Props) {
   const fromParts = splitEndpoint(value.from);
@@ -385,6 +402,9 @@ export function DateRangePicker({
   };
 
   const handleSelectDay = (day: Date) => {
+    if (minDate && toIsoDate(day) < minDate) {
+      return;
+    }
     if (!selectingEnd || !draftFrom) {
       setDraftFrom(day);
       setDraftTo(null);
@@ -508,6 +528,7 @@ export function DateRangePicker({
               hover={hoverDay}
               selectingEnd={selectingEnd}
               today={today}
+              minDate={minDate}
               onSelectDay={handleSelectDay}
               onHoverDay={setHoverDay}
             />
@@ -533,6 +554,7 @@ export function DateRangePicker({
               hover={hoverDay}
               selectingEnd={selectingEnd}
               today={today}
+              minDate={minDate}
               onSelectDay={handleSelectDay}
               onHoverDay={setHoverDay}
             />

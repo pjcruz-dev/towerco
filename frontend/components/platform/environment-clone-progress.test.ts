@@ -26,8 +26,14 @@ function clone(overrides: Partial<EnvironmentCloneSnapshot> = {}): EnvironmentCl
 describe("environment copy again", () => {
   it("offers another copy once a snapshot is ready", () => {
     expect(environmentCloneCanCopyAgain(clone())).toBe(true);
-    expect(environmentCloneCopyAgainLabel(clone({ source_environment: "staging" }))).toBe(
+    expect(environmentCloneCopyAgainLabel(clone({ source_environment: "staging", environment: "test" }))).toBe(
       "Copy again from staging",
+    );
+    expect(environmentCloneCanCopyAgain(clone({ source_tenant_id: "source", target_tenant_id: "target" }), "target")).toBe(
+      true,
+    );
+    expect(environmentCloneCanCopyAgain(clone({ source_tenant_id: "source", target_tenant_id: "target" }), "source")).toBe(
+      false,
     );
   });
 

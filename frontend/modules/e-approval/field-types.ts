@@ -176,7 +176,7 @@ export function defaultFieldForType(type: EApprovalFieldType, index: number): EA
       options: {
         columns: [
           { label: "Description", type: "text" },
-          { label: "Amount", type: "currency" },
+          { label: "Amount", type: "currency", show_total: true },
         ],
       },
     };

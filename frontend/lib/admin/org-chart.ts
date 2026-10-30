@@ -131,6 +131,73 @@ export function buildOrgChartIndex(people: AdminOrgChartPerson[]): OrgChartIndex
   return index;
 }
 
+/**
+ * Same department written two ways in Entra ("Operations & Maintenance" /
+ * "Operations and Maintenance", "SAG and …" / "SAG And …"). Used only to
+ * group the department filter. Person cards keep the department Entra sent.
+ * Distinct names stay distinct ("Human Resources" is not "Human Resources and Admin").
+ */
+export function departmentEquivalenceKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll("&", " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+}
+
+function departmentLabelPreference(label: string): number {
+  let score = 0;
+  if (label.includes("&")) {
+    score += 2;
+  }
+  if (/\bAnd\b/.test(label)) {
+    score += 1;
+  }
+  return score;
+}
+
+/** One dropdown label per equivalent spelling. Does not rewrite people. */
+export function canonicalDepartmentLabels(departments: string[]): string[] {
+  const groups = new Map<string, Map<string, number>>();
+
+  for (const department of departments) {
+    const dept = department.trim();
+    if (!dept) {
+      continue;
+    }
+    const key = departmentEquivalenceKey(dept);
+    if (!key) {
+      continue;
+    }
+    const counts = groups.get(key) ?? new Map<string, number>();
+    counts.set(dept, (counts.get(dept) ?? 0) + 1);
+    groups.set(key, counts);
+  }
+
+  const labels: string[] = [];
+  for (const counts of groups.values()) {
+    const variants = [...counts.entries()];
+    variants.sort((left, right) => {
+      if (left[1] !== right[1]) {
+        return right[1] - left[1];
+      }
+      const preference = departmentLabelPreference(left[0]) - departmentLabelPreference(right[0]);
+      if (preference !== 0) {
+        return preference;
+      }
+      return left[0].localeCompare(right[0], undefined, { sensitivity: "base" });
+    });
+    const chosen = variants[0]?.[0];
+    if (chosen) {
+      labels.push(chosen);
+    }
+  }
+
+  return labels.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 /** Fill blank departments from the nearest ancestor with a department (manager chain). */
 export function inheritDepartmentsFromAncestors(index: OrgChartIndex): void {
   for (const node of index.nodes) {
@@ -262,14 +329,14 @@ export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
   licenses: string[];
   hasUnassignedDepartment: boolean;
 } {
-  const departments = new Set<string>();
+  const departments: string[] = [];
   const licenses = new Set<string>();
   let hasUnassignedDepartment = false;
 
   for (const node of nodes) {
     const dept = node.department?.trim() ?? "";
     if (dept) {
-      departments.add(dept);
+      departments.push(dept);
     } else if (!node.external) {
       hasUnassignedDepartment = true;
     }
@@ -280,7 +347,7 @@ export function collectOrgFilterOptions(nodes: OrgChartNode[]): {
     list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
   return {
-    departments: sort([...departments]),
+    departments: canonicalDepartmentLabels(departments),
     licenses: sort([...licenses]),
     hasUnassignedDepartment,
   };
@@ -293,7 +360,7 @@ function nodeMatchesFilters(node: OrgChartNode, filters: OrgChartFilters): boole
       if (dept !== "") {
         return false;
       }
-    } else if (dept !== filters.department) {
+    } else if (departmentEquivalenceKey(dept) !== departmentEquivalenceKey(filters.department)) {
       return false;
     }
   }

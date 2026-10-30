@@ -70,4 +70,31 @@ describe("rejected approval trail", () => {
     expect(steps[2]?.statusLabel).toBe("Pending");
     expect(steps[3]?.state).toBe("skipped");
   });
+
+  it("keeps a first-to-approve band on one step and marks the others not needed", () => {
+    const steps = workflowPreviewToStepShowItems(
+      [
+        { step_order: 1, runtime_status: "skipped", label: "Direct manager (Entra)" },
+        { step_order: 2, runtime_status: "approved", runtime_approver: { id: "caro", name: "Caro Traya" } },
+        { step_order: 2, runtime_status: "invalidated", runtime_approver: { id: "anne", name: "Anne Marie Acaso" } },
+        { step_order: 2, runtime_status: "invalidated", runtime_approver: { id: "arvin", name: "Arvin John Gervacio" } },
+        { step_order: 3, runtime_status: "pending", runtime_approver: { id: "denver", name: "Denver Arquiza" } },
+        { step_order: 4, resolved_user_name: "Peter Joseph Cruz" },
+      ],
+      "pending",
+    );
+
+    expect(steps.map((step) => `${step.stepOrder} ${step.approverName ?? ""} ${step.statusLabel}`)).toEqual([
+      "1  Skipped",
+      "2 Caro Traya Approved",
+      "2 Anne Marie Acaso Not needed",
+      "2 Arvin John Gervacio Not needed",
+      "3 Denver Arquiza Pending",
+      "4 Peter Joseph Cruz Upcoming",
+    ]);
+    expect(workflowStepCompactCaption(steps)).toEqual({
+      progress: "Step 3 of 4",
+      waiting: "Waiting on Denver Arquiza",
+    });
+  });
 });

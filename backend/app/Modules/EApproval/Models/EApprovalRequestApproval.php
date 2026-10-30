@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Models;
 
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -62,6 +63,32 @@ class EApprovalRequestApproval extends Model
     }
 
     /**
+     * Compiled rows can miss a checkbox saved on the form after the request started.
+     * The live step at the same order still counts.
+     */
+    public function requiresProofOfPayment(): bool
+    {
+        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
+        if (! empty($condition['proof_of_payment'])) {
+            return true;
+        }
+
+        $order = (int) ($this->step?->step_order ?? 0);
+        if ($order < 1) {
+            return false;
+        }
+
+        $this->loadMissing('submission.form.workflowTemplate.steps');
+        $templateSteps = $this->submission?->form?->workflowTemplate?->steps;
+
+        return $templateSteps !== null && $templateSteps->contains(
+            static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order === $order
+                && is_array($step->condition)
+                && ! empty($step->condition['proof_of_payment']),
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toListRow(): array
@@ -100,6 +127,10 @@ class EApprovalRequestApproval extends Model
             'finance_action' => is_array($this->step?->condition)
                 ? ($this->step->condition['finance_action'] ?? null)
                 : null,
+            'proof_of_payment' => $this->requiresProofOfPayment(),
+            'decision_labels' => EApprovalWorkflowStepDefinitionSupport::decisionLabels(
+                is_array($this->step?->condition) ? ['condition' => $this->step->condition] : [],
+            ),
             'parallel_mode' => $this->parallelModeFromStep(),
             'parallel_quorum' => $this->parallelQuorumFromStep(),
             'duty' => is_array($this->step?->condition) && ($this->step->condition['duty'] ?? null) === 'review'
@@ -110,12 +141,37 @@ class EApprovalRequestApproval extends Model
                 'name' => $this->approver->name,
                 'email' => $this->approver->email,
             ] : null,
-            'submission' => $this->submission ? [
-                'id' => (string) $this->submission->id,
-                'document_no' => $this->submission->document_no,
-                'status' => $this->submission->status,
-                'form_name' => $this->submission->form?->name,
-            ] : null,
+            'submission' => $this->submission ? $this->submissionSummary() : null,
+        ];
+    }
+
+    /**
+     * Same card fields the submissions list shows.
+     *
+     * @return array<string, mixed>
+     */
+    private function submissionSummary(): array
+    {
+        $submission = $this->submission;
+        if ($submission === null) {
+            return [];
+        }
+
+        $list = $submission->toListRow();
+
+        return [
+            'id' => $list['id'],
+            'document_no' => $list['document_no'],
+            'status' => $list['status'],
+            'status_label' => $list['status_label'] ?? null,
+            'form_id' => $list['form_id'] ?? null,
+            'form_name' => $list['form_name'] ?? null,
+            'subsidiary' => $list['subsidiary'] ?? null,
+            'current_step' => $list['current_step'] ?? 0,
+            'step_count' => $list['step_count'] ?? null,
+            'workflow_steps' => $list['workflow_steps'] ?? [],
+            'requestor' => $list['requestor'] ?? null,
+            'created_at' => $list['created_at'] ?? null,
         ];
     }
 

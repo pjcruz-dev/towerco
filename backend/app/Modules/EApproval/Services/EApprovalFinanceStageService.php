@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Services;
 
+use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Models\EApprovalWorkflowStep;
@@ -37,6 +38,11 @@ final class EApprovalFinanceStageService
         $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
 
         if ($status === EApprovalSubmissionStatus::PENDING) {
+            $proofLabel = $this->proofStatusLabel($submission);
+            if ($proofLabel !== null) {
+                return $proofLabel;
+            }
+
             $stepLabel = $this->currentStepLabel($submission);
             $word = EApprovalFormMailConfig::statusWord($metadata, EApprovalSubmissionStatus::PENDING);
 
@@ -56,6 +62,36 @@ final class EApprovalFinanceStageService
         }
 
         return EApprovalFormMailConfig::statusWord($metadata, $status);
+    }
+
+    /**
+     * The latest proof on the current step replaces Pending until the request moves on.
+     */
+    private function proofStatusLabel(EApprovalSubmission $submission): ?string
+    {
+        $finance = $this->finance($submission);
+        $entries = is_array($finance['payment_proofs'] ?? null) ? $finance['payment_proofs'] : [];
+        if ($entries === []) {
+            return null;
+        }
+
+        $latest = $entries[array_key_last($entries)];
+        if (! is_array($latest)) {
+            return null;
+        }
+
+        $proofStep = array_key_exists('step_order', $latest)
+            ? (int) $latest['step_order']
+            : (int) $submission->current_step;
+        if ($proofStep !== (int) $submission->current_step) {
+            return null;
+        }
+
+        return match (strtolower(trim((string) ($latest['status'] ?? '')))) {
+            'hold' => 'On hold',
+            'released' => 'Released',
+            default => null,
+        };
     }
 
     /**
@@ -108,6 +144,55 @@ final class EApprovalFinanceStageService
         $finance['settlement_direction'] = $amount > 0.004 ? 'payment' : ($amount < -0.004 ? 'surrender' : 'settled');
         $finance['settlement_amount'] = number_format($amount, 2, '.', '');
         $finance['settled_at'] = now()->toIso8601String();
+        $submission->finance_json = $finance;
+        $submission->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $proof
+     */
+    public function recordPaymentProof(EApprovalSubmission $submission, array $proof, TenantUser $actor): void
+    {
+        $status = strtolower(trim((string) ($proof['status'] ?? '')));
+        if (! in_array($status, ['released', 'hold'], true)) {
+            throw ValidationException::withMessages([
+                'payment_proof.status' => [__('Choose Released or Hold.')],
+            ]);
+        }
+
+        $comment = trim((string) ($proof['comment'] ?? ''));
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $id): string => trim((string) $id),
+            is_array($proof['attachment_ids'] ?? null) ? $proof['attachment_ids'] : [],
+        ))));
+        if (count($ids) > 4) {
+            throw ValidationException::withMessages([
+                'payment_proof.attachment_ids' => [__('Attach at most 4 files.')],
+            ]);
+        }
+        if ($ids !== []) {
+            $found = EApprovalAttachment::query()
+                ->where('submission_id', $submission->id)
+                ->whereIn('id', $ids)
+                ->count();
+            if ($found !== count($ids)) {
+                throw ValidationException::withMessages([
+                    'payment_proof.attachment_ids' => [__('One of those files is not on this request.')],
+                ]);
+            }
+        }
+
+        $finance = $this->finance($submission);
+        $entries = is_array($finance['payment_proofs'] ?? null) ? $finance['payment_proofs'] : [];
+        $entries[] = [
+            'status' => $status,
+            'comment' => $comment,
+            'attachment_ids' => $ids,
+            'user_id' => (string) $actor->id,
+            'step_order' => isset($proof['step_order']) ? (int) $proof['step_order'] : (int) $submission->current_step,
+            'recorded_at' => now()->toIso8601String(),
+        ];
+        $finance['payment_proofs'] = $entries;
         $submission->finance_json = $finance;
         $submission->save();
     }

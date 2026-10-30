@@ -262,7 +262,7 @@ final class TenantEnvironmentCloneServiceTest extends TestCase
         $previous = $this->createReadyClone($source, $target);
 
         $next = app(TenantEnvironmentCloneService::class)->copyAgain(
-            $source,
+            $target,
             $previous,
             true,
             'test.alliancetowers.com',
@@ -273,6 +273,33 @@ final class TenantEnvironmentCloneServiceTest extends TestCase
         $this->assertTrue($next->pause_source);
         $this->assertSame('read_only', $source->fresh()?->operator_access_mode);
         $this->assertSame('blocked', $target->fresh()?->operator_access_mode);
+    }
+
+    public function test_copy_again_refuses_to_replace_the_source_workspace(): void
+    {
+        Bus::fake();
+        $source = $this->createSourceTenant();
+        $target = $this->createLinkedTenant('test', 'test.alliancetowers.com');
+        $previous = $this->createReadyClone($source, $target);
+
+        try {
+            app(TenantEnvironmentCloneService::class)->copyAgain(
+                $source,
+                $previous,
+                false,
+                'test.alliancetowers.com',
+                null,
+                null,
+            );
+            $this->fail('Expected copy again to refuse the source workspace.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('clone', $e->errors());
+        }
+
+        $this->assertNull($source->fresh()?->operator_access_mode);
+        $this->assertNull($target->fresh()?->operator_access_mode);
+        $this->assertSame(1, TenantEnvironmentClone::query()->count());
+        Bus::assertNotDispatched(CloneTenantEnvironmentJob::class);
     }
 
     public function test_copy_again_rejects_the_wrong_target_domain_without_blocking_it(): void

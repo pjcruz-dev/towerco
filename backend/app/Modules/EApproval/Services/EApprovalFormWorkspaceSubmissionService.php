@@ -39,6 +39,7 @@ final class EApprovalFormWorkspaceSubmissionService
         ?string $sort = null,
         ?string $subsidiary = null,
         ?string $department = null,
+        ?string $awaitingApproverId = null,
     ): array {
         $dashboard = is_array($workspace['dashboard'] ?? null) ? $workspace['dashboard'] : [];
         $columns = is_array($dashboard['table_columns'] ?? null) ? $dashboard['table_columns'] : [];
@@ -61,6 +62,7 @@ final class EApprovalFormWorkspaceSubmissionService
             $sort,
             $subsidiary,
             $department,
+            $awaitingApproverId,
         );
 
         $rows = $paginator->getCollection()->map(function (EApprovalSubmission $submission) use ($fieldsByName, $fieldNames): array {

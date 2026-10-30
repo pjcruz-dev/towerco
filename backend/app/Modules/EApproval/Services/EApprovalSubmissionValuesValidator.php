@@ -6,7 +6,11 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
+use App\Modules\EApproval\Support\EApprovalDateBounds;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalForecastActivityLimit;
+use App\Modules\EApproval\Support\EApprovalFundsNeededBy;
+use App\Modules\EApproval\Support\EApprovalGridColumnRules;
 use App\Modules\EApproval\Support\EApprovalPerDiemDays;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
 use Illuminate\Validation\ValidationException;
@@ -34,13 +38,20 @@ final class EApprovalSubmissionValuesValidator
         $form->loadMissing('fields');
         $errors = [];
         $policyApproverFields = $this->policyRequiredApprovers->fieldNamesForValidation($form, $values);
+        $sectionOpen = true;
 
         foreach ($form->fields as $field) {
+            if ((string) $field->type === 'section') {
+                $sectionOpen = $this->visibility->isVisible($field, $values);
+
+                continue;
+            }
+
             if ($this->isStructuralField($field)) {
                 continue;
             }
 
-            if (! $this->visibility->isVisible($field, $values)) {
+            if (! $sectionOpen || ! $this->visibility->isVisible($field, $values)) {
                 continue;
             }
 
@@ -119,6 +130,34 @@ final class EApprovalSubmissionValuesValidator
                 $lineError = $this->activityExpenseLineError($field, $raw);
                 if ($lineError !== null) {
                     $errors["values.{$name}"] = [$lineError];
+                }
+
+                $requiredError = EApprovalGridColumnRules::requiredError(
+                    is_array($field->options) ? $field->options : [],
+                    $raw,
+                );
+                if ($requiredError !== null) {
+                    $errors["values.{$name}"] = [$requiredError];
+                }
+
+                $durationError = EApprovalForecastActivityLimit::error(
+                    $name,
+                    EApprovalFieldOptionsParser::gridColumns(is_array($field->options) ? $field->options : []),
+                    $raw,
+                );
+                if ($durationError !== null) {
+                    $errors["values.{$name}"] = [$durationError];
+                }
+
+                if (! isset($errors["values.{$name}"])) {
+                    $boundError = EApprovalDateBounds::gridError(
+                        is_array($field->options) ? $field->options : [],
+                        $raw,
+                        $values,
+                    );
+                    if ($boundError !== null) {
+                        $errors["values.{$name}"] = [$boundError];
+                    }
                 }
 
                 continue;
@@ -292,6 +331,20 @@ final class EApprovalSubmissionValuesValidator
 
             if ($type === 'signature' && ! $this->isValidSignature($value)) {
                 $errors["values.{$name}"] = [__(':label must include a signature.', ['label' => $label])];
+            }
+
+            if ($name === 'needed_by' && trim((string) ($validation['date_min'] ?? '')) === '') {
+                $leadError = EApprovalFundsNeededBy::error($value);
+                if ($leadError !== null) {
+                    $errors["values.{$name}"] = [$leadError];
+                }
+            }
+
+            if (! isset($errors["values.{$name}"]) && ($type === 'date' || $type === 'date_range')) {
+                $boundError = EApprovalDateBounds::valueError($validation, $value, $values, $label);
+                if ($boundError !== null) {
+                    $errors["values.{$name}"] = [$boundError];
+                }
             }
         }
 
@@ -615,7 +668,7 @@ final class EApprovalSubmissionValuesValidator
                 $rate = $rate / $nights;
             }
             if ($rate > $max + 0.001) {
-                return __('Lodging cannot exceed :rate.', [
+                return __('Lodging cannot exceed :rate per day.', [
                     'rate' => number_format($max, 2, '.', ''),
                 ]);
             }

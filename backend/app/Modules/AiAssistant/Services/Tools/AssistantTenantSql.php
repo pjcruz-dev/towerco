@@ -175,9 +175,9 @@ final class AssistantTenantSql
                 'sql' => ['That statement is not allowed. A wipe (TRUNCATE, DROP TABLE, or a change with no WHERE) is rejected.'],
             ]);
         }
-        if ($verb === 'DROP' && preg_match('/\bindex\b/i', $statement) !== 1) {
+        if (in_array($verb, ['CREATE', 'ALTER', 'DROP'], true)) {
             throw ValidationException::withMessages([
-                'sql' => ['DROP TABLE is rejected. Change the rows you mean. Do not wipe a table.'],
+                'sql' => ['Schema changes are rejected. Create, update, or delete the named rows. Do not wipe or reshape a table.'],
             ]);
         }
         if (in_array($verb, ['UPDATE', 'DELETE'], true) && preg_match('/\bwhere\b/i', $statement) !== 1) {
@@ -188,6 +188,11 @@ final class AssistantTenantSql
         if (in_array($verb, ['UPDATE', 'DELETE'], true) && preg_match('/\bwhere\s+(1\s*=\s*1|true|1)\b/i', $statement) === 1) {
             throw ValidationException::withMessages([
                 'sql' => ['That WHERE clause matches every row. A wipe is rejected.'],
+            ]);
+        }
+        if (in_array($verb, ['UPDATE', 'DELETE'], true) && preg_match('/\bwhere\b(.*)$/is', $statement, $where) === 1 && preg_match('/(?:=|\bin\s*\()/i', $where[1]) !== 1) {
+            throw ValidationException::withMessages([
+                'sql' => ['Name the rows with = or IN. A change that matches every row is rejected.'],
             ]);
         }
         if (in_array($verb, ['DROP', 'CREATE', 'ALTER'], true) && preg_match('/\b(database|schema|user|view)\b/i', $statement) === 1 && preg_match('/\b(table|index|column)\b/i', $statement) !== 1) {

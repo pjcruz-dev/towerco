@@ -89,7 +89,7 @@ final class EApprovalFormWorkspaceTest extends TestCase
         tenancy()->initialize($this->testTenant);
 
         $form = $this->createIsoFormWithDashboardFieldColumn();
-        $titleField = \App\Modules\EApproval\Models\EApprovalFormField::query()
+        $titleField = EApprovalFormField::query()
             ->where('form_id', $form->id)
             ->where('name', 'document_title')
             ->firstOrFail();
@@ -598,6 +598,177 @@ final class EApprovalFormWorkspaceTest extends TestCase
             'doc_type_code' => 'F',
             'restricted_to' => $restrictedTo,
             'metadata_json' => [
+                'workspace' => $workspace,
+            ],
+        ]);
+    }
+
+    public function test_workspace_lists_the_viewers_draft_as_continue(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $form = $this->createIsoForm();
+        EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'document_no' => 'DRAFT-WS-1',
+            'status' => EApprovalSubmissionStatus::DRAFT,
+            'current_step' => 1,
+        ]);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/e-approval/workspaces/'.EApprovalFormWorkspaceSupport::ISO_WORKSPACE_SLUG)
+            ->assertOk()
+            ->assertJsonPath('data.continue_drafts.0.document_no', 'DRAFT-WS-1')
+            ->assertJsonPath('data.continue_drafts.0.can_continue', true)
+            ->assertJsonPath('data.continue_drafts.0.href', '/e-approval/request/'.$form->id)
+            ->assertJsonPath('data.kpis.0.href', '/e-approval/w/iso-approval?queue=pending');
+    }
+
+    public function test_cash_advance_workspace_counts_money(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $form = $this->createMoneyWorkspaceForm('cash_advance', 'cash-advance');
+        $requested = EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'currency',
+            'name' => 'requested_amount',
+            'label' => 'Requested amount',
+            'step_order' => 1,
+        ]);
+        $subsidiary = EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'text',
+            'name' => 'subsidiary',
+            'label' => 'Subsidiary',
+            'step_order' => 2,
+        ]);
+        $reimbursement = EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'currency',
+            'name' => 'total_reimbursement',
+            'label' => 'Total reimbursement',
+            'step_order' => 3,
+        ]);
+        $parent = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'document_no' => 'CA-100',
+            'status' => EApprovalSubmissionStatus::APPROVED,
+            'current_step' => 1,
+        ]);
+        EApprovalFormValue::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $parent->id,
+            'field_id' => $requested->id,
+            'value' => '1000.00',
+        ]);
+        EApprovalFormValue::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $parent->id,
+            'field_id' => $subsidiary->id,
+            'value' => 'ATC',
+        ]);
+        $child = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'parent_submission_id' => $parent->id,
+            'document_no' => 'LQ-100',
+            'status' => EApprovalSubmissionStatus::APPROVED,
+            'current_step' => 1,
+        ]);
+        EApprovalFormValue::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $child->id,
+            'field_id' => $reimbursement->id,
+            'value' => '400.00',
+        ]);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/e-approval/workspaces/cash-advance')
+            ->assertOk()
+            ->assertJsonPath('data.kpis.0.key', 'outstanding')
+            ->assertJsonPath('data.kpis.0.value', '600.00')
+            ->assertJsonPath('data.kpis.1.value', '1,000.00')
+            ->assertJsonPath('data.kpis.2.value', '400.00')
+            ->assertJsonPath('data.subsidiary_breakdown.0.key', 'ATC')
+            ->assertJsonPath('data.subsidiary_breakdown.0.amount', 1000);
+    }
+
+    public function test_workspace_lines_expand_grid_rows(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $form = $this->createMoneyWorkspaceForm('cash_advance', 'cash-lines');
+        $grid = EApprovalFormField::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'type' => 'grid',
+            'name' => 'expense_lines',
+            'label' => 'Forecast lines',
+            'step_order' => 1,
+            'options' => [
+                'columns' => [
+                    ['label' => 'Travel dates', 'type' => 'date_range'],
+                    ['label' => 'Amount', 'type' => 'currency'],
+                ],
+            ],
+        ]);
+        $submission = EApprovalSubmission::query()->create([
+            'id' => (string) Str::uuid(),
+            'form_id' => $form->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'document_no' => 'CA-LINE',
+            'status' => EApprovalSubmissionStatus::PENDING,
+            'current_step' => 1,
+        ]);
+        EApprovalFormValue::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $submission->id,
+            'field_id' => $grid->id,
+            'value' => json_encode([
+                'rows' => [
+                    ['0' => json_encode(['from' => '2026-10-14', 'to' => '2026-10-16']), '1' => '1500'],
+                ],
+            ]),
+        ]);
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/e-approval/workspaces/cash-lines/lines')
+            ->assertOk()
+            ->assertJsonPath('data.0.document_no', 'CA-LINE')
+            ->assertJsonPath('data.0.date_range', '2026-10-14 – 2026-10-16')
+            ->assertJsonPath('data.0.amount', '1,500.00')
+            ->assertJsonPath('meta.total', 1);
+    }
+
+    private function createMoneyWorkspaceForm(string $family, string $slug): EApprovalForm
+    {
+        $workspace = EApprovalFormWorkspaceSupport::isoPilotDefaults('Cash advance');
+        $workspace['slug'] = $slug;
+        $workspace['title'] = 'Cash advance';
+
+        return EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cash advance',
+            'description' => 'Cash advance workspace',
+            'category' => 'general',
+            'status' => 'published',
+            'schema_version' => 1,
+            'owner_code' => 'GEN',
+            'doc_type_code' => 'F',
+            'metadata_json' => [
+                'form_family' => $family,
                 'workspace' => $workspace,
             ],
         ]);

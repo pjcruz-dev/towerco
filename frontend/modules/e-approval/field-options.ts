@@ -48,12 +48,26 @@ export type GridColumnDef = {
   linked_grid?: string;
   /** Date range columns include a clock. Missing means on, so existing forms keep time. */
   include_time?: boolean;
+  /** Hidden columns stay in the saved grid so existing cell indexes do not move. */
+  hidden?: boolean;
+  /** The requestor must fill this cell on any line that has other values. */
+  required?: boolean;
+  /** A site lookup can hold more than one site. */
+  multiple?: boolean;
+  /** This number or currency column is added to the grid's total row. */
+  show_total?: boolean;
   /**
    * Site lookup columns to write onto the line. Missing means address only.
    * An empty list keeps the site ID and nothing else.
    */
   show_fields?: string[];
   locked?: boolean;
+  /** `today` blocks past days. `lead` blocks before today + lead_days. `field` blocks before that field's date. */
+  date_min?: "today" | "lead" | "field";
+  lead_days?: number;
+  date_min_field?: string;
+  /** Site cells must belong to this form field (usually Subsidiary). */
+  subsidiary_field?: string;
 };
 
 export const GRID_COLUMN_TYPE_LABELS: Record<GridColumnType, string> = {
@@ -315,8 +329,24 @@ function normalizeGridColumnDef(entry: unknown, index: number): GridColumnDef | 
     ...(filledFrom !== "" ? { filled_from: filledFrom } : {}),
     ...(linkedGrid !== "" ? { linked_grid: linkedGrid } : {}),
     ...(type === "date_range" && record.include_time === false ? { include_time: false } : {}),
+    ...(record.hidden === true ? { hidden: true } : {}),
+    ...(record.required === true ? { required: true } : {}),
+    ...(record.multiple === true ? { multiple: true } : {}),
+    ...(record.show_total === true ? { show_total: true } : {}),
     ...(showFields ? { show_fields: showFields } : {}),
     ...(record.locked === true || label.toLowerCase() === "vat" ? { locked: true } : {}),
+    ...(record.date_min === "today" || record.date_min === "lead" || record.date_min === "field"
+      ? { date_min: record.date_min }
+      : {}),
+    ...(record.date_min === "lead" && typeof record.lead_days === "number"
+      ? { lead_days: Math.max(1, Math.floor(record.lead_days)) }
+      : {}),
+    ...(record.date_min === "field" && typeof record.date_min_field === "string" && record.date_min_field.trim() !== ""
+      ? { date_min_field: record.date_min_field.trim() }
+      : {}),
+    ...(typeof record.subsidiary_field === "string" && record.subsidiary_field.trim() !== ""
+      ? { subsidiary_field: record.subsidiary_field.trim() }
+      : {}),
   };
 }
 
@@ -357,8 +387,16 @@ export function setGridColumnDefs(columns: GridColumnDef[]): { columns: GridColu
         ...(col.filled_from ? { filled_from: col.filled_from } : {}),
         ...(col.linked_grid ? { linked_grid: col.linked_grid } : {}),
         ...(col.type === "date_range" && col.include_time === false ? { include_time: false } : {}),
+        ...(col.hidden ? { hidden: true } : {}),
+        ...(col.required ? { required: true } : {}),
+        ...(col.multiple ? { multiple: true } : {}),
+        ...(col.show_total ? { show_total: true } : {}),
         ...(col.show_fields ? { show_fields: col.show_fields } : {}),
         ...(col.locked ? { locked: true } : {}),
+        ...(col.date_min ? { date_min: col.date_min } : {}),
+        ...(col.date_min === "lead" && col.lead_days ? { lead_days: col.lead_days } : {}),
+        ...(col.date_min === "field" && col.date_min_field ? { date_min_field: col.date_min_field } : {}),
+        ...(col.subsidiary_field ? { subsidiary_field: col.subsidiary_field } : {}),
       }))
       .filter((col) => col.label !== ""),
   };

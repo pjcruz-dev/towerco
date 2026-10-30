@@ -36,8 +36,10 @@ import { moduleListExportParamsSerializer } from "@/lib/api/module-list-export-p
 export async function fetchEApprovalAssignableUsers(
   audience: "approvers" | "requestors" | "recipients" = "approvers",
 ): Promise<EApprovalAssignableUser[]> {
+  const resolved =
+    audience === "requestors" || audience === "recipients" ? audience : "approvers";
   const response = await apiClient.get<{ data: EApprovalAssignableUser[] }>("/e-approval/assignable-users", {
-    params: audience === "requestors" ? { audience } : undefined,
+    params: resolved === "approvers" ? undefined : { audience: resolved },
   });
   return response.data.data;
 }
@@ -320,6 +322,7 @@ export async function fetchEApprovalWorkspaceSubmissions(
     sort?: string;
     subsidiary?: string;
     department?: string;
+    awaiting_me?: boolean;
   } = {},
 ): Promise<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalWorkspaceSubmissionRow[]; meta: PaginatedMeta }>(
@@ -328,9 +331,50 @@ export async function fetchEApprovalWorkspaceSubmissions(
       params: {
         ...params,
         mine: params.mine ? 1 : undefined,
+        awaiting_me: params.awaiting_me ? 1 : undefined,
       },
     },
   );
+  return response.data;
+}
+
+export type EApprovalWorkspaceLineRow = {
+  id: string;
+  submission_id: string;
+  document_no: string;
+  status: string;
+  requestor_name: string;
+  subsidiary: string;
+  date_range: string;
+  amount: string;
+  line_no: number;
+};
+
+export async function fetchEApprovalWorkspaceLines(
+  slug: string,
+  params: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    status?: string;
+    mine?: boolean;
+    from?: string;
+    to?: string;
+    subsidiary?: string;
+    department?: string;
+    awaiting_me?: boolean;
+  } = {},
+): Promise<{ data: EApprovalWorkspaceLineRow[]; meta: PaginatedMeta & { truncated?: boolean } }> {
+  const response = await apiClient.get<{
+    data: EApprovalWorkspaceLineRow[];
+    meta: PaginatedMeta & { truncated?: boolean };
+  }>(`/e-approval/workspaces/${encodeURIComponent(slug)}/lines`, {
+    params: {
+      ...params,
+      mine: params.mine ? 1 : undefined,
+      awaiting_me: params.awaiting_me ? 1 : undefined,
+    },
+  });
   return response.data;
 }
 
@@ -579,9 +623,36 @@ export async function decideEApprovalApproval(
     proceed_optional?: boolean;
     file_audience?: "everyone" | "specific_person" | "selected_users";
     file_recipient_ids?: string[];
+    payment_proof?: { status: "released" | "hold"; comment?: string };
+    payment_files?: File[];
   },
 ): Promise<void> {
-  await apiClient.post(`/e-approval/approvals/${id}/decide`, payload);
+  const files = payload.payment_files ?? [];
+  if (files.length === 0) {
+    const body = { ...payload };
+    delete body.payment_files;
+    await apiClient.post(`/e-approval/approvals/${id}/decide`, body);
+    return;
+  }
+
+  const body = new FormData();
+  body.append("decision", payload.decision);
+  if (payload.remarks) body.append("remarks", payload.remarks);
+  if (payload.signature) body.append("signature", payload.signature);
+  if (payload.signature_consent) body.append("signature_consent", "1");
+  if (payload.signature_storage_consent) body.append("signature_storage_consent", "1");
+  if (payload.release_reference) body.append("release_reference", payload.release_reference);
+  if (payload.release_date) body.append("release_date", payload.release_date);
+  if (payload.settlement_reference) body.append("settlement_reference", payload.settlement_reference);
+  if (payload.proceed_optional) body.append("proceed_optional", "1");
+  if (payload.file_audience) body.append("file_audience", payload.file_audience);
+  (payload.file_recipient_ids ?? []).forEach((recipientId) => body.append("file_recipient_ids[]", recipientId));
+  if (payload.payment_proof) {
+    body.append("payment_proof[status]", payload.payment_proof.status);
+    if (payload.payment_proof.comment) body.append("payment_proof[comment]", payload.payment_proof.comment);
+  }
+  files.forEach((file) => body.append("payment_files[]", file));
+  await apiClient.post(`/e-approval/approvals/${id}/decide`, body, { timeout: 120_000 });
 }
 
 export async function cancelEApprovalCashAdvanceTrip(id: string): Promise<EApprovalSubmissionDetail> {
@@ -621,9 +692,32 @@ export async function postEApprovalComment(
     pin_w?: number;
     pin_h?: number;
     mention_user_ids?: string[];
+    images?: File[];
   },
 ): Promise<void> {
-  await apiClient.post(`/e-approval/submissions/${submissionId}/comments`, payload);
+  const images = payload.images ?? [];
+  if (images.length === 0) {
+    await apiClient.post(`/e-approval/submissions/${submissionId}/comments`, {
+      message: payload.message,
+      parent_id: payload.parent_id,
+      attachment_id: payload.attachment_id,
+      pin_page: payload.pin_page,
+      pin_x: payload.pin_x,
+      pin_y: payload.pin_y,
+      pin_w: payload.pin_w,
+      pin_h: payload.pin_h,
+      mention_user_ids: payload.mention_user_ids,
+    });
+    return;
+  }
+
+  const body = new FormData();
+  body.append("message", payload.message);
+  if (payload.parent_id) body.append("parent_id", payload.parent_id);
+  if (payload.attachment_id) body.append("attachment_id", payload.attachment_id);
+  (payload.mention_user_ids ?? []).forEach((id) => body.append("mention_user_ids[]", id));
+  images.forEach((file) => body.append("images[]", file));
+  await apiClient.post(`/e-approval/submissions/${submissionId}/comments`, body);
 }
 
 export async function fetchEApprovalAuditIndex(params: {
@@ -1008,6 +1102,7 @@ export async function downloadEApprovalWorkspaceExport(
     grid_field?: string;
     async?: boolean;
     ids?: string[];
+    awaiting_me?: boolean;
   } = {},
 ): Promise<EApprovalExportResult> {
   const response = await apiClient.get<Blob | { data: Record<string, unknown> }>(
@@ -1019,6 +1114,7 @@ export async function downloadEApprovalWorkspaceExport(
         from: params.from || undefined,
         to: params.to || undefined,
         mine: params.mine ? "1" : undefined,
+        awaiting_me: params.awaiting_me ? "1" : undefined,
         include_fields: params.include_fields === false ? "0" : undefined,
         subsidiary: params.subsidiary || undefined,
         department: params.department || undefined,
@@ -1099,6 +1195,8 @@ export type EApprovalMasterDataOption = {
   data?: {
     address?: string;
     name?: string;
+    label?: string;
+    code?: string;
     vatable?: boolean;
     per_diem?: boolean;
     hotel?: boolean;

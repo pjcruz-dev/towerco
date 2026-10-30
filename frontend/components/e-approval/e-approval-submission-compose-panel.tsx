@@ -19,6 +19,7 @@ import {
   fetchEApprovalMetadata,
   fetchEApprovalApprovalPolicy,
   fetchEApprovalOpenCashAdvances,
+  fetchEApprovalSettingsPublic,
   fetchEApprovalSubmission,
   resubmitEApprovalSubmission,
   submitEApprovalSubmissionDraft,
@@ -614,6 +615,12 @@ export function EApprovalSubmissionComposePanel({
     ? (resubmitQuery.data?.attachments ?? [])
     : (draftQuery.data?.attachments ?? []);
 
+  const financeCapsQuery = useQuery({
+    queryKey: ["e-approval", "settings", "public"],
+    queryFn: fetchEApprovalSettingsPublic,
+    staleTime: 60_000,
+  });
+
   const draftExistingAttachmentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const attachment of activeSubmissionAttachments) {
@@ -625,6 +632,33 @@ export function EApprovalSubmissionComposePanel({
     }
     return counts;
   }, [activeSubmissionAttachments]);
+
+  const submissionValidationOptions = useMemo(() => {
+    const cap = (raw: string | undefined): number | null => {
+      const text = (raw ?? "").trim();
+      if (text === "") {
+        return null;
+      }
+      const value = Number(text);
+      return Number.isFinite(value) ? value : null;
+    };
+
+    return {
+      approverOptions,
+      requiredApproverFieldNames,
+      existingAttachmentCountsByField: draftExistingAttachmentCounts,
+      cameraMetadataByField,
+      perDiemMaxPerDay: cap(financeCapsQuery.data?.per_diem_max_per_day),
+      lodgingMaxPerDay: cap(financeCapsQuery.data?.hotel_accommodation_max),
+    };
+  }, [
+    approverOptions,
+    cameraMetadataByField,
+    draftExistingAttachmentCounts,
+    financeCapsQuery.data?.hotel_accommodation_max,
+    financeCapsQuery.data?.per_diem_max_per_day,
+    requiredApproverFieldNames,
+  ]);
 
   const revisionStillNeeded = useMemo(() => {
     if (!controlledDocumentSync || controlledDocumentRequestMode !== "revision") {
@@ -1001,12 +1035,12 @@ export function EApprovalSubmissionComposePanel({
       return;
     }
 
-    const validationIssues = validateSubmissionValues(composeFields, computedValues, attachmentFiles, {
-      approverOptions,
-      requiredApproverFieldNames,
-      existingAttachmentCountsByField: draftExistingAttachmentCounts,
-      cameraMetadataByField,
-    });
+    const validationIssues = validateSubmissionValues(
+      composeFields,
+      computedValues,
+      attachmentFiles,
+      submissionValidationOptions,
+    );
     if (validationIssues.length > 0) {
       const map: Record<string, string> = {};
       for (const issue of validationIssues) {
@@ -1291,24 +1325,36 @@ export function EApprovalSubmissionComposePanel({
               fieldHelpOverrides={fieldHelpOverrides}
               formMetadata={formMetadata}
               composeConfig={composeConfig}
-              validationOptions={{
-                approverOptions,
-                requiredApproverFieldNames,
-                existingAttachmentCountsByField: draftExistingAttachmentCounts,
-                cameraMetadataByField,
-              }}
+              validationOptions={submissionValidationOptions}
               currentStep={composeCurrentStep}
               onCurrentStepChange={setComposeCurrentStep}
               onStepMetaChange={setComposeStepMeta}
               onStepValidationIssues={(issues) => {
                 const map: Record<string, string> = {};
                 for (const issue of issues) {
-                  map[issue.fieldName] = issue.message;
+                  if (!map[issue.fieldName]) {
+                    map[issue.fieldName] = issue.message;
+                  }
                 }
                 setFieldErrors(map);
                 if (issues[0]) {
                   scrollToFirstFieldError(issues[0].fieldName);
                 }
+              }}
+              onLiveValidationIssues={(issues) => {
+                const map: Record<string, string> = {};
+                for (const issue of issues) {
+                  if (!map[issue.fieldName]) {
+                    map[issue.fieldName] = issue.message;
+                  }
+                }
+                setFieldErrors((current) => {
+                  const keys = Object.keys(map);
+                  const same =
+                    keys.length === Object.keys(current).length &&
+                    keys.every((key) => current[key] === map[key]);
+                  return same ? current : map;
+                });
               }}
               onChange={(name, value) => {
                 userEditedRef.current = true;

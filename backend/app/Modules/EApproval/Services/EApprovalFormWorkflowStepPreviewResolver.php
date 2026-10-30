@@ -301,6 +301,18 @@ final class EApprovalFormWorkflowStepPreviewResolver
         }
 
         if ($type === 'user_list' || $type === 'reviewer_list') {
+            $condition = is_array($definition['condition'] ?? null) ? $definition['condition'] : [];
+            if ($type === 'user_list' && EApprovalWorkflowStepDefinitionSupport::listSource($definition, $condition) === 'fixed') {
+                $ids = EApprovalWorkflowStepDefinitionSupport::fixedApproverIds($definition, $condition);
+                if ($ids === []) {
+                    return __('Add at least one fixed approver.');
+                }
+
+                return $user === null
+                    ? __('Fixed approvers did not resolve to active users.')
+                    : null;
+            }
+
             $fieldName = $approverId !== '' ? $approverId : trim((string) ($definition['approver_id'] ?? ''));
             if ($fieldName === '') {
                 return $type === 'reviewer_list'

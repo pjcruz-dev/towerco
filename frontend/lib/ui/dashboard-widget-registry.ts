@@ -51,22 +51,32 @@ function isSpan(value: unknown): value is DashboardWidgetSpan {
   return value === "full" || value === "half" || value === "third" || value === "quarter";
 }
 
+/**
+ * Laravel's `array` JSON cast encodes an empty object `{}` as `[]`.
+ * A saved layout with no spans or card options still has those keys.
+ */
+function isPhpEmptyObject(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function isObjectMap(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function isDashboardLayoutPrefs(value: unknown): value is DashboardLayoutPrefs {
   if (!value || typeof value !== "object") return false;
   const row = value as Record<string, unknown>;
   if ("widgetOrder" in row && !isStringArray(row.widgetOrder)) return false;
   if ("hiddenWidgetIds" in row && !isStringArray(row.hiddenWidgetIds)) return false;
   if ("enabledWidgetIds" in row && !isStringArray(row.enabledWidgetIds)) return false;
-  if ("spans" in row && row.spans !== undefined) {
-    if (!row.spans || typeof row.spans !== "object" || Array.isArray(row.spans)) return false;
-    for (const span of Object.values(row.spans as Record<string, unknown>)) {
+  if ("spans" in row && row.spans !== undefined && !isPhpEmptyObject(row.spans)) {
+    if (!isObjectMap(row.spans)) return false;
+    for (const span of Object.values(row.spans)) {
       if (!isSpan(span)) return false;
     }
   }
-  if ("widgetOptions" in row && row.widgetOptions !== undefined) {
-    if (!row.widgetOptions || typeof row.widgetOptions !== "object" || Array.isArray(row.widgetOptions)) {
-      return false;
-    }
+  if ("widgetOptions" in row && row.widgetOptions !== undefined && !isPhpEmptyObject(row.widgetOptions)) {
+    if (!isObjectMap(row.widgetOptions)) return false;
   }
   return true;
 }

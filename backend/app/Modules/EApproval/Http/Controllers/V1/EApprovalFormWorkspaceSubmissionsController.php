@@ -35,6 +35,7 @@ class EApprovalFormWorkspaceSubmissionsController extends AbstractApiController
         ]);
 
         $forceOwn = filter_var($request->query('mine', false), FILTER_VALIDATE_BOOLEAN);
+        $awaitingMe = filter_var($request->query('awaiting_me', false), FILTER_VALIDATE_BOOLEAN);
         $canViewAll = $workspaces->viewerCanSeeAllInWorkspace($request->user(), $context['workspace']) && ! $forceOwn;
         $status = (string) ($validated['status'] ?? $request->query('status', 'all'));
 
@@ -53,6 +54,7 @@ class EApprovalFormWorkspaceSubmissionsController extends AbstractApiController
             $query['sort'],
             isset($validated['subsidiary']) ? trim((string) $validated['subsidiary']) : null,
             isset($validated['department']) ? trim((string) $validated['department']) : null,
+            $awaitingMe ? (string) $request->user()->id : null,
         );
 
         return $this->okWithMeta($payload['data'], $payload['meta']);

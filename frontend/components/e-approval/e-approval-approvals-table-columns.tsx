@@ -33,14 +33,30 @@ export function createEApprovalApprovalsTableColumns(): ColumnDef<EApprovalAppro
       cell: ({ row }) => row.original.submission?.form_name,
     },
     {
+      id: "requestor",
+      header: "Requestor",
+      cell: ({ row }) => row.original.submission?.requestor?.name ?? "—",
+    },
+    {
+      id: "submitted",
+      header: "Submitted",
+      cell: ({ row }) => {
+        const value = row.original.submission?.created_at;
+        if (!value) return "—";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { dateStyle: "medium" });
+      },
+    },
+    {
       id: "status",
       accessorKey: "status",
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => (
         <EApprovalStatusBadge
-          status={row.original.status}
-          kind={row.original.status === "pending" ? "approval" : "submission"}
+          status={row.original.submission?.status || row.original.status}
+          label={row.original.submission?.status_label}
+          kind="submission"
         />
       ),
     },

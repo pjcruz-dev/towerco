@@ -9,7 +9,9 @@ use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalAwaitingApproverFilter;
 use App\Modules\EApproval\Support\EApprovalFieldOptionsParser;
+use App\Modules\EApproval\Support\EApprovalGridCellText;
 use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
 use App\Modules\Identity\Models\TenantUser;
@@ -334,7 +336,7 @@ final class EApprovalSubmissionExportService
                 $keyed['line_no'] = (string) ($rowIndex + 1);
 
                 for ($i = 0; $i < $columnCount; $i++) {
-                    $keyed['cell:'.$i] = $cells[(string) $i] ?? '';
+                    $keyed['cell:'.$i] = EApprovalGridCellText::present($cells[(string) $i] ?? '');
                 }
 
                 if ($totalIndices !== null) {
@@ -534,6 +536,11 @@ final class EApprovalSubmissionExportService
             } else {
                 $this->applyViewerScope($query, $scope['viewer']);
             }
+        }
+
+        $awaitingApproverId = trim((string) ($filters['awaiting_approver_id'] ?? ''));
+        if ($awaitingApproverId !== '') {
+            EApprovalAwaitingApproverFilter::apply($query, $awaitingApproverId);
         }
 
         return $query;

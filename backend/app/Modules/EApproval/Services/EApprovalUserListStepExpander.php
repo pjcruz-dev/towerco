@@ -65,6 +65,9 @@ final class EApprovalUserListStepExpander
      */
     private function expandOne(array $definition, array $values, bool $strict, bool $review = false): array
     {
+        $condition = is_array($definition['condition'] ?? null) ? $definition['condition'] : [];
+        $fixed = ! $review
+            && EApprovalWorkflowStepDefinitionSupport::listSource($definition, $condition) === 'fixed';
         $fieldName = trim((string) ($definition['approverId'] ?? $definition['approver_id'] ?? ''));
         $order = (int) ($definition['step_order'] ?? 1);
         $when = EApprovalWorkflowStepDefinitionSupport::whenFromDefinition(
@@ -86,7 +89,18 @@ final class EApprovalUserListStepExpander
             ?? (is_array($definition['condition'] ?? null) ? ($definition['condition']['fallback_approver_id'] ?? null) : null);
         $fallbackId = is_string($fallback) && trim($fallback) !== '' ? trim($fallback) : null;
 
-        if ($fieldName === '') {
+        if ($fixed) {
+            $candidates = EApprovalWorkflowStepDefinitionSupport::fixedApproverIds($definition, $condition);
+            if ($candidates === []) {
+                if (! $strict) {
+                    return [];
+                }
+
+                throw ValidationException::withMessages([
+                    'workflow' => [__('A fixed approver list step needs at least one approver.')],
+                ]);
+            }
+        } elseif ($fieldName === '') {
             if (! $strict) {
                 return [];
             }
@@ -98,9 +112,9 @@ final class EApprovalUserListStepExpander
                         : 'A dynamic approver list step is missing its source field.',
                 )],
             ]);
+        } else {
+            $candidates = EApprovalUserListValueParser::parse($values[$fieldName] ?? null);
         }
-
-        $candidates = EApprovalUserListValueParser::parse($values[$fieldName] ?? null);
         $resolved = $this->resolveActiveUserIds($candidates);
 
         if ($resolved === [] && $fallbackId !== null) {
@@ -114,9 +128,11 @@ final class EApprovalUserListStepExpander
 
             throw ValidationException::withMessages([
                 'workflow' => [__(
-                    $review
-                        ? 'Reviewer list ":field" is empty or has no active users. Add reviewers or set a fallback approver.'
-                        : 'Approver list ":field" is empty or has no active users. Add stakeholders or set a fallback approver.',
+                    $fixed
+                        ? 'Fixed approvers are inactive or missing. Pick active users or set a fallback approver.'
+                        : ($review
+                            ? 'Reviewer list ":field" is empty or has no active users. Add reviewers or set a fallback approver.'
+                            : 'Approver list ":field" is empty or has no active users. Add stakeholders or set a fallback approver.'),
                     ['field' => $fieldName],
                 )],
             ]);
@@ -133,6 +149,21 @@ final class EApprovalUserListStepExpander
                 || (is_array($definition['condition'] ?? null) && ! empty($definition['condition']['optional']));
             if ($memberOptional) {
                 $member['optional'] = true;
+            }
+            $autoApproveDays = EApprovalWorkflowStepDefinitionSupport::autoApproveDays(
+                $definition,
+                is_array($definition['condition'] ?? null) ? $definition['condition'] : [],
+            );
+            if ($autoApproveDays !== null) {
+                $member['auto_approve_enabled'] = true;
+                $member['auto_approve_days'] = $autoApproveDays;
+            }
+            if (EApprovalWorkflowStepDefinitionSupport::proofOfPaymentEnabled($definition)) {
+                $member['proof_of_payment'] = true;
+            }
+            $decisionLabels = EApprovalWorkflowStepDefinitionSupport::storedDecisionLabels($definition);
+            if ($decisionLabels !== null) {
+                $member['decision_labels'] = $decisionLabels;
             }
             if ($when !== []) {
                 $member['when'] = $when;

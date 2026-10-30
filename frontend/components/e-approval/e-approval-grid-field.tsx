@@ -36,11 +36,23 @@ import {
   perDiemLineTotal,
   rowIsLodging,
   sumGridColumnValues,
+  gridColumnFooterValue,
+  gridColumnsRequestTotals,
   summableGridColumnIndexes,
 } from "@/modules/e-approval/grid-row-formulas";
 import { placeReviewTotals, type ComposeReviewTotal } from "@/modules/e-approval/form-compose-review";
 import { parseSubmissionAmount } from "@/modules/e-approval/parent-submission-link";
 import type { EApprovalFormFieldInput, EApprovalOpenCashAdvance } from "@/modules/e-approval/types";
+
+function vatSplitKind(label: string): "non" | "net" | null {
+  if (/^non-?vatable$/i.test(label.trim())) {
+    return "non";
+  }
+  if (/net of vat/i.test(label.trim())) {
+    return "net";
+  }
+  return null;
+}
 
 function expenseLineSplitDisplay(
   columns: GridColumnDef[],
@@ -249,7 +261,7 @@ function hotelAmountNote(
   }
   if (maxRate !== null && rate > maxRate + 0.001) {
     return {
-      text: `Lodging cannot exceed ${formatGridCurrencyDisplay(maxRate.toFixed(2))}.`,
+      text: `Lodging cannot exceed ${formatGridCurrencyDisplay(maxRate.toFixed(2))} per day.`,
       error: true,
     };
   }
@@ -383,10 +395,10 @@ export function EApprovalGridField({
   const displayColumns = [...visibleColumns];
   if (field?.name === "expense_lines" && expenseLineVatParts(columnDefs, {}) !== null) {
     const extras: Array<{ label: string; synthetic: "non" | "net" }> = [];
-    if (!columnDefs.some((column) => /^non-?vatable$/i.test(column.label.trim()))) {
+    if (!columnDefs.some((column) => vatSplitKind(column.label) === "non")) {
       extras.push({ label: "Non-VATable", synthetic: "non" });
     }
-    if (!columnDefs.some((column) => /net of vat/i.test(column.label.trim()))) {
+    if (!columnDefs.some((column) => vatSplitKind(column.label) === "net")) {
       extras.push({ label: "VATable, net of VAT", synthetic: "net" });
     }
     const vatAt = displayColumns.findIndex(({ column }) => /^vat$/i.test(column.label.trim()));
@@ -399,8 +411,9 @@ export function EApprovalGridField({
       });
     });
   }
+  const explicitColumnTotals = gridColumnsRequestTotals(columnDefs);
   const summaryRows =
-    summaryTotals.length > 0
+    !explicitColumnTotals && summaryTotals.length > 0
       ? placeReviewTotals(
           displayColumns.map(({ column }) => column.label),
           summaryTotals,
@@ -423,7 +436,9 @@ export function EApprovalGridField({
   const hotelMaxParsed = hotelMaxRaw.trim() === "" ? null : Number(hotelMaxRaw);
   const hotelMax = hotelMaxParsed !== null && Number.isFinite(hotelMaxParsed) ? hotelMaxParsed : null;
   const showTotalsFooter =
-    field?.name !== "expense_lines" && summable.some(Boolean) && grid.rows.length > 0;
+    summable.some(Boolean) &&
+    grid.rows.length > 0 &&
+    (gridColumnsRequestTotals(columnDefs) || field?.name !== "expense_lines");
   const labelColSpan = leadingNonSummableColSpan(summable);
 
   const commit = (next: GridFieldValue) => {
@@ -509,7 +524,8 @@ export function EApprovalGridField({
     const copy: Record<string, string> = {};
     for (let i = 0; i < columns.length; i += 1) {
       const key = columnKey(i, columns.length);
-      copy[key] = previous[key] ?? "";
+      const label = String(columns[i] ?? "").trim();
+      copy[key] = /^forecast amount$/i.test(label) ? "" : (previous[key] ?? "");
     }
 
     commit({ rows: [...grid.rows, copy] });
@@ -590,21 +606,22 @@ export function EApprovalGridField({
               >
                 {displayColumns.map(({ column: colDef, index: colIndex, synthetic }) => {
                   const moneyRole = liquidationMoneyRole(columnDefs, colDef);
+                  const splitKind = synthetic ?? vatSplitKind(colDef.label);
                   return (
                   <td
                     key={`${rowIndex}-${colDef.label}-${colIndex}`}
                     style={{ minWidth: gridColumnMinWidth(colDef) }}
                     className={cn(
                       "border border-border px-1 py-1 align-middle",
-                      (isHighlightedTotalColumn(colDef) || synthetic) && "bg-muted/50",
-                      synthetic && "text-right tabular-nums",
+                      (isHighlightedTotalColumn(colDef) || splitKind) && "bg-muted/50",
+                      splitKind && "text-right tabular-nums",
                       moneyRole === "forecast" && "bg-muted/70",
                       moneyRole === "actual" && "bg-primary/10",
                     )}
                   >
-                    {synthetic ? (
+                    {splitKind ? (
                       <span className="block px-1 text-right text-[11px] tabular-nums">
-                        {expenseLineSplitDisplay(flagColumns, row, synthetic)}
+                        {expenseLineSplitDisplay(flagColumns, row, splitKind)}
                       </span>
                     ) : expenseCellApplies(flagColumns, row, colDef) ? (
                       <PerDiemAmountCell
@@ -625,6 +642,7 @@ export function EApprovalGridField({
                           comfortable={comfortable}
                           allowRemoteLookups={allowRemoteLookups}
                           subsidiary={allValues.subsidiary ?? ""}
+                          values={allValues}
                           value={row[columnKey(colIndex, columns.length)] ?? ""}
                           onChange={(cellValue, meta) => updateCell(rowIndex, colIndex, cellValue, meta)}
                         />
@@ -704,7 +722,10 @@ export function EApprovalGridField({
                       />
                     );
                   }
-                  const total = sumGridColumnValues(grid.rows, colIndex, columns.length);
+                  const total =
+                    colIndex >= 0
+                      ? gridColumnFooterValue(columnDefs, grid.rows, colIndex)
+                      : sumGridColumnValues(grid.rows, colIndex, columns.length);
                   return (
                     <td
                       key={`foot-${colIndex}`}

@@ -49,7 +49,11 @@ Configure on the form editor **Workspace** tab → **Dashboard layout**:
 
 - **Widgets:** KPI strip, status breakdown, recent activity, submissions table (toggle + reorder)
 - **Table columns:** system columns plus exportable form fields; **Auto-add form fields** picks the first text/select fields
-- **Saved views:** preset filters (status, mine, last N days) shown as chips on the workspace page
+- **Saved views:** preset filters (status, mine, last N days) shown as chips on the workspace page. Pending, Needs revision, and Awaiting you open that list already filtered (`?queue=pending|returned|awaiting`). Drafts the viewer can finish sit above the board with a Continue link.
+
+**Money forms** (`form_family` `cash_advance` or `liquidation`) replace the count strip with Outstanding, Forecast, and Actual. The subsidiary chart uses those amounts. Other forms keep the count cards.
+
+**Lines:** the submissions widget can switch to Requests | Lines. Lines are one row per grid line (document, requestor, subsidiary, date range, amount, status) from `GET /api/v1/e-approval/workspaces/{slug}/lines`, using the same filters. Export follows that view.
 
 **API additions:**
 

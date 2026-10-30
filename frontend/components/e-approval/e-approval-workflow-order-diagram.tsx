@@ -168,7 +168,10 @@ function SortableBand({
               <WorkflowDiagramNodeCard
                 node={node}
                 wide={grouped}
-                selected={selectedStepIndex === node.stepIndex}
+                selected={
+                  selectedStepIndex === node.stepIndex ||
+                  (node.peerIndexes?.includes(selectedStepIndex ?? -1) ?? false)
+                }
                 onSelect={() => onSelectStep(node.stepIndex)}
                 statusFallback={
                   node.warning ? (

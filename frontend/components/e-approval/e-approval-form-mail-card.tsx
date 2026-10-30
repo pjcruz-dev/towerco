@@ -54,7 +54,7 @@ export function EApprovalFormMailCard({ value, formName, fields, onChange, disab
   return (
     <EApprovalSectionCard
       title="Email and status"
-      description="Subject, body, and buttons are edited here. A workflow step only chooses whether that mail is sent and who is copied. Blank fields keep the standard wording."
+      description="These are the form defaults. Each workflow step can replace the status name and the email sent for that step. A blank step field keeps the wording here."
     >
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-foreground">Status names</h3>

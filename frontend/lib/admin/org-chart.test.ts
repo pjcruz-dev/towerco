@@ -226,6 +226,187 @@ describe("org chart filters", () => {
     },
   ];
 
+  it("collapses department spellings that differ only by and, ampersand, or case", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "ops-and",
+        name: "Ops And",
+        email: "ops-and@example.com",
+        job_title: "Lead",
+        department: "Operations and Maintenance",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "ops-amp",
+        name: "Ops Amp",
+        email: "ops-amp@example.com",
+        job_title: "Tech",
+        department: "Operations & Maintenance",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "sag-lower",
+        name: "Sag Lower",
+        email: "sag-lower@example.com",
+        job_title: "Lead",
+        department: "SAG and Lessor Management",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "sag-upper",
+        name: "Sag Upper",
+        email: "sag-upper@example.com",
+        job_title: "Analyst",
+        department: "SAG And Lessor Management",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "hr",
+        name: "Hr Person",
+        email: "hr@example.com",
+        job_title: "HR",
+        department: "Human Resources",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "hr-admin",
+        name: "Hr Admin",
+        email: "hr-admin@example.com",
+        job_title: "HR Admin",
+        department: "Human Resources and Admin",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "eng",
+        name: "Eng Person",
+        email: "eng@example.com",
+        job_title: "Engineer",
+        department: "Engineering & Design",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+    ]);
+
+    expect(index.nodes.map((node) => node.id).sort()).toEqual([
+      "eng",
+      "hr",
+      "hr-admin",
+      "ops-amp",
+      "ops-and",
+      "sag-lower",
+      "sag-upper",
+    ]);
+    expect(collectOrgFilterOptions(index.nodes).departments).toEqual([
+      "Engineering & Design",
+      "Human Resources",
+      "Human Resources and Admin",
+      "Operations and Maintenance",
+      "SAG and Lessor Management",
+    ]);
+    expect(index.byId.get("ops-amp")?.department).toBe("Operations & Maintenance");
+    expect(index.byId.get("ops-and")?.department).toBe("Operations and Maintenance");
+    expect(index.byId.get("sag-upper")?.department).toBe("SAG And Lessor Management");
+    expect(index.byId.get("sag-lower")?.department).toBe("SAG and Lessor Management");
+    expect(index.byId.get("hr")?.department).toBe("Human Resources");
+    expect(index.byId.get("hr-admin")?.department).toBe("Human Resources and Admin");
+    expect(index.byId.get("eng")?.department).toBe("Engineering & Design");
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Operations and Maintenance",
+      license: "",
+    });
+    expect([...filtered.byId.keys()].sort()).toEqual(["ops-amp", "ops-and"]);
+    expect(filtered.byId.get("ops-amp")?.department).toBe("Operations & Maintenance");
+    expect(filtered.byId.get("ops-and")?.department).toBe("Operations and Maintenance");
+
+    const hrOnly = filterOrgChartIndex(index, {
+      department: "Human Resources",
+      license: "",
+    });
+    expect([...hrOnly.byId.keys()]).toEqual(["hr"]);
+  });
+
+  it("keeps the department spelling used by more people", () => {
+    const index = buildOrgChartIndex([
+      {
+        id: "a",
+        name: "Ada",
+        email: "ada@example.com",
+        job_title: "Lead",
+        department: "Operations & Maintenance",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "b",
+        name: "Ben",
+        email: "ben@example.com",
+        job_title: "Tech",
+        department: "Operations & Maintenance",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+      {
+        id: "c",
+        name: "Cara",
+        email: "cara@example.com",
+        job_title: "Tech",
+        department: "Operations and Maintenance",
+        manager_id: null,
+        manager_name: null,
+        direct_report_count: 0,
+        license_label: "Business Premium",
+        roles: [],
+      },
+    ]);
+
+    expect(collectOrgFilterOptions(index.nodes).departments).toEqual(["Operations & Maintenance"]);
+    expect(index.nodes).toHaveLength(3);
+    expect(index.byId.get("a")?.department).toBe("Operations & Maintenance");
+    expect(index.byId.get("b")?.department).toBe("Operations & Maintenance");
+    expect(index.byId.get("c")?.department).toBe("Operations and Maintenance");
+
+    const filtered = filterOrgChartIndex(index, {
+      department: "Operations & Maintenance",
+      license: "",
+    });
+    expect([...filtered.byId.keys()].sort()).toEqual(["a", "b", "c"]);
+    expect(filtered.byId.get("c")?.department).toBe("Operations and Maintenance");
+  });
+
   it("collects filter options and keeps ancestors when filtering", () => {
     const index = buildOrgChartIndex(filterPeople);
     const options = collectOrgFilterOptions(index.nodes);

@@ -32,6 +32,8 @@ type Props = {
   placeholder?: string;
   className?: string;
   id?: string;
+  /** Days before this `yyyy-MM-dd` cannot be chosen. */
+  minDate?: string;
   "aria-invalid"?: boolean;
 };
 
@@ -95,6 +97,7 @@ export function DatePicker({
   placeholder = "Select date",
   className,
   id,
+  minDate,
   "aria-invalid": ariaInvalid,
 }: Props) {
   const selected = useMemo(() => parseIsoDate(value), [value]);
@@ -186,21 +189,29 @@ export function DatePicker({
             const inMonth = cell.getMonth() === visibleMonth.getMonth();
             const isSelected = selected ? sameDay(cell, selected) : false;
             const isToday = sameDay(cell, today);
+            const iso = toIsoDate(cell);
+            const tooEarly = Boolean(minDate && iso < minDate);
 
             return (
               <button
-                key={toIsoDate(cell)}
+                key={iso}
                 type="button"
+                disabled={tooEarly}
                 onClick={() => {
-                  onChange(toIsoDate(cell));
+                  if (tooEarly) {
+                    return;
+                  }
+                  onChange(iso);
                   setOpen(false);
                 }}
                 className={cn(
                   "flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors",
-                  "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  !inMonth && "text-muted-foreground/50",
-                  inMonth && !isSelected && "text-foreground",
-                  isToday && !isSelected && "ring-1 ring-border",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  tooEarly && "cursor-not-allowed text-muted-foreground/30",
+                  !tooEarly && "hover:bg-muted",
+                  !inMonth && !tooEarly && "text-muted-foreground/50",
+                  inMonth && !isSelected && !tooEarly && "text-foreground",
+                  isToday && !isSelected && !tooEarly && "ring-1 ring-border",
                   isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
               >
@@ -228,8 +239,13 @@ export function DatePicker({
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-xs"
+            disabled={Boolean(minDate && toIsoDate(today) < minDate)}
             onClick={() => {
-              onChange(toIsoDate(today));
+              const iso = toIsoDate(today);
+              if (minDate && iso < minDate) {
+                return;
+              }
+              onChange(iso);
               setVisibleMonth(startOfMonth(today));
               setOpen(false);
             }}

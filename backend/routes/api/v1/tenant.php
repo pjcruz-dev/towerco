@@ -169,6 +169,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormValidateController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkflowPreviewController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceExportController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceLinesController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalFormWorkspaceSubmissionsController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalHealthController;
@@ -506,6 +507,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::get('e-approval/workspaces', EApprovalFormWorkspaceIndexController::class)->name('api.tenant.v1.e_approval.workspaces.index');
     Route::get('e-approval/workspaces/{slug}', EApprovalFormWorkspaceShowController::class)->name('api.tenant.v1.e_approval.workspaces.show');
     Route::get('e-approval/workspaces/{slug}/export', EApprovalFormWorkspaceExportController::class)->name('api.tenant.v1.e_approval.workspaces.export');
+    Route::get('e-approval/workspaces/{slug}/lines', EApprovalFormWorkspaceLinesController::class)->name('api.tenant.v1.e_approval.workspaces.lines');
     Route::get('e-approval/workspaces/{slug}/submissions', EApprovalFormWorkspaceSubmissionsController::class)->name('api.tenant.v1.e_approval.workspaces.submissions');
     Route::get('e-approval/form-templates', EApprovalFormTemplatesIndexController::class)->name('api.tenant.v1.e_approval.form_templates.index');
     Route::post('e-approval/form-templates', EApprovalFormTemplateStoreController::class)->name('api.tenant.v1.e_approval.form_templates.store');

@@ -3,15 +3,12 @@ import { catalogFieldDragId } from "@/modules/e-approval/field-layout";
 import type { GridColumnDef } from "@/modules/e-approval/field-options";
 import type { EApprovalFormFieldInput } from "@/modules/e-approval/types";
 
-export type EApprovalFormFieldBundleId =
-  | "expense_lines_total"
-  | "reimbursement_expense_lines_total"
-  | "po_line_items_total";
+export type EApprovalFormFieldBundleId = "expense_lines_total" | "reimbursement_expense_lines_total";
 
 export type EApprovalGridColumnPresetId =
+  | "cash_advance_forecast"
   | "expense_lines_liquidation"
-  | "expense_lines_reimbursement"
-  | "po_line_items";
+  | "expense_lines_reimbursement";
 
 export const E_APPROVAL_FORM_FIELD_BUNDLES: {
   id: EApprovalFormFieldBundleId;
@@ -20,18 +17,13 @@ export const E_APPROVAL_FORM_FIELD_BUNDLES: {
 }[] = [
   {
     id: "expense_lines_total",
-    label: "Total + liquidation expense lines",
-    description: "Currency total auto-sums the Amount column. Expense type is a dropdown.",
+    label: "Liquidation expense lines",
+    description: "Sites, expense-type flags, and a total row. A read-only total stores the Amount sum.",
   },
   {
     id: "reimbursement_expense_lines_total",
-    label: "Total + reimbursement expense lines",
-    description: "Currency total auto-sums the Amount column, including OR number.",
-  },
-  {
-    id: "po_line_items_total",
-    label: "Total + PO line items",
-    description: "Currency total auto-calculates Qty × unit price per row.",
+    label: "Reimbursement expense lines",
+    description: "OR number, sites, expense-type flags, and a total row. A read-only total stores the Amount sum.",
   },
 ];
 
@@ -40,46 +32,93 @@ const VAT_TREATMENT_CHOICES = [
   { value: "non_vatable", label: "Non-VATable" },
 ];
 
+const EXPENSE_TYPE_CHOICES = [
+  { value: "land", label: "Transportation - Land", data: { vatable: true } },
+  { value: "sea", label: "Transportation - Sea", data: { vatable: true } },
+  { value: "air", label: "Transportation - Air", data: { vatable: true } },
+  { value: "gasoline", label: "Gasoline", data: { vatable: true } },
+  { value: "lodging", label: "Lodging", data: { vatable: true, hotel: true } },
+  { value: "per_diem", label: "Per Diem", data: { vatable: false, per_diem: true } },
+  { value: "car_rental", label: "Car Rental", data: { vatable: true } },
+  { value: "others", label: "Others", data: { vatable: true } },
+];
+
+function siteColumn(label: string): GridColumnDef {
+  return {
+    label,
+    type: "select",
+    master_data_key: "sites",
+    multiple: true,
+    show_fields: ["label", "code", "address", "name"],
+    subsidiary_field: "subsidiary",
+  };
+}
+
+function moneySplitColumns(): GridColumnDef[] {
+  return [
+    { label: "VAT treatment", type: "select", choices: VAT_TREATMENT_CHOICES, hidden: true },
+    { label: "VAT", type: "currency", locked: true, show_total: true },
+    { label: "Non-VATable", type: "currency", locked: true, show_total: true },
+    { label: "VATable, net of VAT", type: "currency", locked: true, show_total: true },
+  ];
+}
+
 function expenseLineColumns(kind: "liquidation" | "reimbursement"): GridColumnDef[] {
   const columns: GridColumnDef[] = [
-    { label: "From date – To date", type: "date_range" },
-    { label: "From site / location", type: "select", master_data_key: "sites" },
-    { label: "To site / location", type: "select", master_data_key: "sites" },
+    { label: "From date – To date", type: "date_range", include_time: false },
+    siteColumn("From site / location"),
+    siteColumn("To site / location"),
     { label: "OR No", type: "text" },
     { label: "Supplier/Payee", type: "text" },
+    { label: "TIN", type: "text" },
     { label: "Description", type: "textarea" },
-    { label: "Expense type", type: "select", master_data_key: "expense_types" },
+    { label: "Expense type", type: "select", choices: EXPENSE_TYPE_CHOICES },
+    { label: "Amount", type: "currency", required: true, show_total: true },
   ];
-  columns.push({ label: "Amount", type: "currency" });
   if (kind === "liquidation") {
-    columns.push({ label: "Forecast amount", type: "currency", locked: true });
+    columns.push(
+      { label: "Forecast amount", type: "currency", locked: true },
+      { label: "Nature of Activity", type: "text", locked: true },
+    );
   }
-  columns.push(
-    { label: "VAT treatment", type: "select", choices: VAT_TREATMENT_CHOICES },
-    { label: "VAT", type: "currency", locked: true },
-  );
+  columns.push(...moneySplitColumns());
   if (kind === "liquidation") {
     columns.push({ label: "Variance reason", type: "textarea" });
   }
   return columns;
 }
 
+function cashAdvanceForecastColumns(): GridColumnDef[] {
+  return [
+    {
+      label: "From date – To date",
+      type: "date_range",
+      required: true,
+      include_time: false,
+      date_min: "field",
+      date_min_field: "needed_by",
+    },
+    siteColumn("From site / location"),
+    siteColumn("To site / location"),
+    { label: "Expense type", type: "select", choices: EXPENSE_TYPE_CHOICES },
+    { label: "Amount", type: "currency", required: true, show_total: true },
+    { label: "Nature of Activity", type: "text", required: true },
+    ...moneySplitColumns(),
+  ];
+}
+
 export const GRID_COLUMN_PRESETS: Record<EApprovalGridColumnPresetId, { label: string; columns: GridColumnDef[] }> = {
+  cash_advance_forecast: {
+    label: "Cash advance forecast",
+    columns: cashAdvanceForecastColumns(),
+  },
   expense_lines_liquidation: {
-    label: "Expense lines of Liquidation",
+    label: "Liquidation expense lines",
     columns: expenseLineColumns("liquidation"),
   },
   expense_lines_reimbursement: {
-    label: "Expense lines of Reimbursement",
+    label: "Reimbursement expense lines",
     columns: expenseLineColumns("reimbursement"),
-  },
-  po_line_items: {
-    label: "PO line items",
-    columns: [
-      { label: "Description", type: "text" },
-      { label: "Qty", type: "number" },
-      { label: "Unit price", type: "currency" },
-    ],
   },
 };
 
@@ -129,39 +168,6 @@ export function buildFormFieldBundle(
         step_order: startIndex + 2,
         validation: { required: true },
         options: { columns: preset.columns },
-      },
-    ];
-  }
-
-  if (bundleId === "po_line_items_total") {
-    const totalName = uniqueName("estimated_total", taken);
-    taken.add(totalName);
-    const gridName = uniqueName("line_items", taken);
-
-    return [
-      {
-        type: "currency",
-        name: totalName,
-        label: "Estimated total",
-        step_order: startIndex + 1,
-        validation: { required: true, help_text: "Auto-calculated from line items." },
-        options: {
-          read_only: true,
-          computed_from: {
-            operation: "sum_grid_lines",
-            source_field: gridName,
-            quantity_column: "Qty",
-            amount_column: "Unit price",
-          },
-        },
-      },
-      {
-        type: "grid",
-        name: gridName,
-        label: "Line items",
-        step_order: startIndex + 2,
-        validation: { required: true },
-        options: { columns: GRID_COLUMN_PRESETS.po_line_items.columns },
       },
     ];
   }

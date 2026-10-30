@@ -76,7 +76,8 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'comment_mention' => "{$prefix} You were mentioned — {$documentNo}",
                 'comment_added' => "{$prefix} Comment on — {$documentNo}",
                 'comment_replied' => "{$prefix} Reply on — {$documentNo}",
-                'reviewed' => "{$prefix} Reviewed — {$documentNo}",
+                'payment_held' => "{$prefix} Payment on hold — {$documentNo}",
+                'payment_released' => "{$prefix} Payment released — {$documentNo}",
                 'cancelled' => "{$prefix} Request cancelled — {$documentNo}",
                 'approval_no_longer_needed' => "{$prefix} Approval no longer needed — {$documentNo}",
                 'approval_rerouted' => "{$prefix} Approval reassigned — {$documentNo}",
@@ -171,6 +172,20 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 $message->line($this->event === 'comment_replied'
                     ? __(':name replied on this request.', ['name' => $this->actorName ?? __('Someone')])
                     : __(':name commented on this request.', ['name' => $this->actorName ?? __('Someone')]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'payment_held') {
+                $message->line(__(':name put the payment on hold. The request stays on this step.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'payment_released') {
+                $message->line(__(':name released the payment. The request continues.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
                 if ($this->detail !== null && trim($this->detail) !== '') {
                     $message->line($this->detail);
                 }

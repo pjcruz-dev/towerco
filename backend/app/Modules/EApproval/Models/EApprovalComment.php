@@ -27,6 +27,7 @@ class EApprovalComment extends Model
         'pin_y',
         'pin_w',
         'pin_h',
+        'image_attachment_ids',
     ];
 
     /**
@@ -40,6 +41,7 @@ class EApprovalComment extends Model
             'pin_y' => 'float',
             'pin_w' => 'float',
             'pin_h' => 'float',
+            'image_attachment_ids' => 'array',
         ];
     }
 

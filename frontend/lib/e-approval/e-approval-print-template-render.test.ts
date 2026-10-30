@@ -10,7 +10,9 @@ import {
   hasCustomPrintDocumentDesign,
   mergeEApprovalPrintCss,
   printableDesignFields,
+  formatPrintSiteCell,
   renderEApprovalPrintTemplateHtml,
+  renderPrintGridTableHtml,
   shouldAppendPrintAttachments,
   shouldUseFinancePrintStarter,
 } from "@/lib/e-approval/e-approval-print-template-render";
@@ -492,6 +494,37 @@ describe("form-style starter layout", () => {
     expect(rendered).toContain("☑");
     expect(rendered).toContain("S1");
     expect(rendered).toContain("☐");
+  });
+});
+
+describe("print site cells", () => {
+  it("prints one site per line and skips the subsidiary tag", () => {
+    const raw = JSON.stringify({
+      sites: [
+        { site: "M1053", location: "ATC-MIN-0205", fields: { subsidiary: "ATC", code: "ATC-MIN-0205" } },
+        { site: "M1170", location: "ATC-MIN-0209", fields: { subsidiary: "ATC" } },
+      ],
+    });
+    expect(formatPrintSiteCell(raw)).toBe("M1053 — ATC-MIN-0205\nM1170 — ATC-MIN-0209");
+
+    const html = renderPrintGridTableHtml(
+      {
+        key: "expense_lines",
+        label: "Forecast lines",
+        columns: ["From site / location", "Nature of Activity", "Amount"],
+        rows: [[raw, "SITE VISIT", "3500"]],
+        total_columns: ["Amount"],
+      },
+      {
+        formName: "Cash advance",
+        fields: [{ key: "requested_amount", label: "Requested amount", value: "7000.00", field_type: "currency" }],
+      },
+    );
+
+    expect(html).toContain("M1053 — ATC-MIN-0205<br>M1170 — ATC-MIN-0209");
+    expect(html).toContain("SITE VISIT");
+    expect(html).not.toContain("subsidiary");
+    expect(html).toContain("₱7,000.00");
   });
 });
 
