@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type Ref } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,49 @@ export function mentionIdsInMessage(message: string, people: EApprovalMentionPer
     }
   }
   return ids;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function EApprovalMentionText({
+  message,
+  people,
+  className,
+}: {
+  message: string;
+  people: EApprovalMentionPerson[];
+  className?: string;
+}) {
+  const names = [...people]
+    .map((person) => person.name.trim())
+    .filter((name) => name !== "")
+    .sort((left, right) => right.length - left.length);
+  if (names.length === 0 || !message.includes("@")) {
+    return <span className={className}>{message}</span>;
+  }
+
+  const pattern = new RegExp(names.map((name) => `@${escapeRegExp(name)}`).join("|"), "g");
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  for (const match of message.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > last) {
+      nodes.push(message.slice(last, index));
+    }
+    nodes.push(
+      <span key={`${index}-${match[0]}`} className="font-medium text-sky-700 dark:text-sky-300">
+        {match[0]}
+      </span>,
+    );
+    last = index + match[0].length;
+  }
+  if (last < message.length) {
+    nodes.push(message.slice(last));
+  }
+
+  return <span className={className}>{nodes}</span>;
 }
 
 type Props = {
@@ -86,6 +129,7 @@ export function EApprovalMentionField({
         value={value}
         rows={rows}
         placeholder={placeholder}
+        spellCheck={false}
         className="w-full"
         onChange={(event) => {
           onChange(event.target.value);

@@ -197,6 +197,7 @@ export type EApprovalRelatedSubmissionRow = {
   id: string;
   document_no: string;
   status: string;
+  status_label?: string | null;
   form_id: string;
   form_name: string | null;
   form_family?: string | null;
@@ -276,6 +277,25 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
   form_schema_version_at_submit?: number | null;
   workflow_version_id?: string | null;
   parent_submission_id?: string | null;
+  /** Latest settlement capture. Paid means the difference was already paid. */
+  settlement_record?: {
+    status: string;
+    reference?: string | null;
+    date?: string | null;
+    amount?: string | null;
+  } | null;
+  /** Open remainder after a payment already recorded. Null until cash has moved. */
+  settlement_balance?: {
+    direction: "surrender" | "payment" | "settled";
+    amount: string;
+    net: string;
+    current: string;
+    closed: boolean;
+    prior_status?: string | null;
+    prior_reference?: string | null;
+    prior_date?: string | null;
+    prior_amount?: string | null;
+  } | null;
   manual_follow_up_cooldown_minutes?: number;
   manual_follow_up_last_at?: string | null;
   manual_follow_up_next_allowed_at?: string | null;
@@ -333,6 +353,8 @@ export type EApprovalApprovalRow = {
   finance_action?: string | null;
   /** This step asks for a proof of payment before it can approve. */
   proof_of_payment?: boolean;
+  /** This step records Paid, Received, or Settled before it can approve. */
+  confirm_settlement?: boolean;
   /** Words on this step's Decide buttons. */
   decision_labels?: {
     approve?: string;
@@ -385,6 +407,7 @@ export type EApprovalDashboardQueueItem = {
   form_name: string | null;
   requestor_name?: string | null;
   status: string;
+  status_label?: string | null;
   step_order?: number | null;
   duty?: "review" | "approve" | null;
   age_days?: number | null;
@@ -502,7 +525,7 @@ export type EApprovalPrintApprovalRow = {
   finance_action?: string | null;
   /** The Approve button word for this step. Blank keeps Approved. */
   decision_label?: string | null;
-  /** Proof of payment choice on this step: released or hold. */
+  /** Proof of payment or settlement choice on this step. */
   proof_status?: string | null;
 };
 

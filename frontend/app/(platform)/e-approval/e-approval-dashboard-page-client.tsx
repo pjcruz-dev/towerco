@@ -109,7 +109,7 @@ function QueueList({
                 ) : null}
               </p>
               <p className="text-xs text-muted-foreground">
-                {formatEApprovalStatusLabel(row.status)}
+                {row.status_label?.trim() || formatEApprovalStatusLabel(row.status)}
                 {row.step_order != null ? ` · Step ${row.step_order}` : ""}
                 {row.duty === "review" ? " · Reviewer" : row.duty === "approve" ? " · Approver" : ""}
                 {row.age_days != null

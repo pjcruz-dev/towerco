@@ -107,6 +107,7 @@ final class EApprovalSubmissionRelatedService
             'id' => (string) $submission->id,
             'document_no' => (string) $submission->document_no,
             'status' => (string) $submission->status,
+            'status_label' => app(EApprovalFinanceStageService::class)->label($submission),
             'form_id' => (string) $submission->form_id,
             'form_name' => $submission->form?->name,
             'form_family' => $this->formFamily($submission->form),

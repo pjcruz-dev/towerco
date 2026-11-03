@@ -226,6 +226,9 @@ final class EApprovalDashboardService
                     'form_name' => $submission?->form?->name,
                     'requestor_name' => $submission?->requestor?->name,
                     'status' => (string) ($submission?->status ?? $approval->status),
+                    'status_label' => $submission !== null
+                        ? app(EApprovalFinanceStageService::class)->label($submission)
+                        : null,
                     'step_order' => $approval->step?->step_order,
                     'duty' => $review ? 'review' : 'approve',
                     'age_days' => $ageDays,
@@ -265,6 +268,7 @@ final class EApprovalDashboardService
                     'form_name' => $submission->form?->name,
                     'requestor_name' => null,
                     'status' => (string) $submission->status,
+                    'status_label' => app(EApprovalFinanceStageService::class)->label($submission),
                     'step_order' => $submission->current_step,
                     'waiting_since' => $submission->updated_at?->toIso8601String(),
                     'href' => '/e-approval/submissions/'.$submission->id,

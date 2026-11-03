@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "
 import { commentMarkColor } from "@/components/e-approval/e-approval-comment-color";
 import {
   EApprovalMentionField,
+  EApprovalMentionText,
   mentionIdsInMessage,
   type EApprovalMentionPerson,
 } from "@/components/e-approval/e-approval-mention-field";
@@ -321,13 +322,18 @@ function PdfPageView({
                 {mark.created_at ? (
                   <span className="block text-[11px] text-muted-foreground">{formatWhen(mark.created_at)}</span>
                 ) : null}
-                <span className="mt-1 block whitespace-pre-wrap bg-card text-sm">{mark.message}</span>
+                <span className="mt-1 block whitespace-pre-wrap bg-card text-sm">
+                  <EApprovalMentionText message={mark.message} people={people} />
+                </span>
                 {(mark.replies ?? []).length > 0 ? (
                   <span className="mt-2 block space-y-1 border-l-2 border-border pl-2">
                     {mark.replies.map((reply) => (
                       <span key={reply.id} className="block text-xs">
                         <span className="font-medium">{reply.user_name}</span>
-                        <span className="text-muted-foreground"> · {reply.message}</span>
+                        <span className="text-muted-foreground">
+                          {" · "}
+                          <EApprovalMentionText message={reply.message} people={people} />
+                        </span>
                       </span>
                     ))}
                   </span>

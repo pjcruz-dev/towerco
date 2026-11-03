@@ -402,7 +402,7 @@ function renderMarkedPrintTotalsFooter(
       cells.push("<td></td>");
       continue;
     }
-    const stored = storedFinanceTotalForColumn(columns[index] ?? "", fields);
+    const stored = expenseGridSumsVisibleCells(columns) ? null : storedFinanceTotalForColumn(columns[index] ?? "", fields);
     const total = stored ?? rows.reduce((sum, row) => {
       const parsed = parsePrintNumericCell(row[index] ?? "");
       return parsed === null ? sum : sum + parsed;
@@ -412,6 +412,11 @@ function renderMarkedPrintTotalsFooter(
     );
   }
   return `<tfoot><tr class="ea-print-table-totals">${cells.join("")}</tr></tfoot>`;
+}
+
+function expenseGridSumsVisibleCells(columns: string[]): boolean {
+  const labels = columns.map((column) => column.trim().toLowerCase());
+  return labels.includes("forecast amount") || labels.includes("or no");
 }
 
 function storedFinanceTotalForColumn(
@@ -574,13 +579,16 @@ export function printGridColumnClass(column: string): string {
   if (label === "quantity" || label === "qty") {
     return "ea-print-col-qty";
   }
+  if (label === "tin") {
+    return "ea-print-col-tin";
+  }
   if (label === "or no" || label === "or number") {
     return "ea-print-col-ref";
   }
   if (label === "supplier/payee" || label === "supplier" || label === "payee") {
     return "ea-print-col-party";
   }
-  if (label === "description" || label === "variance reason") {
+  if (label === "description" || label === "variance reason" || label.includes("nature of activity")) {
     return "ea-print-col-note";
   }
 

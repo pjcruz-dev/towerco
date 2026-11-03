@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   approverMustConfirmSettlement,
   reimbursementPayVerdict,
+  settlementVerdictAfterCapture,
   settlementVerdictFromValues,
+  settlementVerdictWithBalance,
 } from "@/modules/e-approval/settlement-verdict";
 
 describe("settlement verdict", () => {
@@ -29,7 +31,7 @@ describe("settlement verdict", () => {
     expect(verdict?.title).toBe("Pay the employee ₱3,000.00.");
   });
 
-  it("asks only the last running approver when no step is marked", () => {
+  it("does not ask the last approver when no step is marked", () => {
     const steps = [{ step_order: 2 }, { step_order: 3 }, { step_order: 4 }];
 
     expect(
@@ -37,7 +39,7 @@ describe("settlement verdict", () => {
     ).toBe(false);
     expect(
       approverMustConfirmSettlement({ direction: "surrender", pendingStepOrder: 4, steps }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("asks only the steps marked to confirm settlement", () => {
@@ -55,7 +57,7 @@ describe("settlement verdict", () => {
     ).toBe(false);
     expect(
       approverMustConfirmSettlement({ direction: "settled", pendingStepOrder: 2, steps }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("pays the reimbursement total and does not describe a surrender", () => {
@@ -66,5 +68,50 @@ describe("settlement verdict", () => {
     expect(verdict?.direction).toBe("payment");
     expect(verdict?.title).toBe("Pay the employee ₱8,500.00.");
     expect(verdict?.title).not.toContain("Surrender");
+  });
+
+  it("says the difference was paid once a payment is recorded", () => {
+    const base = settlementVerdictFromValues([
+      { field_name: "total_reimbursement", value: "70009.00" },
+      { field_name: "cash_advance_amount", value: "3500.00" },
+    ]);
+
+    const recorded = settlementVerdictAfterCapture(base!, {
+      status: "paid",
+      amount: "66509.00",
+      reference: "gggdfd6666",
+      date: "2026-10-31",
+    });
+
+    expect(recorded.title).toBe("Paid ₱66,509.00.");
+    expect(recorded.detail).toContain("gggdfd6666");
+    expect(recorded.title).not.toContain("Pay the employee");
+  });
+
+  it("asks for the unpaid remainder after a revision", () => {
+    const base = settlementVerdictFromValues([
+      { field_name: "total_reimbursement", value: "30000.00" },
+      { field_name: "cash_advance_amount", value: "15000.00" },
+    ]);
+
+    const open = settlementVerdictWithBalance(
+      base!,
+      { status: "paid", amount: "5000.00", reference: "AS312FDRD222", date: "2026-11-03" },
+      {
+        direction: "payment",
+        amount: "10000.00",
+        net: "5000.00",
+        current: "15000.00",
+        closed: false,
+        prior_status: "paid",
+        prior_reference: "AS312FDRD222",
+        prior_date: "2026-11-03",
+        prior_amount: "5000.00",
+      },
+    );
+
+    expect(open.title).toBe("Still to pay ₱10,000.00.");
+    expect(open.detail).toContain("AS312FDRD222");
+    expect(open.direction).toBe("payment");
   });
 });

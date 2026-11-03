@@ -6,6 +6,7 @@ import { commentMarkColor } from "@/components/e-approval/e-approval-comment-col
 import { EApprovalPdfPinLayer } from "@/components/e-approval/e-approval-pdf-pin-layer";
 import {
   EApprovalMentionField,
+  EApprovalMentionText,
   mentionIdsInMessage,
   type EApprovalMentionPerson,
 } from "@/components/e-approval/e-approval-mention-field";
@@ -302,7 +303,9 @@ function ImageMarkLayer({
                       <span className={cn("size-2 shrink-0 rounded-full", color.dot)} aria-hidden />
                       {mark.user_name}
                     </span>
-                    <span className="mt-1 block whitespace-pre-wrap bg-card text-sm">{mark.message}</span>
+                    <span className="mt-1 block whitespace-pre-wrap bg-card text-sm">
+                      <EApprovalMentionText message={mark.message} people={people} />
+                    </span>
                     <button
                       type="button"
                       className="mt-1 text-xs text-primary hover:underline"
@@ -701,14 +704,20 @@ export function EApprovalAttachmentComments({
                       {comment.pin_page ? (
                         <span className="text-muted-foreground"> · Page {comment.pin_page}</span>
                       ) : null}
-                      <span className="text-muted-foreground"> · {comment.message}</span>
+                      <span className="text-muted-foreground">
+                        {" · "}
+                        <EApprovalMentionText message={comment.message} people={people} />
+                      </span>
                     </p>
                     {(comment.replies ?? []).length > 0 ? (
                       <ul className="mt-1 space-y-1 border-l-2 border-border pl-3">
                         {comment.replies.map((reply) => (
                           <li key={reply.id}>
                             <span className="font-medium">{reply.user_name}</span>
-                            <span className="text-muted-foreground"> · {reply.message}</span>
+                            <span className="text-muted-foreground">
+                              {" · "}
+                              <EApprovalMentionText message={reply.message} people={people} />
+                            </span>
                           </li>
                         ))}
                       </ul>

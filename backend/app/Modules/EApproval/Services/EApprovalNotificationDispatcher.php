@@ -304,6 +304,32 @@ final class EApprovalNotificationDispatcher
         );
     }
 
+    public function dispatchSettlement(
+        EApprovalSubmission $submission,
+        TenantUser $actor,
+        string $status,
+        string $comment,
+    ): void {
+        $requestorId = (string) $submission->requestor_id;
+        if ($requestorId === '') {
+            return;
+        }
+
+        $event = match ($status) {
+            'hold' => 'settlement_held',
+            'received' => 'settlement_received',
+            'settled' => 'settlement_settled',
+            default => 'settlement_paid',
+        };
+        $this->sendEventToUsers(
+            $submission,
+            [$requestorId],
+            $event,
+            $actor->name,
+            $comment !== '' ? $comment : null,
+        );
+    }
+
     public function dispatchReviewed(EApprovalSubmission $submission, TenantUser $actor, ?string $note, int $stepOrder): void
     {
         $actorId = (string) $actor->id;

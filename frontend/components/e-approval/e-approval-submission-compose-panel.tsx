@@ -633,6 +633,29 @@ export function EApprovalSubmissionComposePanel({
     return counts;
   }, [activeSubmissionAttachments]);
 
+  useEffect(() => {
+    setFieldErrors((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const field of fields) {
+        if (field.type !== "file" && field.type !== "camera") {
+          continue;
+        }
+        const message = next[field.name];
+        if (!message || !message.includes("choose the file again")) {
+          continue;
+        }
+        const total =
+          (attachmentFiles[field.name]?.length ?? 0) + (draftExistingAttachmentCounts[field.name] ?? 0);
+        if (total > 0) {
+          delete next[field.name];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [attachmentFiles, draftExistingAttachmentCounts, fields]);
+
   const submissionValidationOptions = useMemo(() => {
     const cap = (raw: string | undefined): number | null => {
       const text = (raw ?? "").trim();

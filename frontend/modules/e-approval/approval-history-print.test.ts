@@ -91,4 +91,18 @@ describe("print approval history", () => {
       "Released · 2026-10-30 04:12",
     ]);
   });
+
+  it("labels a settlement capture as Paid, Received, or Settled", () => {
+    const data = payload([
+      row({ step: 2, approver: "Treasury", status: "approved", proof_status: "paid" }),
+      row({ step: 3, approver: "Treasury", status: "approved", proof_status: "received" }),
+      row({ step: 4, approver: "Treasury", status: "approved", proof_status: "settled" }),
+    ]);
+
+    expect(buildApprovalHistorySlots(data).map((slot) => slot.subtitle?.split(" · ")[0])).toEqual([
+      "Paid",
+      "Received",
+      "Settled",
+    ]);
+  });
 });

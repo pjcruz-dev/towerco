@@ -32,9 +32,14 @@ import {
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import { EApprovalAttachmentComments } from "@/components/e-approval/e-approval-attachment-comments";
 import { EApprovalProofOfPaymentDialog } from "@/components/e-approval/e-approval-proof-of-payment-dialog";
+import {
+  EApprovalSettlementCaptureDialog,
+  type SettlementCaptureDraft,
+} from "@/components/e-approval/e-approval-settlement-capture-dialog";
 import { EApprovalCommentImages } from "@/components/e-approval/e-approval-comment-images";
 import {
   EApprovalMentionField,
+  EApprovalMentionText,
   mentionIdsInMessage,
   type EApprovalMentionPerson,
 } from "@/components/e-approval/e-approval-mention-field";
@@ -79,9 +84,9 @@ import { EApprovalSubmissionWorkflowPathPanel } from "@/components/e-approval/e-
 import { EApprovalWaitingOnPanel } from "@/components/e-approval/e-approval-waiting-on-panel";
 import { getDuplicateApproverIds } from "@/modules/e-approval/display";
 import {
-  approverMustConfirmSettlement,
   reimbursementPayVerdict,
   settlementVerdictFromValues,
+  settlementVerdictWithBalance,
 } from "@/modules/e-approval/settlement-verdict";
 import { shouldHideSubmissionAttachmentFieldValue } from "@/modules/e-approval/submission-form-content";
 import {
@@ -170,13 +175,13 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   const [releaseReference, setReleaseReference] = useState("");
   const [releaseDate, setReleaseDate] = useState("");
   const [settlementReference, setSettlementReference] = useState("");
-  const [settlementSeen, setSettlementSeen] = useState(false);
   const [returnReference, setReturnReference] = useState("");
   const [forceFullRestart, setForceFullRestart] = useState(false);
   const [approvalSignature, setApprovalSignature] = useState<string | null>(null);
   const [approvalSignatureError, setApprovalSignatureError] = useState<string | null>(null);
   const [signatureConsentOpen, setSignatureConsentOpen] = useState(false);
   const [proofOpen, setProofOpen] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
   const queuedDecisionRef = useRef<{
     approvalId: string;
     decision: "approved" | "rejected" | "acknowledged";
@@ -184,6 +189,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     proceedOptional?: boolean;
     fileAudience?: EApprovalFileAudience;
     fileRecipientIds?: string[];
+    paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
+    settlementCapture?: SettlementCaptureDraft;
   } | null>(null);
   const [fileAudience, setFileAudience] = useState<EApprovalFileAudience>("everyone");
   const [fileRecipientIds, setFileRecipientIds] = useState<string[]>([]);
@@ -369,24 +376,26 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     if (!data?.values) {
       return null;
     }
-    if (data.form_family === "liquidation") {
-      return settlementVerdictFromValues(data.values);
+    const base =
+      data.form_family === "liquidation"
+        ? settlementVerdictFromValues(data.values)
+        : data.form_family === "reimbursement"
+          ? reimbursementPayVerdict(data.values)
+          : null;
+    if (!base) {
+      return null;
     }
-    if (data.form_family === "reimbursement") {
-      return reimbursementPayVerdict(data.values);
-    }
-    return null;
-  }, [data?.form_family, data?.values]);
-  const settlementNeedsConfirm = approverMustConfirmSettlement({
-    direction: settlementVerdict?.direction ?? null,
-    pendingStepOrder: pendingApproval?.step_order ?? null,
-    steps:
-      (workflowPreviewQuery.data?.resolved_steps?.length ?? 0) > 0
-        ? (workflowPreviewQuery.data?.resolved_steps ?? [])
-        : data?.step_count && data.step_count > 0
-          ? [{ step_order: data.step_count }]
-          : [],
-  });
+    return settlementVerdictWithBalance(base, data.settlement_record, data.settlement_balance);
+  }, [data?.form_family, data?.settlement_balance, data?.settlement_record, data?.values]);
+  const settlementAlreadyRecorded =
+    data?.settlement_balance != null
+      ? data.settlement_balance.closed
+      : data?.settlement_record?.status === "paid" ||
+        data?.settlement_record?.status === "received" ||
+        data?.settlement_record?.status === "settled";
+  const settlementNeedsCapture = Boolean(
+    pendingApproval?.confirm_settlement && settlementVerdict && !settlementAlreadyRecorded,
+  );
 
   const rerouteMutation = useMutation({
     mutationFn: () =>
@@ -429,6 +438,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       fileAudience,
       fileRecipientIds,
       paymentProof,
+      settlementCapture,
     }: {
       approvalId: string;
       decision: "approved" | "rejected" | "acknowledged";
@@ -437,8 +447,10 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       fileAudience?: EApprovalFileAudience;
       fileRecipientIds?: string[];
       paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
+      settlementCapture?: SettlementCaptureDraft;
     }) => {
-      const signing = (decision === "approved" || decision === "acknowledged") && paymentProof?.status !== "hold";
+      const holding = paymentProof?.status === "hold" || settlementCapture?.status === "hold";
+      const signing = (decision === "approved" || decision === "acknowledged") && !holding;
       return decideEApprovalApproval(approvalId, {
         decision,
         remarks: decisionRemarksRef.current.trim() || undefined,
@@ -447,7 +459,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
         signature_storage_consent: signing ? true : undefined,
         release_reference: releaseReference.trim() || undefined,
         release_date: releaseDate || undefined,
-        settlement_reference: settlementReference.trim() || undefined,
+        settlement_reference: settlementCapture?.reference || settlementReference.trim() || undefined,
         proceed_optional: proceedOptional,
         file_audience: decision === "rejected" ? undefined : fileAudience,
         file_recipient_ids: decision === "rejected" ? undefined : fileRecipientIds,
@@ -455,6 +467,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
           ? { status: paymentProof.status, comment: paymentProof.comment || undefined }
           : undefined,
         payment_files: paymentProof?.files,
+        settlement_capture: settlementCapture
+          ? {
+              status: settlementCapture.status,
+              comment: settlementCapture.comment || undefined,
+              reference: settlementCapture.reference || undefined,
+              date: settlementCapture.date || undefined,
+            }
+          : undefined,
+        settlement_files: settlementCapture?.files,
       });
     },
     onSuccess: (_result, variables) => {
@@ -463,6 +484,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
       queuedDecisionRef.current = null;
       setProofOpen(false);
+      setSettleOpen(false);
+      const settlementStatus = variables.settlementCapture?.status;
       push({
         level: "success",
         title:
@@ -470,13 +493,24 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             ? "Payment on hold"
             : variables.paymentProof?.status === "released"
               ? "Payment released"
-              : variables.decision === "acknowledged"
-                ? "Reviewed"
-                : "Decision recorded",
+              : settlementStatus === "hold"
+                ? "Settlement on hold"
+                : settlementStatus === "paid"
+                  ? "Payment recorded"
+                  : settlementStatus === "received"
+                    ? "Cash received"
+                    : settlementStatus === "settled"
+                      ? "Settlement recorded"
+                      : variables.decision === "acknowledged"
+                        ? "Reviewed"
+                        : "Decision recorded",
         message:
-          variables.paymentProof?.status === "hold"
+          variables.paymentProof?.status === "hold" || settlementStatus === "hold"
             ? "The request stays on this step. The requestor is notified."
-            : variables.paymentProof?.status === "released"
+            : variables.paymentProof?.status === "released" ||
+                settlementStatus === "paid" ||
+                settlementStatus === "received" ||
+                settlementStatus === "settled"
               ? "The request continues. The requestor is notified."
               : undefined,
       });
@@ -502,6 +536,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     fileAudience?: EApprovalFileAudience;
     fileRecipientIds?: string[];
     paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
+    settlementCapture?: SettlementCaptureDraft;
   }) => {
     if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
       return;
@@ -509,6 +544,11 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     if (payload.decision === "approved" && pendingApproval?.proof_of_payment && !payload.paymentProof) {
       queuedDecisionRef.current = payload;
       setProofOpen(true);
+      return;
+    }
+    if (payload.decision === "approved" && settlementNeedsCapture && !payload.settlementCapture) {
+      queuedDecisionRef.current = payload;
+      setSettleOpen(true);
       return;
     }
     decideInFlightRef.current = true;
@@ -933,7 +973,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                   </div>
                 ) : (
                   <>
-                    <EApprovalSettlementVerdict values={data.values} className="mt-4" />
+                    <EApprovalSettlementVerdict values={data.values} verdict={settlementVerdict} className="mt-4" />
                     <EApprovalSubmissionFormContent
                       values={data.values}
                       formFields={data.form_fields}
@@ -1161,7 +1201,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             {showDecideTab ? (
             <TabsContent value="decide" className="mt-4">
               <div className="space-y-4">
-                {settlementVerdict ? <EApprovalSettlementVerdict values={data.values} /> : null}
+                {settlementVerdict ? <EApprovalSettlementVerdict values={data.values} verdict={settlementVerdict} /> : null}
                 {data.status === "awaiting_dcf" ? (
                   <EApprovalSectionCard title="Document control" description="Update fields and submit for processing.">
                     <div className="space-y-3">
@@ -1320,22 +1360,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     description="Sign to approve. Remarks are optional for approve, required for reject or revision."
                   >
                     <div className="mt-4 space-y-4">
-                      {settlementNeedsConfirm && settlementVerdict ? (
-                        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
-                          <Checkbox
-                            className="mt-0.5"
-                            checked={settlementSeen}
-                            onCheckedChange={(checked) => setSettlementSeen(checked === true)}
-                            disabled={decideMutation.isPending || revisionMutation.isPending}
-                          />
-                          <span>
-                            <span className="font-medium">{settlementVerdict.title}</span>
-                            <span className="mt-0.5 block text-xs text-muted-foreground">
-                              Tick this before Approve. The request stays pending until you decide.
-                            </span>
-                          </span>
-                        </label>
-                      ) : null}
                       <EApprovalApprovalSignatureField
                         value={approvalSignature}
                         onChange={setApprovalSignature}
@@ -1370,13 +1394,14 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       {pendingApproval.finance_action === "settlement" ||
                       pendingApproval.finance_action === "payment" ? (
                         <div className="space-y-3 border-t border-border pt-4">
-                          <EApprovalSettlementVerdict values={data.values} />
+                          <EApprovalSettlementVerdict values={data.values} verdict={settlementVerdict} />
+                          {pendingApproval.confirm_settlement ? null : (
                           <div className="space-y-1.5">
                           <Label htmlFor="settlement-reference">
                             {pendingApproval.finance_action === "payment" ||
-                            settlementVerdictFromValues(data.values)?.direction === "payment"
+                            settlementVerdict?.direction === "payment"
                               ? "Payment reference"
-                              : settlementVerdictFromValues(data.values)?.direction === "surrender"
+                              : settlementVerdict?.direction === "surrender"
                                 ? "Surrender reference"
                                 : "Settlement reference"}
                           </Label>
@@ -1387,14 +1412,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             disabled={decideMutation.isPending || revisionMutation.isPending}
                           />
                           <p className="text-xs text-muted-foreground">
-                            {settlementVerdictFromValues(data.values)?.direction === "surrender"
+                            {settlementVerdict?.direction === "surrender"
                               ? "Enter the reference for the cash the employee returned."
-                              : settlementVerdictFromValues(data.values)?.direction === "payment" ||
+                              : settlementVerdict?.direction === "payment" ||
                                   pendingApproval.finance_action === "payment"
                                 ? "Enter the reference for the payment to the employee."
                                 : "Leave blank only when the totals match and no cash moves."}
                           </p>
                           </div>
+                          )}
                         </div>
                       ) : null}
                       <div data-help="ea-decide-remarks" className="space-y-1.5 border-t border-border pt-4">
@@ -1447,9 +1473,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                         <span data-help="ea-decide-approve" className="inline-flex">
                           <Button
                             size="sm"
-                            className={
-                              settlementNeedsConfirm && !settlementSeen ? "opacity-50" : undefined
-                            }
                             onClick={() => {
                               if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
                                 return;
@@ -1457,14 +1480,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               const signatureError = validateApprovalSignature(approvalSignature);
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
-                                return;
-                              }
-                              if (settlementNeedsConfirm && !settlementSeen) {
-                                push({
-                                  level: "error",
-                                  title: "Confirm the settlement",
-                                  message: settlementVerdict?.title ?? "Read the settlement before approving.",
-                                });
                                 return;
                               }
                               if (
@@ -1487,15 +1502,19 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                 return;
                               }
                               proceedOptionalRef.current = false;
+                              queuedDecisionRef.current = {
+                                approvalId: pendingApproval.id,
+                                decision: "approved",
+                                proceedOptional: false,
+                                fileAudience: showFileAudience ? fileAudience : undefined,
+                                fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+                              };
                               if (pendingApproval.proof_of_payment) {
-                                queuedDecisionRef.current = {
-                                  approvalId: pendingApproval.id,
-                                  decision: "approved",
-                                  proceedOptional: false,
-                                  fileAudience: showFileAudience ? fileAudience : undefined,
-                                  fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
-                                };
                                 setProofOpen(true);
+                                return;
+                              }
+                              if (settlementNeedsCapture) {
+                                setSettleOpen(true);
                                 return;
                               }
                               setSignatureConsentOpen(true);
@@ -1509,7 +1528,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           <Button
                             size="sm"
                             variant="outline"
-                            className={settlementNeedsConfirm && !settlementSeen ? "opacity-50" : undefined}
                             onClick={() => {
                               if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
                                 return;
@@ -1517,14 +1535,6 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               const signatureError = validateApprovalSignature(approvalSignature);
                               if (signatureError) {
                                 setApprovalSignatureError(signatureError);
-                                return;
-                              }
-                              if (settlementNeedsConfirm && !settlementSeen) {
-                                push({
-                                  level: "error",
-                                  title: "Confirm the settlement",
-                                  message: settlementVerdict?.title ?? "Read the settlement before approving.",
-                                });
                                 return;
                               }
                               if (showFileAudience && !fileAudienceReady(fileAudience, fileRecipientIds)) {
@@ -1536,15 +1546,19 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                                 return;
                               }
                               proceedOptionalRef.current = true;
+                              queuedDecisionRef.current = {
+                                approvalId: pendingApproval.id,
+                                decision: "approved",
+                                proceedOptional: true,
+                                fileAudience: showFileAudience ? fileAudience : undefined,
+                                fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+                              };
                               if (pendingApproval.proof_of_payment) {
-                                queuedDecisionRef.current = {
-                                  approvalId: pendingApproval.id,
-                                  decision: "approved",
-                                  proceedOptional: true,
-                                  fileAudience: showFileAudience ? fileAudience : undefined,
-                                  fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
-                                };
                                 setProofOpen(true);
+                                return;
+                              }
+                              if (settlementNeedsCapture) {
+                                setSettleOpen(true);
                                 return;
                               }
                               setSignatureConsentOpen(true);
@@ -1602,6 +1616,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             fileAudience: showFileAudience ? fileAudience : undefined,
                             fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
                             paymentProof: queued?.paymentProof,
+                            settlementCapture: queued?.settlementCapture,
                           });
                         }}
                       />
@@ -1721,14 +1736,18 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               })()}
                             </button>
                           ) : null}
-                          {c.message.trim() !== "" ? <p className="mt-1 whitespace-pre-wrap">{c.message}</p> : null}
+                          {c.message.trim() !== "" ? (
+                            <p className="mt-1 whitespace-pre-wrap">
+                              <EApprovalMentionText message={c.message} people={mentionPeople} />
+                            </p>
+                          ) : null}
                           <EApprovalCommentImages images={c.images ?? []} />
                           {(c.replies ?? []).length > 0 ? (
                             <ul className="mt-2 space-y-2 border-l-2 border-border pl-3">
                               {c.replies.map((reply) => (
                                 <li key={reply.id}>
                                   <span className="font-medium">{reply.user_name}: </span>
-                                  {reply.message}
+                                  <EApprovalMentionText message={reply.message} people={mentionPeople} />
                                   <EApprovalCommentImages images={reply.images ?? []} />
                                 </li>
                               ))}
@@ -1850,11 +1869,47 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             submitDecision({ ...queued, paymentProof: proof });
             return;
           }
-          queuedDecisionRef.current = { ...queued, paymentProof: proof };
+          const next = { ...queued, paymentProof: proof };
+          queuedDecisionRef.current = next;
           setProofOpen(false);
+          if (settlementNeedsCapture && !next.settlementCapture) {
+            setSettleOpen(true);
+            return;
+          }
           setSignatureConsentOpen(true);
         }}
       />
+      {settlementVerdict ? (
+        <EApprovalSettlementCaptureDialog
+          open={settleOpen}
+          submitting={decideMutation.isPending}
+          direction={settlementVerdict.direction}
+          title={settlementVerdict.title}
+          detail={settlementVerdict.detail}
+          onOpenChange={(open) => {
+            if (!open && !decideMutation.isPending && !queuedDecisionRef.current?.settlementCapture) {
+              queuedDecisionRef.current = null;
+            }
+            if (!decideMutation.isPending) {
+              setSettleOpen(open);
+            }
+          }}
+          onConfirm={(capture) => {
+            const queued = queuedDecisionRef.current;
+            if (!queued) {
+              return;
+            }
+            if (capture.status === "hold") {
+              setSettleOpen(false);
+              submitDecision({ ...queued, settlementCapture: capture });
+              return;
+            }
+            queuedDecisionRef.current = { ...queued, settlementCapture: capture };
+            setSettleOpen(false);
+            setSignatureConsentOpen(true);
+          }}
+        />
+      ) : null}
     </PermissionGate>
   );
 }

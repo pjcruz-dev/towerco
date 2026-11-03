@@ -911,6 +911,8 @@ final class EApprovalSubmissionService
                 ]
                 : null,
             ...$this->revisionFeedbackMeta($submission),
+            'settlement_record' => $this->settlementRecord($submission),
+            'settlement_balance' => $this->financeStage->settlementBalance($submission),
         ]);
     }
 
@@ -959,6 +961,43 @@ final class EApprovalSubmissionService
             'revision_remarks' => $remarks !== '' ? $remarks : null,
             'revision_remarks_at' => $log->created_at?->toIso8601String(),
             'revision_remarks_by' => $log->user?->name,
+        ];
+    }
+
+    /**
+     * Latest settlement capture. Paid, Received, and Settled mean the cash already moved.
+     *
+     * @return array{status: string, reference: string|null, date: string|null, amount: string|null}|null
+     */
+    private function settlementRecord(EApprovalSubmission $submission): ?array
+    {
+        $finance = is_array($submission->finance_json) ? $submission->finance_json : [];
+        $entries = is_array($finance['settlement_captures'] ?? null) ? $finance['settlement_captures'] : [];
+        $latest = null;
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+            $status = strtolower(trim((string) ($entry['status'] ?? '')));
+            if (! in_array($status, ['paid', 'received', 'settled', 'hold'], true)) {
+                continue;
+            }
+            $latest = $entry;
+            $latest['status'] = $status;
+        }
+        if ($latest === null) {
+            return null;
+        }
+
+        $reference = trim((string) ($latest['reference'] ?? $finance['settlement_reference'] ?? ''));
+        $date = trim((string) ($latest['date'] ?? ''));
+        $amount = trim((string) ($finance['settlement_amount'] ?? ''));
+
+        return [
+            'status' => (string) $latest['status'],
+            'reference' => $reference !== '' ? $reference : null,
+            'date' => $date !== '' ? $date : null,
+            'amount' => $amount !== '' ? $amount : null,
         ];
     }
 

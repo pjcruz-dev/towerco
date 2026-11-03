@@ -44,9 +44,19 @@ class EApprovalApprovalDecideController extends AbstractApiController
             'payment_proof.attachment_ids.*' => ['uuid'],
             'payment_files' => ['sometimes', 'array', 'max:4'],
             'payment_files.*' => ['file', 'max:10240'],
+            'settlement_capture' => ['sometimes', 'array'],
+            'settlement_capture.status' => ['required_with:settlement_capture', 'string', 'in:paid,received,settled,hold'],
+            'settlement_capture.comment' => ['nullable', 'string', 'max:5000'],
+            'settlement_capture.reference' => ['nullable', 'string', 'max:120'],
+            'settlement_capture.date' => ['nullable', 'date'],
+            'settlement_capture.attachment_ids' => ['sometimes', 'array', 'max:4'],
+            'settlement_capture.attachment_ids.*' => ['uuid'],
+            'settlement_files' => ['sometimes', 'array', 'max:4'],
+            'settlement_files.*' => ['file', 'max:10240'],
         ]);
 
-        $holding = is_array($data['payment_proof'] ?? null) && ($data['payment_proof']['status'] ?? '') === 'hold';
+        $holding = (is_array($data['payment_proof'] ?? null) && ($data['payment_proof']['status'] ?? '') === 'hold')
+            || (is_array($data['settlement_capture'] ?? null) && ($data['settlement_capture']['status'] ?? '') === 'hold');
         if (! $holding && ($data['decision'] === 'approved' || $data['decision'] === 'acknowledged')) {
             $signature = $data['signature'] ?? null;
             $hasSignature = is_string($signature) && trim($signature) !== '';
@@ -67,13 +77,33 @@ class EApprovalApprovalDecideController extends AbstractApiController
             }
         }
 
-        $stored = $this->storePaymentFiles($request, $approval, $files);
+        $stored = array_merge(
+            $this->storePaymentFiles($request, $approval, $files),
+            $this->storeSettlementFiles($request, $approval, $files),
+        );
         if ($stored !== []) {
-            $data['payment_proof'] ??= [];
-            $data['payment_proof']['attachment_ids'] = array_map(
-                static fn (EApprovalAttachment $row): string => (string) $row->id,
+            $paymentStored = array_values(array_filter(
                 $stored,
-            );
+                static fn (EApprovalAttachment $row): bool => ($row->metadata['payment_proof'] ?? false) === true,
+            ));
+            $settlementStored = array_values(array_filter(
+                $stored,
+                static fn (EApprovalAttachment $row): bool => ($row->metadata['settlement_capture'] ?? false) === true,
+            ));
+            if ($paymentStored !== []) {
+                $data['payment_proof'] ??= [];
+                $data['payment_proof']['attachment_ids'] = array_map(
+                    static fn (EApprovalAttachment $row): string => (string) $row->id,
+                    $paymentStored,
+                );
+            }
+            if ($settlementStored !== []) {
+                $data['settlement_capture'] ??= [];
+                $data['settlement_capture']['attachment_ids'] = array_map(
+                    static fn (EApprovalAttachment $row): string => (string) $row->id,
+                    $settlementStored,
+                );
+            }
         }
 
         try {
@@ -88,6 +118,7 @@ class EApprovalApprovalDecideController extends AbstractApiController
                     'release_date' => $data['release_date'] ?? null,
                     'settlement_reference' => $data['settlement_reference'] ?? null,
                     'payment_proof' => $data['payment_proof'] ?? null,
+                    'settlement_capture' => $data['settlement_capture'] ?? null,
                 ],
                 (bool) ($data['proceed_optional'] ?? false),
                 isset($data['file_audience']) ? (string) $data['file_audience'] : null,
@@ -130,6 +161,38 @@ class EApprovalApprovalDecideController extends AbstractApiController
                 continue;
             }
             $stored[] = $files->store($submission, $upload, 'payment_proof', ['payment_proof' => true]);
+        }
+
+        return $stored;
+    }
+
+    /**
+     * @return list<EApprovalAttachment>
+     */
+    private function storeSettlementFiles(
+        Request $request,
+        EApprovalRequestApproval $approval,
+        EApprovalFileStorageService $files,
+    ): array {
+        $uploads = $request->file('settlement_files', []);
+        if ($uploads === null || $uploads === []) {
+            return [];
+        }
+
+        $approval->loadMissing('submission');
+        $submission = $approval->submission;
+        if ($submission === null) {
+            throw ValidationException::withMessages([
+                'approval' => [__('Submission not found.')],
+            ]);
+        }
+
+        $stored = [];
+        foreach (is_array($uploads) ? $uploads : [$uploads] as $upload) {
+            if ($upload === null) {
+                continue;
+            }
+            $stored[] = $files->store($submission, $upload, 'settlement_capture', ['settlement_capture' => true]);
         }
 
         return $stored;

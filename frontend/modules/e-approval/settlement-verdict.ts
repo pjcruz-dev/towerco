@@ -11,6 +11,8 @@ export type SettlementVerdict = {
   released: number;
   title: string;
   detail: string;
+  /** Cash already moved, and a remainder is still open. */
+  outstanding?: boolean;
 };
 
 type ValueRow = {
@@ -65,40 +67,137 @@ export function settlementVerdictFromValues(rows: ValueRow[]): SettlementVerdict
   };
 }
 
+export type SettlementRecord = {
+  status: string;
+  reference?: string | null;
+  date?: string | null;
+  amount?: string | null;
+};
+
+export type SettlementBalance = {
+  direction: SettlementDirection;
+  /** Absolute pesos still to move. */
+  amount: string;
+  net: string;
+  current: string;
+  closed: boolean;
+  prior_status?: string | null;
+  prior_reference?: string | null;
+  prior_date?: string | null;
+  prior_amount?: string | null;
+};
+
+/**
+ * A later revision compares the new difference with cash already moved.
+ * The banner asks only for what is still open.
+ */
+export function settlementVerdictWithBalance(
+  verdict: SettlementVerdict,
+  record: SettlementRecord | null | undefined,
+  balance: SettlementBalance | null | undefined,
+): SettlementVerdict {
+  const net = Number(balance?.net ?? "0");
+  if (
+    balance &&
+    !balance.closed &&
+    Number.isFinite(net) &&
+    Math.abs(net) > 0.004 &&
+    (balance.direction === "payment" || balance.direction === "surrender")
+  ) {
+    const amountLabel = formatGridCurrencyDisplay(balance.amount);
+    const priorLabel = formatGridCurrencyDisplay(balance.prior_amount?.trim() ? balance.prior_amount : balance.net);
+    const priorVerb = balance.prior_status === "received" ? "Received" : "Paid";
+    const reference = balance.prior_reference?.trim() ?? "";
+    const date = balance.prior_date?.trim() ?? "";
+    const stamp = [
+      reference !== "" ? `reference ${reference}` : "",
+      date !== "" ? `dated ${date}` : "",
+    ]
+      .filter((part) => part !== "")
+      .join(", ");
+
+    return {
+      ...verdict,
+      direction: balance.direction,
+      amount: Number(balance.amount),
+      outstanding: true,
+      title: balance.direction === "surrender" ? `Still to receive ${amountLabel}.` : `Still to pay ${amountLabel}.`,
+      detail: `${priorVerb} ${priorLabel}${stamp !== "" ? `, ${stamp}` : ""}.`,
+    };
+  }
+
+  return settlementVerdictAfterCapture(verdict, record);
+}
+
+/** Once the cash has moved, the banner records that instead of asking for it again. */
+export function settlementVerdictAfterCapture(
+  verdict: SettlementVerdict,
+  record: SettlementRecord | null | undefined,
+): SettlementVerdict {
+  const status = (record?.status ?? "").trim().toLowerCase();
+  if (status !== "paid" && status !== "received" && status !== "settled") {
+    return verdict;
+  }
+
+  const amountLabel = formatGridCurrencyDisplay(
+    record?.amount?.trim() ? record.amount : verdict.amount.toFixed(2),
+  );
+  const reference = record?.reference?.trim() ?? "";
+  const date = record?.date?.trim() ?? "";
+  const stamp = [
+    reference !== "" ? `Reference ${reference}` : "",
+    date !== "" ? `dated ${date}` : "",
+  ]
+    .filter((part) => part !== "")
+    .join(", ");
+  const recorded = stamp !== "" ? `${stamp}. ` : "";
+
+  if (status === "received") {
+    return {
+      ...verdict,
+      direction: "settled",
+      title: `Received ${amountLabel}.`,
+      detail: `${recorded}The employee returned the difference.`,
+    };
+  }
+  if (status === "settled") {
+    return {
+      ...verdict,
+      direction: "settled",
+      title: "Settled. No cash moved.",
+      detail: recorded !== "" ? stamp + "." : verdict.detail,
+    };
+  }
+
+  return {
+    ...verdict,
+    direction: "settled",
+    title: `Paid ${amountLabel}.`,
+    detail: `${recorded}The company already paid the difference.`,
+  };
+}
+
 type SettlementStep = {
   step_order: number;
   confirm_settlement?: boolean | null;
 };
 
 /**
- * Cash must move, and this approver is one of the steps marked to confirm it.
- * When no step is marked, the last approver who actually runs confirms.
+ * This pending step is marked Settle the cash. Even totals still open the panel.
+ * A step that is not marked does not ask, including the last approver.
  */
 export function approverMustConfirmSettlement(input: {
   direction: SettlementDirection | null;
   pendingStepOrder: number | null;
   steps: SettlementStep[];
 }): boolean {
-  if (input.direction !== "surrender" && input.direction !== "payment") {
-    return false;
-  }
-  if (input.pendingStepOrder == null) {
+  if (input.direction == null || input.pendingStepOrder == null) {
     return false;
   }
 
-  const explicit = input.steps.filter((step) => step.confirm_settlement === true);
-  if (explicit.length > 0) {
-    return explicit.some((step) => step.step_order === input.pendingStepOrder);
-  }
-
-  const orders = input.steps
-    .map((step) => step.step_order)
-    .filter((order) => Number.isFinite(order));
-  if (orders.length === 0) {
-    return false;
-  }
-
-  return input.pendingStepOrder === Math.max(...orders);
+  return input.steps.some(
+    (step) => step.confirm_settlement === true && step.step_order === input.pendingStepOrder,
+  );
 }
 
 /** Reimbursement has no cash advance and no forecast. The actual total is the amount to pay. */

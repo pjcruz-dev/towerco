@@ -78,6 +78,10 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'comment_replied' => "{$prefix} Reply on — {$documentNo}",
                 'payment_held' => "{$prefix} Payment on hold — {$documentNo}",
                 'payment_released' => "{$prefix} Payment released — {$documentNo}",
+                'settlement_held' => "{$prefix} Settlement on hold — {$documentNo}",
+                'settlement_paid' => "{$prefix} Settlement paid — {$documentNo}",
+                'settlement_received' => "{$prefix} Cash received — {$documentNo}",
+                'settlement_settled' => "{$prefix} Settlement recorded — {$documentNo}",
                 'cancelled' => "{$prefix} Request cancelled — {$documentNo}",
                 'approval_no_longer_needed' => "{$prefix} Approval no longer needed — {$documentNo}",
                 'approval_rerouted' => "{$prefix} Approval reassigned — {$documentNo}",
@@ -184,6 +188,34 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 }
             } elseif ($this->event === 'payment_released') {
                 $message->line(__(':name released the payment. The request continues.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'settlement_held') {
+                $message->line(__(':name put the settlement on hold. The request stays on this step.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'settlement_paid') {
+                $message->line(__(':name paid the difference. The request continues.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'settlement_received') {
+                $message->line(__(':name recorded the cash the employee returned. The request continues.', [
+                    'name' => $this->actorName ?? __('An approver'),
+                ]));
+                if ($this->detail !== null && trim($this->detail) !== '') {
+                    $message->line($this->detail);
+                }
+            } elseif ($this->event === 'settlement_settled') {
+                $message->line(__(':name recorded that no cash moves. The request continues.', [
                     'name' => $this->actorName ?? __('An approver'),
                 ]));
                 if ($this->detail !== null && trim($this->detail) !== '') {

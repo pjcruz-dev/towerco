@@ -99,7 +99,7 @@ export const E_APPROVAL_STEP_TYPES = [
   { value: "user", label: "Fixed user" },
   { value: "reviewer", label: "Fixed reviewer (sign, then continue)" },
   { value: "field", label: "From approver field" },
-  { value: "user_list", label: "From approver list (dynamic N)" },
+  { value: "user_list", label: "Several approvers" },
   { value: "reviewer_list", label: "Reviewer list (comment, then continue)" },
   { value: "field_map", label: "Mapped field value" },
   { value: "manager", label: "Direct manager (Entra ID)" },

@@ -99,7 +99,8 @@ final class EApprovalSubmissionPrintService
                     'step_label' => $a->step?->label,
                     'finance_action' => trim((string) ($condition['finance_action'] ?? '')) ?: null,
                     'decision_label' => $labels['approve'],
-                    'proof_status' => $this->paymentProofStatus($submission, $stepOrder),
+                    'proof_status' => $this->settlementCaptureStatus($submission, $stepOrder)
+                        ?? $this->paymentProofStatus($submission, $stepOrder),
                 ];
             })->values()->all(),
             'attachments' => $submission->attachments->reject(static fn ($a) => $a->isSuperseded())->map(static fn ($a) => [
@@ -128,6 +129,28 @@ final class EApprovalSubmissionPrintService
             }
             $next = strtolower(trim((string) ($entry['status'] ?? '')));
             if ($next === 'released' || $next === 'hold') {
+                $status = $next;
+            }
+        }
+
+        return $status;
+    }
+
+    /** Latest settlement status recorded on this step. Paid, Received, Settled, and Hold are the choices. */
+    private function settlementCaptureStatus(EApprovalSubmission $submission, int $stepOrder): ?string
+    {
+        if ($stepOrder < 1) {
+            return null;
+        }
+        $finance = is_array($submission->finance_json) ? $submission->finance_json : [];
+        $entries = is_array($finance['settlement_captures'] ?? null) ? $finance['settlement_captures'] : [];
+        $status = null;
+        foreach ($entries as $entry) {
+            if (! is_array($entry) || (int) ($entry['step_order'] ?? 0) !== $stepOrder) {
+                continue;
+            }
+            $next = strtolower(trim((string) ($entry['status'] ?? '')));
+            if (in_array($next, ['paid', 'received', 'settled', 'hold'], true)) {
                 $status = $next;
             }
         }

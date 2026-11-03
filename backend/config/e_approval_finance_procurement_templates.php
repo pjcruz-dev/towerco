@@ -198,7 +198,10 @@ $roleStep = static function (int $order, string $role, string $label, string $ac
         'approverId' => $role,
         'step_order' => $order,
         'label' => $label,
-        'condition' => ['finance_action' => $action],
+        'condition' => array_filter([
+            'finance_action' => $action,
+            'confirm_settlement' => in_array($action, ['settlement', 'payment'], true) ? true : null,
+        ]),
     ];
 };
 

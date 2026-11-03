@@ -329,7 +329,8 @@ describe("form-style starter layout", () => {
     expect(css).toContain("@page { size: A4 landscape; margin: 10mm; }");
     expect(css).toContain(".ea-print-col-date");
     expect(css).toContain(".ea-lq-doc .ea-print-col-date");
-    expect(css).toContain("width: 10%");
+    expect(css).toContain(".ea-print-col-tin");
+    expect(css).toContain("table-layout: auto");
 
     const rendered = renderEApprovalPrintTemplateHtml(html, samplePayload({
       form_name: "Cash advance",
@@ -525,6 +526,26 @@ describe("print site cells", () => {
     expect(html).toContain("SITE VISIT");
     expect(html).not.toContain("subsidiary");
     expect(html).toContain("₱7,000.00");
+  });
+
+  it("keeps a liquidation amount total on the visible lines and gives TIN a column", () => {
+    const html = renderPrintGridTableHtml(
+      {
+        key: "expense_lines",
+        label: "Expense lines",
+        columns: ["TIN", "Description", "VAT treatment", "Amount", "Forecast amount"],
+        rows: [["123", "Freight", "vatable", "50009", "3500"]],
+        total_columns: ["Amount"],
+      },
+      {
+        formName: "Liquidation",
+        fields: [{ key: "total_reimbursement", label: "Total", value: "70009.00", field_type: "currency" }],
+      },
+    );
+
+    expect(html).toContain('class="ea-print-col-tin"');
+    expect(html).toContain("₱50,009.00");
+    expect(html).not.toContain("₱70,009.00");
   });
 });
 

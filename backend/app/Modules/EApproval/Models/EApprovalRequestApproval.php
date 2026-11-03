@@ -64,28 +64,37 @@ class EApprovalRequestApproval extends Model
 
     /**
      * Compiled rows can miss a checkbox saved on the form after the request started.
-     * The live step at the same order still counts.
+     * Match the same person and the same when-clause. Runtime step numbers are compacted,
+     * so the template step at the same number can be a different branch.
+     * A payment already released on this request is not asked for again.
      */
     public function requiresProofOfPayment(): bool
     {
+        if ($this->latestPaymentProofStatus() === 'released') {
+            return false;
+        }
+
         $condition = is_array($this->step?->condition) ? $this->step->condition : [];
         if (! empty($condition['proof_of_payment'])) {
             return true;
         }
 
-        $order = (int) ($this->step?->step_order ?? 0);
-        if ($order < 1) {
-            return false;
+        return $this->liveTemplateHasFlag('proof_of_payment');
+    }
+
+    /**
+     * Compiled rows can miss a checkbox saved on the form after the request started.
+     * Match the same person and the same when-clause. Runtime step numbers are compacted,
+     * so the template step at the same number can be a different branch.
+     */
+    public function requiresSettleCash(): bool
+    {
+        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
+        if (! empty($condition['confirm_settlement'])) {
+            return true;
         }
 
-        $this->loadMissing('submission.form.workflowTemplate.steps');
-        $templateSteps = $this->submission?->form?->workflowTemplate?->steps;
-
-        return $templateSteps !== null && $templateSteps->contains(
-            static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order === $order
-                && is_array($step->condition)
-                && ! empty($step->condition['proof_of_payment']),
-        );
+        return $this->liveTemplateHasFlag('confirm_settlement');
     }
 
     /**
@@ -128,6 +137,7 @@ class EApprovalRequestApproval extends Model
                 ? ($this->step->condition['finance_action'] ?? null)
                 : null,
             'proof_of_payment' => $this->requiresProofOfPayment(),
+            'confirm_settlement' => $this->requiresSettleCash(),
             'decision_labels' => EApprovalWorkflowStepDefinitionSupport::decisionLabels(
                 is_array($this->step?->condition) ? ['condition' => $this->step->condition] : [],
             ),
@@ -173,6 +183,94 @@ class EApprovalRequestApproval extends Model
             'requestor' => $list['requestor'] ?? null,
             'created_at' => $list['created_at'] ?? null,
         ];
+    }
+
+    private function latestPaymentProofStatus(): ?string
+    {
+        $finance = is_array($this->submission?->finance_json) ? $this->submission->finance_json : [];
+        $entries = is_array($finance['payment_proofs'] ?? null) ? $finance['payment_proofs'] : [];
+        $latest = null;
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+            $status = strtolower(trim((string) ($entry['status'] ?? '')));
+            if (in_array($status, ['released', 'hold'], true)) {
+                $latest = $status;
+            }
+        }
+
+        return $latest;
+    }
+
+    /**
+     * The live template step for this person, not whichever template row shares the compacted order.
+     */
+    private function liveTemplateHasFlag(string $flag): bool
+    {
+        $compiled = $this->step;
+        if ($compiled === null) {
+            return false;
+        }
+
+        $this->loadMissing('submission.form.workflowTemplate.steps');
+        $templateSteps = $this->submission?->form?->workflowTemplate?->steps;
+        if ($templateSteps === null) {
+            return false;
+        }
+
+        $whenKey = $this->whenKey($compiled);
+        $approverId = (string) ($compiled->approver_id ?? '');
+        $type = (string) $compiled->approver_type;
+
+        return $templateSteps->contains(function (EApprovalWorkflowStep $step) use ($flag, $whenKey, $approverId, $type): bool {
+            $condition = is_array($step->condition) ? $step->condition : [];
+            if (empty($condition[$flag])) {
+                return false;
+            }
+            if ($this->whenKey($step) !== $whenKey) {
+                return false;
+            }
+            if ($approverId !== '' && (string) ($step->approver_id ?? '') === $approverId) {
+                return true;
+            }
+            $fixed = $condition['fixed_approver_ids'] ?? [];
+            $fixedIds = [];
+            if (is_array($fixed)) {
+                foreach ($fixed as $id) {
+                    if (is_scalar($id) && trim((string) $id) !== '') {
+                        $fixedIds[] = trim((string) $id);
+                    }
+                }
+            }
+            if ($approverId !== '' && in_array($approverId, $fixedIds, true)) {
+                return true;
+            }
+
+            return $approverId === '' && (string) $step->approver_type === $type;
+        });
+    }
+
+    private function whenKey(EApprovalWorkflowStep $step): string
+    {
+        $condition = is_array($step->condition) ? $step->condition : [];
+        $when = $condition['when'] ?? [];
+        if (! is_array($when)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($when as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+            $parts[] = strtolower(trim((string) ($entry['field'] ?? '')))
+                .'|'.strtolower(trim((string) ($entry['operator'] ?? 'equals')))
+                .'|'.trim((string) ($entry['value'] ?? ''));
+        }
+        sort($parts);
+
+        return implode(';', $parts);
     }
 
     private function parallelModeFromStep(): ?string

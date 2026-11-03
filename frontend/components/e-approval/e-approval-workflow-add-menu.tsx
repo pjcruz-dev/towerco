@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export type WorkflowAddKind =
   | "step"
+  | "fixed_list"
   | "if_else"
   | "ladder"
   | "parallel"
@@ -30,6 +31,13 @@ const OPTIONS: Array<{
     label: "Approval step",
     description: "One approver in sequence",
     icon: <Plus className="h-3.5 w-3.5" />,
+  },
+  {
+    kind: "fixed_list",
+    section: "Approve",
+    label: "Several approvers",
+    description: "Named people on one step — any one, all, or at least N",
+    icon: <Users className="h-3.5 w-3.5" />,
   },
   {
     kind: "if_else",

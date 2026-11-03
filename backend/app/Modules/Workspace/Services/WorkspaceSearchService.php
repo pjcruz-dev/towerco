@@ -247,7 +247,9 @@ final class WorkspaceSearchService
             'title' => (string) $submission->document_no,
             'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
             'status' => $rawStatus,
-            'status_label' => $rawStatus !== null ? EApprovalSubmissionStatus::label($rawStatus) : null,
+            'status_label' => $submission instanceof EApprovalSubmission
+                ? app(EApprovalFinanceStageService::class)->label($submission)
+                : ($rawStatus !== null ? EApprovalSubmissionStatus::label($rawStatus) : null),
             'current_step' => $currentStep > 0 ? $currentStep : null,
             'waiting_on' => $waitingOn,
             'href' => '/e-approval/submissions/'.$submission->id,

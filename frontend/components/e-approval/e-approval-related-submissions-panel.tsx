@@ -80,7 +80,7 @@ function RelatedSubmissionLink({ row }: { row: EApprovalRelatedSubmissionRow }) 
         </p>
         {amount ? <p className="text-xs text-muted-foreground">{amount}</p> : null}
       </div>
-      <EApprovalStatusBadge status={row.status} kind="submission" className="self-start sm:self-center" />
+      <EApprovalStatusBadge status={row.status} label={row.status_label} kind="submission" className="self-start sm:self-center" />
     </Link>
   );
 }

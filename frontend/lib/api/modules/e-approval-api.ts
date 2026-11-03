@@ -625,12 +625,20 @@ export async function decideEApprovalApproval(
     file_recipient_ids?: string[];
     payment_proof?: { status: "released" | "hold"; comment?: string };
     payment_files?: File[];
+    settlement_capture?: {
+      status: "paid" | "received" | "settled" | "hold";
+      comment?: string;
+      reference?: string;
+      date?: string;
+    };
+    settlement_files?: File[];
   },
 ): Promise<void> {
-  const files = payload.payment_files ?? [];
+  const files = [...(payload.payment_files ?? []), ...(payload.settlement_files ?? [])];
   if (files.length === 0) {
     const body = { ...payload };
     delete body.payment_files;
+    delete body.settlement_files;
     await apiClient.post(`/e-approval/approvals/${id}/decide`, body);
     return;
   }
@@ -651,7 +659,16 @@ export async function decideEApprovalApproval(
     body.append("payment_proof[status]", payload.payment_proof.status);
     if (payload.payment_proof.comment) body.append("payment_proof[comment]", payload.payment_proof.comment);
   }
-  files.forEach((file) => body.append("payment_files[]", file));
+  if (payload.settlement_capture) {
+    body.append("settlement_capture[status]", payload.settlement_capture.status);
+    if (payload.settlement_capture.comment) body.append("settlement_capture[comment]", payload.settlement_capture.comment);
+    if (payload.settlement_capture.reference) {
+      body.append("settlement_capture[reference]", payload.settlement_capture.reference);
+    }
+    if (payload.settlement_capture.date) body.append("settlement_capture[date]", payload.settlement_capture.date);
+  }
+  (payload.payment_files ?? []).forEach((file) => body.append("payment_files[]", file));
+  (payload.settlement_files ?? []).forEach((file) => body.append("settlement_files[]", file));
   await apiClient.post(`/e-approval/approvals/${id}/decide`, body, { timeout: 120_000 });
 }
 

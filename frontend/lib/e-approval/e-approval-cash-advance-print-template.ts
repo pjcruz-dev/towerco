@@ -281,15 +281,18 @@ export function defaultCashAdvanceDocumentDesignCss(options?: CashAdvancePrintPa
 }
 .ea-ca-doc .ea-print-col-treatment { width: 10%; text-align: center; }
 
-/* Liquidation and reimbursement have more columns than a cash advance forecast. */
+/* Liquidation and reimbursement list more columns than a cash advance forecast. */
 .ea-lq-doc .ea-print-table,
 .ea-re-doc .ea-print-table {
+  table-layout: auto;
   font-size: 8px;
 }
 .ea-lq-doc .ea-print-table th,
 .ea-lq-doc .ea-print-table td,
 .ea-re-doc .ea-print-table th,
 .ea-re-doc .ea-print-table td {
+  width: auto;
+  min-width: 3.4rem;
   padding: 3px 4px;
   word-break: normal;
   overflow-wrap: break-word;
@@ -297,38 +300,39 @@ export function defaultCashAdvanceDocumentDesignCss(options?: CashAdvancePrintPa
 .ea-lq-doc .ea-print-table thead th,
 .ea-re-doc .ea-print-table thead th {
   font-size: 7.5px;
-  line-height: 1.2;
+  line-height: 1.25;
   white-space: normal;
 }
 .ea-lq-doc .ea-print-col-date,
-.ea-re-doc .ea-print-col-date { width: 10%; }
+.ea-re-doc .ea-print-col-date { min-width: 6.2rem; }
 .ea-lq-doc .ea-print-col-site,
-.ea-re-doc .ea-print-col-site { width: 7%; }
+.ea-re-doc .ea-print-col-site { min-width: 5.6rem; }
 .ea-lq-doc .ea-print-col-ref,
-.ea-re-doc .ea-print-col-ref { width: 5%; }
-.ea-lq-doc .ea-print-col-party,
-.ea-re-doc .ea-print-col-party { width: 7%; }
-.ea-lq-doc .ea-print-col-note,
-.ea-re-doc .ea-print-col-note { width: 8%; }
-.ea-lq-doc .ea-print-col-type,
-.ea-re-doc .ea-print-col-type { width: 6%; }
+.ea-re-doc .ea-print-col-ref,
+.ea-lq-doc .ea-print-col-tin,
+.ea-re-doc .ea-print-col-tin,
 .ea-lq-doc .ea-print-col-qty,
-.ea-re-doc .ea-print-col-qty { width: 5%; text-align: right; }
+.ea-re-doc .ea-print-col-qty {
+  min-width: 3.2rem;
+  white-space: nowrap;
+}
+.ea-lq-doc .ea-print-col-party,
+.ea-re-doc .ea-print-col-party,
+.ea-lq-doc .ea-print-col-type,
+.ea-re-doc .ea-print-col-type,
+.ea-lq-doc .ea-print-col-treatment,
+.ea-re-doc .ea-print-col-treatment { min-width: 4.4rem; }
+.ea-lq-doc .ea-print-col-note,
+.ea-re-doc .ea-print-col-note { min-width: 5.2rem; }
 .ea-lq-doc .ea-print-col-money,
 .ea-re-doc .ea-print-col-money,
 .ea-lq-doc .ea-print-col-vat,
 .ea-re-doc .ea-print-col-vat {
-  width: 7%;
-  white-space: normal;
-}
-.ea-lq-doc .ea-print-table td.ea-print-col-money,
-.ea-re-doc .ea-print-table td.ea-print-col-money,
-.ea-lq-doc .ea-print-table td.ea-print-col-vat,
-.ea-re-doc .ea-print-table td.ea-print-col-vat {
+  min-width: 4.6rem;
   white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.ea-lq-doc .ea-print-col-treatment,
-.ea-re-doc .ea-print-col-treatment { width: 7%; }
 .ea-ca-doc .ea-print-table tfoot td {
   background: #f8fafc;
   font-weight: 700;

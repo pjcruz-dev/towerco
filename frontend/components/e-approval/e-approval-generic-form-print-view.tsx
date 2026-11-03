@@ -101,7 +101,7 @@ export function EApprovalGenericFormPrintView({
     const savedHasExpenseColumnFix =
       fallbackFamily !== "liquidation" && fallbackFamily !== "reimbursement"
         ? true
-        : saved.includes(`.${fallbackFamily === "liquidation" ? "ea-lq-doc" : "ea-re-doc"} .ea-print-col-date`);
+        : saved.includes(".ea-print-col-tin");
     const base =
       saved && !usingFamilyStarter && savedHasExpenseColumnFix
         ? saved

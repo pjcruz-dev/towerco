@@ -219,6 +219,11 @@ final class ApprovalDecisionService
             return $this->holdPayment($approval, $submission, $proof, $actor);
         }
 
+        $capture = is_array($financeInput['settlement_capture'] ?? null) ? $financeInput['settlement_capture'] : null;
+        if (is_array($capture) && ($capture['status'] ?? '') === 'hold') {
+            return $this->holdSettlement($approval, $submission, $capture, $actor);
+        }
+
         return $this->approve($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds);
     }
 
@@ -434,6 +439,140 @@ final class ApprovalDecisionService
     }
 
     /**
+     * @param  array<string, mixed>  $capture
+     */
+    private function holdSettlement(
+        EApprovalRequestApproval $approval,
+        EApprovalSubmission $submission,
+        array $capture,
+        TenantUser $actor,
+    ): EApprovalRequestApproval {
+        $approval->setRelation('submission', $submission);
+        if (! $approval->requiresSettleCash()) {
+            throw ValidationException::withMessages([
+                'settlement_capture' => [__('This step does not settle the cash.')],
+            ]);
+        }
+
+        return DB::connection('tenant')->transaction(function () use ($approval, $submission, $capture, $actor) {
+            $this->financeStage->recordSettlementCapture($submission, $capture, $actor);
+            $this->comments->add(
+                $submission,
+                $this->settlementCaptureNote($capture),
+                $actor,
+                notifyStakeholders: false,
+                imageAttachmentIds: $this->paymentProofFileIds($capture),
+            );
+            $comment = trim((string) ($capture['comment'] ?? ''));
+            $this->inApp->notify(
+                (string) $submission->requestor_id,
+                'settlement_held',
+                $submission->id,
+                __(':name put the settlement for :doc on hold.', ['name' => $actor->name, 'doc' => $submission->document_no]),
+                submission: $submission,
+                actor: $actor,
+                bodyPreview: $comment !== '' ? $comment : null,
+            );
+            $this->mail->dispatchSettlement($submission, $actor, 'hold', $comment);
+
+            return $approval->fresh(['submission.form', 'approver', 'step']);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $financeInput
+     */
+    private function captureSettlement(
+        EApprovalRequestApproval $approval,
+        EApprovalSubmission $submission,
+        array &$financeInput,
+        TenantUser $actor,
+    ): void {
+        $approval->setRelation('submission', $submission);
+        if (! $approval->requiresSettleCash()) {
+            if (is_array($financeInput['settlement_capture'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'settlement_capture' => [__('This step does not settle the cash.')],
+                ]);
+            }
+
+            return;
+        }
+
+        $capture = is_array($financeInput['settlement_capture'] ?? null) ? $financeInput['settlement_capture'] : null;
+        $status = is_array($capture) ? strtolower(trim((string) ($capture['status'] ?? ''))) : '';
+        $balance = $this->financeStage->settlementBalance($submission);
+        $closed = is_array($balance) && ($balance['closed'] ?? false) === true;
+        if (! is_array($capture) || ! in_array($status, ['paid', 'received', 'settled'], true)) {
+            if ($closed || ($balance === null && $this->financeStage->settlementAlreadyMoved($submission))) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'settlement_capture' => [__('Record the settlement before approving.')],
+            ]);
+        }
+        if ($closed) {
+            throw ValidationException::withMessages([
+                'settlement_capture' => [__('Nothing is left to settle.')],
+            ]);
+        }
+
+        $this->financeStage->recordSettlementCapture($submission, $capture, $actor);
+        $reference = trim((string) ($capture['reference'] ?? ''));
+        if ($reference !== '') {
+            $financeInput['settlement_reference'] = $reference;
+        }
+        $this->comments->add(
+            $submission,
+            $this->settlementCaptureNote($capture),
+            $actor,
+            notifyStakeholders: false,
+            imageAttachmentIds: $this->paymentProofFileIds($capture),
+        );
+        $comment = trim((string) ($capture['comment'] ?? ''));
+        $event = match ($status) {
+            'received' => 'settlement_received',
+            'settled' => 'settlement_settled',
+            default => 'settlement_paid',
+        };
+        $this->inApp->notify(
+            (string) $submission->requestor_id,
+            $event,
+            $submission->id,
+            __(':name recorded the settlement for :doc.', ['name' => $actor->name, 'doc' => $submission->document_no]),
+            submission: $submission,
+            actor: $actor,
+            bodyPreview: $comment !== '' ? $comment : null,
+        );
+        $this->mail->dispatchSettlement($submission, $actor, $status, $comment);
+    }
+
+    /**
+     * @param  array<string, mixed>  $capture
+     */
+    private function settlementCaptureNote(array $capture): string
+    {
+        $status = match (strtolower(trim((string) ($capture['status'] ?? '')))) {
+            'hold' => 'Hold',
+            'received' => 'Received',
+            'settled' => 'Settled',
+            default => 'Paid',
+        };
+        $comment = trim((string) ($capture['comment'] ?? ''));
+        $note = 'Settle the cash — '.$status.'.';
+        $reference = trim((string) ($capture['reference'] ?? ''));
+        if ($reference !== '') {
+            $note .= ' '.$reference.'.';
+        }
+        if ($comment !== '') {
+            $note .= ' '.$comment;
+        }
+
+        return $note;
+    }
+
+    /**
      * Hold needs a comment and stays on this step. Released needs a file and continues.
      *
      * @param  array<string, mixed>  $proof
@@ -504,6 +643,7 @@ final class ApprovalDecisionService
         return DB::connection('tenant')->transaction(function () use ($approval, $submission, $remarks, $signature, $actor, $financeInput, $proceedOptional, $fileAudience, $fileRecipientIds) {
             $this->rememberFileAudience($submission, $fileAudience, $fileRecipientIds);
             $this->captureReleasedProof($approval, $submission, $financeInput, $actor);
+            $this->captureSettlement($approval, $submission, $financeInput, $actor);
             $this->financeStage->captureOnApprove($submission, $approval->step, $financeInput);
 
             $previousApprovalStatus = (string) $approval->status;

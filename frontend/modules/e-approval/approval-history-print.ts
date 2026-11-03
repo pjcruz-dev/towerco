@@ -25,6 +25,15 @@ export function approvalHistoryVerb(row: EApprovalPrintApprovalRow, acknowledged
   if (proof === "released") {
     return "Released";
   }
+  if (proof === "paid") {
+    return "Paid";
+  }
+  if (proof === "received") {
+    return "Received";
+  }
+  if (proof === "settled") {
+    return "Settled";
+  }
   if (proof === "hold") {
     return "Hold";
   }

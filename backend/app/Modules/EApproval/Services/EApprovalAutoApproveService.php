@@ -64,6 +64,9 @@ final class EApprovalAutoApproveService
         if (EApprovalWorkflowStepDefinitionSupport::proofOfPaymentEnabled($condition)) {
             return false;
         }
+        if (EApprovalWorkflowStepDefinitionSupport::confirmSettlementEnabled($condition)) {
+            return false;
+        }
 
         if (! EApprovalWorkflowStepDefinitionSupport::approvalIsDue($approval->created_at, $days, $now)) {
             return false;

@@ -108,6 +108,8 @@ export function EApprovalComposeFormFields({
 }: Props) {
   const composeConfig = composeConfigOverride ?? parseFormComposeConfig(formMetadata);
   const touchedFields = useRef(new Set<string>());
+  const fileSelectionsRef = useRef(fileSelections ?? {});
+  fileSelectionsRef.current = fileSelections ?? {};
   const contentSteps = useMemo(
     () => buildFormComposeSteps(fields, composeConfig.stepSource),
     [fields, composeConfig.stepSource],
@@ -218,7 +220,12 @@ export function EApprovalComposeFormFields({
       return true;
     }
 
-    const issues = validateSubmissionValues(activeStep.fields, values, fileSelections ?? {}, validationOptions ?? {});
+    const issues = validateSubmissionValues(
+      activeStep.fields,
+      values,
+      fileSelectionsRef.current,
+      validationOptions ?? {},
+    );
     if (issues.length === 0) {
       markStepValidated(safeStepIndex);
       return true;
@@ -271,7 +278,7 @@ export function EApprovalComposeFormFields({
       const issues = validateSubmissionValues(
         stepFields,
         nextValues,
-        fileSelections ?? {},
+        fileSelectionsRef.current,
         validationOptions ?? {},
       ).filter((issue) => touchedFields.current.has(issue.fieldName));
       onLiveValidationIssues(issues);
@@ -293,6 +300,13 @@ export function EApprovalComposeFormFields({
 
   const handleFileChange = useCallback(
     (fieldName: string, files: File[]) => {
+      const next = { ...fileSelectionsRef.current };
+      if (files.length === 0) {
+        delete next[fieldName];
+      } else {
+        next[fieldName] = files;
+      }
+      fileSelectionsRef.current = next;
       const stepIndex = findComposeStepIndexForFieldName(contentSteps, fieldName);
       if (stepIndex >= 0) {
         invalidateFromStep(stepIndex);

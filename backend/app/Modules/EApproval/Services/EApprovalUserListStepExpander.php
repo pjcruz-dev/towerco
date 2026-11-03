@@ -161,6 +161,9 @@ final class EApprovalUserListStepExpander
             if (EApprovalWorkflowStepDefinitionSupport::proofOfPaymentEnabled($definition)) {
                 $member['proof_of_payment'] = true;
             }
+            if (EApprovalWorkflowStepDefinitionSupport::confirmSettlementEnabled($definition)) {
+                $member['confirm_settlement'] = true;
+            }
             $decisionLabels = EApprovalWorkflowStepDefinitionSupport::storedDecisionLabels($definition);
             if ($decisionLabels !== null) {
                 $member['decision_labels'] = $decisionLabels;
