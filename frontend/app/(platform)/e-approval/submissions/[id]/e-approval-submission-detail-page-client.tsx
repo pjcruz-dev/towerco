@@ -611,9 +611,25 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   );
   const { openPdfPreview, isGenerating: isPdfGenerating } = useEApprovalPdfPreview();
   const attachments = data?.attachments ?? [];
-  const reviewAttachments = attachments.filter(
-    (file) => !file.metadata?.superseded_at && !file.metadata?.comment_image,
-  );
+  const reviewAttachments = attachments.filter((file) => {
+    if (file.metadata?.comment_image) {
+      return false;
+    }
+    if (!file.metadata?.superseded_at) {
+      return true;
+    }
+    const field = file.field_name?.trim() ?? "";
+    const slot = file.metadata?.slot?.trim() ?? "";
+    const replaced = attachments.some((other) => {
+      if (other.id === file.id || other.metadata?.comment_image || other.metadata?.superseded_at) {
+        return false;
+      }
+      const otherField = other.field_name?.trim() ?? "";
+      const otherSlot = other.metadata?.slot?.trim() ?? "";
+      return field !== "" ? otherField === field && otherSlot === slot : false;
+    });
+    return !replaced;
+  });
   const inlineFileFieldNames = new Set(
     (data?.form_fields ?? [])
       .filter((field) => field.type === "file" || field.type === "camera")
