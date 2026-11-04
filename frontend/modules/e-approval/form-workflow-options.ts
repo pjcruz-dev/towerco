@@ -1,11 +1,13 @@
 export type FormWorkflowOptionSettings = {
   optionalApprover: boolean;
   sendApprovedFiles: boolean;
+  requestComments: boolean;
 };
 
 export const DEFAULT_FORM_WORKFLOW_OPTIONS: FormWorkflowOptionSettings = {
   optionalApprover: false,
   sendApprovedFiles: false,
+  requestComments: false,
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -24,6 +26,7 @@ export function formWorkflowOptionsFromMetadata(metadata: unknown): FormWorkflow
   return {
     optionalApprover: options?.optional_approver === true,
     sendApprovedFiles: distribution?.enabled === true,
+    requestComments: options?.request_comments === true,
   };
 }
 
@@ -32,13 +35,14 @@ export function mergeFormWorkflowOptionsIntoMetadata(
   settings: FormWorkflowOptionSettings,
 ): Record<string, unknown> {
   const next = { ...metadata };
-  if (!settings.optionalApprover && !settings.sendApprovedFiles) {
+  if (!settings.optionalApprover && !settings.sendApprovedFiles && !settings.requestComments) {
     delete next.workflow_options;
     return next;
   }
 
   next.workflow_options = {
     optional_approver: settings.optionalApprover,
+    request_comments: settings.requestComments,
     file_distribution: {
       enabled: settings.sendApprovedFiles,
     },

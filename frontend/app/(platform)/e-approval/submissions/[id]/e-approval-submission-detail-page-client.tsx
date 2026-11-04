@@ -31,6 +31,7 @@ import {
   workflowPreviewToStepShowItems,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import { EApprovalAttachmentComments } from "@/components/e-approval/e-approval-attachment-comments";
+import { EApprovalRequestFieldMark } from "@/components/e-approval/e-approval-request-field-notes";
 import { EApprovalProofOfPaymentDialog } from "@/components/e-approval/e-approval-proof-of-payment-dialog";
 import {
   EApprovalSettlementCaptureDialog,
@@ -68,6 +69,7 @@ import {
   fetchEApprovalSubmission,
   postEApprovalComment,
   previewEApprovalSubmissionWorkflow,
+  requestEApprovalReturnToStep,
   requestEApprovalRevision,
   rerouteEApprovalApproval,
   resubmitEApprovalSubmission,
@@ -289,6 +291,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       pin_h?: number;
       mention_user_ids?: string[];
       images?: File[];
+      field_name?: string;
     }) =>
       postEApprovalComment(submissionId, payload),
     onSuccess: () => {
@@ -316,6 +319,17 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
       setForceFullRestart(false);
     },
     onError: (e) => push({ level: "error", title: "Revision failed", message: getErrorMessage(e) }),
+  });
+
+  const returnToStepMutation = useMutation({
+    mutationFn: () => requestEApprovalReturnToStep(submissionId, decisionRemarksRef.current.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId] });
+      queryClient.invalidateQueries({ queryKey: ["e-approval", "submission", submissionId, "comments"] });
+      push({ level: "success", title: "Returned to the earlier step" });
+      setDecisionRemarks("");
+    },
+    onError: (e) => push({ level: "error", title: "Return failed", message: getErrorMessage(e) }),
   });
 
   const followUpMutation = useMutation({
@@ -538,7 +552,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     paymentProof?: { status: "released" | "hold"; comment: string; files: File[] };
     settlementCapture?: SettlementCaptureDraft;
   }) => {
-    if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+    if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending || returnToStepMutation.isPending) {
       return;
     }
     if (payload.decision === "approved" && pendingApproval?.proof_of_payment && !payload.paymentProof) {
@@ -599,6 +613,27 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   ]);
 
   const tabsKey = data ? `${data.id}-${pendingApproval?.id ?? "idle"}-${defaultTab}` : "loading";
+
+  const queueApproval = (proceedOptional = false) => {
+    if (!pendingApproval) {
+      return;
+    }
+    queuedDecisionRef.current = {
+      approvalId: pendingApproval.id,
+      decision: "approved",
+      proceedOptional,
+      fileAudience: showFileAudience ? fileAudience : undefined,
+      fileRecipientIds: showFileAudience ? fileRecipientIds : undefined,
+    };
+  };
+
+  const openApprovalSignature = () => {
+    if (defaultTab === "decide") {
+      setSignatureConsentOpen(true);
+      return;
+    }
+    setFileConsent("approved");
+  };
 
   const onTabChange = useCallback(
     (nextTab: string) => {
@@ -674,10 +709,10 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     return [...people.values()];
   }, [data]);
   const fileDecision =
-    canApprove && pendingApproval && !pendingApproval.finance_action
+    canApprove && pendingApproval
       ? {
           mode: pendingApproval.duty === "review" ? ("review" as const) : ("approval" as const),
-          busy: decideMutation.isPending || revisionMutation.isPending,
+          busy: decideMutation.isPending || revisionMutation.isPending || returnToStepMutation.isPending,
           onAcknowledge: (message: string) => {
             decisionRemarksRef.current = message;
             setDecisionRemarks(message);
@@ -686,6 +721,15 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
           onApprove: (message: string) => {
             decisionRemarksRef.current = message;
             setDecisionRemarks(message);
+            queueApproval(false);
+            if (pendingApproval.proof_of_payment) {
+              setProofOpen(true);
+              return;
+            }
+            if (settlementNeedsCapture) {
+              setSettleOpen(true);
+              return;
+            }
             setFileConsent("approved");
           },
           onReject: (message: string) => {
@@ -994,6 +1038,22 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                       values={data.values}
                       formFields={data.form_fields}
                       attachments={reviewAttachments}
+                      wrapValue={
+                        data.request_comments
+                          ? (fieldName, node) => (
+                              <EApprovalRequestFieldMark
+                                fieldName={fieldName}
+                                comments={commentsQuery.data ?? []}
+                                people={mentionPeople}
+                                posting={commentMutation.isPending}
+                                decision={fileDecision}
+                                onPost={(payload) => commentMutation.mutate(payload)}
+                              >
+                                {node}
+                              </EApprovalRequestFieldMark>
+                            )
+                          : undefined
+                      }
                       renderFileReview={(fieldName) => {
                         const files = reviewAttachments.filter((file) => file.field_name === fieldName);
                         if (files.length === 0) {
@@ -1071,11 +1131,17 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           return;
                         }
                         const decision = fileConsent;
+                        const queued = queuedDecisionRef.current;
                         setFileConsent(null);
                         submitDecision({
                           approvalId: pendingApproval.id,
                           decision,
                           signature: approvalSignature!.trim(),
+                          proceedOptional: queued?.proceedOptional,
+                          fileAudience: queued?.fileAudience,
+                          fileRecipientIds: queued?.fileRecipientIds,
+                          paymentProof: queued?.paymentProof,
+                          settlementCapture: queued?.settlementCapture,
                         });
                       }}
                     >
@@ -1490,7 +1556,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           <Button
                             size="sm"
                             onClick={() => {
-                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending || returnToStepMutation.isPending) {
                                 return;
                               }
                               const signatureError = validateApprovalSignature(approvalSignature);
@@ -1545,7 +1611,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending) {
+                              if (decideInFlightRef.current || decideMutation.isPending || revisionMutation.isPending || returnToStepMutation.isPending) {
                                 return;
                               }
                               const signatureError = validateApprovalSignature(approvalSignature);
@@ -1616,6 +1682,21 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                             {decisionLabels.revision}
                           </Button>
                         </span>
+                        {pendingApproval.return_to_step && pendingApproval.return_to_step_target ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => returnToStepMutation.mutate()}
+                            disabled={
+                              decideMutation.isPending ||
+                              revisionMutation.isPending ||
+                              returnToStepMutation.isPending ||
+                              decisionRemarks.trim().length < 5
+                            }
+                          >
+                            Return to step {pendingApproval.return_to_step_target}
+                          </Button>
+                        ) : null}
                       </div>
                       <EApprovalSignatureConsentDialog
                         open={signatureConsentOpen}
@@ -1727,6 +1808,10 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                               {isWorkflowRemark ? (
                                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                                   {isRejection ? "Rejection" : "Revision requested"}
+                                </span>
+                              ) : c.field_name ? (
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                  On {data.form_fields?.find((field) => field.name === c.field_name)?.label || c.field_name}
                                 </span>
                               ) : null}
                             </span>
@@ -1892,7 +1977,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             setSettleOpen(true);
             return;
           }
-          setSignatureConsentOpen(true);
+          openApprovalSignature();
         }}
       />
       {settlementVerdict ? (
@@ -1922,7 +2007,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
             }
             queuedDecisionRef.current = { ...queued, settlementCapture: capture };
             setSettleOpen(false);
-            setSignatureConsentOpen(true);
+            openApprovalSignature();
           }}
         />
       ) : null}

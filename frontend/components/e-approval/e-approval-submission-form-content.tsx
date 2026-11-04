@@ -20,16 +20,20 @@ type Props = {
   className?: string;
   /** File and camera fields stay in place. Return the review for that field, or null to show the stored name. */
   renderFileReview?: (fieldName: string) => ReactNode;
+  /** Wrap a value so a mark can sit on it. File reviews are left as they are. */
+  wrapValue?: (fieldName: string, node: ReactNode) => ReactNode;
 };
 
 function ContentItem({
   item,
   duplicateApproverIds,
   renderFileReview,
+  wrapValue,
 }: {
   item: SubmissionFormContentItem;
   duplicateApproverIds: Set<string>;
   renderFileReview?: (fieldName: string) => ReactNode;
+  wrapValue?: (fieldName: string, node: ReactNode) => ReactNode;
 }) {
   const label = item.value.label ?? item.value.field_name ?? "Field";
   const fieldName = item.value.field_name?.trim() || item.formField?.name || "";
@@ -39,20 +43,23 @@ function ContentItem({
     <div className={cn((item.fullWidth || fileReview) && "md:col-span-2")}>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="mt-1">
-        {fileReview ? (
-          fileReview
-        ) : item.table ? (
-          <EApprovalLineItemsTable
-            table={item.table}
-            totals={item.totals}
-            printLayout={item.formField?.name === "expense_lines" || item.value.field_name === "expense_lines"}
-          />
-        ) : (
-          <EApprovalSubmissionFieldDisplay
-            field={item.value}
-            duplicateApproverIds={duplicateApproverIds}
-          />
-        )}
+        {fileReview
+          ? fileReview
+          : (() => {
+              const value = item.table ? (
+                <EApprovalLineItemsTable
+                  table={item.table}
+                  totals={item.totals}
+                  printLayout={item.formField?.name === "expense_lines" || item.value.field_name === "expense_lines"}
+                />
+              ) : (
+                <EApprovalSubmissionFieldDisplay
+                  field={item.value}
+                  duplicateApproverIds={duplicateApproverIds}
+                />
+              );
+              return wrapValue && fieldName ? wrapValue(fieldName, value) : value;
+            })()}
       </dd>
     </div>
   );
@@ -64,6 +71,7 @@ export function EApprovalSubmissionFormContent({
   attachments = [],
   className,
   renderFileReview,
+  wrapValue,
 }: Props) {
   const groups = useMemo(
     () =>
@@ -94,6 +102,7 @@ export function EApprovalSubmissionFormContent({
                 item={item}
                 duplicateApproverIds={duplicateApproverIds}
                 renderFileReview={renderFileReview}
+                wrapValue={wrapValue}
               />
             ))}
           </dl>

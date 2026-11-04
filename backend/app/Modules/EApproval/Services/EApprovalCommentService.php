@@ -38,6 +38,7 @@ final class EApprovalCommentService
             'images' => $this->imagePayload($c),
             'user_name' => $c->user?->name ?? '—',
             'created_at' => $c->created_at?->toIso8601String(),
+            'field_name' => is_string($c->field_name) && $c->field_name !== '' ? $c->field_name : null,
             'attachment_id' => $c->attachment_id !== null ? (string) $c->attachment_id : null,
             'pin_page' => $c->pin_page !== null ? (int) $c->pin_page : null,
             'pin_x' => $c->pin_x !== null ? (float) $c->pin_x : null,
@@ -69,6 +70,7 @@ final class EApprovalCommentService
         ?float $pinH = null,
         array $mentionUserIds = [],
         array $imageAttachmentIds = [],
+        ?string $fieldName = null,
     ): EApprovalComment {
         $trimmed = trim($message);
         $attachmentId = $this->attachmentOnSubmission($submission, $attachmentId);
@@ -80,6 +82,7 @@ final class EApprovalCommentService
             $pinW,
             $pinH,
             $parentId,
+            $fieldName,
         );
 
         if ($parentId !== null && $parentId !== '' && $attachmentId === null) {
@@ -95,6 +98,7 @@ final class EApprovalCommentService
             'submission_id' => $submission->id,
             'user_id' => $actor->id,
             'message' => $trimmed,
+            'field_name' => $fieldName !== null && trim($fieldName) !== '' ? trim($fieldName) : null,
             'parent_id' => $parentId,
             'attachment_id' => $attachmentId,
             'pin_page' => $pinPage,
@@ -167,13 +171,19 @@ final class EApprovalCommentService
         ?float $pinW,
         ?float $pinH,
         ?string $parentId,
+        ?string $fieldName = null,
     ): array {
         $placed = $pinPage !== null || $pinX !== null || $pinY !== null || $pinW !== null || $pinH !== null;
         if (! $placed || ($parentId !== null && $parentId !== '')) {
             return [null, null, null, null, null];
         }
 
-        if ($attachmentId === null || $pinPage === null || $pinX === null || $pinY === null) {
+        $onField = $attachmentId === null && is_string($fieldName) && trim($fieldName) !== '';
+        if ($onField && $pinX !== null && $pinY !== null) {
+            $pinPage = 1;
+        }
+
+        if ((! $onField && $attachmentId === null) || $pinPage === null || $pinX === null || $pinY === null) {
             throw ValidationException::withMessages([
                 'pin_page' => [__('A comment on the page needs the file, the page, and the spot.')],
             ]);
@@ -221,7 +231,11 @@ final class EApprovalCommentService
 
         $pendingApproverIds = EApprovalRequestApproval::query()
             ->where('submission_id', $submission->id)
-            ->whereIn('status', [EApprovalApprovalStatus::PENDING, EApprovalApprovalStatus::ACKNOWLEDGED])
+            ->whereIn('status', [
+                EApprovalApprovalStatus::PENDING,
+                EApprovalApprovalStatus::ACKNOWLEDGED,
+                EApprovalApprovalStatus::APPROVED,
+            ])
             ->whereNotNull('approver_id')
             ->pluck('approver_id')
             ->map(static fn (mixed $id): string => (string) $id)

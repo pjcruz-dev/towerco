@@ -39,7 +39,53 @@ final class EApprovalDocumentSequenceService
     /**
      * @param  array<string, mixed>  $values
      */
+    /**
+     * The number stem for these values, before the sequence. Subsidiary and department are part of it.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function prefixFor(EApprovalForm $form, array $values = [], ?TenantUser $submitter = null): string
+    {
+        if ($form->doc_no_custom_enabled && is_string($form->doc_no_template) && trim($form->doc_no_template) !== '') {
+            return $this->renderedPrefix($form, $values, $submitter)['prefix'];
+        }
+
+        $owner = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($form->owner_code ?: 'GEN')) ?: 'GEN');
+        $docType = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($form->doc_type_code ?: 'F')) ?: 'F');
+
+        return "{$owner}-{$docType}";
+    }
+
+    public function issuedNumberUsesPrefix(string $documentNo, string $prefix): bool
+    {
+        $documentNo = trim($documentNo);
+        $prefix = trim($prefix);
+        if ($documentNo === '' || $prefix === '') {
+            return false;
+        }
+
+        return preg_match('/^'.preg_quote($prefix, '/').'-(\d+)$/', $documentNo) === 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
     private function nextFromTemplate(EApprovalForm $form, array $values, ?TenantUser $submitter = null): string
+    {
+        $rendered = $this->renderedPrefix($form, $values, $submitter);
+
+        return DB::connection('tenant')->transaction(function () use ($rendered): string {
+            $n = $this->allocateSequence($rendered['prefix']);
+
+            return sprintf('%s-%0'.$rendered['padding'].'d', $rendered['prefix'], $n);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array{prefix: string, padding: int}
+     */
+    private function renderedPrefix(EApprovalForm $form, array $values, ?TenantUser $submitter): array
     {
         $template = trim((string) $form->doc_no_template);
         $padding = 3;
@@ -60,16 +106,12 @@ final class EApprovalDocumentSequenceService
             $template,
         ) ?? $template;
 
-        $prefix = rtrim($prefix, '-');
+        $prefix = rtrim((string) $prefix, '-');
         if ($prefix === '') {
             $prefix = 'DOC';
         }
 
-        return DB::connection('tenant')->transaction(function () use ($prefix, $padding): string {
-            $n = $this->allocateSequence($prefix);
-
-            return sprintf('%s-%0'.$padding.'d', $prefix, $n);
-        });
+        return ['prefix' => $prefix, 'padding' => $padding];
     }
 
     /**

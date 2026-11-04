@@ -41,6 +41,8 @@ type Props = {
   allowRemoteLookups?: boolean;
   /** Cash-advance subsidiary. From site and To site only list that subsidiary's site IDs. */
   subsidiary?: string;
+  /** Sites already chosen on this column. They stay off the search list. */
+  excludeSites?: string[];
   /** Other answers, used when a date column must fall on or after a form field. */
   values?: Record<string, string>;
 };
@@ -57,6 +59,7 @@ export function EApprovalGridCell({
   comfortable,
   allowRemoteLookups = true,
   subsidiary = "",
+  excludeSites = [],
   values = {},
 }: Props) {
   const inputClass = comfortable
@@ -74,6 +77,7 @@ export function EApprovalGridCell({
         inputClass={inputClass}
         allowRemoteLookups={allowRemoteLookups}
         subsidiary={subsidiary}
+        excludeSites={excludeSites}
       />
     );
   }
@@ -302,6 +306,12 @@ function parseSiteStops(value: string): Array<{ site: string; location: string; 
   return one.site !== "" ? [one] : [];
 }
 
+export function siteIdsInGridCell(value: string): string[] {
+  return parseSiteStops(value)
+    .map((stop) => stop.site.trim())
+    .filter((site) => site !== "");
+}
+
 function serializeSiteStops(
   stops: Array<{ site: string; location: string; fields: Record<string, string> }>,
   showFields: string[],
@@ -397,6 +407,7 @@ function GridSiteCell({
   inputClass,
   allowRemoteLookups = true,
   subsidiary = "",
+  excludeSites = [],
 }: {
   value: string;
   showFields?: string[];
@@ -406,6 +417,7 @@ function GridSiteCell({
   inputClass: string;
   allowRemoteLookups?: boolean;
   subsidiary?: string;
+  excludeSites?: string[];
 }) {
   const stops = multiple ? parseSiteStops(value) : [];
   const stop = multiple ? { site: "", location: "", fields: {} } : parseSiteStop(value);
@@ -457,6 +469,12 @@ function GridSiteCell({
   });
 
   const options = search.data?.options ?? [];
+  const takenSites = new Set(
+    [...excludeSites, ...stops.map((pickedStop) => pickedStop.site), stop.site]
+      .map((site) => site.trim().toUpperCase())
+      .filter((site) => site !== ""),
+  );
+  const visibleOptions = options.filter((option) => !takenSites.has(option.value.trim().toUpperCase()));
   const showMenu = open && !disabled && typedQuery !== "" && (search.isFetching || search.isFetched);
 
   useLayoutEffect(() => {
@@ -483,7 +501,7 @@ function GridSiteCell({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [showMenu, typedQuery, options.length]);
+  }, [showMenu, typedQuery, visibleOptions.length]);
 
   const placeholder = waitingForRequest
     ? "Select a subsidiary first"
@@ -501,12 +519,12 @@ function GridSiteCell({
             className="fixed z-[200] max-h-48 overflow-auto rounded-md border border-border bg-popover p-1 text-left shadow-md"
             style={{ top: menuBox.top, left: menuBox.left, width: menuBox.width }}
           >
-            {options.length === 0 ? (
+            {visibleOptions.length === 0 ? (
               <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                {search.isFetching ? "Searching…" : "No matching site"}
+                {search.isFetching ? "Searching…" : options.length > 0 ? "Already selected" : "No matching site"}
               </li>
             ) : (
-              options.map((option) => {
+              visibleOptions.map((option) => {
                 const fields = optionSiteFields(option.data);
                 const address = fields.address || option.subtitle || "";
                 const picked = address !== "" ? { ...fields, address } : { ...fields };

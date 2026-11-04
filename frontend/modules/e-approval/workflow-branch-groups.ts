@@ -1094,6 +1094,10 @@ export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): Ex
     }
 
     const bandIndexes = [index];
+    const seenValues = new Set<string>();
+    if (first.value !== "") {
+      seenValues.add(`${first.operator}\0${first.value}`);
+    }
     let cursor = index + 1;
     while (cursor < steps.length) {
       const next = parseValueMatchBand(steps[cursor]);
@@ -1104,6 +1108,13 @@ export function detectValueMatchLadders(steps: EApprovalWorkflowStepInput[]): Ex
       if (ladderCaseMemberIndexes(steps, primary).includes(cursor) && cursor !== primary) {
         cursor += 1;
         continue;
+      }
+      const valueKey = `${next.operator}\0${next.value}`;
+      if (next.value !== "" && seenValues.has(valueKey)) {
+        break;
+      }
+      if (next.value !== "") {
+        seenValues.add(valueKey);
       }
       bandIndexes.push(cursor);
       cursor += 1;

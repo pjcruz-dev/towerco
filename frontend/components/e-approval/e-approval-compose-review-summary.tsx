@@ -32,6 +32,19 @@ function ReviewTotalCell({ total }: { total: ComposeReviewTotal }) {
   );
 }
 
+function reviewColumnKind(header: string): "date" | "site" | "money" | "text" {
+  if (isReviewMoneyColumn(header)) {
+    return "money";
+  }
+  if (/date/i.test(header)) {
+    return "date";
+  }
+  if (/site/i.test(header)) {
+    return "site";
+  }
+  return "text";
+}
+
 export function EApprovalLineItemsTable({
   table,
   totals,
@@ -47,10 +60,11 @@ export function EApprovalLineItemsTable({
   // The print layout only keeps a figure that sits under a column on this table.
   const totalRows = printLayout ? placed.slice(0, 1).filter((row) => row.some(Boolean)) : placed;
   const moneyColumns = table.headers.map((header) => isReviewMoneyColumn(header));
+  const columnKinds = table.headers.map((header) => reviewColumnKind(header));
 
   return (
     <div className="mt-2 overflow-x-auto rounded-md border border-border">
-      <table className={cn("w-full min-w-[20rem] border-collapse text-left", printLayout ? "text-[11px]" : "text-sm")}>
+      <table className={cn("w-max min-w-full border-collapse text-left", printLayout ? "text-[11px]" : "text-sm")}>
         <thead>
           <tr className={cn(printLayout ? "bg-muted text-foreground" : "bg-slate-700 text-white dark:bg-slate-800")}>
             {table.headers.map((header, headerIndex) => (
@@ -59,8 +73,11 @@ export function EApprovalLineItemsTable({
                 scope="col"
                 className={cn(
                   "border border-border px-2 py-1.5 font-medium",
-                  printLayout ? "text-center text-[10px] leading-tight whitespace-normal" : "px-3 py-2 text-xs whitespace-nowrap",
-                  moneyColumns[headerIndex] && "min-w-[5.5rem] text-right",
+                  printLayout ? "text-center text-[10px] leading-tight" : "px-3 py-2 text-xs whitespace-nowrap",
+                  columnKinds[headerIndex] === "date" && "min-w-[17rem]",
+                  columnKinds[headerIndex] === "site" && "min-w-[14rem]",
+                  columnKinds[headerIndex] === "text" && "min-w-[6.5rem]",
+                  moneyColumns[headerIndex] && "min-w-[5.5rem] text-right whitespace-nowrap",
                 )}
               >
                 {header}
@@ -81,8 +98,11 @@ export function EApprovalLineItemsTable({
                 <td
                   key={`review-cell-${rowIndex}-${cellIndex}`}
                   className={cn(
-                    "border border-border align-top break-words",
-                    printLayout ? "px-2 py-1 whitespace-pre-line" : "px-3 py-2 whitespace-pre-line",
+                    "border border-border align-top",
+                    printLayout ? "px-2 py-1" : "px-3 py-2",
+                    columnKinds[cellIndex] === "date" && "min-w-[17rem] whitespace-nowrap",
+                    columnKinds[cellIndex] === "site" && "min-w-[14rem] whitespace-pre-line",
+                    columnKinds[cellIndex] === "text" && "min-w-[6.5rem] whitespace-nowrap",
                     moneyColumns[cellIndex] && "min-w-[5.5rem] text-right whitespace-nowrap tabular-nums",
                     cell === "—" && "text-muted-foreground",
                   )}

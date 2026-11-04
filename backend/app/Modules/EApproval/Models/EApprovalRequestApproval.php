@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Models;
 
+use App\Modules\EApproval\Support\EApprovalLiveStepMatcher;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -63,10 +64,8 @@ class EApprovalRequestApproval extends Model
     }
 
     /**
-     * Compiled rows can miss a checkbox saved on the form after the request started.
-     * Match the same person and the same when-clause. Runtime step numbers are compacted,
-     * so the template step at the same number can be a different branch.
-     * A payment already released on this request is not asked for again.
+     * The checkbox on the matching live step wins. A later copy of the same person
+     * is a different step. A payment already released on this request is not asked for again.
      */
     public function requiresProofOfPayment(): bool
     {
@@ -74,12 +73,16 @@ class EApprovalRequestApproval extends Model
             return false;
         }
 
-        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
-        if (! empty($condition['proof_of_payment'])) {
-            return true;
+        $live = $this->matchingLiveTemplateStep();
+        if ($live !== null) {
+            $condition = is_array($live->condition) ? $live->condition : [];
+
+            return ! empty($condition['proof_of_payment']);
         }
 
-        return $this->liveTemplateHasFlag('proof_of_payment');
+        $condition = is_array($this->step?->condition) ? $this->step->condition : [];
+
+        return ! empty($condition['proof_of_payment']);
     }
 
     /**
@@ -95,6 +98,32 @@ class EApprovalRequestApproval extends Model
         }
 
         return $this->liveTemplateHasFlag('confirm_settlement');
+    }
+
+    public function requiresReturnToStep(): bool
+    {
+        $live = $this->matchingLiveTemplateStep();
+        $source = $live ?? $this->step;
+        $condition = is_array($source?->condition) ? $source->condition : [];
+
+        return ! empty($condition['return_to_step']);
+    }
+
+    /**
+     * A chosen earlier step, or null when the switch means the previous step.
+     */
+    public function configuredReturnStepOrder(): ?int
+    {
+        if (! $this->requiresReturnToStep()) {
+            return null;
+        }
+
+        $live = $this->matchingLiveTemplateStep();
+        $source = $live ?? $this->step;
+        $condition = is_array($source?->condition) ? $source->condition : [];
+        $raw = $condition['return_to_step_order'] ?? null;
+
+        return is_numeric($raw) && (int) $raw > 0 ? (int) $raw : null;
     }
 
     /**
@@ -138,6 +167,8 @@ class EApprovalRequestApproval extends Model
                 : null,
             'proof_of_payment' => $this->requiresProofOfPayment(),
             'confirm_settlement' => $this->requiresSettleCash(),
+            'return_to_step' => $this->requiresReturnToStep(),
+            'return_to_step_target' => $this->requiresReturnToStep() ? $this->resolvedReturnStepOrder() : null,
             'decision_labels' => EApprovalWorkflowStepDefinitionSupport::decisionLabels(
                 is_array($this->step?->condition) ? ['condition' => $this->step->condition] : [],
             ),
@@ -206,6 +237,35 @@ class EApprovalRequestApproval extends Model
     /**
      * The live template step for this person, not whichever template row shares the compacted order.
      */
+    private function resolvedReturnStepOrder(): ?int
+    {
+        $current = (int) ($this->step?->step_order ?? $this->submission?->current_step ?? 0);
+        $configured = $this->configuredReturnStepOrder();
+        if ($configured !== null && $configured < $current) {
+            return $configured;
+        }
+
+        $this->loadMissing('submission.approvals.step');
+        $orders = $this->submission?->approvals
+            ?->map(static fn (self $row): int => (int) ($row->step?->step_order ?? 0))
+            ->filter(static fn (int $order): bool => $order > 0 && $order < $current)
+            ->unique()
+            ->sort()
+            ->values();
+
+        return $orders !== null && $orders->isNotEmpty() ? (int) $orders->last() : null;
+    }
+
+    private function matchingLiveTemplateStep(): ?EApprovalWorkflowStep
+    {
+        $this->loadMissing('submission');
+        if ($this->submission === null) {
+            return null;
+        }
+
+        return EApprovalLiveStepMatcher::match($this->submission, $this->step);
+    }
+
     private function liveTemplateHasFlag(string $flag): bool
     {
         $compiled = $this->step;
@@ -219,7 +279,7 @@ class EApprovalRequestApproval extends Model
             return false;
         }
 
-        $whenKey = $this->whenKey($compiled);
+        $whenKey = EApprovalLiveStepMatcher::whenKey($compiled);
         $approverId = (string) ($compiled->approver_id ?? '');
         $type = (string) $compiled->approver_type;
 
@@ -228,7 +288,7 @@ class EApprovalRequestApproval extends Model
             if (empty($condition[$flag])) {
                 return false;
             }
-            if ($this->whenKey($step) !== $whenKey) {
+            if (EApprovalLiveStepMatcher::whenKey($step) !== $whenKey) {
                 return false;
             }
             if ($approverId !== '' && (string) ($step->approver_id ?? '') === $approverId) {
@@ -249,28 +309,6 @@ class EApprovalRequestApproval extends Model
 
             return $approverId === '' && (string) $step->approver_type === $type;
         });
-    }
-
-    private function whenKey(EApprovalWorkflowStep $step): string
-    {
-        $condition = is_array($step->condition) ? $step->condition : [];
-        $when = $condition['when'] ?? [];
-        if (! is_array($when)) {
-            return '';
-        }
-
-        $parts = [];
-        foreach ($when as $entry) {
-            if (! is_array($entry)) {
-                continue;
-            }
-            $parts[] = strtolower(trim((string) ($entry['field'] ?? '')))
-                .'|'.strtolower(trim((string) ($entry['operator'] ?? 'equals')))
-                .'|'.trim((string) ($entry['value'] ?? ''));
-        }
-        sort($parts);
-
-        return implode(';', $parts);
     }
 
     private function parallelModeFromStep(): ?string

@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, GripVertical, Trash2 } from "lucide-react";
 
 import {
   EApprovalWorkflowAddMenu,
@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
+import { insertWorkflowStepsAt } from "@/modules/e-approval/workflow-band-reorder";
 import {
   buildWorkflowEditorDiagram,
   moveWorkflowVisualBand,
@@ -88,6 +89,7 @@ function SortableBand({
   onSelectStep,
   onMove,
   onInsertAfter,
+  onClone,
   onRemove,
 }: {
   band: WorkflowEditorDiagramBand;
@@ -97,6 +99,7 @@ function SortableBand({
   onSelectStep: (index: number) => void;
   onMove: (direction: "up" | "down") => void;
   onInsertAfter: (kind: WorkflowAddKind) => void;
+  onClone: () => void;
   onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -176,7 +179,7 @@ function SortableBand({
                 statusFallback={
                   node.warning ? (
                     <span className="text-xs text-amber-700 dark:text-amber-300">Incomplete</span>
-                  ) : (
+                  ) : node.subtitle || node.caseLabel ? null : (
                     <span className="text-xs text-muted-foreground">Configured</span>
                   )
                 }
@@ -214,6 +217,21 @@ function SortableBand({
             ariaLabel={`Add after band ${band.orderLabel}`}
             onSelect={onInsertAfter}
           />
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label={
+              band.variant === "exclusive"
+                ? `Clone ${band.bandLabel ?? "exclusive branch"}`
+                : band.variant === "parallel"
+                  ? `Clone parallel step ${band.orderLabel}`
+                  : `Clone step ${band.orderLabel}`
+            }
+            onClick={onClone}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
           <Button
             type="button"
             size="icon-sm"
@@ -288,7 +306,7 @@ export function EApprovalWorkflowOrderDiagram({
   return (
     <WorkflowDiagramShell
       title="Workflow path"
-      description="Click a step to configure it in the side panel. If/Else and ladders are side-by-side (one case runs). Drag, +, or trash act on the whole band."
+      description="Click a step to configure it in the side panel. If/Else and ladders are side-by-side (one case runs). Drag, clone, +, or trash act on the whole band."
       className={className}
       actions={
         <EApprovalWorkflowAddMenu
@@ -339,6 +357,23 @@ export function EApprovalWorkflowOrderDiagram({
                   onStepsChange(moveWorkflowVisualBand(steps, bands, bandIndex, direction))
                 }
                 onInsertAfter={(kind) => onInsert(kind, insertAtAfterBand(bandIndex))}
+                onClone={() => {
+                  const indexes = [...band.memberIndexes].sort((left, right) => left - right);
+                  const copies = indexes
+                    .map((index) => steps[index])
+                    .filter((step): step is EApprovalWorkflowStepInput => step != null)
+                    .map((step) => {
+                      const { id: _id, ...rest } = step;
+                      return {
+                        ...rest,
+                        condition: rest.condition ? { ...rest.condition } : rest.condition,
+                      };
+                    });
+                  if (copies.length === 0) {
+                    return;
+                  }
+                  onStepsChange(insertWorkflowStepsAt(steps, copies, Math.max(...indexes) + 1));
+                }}
                 onRemove={() => onStepsChange(removeWorkflowVisualBandAt(steps, bands, bandIndex))}
               />
             </div>

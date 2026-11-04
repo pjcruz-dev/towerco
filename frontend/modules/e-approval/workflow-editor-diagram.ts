@@ -60,7 +60,7 @@ function nodeFromStep(
   const subtitle =
     resolve.subtitleForStep?.(step, stepIndex) ?? workflowStepTypeLabel(step.type);
   const detail = caseLabel
-    ? `Case: ${caseLabel}`
+    ? null
     : stepRunsAlways(step)
       ? "Always runs for matching submissions."
       : `Runs when: ${whenSummary(step, fields)}`;

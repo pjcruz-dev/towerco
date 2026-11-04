@@ -59,6 +59,10 @@ export type EApprovalWorkflowStepInput = {
   auto_approve_days?: number;
   /** Approving opens a proof of payment. Released continues. Hold stays on this step. */
   proof_of_payment?: boolean;
+  /** This step can send the request back to an earlier approver. */
+  return_to_step?: boolean;
+  /** Chosen earlier step. Omitted means the previous step. */
+  return_to_step_order?: number;
   /** Words on Decide for this step. Blank keeps Approve, Reject, and Request revision. */
   decision_labels?: {
     approve?: string;
@@ -259,6 +263,8 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
     duty: "review" | "approve";
   } | null;
   send_approved_files?: boolean;
+  /** Notes on a field in Request details. Off until the form turns it on. */
+  request_comments?: boolean;
   publishes_on_approve?: boolean;
   /** Approver feedback when status is returned or rejected. */
   revision_remarks?: string | null;
@@ -355,6 +361,10 @@ export type EApprovalApprovalRow = {
   proof_of_payment?: boolean;
   /** This step records Paid, Received, or Settled before it can approve. */
   confirm_settlement?: boolean;
+  /** This step can send the request back to an earlier approver. */
+  return_to_step?: boolean;
+  /** The step the button returns to. */
+  return_to_step_target?: number | null;
   /** Words on this step's Decide buttons. */
   decision_labels?: {
     approve?: string;
@@ -594,6 +604,8 @@ export type EApprovalCommentRow = {
   message: string;
   user_name: string;
   created_at: string | null;
+  /** Field this note is about. Empty on activity and file comments. */
+  field_name?: string | null;
   attachment_id?: string | null;
   /** 1-based page when the note is pinned on a PDF preview. */
   pin_page?: number | null;

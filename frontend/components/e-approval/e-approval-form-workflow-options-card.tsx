@@ -15,7 +15,7 @@ export function EApprovalFormWorkflowOptionsCard({ value, onChange, disabled }: 
   return (
     <EApprovalSectionCard
       title="Workflow options"
-      description="Both are off until you turn them on. They apply to requests submitted after you save."
+      description="These stay off until you turn them on. Save the form. You do not need to publish."
     >
       <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
         <div className="space-y-1">
@@ -43,6 +43,20 @@ export function EApprovalFormWorkflowOptionsCard({ value, onChange, disabled }: 
           checked={value.sendApprovedFiles}
           disabled={disabled}
           onCheckedChange={(checked) => onChange({ ...value, sendApprovedFiles: Boolean(checked) })}
+        />
+      </div>
+      <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3">
+        <div className="min-w-0 space-y-1">
+          <Label htmlFor="ea-request-comments">Comments on the request</Label>
+          <p className="text-xs text-muted-foreground">
+            Drag on a value in Request details, the same way you mark a file. The note can mention someone with @. The person deciding can also Approve, Reject, or request Revision from that mark.
+          </p>
+        </div>
+        <Switch
+          id="ea-request-comments"
+          checked={value.requestComments}
+          disabled={disabled}
+          onCheckedChange={(checked) => onChange({ ...value, requestComments: Boolean(checked) })}
         />
       </div>
     </EApprovalSectionCard>

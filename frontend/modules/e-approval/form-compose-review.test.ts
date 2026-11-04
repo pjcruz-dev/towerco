@@ -160,7 +160,7 @@ describe("form compose review", () => {
       }),
     });
 
-    expect(rows[0]?.table?.rows[0]).toEqual(["ATC-VIS-0773\nLGU Brgy Ubojan\nUbojan"]);
+    expect(rows[0]?.table?.rows[0]).toEqual(["ATC-VIS-0773 · Ubojan\nLGU Brgy Ubojan"]);
   });
 
   it("hides the clock on a date range column when include time is off", () => {

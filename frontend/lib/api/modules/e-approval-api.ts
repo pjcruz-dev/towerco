@@ -191,12 +191,14 @@ export async function previewEApprovalFormWorkflow(
   formId: string,
   values: Record<string, string> = {},
   requestorEmail?: string,
+  steps?: EApprovalWorkflowStepInput[],
 ): Promise<EApprovalWorkflowPreviewResponse> {
   const response = await apiClient.post<{ data: EApprovalWorkflowPreviewResponse }>(
     `/e-approval/forms/${formId}/workflow-preview`,
     {
       values: { ...values },
       ...(requestorEmail?.trim() ? { requestor_email: requestorEmail.trim() } : {}),
+      ...(steps && steps.length > 0 ? { steps } : {}),
     },
   );
   return response.data.data;
@@ -710,6 +712,7 @@ export async function postEApprovalComment(
     pin_h?: number;
     mention_user_ids?: string[];
     images?: File[];
+    field_name?: string;
   },
 ): Promise<void> {
   const images = payload.images ?? [];
@@ -724,12 +727,14 @@ export async function postEApprovalComment(
       pin_w: payload.pin_w,
       pin_h: payload.pin_h,
       mention_user_ids: payload.mention_user_ids,
+      field_name: payload.field_name,
     });
     return;
   }
 
   const body = new FormData();
   body.append("message", payload.message);
+  if (payload.field_name) body.append("field_name", payload.field_name);
   if (payload.parent_id) body.append("parent_id", payload.parent_id);
   if (payload.attachment_id) body.append("attachment_id", payload.attachment_id);
   (payload.mention_user_ids ?? []).forEach((id) => body.append("mention_user_ids[]", id));
@@ -1318,6 +1323,17 @@ export async function fetchEApprovalMasterDataRows(setId: string): Promise<
     };
   }>(`/e-approval/master-data-sets/${setId}/rows`);
   return response.data.data.data;
+}
+
+export async function requestEApprovalReturnToStep(
+  submissionId: string,
+  remarks: string,
+): Promise<EApprovalSubmissionDetail> {
+  const response = await apiClient.post<{ data: EApprovalSubmissionDetail }>(
+    `/e-approval/submissions/${submissionId}/return-to-step`,
+    { remarks },
+  );
+  return response.data.data;
 }
 
 export async function requestEApprovalRevision(

@@ -20,6 +20,7 @@ class EApprovalComment extends Model
         'submission_id',
         'user_id',
         'message',
+        'field_name',
         'parent_id',
         'attachment_id',
         'pin_page',

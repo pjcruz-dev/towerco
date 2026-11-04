@@ -7,6 +7,8 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
+use App\Modules\EApproval\Support\EApprovalLiveStepMatcher;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 
 /**
@@ -85,6 +87,16 @@ final class EApprovalSubmissionWorkflowPreviewService
                 && $runtimeStatus === 'invalidated'
             ) {
                 $runtimeStatus = 'returned';
+            }
+
+            // Sending the request back invalidates the step it left. That step still runs later.
+            if (
+                $currentStep > 0
+                && $order > $currentStep
+                && in_array($runtimeStatus, ['invalidated', 'superseded'], true)
+            ) {
+                $runtimeStatus = null;
+                $match = null;
             }
 
             $pathReason = __('Conditions matched — step runs for this submission.');
@@ -248,12 +260,24 @@ final class EApprovalSubmissionWorkflowPreviewService
             return false;
         }
 
+        $submission->loadMissing('form');
+        if (! EApprovalFormWorkflowOptions::optionalApproverEnabled(
+            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+        )) {
+            return false;
+        }
+
         $steps = app(EApprovalSubmissionWorkflowResolver::class)->stepsForAdvance($submission);
 
-        return $steps->contains(static function ($step) use ($order): bool {
-            return (int) $step->step_order === $order
-                && is_array($step->condition)
-                && ! empty($step->condition['optional']);
+        return $steps->contains(function ($step) use ($submission, $order): bool {
+            if (! $step instanceof EApprovalWorkflowStep || (int) $step->step_order !== $order) {
+                return false;
+            }
+            $live = EApprovalLiveStepMatcher::match($submission, $step);
+            $source = $live ?? $step;
+            $condition = is_array($source->condition) ? $source->condition : [];
+
+            return ! empty($condition['optional']);
         });
     }
 

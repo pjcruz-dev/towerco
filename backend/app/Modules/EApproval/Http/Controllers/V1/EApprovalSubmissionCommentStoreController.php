@@ -9,8 +9,10 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Services\EApprovalCommentService;
 use App\Modules\EApproval\Services\EApprovalFileStorageService;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
+use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class EApprovalSubmissionCommentStoreController extends AbstractApiController
 {
@@ -39,7 +41,37 @@ class EApprovalSubmissionCommentStoreController extends AbstractApiController
             'pin_h' => ['nullable', 'numeric', 'between:0,1'],
             'mention_user_ids' => ['nullable', 'array', 'max:20'],
             'mention_user_ids.*' => ['uuid'],
+            'field_name' => ['nullable', 'string', 'max:64'],
         ]);
+
+        $fieldName = isset($data['field_name']) ? trim((string) $data['field_name']) : '';
+        if ($fieldName !== '') {
+            $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null;
+            if (! EApprovalFormWorkflowOptions::requestCommentsEnabled($metadata)) {
+                throw ValidationException::withMessages([
+                    'field_name' => [__('Comments on the request are off for this form.')],
+                ]);
+            }
+            $submission->loadMissing('form.fields');
+            $known = $submission->form?->fields
+                ?->contains(static fn ($field): bool => (string) ($field->name ?? '') === $fieldName) === true;
+            if (! $known) {
+                $raw = $submission->schema_snapshot_json;
+                $decoded = is_string($raw) ? json_decode($raw, true) : null;
+                $snapshot = is_array($decoded) && is_array($decoded['fields'] ?? null) ? $decoded['fields'] : [];
+                foreach ($snapshot as $field) {
+                    if (is_array($field) && (string) ($field['name'] ?? '') === $fieldName) {
+                        $known = true;
+                        break;
+                    }
+                }
+            }
+            if (! $known) {
+                throw ValidationException::withMessages([
+                    'field_name' => [__('That field is not on this request.')],
+                ]);
+            }
+        }
 
         $imageIds = [];
         $uploads = $request->file('images', []);
@@ -65,6 +97,7 @@ class EApprovalSubmissionCommentStoreController extends AbstractApiController
             isset($data['pin_h']) ? (float) $data['pin_h'] : null,
             array_values($data['mention_user_ids'] ?? []),
             $imageIds,
+            $fieldName !== '' ? $fieldName : null,
         );
 
         return $this->created(['id' => (string) $comment->id]);

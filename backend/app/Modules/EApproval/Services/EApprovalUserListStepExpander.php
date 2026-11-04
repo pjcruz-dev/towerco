@@ -164,6 +164,13 @@ final class EApprovalUserListStepExpander
             if (EApprovalWorkflowStepDefinitionSupport::confirmSettlementEnabled($definition)) {
                 $member['confirm_settlement'] = true;
             }
+            if (EApprovalWorkflowStepDefinitionSupport::returnToStepEnabled($definition)) {
+                $member['return_to_step'] = true;
+                $returnOrder = EApprovalWorkflowStepDefinitionSupport::returnToStepOrder($definition);
+                if ($returnOrder !== null) {
+                    $member['return_to_step_order'] = $returnOrder;
+                }
+            }
             $decisionLabels = EApprovalWorkflowStepDefinitionSupport::storedDecisionLabels($definition);
             if ($decisionLabels !== null) {
                 $member['decision_labels'] = $decisionLabels;

@@ -8,6 +8,8 @@ use App\Core\Http\Middleware\EnsureActiveSession;
 use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Services\EApprovalDocumentSequenceService;
+use App\Modules\Identity\Models\TenantUser;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
@@ -57,6 +59,12 @@ final class EApprovalDocumentSequenceSubsidiaryTest extends TestCase
 
         $this->assertSame('ATC-FINANCE-F-001', $atc);
         $this->assertSame('ADIC-FINANCE-F-001', $adic);
+        $this->assertSame('ATC-FINANCE-F', $service->prefixFor($form, [
+            'subsidiary' => 'ATC',
+            'department' => 'Finance',
+        ]));
+        $this->assertTrue($service->issuedNumberUsesPrefix($atc, 'ATC-FINANCE-F'));
+        $this->assertFalse($service->issuedNumberUsesPrefix($atc, 'ADIC-FINANCE-F'));
 
         tenancy()->end();
     }
@@ -65,13 +73,13 @@ final class EApprovalDocumentSequenceSubsidiaryTest extends TestCase
     {
         tenancy()->initialize($this->testTenant);
 
-        if (! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'department')
-            || ! \Illuminate\Support\Facades\Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
+        if (! Schema::connection('tenant')->hasColumn('users', 'department')
+            || ! Schema::connection('tenant')->hasColumn('users', 'manager_id')) {
             tenancy()->end();
             $this->markTestSkipped('Org department columns not present in test tenant schema.');
         }
 
-        $lead = \App\Modules\Identity\Models\TenantUser::query()->create([
+        $lead = TenantUser::query()->create([
             'name' => 'Doc Lead',
             'email' => 'doc.lead@towerone.test',
             'password' => 'password',
@@ -80,7 +88,7 @@ final class EApprovalDocumentSequenceSubsidiaryTest extends TestCase
         ]);
         $lead->assignRole('viewer');
 
-        $mid = \App\Modules\Identity\Models\TenantUser::query()->create([
+        $mid = TenantUser::query()->create([
             'name' => 'Doc Mid',
             'email' => 'doc.mid@towerone.test',
             'password' => 'password',
@@ -90,7 +98,7 @@ final class EApprovalDocumentSequenceSubsidiaryTest extends TestCase
         ]);
         $mid->assignRole('viewer');
 
-        $submitter = \App\Modules\Identity\Models\TenantUser::query()->create([
+        $submitter = TenantUser::query()->create([
             'name' => 'Doc Submitter',
             'email' => 'doc.submitter@towerone.test',
             'password' => 'password',

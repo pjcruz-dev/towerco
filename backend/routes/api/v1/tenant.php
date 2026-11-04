@@ -235,6 +235,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionManualFollowUpC
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionPreviewController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionPrintDataController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionResubmitController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionReturnToStepController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionRevisionController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShareLinkIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionShareLinkRevokeController;
@@ -645,6 +646,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::delete('e-approval/me/attachments/{attachment}', EApprovalMeAttachmentDestroyController::class)->name('api.tenant.v1.e_approval.me.attachments.destroy');
     Route::post('e-approval/submissions/{submission}/preview', EApprovalSubmissionPreviewController::class)->name('api.tenant.v1.e_approval.submissions.preview');
     Route::post('e-approval/submissions/{submission}/revision', EApprovalSubmissionRevisionController::class)->name('api.tenant.v1.e_approval.submissions.revision');
+    Route::post('e-approval/submissions/{submission}/return-to-step', EApprovalSubmissionReturnToStepController::class)->name('api.tenant.v1.e_approval.submissions.return_to_step');
     Route::put('e-approval/submissions/{submission}/dcf-resubmit', EApprovalSubmissionDcfResubmitController::class)->name('api.tenant.v1.e_approval.submissions.dcf_resubmit');
     Route::post('e-approval/submissions/{submission}/manual-follow-up', EApprovalSubmissionManualFollowUpController::class)->name('api.tenant.v1.e_approval.submissions.manual_follow_up');
     Route::get('e-approval/submissions/{submission}/share-links', EApprovalSubmissionShareLinkIndexController::class)->name('api.tenant.v1.e_approval.submissions.share_links.index');

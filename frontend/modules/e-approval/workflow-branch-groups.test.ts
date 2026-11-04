@@ -441,6 +441,21 @@ describe("workflow branch groups", () => {
     expect(toWorkflowEditorSegments(owned).map((segment) => segment.type)).toEqual(["ladder", "single"]);
   });
 
+  it("keeps a cloned value ladder as its own block", () => {
+    const steps = [
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "atc"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ADIC" }], "adic"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ATC" }], "atc-copy"),
+      stepWithWhen([{ field: "subsidiary", operator: "equals", value: "ADIC" }], "adic-copy"),
+    ];
+
+    expect(detectValueMatchLadders(steps).map((ladder) => ladder.bandIndexes)).toEqual([
+      [0, 1],
+      [2, 3],
+    ]);
+    expect(toWorkflowEditorSegments(steps).map((segment) => segment.type)).toEqual(["ladder", "ladder"]);
+  });
+
   it("keeps a value ladder together while its cases are still blank", () => {
     const steps = [
       stepWithWhen([{ field: "purpose", operator: "equals", value: "" }], "a"),

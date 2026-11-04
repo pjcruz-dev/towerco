@@ -32,6 +32,16 @@ final class EApprovalFormWorkflowOptions
     }
 
     /**
+     * Notes on the request details. Off until the form turns it on.
+     *
+     * @param  array<string, mixed>|null  $metadata
+     */
+    public static function requestCommentsEnabled(?array $metadata): bool
+    {
+        return (bool) (self::options($metadata)['request_comments'] ?? false);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $metadata
      * @return array<string, mixed>
      */

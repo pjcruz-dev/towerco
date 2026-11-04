@@ -131,7 +131,7 @@ export function WorkflowDiagramNodeCard({
           <span className="text-xs text-muted-foreground">Skipped</span>
         ) : status ? (
           <EApprovalStatusBadge status={status} kind="approval" />
-        ) : (
+        ) : statusFallback === null ? null : (
           (statusFallback ?? <span className="text-xs text-muted-foreground">Not started</span>)
         )}
       </div>

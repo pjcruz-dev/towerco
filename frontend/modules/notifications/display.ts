@@ -11,6 +11,9 @@ const E_APPROVAL_ACTION_TYPES = new Set([
   "returned",
   "manual_follow_up",
   "awaiting_dcf",
+  "comment_added",
+  "comment_replied",
+  "comment_mention",
 ]);
 
 export function notificationModuleLabel(module: string): string {

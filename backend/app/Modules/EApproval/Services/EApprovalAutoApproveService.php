@@ -6,6 +6,7 @@ namespace App\Modules\EApproval\Services;
 
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
+use App\Modules\EApproval\Support\EApprovalLiveStepMatcher;
 use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use App\Modules\Identity\Models\TenantUser;
@@ -51,9 +52,12 @@ final class EApprovalAutoApproveService
     private function approveIfDue(EApprovalRequestApproval $approval, Carbon $now): bool
     {
         $step = $approval->step;
-        $condition = is_array($step?->condition) ? $step->condition : [];
+        $submission = $approval->submission;
+        $live = $submission !== null ? EApprovalLiveStepMatcher::match($submission, $step) : null;
+        $source = $live ?? $step;
+        $condition = is_array($source?->condition) ? $source->condition : [];
         $days = EApprovalWorkflowStepDefinitionSupport::autoApproveDays([], $condition);
-        if ($days === null || EApprovalReviewStep::isReviewStep($step)) {
+        if ($days === null || EApprovalReviewStep::isReviewStep($source)) {
             return false;
         }
 

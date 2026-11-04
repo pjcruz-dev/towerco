@@ -590,6 +590,39 @@ final class EApprovalSubmissionService
     }
 
     /**
+     * A revised subsidiary (or department) belongs on a number for that series.
+     * The previous number goes back into its own series.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    private function reissueDocumentNumberForValues(
+        EApprovalSubmission $submission,
+        EApprovalForm $form,
+        array $values,
+        TenantUser $actor,
+    ): void {
+        if (! $form->doc_no_custom_enabled) {
+            return;
+        }
+
+        $current = trim((string) $submission->document_no);
+        if ($current === '' || preg_match('/-R\d+$/i', $current) === 1) {
+            return;
+        }
+
+        $prefix = $this->documentNumbers->prefixFor($form, $values, $actor);
+        if ($this->documentNumbers->issuedNumberUsesPrefix($current, $prefix)) {
+            return;
+        }
+
+        $next = $this->documentNumbers->nextDocumentNumber($form, $values, $actor);
+        $submission->document_no = $next;
+        $submission->save();
+        $this->documentNumbers->releaseDocumentCode($current);
+        $this->audit->log('document_no_reissued', $submission->id, $current.' -> '.$next, $actor);
+    }
+
+    /**
      * @param  array<string, mixed>  $values
      */
     public function resubmit(EApprovalSubmission $submission, array $values, TenantUser $actor): EApprovalSubmission
@@ -639,6 +672,8 @@ final class EApprovalSubmissionService
             $routingDecision,
         ) {
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
+
+            $this->reissueDocumentNumberForValues($submission, $form, $values, $actor);
 
             $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
             $currentCycle = max(1, (int) ($submission->approval_cycle ?: 1));
@@ -893,6 +928,9 @@ final class EApprovalSubmissionService
                 ? $this->workflow->optionalContinuation($submission)
                 : null,
             'send_approved_files' => EApprovalFormWorkflowOptions::sendApprovedFiles(
+                is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+            ),
+            'request_comments' => EApprovalFormWorkflowOptions::requestCommentsEnabled(
                 is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
             ),
             'publishes_on_approve' => (bool) $viewerContext['viewer_pending_approval_id']

@@ -181,6 +181,14 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['proof_of_payment'] = true;
         }
 
+        if (self::returnToStepEnabled($condition)) {
+            $definition['return_to_step'] = true;
+            $returnOrder = self::returnToStepOrder($condition);
+            if ($returnOrder !== null) {
+                $definition['return_to_step_order'] = $returnOrder;
+            }
+        }
+
         $decisionLabels = self::storedDecisionLabels(['condition' => $condition]);
         if ($decisionLabels !== null) {
             $definition['decision_labels'] = $decisionLabels;
@@ -293,6 +301,14 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['proof_of_payment'] = true;
         }
 
+        if (self::returnToStepEnabled($step)) {
+            $definition['return_to_step'] = true;
+            $returnOrder = self::returnToStepOrder($step);
+            if ($returnOrder !== null) {
+                $definition['return_to_step_order'] = $returnOrder;
+            }
+        }
+
         $decisionLabels = self::storedDecisionLabels($step);
         if ($decisionLabels !== null) {
             $definition['decision_labels'] = $decisionLabels;
@@ -361,6 +377,34 @@ final class EApprovalWorkflowStepDefinitionSupport
         $text = trim((string) $value);
 
         return $text === '' ? $fallback : mb_substr($text, 0, 40);
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     */
+    public static function returnToStepEnabled(array $source): bool
+    {
+        if (array_key_exists('return_to_step', $source)) {
+            return self::flagTruthy($source['return_to_step']);
+        }
+
+        $condition = is_array($source['condition'] ?? null) ? $source['condition'] : [];
+
+        return self::flagTruthy($condition['return_to_step'] ?? false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     */
+    public static function returnToStepOrder(array $source): ?int
+    {
+        $raw = $source['return_to_step_order'] ?? null;
+        if (! is_numeric($raw)) {
+            $condition = is_array($source['condition'] ?? null) ? $source['condition'] : [];
+            $raw = $condition['return_to_step_order'] ?? null;
+        }
+
+        return is_numeric($raw) && (int) $raw > 0 ? (int) $raw : null;
     }
 
     public static function proofOfPaymentEnabled(array $source): bool
@@ -527,6 +571,18 @@ final class EApprovalWorkflowStepDefinitionSupport
             $condition['proof_of_payment'] = true;
         } else {
             unset($condition['proof_of_payment']);
+        }
+
+        if (self::returnToStepEnabled($step)) {
+            $condition['return_to_step'] = true;
+            $returnOrder = self::returnToStepOrder($step);
+            if ($returnOrder !== null) {
+                $condition['return_to_step_order'] = $returnOrder;
+            } else {
+                unset($condition['return_to_step_order']);
+            }
+        } else {
+            unset($condition['return_to_step'], $condition['return_to_step_order']);
         }
 
         $decisionLabels = self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list'

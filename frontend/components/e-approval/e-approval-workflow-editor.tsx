@@ -130,6 +130,8 @@ type StepCardProps = {
   onToggleWhen: () => void;
   onUpdate: (patch: Partial<EApprovalWorkflowStepInput>) => void;
   onRemove: () => void;
+  /** The case list above already edits these people. */
+  hideSingleApprover?: boolean;
   /** When set, replaces the default “next step” footer (used inside If/Else groups). */
   footerOverride?: ReactNode;
   compactHeader?: boolean;
@@ -145,6 +147,13 @@ const DECISION_BUTTON_DEFAULTS = {
   reject: "Reject",
   revision: "Request revision",
 } as const;
+
+function earlierOrdersFor(steps: EApprovalWorkflowStepInput[], step: EApprovalWorkflowStepInput): number[] {
+  const current = step.step_order ?? 0;
+  return [...new Set(steps.map((item) => item.step_order).filter((order): order is number => typeof order === "number"))]
+    .filter((order) => order > 0 && order < current)
+    .sort((left, right) => left - right);
+}
 
 function stepDecisionLabel(
   step: EApprovalWorkflowStepInput,
@@ -441,6 +450,7 @@ function WorkflowStepCard({
   onToggleWhen,
   onUpdate,
   onRemove,
+  hideSingleApprover = false,
   footerOverride,
   compactHeader,
   hideWhenEditor = false,
@@ -452,6 +462,7 @@ function WorkflowStepCard({
   const nextStep = steps[index + 1];
   const nextStepNumber = nextStep ? (nextStep.step_order ?? index + 2) : null;
   const stepNumber = step.step_order ?? index + 1;
+  const earlierStepOrders = earlierOrdersFor(steps, step);
 
   return (
     <article className="min-w-0 flex-1 rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -482,16 +493,18 @@ function WorkflowStepCard({
                 : `Runs when: ${whenSummary(step, fields)}`}
           </p>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-        >
-          <Trash2 className="mr-1 h-3.5 w-3.5" />
-          Remove
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Remove
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3">
@@ -798,6 +811,10 @@ function WorkflowStepCard({
               ))}
             </Select>
           </label>
+        ) : hideSingleApprover ? (
+          <p className="text-xs text-muted-foreground">
+            The people on this case are the list above. Clone on the path copies this whole case.
+          </p>
         ) : (
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">
@@ -941,6 +958,56 @@ function WorkflowStepCard({
           </span>
         </span>
       </label>
+
+      {earlierStepOrders.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={step.return_to_step === true || step.condition?.return_to_step === true}
+              onCheckedChange={(checked) =>
+                onUpdate({
+                  return_to_step: checked === true,
+                  return_to_step_order: checked === true ? step.return_to_step_order : undefined,
+                })
+              }
+            />
+            <span>
+              <span className="font-medium">Can return to an earlier step</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Decide shows Return to step. That sends the request back to an earlier approver. Request revision still goes to the requestor.
+              </span>
+            </span>
+          </label>
+          {step.return_to_step === true || step.condition?.return_to_step === true ? (
+            <label className="grid gap-1 pl-6 text-sm">
+              <span className="text-xs font-medium text-muted-foreground">Send it back to</span>
+              <Select
+                value={
+                  typeof step.return_to_step_order === "number"
+                    ? String(step.return_to_step_order)
+                    : typeof step.condition?.return_to_step_order === "number"
+                      ? String(step.condition.return_to_step_order)
+                      : ""
+                }
+                onChange={(event) =>
+                  onUpdate({
+                    return_to_step: true,
+                    return_to_step_order: event.target.value === "" ? undefined : Number(event.target.value),
+                  })
+                }
+              >
+                <option value="">Previous step</option>
+                {earlierStepOrders.map((order) => (
+                  <option key={order} value={order}>
+                    Step {order}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
 
       {settlementFamily ? (
         <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
@@ -1182,7 +1249,13 @@ export function EApprovalWorkflowEditor({
       for (const fieldName of previewFieldNames) {
         payload[fieldName] = previewValues[fieldName] ?? "";
       }
-      return previewEApprovalFormWorkflow(formId!, payload, managerTestEmail);
+      const draftSteps = compactWorkflowStepOrdersPreservingTies(
+        getValidEApprovalWorkflowSteps(steps).map((step, index) => ({
+          ...step,
+          step_order: step.step_order ?? index + 1,
+        })),
+      );
+      return previewEApprovalFormWorkflow(formId!, payload, managerTestEmail, draftSteps);
     },
     onError: (error) => {
       push({ level: "error", title: "Preview failed", message: getErrorMessage(error) });
@@ -1234,6 +1307,40 @@ export function EApprovalWorkflowEditor({
             delete condition.confirm_settlement;
           }
           return { ...step, confirm_settlement: Boolean(patch.confirm_settlement), condition };
+        }),
+      );
+      return;
+    }
+    if ("return_to_step" in patch || "return_to_step_order" in patch) {
+      const order = steps[index]?.step_order;
+      const enabled = "return_to_step" in patch ? Boolean(patch.return_to_step) : true;
+      const target =
+        enabled && typeof patch.return_to_step_order === "number" && patch.return_to_step_order > 0
+          ? patch.return_to_step_order
+          : undefined;
+      onStepsChange(
+        steps.map((step, itemIndex) => {
+          if (itemIndex !== index && step.step_order !== order) {
+            return step;
+          }
+          const condition = { ...(step.condition ?? {}) };
+          if (enabled) {
+            condition.return_to_step = true;
+            if (target !== undefined) {
+              condition.return_to_step_order = target;
+            } else {
+              delete condition.return_to_step_order;
+            }
+          } else {
+            delete condition.return_to_step;
+            delete condition.return_to_step_order;
+          }
+          return {
+            ...step,
+            return_to_step: enabled,
+            return_to_step_order: target,
+            condition,
+          };
         }),
       );
       return;
@@ -1603,6 +1710,7 @@ export function EApprovalWorkflowEditor({
       footerOverride?: ReactNode;
       compactHeader?: boolean;
       hideWhenEditor?: boolean;
+      hideSingleApprover?: boolean;
     },
   ) => {
     const step = steps[index];
@@ -1626,6 +1734,7 @@ export function EApprovalWorkflowEditor({
         footerOverride={options?.footerOverride}
         compactHeader={options?.compactHeader}
         hideWhenEditor={options?.hideWhenEditor}
+        hideSingleApprover={options?.hideSingleApprover}
         settlementFamily={settlementFamily}
         mailSettings={mailSettings ?? formMailSettingsFromMetadata({})}
         formName={formName}
@@ -2239,6 +2348,11 @@ export function EApprovalWorkflowEditor({
                     selectedSegment?.type === "ladder",
                   hideWhenEditor:
                     selectedSegment?.type === "branch" || selectedSegment?.type === "ladder",
+                  hideSingleApprover:
+                    selectedSegment?.type === "ladder" &&
+                    selectedSegment.ladder.match === "value" &&
+                    (steps[selectedStepIndex]?.type ?? "") === "user" &&
+                    ladderCaseMemberIndexes(steps, ladderCasePrimaryIndex(steps, selectedStepIndex)).length > 0,
                   footerOverride:
                     selectedSegment?.type === "parallel" ? (
                       <div className="mt-4 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -2298,9 +2412,8 @@ export function EApprovalWorkflowEditor({
           <div>
             <h3 className="text-sm font-medium">Preview approval path</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Enter sample field values (e.g. Non-PO), then preview. Matching steps appear under Runs; the other
-              If/Else or ladder cases appear under Skipped. Save the form first — preview uses saved step
-              definitions, not unsaved editor drafts.
+              Enter sample field values, then preview. This uses the steps on the path above, including changes
+              you have not saved yet. Matching steps appear under Runs. The other cases appear under Skipped.
             </p>
           </div>
           {hasManagerStep ? (

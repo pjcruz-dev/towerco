@@ -132,3 +132,47 @@ export function insertWorkflowStepAt(
 
   return [...before, inserted, ...after];
 }
+
+/**
+ * Insert a block after `atIndex` in the step list. Steps that share a step_order
+ * stay on one band. Later steps move down by the number of new bands.
+ */
+export function insertWorkflowStepsAt(
+  steps: EApprovalWorkflowStepInput[],
+  block: EApprovalWorkflowStepInput[],
+  atIndex?: number,
+): EApprovalWorkflowStepInput[] {
+  if (block.length === 0) {
+    return steps;
+  }
+
+  const insertAt = Math.max(0, Math.min(atIndex ?? steps.length, steps.length));
+  const before = compactWorkflowStepOrdersPreservingTies(steps.slice(0, insertAt));
+  const afterSource = steps.slice(insertAt);
+  const baseOrder =
+    before.length > 0 ? Math.max(...before.map((row, index) => row.step_order ?? index + 1)) : 0;
+
+  const uniqueOrders: number[] = [];
+  block.forEach((step, index) => {
+    const order = step.step_order ?? index + 1;
+    if (!uniqueOrders.includes(order)) {
+      uniqueOrders.push(order);
+    }
+  });
+  uniqueOrders.sort((left, right) => left - right);
+  const orderMap = new Map(uniqueOrders.map((order, index) => [order, baseOrder + index + 1]));
+  const inserted = block.map((step, index) => {
+    const oldOrder = step.step_order ?? index + 1;
+    return {
+      ...step,
+      step_order: orderMap.get(oldOrder) ?? baseOrder + 1,
+    };
+  });
+
+  const after = compactWorkflowStepOrdersPreservingTies(afterSource).map((row, index) => ({
+    ...row,
+    step_order: (row.step_order ?? index + 1) + baseOrder + uniqueOrders.length,
+  }));
+
+  return [...before, ...inserted, ...after];
+}

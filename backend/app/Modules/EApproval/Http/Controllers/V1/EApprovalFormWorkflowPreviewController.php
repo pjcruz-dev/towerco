@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Services\EApprovalConditionalWorkflowCompilerService;
+use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,16 +23,30 @@ class EApprovalFormWorkflowPreviewController extends AbstractApiController
         $request->validate([
             'values' => ['nullable', 'array'],
             'requestor_email' => ['nullable', 'email', 'max:255'],
+            'steps' => ['nullable', 'array', 'max:80'],
+            'steps.*' => ['array'],
         ]);
 
         /** @var array<string, mixed> $values */
         $values = is_array($request->input('values')) ? $request->input('values') : [];
         $requestorEmail = $request->input('requestor_email');
+        $rawSteps = $request->input('steps');
+        $definitions = null;
+        if (is_array($rawSteps) && $rawSteps !== []) {
+            $definitions = [];
+            foreach (array_values($rawSteps) as $index => $step) {
+                if (! is_array($step)) {
+                    continue;
+                }
+                $definitions[] = EApprovalWorkflowStepDefinitionSupport::normalizePayloadStep($step, $index + 1);
+            }
+        }
 
         return $this->ok($compiler->preview(
             $form,
             $values,
             is_string($requestorEmail) ? $requestorEmail : null,
+            $definitions,
         ));
     }
 }

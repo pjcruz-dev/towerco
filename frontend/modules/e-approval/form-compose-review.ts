@@ -191,7 +191,7 @@ function formatSiteStopDisplay(raw: string): string | null {
         continue;
       }
       const text = String(value ?? "").trim();
-      if (text !== "" && text !== location && text !== site) {
+      if (text !== "" && text !== location && text !== site && !extras.includes(text)) {
         extras.push(text);
       }
     }
@@ -199,18 +199,19 @@ function formatSiteStopDisplay(raw: string): string | null {
   if (site === "" && location === "" && extras.length === 0) {
     return "—";
   }
+
+  const identity = [site, ...extras].filter((line) => line !== "").join(" · ");
+  if (location === "" || location === site || extras.includes(location)) {
+    return identity || location;
+  }
+  if (identity === "") {
+    return location;
+  }
   if (extras.length === 0) {
-    if (location === "") {
-      return site;
-    }
-    if (site === "") {
-      return location;
-    }
     return `${site} — ${location}`;
   }
 
-  const lines = [site, location, ...extras].filter((line) => line !== "");
-  return lines.join("\n");
+  return `${identity}\n${location}`;
 }
 
 function selectChoiceLabel(column: GridColumnDef, value: string): string | null {

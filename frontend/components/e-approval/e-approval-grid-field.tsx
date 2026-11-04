@@ -8,7 +8,7 @@ import { fetchEApprovalSettingsPublic } from "@/lib/api/modules/e-approval-api";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { EApprovalGridCell, type GridCellMeta } from "@/components/e-approval/e-approval-grid-cell";
+import { EApprovalGridCell, siteIdsInGridCell, type GridCellMeta } from "@/components/e-approval/e-approval-grid-cell";
 import { useEApprovalFieldChoices } from "@/hooks/use-e-approval-field-choices";
 import {
   columnKey,
@@ -43,6 +43,30 @@ import {
 import { placeReviewTotals, type ComposeReviewTotal } from "@/modules/e-approval/form-compose-review";
 import { parseSubmissionAmount } from "@/modules/e-approval/parent-submission-link";
 import type { EApprovalFormFieldInput, EApprovalOpenCashAdvance } from "@/modules/e-approval/types";
+
+function sitesChosenOnOtherRows(
+  rows: Array<Record<string, string>>,
+  rowIndex: number,
+  colIndex: number,
+  columnCount: number,
+  column: GridColumnDef,
+): string[] {
+  const siteColumn =
+    column.type === "select" &&
+    (column.master_data_key === "sites" || /^(from|to) site$/i.test(column.label.trim()));
+  if (!siteColumn) {
+    return [];
+  }
+  const key = columnKey(colIndex, columnCount);
+  const chosen: string[] = [];
+  rows.forEach((row, index) => {
+    if (index === rowIndex) {
+      return;
+    }
+    chosen.push(...siteIdsInGridCell(row[key] ?? ""));
+  });
+  return chosen;
+}
 
 function vatSplitKind(label: string): "non" | "net" | null {
   if (/^non-?vatable$/i.test(label.trim())) {
@@ -643,6 +667,7 @@ export function EApprovalGridField({
                           allowRemoteLookups={allowRemoteLookups}
                           subsidiary={allValues.subsidiary ?? ""}
                           values={allValues}
+                          excludeSites={sitesChosenOnOtherRows(grid.rows, rowIndex, colIndex, columns.length, colDef)}
                           value={row[columnKey(colIndex, columns.length)] ?? ""}
                           onChange={(cellValue, meta) => updateCell(rowIndex, colIndex, cellValue, meta)}
                         />

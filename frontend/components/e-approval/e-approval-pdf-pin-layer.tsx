@@ -556,7 +556,11 @@ export function EApprovalPdfPinLayer({
         }
         pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
         // pdf.js transfers this buffer to the worker. Hand it a copy.
-        const loadingTask = pdfjs.getDocument({ data: Uint8Array.from(bytes) }) as PdfLoadingTask;
+        // Errors only. Receipt PDFs often warn about a Type3 font image with no EI marker.
+        const loadingTask = pdfjs.getDocument({
+          data: Uint8Array.from(bytes),
+          verbosity: 0,
+        }) as PdfLoadingTask;
         task = loadingTask;
         const next = await loadingTask.promise;
         if (cancelled) {

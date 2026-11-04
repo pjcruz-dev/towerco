@@ -13,6 +13,7 @@ use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalFinalPreview;
 use App\Modules\EApproval\Support\EApprovalFormPolicySupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
+use App\Modules\EApproval\Support\EApprovalLiveStepMatcher;
 use App\Modules\EApproval\Support\EApprovalParallelMode;
 use App\Modules\EApproval\Support\EApprovalReviewStep;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
@@ -20,6 +21,7 @@ use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\EApproval\Support\EApprovalWorkflowConditionEvaluator;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -37,6 +39,7 @@ final class SubmissionWorkflowService
         private readonly EApprovalFormFieldChoicesResolver $fieldChoicesResolver,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalWorkflowConditionEvaluator $conditionEvaluator,
+        private readonly EApprovalCommentService $comments,
     ) {}
 
     /**
@@ -628,8 +631,7 @@ final class SubmissionWorkflowService
             return null;
         }
 
-        $order = (int) $later->first()->step_order;
-        if (! $this->bandMarkedOptional($submission, $order, $later)) {
+        if (! $this->bandMarkedOptional($submission, $later)) {
             return null;
         }
 
@@ -675,41 +677,25 @@ final class SubmissionWorkflowService
     }
 
     /**
-     * Compiled rows sometimes lost condition.optional. The live form step at the same order still counts.
+     * The checkbox on each person's own step. A later copy, or another branch
+     * that landed on the same number, does not count.
      *
      * @param  Collection<int, EApprovalWorkflowStep>  $band
      */
-    private function bandMarkedOptional(EApprovalSubmission $submission, int $order, Collection $band): bool
+    private function bandMarkedOptional(EApprovalSubmission $submission, Collection $band): bool
     {
-        $compiled = $band->every(
-            static fn (EApprovalWorkflowStep $step): bool => is_array($step->condition) && ! empty($step->condition['optional']),
+        return $band->every(
+            fn (EApprovalWorkflowStep $step): bool => $this->stepMarkedOptional($submission, $step),
         );
-        if ($compiled) {
-            return true;
-        }
-
-        return $this->templateOrderIsOptional($submission, $order);
     }
 
     private function stepMarkedOptional(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
     {
-        if (is_array($step->condition) && ! empty($step->condition['optional'])) {
-            return true;
-        }
+        $live = EApprovalLiveStepMatcher::match($submission, $step);
+        $source = $live ?? $step;
+        $condition = is_array($source->condition) ? $source->condition : [];
 
-        return $this->templateOrderIsOptional($submission, (int) $step->step_order);
-    }
-
-    private function templateOrderIsOptional(EApprovalSubmission $submission, int $order): bool
-    {
-        $submission->loadMissing('form.workflowTemplate.steps');
-        $templateSteps = $submission->form?->workflowTemplate?->steps ?? collect();
-
-        return $templateSteps->contains(
-            static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order === $order
-                && is_array($step->condition)
-                && ! empty($step->condition['optional']),
-        );
+        return ! empty($condition['optional']);
     }
 
     public function viewerCanSendPreview(EApprovalSubmission $submission, ?TenantUser $viewer): bool
@@ -1093,6 +1079,129 @@ final class SubmissionWorkflowService
      * @param  array<string, mixed>|null  $condition
      * @param  array<string, mixed>  $values
      */
+    /**
+     * Send the request back to an earlier approver. The people on that step decide again.
+     * Later approvals in this round no longer count.
+     */
+    public function returnToEarlierStep(EApprovalSubmission $submission, TenantUser $actor, string $remarks): void
+    {
+        $remarks = trim($remarks);
+        if (strlen($remarks) < 5) {
+            throw ValidationException::withMessages([
+                'remarks' => [__('A remark of at least 5 characters is required to return to a step.')],
+            ]);
+        }
+        if ((string) $submission->status !== EApprovalSubmissionStatus::PENDING) {
+            throw ValidationException::withMessages([
+                'submission' => [__('This request is not waiting on an approver.')],
+            ]);
+        }
+
+        $current = (int) $submission->current_step;
+        $pending = $this->viewerPendingOnStep($submission, $actor, $current);
+        if (! $pending instanceof EApprovalRequestApproval || ! $pending->requiresReturnToStep()) {
+            throw ValidationException::withMessages([
+                'submission' => [__('This step cannot return the request to an earlier step.')],
+            ]);
+        }
+
+        $steps = $this->workflowResolver->stepsForAdvance($submission);
+        $earlier = $steps
+            ->map(static fn (EApprovalWorkflowStep $step): int => (int) $step->step_order)
+            ->filter(static fn (int $order): bool => $order > 0 && $order < $current)
+            ->unique()
+            ->sort()
+            ->values();
+        if ($earlier->isEmpty()) {
+            throw ValidationException::withMessages([
+                'submission' => [__('There is no earlier step to return to.')],
+            ]);
+        }
+
+        $configured = $pending->configuredReturnStepOrder();
+        $target = $configured !== null && $earlier->contains($configured)
+            ? $configured
+            : (int) $earlier->last();
+
+        DB::connection('tenant')->transaction(function () use ($submission, $actor, $remarks, $target, $steps): void {
+            $cycle = max(1, (int) ($submission->approval_cycle ?: 1));
+
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where(function ($query) use ($cycle): void {
+                    $query->where('approval_cycle', $cycle)->orWhereNull('approval_cycle');
+                })
+                ->whereIn('status', [EApprovalApprovalStatus::APPROVED, EApprovalApprovalStatus::ACKNOWLEDGED])
+                ->whereHas('step', static fn ($query) => $query->where('step_order', '>=', $target))
+                ->update([
+                    'status' => EApprovalApprovalStatus::SUPERSEDED,
+                    'remarks' => __('Sent back to step :step.', ['step' => $target]),
+                    'acted_at' => now(),
+                ]);
+
+            EApprovalRequestApproval::query()
+                ->where('submission_id', $submission->id)
+                ->where('status', EApprovalApprovalStatus::PENDING)
+                ->update([
+                    'status' => EApprovalApprovalStatus::INVALIDATED,
+                    'remarks' => __('Returned to step :step.', ['step' => $target]),
+                    'acted_at' => now(),
+                ]);
+
+            $submission->loadMissing(['form', 'values.field']);
+            $values = $this->valuesMap($submission);
+            $activated = 0;
+            foreach ($steps->where('step_order', $target) as $step) {
+                if (! $this->evaluateCondition($step->condition, $values)) {
+                    continue;
+                }
+                $approverId = $this->resolveApproverId($step, $values, $submission, $submission->form);
+                if ($approverId === null) {
+                    continue;
+                }
+                EApprovalRequestApproval::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'submission_id' => $submission->id,
+                    'step_id' => $step->id,
+                    'approver_id' => $approverId,
+                    'status' => EApprovalApprovalStatus::PENDING,
+                    'approval_cycle' => $cycle,
+                ]);
+                $activated++;
+                $this->notifyApproverAssigned(
+                    $submission,
+                    $approverId,
+                    revised: true,
+                    review: EApprovalReviewStep::isReviewStep($step),
+                );
+            }
+
+            if ($activated < 1) {
+                throw ValidationException::withMessages([
+                    'submission' => [__('That step has no approver to send the request back to.')],
+                ]);
+            }
+
+            $submission->current_step = $target;
+            $submission->status = EApprovalSubmissionStatus::PENDING;
+            $submission->save();
+
+            $this->audit->log(
+                'returned_to_step',
+                $submission->id,
+                $remarks,
+                $actor,
+                entityLabel: $submission->document_no,
+            );
+            $this->comments->add(
+                $submission,
+                __('Returned to step :step: :remarks', ['step' => $target, 'remarks' => $remarks]),
+                $actor,
+                notifyStakeholders: false,
+            );
+        });
+    }
+
     public function evaluateCondition(?array $condition, array $values): bool
     {
         return $this->conditionEvaluator->matchesStoredCondition($condition, $values);
