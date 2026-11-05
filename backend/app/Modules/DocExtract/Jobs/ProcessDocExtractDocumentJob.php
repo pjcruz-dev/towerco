@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
 
 final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
 {
-    public int $timeout = 300;
+    public int $timeout = 420;
 
     public int $tries = 2;
 

@@ -75,6 +75,44 @@ function fieldValueToText(value: unknown): string {
   }
 }
 
+function tableRowCount(raw: string): number {
+  const trimmed = raw.trim();
+  if (trimmed === "") return 0;
+  try {
+    const parsed = JSON.parse(trimmed) as { rows?: unknown };
+    if (parsed && typeof parsed === "object" && Array.isArray(parsed.rows)) {
+      return parsed.rows.length;
+    }
+  } catch {
+    return 0;
+  }
+  return 0;
+}
+
+function blankCellNotes(documents: DocExtractDocument[] | undefined, fields: DocExtractField[]) {
+  const notes: Array<{ account_number: string; field: string; label: string; reason: string }> = [];
+  for (const document of documents ?? []) {
+    for (const field of fields) {
+      if (!isTableLikeField(field)) continue;
+      const parsed = parseDocExtractTableValue(fieldValueToText(document.field_values?.[field.key]), field);
+      for (const gap of parsed.gaps) {
+        const row = parsed.rows.find((item) => item.account_number === gap.account_number);
+        if (row && (row[gap.field] ?? "").trim() !== "") continue;
+        notes.push(gap);
+      }
+    }
+  }
+  return notes;
+}
+
+function draftShouldTakeServer(field: DocExtractField, draft: string, server: string): boolean {
+  if (server.trim() === "") return false;
+  if (field.type === "table") {
+    return tableRowCount(draft) === 0 && tableRowCount(server) > 0;
+  }
+  return draft.trim() === "";
+}
+
 function buildDraftRow(document: DocExtractDocument, fields: DocExtractField[]): Record<string, string> {
   const row: Record<string, string> = {};
   for (const field of fields) {
@@ -144,14 +182,19 @@ export function DocExtractBatchDetailPageClient() {
     queryFn: () => fetchDocExtractBatch(batchId),
     enabled: Boolean(batchId),
     refetchInterval: (state) => {
-      const status = state.state.data?.status;
-      return status === "processing" || status === "pending" ? 3000 : false;
+      const batch = state.state.data;
+      const status = batch?.status;
+      const waiting = (batch?.documents ?? []).some(
+        (document) => document.status === "pending" || document.status === "scanning",
+      );
+      return status === "processing" || status === "pending" || waiting ? 3000 : false;
     },
   });
 
   const fields = batchQuery.data?.effective_fields ?? batchQuery.data?.template?.fields;
   const documents = batchQuery.data?.documents;
   const isAuto = (batchQuery.data?.mode ?? "auto") === "auto" && !batchQuery.data?.template_id;
+  const usesTemplate = Boolean(batchQuery.data?.template_id);
   const visibleFields = fields ?? [];
   const canCurate = canRun;
 
@@ -173,13 +216,18 @@ export function DocExtractBatchDetailPageClient() {
 
   useEffect(() => {
     if (customizeFocusedRef.current) return;
+    if (usesTemplate) {
+      setActiveStep(4);
+      customizeFocusedRef.current = true;
+      return;
+    }
     if (visibleFields.length > 0) {
       setActiveStep(3);
       customizeFocusedRef.current = true;
     } else if ((documents?.length ?? 0) > 0) {
       setActiveStep(2);
     }
-  }, [visibleFields.length, documents?.length]);
+  }, [visibleFields.length, documents?.length, usesTemplate]);
 
   useEffect(() => {
     const nextFields = fields ?? [];
@@ -212,7 +260,7 @@ export function DocExtractBatchDetailPageClient() {
             if (!(field.key in row)) {
               row[field.key] = server;
               rowChanged = true;
-            } else if (draft.trim() === "" && server.trim() !== "") {
+            } else if (draftShouldTakeServer(field, draft, server)) {
               row[field.key] = server;
               rowChanged = true;
             }
@@ -330,12 +378,15 @@ export function DocExtractBatchDetailPageClient() {
   const pageCount = useMemo(() => {
     return (documents ?? []).reduce((sum, document) => sum + (document.page_count ?? 0), 0);
   }, [documents]);
+  const blankNotes = useMemo(
+    () => blankCellNotes(documents, visibleFields),
+    [documents, visibleFields],
+  );
 
   const openTableViewer = (document: DocExtractDocument, field: DocExtractField) => {
-    const serverRaw = document.field_values?.[field.key];
-    const serverValue =
-      serverRaw == null ? "" : typeof serverRaw === "string" ? serverRaw : JSON.stringify(serverRaw);
-    const raw = drafts[document.id]?.[field.key] ?? serverValue;
+    const serverValue = fieldValueToText(document.field_values?.[field.key]);
+    const draft = drafts[document.id]?.[field.key] ?? "";
+    const raw = tableRowCount(serverValue) > 0 ? serverValue : draft.trim() === "" ? serverValue : draft;
     setTableViewer({
       open: true,
       documentId: document.id,
@@ -344,6 +395,25 @@ export function DocExtractBatchDetailPageClient() {
       data: parseDocExtractTableValue(raw, field),
     });
   };
+
+  useEffect(() => {
+    if (!tableViewer?.open) return;
+    const document = (documents ?? []).find((item) => item.id === tableViewer.documentId);
+    if (!document) return;
+    const serverValue = fieldValueToText(document.field_values?.[tableViewer.field.key]);
+    if (tableRowCount(serverValue) === 0) return;
+    setTableViewer((current) => {
+      if (!current?.open || current.documentId !== document.id) return current;
+      const untouched = (current.data?.rows ?? []).every((row) =>
+        Object.values(row).every((cell) => cell.trim() === ""),
+      );
+      if (!untouched) return current;
+      return {
+        ...current,
+        data: parseDocExtractTableValue(serverValue, current.field),
+      };
+    });
+  }, [documents, tableViewer?.open, tableViewer?.documentId, tableViewer?.field]);
 
   const saveRow = (documentId: string) => {
     const values = drafts[documentId] ?? {};
@@ -379,16 +449,18 @@ export function DocExtractBatchDetailPageClient() {
             Extraction workspace
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {batchQuery.data?.template_name ?? (isAuto ? "Auto-detect" : "Template")} · records were consolidated on
-            upload; arrange columns in step 3, then validate values in results
+            {batchQuery.data?.template_name ?? (isAuto ? "Auto-detect" : "Template")}
+            {usesTemplate
+              ? " · columns come from the template. Check the blank-cell log, then download from View results."
+              : " · records were consolidated on upload; arrange columns in step 3, then validate values in results"}
           </p>
           <ol className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
             {(
               [
                 { step: 1 as const, label: "1. Upload files" },
                 { step: 2 as const, label: "2. Consolidate" },
-                { step: 3 as const, label: "3. Customize fields" },
-                { step: 4 as const, label: "4. View results" },
+                ...(usesTemplate ? [] : [{ step: 3 as const, label: "3. Customize fields" }]),
+                { step: 4 as const, label: usesTemplate ? "3. View results" : "4. View results" },
               ] as const
             ).map((item) => (
               <li key={item.step}>
@@ -502,7 +574,8 @@ export function DocExtractBatchDetailPageClient() {
               </ul>
             </section>
 
-            {/* Section 3 — customize */}
+            {/* Section 3 — customize. Hidden once a template already defines the columns. */}
+            {usesTemplate ? null : (
             <section
               id="dx-step-customize"
               data-help="dx-customize-section"
@@ -551,6 +624,7 @@ export function DocExtractBatchDetailPageClient() {
                 />
               )}
             </section>
+            )}
 
             {/* Section 3 — results */}
             <section
@@ -560,7 +634,9 @@ export function DocExtractBatchDetailPageClient() {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">4. View results</h2>
+                  <h2 className="text-xl font-semibold text-foreground">
+                    {usesTemplate ? "3. View results" : "4. View results"}
+                  </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Click a cell to edit · validate important values before export
                   </p>
@@ -601,6 +677,24 @@ export function DocExtractBatchDetailPageClient() {
                 ) : null}
               </div>
 
+          {blankNotes.length > 0 ? (
+            <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <p className="text-sm font-medium text-foreground">Blank cells</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These stayed empty because the line on the scan could not be read. Nothing was guessed.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {blankNotes.map((gap) => (
+                  <li key={`${gap.account_number}-${gap.field}`} className="text-sm text-foreground">
+                    <span className="font-medium tabular-nums">{gap.account_number || "Row"}</span>
+                    <span className="text-muted-foreground"> · {gap.label}. </span>
+                    {gap.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="overflow-hidden rounded-lg border border-border">
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[13px]">
@@ -635,7 +729,8 @@ export function DocExtractBatchDetailPageClient() {
                           editingCell?.documentId === document.id && editingCell.key === field.key;
 
                         if (isTableLikeField(field)) {
-                          const table = parseDocExtractTableValue(value, field);
+                          const tableSource = tableRowCount(serverValue) > 0 ? serverValue : value;
+                          const table = parseDocExtractTableValue(tableSource, field);
                           return (
                             <td key={field.key} className="px-4 py-3">
                               <button

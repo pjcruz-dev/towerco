@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Pencil, Plus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowLeft, Download, Pencil, Plus, Upload, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 
 import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
 import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
@@ -57,6 +57,11 @@ import {
   DOC_EXTRACT_OT_OVERTIME_TEMPLATE_NAME,
   buildOtOvertimeTemplateFields,
 } from "@/modules/doc-extract/ot-overtime-template";
+import {
+  downloadDocExtractTemplateFile,
+  parseDocExtractTemplateFile,
+  uniqueTemplateName,
+} from "@/modules/doc-extract/template-file";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const LAYOUT_KEY = "toweros.doc-extract.templates.layout";
@@ -149,6 +154,7 @@ function initialEditor(mode: "create" | "edit" = "create"): EditorState {
 export function DocExtractTemplatesPageClient() {
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [editor, setEditor] = useState<EditorState>(initialEditor());
   const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
     useDashboardLayoutPrefs(LAYOUT_KEY);
@@ -271,6 +277,33 @@ export function DocExtractTemplatesPageClient() {
     },
   });
 
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      if (file.size > 1_000_000) {
+        throw new Error("Template file must be 1 MB or smaller.");
+      }
+      const parsed = parseDocExtractTemplateFile(await file.text());
+      const name = uniqueTemplateName(
+        parsed.name,
+        templates.map((template) => template.name),
+      );
+      return createDocExtractTemplate({ ...parsed, name });
+    },
+    onSuccess: async (template) => {
+      notify({
+        level: "success",
+        title: "Template imported",
+        message: `"${template.name}" · ${template.fields.length} columns · ${template.status}`,
+      });
+      await invalidateTemplates();
+    },
+    onError: (error) => {
+      notify({ level: "error", title: "Could not import template", message: getErrorMessage(error) });
+    },
+  });
+
+  const openImport = () => importInputRef.current?.click();
+
   const layoutMeta = useMemo(() => [{ id: "template_grid", label: "Template catalog" }], []);
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
@@ -298,12 +331,18 @@ export function DocExtractTemplatesPageClient() {
               <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
                 <p className="text-sm font-medium text-foreground">No templates yet</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Create one with custom columns, or save columns from an auto-detect batch.
+                  Create one, import a template file, or save columns from an auto-detect batch.
                 </p>
-                <Button className="mt-4" size="sm" onClick={openCreate}>
-                  <Plus className="size-4" />
-                  Create template
-                </Button>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button size="sm" variant="outline" onClick={openImport} disabled={importMutation.isPending}>
+                    <Upload className="size-4" />
+                    Import template
+                  </Button>
+                  <Button size="sm" onClick={openCreate}>
+                    <Plus className="size-4" />
+                    Create template
+                  </Button>
+                </div>
               </div>
             );
           }
@@ -352,6 +391,14 @@ export function DocExtractTemplatesPageClient() {
                       </button>
                       <button
                         type="button"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
+                        onClick={() => downloadDocExtractTemplateFile(template)}
+                      >
+                        <Download className="size-3.5" />
+                        Export
+                      </button>
+                      <button
+                        type="button"
                         className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400"
                         disabled={statusMutation.isPending}
                         onClick={() =>
@@ -387,6 +434,7 @@ export function DocExtractTemplatesPageClient() {
     ];
   }, [
     deleteMutation,
+    importMutation,
     layout,
     statusMutation,
     templates,
@@ -470,6 +518,15 @@ export function DocExtractTemplatesPageClient() {
               ) : null}
               {isVisible("new") ? (
                 <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={importMutation.isPending}
+                    onClick={openImport}
+                  >
+                    <Upload className="size-4" />
+                    Import template
+                  </Button>
                   <Button size="sm" variant="outline" onClick={openCreateOtOvertime}>
                     OT overtime template
                   </Button>
@@ -481,6 +538,19 @@ export function DocExtractTemplatesPageClient() {
               ) : null}
             </>
           )}
+        />
+
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          aria-label="Import template file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) importMutation.mutate(file);
+          }}
         />
 
         <DashboardWidgetBoard

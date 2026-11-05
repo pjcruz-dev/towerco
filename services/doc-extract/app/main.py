@@ -8,7 +8,7 @@ from typing import Any
 import fitz  # PyMuPDF
 import pytesseract
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .extract import discover_fields, map_fields, parse_fields_json
 
@@ -258,15 +258,15 @@ def _scan_pdf_bytes(
         else:
             indices = list(range(1, total + 1))
 
+        force_sharp = False
         for index in indices:
             page = doc.load_page(index - 1)
             text = (page.get_text("text") or "").strip()
             if len(text) < SPARSE_CHAR_THRESHOLD:
                 used_ocr = True
-                pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), alpha=False)
-                image = Image.open(io.BytesIO(pix.tobytes("png")))
-                ocr_text = pytesseract.image_to_string(image, config="--psm 6") or ""
-                text = ocr_text.strip()
+                text = _ocr_pdf_page(page, force_sharp=force_sharp)
+                if _page_needs_sharp_ocr(text):
+                    force_sharp = True
                 if not text:
                     warnings.append(f"Page {index} produced little or no text after OCR.")
             pages.append({"page": index, "text": text})
@@ -275,6 +275,49 @@ def _scan_pdf_bytes(
 
     engine = "pymupdf+tesseract" if used_ocr else "pymupdf"
     return pages, engine
+
+
+_SHARP_OCR_TOKENS = (
+    "statement",
+    "statem",
+    "account",
+    "reading",
+    "ilocos",
+    "inec",
+    "electric",
+    "kwh",
+    "amount due",
+    "consolidated bill",
+)
+
+
+def _page_needs_sharp_ocr(text: str) -> bool:
+    blob = text.lower()
+    return any(token in blob for token in _SHARP_OCR_TOKENS)
+
+
+def _ocr_sharp(page: fitz.Page) -> str:
+    sharp = _page_image(page, 3.4)
+    # Thermal-print scans are faint gray. A hard threshold keeps the digits.
+    sharp = sharp.point(lambda pixel: 0 if pixel < 150 else 255)
+    return (pytesseract.image_to_string(sharp, config="--psm 6") or "").strip()
+
+
+def _ocr_pdf_page(page: fitz.Page, force_sharp: bool = False) -> str:
+    """Image-only bills. Later pages of a utility PDF skip the detection pass."""
+    if force_sharp:
+        return _ocr_sharp(page)
+    fast = _page_image(page, 2.0)
+    fast_text = (pytesseract.image_to_string(fast, config="--psm 6") or "").strip()
+    if not _page_needs_sharp_ocr(fast_text):
+        return fast_text
+    return _ocr_sharp(page) or fast_text
+
+
+def _page_image(page: fitz.Page, scale: float) -> Image.Image:
+    pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+    image = Image.open(io.BytesIO(pix.tobytes("png"))).convert("L")
+    return ImageOps.autocontrast(image)
 
 
 def _ocr_image_bytes(raw: bytes, warnings: list[str]) -> tuple[list[dict[str, Any]], str]:

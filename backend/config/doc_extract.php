@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 return [
     'service_url' => rtrim((string) env('DOC_EXTRACT_URL', 'http://doc-extract:8081'), '/'),
-    'timeout_seconds' => (int) env('DOC_EXTRACT_TIMEOUT', 120),
+    // A 35-page scanned bill is one OCR request. 120s returns before the sidecar writes a byte.
+    'timeout_seconds' => (int) env('DOC_EXTRACT_TIMEOUT', 300),
     'retention_days' => (int) env('DOC_EXTRACT_RETENTION_DAYS', 7),
     'max_files_per_batch' => (int) env('DOC_EXTRACT_MAX_FILES_PER_BATCH', 500),
     /** Max pages expanded when split_pages is enabled for a single PDF. */

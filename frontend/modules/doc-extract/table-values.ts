@@ -1,8 +1,16 @@
 import type { DocExtractField, DocExtractTableColumn } from "@/modules/doc-extract/types";
 
+export type DocExtractTableGap = {
+  account_number: string;
+  field: string;
+  label: string;
+  reason: string;
+};
+
 export type DocExtractTableData = {
   columns: DocExtractTableColumn[];
   rows: Array<Record<string, string>>;
+  gaps: DocExtractTableGap[];
 };
 
 export function parseDocExtractTableValue(
@@ -17,7 +25,7 @@ export function parseDocExtractTableValue(
   }));
 
   if (!raw || raw.trim() === "") {
-    return { columns, rows: [] };
+    return { columns, rows: [], gaps: [] };
   }
 
   try {
@@ -29,10 +37,11 @@ export function parseDocExtractTableValue(
       return {
         columns: columns.length > 0 ? columns : inferColumns(rows),
         rows,
+        gaps: [],
       };
     }
     if (parsed && typeof parsed === "object") {
-      const object = parsed as { columns?: unknown; rows?: unknown };
+      const object = parsed as { columns?: unknown; rows?: unknown; gaps?: unknown };
       const nestedColumns = Array.isArray(object.columns)
         ? object.columns
             .filter((column): column is Record<string, unknown> => column !== null && typeof column === "object")
@@ -51,6 +60,7 @@ export function parseDocExtractTableValue(
       return {
         columns: nestedColumns.length > 0 ? nestedColumns : inferColumns(rows),
         rows,
+        gaps: parseTableGaps(object.gaps),
       };
     }
   } catch {
@@ -62,7 +72,7 @@ export function parseDocExtractTableValue(
     .map((line) => line.trim())
     .filter(Boolean);
   if (lines.length === 0) {
-    return { columns, rows: [] };
+    return { columns, rows: [], gaps: [] };
   }
 
   const delimiter = lines[0].includes("\t") ? "\t" : lines[0].includes("|") ? "|" : ",";
@@ -86,7 +96,20 @@ export function parseDocExtractTableValue(
     return row;
   });
 
-  return { columns: inferred, rows };
+  return { columns: inferred, rows, gaps: [] };
+}
+
+function parseTableGaps(raw: unknown): DocExtractTableGap[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
+    .map((item) => ({
+      account_number: String(item.account_number ?? ""),
+      field: String(item.field ?? ""),
+      label: String(item.label ?? item.field ?? "Field"),
+      reason: String(item.reason ?? ""),
+    }))
+    .filter((item) => item.reason.trim() !== "");
 }
 
 export function stringifyDocExtractTableValue(data: DocExtractTableData): string {
@@ -98,6 +121,7 @@ export function stringifyDocExtractTableValue(data: DocExtractTableData): string
       description: column.description ?? null,
     })),
     rows: data.rows,
+    gaps: data.gaps ?? [],
   });
 }
 

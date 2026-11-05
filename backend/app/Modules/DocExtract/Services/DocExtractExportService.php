@@ -22,16 +22,16 @@ final class DocExtractExportService
             if ($handle === false) {
                 return;
             }
-            fputcsv($handle, $headers);
-            foreach ($rows as $row) {
-                fputcsv($handle, $row);
-            }
             if ($flat['rows'] !== []) {
-                fputcsv($handle, []);
                 fputcsv($handle, $flat['headers']);
                 foreach ($flat['rows'] as $row) {
                     fputcsv($handle, $row);
                 }
+                fputcsv($handle, []);
+            }
+            fputcsv($handle, $headers);
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
             }
             fclose($handle);
         }, $filename, [
@@ -43,16 +43,14 @@ final class DocExtractExportService
     {
         [$headers, $rows] = $this->buildMainRows($batch);
         $writer = new ExcelWorkbookWriter;
-        $writer->addSheet('Extraction Results', [$headers, ...$rows]);
-
         $flat = $this->buildFlattenedTableRows($batch);
         if ($flat['rows'] !== []) {
             $writer->addSheet('All table details', [$flat['headers'], ...$flat['rows']]);
         }
-
         foreach ($this->buildNestedTableSheets($batch) as $sheet) {
             $writer->addSheet($sheet['name'], $sheet['rows']);
         }
+        $writer->addSheet('Extraction Results', [$headers, ...$rows]);
 
         $binary = $writer->toBinaryString();
         $filename = 'extraction-results-'.$batch->id.'.xlsx';

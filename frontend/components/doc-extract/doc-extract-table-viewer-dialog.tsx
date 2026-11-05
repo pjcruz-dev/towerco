@@ -64,6 +64,11 @@ export function DocExtractTableViewerDialog({
 }: DocExtractTableViewerDialogProps) {
   const columns = data?.columns ?? [];
   const rows = data?.rows ?? [];
+  const openGaps = (data?.gaps ?? []).filter((gap) => {
+    const row = rows.find((item) => item.account_number === gap.account_number);
+    if (!row) return true;
+    return (row[gap.field] ?? "").trim() === "";
+  });
 
   const updateCell = (rowIndex: number, columnKey: string, value: string) => {
     if (!data) return;
@@ -77,6 +82,7 @@ export function DocExtractTableViewerDialog({
     if (!data) return;
     const cols = data.columns.length > 0 ? data.columns : [{ key: "col_1", label: "Column 1", type: "text" as const }];
     onChange({
+      ...data,
       columns: cols,
       rows: [...data.rows, emptyRow(cols)],
     });
@@ -98,6 +104,7 @@ export function DocExtractTableViewerDialog({
     const key = slugColumnKey(label, keys);
     const column: DocExtractTableColumn = { key, label, type: "text", description: null };
     onChange({
+      ...data,
       columns: [...data.columns, column],
       rows: data.rows.map((row) => ({ ...row, [key]: "" })),
     });
@@ -108,6 +115,7 @@ export function DocExtractTableViewerDialog({
     const removed = data.columns[columnIndex];
     if (!removed) return;
     onChange({
+      ...data,
       columns: data.columns.filter((_, index) => index !== columnIndex),
       rows: data.rows.map((row) => {
         const next = { ...row };
@@ -216,7 +224,8 @@ export function DocExtractTableViewerDialog({
                           <td key={column.key} className="px-3 py-2 text-foreground">
                             {canEdit ? (
                               <Input
-                                className="h-8"
+                                className="h-8 min-w-[9rem]"
+                                title={row[column.key] || undefined}
                                 value={row[column.key] ?? ""}
                                 onChange={(event) => updateCell(rowIndex, column.key, event.target.value)}
                               />
@@ -246,6 +255,23 @@ export function DocExtractTableViewerDialog({
               </table>
             </div>
           )}
+          {openGaps.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <p className="text-sm font-medium text-foreground">Blank cells</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These stayed empty because the line on the scan could not be read. Nothing was guessed.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {openGaps.map((gap) => (
+                  <li key={`${gap.account_number}-${gap.field}`} className="text-sm text-foreground">
+                    <span className="font-medium tabular-nums">{gap.account_number || "Row"}</span>
+                    <span className="text-muted-foreground"> · {gap.label}. </span>
+                    {gap.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </DialogBody>
 
         <DialogFooter className="border-t border-border px-6 py-4">
