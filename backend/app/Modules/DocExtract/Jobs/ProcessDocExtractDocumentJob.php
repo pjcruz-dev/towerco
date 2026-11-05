@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
 
 final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
 {
-    public int $timeout = 420;
+    public int $timeout = 1800;
 
     public int $tries = 2;
 
@@ -93,7 +93,7 @@ final class ProcessDocExtractDocumentJob extends AbstractQueuedJob
                     }
                 }
 
-                $result = $scanClient->scan(
+                $result = $scanClient->scanChunked(
                     (string) $document->original_filename,
                     (string) ($document->mime_type ?? 'application/pdf'),
                     $bytes,

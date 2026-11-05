@@ -9,6 +9,9 @@ use RuntimeException;
 
 final class DocExtractScanClient
 {
+    /** Pages per OCR request. A 35-page scan does not finish inside one 5-minute wait. */
+    private const SCAN_PAGE_CHUNK = 3;
+
     /**
      * @param  list<array{key?: mixed, label?: mixed, type?: mixed, hint?: mixed}>  $fields
      * @param  list<int>|null  $pages  1-based page numbers to scan; null = all pages
@@ -54,6 +57,78 @@ final class DocExtractScanClient
         $payload = $response->json() ?? [];
 
         return $this->normalizeScanPayload($payload, $fields);
+    }
+
+    /**
+     * Scan long PDFs a few pages at a time so one request does not sit silent until the timeout.
+     *
+     * @param  list<array{key?: mixed, label?: mixed, type?: mixed, hint?: mixed, columns?: mixed}>  $fields
+     * @param  list<int>|null  $pages
+     * @return array{
+     *   engine: string,
+     *   pages: list<array{page: int, text: string}>,
+     *   warnings: list<string>,
+     *   field_values: array<string, string|null>,
+     *   discovered_fields: list<array{key: string, label: string, type: string, hint: string|null, columns?: list<array<string, mixed>>}>,
+     *   mode: string
+     * }
+     */
+    public function scanChunked(
+        string $filename,
+        string $mimeType,
+        string $binaryContents,
+        array $fields = [],
+        ?array $pages = null,
+    ): array {
+        $normalized = $this->normalizePageList($pages);
+        if ($normalized === null) {
+            try {
+                $count = $this->pageCount($filename, $mimeType, $binaryContents);
+            } catch (\Throwable) {
+                return $this->scan($filename, $mimeType, $binaryContents, $fields, null);
+            }
+            if ($count > self::SCAN_PAGE_CHUNK) {
+                $normalized = range(1, $count);
+            }
+        }
+
+        if ($normalized === null || count($normalized) <= self::SCAN_PAGE_CHUNK) {
+            return $this->scan($filename, $mimeType, $binaryContents, $fields, $normalized);
+        }
+
+        $allPages = [];
+        $warnings = [];
+        $engine = 'pymupdf';
+        foreach (array_chunk($normalized, self::SCAN_PAGE_CHUNK) as $chunk) {
+            $part = $this->scan($filename, $mimeType, $binaryContents, [], $chunk);
+            foreach ($part['pages'] as $page) {
+                $allPages[] = $page;
+            }
+            foreach ($part['warnings'] as $warning) {
+                if ($warning !== '') {
+                    $warnings[] = $warning;
+                }
+            }
+            if (($part['engine'] ?? '') !== '') {
+                $engine = (string) $part['engine'];
+            }
+        }
+
+        usort($allPages, static fn (array $left, array $right): int => $left['page'] <=> $right['page']);
+        $text = trim(implode("\n\n", array_filter(
+            array_map(static fn (array $page): string => trim($page['text']), $allPages),
+            static fn (string $pageText): bool => $pageText !== '',
+        )));
+        $mapped = $fields !== [] ? $this->mapText($text, $fields) : [];
+
+        return [
+            'engine' => $engine,
+            'pages' => $allPages,
+            'warnings' => array_values(array_unique($warnings)),
+            'field_values' => $mapped,
+            'discovered_fields' => [],
+            'mode' => $fields !== [] ? 'template' : 'auto',
+        ];
     }
 
     public function pageCount(string $filename, string $mimeType, string $binaryContents): int
@@ -172,10 +247,12 @@ final class DocExtractScanClient
                 }
                 if ($value === null) {
                     $fieldValues[$key] = null;
+
                     continue;
                 }
                 if (is_scalar($value)) {
                     $fieldValues[$key] = (string) $value;
+
                     continue;
                 }
                 if (is_array($value)) {
@@ -280,10 +357,12 @@ final class DocExtractScanClient
                 }
                 if ($value === null) {
                     $fieldValues[$key] = null;
+
                     continue;
                 }
                 if (is_scalar($value)) {
                     $fieldValues[$key] = (string) $value;
+
                     continue;
                 }
                 if (is_array($value)) {
