@@ -10,6 +10,7 @@ import {
   type EApprovalWorkflowPreviewResponse,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import type { EApprovalSubmissionDetail } from "@/modules/e-approval/types";
 
 type Props = {
   submissionId: string;
@@ -18,6 +19,7 @@ type Props = {
   enabled?: boolean;
   /** Shown under the path header when the last resubmit applied resume/restart routing. */
   revisionRoutingNote?: string | null;
+  training?: EApprovalSubmissionDetail["publication_training"];
 };
 
 function previewForSubmissionStatus(
@@ -48,6 +50,7 @@ export function EApprovalSubmissionWorkflowPathPanel({
   submissionStatus = null,
   enabled = true,
   revisionRoutingNote = null,
+  training = null,
 }: Props) {
   const query = useQuery({
     queryKey: ["e-approval", "submission", submissionId, "workflow-preview", submissionStatus ?? ""],
@@ -99,7 +102,7 @@ export function EApprovalSubmissionWorkflowPathPanel({
           {preview.matched_rule_label ? (
             <p className="text-xs text-muted-foreground">{preview.matched_rule_label}</p>
           ) : null}
-          <EApprovalWorkflowPathDiagram preview={preview} compactDetails />
+          <EApprovalWorkflowPathDiagram preview={preview} training={training} compactDetails />
         </div>
       ) : null}
     </div>

@@ -22,6 +22,15 @@ class ControlledDocumentRevisionStreamController
         abort_unless($request->user()?->can('documents:controlled:view'), 403);
 
         $revisionModel = $registry->findRevisionOrFail($controlledDocument, $revision);
+        if ((string) $revisionModel->status === ControlledDocumentRevisionStatus::SUPERSEDED) {
+            $user = $request->user();
+            abort_unless(
+                $user?->can('documents:controlled:manage')
+                || $user?->can('documents:controlled:approve')
+                || $user?->can('documents:controlled:import'),
+                403,
+            );
+        }
 
         return $storage->streamDownload($revisionModel);
     }

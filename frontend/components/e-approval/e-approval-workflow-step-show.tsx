@@ -139,6 +139,30 @@ export function workflowStepCompactCaption(steps: WorkflowStepShowItem[]): {
   return { progress, waiting: null };
 }
 
+export function withPublicationTrainingStep(
+  steps: WorkflowStepShowItem[],
+  training?: { holding?: boolean; completed?: number; total?: number; names?: string[] } | null,
+): WorkflowStepShowItem[] {
+  if (!training?.holding) {
+    return steps;
+  }
+  const order = steps.reduce((max, step, index) => Math.max(max, step.stepOrder ?? index + 1), 0) + 1;
+  const names = (training.names ?? []).filter((name) => name.trim() !== "");
+  const total = training.total ?? names.length;
+
+  return [
+    ...steps,
+    {
+      key: "publication-training",
+      label: "Training",
+      stepOrder: order,
+      state: "current",
+      approverNames: names,
+      statusLabel: total === 0 ? "Invite someone" : `${training.completed ?? 0} of ${total} complete`,
+    },
+  ];
+}
+
 function tooltipLines(steps: WorkflowStepShowItem[]): string[] {
   return steps.map((step, index) => {
     const who = formatApproverLine(step);

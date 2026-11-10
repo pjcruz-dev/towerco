@@ -360,7 +360,7 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
 
                         {/* File / E-Forms links */}
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2.5">
-                          {revision.has_file ? (
+                          {revision.has_file && (revision.status !== "superseded" || canManage) ? (
                             <Button
                               type="button"
                               variant="outline"
@@ -401,6 +401,8 @@ export function ControlledDocumentDetailDrawer({ documentId, canCreate, canManag
                                   : revision.original_filename
                                 : "Download"}
                             </Button>
+                          ) : revision.has_file && revision.status === "superseded" ? (
+                            <span className="text-xs text-muted-foreground">Document control only</span>
                           ) : canManage ? (
                             <Button
                               type="button"

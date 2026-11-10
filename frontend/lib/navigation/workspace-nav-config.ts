@@ -761,13 +761,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             permissions: ["e_approval:settings:manage"],
           },
           {
-            title: "Approval policies",
-            href: "/e-approval/approval-policies",
-            section: "E-Forms",
-            module: "e_approval",
-            permissions: ["e_approval:settings:manage"],
-          },
-          {
             title: "Master data",
             href: "/e-approval/master-data",
             section: "E-Forms",

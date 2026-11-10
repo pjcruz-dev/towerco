@@ -3143,15 +3143,26 @@ def _looks_like_inec(text: str) -> bool:
         return True
     if "consolidated bill statement" in blob and "inec" in blob:
         return True
-    header = re.search(r"stat[a-z]{1,8}nt\s+of\s+account", blob) is not None
-    return header and re.search(r"k[wh]h?\s*used", blob) is not None and (
-        "inec" in blob or "dingras" in blob or "r.f.s" in blob or "rfs capex" in blob
+    # Phone photos read the title as "SIATEHENT OF ACCOUNT", "STATEMENT OF ACCUUNT", "STATEMENT GF ACCOUNT".
+    header = re.search(r"(?:st|si)[a-z]{3,12}nt\s+(?:of|gf|0f)\s+acc[a-z]{2,8}nt", blob) is not None
+    bill = re.search(r"k[wh]h?\s*used|pres\s+reading", blob) is not None
+    if header and bill and (
+        "inec" in blob or "dingras" in blob or "r.f.s" in blob or "rfs capex" in blob or "capex" in blob
+    ):
+        return True
+    return (
+        re.search(r"\binec\b", blob) is not None
+        and re.search(r"account[\s_]*no", blob) is not None
+        and bill
     )
 
 
 def _inec_blocks(text: str) -> list[str]:
     # OCR writes "STATEmWENT" and "Account_No". Split on either, then keep charge blocks.
-    parts = re.split(r"(?i)(?=stat[a-z]{1,8}nt\s+of\s+account|account[\s_]*no\b)", text)
+    parts = re.split(
+        r"(?i)(?=(?:st|si)[a-z]{3,12}nt\s+(?:of|gf|0f)\s+acc[a-z]{2,8}nt|account[\s_]*no\b)",
+        text,
+    )
     blocks = [
         part
         for part in parts
@@ -3227,6 +3238,34 @@ def _inec_loose_amount(line: str) -> Decimal | None:
 
 def _inec_same_money(left: Decimal, right: Decimal) -> bool:
     return _inec_quantize(left, 2) == _inec_quantize(right, 2)
+
+
+def _inec_glyph_off(left: int, right: int) -> bool:
+    a = str(left)
+    b = str(right)
+    return len(a) == len(b) and sum(char_a != char_b for char_a, char_b in zip(a, b)) == 1
+
+
+def _inec_correct_dial(
+    present: Decimal,
+    previous: Decimal,
+    multiplier: Decimal,
+    kwh: Decimal,
+) -> tuple[Decimal, Decimal] | None:
+    """Keep the printed kWh when one dial is a single misread glyph away from it."""
+    if multiplier <= 0 or kwh <= 0:
+        return None
+    delta = kwh / multiplier
+    if delta != delta.to_integral_value():
+        return None
+    step = int(delta)
+    target_present = int(previous) + step
+    if _inec_glyph_off(int(present), target_present):
+        return Decimal(target_present), previous
+    target_previous = int(present) - step
+    if target_previous >= 0 and _inec_glyph_off(int(previous), target_previous):
+        return present, Decimal(target_previous)
+    return None
 
 
 def _inec_one_digit_off(left: Decimal, right: Decimal) -> bool:
@@ -3390,20 +3429,40 @@ def _inec_vatable_amounts(block: str, kwh: Decimal | None) -> list[Decimal] | No
             if amount is not None:
                 distribution = amount
                 break
+    if distribution is None:
+        for line in lines:
+            if re.search(r"ibut|dist", line, flags=re.IGNORECASE) is None:
+                continue
+            if re.search(r"vat|trans|loss|retail|sub\s+total", line, flags=re.IGNORECASE) is not None:
+                continue
+            if re.search(r"enand|emand|fend|/k", line, flags=re.IGNORECASE) is None:
+                continue
+            amount = _inec_line_amount(line)
+            if amount is None:
+                short = re.search(r"(\d{2,5})\.(\d)\b", line)
+                if short is not None:
+                    amount = Decimal(f"{short.group(1)}.{short.group(2)}0")
+            if amount is not None:
+                distribution = amount
+                break
 
     retail: list[Decimal] = []
     for line in lines:
         # "Retai! Cust" and "/est" are the same two flat customer charges.
-        if re.search(r"retai(?:\w*\s+|\W+\s*)c[uo]st", line, flags=re.IGNORECASE) is None:
+        if re.search(r"reta.{0,8}c[uo]st", line, flags=re.IGNORECASE) is None:
             continue
         rate = _inec_unit_rate(line, r"(?:c|e)st")
         if rate is not None and rate >= 80:
             digits = f"{rate:.4f}".replace(".", "")[-6:]
             rate = Decimal(digits[:-4] + "." + digits[-4:])
+        amount = _inec_line_amount(line)
+        # The flat charge is printed next to a rate OCR often turns into 146.0000.
+        if amount is not None and Decimal("20") <= amount <= Decimal("80"):
+            retail.append(_inec_quantize(amount, 2))
+            continue
         if rate is not None:
             retail.append(_inec_quantize(rate, 2))
             continue
-        amount = _inec_line_amount(line)
         if amount is not None:
             retail.append(amount)
 
@@ -3414,7 +3473,7 @@ def _inec_vatable_amounts(block: str, kwh: Decimal | None) -> list[Decimal] | No
             for line in lines
         )
         supply_seen = any(
-            re.search(r"retai(?:\w*\s+|\W+\s*)c[uo]st", line, flags=re.IGNORECASE)
+            re.search(r"reta.{0,8}c[uo]st", line, flags=re.IGNORECASE)
             and re.search(r"eter", line, flags=re.IGNORECASE) is None
             for line in lines
         )
@@ -3425,7 +3484,7 @@ def _inec_vatable_amounts(block: str, kwh: Decimal | None) -> list[Decimal] | No
 
     lifeline_line = first_line(lambda line: re.search(r"lifeline", line, flags=re.IGNORECASE) is not None)
     senior_line = first_line(lambda line: re.search(r"senior", line, flags=re.IGNORECASE) is not None)
-    capex_line = first_line(lambda line: re.search(r"capex|apex", line, flags=re.IGNORECASE) is not None)
+    capex_line = first_line(lambda line: re.search(r"capex|apex|caper", line, flags=re.IGNORECASE) is not None)
     lifeline = per_kwh(lifeline_line, _inec_line_amount(lifeline_line) if lifeline_line else None)
     senior = per_kwh(senior_line, _inec_line_amount(senior_line) if senior_line else None)
     capex = per_kwh(capex_line, _inec_line_amount(capex_line) if capex_line else None)
@@ -3543,6 +3602,19 @@ def _inec_bill_month(iso_date: str) -> str:
     return f"{_INEC_MONTHS[month - 1]}-{year}"
 
 
+def _inec_us_date(raw: str | None) -> str | None:
+    """Period lines on the phone-photo bills are m/d/yyyy, not year-first."""
+    if raw is None:
+        return None
+    match = re.fullmatch(r"(\d{1,2})[-/](\d{1,2})[-/](\d{4})", raw.strip())
+    if match is None:
+        return None
+    month, day, year = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    if not 1 <= month <= 12 or not 1 <= day <= 31:
+        return None
+    return f"{year:04d}-{month:02d}-{day:02d}"
+
+
 def _inec_iso_date(raw: str | None) -> str | None:
     if raw is None:
         return None
@@ -3628,7 +3700,7 @@ def _inec_snap_multiplier_from_subsidy(
 
 def _inec_clean_party(value: str) -> str:
     value = re.split(
-        r"(?i)\b(?:rdg|reading\s+date|date|fate|gate|hate|late|flate)\b",
+        r"(?i)\b(?:rdg|reading\s+date|dates?|fate|gate|hate|hates|cate|bate|late|flate)\b",
         value,
         maxsplit=1,
     )[0]
@@ -3648,6 +3720,19 @@ def _inec_party_line(block: str, labels: str) -> str:
     if match is None:
         return ""
     return _inec_clean_party(match.group(1))
+
+
+def _inec_customer_name(block: str, customers: dict[str, str] | None, account: str) -> str:
+    captured = _inec_party_line(block, r"n[a-z]{1,3}e|wane|haze|nepe|nage")
+    head = captured or "\n".join(block.split("\n")[:8])
+    canonical = _inec_canonical_customer(head)
+    if canonical:
+        if re.search(r"temp|conn|porar", head, flags=re.IGNORECASE):
+            return f"{canonical} (TEMP CONN)"
+        return canonical
+    if captured:
+        return captured
+    return (customers or {}).get(account, "")
 
 
 def _inec_canonical_customer(text: str) -> str:
@@ -3795,8 +3880,15 @@ def _inec_loose_day(block: str, month: int) -> int | None:
 
 def _inec_period_date(block: str, label: str) -> str | None:
     cleaned = re.sub(r"(\d)\s*-\s*(\d)", r"\1-\2", block)
-    prefix = r"(?:Period\s+Fr\w*|(?<![A-Za-z])rom|Pend\s+From)\b" if label == "from" else r"(?:Period|erlod|eriod)\s+To\b"
-    iso = _inec_iso_date(_inec_first(prefix + r"[^\d\n]{0,16}(\d{4}[-/]\d{1,2}[-/]\d{1,2})", cleaned))
+    prefix = (
+        r"(?:Period\s+Fr\w*|(?<![A-Za-z])rom|Pend\s+From)\b"
+        if label == "from"
+        else r"(?:Period|erlod|eriod|pert[a-z]{1,3})\s+To\b"
+    )
+    tail = prefix + r"[^\d\n]{0,16}"
+    iso = _inec_iso_date(_inec_first(tail + r"(\d{4}[-/]\d{1,2}[-/]\d{1,2})", cleaned))
+    if iso is None:
+        iso = _inec_us_date(_inec_first(tail + r"(\d{1,2}[-/]\d{1,2}[-/]\d{4})", cleaned))
     if iso is not None:
         return _inec_finish_period(block, iso)
     if label == "to":
@@ -3819,13 +3911,13 @@ def _inec_row_from_block(
     customers: dict[str, str] | None = None,
 ) -> dict[str, str] | None:
     account = _inec_digits(r"Account[\s_]*No\.?\s*[:=]?\s*([0-9][0-9\-\s]{5,16})", block)
-    if not account:
+    if not account or len(account) < 9:
         return None
     hint = (summary or {}).get(account, {})
 
     meter = _inec_meter_from_block(block) or str(hint.get("meter") or "")
     multiplier = _inec_decimal(
-        r"(?:\w*plier|Multi\s*plier)\s*[:=;]?\s*(100|40|20|10|1)\b",
+        r"(?:\w*pliers?|Multi\s*plier)\s*[:=;]?\s*(100|40|20|10|1)\b",
         block,
     )
     if multiplier is None and re.search(r"plier\s*[:=;]?\s*4\)", block, flags=re.IGNORECASE):
@@ -3865,7 +3957,12 @@ def _inec_row_from_block(
             if previous == 0 and computed_kwh != parsed_kwh:
                 pass
             elif computed_kwh != parsed_kwh:
-                kwh = computed_kwh
+                corrected = _inec_correct_dial(present, previous, multiplier, parsed_kwh)
+                if corrected is not None:
+                    present, previous = corrected
+                    kwh = parsed_kwh
+                else:
+                    kwh = computed_kwh
     if kwh is None and isinstance(hint.get("kwh"), Decimal):
         kwh = hint["kwh"]
     total = _inec_statement_total(block)
@@ -3926,11 +4023,7 @@ def _inec_row_from_block(
         "electric_coop": "INEC",
         "bill_month": bill_month,
         "account_number": account,
-        "name": (
-            _inec_party_line(block, r"n[a-z]{1,3}e|wane|haze")
-            or _inec_canonical_customer("\n".join(block.split("\n")[:8]))
-            or (customers or {}).get(account, "")
-        ),
+        "name": _inec_customer_name(block, customers, account),
         "address": _inec_usable_address(
             _inec_party_line(block, r"address|adress|addres|imress|mress|wess|wass|hess|aiess|auras|hikers|ress")
             or _inec_address_after_name(block)

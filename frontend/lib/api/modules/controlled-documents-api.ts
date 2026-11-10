@@ -279,6 +279,8 @@ export async function fetchControlledDocumentOverview(params?: {
   document_type?: string;
   status?: string;
   file?: string;
+  published_from?: string;
+  published_to?: string;
 }): Promise<ControlledDocumentOverview> {
   const response = await apiClient.get<{ data: ControlledDocumentOverview }>(
     "/documents/controlled/overview",
@@ -301,6 +303,8 @@ export async function fetchControlledDocumentReport(params: {
   document_type?: string;
   review?: string;
   file?: string;
+  published_from?: string;
+  published_to?: string;
 }): Promise<ControlledDocumentReport> {
   const response = await apiClient.get<{ data: ControlledDocumentReport }>(
     "/documents/controlled/reports",
@@ -316,6 +320,8 @@ export async function downloadControlledDocumentReport(params: {
   document_type?: string;
   review?: string;
   file?: string;
+  published_from?: string;
+  published_to?: string;
 }): Promise<Blob> {
   const response = await apiClient.get<Blob>("/documents/controlled/reports/export", {
     params,

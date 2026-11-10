@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkflowPathDiagram,
   describeParallelBandLabel,
+  trainingPathBand,
 } from "@/modules/e-approval/workflow-path-diagram";
 
 describe("workflow-path-diagram", () => {
@@ -79,5 +80,19 @@ describe("workflow-path-diagram", () => {
         { parallel_mode: "n_of_m", parallel_quorum: 2 },
       ]),
     ).toMatch(/2 of 3/);
+  });
+
+  it("adds a live training band after the last approval", () => {
+    const band = trainingPathBand(
+      [
+        { id: "1", name: "Peter Joseph Cruz", email: "prcruz@alliancetowers.com", status: "invited" },
+        { id: "2", name: "Denver Arquiza", email: "dearquiza@alliancetowers.com", status: "completed" },
+      ],
+      4,
+    );
+
+    expect(band.stepOrder).toBe(5);
+    expect(band.bandLabel).toBe("Training · All must finish");
+    expect(band.nodes.map((node) => node.status)).toEqual(["pending", "training_done"]);
   });
 });

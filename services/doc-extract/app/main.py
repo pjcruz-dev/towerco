@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import re
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -297,10 +298,15 @@ def _page_needs_sharp_ocr(text: str) -> bool:
 
 
 def _ocr_sharp(page: fitz.Page) -> str:
-    sharp = _page_image(page, 3.4)
+    image = _page_image(page, 3.4)
     # Thermal-print scans are faint gray. A hard threshold keeps the digits.
-    sharp = sharp.point(lambda pixel: 0 if pixel < 150 else 255)
-    return (pytesseract.image_to_string(sharp, config="--psm 6") or "").strip()
+    hard = image.point(lambda pixel: 0 if pixel < 150 else 255)
+    hard_text = (pytesseract.image_to_string(hard, config="--psm 6") or "").strip()
+    if re.search(r"account", hard_text, flags=re.IGNORECASE):
+        return hard_text
+    # Phone photos of the bill go blank under that threshold. Keep the softer read.
+    plain = (pytesseract.image_to_string(image, config="--psm 6") or "").strip()
+    return plain or hard_text
 
 
 def _ocr_pdf_page(page: fitz.Page, force_sharp: bool = False) -> str:

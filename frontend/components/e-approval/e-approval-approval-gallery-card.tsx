@@ -7,6 +7,7 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import {
   EApprovalWorkflowStepShow,
   buildWorkflowStepShowItems,
+  withPublicationTrainingStep,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import type { EApprovalApprovalRow } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
@@ -73,12 +74,15 @@ export function EApprovalApprovalGalleryCard({ row }: Props) {
           ) : null}
           <EApprovalWorkflowStepShow
             variant="compact"
-            steps={buildWorkflowStepShowItems({
-              currentStep: submission?.current_step ?? 0,
-              stepCount: submission?.step_count,
-              status,
-              workflowSteps: submission?.workflow_steps,
-            })}
+            steps={withPublicationTrainingStep(
+              buildWorkflowStepShowItems({
+                currentStep: submission?.current_step ?? 0,
+                stepCount: submission?.step_count,
+                status,
+                workflowSteps: submission?.workflow_steps,
+              }),
+              submission?.publication_training,
+            )}
           />
         </div>
       </div>

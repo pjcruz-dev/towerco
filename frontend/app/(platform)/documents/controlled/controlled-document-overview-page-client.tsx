@@ -13,6 +13,7 @@ import { FilterSelect } from "@/components/forms/filter-select";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -63,7 +64,33 @@ function readOverviewQuery(params: URLSearchParams) {
     documentType: params.get("filter[document_type]") ?? "",
     status: status === "pending" || status === "published" || status === "obsolete" ? status : "",
     file: params.get("filter[file]") === "has" || params.get("filter[file]") === "missing" ? (params.get("filter[file]") ?? "") : "",
+    publishedFrom: params.get("published_from") ?? "",
+    publishedTo: params.get("published_to") ?? "",
   };
+}
+
+function reportsHref(query: ReturnType<typeof readOverviewQuery>): string {
+  const params = new URLSearchParams();
+  if (query.department) {
+    params.set("filter[department]", query.department);
+  }
+  if (query.documentType) {
+    params.set("filter[document_type]", query.documentType);
+  }
+  if (query.status) {
+    params.set("filter[status]", query.status);
+  }
+  if (query.file) {
+    params.set("filter[file]", query.file);
+  }
+  if (query.publishedFrom) {
+    params.set("published_from", query.publishedFrom);
+  }
+  if (query.publishedTo) {
+    params.set("published_to", query.publishedTo);
+  }
+  const qs = params.toString();
+  return qs ? `/documents/controlled/reports?${qs}` : "/documents/controlled/reports";
 }
 
 function displayTitle(title: string): string {
@@ -80,6 +107,10 @@ function formatWait(days: number): string {
 function formatDay(value: string | null): string {
   if (!value) {
     return "—";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString();
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -100,6 +131,8 @@ export function ControlledDocumentOverviewPageClient() {
         document_type: queryState.documentType || undefined,
         status: queryState.status || undefined,
         file: queryState.file || undefined,
+        published_from: queryState.publishedFrom || undefined,
+        published_to: queryState.publishedTo || undefined,
       }),
     placeholderData: keepPreviousData,
   });
@@ -108,7 +141,9 @@ export function ControlledDocumentOverviewPageClient() {
   const total = counts?.total ?? 0;
   const approved = counts?.published ?? 0;
   const facets = data?.facets;
-  const filtered = Boolean(queryState.department || queryState.documentType || queryState.status || queryState.file);
+  const filtered = Boolean(
+    queryState.department || queryState.documentType || queryState.status || queryState.file || queryState.publishedFrom || queryState.publishedTo,
+  );
 
   function replace(patch: Record<string, string | null>) {
     const next = new URLSearchParams(searchParams.toString());
@@ -137,7 +172,7 @@ export function ControlledDocumentOverviewPageClient() {
               <Button size="sm" variant="outline" render={<Link href="/documents/controlled/obsolete" />}>
                 Files
               </Button>
-              <Button size="sm" variant="outline" render={<Link href="/documents/controlled/reports" />}>
+              <Button size="sm" variant="outline" render={<Link href={reportsHref(queryState)} />}>
                 Reports
               </Button>
               <Button
@@ -209,6 +244,27 @@ export function ControlledDocumentOverviewPageClient() {
               <option value="missing">Missing file</option>
             </FilterSelect>
           </div>
+          <div>
+            <label htmlFor="cdr-overview-published-from" className="text-xs font-medium text-muted-foreground">
+              Published from
+            </label>
+            <DatePicker
+              id="cdr-overview-published-from"
+              value={queryState.publishedFrom}
+              onChange={(value) => replace({ published_from: value || null })}
+            />
+          </div>
+          <div>
+            <label htmlFor="cdr-overview-published-to" className="text-xs font-medium text-muted-foreground">
+              Published to
+            </label>
+            <DatePicker
+              id="cdr-overview-published-to"
+              value={queryState.publishedTo}
+              minDate={queryState.publishedFrom || undefined}
+              onChange={(value) => replace({ published_to: value || null })}
+            />
+          </div>
           {filtered ? (
             <Button
               type="button"
@@ -220,6 +276,8 @@ export function ControlledDocumentOverviewPageClient() {
                   "filter[document_type]": null,
                   "filter[status]": null,
                   "filter[file]": null,
+                  published_from: null,
+                  published_to: null,
                 })
               }
             >
@@ -242,7 +300,12 @@ export function ControlledDocumentOverviewPageClient() {
             ))}
           </div>
         ) : (
-          <OverviewBody data={data} total={total} approved={approved} />
+          <OverviewBody
+            data={data}
+            total={total}
+            approved={approved}
+            publishedRange={queryState.publishedFrom !== "" || queryState.publishedTo !== ""}
+          />
         )}
       </div>
     </PermissionGate>
@@ -253,10 +316,12 @@ function OverviewBody({
   data,
   total,
   approved,
+  publishedRange,
 }: {
   data: ControlledDocumentOverview;
   total: number;
   approved: number;
+  publishedRange: boolean;
 }) {
   const counts = data.counts;
   const departments = data.departments ?? [];
@@ -327,11 +392,11 @@ function OverviewBody({
           emptyMessage="No controlled documents yet."
         />
         <DashboardLineChart
-          title="Approved over 30 days"
+          title={publishedRange ? "Approved in this range" : "Approved over 30 days"}
           description="The number is the total published in this window, not today alone."
           headline="total"
           data={data.published_over_time ?? []}
-          emptyMessage="Nothing was published in the last 30 days."
+          emptyMessage={publishedRange ? "Nothing was published in this range." : "Nothing was published in the last 30 days."}
         />
       </div>
 
@@ -444,7 +509,12 @@ function OverviewBody({
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-medium text-foreground">Publication and Implementation</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">The eight most recently published documents.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {publishedRange
+              ? "Published documents in the selected range."
+              : "The eight most recently published documents."}{" "}
+            The published date is the day the file was released. The effective date is that day or a later day. The two dates can be the same.
+          </p>
         </div>
         {data.recent.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing has been approved yet.</p>
@@ -458,8 +528,8 @@ function OverviewBody({
                 <TableHead>Department</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Revision</TableHead>
-                <TableHead>Effective Date</TableHead>
                 <TableHead>Published</TableHead>
+                <TableHead>Effective date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -476,8 +546,8 @@ function OverviewBody({
                   <TableCell>{row.department || "—"}</TableCell>
                   <TableCell>{row.document_type || "—"}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.current_revision}</TableCell>
-                  <TableCell className="tabular-nums">{formatDay(row.effective_date)}</TableCell>
                   <TableCell className="tabular-nums">{formatDay(row.published_at)}</TableCell>
+                  <TableCell className="tabular-nums">{formatDay(row.effective_date)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

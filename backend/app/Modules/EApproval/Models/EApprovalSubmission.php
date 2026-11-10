@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\EApproval\Models;
 
 use App\Modules\EApproval\Services\EApprovalFinanceStageService;
+use App\Modules\EApproval\Services\EApprovalPublicationTrainingService;
 use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalSubmissionSource;
 use App\Modules\Identity\Models\TenantUser;
@@ -99,6 +100,12 @@ class EApprovalSubmission extends Model
         return $this->hasMany(EApprovalRequestApproval::class, 'submission_id');
     }
 
+    /** @return HasMany<EApprovalPublicationTraining, $this> */
+    public function publicationTrainings(): HasMany
+    {
+        return $this->hasMany(EApprovalPublicationTraining::class, 'submission_id');
+    }
+
     public function isExternalSubmission(): bool
     {
         return ($this->submission_source ?? EApprovalSubmissionSource::INTERNAL) === EApprovalSubmissionSource::EXTERNAL;
@@ -179,12 +186,46 @@ class EApprovalSubmission extends Model
             'subsidiary' => $this->scalarFieldValue('subsidiary'),
             'department' => $this->scalarFieldValue('department') ?: $this->requestor?->department,
             'workflow_steps' => $this->workflowStepsSummary(),
+            'publication_training' => $this->publicationTrainingCard(),
             'submission_source' => $this->submission_source ?? 'internal',
             'requestor' => $requestorLabel,
             'external_submitter_name' => $this->external_submitter_name,
             'external_submitter_email' => $this->external_submitter_email,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array{holding: bool, completed: int, total: int, names: list<string>}|null
+     */
+    private function publicationTrainingCard(): ?array
+    {
+        $training = app(EApprovalPublicationTrainingService::class);
+        if (! $training->isHolding($this)) {
+            return null;
+        }
+
+        $rows = $this->relationLoaded('publicationTrainings')
+            ? $this->publicationTrainings
+            : $this->publicationTrainings()->with('user:id,name')->get();
+        $names = [];
+        $completed = 0;
+        foreach ($rows as $row) {
+            if ((string) $row->status === 'completed') {
+                $completed++;
+            }
+            $name = trim((string) ($row->user?->name ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return [
+            'holding' => true,
+            'completed' => $completed,
+            'total' => $rows->count(),
+            'names' => $names,
         ];
     }
 

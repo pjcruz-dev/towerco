@@ -33,6 +33,7 @@ import {
 import { EApprovalAttachmentComments } from "@/components/e-approval/e-approval-attachment-comments";
 import { EApprovalRequestFieldMark } from "@/components/e-approval/e-approval-request-field-notes";
 import { EApprovalProofOfPaymentDialog } from "@/components/e-approval/e-approval-proof-of-payment-dialog";
+import { EApprovalPublicationTrainingCard } from "@/components/e-approval/e-approval-publication-training-card";
 import {
   EApprovalSettlementCaptureDialog,
   type SettlementCaptureDraft,
@@ -121,6 +122,10 @@ function fileAudienceReady(audience: EApprovalFileAudience, recipientIds: string
   return recipientIds.length > 0;
 }
 
+function submissionSendsFileLink(values: { field_name: string | null }[] | undefined): boolean {
+  return (values ?? []).some((row) => row.field_name === "document_code");
+}
+
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -205,7 +210,18 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
-  const showFileAudience = Boolean(data?.publishes_on_approve);
+  const awaitsTraining = data?.awaits_publication_training === true;
+  const showFileAudience = Boolean(data?.publishes_on_approve) && data?.sends_file_link === true && !awaitsTraining;
+  const controlledFileLink = submissionSendsFileLink(data?.values);
+  const fileAudienceTimingNote = !showFileAudience
+    ? undefined
+    : controlledFileLink
+      ? data?.optional_next
+        ? "Approve sends the link now. Approve and send waits until that step finishes. The published file is not attached."
+        : "They receive a link to the current published file. The file is not attached."
+      : data?.optional_next
+        ? "Approve publishes now and sends the files. Approve and send waits until that step finishes, then sends them."
+        : undefined;
 
   const workflowPreviewQuery = useQuery({
     queryKey: ["e-approval", "submission", submissionId, "workflow-preview", data?.status ?? ""],
@@ -237,6 +253,29 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
     workflowPreviewQuery.data?.resolved_steps,
     workflowPreviewQuery.data?.skipped_steps,
   ]);
+  const workflowTrail = useMemo(() => {
+    const training = data?.publication_training;
+    if (!training?.holding) {
+      return workflowStepItems;
+    }
+    const order =
+      workflowStepItems.reduce((max, step, index) => Math.max(max, step.stepOrder ?? index + 1), 0) + 1;
+    const names = training.invites.map((invite) => invite.name).filter((name) => name.trim() !== "");
+    return [
+      ...workflowStepItems,
+      {
+        key: "publication-training",
+        label: "Training",
+        stepOrder: order,
+        state: "current" as const,
+        approverNames: names,
+        statusLabel:
+          training.total === 0
+            ? "Invite someone"
+            : `${training.completed} of ${training.total} complete`,
+      },
+    ];
+  }, [data?.publication_training, workflowStepItems]);
 
   const subsidiaryLabel = useMemo(() => {
     if (data?.subsidiary) return data.subsidiary;
@@ -646,25 +685,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
   );
   const { openPdfPreview, isGenerating: isPdfGenerating } = useEApprovalPdfPreview();
   const attachments = data?.attachments ?? [];
-  const reviewAttachments = attachments.filter((file) => {
-    if (file.metadata?.comment_image) {
-      return false;
-    }
-    if (!file.metadata?.superseded_at) {
-      return true;
-    }
-    const field = file.field_name?.trim() ?? "";
-    const slot = file.metadata?.slot?.trim() ?? "";
-    const replaced = attachments.some((other) => {
-      if (other.id === file.id || other.metadata?.comment_image || other.metadata?.superseded_at) {
-        return false;
-      }
-      const otherField = other.field_name?.trim() ?? "";
-      const otherSlot = other.metadata?.slot?.trim() ?? "";
-      return field !== "" ? otherField === field && otherSlot === slot : false;
-    });
-    return !replaced;
-  });
+  // A replaced file stays on the request as a previous version, with its marks.
+  const reviewAttachments = attachments.filter((file) => !file.metadata?.comment_image);
   const inlineFileFieldNames = new Set(
     (data?.form_fields ?? [])
       .filter((field) => field.type === "file" || field.type === "camera")
@@ -919,7 +941,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                     : "—"}
                 </p>
               ) : (
-                <EApprovalWorkflowStepShow variant="compact" steps={workflowStepItems} />
+                <EApprovalWorkflowStepShow variant="compact" steps={workflowTrail} />
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
@@ -968,6 +990,13 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               </Button>
             </div>
           </div>
+        ) : null}
+
+        {data?.publication_training?.holding ? (
+          <EApprovalPublicationTrainingCard
+            submissionId={submissionId}
+            training={data.publication_training}
+          />
         ) : null}
 
         {data ? (
@@ -1248,6 +1277,7 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
               <EApprovalSubmissionWorkflowPathPanel
                 submissionId={submissionId}
                 submissionStatus={data.status}
+                training={data.publication_training}
                 revisionRoutingNote={
                   data.revision_routing_applied
                     ? describeRevisionRoutingApplied({
@@ -1541,11 +1571,8 @@ export function EApprovalSubmissionDetailPageClient({ submissionId }: Props) {
                           onAudienceChange={setFileAudience}
                           onRecipientIdsChange={setFileRecipientIds}
                           disabled={decideMutation.isPending || revisionMutation.isPending}
-                          timingNote={
-                            data.optional_next
-                              ? "Approve publishes now and sends the files. Approve and send waits until that step finishes, then sends them."
-                              : undefined
-                          }
+                          linkOnly={controlledFileLink}
+                          timingNote={fileAudienceTimingNote}
                         />
                       ) : null}
                       <div

@@ -309,7 +309,7 @@ export function SidebarNavGroup({
             return (
               <SidebarMenuSubItem key={item.href}>
                 {showSection ? (
-                  <p className="px-2 pb-1 pt-2 text-xs font-medium text-sidebar-foreground/45">
+                  <p className="-translate-x-px px-2 pb-1 pt-2 text-xs font-medium text-sidebar-foreground/45">
                     {item.section}
                   </p>
                 ) : null}

@@ -22,6 +22,7 @@ use App\Modules\Workspace\Support\WorkspaceAuditChanges;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 final class ControlledDocumentRegistryService
@@ -270,12 +271,15 @@ final class ControlledDocumentRegistryService
         $this->applyFilters($filtered, $filters);
         $today = Carbon::today();
         $publishedFrom = $today->copy()->subDays(30)->startOfDay();
+        $rangeFrom = is_string($filters['published_from'] ?? null) ? $filters['published_from'] : '';
+        $rangeTo = is_string($filters['published_to'] ?? null) ? $filters['published_to'] : '';
+        $hasPublishedWindow = $rangeFrom !== '' || $rangeTo !== '';
 
         $recent = (clone $filtered)
             ->where('status', ControlledDocumentStatus::PUBLISHED)
             ->whereNotNull('published_at')
             ->orderByDesc('published_at')
-            ->limit(8)
+            ->limit($hasPublishedWindow ? 50 : 8)
             ->get(['id', 'document_code', 'title', 'department', 'document_type', 'status', 'current_revision', 'effective_date', 'published_at']);
 
         $publishedScope = (clone $filtered)->where('status', ControlledDocumentStatus::PUBLISHED);
@@ -323,7 +327,7 @@ final class ControlledDocumentRegistryService
                 'effective_date' => $document->effective_date?->toDateString(),
                 'published_at' => $document->published_at?->toIso8601String(),
             ])->values()->all(),
-            'published_over_time' => $this->publishedOverTime($filtered),
+            'published_over_time' => $this->publishedOverTime($filtered, $filters),
         ];
     }
 
@@ -485,14 +489,25 @@ final class ControlledDocumentRegistryService
     }
 
     /**
-     * Real 30-day published counts for the register the viewer can see.
+     * Published counts for the register the viewer can see.
+     * A chosen range replaces the default 30 days.
      *
+     * @param  Builder<ControlledDocument>  $scoped
+     * @param  array<string, mixed>  $filters
      * @return list<array{key: string, label: string, value: int}>
      */
-    private function publishedOverTime(Builder $scoped): array
+    private function publishedOverTime(Builder $scoped, array $filters = []): array
     {
-        $to = Carbon::now()->startOfDay();
-        $from = $to->copy()->subDays(29);
+        $fromRaw = is_string($filters['published_from'] ?? null) ? $filters['published_from'] : '';
+        $toRaw = is_string($filters['published_to'] ?? null) ? $filters['published_to'] : '';
+        $to = $toRaw !== '' ? Carbon::parse($toRaw)->startOfDay() : Carbon::now()->startOfDay();
+        $from = $fromRaw !== '' ? Carbon::parse($fromRaw)->startOfDay() : $to->copy()->subDays(29);
+        if ($from->greaterThan($to)) {
+            [$from, $to] = [$to->copy(), $from->copy()];
+        }
+        if ($from->diffInDays($to) > 365) {
+            $from = $to->copy()->subDays(365);
+        }
         $counts = (clone $scoped)
             ->selectRaw('DATE(published_at) as day_key, COUNT(*) as total')
             ->where('status', ControlledDocumentStatus::PUBLISHED)
@@ -502,7 +517,8 @@ final class ControlledDocumentRegistryService
             ->pluck('total', 'day_key');
 
         $series = [];
-        for ($i = 0; $i < 30; $i++) {
+        $days = (int) $from->diffInDays($to);
+        for ($i = 0; $i <= $days; $i++) {
             $day = $from->copy()->addDays($i);
             $key = $day->toDateString();
             $series[] = [
@@ -1170,9 +1186,13 @@ final class ControlledDocumentRegistryService
     {
         $fromRaw = $filters['published_from'] ?? null;
         $toRaw = $filters['published_to'] ?? null;
-        if (is_string($fromRaw) && $fromRaw !== '' && is_string($toRaw) && $toRaw !== '') {
-            $from = Carbon::parse($fromRaw)->startOfDay();
-            $to = Carbon::parse($toRaw)->endOfDay();
+        if ((is_string($fromRaw) && $fromRaw !== '') || (is_string($toRaw) && $toRaw !== '')) {
+            $to = is_string($toRaw) && $toRaw !== ''
+                ? Carbon::parse($toRaw)->endOfDay()
+                : Carbon::today()->endOfDay();
+            $from = is_string($fromRaw) && $fromRaw !== ''
+                ? Carbon::parse($fromRaw)->startOfDay()
+                : $to->copy()->subDays(90)->startOfDay();
         } else {
             $period = (int) ($filters['period'] ?? 90);
             if (! in_array($period, [30, 90, 365], true)) {
@@ -1437,5 +1457,17 @@ final class ControlledDocumentRegistryService
         }
 
         return $revision;
+    }
+
+    public function submissionFileIsObsolete(string $submissionId): bool
+    {
+        if ($submissionId === '' || ! Schema::connection('tenant')->hasTable('controlled_document_revisions')) {
+            return false;
+        }
+
+        return ControlledDocumentRevision::query()
+            ->where('e_approval_submission_id', $submissionId)
+            ->where('status', ControlledDocumentRevisionStatus::SUPERSEDED)
+            ->exists();
     }
 }

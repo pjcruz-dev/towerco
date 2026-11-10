@@ -27,6 +27,8 @@ class ControlledDocumentOverviewController extends AbstractApiController
             'document_type' => ['sometimes', 'nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'nullable', 'string', Rule::in(['pending', 'published', 'obsolete'])],
             'file' => ['sometimes', 'nullable', 'string', Rule::in(['has', 'missing'])],
+            'published_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'published_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:published_from'],
         ]);
 
         return $this->ok($registry->overview($user, [
@@ -34,6 +36,8 @@ class ControlledDocumentOverviewController extends AbstractApiController
             'document_type' => $data['document_type'] ?? null,
             'status' => $data['status'] ?? null,
             'file' => $data['file'] ?? null,
+            'published_from' => $data['published_from'] ?? null,
+            'published_to' => $data['published_to'] ?? null,
         ]));
     }
 }

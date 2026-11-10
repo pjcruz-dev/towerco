@@ -45,7 +45,7 @@ function resolveNavGroupHomeHref(items: SubNav[]): string {
 }
 
 const navButtonClass =
-  "text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground";
+  "h-8 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground";
 
 function SidebarNavLink({
   title,
@@ -193,7 +193,7 @@ export function AppSidebar() {
       <SidebarContent className="scrollbar-hide gap-1 px-2 py-2">
         {groupsWithBadges.map((group) => (
           <div key={group.group} className="mt-2 first:mt-0">
-            <div className="px-3 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
+            <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
               {group.group}
             </div>
             <SidebarMenu>

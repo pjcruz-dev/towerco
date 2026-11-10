@@ -82,6 +82,7 @@ use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentLookupController
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentObsoleteBoardController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentObsoleteController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentOverviewController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentPublishedFileController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessShowController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentRegisterAccessUpdateController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentReportController;
@@ -197,6 +198,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalNotificationUnreadCountCo
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutDestroyController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutShowController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPdfLayoutUpdateController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicationTrainingController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkIndexController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkRevealController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalPublicFormLinkRevokeController;
@@ -434,6 +436,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
         Route::get('documents/controlled/{controlledDocument}', ControlledDocumentShowController::class)->name('api.tenant.v1.documents.controlled.show');
         Route::post('documents/controlled/{controlledDocument}/obsolete', ControlledDocumentObsoleteController::class)->name('api.tenant.v1.documents.controlled.obsolete');
         Route::post('documents/controlled/{controlledDocument}/revisions/{revision}/file', ControlledDocumentRevisionFileStoreController::class)->name('api.tenant.v1.documents.controlled.revisions.file');
+        Route::get('documents/controlled/{controlledDocument}/published-file', ControlledDocumentPublishedFileController::class)->name('api.tenant.v1.documents.controlled.published_file');
         Route::get('documents/controlled/{controlledDocument}/revisions/{revision}/download', ControlledDocumentRevisionDownloadController::class)->name('api.tenant.v1.documents.controlled.revisions.download');
         Route::get('documents/controlled/{controlledDocument}/revisions/{revision}/stream', ControlledDocumentRevisionStreamController::class)->name('api.tenant.v1.documents.controlled.revisions.stream');
     });
@@ -595,6 +598,9 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::put('e-approval/submissions/{submission}/resubmit', EApprovalSubmissionResubmitController::class)->name('api.tenant.v1.e_approval.submissions.resubmit');
     Route::get('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentIndexController::class)->name('api.tenant.v1.e_approval.submissions.comments.index');
     Route::post('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentStoreController::class)->name('api.tenant.v1.e_approval.submissions.comments.store');
+    Route::post('e-approval/submissions/{submission}/training/invites', [EApprovalPublicationTrainingController::class, 'invite'])->name('api.tenant.v1.e_approval.submissions.training.invites');
+    Route::post('e-approval/submissions/{submission}/training/complete', [EApprovalPublicationTrainingController::class, 'complete'])->name('api.tenant.v1.e_approval.submissions.training.complete');
+    Route::delete('e-approval/submissions/{submission}/training/invites/{invite}', [EApprovalPublicationTrainingController::class, 'remove'])->name('api.tenant.v1.e_approval.submissions.training.invites.destroy');
     Route::post('e-approval/submissions/{submission}/attachments', EApprovalSubmissionAttachmentStoreController::class)->name('api.tenant.v1.e_approval.submissions.attachments.store');
     Route::get('e-approval/attachments/{attachment}', EApprovalAttachmentDownloadController::class)->name('api.tenant.v1.e_approval.attachments.show');
     Route::delete('e-approval/attachments/{attachment}', EApprovalSubmissionAttachmentDestroyController::class)->name('api.tenant.v1.e_approval.attachments.destroy');

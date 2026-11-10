@@ -11,6 +11,7 @@ use App\Core\Support\ModuleListExportQuery;
 use App\Modules\Identity\Models\ModuleListExport;
 use App\Modules\Identity\Services\ModuleListExportService;
 use App\Modules\Ticketing\Services\TicketingPlanFeaturesService;
+use App\Modules\Ticketing\Services\TicketingSchemaService;
 use App\Modules\Ticketing\Services\TicketingTicketService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

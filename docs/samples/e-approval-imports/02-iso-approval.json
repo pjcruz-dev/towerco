@@ -17,7 +17,6 @@
           "department": "department",
           "revision_number": "revision_number",
           "effective_date": "effective_date",
-          "next_review_date": "review_date",
           "change_summary": "change_summary"
         },
         "attachmentField": "attachments"
@@ -137,27 +136,6 @@
           }
         },
         "step_order": 4
-      },
-      {
-        "type": "date",
-        "name": "review_date",
-        "label": "Next review date",
-        "semantic_type": "date",
-        "behavior": {},
-        "formula": null,
-        "validation": {
-          "required": false,
-          "help_text": "Optional compliance reminder on the master record after approval."
-        },
-        "options": {
-          "layout": {
-            "width": "half",
-            "row_id": "iso_new_dates",
-            "slot": 1,
-            "row_columns": 2
-          }
-        },
-        "step_order": 5
       },
       {
         "type": "section",

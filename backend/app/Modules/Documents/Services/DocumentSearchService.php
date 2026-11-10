@@ -27,7 +27,11 @@ final class DocumentSearchService
             ->whereNull('deleted_at')
             ->where(static function ($q) use ($like): void {
                 $q->where('title', 'like', $like)
-                    ->orWhere('original_filename', 'like', $like);
+                    ->orWhere('original_filename', 'like', $like)
+                    ->orWhereHas('site', static function ($site) use ($like): void {
+                        $site->where('site_code', 'like', $like)
+                            ->orWhere('name', 'like', $like);
+                    });
             })
             ->with(['site:id,site_code,name'])
             ->orderByDesc('last_touched_at')

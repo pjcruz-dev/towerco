@@ -9,6 +9,8 @@ export type ControlledReportQuery = {
   status: string;
   review: string;
   file: string;
+  publishedFrom: string;
+  publishedTo: string;
 };
 
 const PERIODS = new Set<ControlledReportPeriod>([30, 90, 365]);
@@ -26,6 +28,8 @@ export function readControlledReportQuery(params: URLSearchParams): ControlledRe
     status: params.get("filter[status]") ?? "",
     review: params.get("filter[review]") ?? "",
     file: params.get("filter[file]") ?? "",
+    publishedFrom: params.get("published_from") ?? "",
+    publishedTo: params.get("published_to") ?? "",
   };
 }
 

@@ -43,9 +43,14 @@ final class EApprovalLiveStepMatcher
     public static function whenKey(EApprovalWorkflowStep $step): string
     {
         $condition = is_array($step->condition) ? $step->condition : [];
+        $duty = strtolower(trim((string) ($condition['duty'] ?? '')));
+        if ($duty === '') {
+            $duty = 'approve';
+        }
+        $optional = ! empty($condition['optional']) ? 'optional' : 'required';
         $when = $condition['when'] ?? [];
         if (! is_array($when)) {
-            return '';
+            return $duty.'#'.$optional;
         }
 
         $parts = [];
@@ -59,7 +64,7 @@ final class EApprovalLiveStepMatcher
         }
         sort($parts);
 
-        return implode(';', $parts);
+        return $duty.'#'.$optional.'#'.implode(';', $parts);
     }
 
     private static function compiledOccurrenceIndex(EApprovalWorkflowStep $compiled, string $whenKey): int

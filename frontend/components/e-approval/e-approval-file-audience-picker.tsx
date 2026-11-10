@@ -17,6 +17,8 @@ type Props = {
   onAudienceChange: (audience: EApprovalFileAudience) => void;
   onRecipientIdsChange: (ids: string[]) => void;
   disabled?: boolean;
+  /** Controlled documents send a register link. The published file is not attached. */
+  linkOnly?: boolean;
   timingNote?: string;
 };
 
@@ -26,6 +28,7 @@ export function EApprovalFileAudiencePicker({
   onAudienceChange,
   onRecipientIdsChange,
   disabled,
+  linkOnly = false,
   timingNote,
 }: Props) {
   const [search, setSearch] = useState("");
@@ -53,20 +56,23 @@ export function EApprovalFileAudiencePicker({
     return [...picked, ...matched];
   }, [chosen, search, users]);
 
+  const receives = linkOnly
+    ? "a link to the current published file. The file is not attached."
+    : "the published files.";
   const confirmation =
     audience === "everyone"
-      ? "Everyone with an email address receives the published files."
+      ? `Everyone with an email address receives ${receives}`
       : chosen.length === 0
         ? audience === "specific_person"
-          ? "Choose one person. Their name stays here so you can see who will receive the files."
-          : "Choose at least one person. Their names stay here so you can see who will receive the files."
+          ? "Choose one person. Their name stays here so you can see who will be notified."
+          : "Choose at least one person. Their names stay here so you can see who will be notified."
         : chosen.length === 1
-          ? `${chosen[0]!.name} (${chosen[0]!.email}) receives the published files.`
-          : `${chosen.map((user) => user.name).join(", ")} receive the published files.`;
+          ? `${chosen[0]!.name} (${chosen[0]!.email}) receives ${receives}`
+          : `${chosen.map((user) => user.name).join(", ")} receive ${receives}`;
 
   return (
     <div className="max-w-md space-y-2">
-      <Label htmlFor="ea-file-audience">Who receives the files</Label>
+      <Label htmlFor="ea-file-audience">{linkOnly ? "Who receives the link" : "Who receives the files"}</Label>
       <Select
         id="ea-file-audience"
         value={audience}
@@ -136,7 +142,7 @@ export function EApprovalFileAudiencePicker({
         </div>
       )}
       <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-foreground">
-        <p className="font-medium">Files will be sent to</p>
+        <p className="font-medium">{linkOnly ? "Link will be sent to" : "Files will be sent to"}</p>
         <p className="mt-1 text-muted-foreground">{confirmation}</p>
         {chosen.length > 1 ? (
           <ul className="mt-2 space-y-1 text-muted-foreground">

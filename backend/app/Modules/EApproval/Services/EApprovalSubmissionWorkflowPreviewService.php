@@ -7,8 +7,7 @@ namespace App\Modules\EApproval\Services;
 use App\Modules\EApproval\Models\EApprovalForm;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
-use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
-use App\Modules\EApproval\Support\EApprovalLiveStepMatcher;
+use App\Modules\EApproval\Models\EApprovalWorkflowStep;
 use App\Modules\EApproval\Support\EApprovalWorkflowStepDefinitionSupport;
 
 /**
@@ -114,7 +113,11 @@ final class EApprovalSubmissionWorkflowPreviewService
                 $warning = null;
             }
 
-            if ($match === null && $this->optionalStepWasNotSent($submission, $order, $currentStep, $isTerminal)) {
+            if ($match === null && $isTerminal && $currentStep > 0 && $order > $currentStep) {
+                $runtimeStatus = 'not_sent';
+                $pathReason = __('Not sent. The request finished before this step.');
+                $warning = null;
+            } elseif ($match === null && $this->optionalStepWasNotSent($submission, $order, $currentStep, $isTerminal)) {
                 $runtimeStatus = 'not_sent';
                 $pathReason = __('Not sent. The previous approver finished without this step.');
                 $warning = null;
@@ -260,25 +263,21 @@ final class EApprovalSubmissionWorkflowPreviewService
             return false;
         }
 
-        $submission->loadMissing('form');
-        if (! EApprovalFormWorkflowOptions::optionalApproverEnabled(
-            is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
-        )) {
-            return false;
+        $submission->loadMissing('form.workflowTemplate.steps');
+        $advance = app(EApprovalSubmissionWorkflowResolver::class)->stepsForAdvance($submission);
+        $template = $submission->form?->workflowTemplate?->steps ?? collect();
+
+        foreach ($advance->concat($template) as $step) {
+            if (! $step instanceof EApprovalWorkflowStep || (int) $step->step_order !== $order) {
+                continue;
+            }
+            $condition = is_array($step->condition) ? $step->condition : [];
+            if (! empty($condition['optional'])) {
+                return true;
+            }
         }
 
-        $steps = app(EApprovalSubmissionWorkflowResolver::class)->stepsForAdvance($submission);
-
-        return $steps->contains(function ($step) use ($submission, $order): bool {
-            if (! $step instanceof EApprovalWorkflowStep || (int) $step->step_order !== $order) {
-                return false;
-            }
-            $live = EApprovalLiveStepMatcher::match($submission, $step);
-            $source = $live ?? $step;
-            $condition = is_array($source->condition) ? $source->condition : [];
-
-            return ! empty($condition['optional']);
-        });
+        return false;
     }
 
     /**

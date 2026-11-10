@@ -7,6 +7,7 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import {
   EApprovalWorkflowStepShow,
   buildWorkflowStepShowItems,
+  withPublicationTrainingStep,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import {
   createActionsColumn,
@@ -37,12 +38,15 @@ export const eApprovalSubmissionTableColumns: ColumnDef<EApprovalSubmissionListR
     (row) => (
       <EApprovalWorkflowStepShow
         variant="compact"
-        steps={buildWorkflowStepShowItems({
-          currentStep: row.current_step,
-          stepCount: row.step_count,
-          status: row.status,
-          workflowSteps: row.workflow_steps,
-        })}
+        steps={withPublicationTrainingStep(
+          buildWorkflowStepShowItems({
+            currentStep: row.current_step,
+            stepCount: row.step_count,
+            status: row.status,
+            workflowSteps: row.workflow_steps,
+          }),
+          row.publication_training,
+        )}
         emptyLabel="—"
       />
     ),

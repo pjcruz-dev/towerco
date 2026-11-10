@@ -51,6 +51,8 @@ type Props = {
   onSelectStep: (index: number) => void;
   /** Insert step or routing at array index (end of prior band / start of next). */
   onInsert: (kind: WorkflowAddKind, insertAt: number) => void;
+  /** Read-only last band. People are chosen on each request. */
+  publicationTrainingNote?: string | null;
   className?: string;
 };
 
@@ -265,6 +267,7 @@ export function EApprovalWorkflowOrderDiagram({
   selectedStepIndex,
   onSelectStep,
   onInsert,
+  publicationTrainingNote = null,
   className,
 }: Props) {
   const bands = buildWorkflowEditorDiagram(steps, fields, {
@@ -382,6 +385,15 @@ export function EApprovalWorkflowOrderDiagram({
             ariaLabel="Insert before end"
             onInsert={(kind) => onInsert(kind, steps.length)}
           />
+          {publicationTrainingNote ? (
+            <div className="flex w-full flex-col items-center">
+              <div className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-left text-sm shadow-sm">
+                <p className="font-medium text-foreground">Training</p>
+                <p className="mt-1 text-xs text-muted-foreground">{publicationTrainingNote}</p>
+              </div>
+              <WorkflowDiagramConnector />
+            </div>
+          ) : null}
           <WorkflowDiagramTerminal label="End" />
         </SortableContext>
       </DndContext>

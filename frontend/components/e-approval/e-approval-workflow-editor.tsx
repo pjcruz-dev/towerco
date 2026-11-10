@@ -40,6 +40,7 @@ import { getErrorMessage } from "@/lib/api/error";
 import { previewEApprovalFormWorkflow, testEApprovalManagerLookup } from "@/lib/api/modules/e-approval-api";
 import { parseSelectChoices } from "@/modules/e-approval/field-options";
 import { E_APPROVAL_STEP_TYPES } from "@/modules/e-approval/field-types";
+import { trainingTypesList } from "@/modules/e-approval/form-workflow-options";
 import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
 import {
   addFixedApproverToLadderCase,
@@ -115,6 +116,7 @@ type Props = {
   /** Liquidation and reimbursement only. Other forms never show the settlement tick. */
   formFamily?: string | null;
   mailSettings?: FormMailSettings;
+  publicationTraining?: { enabled: boolean; field: string; values: string } | null;
 };
 
 type StepCardProps = {
@@ -959,6 +961,20 @@ function WorkflowStepCard({
         </span>
       </label>
 
+      <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={step.sends_file_link === true || step.condition?.sends_file_link === true}
+          onCheckedChange={(checked) => onUpdate({ sends_file_link: checked === true })}
+        />
+        <span>
+          <span className="font-medium">Send the current file link</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            If this step finishes the request, this approver chooses who receives a link to the current published file. The message does not include the file. After a new revision is published, that link opens the new file. An obsolete revision cannot be opened from it.
+          </span>
+        </span>
+      </label>
+
       {earlierStepOrders.length > 0 ? (
         <div className="mt-3 space-y-2">
           <label className="flex cursor-pointer items-start gap-2 text-sm">
@@ -1140,6 +1156,40 @@ function findSegmentForStepIndex(
   return null;
 }
 
+function trainingPathNote(field: string, values: string, fields: { name: string; label?: string | null }[]): string {
+  const name = field.trim();
+  if (name === "") {
+    return "Every request on this form. After the last approval, the requestor invites people. Publication waits until they finish.";
+  }
+  const label = fields.find((item) => item.name === name)?.label?.trim() || name;
+  const listed = trainingTypesList(values);
+  if (listed.length === 0) {
+    return `Every request with ${label} filled in. The requestor invites people on that request.`;
+  }
+
+  return `Only when ${label} is ${listed.join(", ")}. The requestor invites people on that request.`;
+}
+
+function previewTrainingApplies(field: string, values: string, previewValues: Record<string, string>): boolean {
+  const name = field.trim();
+  if (name === "") {
+    return true;
+  }
+  const listed = trainingTypesList(values);
+  if (listed.length === 0) {
+    return true;
+  }
+  const raw = (previewValues[name] ?? "").trim().toLowerCase();
+  if (raw === "") {
+    return false;
+  }
+
+  return listed.some((type) => {
+    const needle = type.toLowerCase();
+    return raw === needle || (needle.length >= 3 && raw.includes(needle));
+  });
+}
+
 export function EApprovalWorkflowEditor({
   fields,
   steps,
@@ -1149,6 +1199,7 @@ export function EApprovalWorkflowEditor({
   formFamily,
   formName = "",
   mailSettings,
+  publicationTraining = null,
 }: Props) {
   const settlementFamily =
     formFamily === "liquidation" || formFamily === "reimbursement" ? formFamily : null;
@@ -1173,7 +1224,10 @@ export function EApprovalWorkflowEditor({
   const [parallelQuorum, setParallelQuorum] = useState(2);
   const [choiceApprovers, setChoiceApprovers] = useState<Record<string, string>>({});
 
-  const hasManagerStep = steps.some((s) => s.type === "manager");
+  const publicationTrainingNote = publicationTraining?.enabled
+    ? trainingPathNote(publicationTraining.field, publicationTraining.values, fields)
+    : null;
+  const hasManagerStep = steps.some((step) => step.type === "manager");
   const approverFieldOptions = useMemo(() => getApproverFieldOptions(fields), [fields]);
   const approverListFieldOptions = useMemo(() => getApproverListFieldOptions(fields), [fields]);
   const fieldMapSourceOptions = useMemo(() => getFieldMapSourceOptions(fields), [fields]);
@@ -1289,6 +1343,24 @@ export function EApprovalWorkflowEditor({
             delete condition.optional;
           }
           return { ...step, optional: Boolean(patch.optional), condition };
+        }),
+      );
+      return;
+    }
+    if ("sends_file_link" in patch) {
+      const order = steps[index]?.step_order;
+      onStepsChange(
+        steps.map((step, itemIndex) => {
+          if (itemIndex !== index && step.step_order !== order) {
+            return step;
+          }
+          const condition = { ...(step.condition ?? {}) };
+          if (patch.sends_file_link) {
+            condition.sends_file_link = true;
+          } else {
+            delete condition.sends_file_link;
+          }
+          return { ...step, sends_file_link: Boolean(patch.sends_file_link), condition };
         }),
       );
       return;
@@ -1809,6 +1881,7 @@ export function EApprovalWorkflowEditor({
             }
             return typeLabel;
           }}
+          publicationTrainingNote={publicationTrainingNote}
         />
       ) : null}
 
@@ -2449,7 +2522,15 @@ export function EApprovalWorkflowEditor({
               <p className="text-sm font-medium">
                 {previewMutation.data.matched_rule_label ?? "No active steps"}
               </p>
-              <EApprovalWorkflowPathDiagram preview={previewMutation.data} />
+              <EApprovalWorkflowPathDiagram
+                preview={previewMutation.data}
+                training={
+                  publicationTraining?.enabled
+                  && previewTrainingApplies(publicationTraining.field, publicationTraining.values, previewValues)
+                    ? { holding: true, invites: [] }
+                    : null
+                }
+              />
             </div>
           ) : null}
         </div>

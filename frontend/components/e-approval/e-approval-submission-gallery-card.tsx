@@ -7,6 +7,7 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import {
   EApprovalWorkflowStepShow,
   buildWorkflowStepShowItems,
+  withPublicationTrainingStep,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import type { EApprovalSubmissionListRow } from "@/modules/e-approval/types";
 import { useAuthStore } from "@/stores/auth-store";
@@ -73,12 +74,15 @@ export function EApprovalSubmissionGalleryCard({ submission, helpStatus, helpAct
           <div data-help={helpStatus ? "ea-submissions-step-show" : undefined}>
             <EApprovalWorkflowStepShow
               variant="compact"
-              steps={buildWorkflowStepShowItems({
-                currentStep: submission.current_step,
-                stepCount: submission.step_count,
-                status: submission.status,
-                workflowSteps: submission.workflow_steps,
-              })}
+              steps={withPublicationTrainingStep(
+                buildWorkflowStepShowItems({
+                  currentStep: submission.current_step,
+                  stepCount: submission.step_count,
+                  status: submission.status,
+                  workflowSteps: submission.workflow_steps,
+                }),
+                submission.publication_training,
+              )}
             />
           </div>
         </div>

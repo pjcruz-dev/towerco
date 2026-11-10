@@ -210,6 +210,50 @@ final class TicketingModuleTest extends TestCase
         $this->assertNull($split);
     }
 
+    public function test_export_downloads_workbook_and_selected_rows(): void
+    {
+        $selected = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Export me',
+                'priority' => 'high',
+            ])
+            ->assertCreated();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->postJson('/api/v1/ticketing/tickets', [
+                'title' => 'Leave me out',
+                'priority' => 'low',
+            ])
+            ->assertCreated();
+
+        $selectedId = (string) $selected->json('data.id');
+
+        $xlsx = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->get('/api/v1/ticketing/tickets/export?format=xlsx');
+
+        $xlsx->assertOk();
+        $this->assertStringContainsString(
+            'spreadsheetml.sheet',
+            (string) $xlsx->headers->get('content-type'),
+        );
+        $this->assertStringStartsWith('PK', $xlsx->streamedContent());
+
+        $csv = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->get('/api/v1/ticketing/tickets/export?'.http_build_query([
+                'format' => 'csv',
+                'ids' => [$selectedId],
+            ]));
+
+        $csv->assertOk();
+        $body = $csv->streamedContent();
+        $this->assertStringContainsString('Export me', $body);
+        $this->assertStringNotContainsString('Leave me out', $body);
+    }
+
     public function test_can_create_ticket_with_comment_flow(): void
     {
         $create = $this->actingAsTenantAdmin()

@@ -663,6 +663,22 @@ final class SubmissionWorkflowService
         return $this->optionalContinuation($submission) !== null;
     }
 
+    public function currentStepSendsFileLink(EApprovalSubmission $submission): bool
+    {
+        $current = (int) $submission->current_step;
+        $steps = $this->workflowResolver->stepsForAdvance($submission)
+            ->filter(static fn (EApprovalWorkflowStep $step): bool => (int) $step->step_order === $current);
+
+        foreach ($steps as $step) {
+            $condition = is_array($step->condition) ? $step->condition : [];
+            if (! empty($condition['sends_file_link'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function optionalStepCanBeSkipped(EApprovalSubmission $submission, EApprovalWorkflowStep $step): bool
     {
         if (! $this->stepMarkedOptional($submission, $step)) {

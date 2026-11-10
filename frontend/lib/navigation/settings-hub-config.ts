@@ -86,16 +86,6 @@ export const settingsHubSections: SettingsHubSection[] = [
         requiredPermissions: [permissions.eApprovalSettingsManage],
       },
       {
-        id: "ea-doa",
-        title: "Approval policies",
-        description: "Delegation-of-authority matrix for compiled workflows.",
-        href: "/e-approval/approval-policies",
-        icon: ClipboardCheck,
-        section: "E-Forms",
-        module: "e_approval",
-        requiredPermissions: [permissions.eApprovalSettingsManage],
-      },
-      {
         id: "ea-master-data",
         title: "Master data",
         description: "Lookup sets used by forms, workflows, and vendor registration.",

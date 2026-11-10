@@ -1,6 +1,9 @@
 import {
   ClipboardCheck,
   ClipboardList,
+  File,
+  FileScan,
+  FileText,
   LifeBuoy,
   MapPin,
   Shapes,
@@ -17,6 +20,10 @@ const ENTITY_ICONS: Record<string, LucideIcon> = {
   "e_approval:submission": ClipboardCheck,
   "e_approval:form": ClipboardList,
   "ticketing:ticket": LifeBuoy,
+  "document_register:controlled_document": FileText,
+  "doc_extract:document": FileScan,
+  "doc_extract:template": FileScan,
+  "documents:document": File,
   "dynamic_entities:record": Shapes,
   "team_access:user": User,
 };
@@ -30,6 +37,9 @@ function entityTypeLabel(module: string, entityType: string): string {
     submission: "Submission",
     form: "Form",
     ticket: "Ticket",
+    controlled_document: "Controlled document",
+    document: "Document",
+    template: "Template",
     record: "Record",
     user: "User",
   };

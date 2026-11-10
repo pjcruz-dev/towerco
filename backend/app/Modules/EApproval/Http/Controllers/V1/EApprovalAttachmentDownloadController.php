@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\EApproval\Http\Controllers\V1;
 
+use App\Modules\Documents\Services\ControlledDocumentRegistryService;
 use App\Modules\EApproval\Models\EApprovalAttachment;
 use App\Modules\EApproval\Services\EApprovalFileStorageService;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
@@ -17,6 +18,7 @@ class EApprovalAttachmentDownloadController
         EApprovalAttachment $attachment,
         EApprovalFileStorageService $files,
         EApprovalSubmissionService $submissions,
+        ControlledDocumentRegistryService $registry,
     ): StreamedResponse {
         abort_unless($request->user()?->can('e_approval:submissions:view'), 403);
 
@@ -28,6 +30,15 @@ class EApprovalAttachmentDownloadController
         $canViewAll = $user->can('e_approval:forms:manage')
             || $user->can('e_approval:audit:view');
         $submissions->assertCanView($submission, $user, $canViewAll);
+
+        if ($registry->submissionFileIsObsolete((string) $submission->id)) {
+            abort_unless(
+                $user->can('documents:controlled:manage')
+                || $user->can('documents:controlled:approve')
+                || $user->can('documents:controlled:import'),
+                403,
+            );
+        }
 
         return $files->download($attachment);
     }

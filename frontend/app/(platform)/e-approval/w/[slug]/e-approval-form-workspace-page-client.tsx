@@ -13,6 +13,7 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import {
   EApprovalWorkflowStepShow,
   buildWorkflowStepShowItems,
+  withPublicationTrainingStep,
 } from "@/components/e-approval/e-approval-workflow-step-show";
 import {
   EApprovalWorkspaceStatusBreakdownChart,
@@ -512,12 +513,15 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
             return (
               <EApprovalWorkflowStepShow
                 variant="compact"
-                steps={buildWorkflowStepShowItems({
-                  currentStep: row.original.current_step,
-                  stepCount: row.original.step_count,
-                  status: row.original.status,
-                  workflowSteps: row.original.workflow_steps,
-                })}
+                steps={withPublicationTrainingStep(
+                  buildWorkflowStepShowItems({
+                    currentStep: row.original.current_step,
+                    stepCount: row.original.step_count,
+                    status: row.original.status,
+                    workflowSteps: row.original.workflow_steps,
+                  }),
+                  row.original.publication_training,
+                )}
                 emptyLabel="—"
               />
             );

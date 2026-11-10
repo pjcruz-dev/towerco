@@ -152,6 +152,7 @@ export function WorkflowDiagramNodeCard({
       : "border-border bg-card text-foreground",
     status === "pending" && "border-amber-300 dark:border-amber-800",
     status === "approved" && "border-green-300 dark:border-green-800",
+    status === "training_done" && "border-green-300 dark:border-green-800",
     status === "rejected" && "border-destructive/40",
     status === "returned" &&
       "border-dashed border-amber-300 bg-amber-500/5 text-foreground dark:border-amber-800",

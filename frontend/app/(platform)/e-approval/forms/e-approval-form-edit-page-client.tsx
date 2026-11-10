@@ -508,6 +508,14 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
       throw new Error("Add at least one workflow step with an approver before publishing.");
     }
 
+    const sendsFileLink = sanitizedSteps.some(
+      (step) => step.sends_file_link === true || step.condition?.sends_file_link === true,
+    );
+    metadata_json = mergeFormWorkflowOptionsIntoMetadata(metadata_json ?? {}, {
+      ...formWorkflowOptionsFromMetadata(metadata_json ?? {}),
+      sendApprovedFiles: sendsFileLink,
+    });
+
     const payload: Record<string, unknown> = {
       name: trimmedName,
       description: description.trim() || null,
@@ -1044,29 +1052,6 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
                     />
                   </label>
                 </div>
-                <label className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-3">
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">Use approval policy matrix</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Compile workflow steps from tenant DOA rules at submit time instead of static form steps.
-                    </span>
-                  </span>
-                  <Switch
-                    checked={Boolean(parseFormMetadataJson(metadataJson).use_approval_policy)}
-                    onCheckedChange={(checked) => {
-                      setMetadataJson((prev) => {
-                        const meta = parseFormMetadataJson(prev);
-                        if (checked) {
-                          meta.use_approval_policy = true;
-                        } else {
-                          delete meta.use_approval_policy;
-                        }
-
-                        return JSON.stringify(meta, null, 2);
-                      });
-                    }}
-                  />
-                </label>
                 <Label className="mt-4 block">
                   <span className="text-xs font-medium text-muted-foreground">Form metadata (JSON)</span>
                   <Textarea
@@ -1145,8 +1130,17 @@ export function EApprovalFormEditPageClient({ formId }: Props) {
               formFamily={typeof parsedMetadata.form_family === "string" ? parsedMetadata.form_family : null}
               formName={name}
               mailSettings={mailSettings}
+              publicationTraining={{
+                enabled: workflowOptions.mandatoryTraining,
+                field: workflowOptions.trainingField,
+                values: workflowOptions.trainingValues,
+              }}
             />
-            <EApprovalFormWorkflowOptionsCard value={workflowOptions} onChange={setWorkflowOptions} />
+            <EApprovalFormWorkflowOptionsCard
+              value={workflowOptions}
+              onChange={setWorkflowOptions}
+              fields={fields}
+            />
             <EApprovalFormRevisionSettingsCard
               value={revisionSettings}
               onChange={setRevisionSettings}

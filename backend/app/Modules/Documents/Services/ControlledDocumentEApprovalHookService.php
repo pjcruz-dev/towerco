@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Services;
 
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Services\EApprovalPublicationTrainingService;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Facades\Log;
@@ -51,6 +52,11 @@ final class ControlledDocumentEApprovalHookService
     public function afterSubmissionMutation(EApprovalSubmission $submission, ?TenantUser $actor = null): void
     {
         if ((string) $submission->status !== EApprovalSubmissionStatus::APPROVED) {
+            return;
+        }
+
+        $training = app(EApprovalPublicationTrainingService::class);
+        if ($training->holdIfRequired($submission)) {
             return;
         }
 

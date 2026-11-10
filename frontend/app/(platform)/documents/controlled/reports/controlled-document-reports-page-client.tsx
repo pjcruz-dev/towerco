@@ -14,6 +14,7 @@ import { FilterSelect } from "@/components/forms/filter-select";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -43,12 +44,14 @@ export function ControlledDocumentReportsPageClient() {
   const [exporting, setExporting] = useState(false);
 
   const reportParams = {
-    period: queryState.period,
+    period: queryState.publishedFrom || queryState.publishedTo ? undefined : queryState.period,
     department: queryState.department || undefined,
     document_type: queryState.documentType || undefined,
     status: queryState.status || undefined,
     review: queryState.review || undefined,
     file: queryState.file || undefined,
+    published_from: queryState.publishedFrom || undefined,
+    published_to: queryState.publishedTo || undefined,
   };
 
   const reportQuery = useQuery({
@@ -61,7 +64,13 @@ export function ControlledDocumentReportsPageClient() {
   const documentTypes = data?.facets.document_types ?? [];
   const total = data?.counts.total ?? 0;
   const filtered = Boolean(
-    queryState.department || queryState.documentType || queryState.status || queryState.file || queryState.period !== 90,
+    queryState.department
+      || queryState.documentType
+      || queryState.status
+      || queryState.file
+      || queryState.publishedFrom
+      || queryState.publishedTo
+      || queryState.period !== 90,
   );
 
   function replace(patch: Record<string, string | null>) {
@@ -133,13 +142,40 @@ export function ControlledDocumentReportsPageClient() {
             <FilterSelect
               id="cdr-report-period"
               label="Period"
-              value={String(queryState.period)}
-              onChange={(value) => replace({ period: value === "90" ? null : value })}
+              value={queryState.publishedFrom || queryState.publishedTo ? "custom" : String(queryState.period)}
+              onChange={(value) => {
+                if (value === "custom") {
+                  return;
+                }
+                replace({ period: value === "90" ? null : value, published_from: null, published_to: null });
+              }}
             >
+              {queryState.publishedFrom || queryState.publishedTo ? <option value="custom">Custom range</option> : null}
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
               <option value="365">Last 365 days</option>
             </FilterSelect>
+          </div>
+          <div>
+            <label htmlFor="cdr-report-published-from" className="text-xs font-medium text-muted-foreground">
+              Published from
+            </label>
+            <DatePicker
+              id="cdr-report-published-from"
+              value={queryState.publishedFrom}
+              onChange={(value) => replace({ published_from: value || null, period: null })}
+            />
+          </div>
+          <div>
+            <label htmlFor="cdr-report-published-to" className="text-xs font-medium text-muted-foreground">
+              Published to
+            </label>
+            <DatePicker
+              id="cdr-report-published-to"
+              value={queryState.publishedTo}
+              minDate={queryState.publishedFrom || undefined}
+              onChange={(value) => replace({ published_to: value || null, period: null })}
+            />
           </div>
           <div>
             <FilterSelect
@@ -204,6 +240,8 @@ export function ControlledDocumentReportsPageClient() {
               onClick={() =>
                 replace({
                   period: null,
+                  published_from: null,
+                  published_to: null,
                   "filter[department]": null,
                   "filter[document_type]": null,
                   "filter[status]": null,

@@ -7,6 +7,7 @@ namespace App\Modules\Documents\Services;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Models\ControlledDocumentRevision;
 use App\Modules\Documents\Support\ControlledDocumentMasterLabel;
+use App\Modules\Documents\Support\ControlledDocumentPublicationRules;
 use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use App\Modules\Documents\Support\ControlledDocumentStatus;
 use App\Modules\Documents\Support\ControlledDocumentSyncConfig;
@@ -100,7 +101,11 @@ final class ControlledDocumentSyncService
             }
 
             $title = $this->fieldValue($values, $config->fieldMap, 'title') ?: $documentCode;
-            $effectiveDate = $this->parseDate($this->fieldValue($values, $config->fieldMap, 'effective_date'));
+            $publishedAt = now();
+            $effectiveDate = ControlledDocumentPublicationRules::alignEffectiveDate(
+                $this->parseDate($this->fieldValue($values, $config->fieldMap, 'effective_date')),
+                $publishedAt,
+            );
             $nextReviewDate = $this->parseDate($this->fieldValue($values, $config->fieldMap, 'next_review_date'));
             $changeSummary = $this->fieldValue($values, $config->fieldMap, 'change_summary');
 
@@ -123,7 +128,7 @@ final class ControlledDocumentSyncService
                     'e_approval_form_id' => $form->id,
                     // Registry ownership follows the requestor (DCF author), not the final approver.
                     'created_by_id' => $authorId,
-                    'published_at' => now(),
+                    'published_at' => $publishedAt,
                 ]);
             } else {
                 $existing->fill([
@@ -133,9 +138,9 @@ final class ControlledDocumentSyncService
                     'department' => $this->fieldValue($values, $config->fieldMap, 'department') ?: $existing->department,
                     'current_revision' => $revisionNumber,
                     'status' => ControlledDocumentStatus::PUBLISHED,
-                    'effective_date' => $effectiveDate ?? $existing->effective_date,
+                    'effective_date' => $effectiveDate,
                     'next_review_date' => $nextReviewDate ?? $existing->next_review_date,
-                    'published_at' => now(),
+                    'published_at' => $publishedAt,
                 ]);
                 $existing->save();
 
@@ -365,12 +370,17 @@ final class ControlledDocumentSyncService
             $dcfNumber = $this->dcfNumbers->next();
         }
 
+        $publishedAt = now();
+        $effectiveDate = ControlledDocumentPublicationRules::alignEffectiveDate(
+            $this->parseDate($this->fieldValue($values, $fieldMap, 'effective_date')) ?? $document->effective_date,
+            $publishedAt,
+        );
         $document->fill([
             'title' => $this->fieldValue($values, $fieldMap, 'title') ?: $document->title,
             'dcf_number' => $dcfNumber,
             'status' => ControlledDocumentStatus::PUBLISHED,
-            'published_at' => now(),
-            'effective_date' => $this->parseDate($this->fieldValue($values, $fieldMap, 'effective_date')) ?? $document->effective_date,
+            'published_at' => $publishedAt,
+            'effective_date' => $effectiveDate,
             'next_review_date' => $this->parseDate($this->fieldValue($values, $fieldMap, 'next_review_date')) ?? $document->next_review_date,
         ]);
         $document->save();
@@ -378,6 +388,7 @@ final class ControlledDocumentSyncService
         $revision->fill([
             'dcf_number' => $dcfNumber,
             'status' => ControlledDocumentRevisionStatus::PUBLISHED,
+            'effective_date' => $effectiveDate,
             'change_summary' => $this->fieldValue($values, $fieldMap, 'change_summary') ?? $revision->change_summary,
             'approved_by_id' => $actor?->id,
             'approved_at' => now(),

@@ -18,9 +18,10 @@ export function EApprovalStatusBadge({ status, label, kind, className }: Props) 
   if (!normalized && !text) {
     return <span className="text-muted-foreground">—</span>;
   }
+  const toneStatus = text === "Pending publication" ? "pending" : normalized || "pending";
 
   return (
-    <StatusBadge tone={resolveEApprovalStatusTone(normalized || "pending", kind)} className={className}>
+    <StatusBadge tone={resolveEApprovalStatusTone(toneStatus, kind)} className={className}>
       {text}
     </StatusBadge>
   );

@@ -78,6 +78,9 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 'comment_replied' => "{$prefix} Reply on — {$documentNo}",
                 'payment_held' => "{$prefix} Payment on hold — {$documentNo}",
                 'payment_released' => "{$prefix} Payment released — {$documentNo}",
+                'training_required' => "{$prefix} Training required — {$documentNo}",
+                'training_invited' => "{$prefix} Training required — {$documentNo}",
+                'publication_released' => "{$prefix} Document published — {$documentNo}",
                 'settlement_held' => "{$prefix} Settlement on hold — {$documentNo}",
                 'settlement_paid' => "{$prefix} Settlement paid — {$documentNo}",
                 'settlement_received' => "{$prefix} Cash received — {$documentNo}",
@@ -106,8 +109,16 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
 
             $submissionId = (string) $this->submission->id;
             $commentEvent = in_array($this->event, ['comment_added', 'comment_replied', 'comment_mention'], true);
-            $actionPath = "/e-approval/submissions/{$submissionId}?tab=".($commentEvent ? 'activity' : 'approvals');
-            $actionLabel = $commentEvent ? 'Open comment' : 'Open review';
+            $trainingEvent = in_array($this->event, ['training_invited', 'training_required', 'publication_released'], true);
+            $actionPath = $trainingEvent
+                ? "/e-approval/submissions/{$submissionId}"
+                : "/e-approval/submissions/{$submissionId}?tab=".($commentEvent ? 'activity' : 'approvals');
+            $actionLabel = match (true) {
+                $commentEvent => 'Open comment',
+                $this->event === 'training_invited', $this->event === 'training_required' => 'Open training',
+                $this->event === 'publication_released' => 'Open request',
+                default => 'Open review',
+            };
 
             $message = (new MailMessage)
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
@@ -186,6 +197,17 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 if ($this->detail !== null && trim($this->detail) !== '') {
                     $message->line($this->detail);
                 }
+            } elseif ($this->event === 'training_required') {
+                $message->line(__('Approvals are finished. This document waits for mandatory training.'));
+                $message->line(__('Invite the people who must complete it. The published date is the day training finishes, and the effective date will not be earlier than that day.'));
+            } elseif ($this->event === 'training_invited') {
+                $message->line(__(':name invited you to complete mandatory training before this document is published.', [
+                    'name' => $this->actorName ?? __('The requestor'),
+                ]));
+                $message->line(__('Open the request and mark training complete when you finish.'));
+            } elseif ($this->event === 'publication_released') {
+                $message->line(__('Training is complete. This document is published.'));
+                $message->line(__('Open the current file from the register. Older revisions are not attached.'));
             } elseif ($this->event === 'payment_released') {
                 $message->line(__(':name released the payment. The request continues.', [
                     'name' => $this->actorName ?? __('An approver'),

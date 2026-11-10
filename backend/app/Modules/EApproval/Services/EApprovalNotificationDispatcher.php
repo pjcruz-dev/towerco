@@ -111,6 +111,14 @@ final class EApprovalNotificationDispatcher
     }
 
     /**
+     * @param  list<string>  $userIds
+     */
+    public function dispatchTrainingInvites(EApprovalSubmission $submission, array $userIds, ?string $actorName): void
+    {
+        $this->sendEventToUsers($submission, $userIds, 'training_invited', $actorName);
+    }
+
+    /**
      * Opt-in mail to the anonymous external submitter. Does not affect tenant-user mail.
      *
      * @param  list<array{file_name: string, url: string}>  $packageLinks

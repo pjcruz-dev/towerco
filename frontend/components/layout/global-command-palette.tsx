@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Search } from "lucide-react";
 
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
+import { isCanceledRequestError } from "@/lib/api/error";
 import { fetchWorkspaceSearch } from "@/lib/api/modules/workspace-search-api";
 import { workspaceSearchResultsToCommandItems } from "@/lib/navigation/workspace-entity-search";
 import {
@@ -46,14 +47,38 @@ function entityStatusChipClass(module: string | undefined, status: string | null
   return "border-border bg-muted/50 text-muted-foreground";
 }
 
-const ENTITY_SEARCH_DEBOUNCE_MS = 350;
+const ENTITY_SEARCH_DEBOUNCE_MS = 250;
 const ENTITY_SEARCH_MIN_CHARS = 2;
-const ENTITY_SEARCH_LIMIT = 4;
+const ENTITY_SEARCH_LIMIT = 6;
 
 type PaletteSection = {
   label: string;
   items: WorkspaceCommandItem[];
 };
+
+function highlightMatch(text: string, query: string): ReactNode {
+  const needle = query.trim();
+  if (needle.length < 2) {
+    return text;
+  }
+
+  const index = text.toLowerCase().indexOf(needle.toLowerCase());
+  if (index < 0) {
+    return text;
+  }
+
+  return (
+    <>
+      {text.slice(0, index)}
+      <span className="font-semibold text-foreground">{text.slice(index, index + needle.length)}</span>
+      {text.slice(index + needle.length)}
+    </>
+  );
+}
+
+function looksLikeCode(value: string): boolean {
+  return /^[A-Z0-9]+(?:[-/][A-Z0-9]+)+$/i.test(value.trim());
+}
 
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") {
@@ -64,9 +89,12 @@ function isMacPlatform(): boolean {
 }
 
 const ENTITY_MODULE_ORDER = [
-  "dynamic_entities",
+  "document_register",
   "e_approval",
   "ticketing",
+  "doc_extract",
+  "documents",
+  "dynamic_entities",
   "asset_management",
   "team_access",
   "ai_assistant",
@@ -143,9 +171,12 @@ export function GlobalCommandPalette() {
   const [recent, setRecent] = useState<WorkspaceCommandItem[]>([]);
   const [entityResults, setEntityResults] = useState<WorkspaceCommandItem[]>([]);
   const [entitySearchLoading, setEntitySearchLoading] = useState(false);
+  const [entitySearchError, setEntitySearchError] = useState(false);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const entitySearchRequestId = useRef(0);
+  const wasOpen = useRef(false);
 
   const allLookupItems = useMemo(
     () => [...index.actions, ...index.navigate, ...workspaceNavigateItems],
@@ -153,14 +184,18 @@ export function GlobalCommandPalette() {
   );
 
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpen.current) {
       setRecent(readWorkspaceCommandRecent(allLookupItems));
       setQuery("");
       setSelectedIndex(0);
       setEntityResults([]);
       setEntitySearchLoading(false);
+      setEntitySearchError(false);
       window.setTimeout(() => inputRef.current?.focus(), 0);
+    } else if (open) {
+      setRecent(readWorkspaceCommandRecent(allLookupItems));
     }
+    wasOpen.current = open;
   }, [allLookupItems, open]);
 
   useEffect(() => {
@@ -169,6 +204,7 @@ export function GlobalCommandPalette() {
     if (!open || trimmed.length < ENTITY_SEARCH_MIN_CHARS) {
       setEntityResults([]);
       setEntitySearchLoading(false);
+      setEntitySearchError(false);
       return;
     }
 
@@ -176,6 +212,8 @@ export function GlobalCommandPalette() {
     entitySearchRequestId.current = requestId;
     const controller = new AbortController();
     setEntitySearchLoading(true);
+    setEntitySearchError(false);
+    setEntityResults([]);
 
     const timer = window.setTimeout(() => {
       fetchWorkspaceSearch(trimmed, ENTITY_SEARCH_LIMIT, controller.signal)
@@ -185,24 +223,15 @@ export function GlobalCommandPalette() {
           }
 
           setEntityResults(workspaceSearchResultsToCommandItems(results));
+          setEntitySearchError(false);
         })
         .catch((error: unknown) => {
-          if (entitySearchRequestId.current !== requestId) {
-            return;
-          }
-          if (
-            (typeof error === "object" &&
-              error !== null &&
-              "code" in error &&
-              (error as { code?: string }).code === "ERR_CANCELED") ||
-            (typeof DOMException !== "undefined" &&
-              error instanceof DOMException &&
-              error.name === "AbortError")
-          ) {
+          if (entitySearchRequestId.current !== requestId || isCanceledRequestError(error)) {
             return;
           }
 
           setEntityResults([]);
+          setEntitySearchError(true);
         })
         .finally(() => {
           if (entitySearchRequestId.current === requestId) {
@@ -215,7 +244,7 @@ export function GlobalCommandPalette() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, query]);
+  }, [open, query, searchAttempt]);
 
   const sections = useMemo((): PaletteSection[] => {
     const trimmed = query.trim();
@@ -269,6 +298,11 @@ export function GlobalCommandPalette() {
     }
   }, [flatItems.length, selectedIndex]);
 
+  useEffect(() => {
+    const selected = listRef.current?.querySelector<HTMLElement>(`[data-command-index="${selectedIndex}"]`);
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex, flatItems.length]);
+
   const shortcutLabel = isMacPlatform() ? "⌘K" : "Ctrl+K";
 
   const runItem = (item: WorkspaceCommandItem) => {
@@ -302,7 +336,7 @@ export function GlobalCommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent showCloseButton className="gap-0 p-0">
-        <DialogHeader className="gap-0 border-b border-border px-4 py-3">
+        <DialogHeader className="gap-0 border-b border-border px-4 py-3 pe-14">
           <DialogTitle className="sr-only">Search {organizationLabel}</DialogTitle>
           <DialogDescription className="sr-only">
             Jump to modules, pages, and quick actions across your tenant workspace.
@@ -315,25 +349,42 @@ export function GlobalCommandPalette() {
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onInputKeyDown}
               placeholder="Search records, modules, pages, and actions…"
-              className="h-10 border-0 bg-transparent pr-16 pl-9 shadow-none focus-visible:ring-0"
+              aria-autocomplete="list"
+              aria-controls="workspace-command-results"
+              className="h-10 border-0 bg-transparent pr-3 pl-9 shadow-none focus-visible:ring-0"
             />
-            <kbd className="pointer-events-none absolute top-1/2 right-2 hidden -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
-              {shortcutLabel}
-            </kbd>
           </div>
         </DialogHeader>
 
-        <div ref={listRef} className="max-h-[min(60vh,420px)] overflow-y-auto py-2">
+        <div
+          id="workspace-command-results"
+          ref={listRef}
+          role="listbox"
+          aria-label="Search results"
+          className="max-h-[min(60vh,420px)] overflow-y-auto py-2"
+        >
           {entitySearchLoading && query.trim().length >= ENTITY_SEARCH_MIN_CHARS ? (
-            <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground" aria-live="polite">
               <Spinner />
               Searching records…
             </div>
           ) : null}
-          {flatItems.length === 0 && !entitySearchLoading ? (
+          {entitySearchError && !entitySearchLoading ? (
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground" role="alert">
+              <p>Search did not finish. Check your connection and try again.</p>
+              <button
+                type="button"
+                className="mt-3 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+                onClick={() => setSearchAttempt((current) => current + 1)}
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
+          {flatItems.length === 0 && !entitySearchLoading && !entitySearchError ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
               {query.trim().length >= ENTITY_SEARCH_MIN_CHARS
-                ? "No matches. Try a document title, site code, ticket, or page name."
+                ? "No matches. Try a document number, title, ticket, form, or page."
                 : "No matches. Try a module name, page, or action."}
             </p>
           ) : flatItems.length > 0 ? (
@@ -353,8 +404,11 @@ export function GlobalCommandPalette() {
                       <li key={`${section.label}:${item.id}:${item.title}`}>
                         <button
                           type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          data-command-index={itemIndex}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors",
+                            "group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors",
                             isSelected ? "bg-muted text-foreground" : "hover:bg-muted/60",
                           )}
                           onMouseEnter={() => setSelectedIndex(itemIndex)}
@@ -365,7 +419,14 @@ export function GlobalCommandPalette() {
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex min-w-0 items-center gap-2">
-                              <span className="truncate font-medium">{item.title}</span>
+                              <span
+                                className={cn(
+                                  "truncate font-medium",
+                                  looksLikeCode(item.title) && "font-mono text-[13px] tabular-nums",
+                                )}
+                              >
+                                {highlightMatch(item.title, query)}
+                              </span>
                               {item.statusLabel ? (
                                 <span
                                   className={cn(
@@ -381,7 +442,12 @@ export function GlobalCommandPalette() {
                               <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
                             ) : null}
                           </span>
-                          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                          <ArrowRight
+                            className={cn(
+                              "h-3.5 w-3.5 shrink-0 text-muted-foreground",
+                              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                            )}
+                          />
                         </button>
                       </li>
                     );
@@ -392,9 +458,10 @@ export function GlobalCommandPalette() {
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-          <span>Find records or jump to modules and workflows</span>
+        <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+          <span>Records, pages, and actions</span>
           <span className="hidden sm:inline">
+            <kbd className="rounded border border-border px-1">{shortcutLabel}</kbd> close ·{" "}
             <kbd className="rounded border border-border px-1">↑↓</kbd> move ·{" "}
             <kbd className="rounded border border-border px-1">Enter</kbd> open
           </span>

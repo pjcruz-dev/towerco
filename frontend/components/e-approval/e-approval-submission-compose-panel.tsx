@@ -45,7 +45,6 @@ import {
 } from "@/modules/e-approval/controlled-document-sync";
 import {
   clearControlledDocumentRevisionValues,
-  controlledDocumentDraftLooksLikeRevision,
   controlledDocumentSubmissionIsRegisterRevision,
   filterFieldsForControlledDocumentMode,
   validateControlledDocumentRequest,
@@ -484,7 +483,6 @@ export function EApprovalSubmissionComposePanel({
     }
 
     const sync = parseControlledDocumentSync(formQuery.data.metadata_json ?? null);
-    let discardRestoredDraftNotice = false;
 
     if (sync && !isResubmitMode) {
       const { mode, documentCode } = controlledDocumentDeepLink;
@@ -497,7 +495,6 @@ export function EApprovalSubmissionComposePanel({
       }
 
       const explicitNewIntent = mode === "new";
-      const draftLooksLikeRevision = controlledDocumentDraftLooksLikeRevision(sync, mergedValues);
 
       if (documentCode && resolvedMode === "revision") {
         mergedValues = {
@@ -507,10 +504,13 @@ export function EApprovalSubmissionComposePanel({
       }
 
       if (resolvedMode === "new") {
-        if (explicitNewIntent && draftLooksLikeRevision) {
+        if (explicitNewIntent) {
           mergedValues = clearControlledDocumentRevisionValues(sync, base);
           clearLocalComposeDraft(formId);
-          discardRestoredDraftNotice = restoredDraft;
+          setDraftSubmissionId(null);
+          setParentSubmissionId(null);
+          setDraftSavedAt(null);
+          restoredDraft = false;
         } else {
           mergedValues = clearControlledDocumentRevisionValues(sync, mergedValues);
         }
@@ -527,7 +527,7 @@ export function EApprovalSubmissionComposePanel({
 
     setValues(mergedValues);
 
-    if (restoredDraft && !discardRestoredDraftNotice) {
+    if (restoredDraft) {
       push({
         level: "info",
         title: "Draft restored",

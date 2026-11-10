@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Workspace\Services;
 
 use App\Models\TicketingTicket;
+use App\Modules\DocExtract\Services\DocExtractSearchService;
 use App\Modules\Documents\Services\ControlledDocumentSearchService;
 use App\Modules\Documents\Services\DocumentSearchService;
 use App\Modules\EApproval\Models\EApprovalForm;
+use App\Modules\EApproval\Models\EApprovalFormValue;
+use App\Modules\EApproval\Models\EApprovalPublicationTraining;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
+use App\Modules\EApproval\Services\EApprovalFinanceStageService;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
@@ -35,6 +39,7 @@ final class WorkspaceSearchService
         private readonly TenantEnabledModulesResolver $enabledModules,
         private readonly DocumentSearchService $documents,
         private readonly ControlledDocumentSearchService $controlledDocuments,
+        private readonly DocExtractSearchService $docExtract,
     ) {}
 
     /**
@@ -67,7 +72,7 @@ final class WorkspaceSearchService
         $providers = [];
 
         if ($this->canSearchModule($enabled, $viewer, 'e_approval', 'e_approval:submissions:view')) {
-            $providers[] = fn (): array => $this->searchEApprovalSubmissions($viewer, $search, $like, $limitPerType);
+            $providers[] = fn (): array => $this->searchEApprovalSubmissions($viewer, $search, $limitPerType);
         }
 
         if ($this->canSearchEApprovalForms($enabled, $viewer)) {
@@ -80,6 +85,10 @@ final class WorkspaceSearchService
 
         if ($this->canSearchModule($enabled, $viewer, 'ticketing', 'ticketing:view')) {
             $providers[] = fn (): array => $this->searchTicketingTickets($viewer, $search, $like, $limitPerType);
+        }
+
+        if ($this->canSearchModule($enabled, $viewer, 'doc_extract', 'doc-extract:view')) {
+            $providers[] = fn (): array => $this->docExtract->asWorkspaceResults($search, $limitPerType);
         }
 
         if ($this->canSearchModule($enabled, $viewer, 'documents', 'documents:view')) {
@@ -139,6 +148,55 @@ final class WorkspaceSearchService
     }
 
     /**
+     * @return list<string>
+     */
+    private function likeNeedles(string $search): array
+    {
+        $terms = [trim($search)];
+        $compact = preg_replace('/\s+/', '', $terms[0]) ?? $terms[0];
+        if ($compact !== '' && $compact !== $terms[0]) {
+            $terms[] = $compact;
+        }
+
+        $needles = [];
+        foreach ($terms as $term) {
+            if (mb_strlen($term) < 2) {
+                continue;
+            }
+            $needles[$term] = $this->like($term);
+            if (preg_match('/^(.+)-R\d{1,4}$/i', $term, $matches) === 1 && mb_strlen($matches[1]) >= 2) {
+                $needles[$matches[1]] = $this->like($matches[1]);
+            }
+        }
+
+        return $needles === [] ? [$this->like($search)] : array_values($needles);
+    }
+
+    private function ticketNumberFromQuery(string $search): ?int
+    {
+        if (preg_match('/^(?:tkt[-\s]*)?(\d+)$/i', trim($search)) !== 1) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $search) ?? '';
+        if ($digits === '') {
+            return null;
+        }
+
+        return (int) $digits;
+    }
+
+    private function ticketSubtitle(TicketingTicket $ticket): ?string
+    {
+        $parts = array_values(array_filter([
+            $ticket->assignee?->name ? 'Assignee: '.$ticket->assignee->name : null,
+            $ticket->requester?->name ? 'Requester: '.$ticket->requester->name : null,
+        ]));
+
+        return $parts === [] ? null : implode(' · ', $parts);
+    }
+
+    /**
      * @return list<array{
      *   module: string,
      *   entity_type: string,
@@ -155,11 +213,11 @@ final class WorkspaceSearchService
     private function searchEApprovalSubmissions(
         TenantUser $viewer,
         string $search,
-        string $like,
         int $limit,
     ): array {
         $canViewAll = $viewer->can('e_approval:forms:manage');
         $statusMatches = EApprovalSubmissionStatus::statusesMatching($search);
+        $likes = $this->likeNeedles($search);
 
         $query = EApprovalSubmission::query()
             ->select(['id', 'document_no', 'status', 'form_id', 'requestor_id', 'current_step', 'approval_cycle'])
@@ -182,21 +240,31 @@ final class WorkspaceSearchService
                 $q->where('requestor_id', $viewer->id)
                     ->orWhereIn('id', EApprovalRequestApproval::query()
                         ->where('approver_id', $viewer->id)
+                        ->select('submission_id'))
+                    ->orWhereIn('id', EApprovalPublicationTraining::query()
+                        ->where('user_id', $viewer->id)
                         ->select('submission_id'));
             });
         }
 
-        $query->where(static function (Builder $q) use ($like, $statusMatches): void {
-            $q->where('document_no', 'like', $like)
-                ->orWhereIn('form_id', EApprovalForm::query()
-                    ->select('id')
-                    ->where('name', 'like', $like))
-                ->orWhereIn('requestor_id', TenantUser::query()
-                    ->select('id')
-                    ->where(static function (Builder $userQuery) use ($like): void {
-                        $userQuery->where('name', 'like', $like)
-                            ->orWhere('email', 'like', $like);
-                    }));
+        $query->where(static function (Builder $q) use ($likes, $statusMatches): void {
+            foreach ($likes as $like) {
+                $q->orWhere('document_no', 'like', $like)
+                    ->orWhere('external_submitter_name', 'like', $like)
+                    ->orWhere('external_submitter_email', 'like', $like)
+                    ->orWhereIn('form_id', EApprovalForm::query()
+                        ->select('id')
+                        ->where('name', 'like', $like))
+                    ->orWhereIn('requestor_id', TenantUser::query()
+                        ->select('id')
+                        ->where(static function (Builder $userQuery) use ($like): void {
+                            $userQuery->where('name', 'like', $like)
+                                ->orWhere('email', 'like', $like);
+                        }))
+                    ->orWhereIn('id', EApprovalFormValue::query()
+                        ->select('submission_id')
+                        ->where('value', 'like', $like));
+            }
 
             if ($statusMatches !== []) {
                 $q->orWhereIn('status', $statusMatches);
@@ -391,30 +459,48 @@ final class WorkspaceSearchService
     private function searchTicketingTickets(TenantUser $viewer, string $search, string $like, int $limit): array
     {
         $canManage = $viewer->can('ticketing:tickets:manage');
-        $ticketNeedle = ltrim($search, 'TKT-tkt-');
+        $ticketNumber = $this->ticketNumberFromQuery($search);
 
         $query = TicketingTicket::query()
             ->select(['id', 'ticket_number', 'title', 'status', 'assignee_id', 'requester_id'])
-            ->with(['assignee:id,name']);
+            ->with(['assignee:id,name', 'requester:id,name']);
 
         if (! $canManage) {
             $query->where('requester_id', $viewer->id);
         }
 
-        $query->where(static function (Builder $inner) use ($like, $ticketNeedle): void {
+        $query->where(static function (Builder $inner) use ($like, $ticketNumber): void {
             $inner->where('title', 'like', $like)
-                ->orWhere('ticket_number', 'like', '%'.addcslashes($ticketNeedle, '%_\\').'%');
+                ->orWhere('description', 'like', $like)
+                ->orWhere('category', 'like', $like)
+                ->orWhere('source_label', 'like', $like)
+                ->orWhereIn('requester_id', TenantUser::query()
+                    ->select('id')
+                    ->where(static function (Builder $userQuery) use ($like): void {
+                        $userQuery->where('name', 'like', $like)
+                            ->orWhere('email', 'like', $like);
+                    }))
+                ->orWhereIn('assignee_id', TenantUser::query()
+                    ->select('id')
+                    ->where(static function (Builder $userQuery) use ($like): void {
+                        $userQuery->where('name', 'like', $like)
+                            ->orWhere('email', 'like', $like);
+                    }));
+
+            if ($ticketNumber !== null) {
+                $inner->orWhere('ticket_number', $ticketNumber);
+            }
         });
 
         return $this->mapRows(
             $query->orderByDesc('updated_at')->limit($limit)->get(),
-            static function (TicketingTicket $ticket): array {
+            function (TicketingTicket $ticket): array {
                 return [
                     'module' => 'ticketing',
                     'entity_type' => 'ticket',
                     'id' => (string) $ticket->id,
                     'title' => trim($ticket->displayNumber().' · '.$ticket->title),
-                    'subtitle' => $ticket->assignee?->name ? 'Assignee: '.$ticket->assignee->name : null,
+                    'subtitle' => $this->ticketSubtitle($ticket),
                     'status' => (string) $ticket->status,
                     'href' => '/ticketing/tickets/'.$ticket->id,
                 ];

@@ -15,6 +15,7 @@ const toneClass: Record<EApprovalStatusTone, string> = {
 
 const labelOverrides: Record<string, string> = {
   acknowledged: "Reviewed",
+  training_done: "Done",
   awaiting_dcf: "Awaiting document control",
   awaiting_me: "Awaiting me",
   invalidated: "Not needed",
@@ -49,7 +50,7 @@ export function resolveEApprovalStatusTone(status: string, kind: EApprovalStatus
   }
 
   if (kind === "approval") {
-    if (key === "approved" || key === "acknowledged") return "success";
+    if (key === "approved" || key === "acknowledged" || key === "training_done") return "success";
     if (key === "rejected") return "danger";
     if (key === "pending") return "warning";
     if (

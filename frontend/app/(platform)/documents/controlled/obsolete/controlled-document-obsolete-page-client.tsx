@@ -68,11 +68,13 @@ function displayTitle(title: string): string {
 function FileCell({
   row,
   canUpload,
+  canDownload,
   uploading,
   onUpload,
 }: {
   row: ControlledDocumentObsoleteRow;
   canUpload: boolean;
+  canDownload: boolean;
   uploading: boolean;
   onUpload: (file: File) => void;
 }) {
@@ -107,6 +109,10 @@ function FileCell({
         </Button>
       </>
     );
+  }
+
+  if (!canDownload) {
+    return <span className="text-xs text-muted-foreground">Document control only</span>;
   }
 
   return (
@@ -145,12 +151,14 @@ function BoardTable({
   rows,
   empty,
   canUpload,
+  canDownloadObsolete,
   uploadingId,
   onUpload,
 }: {
   rows: ControlledDocumentObsoleteRow[];
   empty: string;
   canUpload: boolean;
+  canDownloadObsolete: boolean;
   uploadingId: string | null;
   onUpload: (row: ControlledDocumentObsoleteRow, file: File) => void;
 }) {
@@ -194,6 +202,7 @@ function BoardTable({
                 <FileCell
                   row={row}
                   canUpload={canUpload}
+                  canDownload={row.standing !== "obsolete" || canDownloadObsolete}
                   uploading={uploadingId === row.revision_id}
                   onUpload={(file) => onUpload(row, file)}
                 />
@@ -313,6 +322,7 @@ export function ControlledDocumentObsoletePageClient() {
               rows={rows}
               empty={viewMeta.empty}
               canUpload={canManage && view !== "approved"}
+              canDownloadObsolete={canManage}
               uploadingId={uploadingId}
               onUpload={(row, file) => uploadMutation.mutate({ row, file })}
             />

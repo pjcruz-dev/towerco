@@ -60,6 +60,9 @@ final class EApprovalFinanceStageService
         }
 
         if ($status === EApprovalSubmissionStatus::APPROVED) {
+            if (app(EApprovalPublicationTrainingService::class)->isHolding($submission)) {
+                return 'Pending publication';
+            }
             if ($family === 'cash_advance') {
                 return $this->isOverdue($submission) ? 'Released — Overdue' : 'Released';
             }

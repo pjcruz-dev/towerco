@@ -86,6 +86,7 @@ final class ApprovalDecisionService
                 'submission.requestor',
                 'submission.approvals.step',
                 'submission.approvals.approver',
+                'submission.publicationTrainings.user:id,name',
                 'submission.values.field',
             ])
             ->whereIn('id', $pageIds)

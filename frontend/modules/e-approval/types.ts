@@ -54,6 +54,8 @@ export type EApprovalWorkflowStepInput = {
   confirm_settlement?: boolean;
   /** The previous approver chooses whether this step runs. */
   optional?: boolean;
+  /** If this step finishes the request, this approver chooses who receives the current file link. */
+  sends_file_link?: boolean;
   /** Approve this person automatically after auto_approve_days with no decision. */
   auto_approve_enabled?: boolean;
   auto_approve_days?: number;
@@ -192,6 +194,12 @@ export type EApprovalSubmissionListRow = {
     approver_name: string | null;
     approver_names: string[];
   }>;
+  publication_training?: {
+    holding: boolean;
+    completed: number;
+    total: number;
+    names: string[];
+  } | null;
   requestor: { id: string; name: string; email: string } | null;
   created_at: string | null;
   updated_at?: string | null;
@@ -255,7 +263,7 @@ export type EApprovalRelatedFormNavigation = {
   href: string;
 };
 
-export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
+export type EApprovalSubmissionDetail = Omit<EApprovalSubmissionListRow, "publication_training"> & {
   viewer_is_requestor?: boolean;
   viewer_pending_approval_id?: string | null;
   optional_next?: {
@@ -266,6 +274,10 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
   /** Notes on a field in Request details. Off until the form turns it on. */
   request_comments?: boolean;
   publishes_on_approve?: boolean;
+  /** This step is marked to choose who receives the current file link. */
+  sends_file_link?: boolean;
+  /** This request waits for training before publication, from the form setting. */
+  awaits_publication_training?: boolean;
   /** Approver feedback when status is returned or rejected. */
   revision_remarks?: string | null;
   revision_remarks_at?: string | null;
@@ -289,6 +301,27 @@ export type EApprovalSubmissionDetail = EApprovalSubmissionListRow & {
     reference?: string | null;
     date?: string | null;
     amount?: string | null;
+  } | null;
+  /**
+   * Open only after the last approval on Policies and Procedures or Work Instructions.
+   * Publication stays closed until every invited person finishes.
+   */
+  publication_training?: {
+    holding: boolean;
+    can_invite: boolean;
+    completed: number;
+    total: number;
+    invites: Array<{
+      id: string;
+      user_id: string;
+      name: string;
+      email: string;
+      status: "invited" | "completed";
+      completed_at?: string | null;
+      can_complete: boolean;
+      can_mark: boolean;
+      can_remove: boolean;
+    }>;
   } | null;
   /** Open remainder after a payment already recorded. Null until cash has moved. */
   settlement_balance?: {
@@ -388,6 +421,7 @@ export type EApprovalApprovalRow = {
     current_step?: number;
     step_count?: number | null;
     workflow_steps?: EApprovalSubmissionListRow["workflow_steps"];
+    publication_training?: EApprovalSubmissionListRow["publication_training"];
     requestor?: { id: string | null; name: string; email: string } | null;
     created_at?: string | null;
   } | null;

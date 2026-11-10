@@ -211,6 +211,7 @@ class EApprovalRequestApproval extends Model
             'current_step' => $list['current_step'] ?? 0,
             'step_count' => $list['step_count'] ?? null,
             'workflow_steps' => $list['workflow_steps'] ?? [],
+            'publication_training' => $list['publication_training'] ?? null,
             'requestor' => $list['requestor'] ?? null,
             'created_at' => $list['created_at'] ?? null,
         ];

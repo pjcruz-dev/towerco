@@ -16,6 +16,14 @@ final class EApprovalApprovedFileDistributionService
 {
     public function send(EApprovalSubmission $submission): void
     {
+        if (app(EApprovalPublicationTrainingService::class)->blocksSpread($submission)) {
+            Log::info('e_approval.approved_files_held_for_training', [
+                'submission_id' => (string) $submission->id,
+            ]);
+
+            return;
+        }
+
         $submission->loadMissing('form');
         $metadata = is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [];
         if (! EApprovalFormWorkflowOptions::sendApprovedFiles($metadata)) {

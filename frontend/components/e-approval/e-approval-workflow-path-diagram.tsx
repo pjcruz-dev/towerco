@@ -7,17 +7,23 @@ import {
   WorkflowDiagramTerminal,
 } from "@/components/e-approval/e-approval-workflow-diagram-chrome";
 import type { EApprovalWorkflowPreviewResponse } from "@/lib/api/modules/e-approval-api";
-import { buildWorkflowPathDiagram } from "@/modules/e-approval/workflow-path-diagram";
+import { buildWorkflowPathDiagram, trainingPathBand } from "@/modules/e-approval/workflow-path-diagram";
 import { cn } from "@/lib/utils";
+
+type TrainingPath = {
+  holding: boolean;
+  invites: { id: string; name: string; email: string; status: string }[];
+};
 
 type Props = {
   preview: Pick<EApprovalWorkflowPreviewResponse, "resolved_steps" | "skipped_steps" | "matched_rule_label">;
+  training?: TrainingPath | null;
   className?: string;
   /** Hide repetitive “conditions matched” lines (submission participant view). */
   compactDetails?: boolean;
 };
 
-const FINISHED_STEP = new Set(["approved", "acknowledged"]);
+const FINISHED_STEP = new Set(["approved", "acknowledged", "training_done"]);
 
 function bandWasNotSent(band: { nodes: { status?: string | null }[] }): boolean {
   return band.nodes.length > 0 && band.nodes.every((node) => {
@@ -53,7 +59,7 @@ function bandLineTone(
   return "idle";
 }
 
-export function EApprovalWorkflowPathDiagram({ preview, className, compactDetails = false }: Props) {
+export function EApprovalWorkflowPathDiagram({ preview, training = null, className, compactDetails = false }: Props) {
   const { runBands, skippedBands } = buildWorkflowPathDiagram(
     compactDetails
       ? {
@@ -75,6 +81,12 @@ export function EApprovalWorkflowPathDiagram({ preview, className, compactDetail
     );
   }
 
+  const visibleBands = runBands.filter((band) => !bandWasNotSent(band));
+  const lastOrder = visibleBands.reduce((max, band) => Math.max(max, band.stepOrder), 0);
+  const bands = training?.holding
+    ? [...visibleBands, trainingPathBand(training.invites, lastOrder)]
+    : visibleBands;
+
   return (
     <WorkflowDiagramShell
       title="Path diagram"
@@ -94,7 +106,7 @@ export function EApprovalWorkflowPathDiagram({ preview, className, compactDetail
       <div role="img" aria-label="Workflow path diagram" className="flex w-full flex-col items-center">
         <WorkflowDiagramTerminal label="Start" />
 
-        {runBands.filter((band) => !bandWasNotSent(band)).map((band, index, bands) => {
+        {bands.map((band, index) => {
           const earlierFinished = bands.slice(0, index).every(bandIsFinished);
           const tone = bandLineTone(band, earlierFinished);
 
@@ -106,11 +118,9 @@ export function EApprovalWorkflowPathDiagram({ preview, className, compactDetail
           );
         })}
 
-        {runBands.some((band) => !bandWasNotSent(band)) ? (
+        {bands.length > 0 ? (
           <>
-            <WorkflowDiagramConnector
-              tone={runBands.filter((band) => !bandWasNotSent(band)).every(bandIsFinished) ? "done" : "idle"}
-            />
+            <WorkflowDiagramConnector tone={bands.every(bandIsFinished) ? "done" : "idle"} />
             <WorkflowDiagramTerminal label="End" />
           </>
         ) : null}

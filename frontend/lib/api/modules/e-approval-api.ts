@@ -385,6 +385,38 @@ export async function fetchEApprovalSubmission(id: string): Promise<EApprovalSub
   return response.data.data;
 }
 
+export async function inviteEApprovalPublicationTraining(
+  submissionId: string,
+  userIds: string[],
+): Promise<EApprovalSubmissionDetail["publication_training"]> {
+  const response = await apiClient.post<{ data: EApprovalSubmissionDetail["publication_training"] }>(
+    `/e-approval/submissions/${submissionId}/training/invites`,
+    { user_ids: userIds },
+  );
+  return response.data.data;
+}
+
+export async function completeEApprovalPublicationTraining(
+  submissionId: string,
+  inviteId?: string,
+): Promise<EApprovalSubmissionDetail["publication_training"]> {
+  const response = await apiClient.post<{ data: EApprovalSubmissionDetail["publication_training"] }>(
+    `/e-approval/submissions/${submissionId}/training/complete`,
+    inviteId ? { invite_id: inviteId } : {},
+  );
+  return response.data.data;
+}
+
+export async function removeEApprovalPublicationTrainingInvite(
+  submissionId: string,
+  inviteId: string,
+): Promise<EApprovalSubmissionDetail["publication_training"]> {
+  const response = await apiClient.delete<{ data: EApprovalSubmissionDetail["publication_training"] }>(
+    `/e-approval/submissions/${submissionId}/training/invites/${inviteId}`,
+  );
+  return response.data.data;
+}
+
 export async function fetchEApprovalSubmissionPrintData(id: string): Promise<EApprovalPrintPayload> {
   const response = await apiClient.get<{ data: EApprovalPrintPayload }>(`/e-approval/submissions/${id}/print`);
   return response.data.data;

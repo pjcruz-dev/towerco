@@ -15,9 +15,7 @@ final class EApprovalFormPolicySupport
 
     public static function usesApprovalPolicy(EApprovalForm $form): bool
     {
-        $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
-
-        return (bool) ($metadata['use_approval_policy'] ?? false);
+        return false;
     }
 
     public static function isPolicyCapableForm(EApprovalForm $form): bool

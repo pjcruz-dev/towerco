@@ -142,3 +142,38 @@ export function buildWorkflowPathDiagram(
 
   return { runBands, skippedBands };
 }
+
+export function trainingPathBand(
+  invites: { id: string; name: string; email: string; status: string }[],
+  afterStepOrder: number,
+): WorkflowDiagramBand {
+  const stepOrder = afterStepOrder + 1;
+  const nodes: WorkflowDiagramNode[] =
+    invites.length > 0
+      ? invites.map((invite) => ({
+          id: `training-${invite.id}`,
+          stepOrder,
+          title: invite.name || "Person",
+          subtitle: invite.email || "Training",
+          kind: "run",
+          status: invite.status === "completed" ? "training_done" : "pending",
+        }))
+      : [
+          {
+            id: "training-empty",
+            stepOrder,
+            title: "No one invited yet",
+            subtitle: "Training",
+            kind: "run",
+            status: "pending",
+          },
+        ];
+
+  return {
+    id: "band-training",
+    stepOrder,
+    kind: "run",
+    bandLabel: invites.length > 1 ? "Training · All must finish" : "Training",
+    nodes,
+  };
+}

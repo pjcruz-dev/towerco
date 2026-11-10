@@ -171,6 +171,10 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['optional'] = true;
         }
 
+        if (! empty($condition['sends_file_link'])) {
+            $definition['sends_file_link'] = true;
+        }
+
         $autoApproveDays = self::autoApproveDays([], $condition);
         if ($autoApproveDays !== null) {
             $definition['auto_approve_enabled'] = true;
@@ -289,6 +293,10 @@ final class EApprovalWorkflowStepDefinitionSupport
 
         if (! empty($step['optional']) || ! empty($condition['optional'])) {
             $definition['optional'] = true;
+        }
+
+        if (! empty($step['sends_file_link']) || ! empty($condition['sends_file_link'])) {
+            $definition['sends_file_link'] = true;
         }
 
         $autoApproveDays = self::autoApproveDays($step, $condition);
@@ -555,6 +563,12 @@ final class EApprovalWorkflowStepDefinitionSupport
             $condition['optional'] = true;
         } else {
             unset($condition['optional']);
+        }
+
+        if (! empty($step['sends_file_link']) || ! empty($condition['sends_file_link'])) {
+            $condition['sends_file_link'] = true;
+        } else {
+            unset($condition['sends_file_link']);
         }
 
         $autoApproveDays = self::reviewDutyEnabled($step, $condition) || $type === 'reviewer_list'

@@ -43,6 +43,68 @@ final class EApprovalFormWorkflowOptions
 
     /**
      * @param  array<string, mixed>|null  $metadata
+     */
+    public static function mandatoryTrainingEnabled(?array $metadata): bool
+    {
+        $node = self::trainingNode($metadata);
+
+        return (bool) ($node['enabled'] ?? false);
+    }
+
+    /**
+     * Empty means every request on the form.
+     *
+     * @param  array<string, mixed>|null  $metadata
+     */
+    public static function mandatoryTrainingField(?array $metadata): string
+    {
+        $node = self::trainingNode($metadata);
+        $field = trim((string) ($node['field'] ?? ''));
+        if ($field !== '') {
+            return $field;
+        }
+
+        $legacy = $node['document_types'] ?? null;
+
+        return is_array($legacy) && $legacy !== [] ? 'document_type' : '';
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $metadata
+     * @return list<string>
+     */
+    public static function mandatoryTrainingValues(?array $metadata): array
+    {
+        $node = self::trainingNode($metadata);
+        $types = $node['values'] ?? $node['document_types'] ?? [];
+        if (! is_array($types)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($types as $type) {
+            $text = trim((string) $type);
+            if ($text !== '') {
+                $clean[] = $text;
+            }
+        }
+
+        return array_values(array_unique($clean));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $metadata
+     * @return array<string, mixed>
+     */
+    private static function trainingNode(?array $metadata): array
+    {
+        $node = self::options($metadata)['mandatory_training'] ?? null;
+
+        return is_array($node) ? $node : [];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $metadata
      * @return array<string, mixed>
      */
     private static function options(?array $metadata): array

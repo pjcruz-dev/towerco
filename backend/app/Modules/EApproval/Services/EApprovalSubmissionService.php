@@ -135,6 +135,7 @@ final class EApprovalSubmissionService
             'requestor:id,name,email',
             'approvals.step:id,step_order',
             'approvals.approver:id,name,email',
+            'publicationTrainings.user:id,name',
             'values' => static function ($relation) use ($eagerFieldNames): void {
                 $names = ['subsidiary', 'department'];
                 if ($eagerFieldNames !== null && $eagerFieldNames !== []) {
@@ -172,11 +173,17 @@ final class EApprovalSubmissionService
             ->where('approver_id', $viewer->id)
             ->exists();
 
-        if (! $isApprover) {
-            throw ValidationException::withMessages([
-                'submission' => [__('You cannot access this submission.')],
-            ]);
+        if ($isApprover) {
+            return;
         }
+
+        if (app(EApprovalPublicationTrainingService::class)->isInvitee($submission, $viewer)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'submission' => [__('You cannot access this submission.')],
+        ]);
     }
 
     /**
@@ -938,6 +945,11 @@ final class EApprovalSubmissionService
                     is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
                 )
                 && $this->workflow->publishesOnThisStep($submission),
+            'sends_file_link' => (bool) $viewerContext['viewer_pending_approval_id']
+                && EApprovalFormWorkflowOptions::sendApprovedFiles(
+                    is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : null,
+                )
+                && $this->workflow->currentStepSendsFileLink($submission),
             'revision_config' => EApprovalRevisionRouting::fromFormMetadata(
                 is_array($submission->form?->metadata_json) ? $submission->form->metadata_json : [],
             ),
@@ -951,6 +963,12 @@ final class EApprovalSubmissionService
             ...$this->revisionFeedbackMeta($submission),
             'settlement_record' => $this->settlementRecord($submission),
             'settlement_balance' => $this->financeStage->settlementBalance($submission),
+            'publication_training' => app(EApprovalPublicationTrainingService::class)->detail(
+                $submission,
+                $viewer,
+                (bool) $viewer?->can('e_approval:forms:manage'),
+            ),
+            'awaits_publication_training' => app(EApprovalPublicationTrainingService::class)->awaitsTraining($submission),
         ]);
     }
 
