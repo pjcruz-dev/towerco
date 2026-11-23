@@ -10,6 +10,10 @@ import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { ControlledDocumentDetailDrawer } from "@/components/documents/controlled-document-detail-drawer";
 import { ControlledDocumentImportDialog } from "@/components/documents/controlled-document-import-dialog";
 import { createControlledDocumentsTableColumns } from "@/components/documents/controlled-documents-table-columns";
+import {
+  useDocumentRegisterAccess,
+  useDocumentRegisterRolePreview,
+} from "@/components/documents/document-register-role-field-access";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -58,9 +62,19 @@ export function ControlledDocumentsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const canImport = usePermission([permissions.documentsControlledImport]);
-  const canManage = usePermission([permissions.documentsControlledManage]);
-  const canCreate = usePermission([permissions.documentsControlledCreate]);
+  const access = useDocumentRegisterAccess();
+  const preview = useDocumentRegisterRolePreview();
+  const canImport =
+    usePermission([permissions.documentsControlledImport]) &&
+    access.allows("import") &&
+    preview.allowsPermission(permissions.documentsControlledImport);
+  const canManage =
+    usePermission([permissions.documentsControlledManage]) &&
+    preview.allowsPermission(permissions.documentsControlledManage);
+  const canCreate =
+    usePermission([permissions.documentsControlledCreate]) &&
+    access.allows("create") &&
+    preview.allowsPermission(permissions.documentsControlledCreate);
   const queryState = useMemo(
     () => readControlledRegisterQuery(searchParams, DEFAULT_SORT),
     [searchParams],
@@ -168,10 +182,14 @@ export function ControlledDocumentsPageClient() {
     [replace],
   );
 
-  const columns = useMemo(
-    () => createControlledDocumentsTableColumns({ canCreate, onOpen: openDocument }),
-    [canCreate, openDocument],
-  );
+  const columns = useMemo(() => {
+    const all = createControlledDocumentsTableColumns({ canCreate, onOpen: openDocument });
+    return all.filter((column) => {
+      const id = column.id ?? "";
+      if (id === "actions") return access.allows("view");
+      return access.visible(id, "table");
+    });
+  }, [access, canCreate, openDocument]);
 
   const sorting = useMemo(
     () => sortingStateFromSortParam(queryState.sort, {}, SORTABLE),
@@ -204,12 +222,14 @@ export function ControlledDocumentsPageClient() {
           description="ISO master list. Pending includes documents that have never been published and approved documents with a revision still in approval. Obsolete includes withdrawn documents and published documents that still have an older revision."
           actions={
             <>
+              {preview.allowsHref("/documents/controlled/reports") ? (
               <Link
                 href="/documents/controlled/reports"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
               >
                 Reports
               </Link>
+              ) : null}
               {canManage ? (
                 <Link
                   href="/documents/controlled/access"

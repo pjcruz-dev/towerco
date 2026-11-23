@@ -114,6 +114,7 @@ function ImageMarkLayer({
   onFocusHandled,
   markingEnabled = true,
   onPost,
+  onResolve,
 }: {
   attachmentId: string;
   fileName: string;
@@ -125,6 +126,7 @@ function ImageMarkLayer({
   onFocusHandled?: () => void;
   markingEnabled?: boolean;
   onPost: Props["onPost"];
+  onResolve?: (commentId: string, resolved: boolean) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
@@ -276,7 +278,7 @@ function ImageMarkLayer({
                 <button
                   type="button"
                   aria-label={`Comment by ${mark.user_name}`}
-                  className={cn("absolute", color.fill, open && "ring-2", open && color.ring)}
+                  className={cn("absolute", color.fill, open && "ring-2", open && color.ring, mark.resolved_at && "opacity-40")}
                   style={{
                     left: `${pinX * 100}%`,
                     top: `${pinY * 100}%`,
@@ -316,6 +318,21 @@ function ImageMarkLayer({
                     >
                       Reply
                     </button>
+                    {onResolve ? (
+                      <button
+                        type="button"
+                        className="mt-1 ml-3 text-xs text-primary hover:underline"
+                        disabled={posting}
+                        onClick={() => onResolve(mark.id, !mark.resolved_at)}
+                      >
+                        {mark.resolved_at ? "Reopen" : "Resolve"}
+                      </button>
+                    ) : null}
+                    {mark.resolved_at ? (
+                      <span className="mt-1 block text-[11px] text-muted-foreground">
+                        Resolved{mark.resolved_by_name ? ` by ${mark.resolved_by_name}` : ""}
+                      </span>
+                    ) : null}
                     {replyTo === mark.id ? (
                       <span className="mt-2 block space-y-2">
                         <EApprovalMentionField
@@ -471,6 +488,7 @@ type Props = {
   onFocusHandled?: () => void;
   canReplace?: boolean;
   onReplaced?: () => void;
+  onResolve?: (commentId: string, resolved: boolean) => void;
   onPost: (payload: {
     message: string;
     parent_id?: string;
@@ -496,6 +514,7 @@ export function EApprovalAttachmentComments({
   onFocusHandled,
   canReplace = false,
   onReplaced,
+  onResolve,
 }: Props) {
   const push = useNotificationStore((state) => state.push);
   const [replacingId, setReplacingId] = useState<string | null>(null);
@@ -675,6 +694,7 @@ export function EApprovalAttachmentComments({
                 onFocusHandled={onFocusHandled}
                 markingEnabled={markingEnabled}
                 onPost={onPost}
+                onResolve={onResolve}
               />
             ) : null}
             {isPdf ? (
@@ -691,6 +711,7 @@ export function EApprovalAttachmentComments({
                   focusCommentId={focusCommentId}
                   onFocusHandled={onFocusHandled}
                   markingEnabled={markingEnabled}
+                  onResolve={onResolve}
                 />
               </div>
             ) : isImage ? null : loose.length === 0 ? (
@@ -732,6 +753,21 @@ export function EApprovalAttachmentComments({
                     >
                       Reply
                     </button>
+                    {onResolve ? (
+                      <button
+                        type="button"
+                        className="mt-1 ml-3 text-xs text-primary hover:underline"
+                        disabled={posting}
+                        onClick={() => onResolve(comment.id, !comment.resolved_at)}
+                      >
+                        {comment.resolved_at ? "Reopen" : "Resolve"}
+                      </button>
+                    ) : null}
+                    {comment.resolved_at ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Resolved{comment.resolved_by_name ? ` by ${comment.resolved_by_name}` : ""}
+                      </p>
+                    ) : null}
                     {replyTo === comment.id ? (
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                         <Textarea

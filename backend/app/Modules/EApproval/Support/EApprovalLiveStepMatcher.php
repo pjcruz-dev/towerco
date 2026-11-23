@@ -80,8 +80,18 @@ final class EApprovalLiveStepMatcher
             ->orderBy('id')
             ->get();
 
+        // A return leaves the previous cycle's rows in place at the same order.
+        // Those are not an earlier visit. The newest row at that order is the current one.
+        $latestIdBySlot = [];
+        foreach ($siblings as $step) {
+            $latestIdBySlot[self::occurrenceSlot($step)] = (string) $step->id;
+        }
+
         $index = 0;
         foreach ($siblings as $step) {
+            if ((string) $step->id !== ($latestIdBySlot[self::occurrenceSlot($step)] ?? '')) {
+                continue;
+            }
             if ((string) $step->id === (string) $compiled->id) {
                 return $index;
             }
@@ -91,6 +101,14 @@ final class EApprovalLiveStepMatcher
         }
 
         return $index;
+    }
+
+    private static function occurrenceSlot(EApprovalWorkflowStep $step): string
+    {
+        return (int) $step->step_order
+            .'|'.self::whenKey($step)
+            .'|'.trim((string) ($step->approver_id ?? ''))
+            .'|'.(string) $step->approver_type;
     }
 
     private static function sameApproverAndWhen(EApprovalWorkflowStep $compiled, EApprovalWorkflowStep $candidate, string $whenKey): bool

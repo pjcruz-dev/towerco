@@ -16,6 +16,8 @@ import {
 import { RecordActionHistoryNavButton } from "@/components/dynamic-entities/record-action-history";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
+import { useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
+import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
 import { resolveWorkspaceBreadcrumbs } from "@/lib/navigation/workspace-breadcrumbs";
 import {
@@ -105,10 +107,18 @@ export function AppTopNavUtilities() {
     [activeTenantId, user],
   );
 
-  const index = useMemo(
-    () => buildWorkspaceCommandIndex(scopedUser, enabledModules, groups),
-    [enabledModules, groups, scopedUser],
-  );
+  const eApprovalPreview = useEApprovalRolePreview();
+  const documentPreview = useDocumentRegisterRolePreview();
+
+  const index = useMemo(() => {
+    const built = buildWorkspaceCommandIndex(scopedUser, enabledModules, groups);
+    const allow = (href: string) => eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href);
+    if (!eApprovalPreview.active && !documentPreview.active) return built;
+    return {
+      navigate: built.navigate.filter((item) => allow(item.href)),
+      actions: built.actions.filter((item) => allow(item.href)),
+    };
+  }, [documentPreview, eApprovalPreview, enabledModules, groups, scopedUser]);
 
   const lookupItems = useMemo(
     () => [...index.navigate, ...index.actions],

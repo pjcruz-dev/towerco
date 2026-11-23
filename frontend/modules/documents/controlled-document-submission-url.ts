@@ -52,8 +52,6 @@ export function eApprovalFocusUrl(formId: string, searchParams?: SearchParamsLik
 
   if (mode === "new" || mode === "revision") {
     params.set("controlled_mode", mode);
-  } else if (!documentCode && !resubmit) {
-    params.set("controlled_mode", "new");
   }
   if (documentCode) {
     params.set("document_code", documentCode);

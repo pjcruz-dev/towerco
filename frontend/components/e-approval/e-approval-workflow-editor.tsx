@@ -40,6 +40,12 @@ import { getErrorMessage } from "@/lib/api/error";
 import { previewEApprovalFormWorkflow, testEApprovalManagerLookup } from "@/lib/api/modules/e-approval-api";
 import { parseSelectChoices } from "@/modules/e-approval/field-options";
 import { E_APPROVAL_STEP_TYPES } from "@/modules/e-approval/field-types";
+import {
+  managerChainCanvasSubtitle,
+  managerChainEnabled,
+  managerChainMaxLevels,
+  managerChainStopTitles,
+} from "@/modules/e-approval/manager-chain";
 import { trainingTypesList } from "@/modules/e-approval/form-workflow-options";
 import type { EApprovalFormFieldInput, EApprovalWorkflowStepInput } from "@/modules/e-approval/types";
 import {
@@ -225,6 +231,91 @@ function StepDecisionButtons({
   );
 }
 
+function ManagerChainFields({
+  step,
+  onUpdate,
+}: {
+  step: EApprovalWorkflowStepInput;
+  onUpdate: (patch: Partial<EApprovalWorkflowStepInput>) => void;
+}) {
+  const enabled = managerChainEnabled(step);
+  const titles = managerChainStopTitles(step);
+  const levels = managerChainMaxLevels(step);
+
+  return (
+    <div className="grid gap-3">
+      <p className="text-xs text-muted-foreground">Resolved from Entra at submit.</p>
+      <label className="flex cursor-pointer items-start gap-2 text-sm">
+        <Checkbox
+          className="mt-0.5"
+          checked={enabled}
+          onCheckedChange={(checked) => {
+            if (checked === true) {
+              const stored =
+                typeof step.manager_chain_stop_titles === "string"
+                  ? step.manager_chain_stop_titles
+                  : typeof step.condition?.manager_chain_stop_titles === "string"
+                    ? step.condition.manager_chain_stop_titles
+                    : "Director";
+              onUpdate({
+                manager_chain: true,
+                manager_chain_stop_titles: stored.trim() === "" ? "Director" : stored,
+                manager_chain_max_levels: levels,
+              });
+              return;
+            }
+            onUpdate({
+              manager_chain: false,
+              manager_chain_stop_titles: undefined,
+              manager_chain_max_levels: undefined,
+            });
+          }}
+        />
+        <span>
+          <span className="font-medium">Follow the reporting line</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Off: only the direct manager. On: each manager approves in order, from the requestor up to the job title below. That person is included, then the line stops. A requestor who reports to a manager, who reports to a director, gets both. A requestor who already reports to the director gets only the director. The same step works on every form.
+          </span>
+        </span>
+      </label>
+      {enabled ? (
+        <div className="grid gap-3 ps-6">
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Stop at job title</span>
+            <Input
+              value={titles}
+              maxLength={120}
+              placeholder="Director"
+              onChange={(event) => onUpdate({ manager_chain: true, manager_chain_stop_titles: event.target.value })}
+            />
+            <span className="block text-[11px] text-muted-foreground">
+              Comma-separated. Leave blank to walk every manager up to the level limit.
+            </span>
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Level limit</span>
+            <Input
+              type="number"
+              min={1}
+              max={8}
+              value={levels}
+              onChange={(event) =>
+                onUpdate({
+                  manager_chain: true,
+                  manager_chain_max_levels: Math.max(1, Math.min(8, Number(event.target.value) || 1)),
+                })
+              }
+            />
+            <span className="block text-[11px] text-muted-foreground">
+              Stops the line even if the job title has not appeared. 1 is the direct manager only.
+            </span>
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function approverLabelForStep(
   step: EApprovalWorkflowStepInput,
   approverOptions: { id: string; label: string }[],
@@ -233,7 +324,7 @@ function approverLabelForStep(
   fieldMapSourceOptions: { id: string; label: string }[],
 ): string {
   if (step.type === "manager") {
-    return "Direct manager (Entra)";
+    return managerChainEnabled(step) ? "Reporting line (Entra)" : "Direct manager (Entra)";
   }
   if (step.type === "field") {
     const field = approverFieldOptions.find((item) => item.id === step.approverId);
@@ -617,7 +708,7 @@ function WorkflowStepCard({
         </label>
 
         {step.type === "manager" ? (
-          <p className="flex items-end pb-2 text-xs text-muted-foreground">Resolved from Entra at submit</p>
+          <ManagerChainFields step={step} onUpdate={onUpdate} />
         ) : step.type === "field" ? (
           <label className="space-y-1">
             <span className="text-xs font-medium text-muted-foreground">Approver field</span>
@@ -1871,6 +1962,10 @@ export function EApprovalWorkflowEditor({
             )
           }
           subtitleForStep={(step) => {
+            const chainSubtitle = managerChainCanvasSubtitle(step);
+            if (chainSubtitle) {
+              return chainSubtitle;
+            }
             const typeLabel = workflowStepTypeLabel(step.type);
             if (step.type === "user" && step.approverId) {
               const user = approverOptions.find((item) => item.id === step.approverId);
@@ -2499,6 +2594,11 @@ export function EApprovalWorkflowEditor({
                 value={managerTestEmail}
                 onChange={(e) => setManagerTestEmail(e.target.value)}
               />
+              {steps.some((step) => managerChainEnabled(step)) ? (
+                <span className="block text-[11px] text-muted-foreground">
+                  Follow the reporting line is on. Preview lists each manager for this email, in order, and stops at the job title. Someone who already reports to that title appears once.
+                </span>
+              ) : null}
             </label>
           ) : null}
           <EApprovalWorkflowPreviewFields

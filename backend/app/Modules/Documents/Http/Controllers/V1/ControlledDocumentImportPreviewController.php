@@ -7,6 +7,8 @@ namespace App\Modules\Documents\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Documents\Http\Controllers\V1\Concerns\DecodesControlledDocumentImportRequest;
 use App\Modules\Documents\Services\ControlledDocumentImportService;
+use App\Modules\Documents\Support\ControlledDocumentRoleFieldAccess;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,7 +18,9 @@ class ControlledDocumentImportPreviewController extends AbstractApiController
 
     public function __invoke(Request $request, ControlledDocumentImportService $import): JsonResponse
     {
-        abort_unless($request->user()?->can('documents:controlled:import'), 403);
+        $user = $request->user();
+        abort_unless($user instanceof TenantUser && $user->can('documents:controlled:import'), 403);
+        abort_unless(app(ControlledDocumentRoleFieldAccess::class)->allows($user, 'import'), 403);
 
         $payload = $this->decodeControlledDocumentImport($request, allowFiles: false);
         $available = $import->availablePaths($payload['archive'], $payload['available_paths'], []);

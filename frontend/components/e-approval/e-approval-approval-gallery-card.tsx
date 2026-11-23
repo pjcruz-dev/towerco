@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { FileStack, User } from "lucide-react";
 
+import { EApprovalRoleFieldFrame, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
+import { E_APPROVAL_LIST_FIELDS } from "@/lib/e-approval/submission-role-access";
 import {
   EApprovalWorkflowStepShow,
   buildWorkflowStepShowItems,
@@ -31,9 +33,12 @@ function submissionHref(row: EApprovalApprovalRow): string | null {
   return pending ? `/e-approval/submissions/${id}?tab=decide` : `/e-approval/submissions/${id}`;
 }
 
+const ROLE_COLUMNS = E_APPROVAL_LIST_FIELDS.map((field) => ({ id: field.id, label: field.label }));
+
 export function EApprovalApprovalGalleryCard({ row }: Props) {
+  const access = useEApprovalSubmissionAccess();
   const submission = row.submission;
-  const href = submissionHref(row);
+  const href = access.allows("view") ? submissionHref(row) : null;
   const status = submission?.status || row.status;
 
   const body = (
@@ -45,28 +50,48 @@ export function EApprovalApprovalGalleryCard({ row }: Props) {
               <FileStack className="h-5 w-5" aria-hidden />
             </div>
             <div className="min-w-0">
-              <p className="font-mono text-sm font-medium text-foreground group-hover:text-primary">
-                {submission?.document_no ?? "—"}
-              </p>
-              <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{submission?.form_name ?? "Form"}</p>
-              {submission?.subsidiary ? (
-                <p className="mt-0.5 text-xs text-muted-foreground">{submission.subsidiary}</p>
+              {access.visible("document_no", "table") ? (
+                <EApprovalRoleFieldFrame fieldName="document_no" fieldLabel="Document" columns={ROLE_COLUMNS}>
+                  <p className="font-mono text-sm font-medium text-foreground group-hover:text-primary">
+                    {submission?.document_no ?? "—"}
+                  </p>
+                </EApprovalRoleFieldFrame>
+              ) : (
+                <p className="font-mono text-sm font-medium text-foreground">Approval</p>
+              )}
+              {access.visible("form_name", "table") ? (
+                <EApprovalRoleFieldFrame fieldName="form_name" fieldLabel="Form" columns={ROLE_COLUMNS}>
+                  <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">{submission?.form_name ?? "Form"}</p>
+                </EApprovalRoleFieldFrame>
+              ) : null}
+              {submission?.subsidiary && access.visible("subsidiary", "table") ? (
+                <EApprovalRoleFieldFrame fieldName="subsidiary" fieldLabel="Subsidiary" columns={ROLE_COLUMNS}>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{submission.subsidiary}</p>
+                </EApprovalRoleFieldFrame>
               ) : null}
             </div>
           </div>
-          <EApprovalStatusBadge
-            status={status}
-            label={submission?.status_label}
-            kind="submission"
-          />
+          {access.visible("status", "table") ? (
+            <EApprovalRoleFieldFrame fieldName="status" fieldLabel="Status" columns={ROLE_COLUMNS}>
+              <EApprovalStatusBadge
+                status={status}
+                label={submission?.status_label}
+                kind="submission"
+              />
+            </EApprovalRoleFieldFrame>
+          ) : null}
         </div>
 
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <User className="h-3.5 w-3.5" aria-hidden />
-              {submission?.requestor?.name ?? "Unknown requestor"}
-            </span>
+            {access.visible("requestor", "table") ? (
+              <EApprovalRoleFieldFrame fieldName="requestor" fieldLabel="Requestor" columns={ROLE_COLUMNS}>
+                <span className="inline-flex items-center gap-1">
+                  <User className="h-3.5 w-3.5" aria-hidden />
+                  {submission?.requestor?.name ?? "Unknown requestor"}
+                </span>
+              </EApprovalRoleFieldFrame>
+            ) : null}
             <span>Submitted {formatSubmittedAt(submission?.created_at)}</span>
           </div>
           {row.step_order != null ? (

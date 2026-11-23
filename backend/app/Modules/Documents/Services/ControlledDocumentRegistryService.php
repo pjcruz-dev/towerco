@@ -567,7 +567,7 @@ final class ControlledDocumentRegistryService
     /**
      * @param  array<string, mixed>  $filters
      */
-    public function exportCsv(TenantUser $actor, array $filters): string
+    public function exportCsv(TenantUser $actor, array $filters, array $hiddenColumns = []): string
     {
         [$from, $to] = $this->reportWindow($filters);
         $filters['published_from'] = $from->toDateString();
@@ -594,34 +594,34 @@ final class ControlledDocumentRegistryService
             ]);
         }
 
-        fputcsv($handle, [
-            'document_code',
-            'dcf_number',
-            'title',
-            'document_type',
-            'department',
-            'revision_number',
-            'status',
-            'effective_date',
-            'next_review_date',
-            'published_at',
-            'has_file',
-        ]);
+        $columns = [
+            'document_code' => fn (ControlledDocument $document): string => (string) $document->document_code,
+            'dcf_number' => fn (ControlledDocument $document): string => (string) ($document->dcf_number ?? ''),
+            'title' => fn (ControlledDocument $document): string => (string) $document->title,
+            'document_type' => fn (ControlledDocument $document): string => (string) ($document->document_type ?? ''),
+            'department' => fn (ControlledDocument $document): string => (string) ($document->department ?? ''),
+            'revision_number' => fn (ControlledDocument $document): string => (string) $document->current_revision,
+            'status' => fn (ControlledDocument $document): string => (string) $document->status,
+            'effective_date' => fn (ControlledDocument $document): string => (string) ($document->effective_date?->toDateString() ?? ''),
+            'next_review_date' => fn (ControlledDocument $document): string => (string) ($document->next_review_date?->toDateString() ?? ''),
+            'published_at' => fn (ControlledDocument $document): string => (string) ($document->published_at?->toDateString() ?? ''),
+            'has_file' => fn (ControlledDocument $document): string => $document->getAttribute('has_file') ? 'yes' : 'no',
+        ];
+        $hidden = array_flip($hiddenColumns);
+        $columns = array_filter(
+            $columns,
+            static fn (string $name): bool => ! isset($hidden[$name]),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        fputcsv($handle, array_keys($columns));
 
         foreach ($documents as $document) {
-            fputcsv($handle, [
-                $document->document_code,
-                $document->dcf_number,
-                $document->title,
-                $document->document_type,
-                $document->department,
-                (string) $document->current_revision,
-                $document->status,
-                $document->effective_date?->toDateString(),
-                $document->next_review_date?->toDateString(),
-                $document->published_at?->toDateString(),
-                $document->getAttribute('has_file') ? 'yes' : 'no',
-            ]);
+            $line = [];
+            foreach ($columns as $value) {
+                $line[] = $value($document);
+            }
+            fputcsv($handle, $line);
         }
 
         rewind($handle);

@@ -146,6 +146,9 @@ class EApprovalForm extends Model
             'name' => $this->name,
             'description' => $this->description,
             'category' => $this->category,
+            'form_family' => ($family = trim((string) (is_array($this->metadata_json) ? ($this->metadata_json['form_family'] ?? '') : ''))) !== ''
+                ? $family
+                : null,
             'status' => $this->status,
             'schema_version' => $this->schema_version,
             'owner_code' => $this->owner_code,
@@ -243,7 +246,7 @@ class EApprovalForm extends Model
                 }
             }
 
-            return $payload;
+            return EApprovalWorkflowStepDefinitionSupport::withManagerChain($payload, ['condition' => $condition]);
         })->values()->all() ?? [];
 
         $metadata = is_array($this->metadata_json) ? $this->metadata_json : [];

@@ -79,6 +79,18 @@ export function EApprovalApprovalSignatureField({
     }
   }, [enabled, onChange, profileSignature, value]);
 
+  if (enabled && profileQuery.isPending) {
+    return null;
+  }
+
+  if (hasProfileSignature) {
+    return (
+      <span className="sr-only" data-help="ea-decide-signature" data-has-profile-signature="true">
+        Your saved signature will be used.
+      </span>
+    );
+  }
+
   const handleUpload = async (file: File | null | undefined) => {
     if (!file || disabled) {
       return;

@@ -159,12 +159,17 @@ export function gridColumnSubsidiaryIssue(
   column: GridColumnDef,
   cell: string,
   values: Record<string, string>,
+  siteSearchScope: "request" | "all" | "atc" | "adic" = "request",
 ): string | null {
   const matchField = column.subsidiary_field?.trim() ?? "";
   if (matchField === "" || column.hidden || cell.trim() === "") {
     return null;
   }
-  const expected = (values[matchField] ?? "").trim();
+  if (siteSearchScope === "all") {
+    return null;
+  }
+  const expected =
+    siteSearchScope === "atc" ? "ATC" : siteSearchScope === "adic" ? "ADIC" : (values[matchField] ?? "").trim();
   if (expected === "") {
     return null;
   }

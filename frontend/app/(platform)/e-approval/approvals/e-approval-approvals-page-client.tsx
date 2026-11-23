@@ -9,6 +9,7 @@ import { ConfigurableModulePageHeader } from "@/components/dashboard/configurabl
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { EApprovalApprovalGalleryCard } from "@/components/e-approval/e-approval-approval-gallery-card";
+import { useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalBackLink } from "@/components/e-approval/e-approval-page-header";
@@ -87,7 +88,22 @@ export function EApprovalApprovalsPageClient() {
   const rows = data?.data ?? [];
   const meta = data?.meta;
   const isEmpty = !isFetching && rows.length === 0;
-  const approvalColumns = useMemo(() => createEApprovalApprovalsTableColumns(), []);
+  const access = useEApprovalSubmissionAccess();
+  const approvalColumns = useMemo(() => {
+    const fieldByColumn: Record<string, string> = {
+      document: "document_no",
+      form: "form_name",
+      requestor: "requestor",
+      status: "status",
+    };
+    return createEApprovalApprovalsTableColumns().filter((column) => {
+      const id = String(column.id ?? "");
+      if (id === "actions") return access.allows("view");
+      const field = fieldByColumn[id];
+      if (!field) return true;
+      return access.visible(field, "table");
+    });
+  }, [access]);
   const normalizedData = useMemo(
     () =>
       applyPageEnhancements(

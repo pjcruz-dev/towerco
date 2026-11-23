@@ -82,6 +82,42 @@ describe("workflow-path-diagram", () => {
     ).toMatch(/2 of 3/);
   });
 
+  it("labels a reporting-line step with the Entra job title", () => {
+    const diagram = buildWorkflowPathDiagram({
+      resolved_steps: [
+        {
+          step_order: 1,
+          type: "user",
+          label: "Project Manager",
+          resolved_user_id: "ramon",
+          resolved_user_name: "Ramon Hernandez",
+          resolved_user_email: "rhernandez@alliancetowers.com",
+          role_label: "Project Manager",
+          warning: null,
+        },
+        {
+          step_order: 2,
+          type: "user",
+          label: "Director",
+          resolved_user_id: "pilar",
+          resolved_user_name: "Demetrio Pilar",
+          resolved_user_email: "dpilar@alliancetowers.com",
+          role_label: "Director",
+          warning: null,
+        },
+      ],
+    });
+
+    expect(diagram.runBands.map((band) => band.nodes[0]?.title)).toEqual([
+      "Ramon Hernandez",
+      "Demetrio Pilar",
+    ]);
+    expect(diagram.runBands.map((band) => band.nodes[0]?.subtitle)).toEqual([
+      "Project Manager · rhernandez@alliancetowers.com",
+      "Director · dpilar@alliancetowers.com",
+    ]);
+  });
+
   it("adds a live training band after the last approval", () => {
     const band = trainingPathBand(
       [

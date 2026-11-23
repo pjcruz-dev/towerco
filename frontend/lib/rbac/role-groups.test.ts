@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import type { AdminRoleRow } from "@/lib/api/modules/admin-roles-api";
 import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
-import { filterRolesForEnabledModules, HIDDEN_TENANT_ROLE_ALIASES } from "@/lib/rbac/role-groups";
+import {
+  filterRolesForEnabledModules,
+  groupRolesForMenu,
+  HIDDEN_TENANT_ROLE_ALIASES,
+  roleLabelWithinGroup,
+} from "@/lib/rbac/role-groups";
 
-function role(name: string): AdminRoleRow {
+function role(name: string, id = 1): AdminRoleRow {
   return {
-    id: 1,
+    id,
     name,
     is_baseline: name === "tenant_admin",
     permissions: [],
@@ -32,6 +37,56 @@ describe("filterRolesForEnabledModules", () => {
     });
 
     expect(visible.map((row) => row.name)).toEqual(["administrator"]);
+  });
+});
+
+describe("groupRolesForMenu", () => {
+  it("groups module roles and keeps workspace roles", () => {
+    const groups = groupRolesForMenu([
+      role("tenant_admin", 1),
+      role("admin", 2),
+      role("billing", 3),
+      role("finance_officer", 4),
+      role("assets_viewer", 5),
+      role("assets_admin", 6),
+      role("dcf_author", 7),
+      role("e_approval_requestor", 8),
+      role("ticketing_operator", 9),
+      role("doc_extract_viewer", 10),
+      role("ai_assistant_user", 11),
+      role("enviroment_switcher", 12),
+    ]);
+
+    expect(groups.map((group) => group.label)).toEqual([
+      "Workspace",
+      "Ticketing",
+      "Assets",
+      "Document register",
+      "E-Forms",
+      "AI Assistant",
+      "DocExtract",
+      "Custom roles",
+    ]);
+    expect(groups.find((group) => group.id === "workspace")?.roles.map((row) => row.name)).toEqual([
+      "billing",
+      "finance_officer",
+      "admin",
+      "tenant_admin",
+    ]);
+    expect(groups.find((group) => group.id === "asset_management")?.roles.map((row) => row.name)).toEqual([
+      "assets_viewer",
+      "assets_admin",
+    ]);
+    expect(groups.find((group) => group.id === "custom")?.roles.map((row) => row.name)).toEqual([
+      "enviroment_switcher",
+    ]);
+    expect(groups.flatMap((group) => group.roles)).toHaveLength(12);
+  });
+
+  it("shortens the role name under its module heading", () => {
+    expect(roleLabelWithinGroup("e_approval", "e_approval_requestor")).toBe("Requestor");
+    expect(roleLabelWithinGroup("document_register", "dcf_controller")).toBe("Controller");
+    expect(roleLabelWithinGroup("workspace", "admin")).toBe("Operations admin");
   });
 });
 

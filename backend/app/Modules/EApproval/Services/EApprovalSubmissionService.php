@@ -17,6 +17,7 @@ use App\Modules\EApproval\Support\EApprovalAwaitingApproverFilter;
 use App\Modules\EApproval\Support\EApprovalFormRequestAccessSupport;
 use App\Modules\EApproval\Support\EApprovalFormWorkflowOptions;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use App\Modules\EApproval\Support\EApprovalSubmissionFieldFilter;
 use App\Modules\EApproval\Support\EApprovalSubmissionSearchFields;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
@@ -56,6 +57,7 @@ final class EApprovalSubmissionService
         private readonly ControlledDocumentEApprovalValuesService $controlledDocumentValues,
         private readonly ControlledDocumentEApprovalHookService $controlledDocumentHook,
         private readonly EApprovalFinanceStageService $financeStage,
+        private readonly EApprovalRoleFieldAccess $roleAccess,
     ) {}
 
     public function paginate(
@@ -197,6 +199,7 @@ final class EApprovalSubmissionService
         ?string $forceCurrentApproverId = null,
         array $attachmentCountsByFieldName = [],
     ): EApprovalSubmission {
+        $values = $this->guardWritableValues($requestor, $values);
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->find($formId);
         if ($form === null) {
             throw ValidationException::withMessages(['form_id' => [__('Form not found.')]]);
@@ -224,11 +227,11 @@ final class EApprovalSubmissionService
         );
         $values = $controlled['values'];
 
-        $this->valuesValidator->validate($form, $values, true, $attachmentCountsByFieldName);
+        $this->valuesValidator->validate($form, $values, true, $attachmentCountsByFieldName, [], $requestor);
 
         return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning, $controlled, $forceCurrentApproverId) {
             $submissionId = (string) Str::uuid();
-            $prepared = $this->workflowPreparer->prepare($form, $values, $submissionId);
+            $prepared = $this->workflowPreparer->prepare($form, $values, $submissionId, (string) $requestor->email);
             $documentNo = $controlled['document_no'];
 
             $submission = EApprovalSubmission::query()->create([
@@ -297,6 +300,7 @@ final class EApprovalSubmissionService
         bool $updateParentLink = true,
         bool $forceNew = false,
     ): EApprovalSubmission {
+        $values = $this->guardWritableValues($requestor, $values);
         if (! $forceNew) {
             $existing = $this->findRequestorDraft($requestor, $formId);
             if ($existing !== null) {
@@ -325,7 +329,7 @@ final class EApprovalSubmissionService
         $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values);
 
-        $this->valuesValidator->validate($form, $values, false);
+        $this->valuesValidator->validate($form, $values, false, [], [], $requestor);
 
         return DB::connection('tenant')->transaction(function () use ($form, $values, $requestor, $parentId, $overspendWarning) {
             $snapshot = $this->snapshots->capture($form);
@@ -363,6 +367,7 @@ final class EApprovalSubmissionService
         ?string $parentSubmissionId = null,
         bool $updateParentLink = false,
     ): EApprovalSubmission {
+        $values = $this->guardWritableValues($requestor, $values, $submission);
         $this->assertDraftOwner($submission, $requestor);
 
         $previousParentId = $submission->parent_submission_id;
@@ -379,7 +384,7 @@ final class EApprovalSubmissionService
         $values = $this->computedFields->apply($form, $values);
         $values = $this->controlledDocumentValues->prepareForDraft($form, $values);
         $overspendWarning = $this->assertParentChildAmounts($form, $parentId, $values, (string) $submission->id);
-        $this->valuesValidator->validate($form, $values, false);
+        $this->valuesValidator->validate($form, $values, false, [], [], $requestor);
 
         return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId) {
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
@@ -412,6 +417,7 @@ final class EApprovalSubmissionService
         ?string $parentSubmissionId = null,
         bool $updateParentLink = false,
     ): EApprovalSubmission {
+        $values = $this->guardWritableValues($requestor, $values, $submission);
         $this->assertDraftOwner($submission, $requestor);
 
         $formForGuard = EApprovalForm::query()->find($submission->form_id);
@@ -444,11 +450,12 @@ final class EApprovalSubmissionService
             true,
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
+            $requestor,
         );
 
         return DB::connection('tenant')->transaction(function () use ($submission, $form, $values, $requestor, $parentId, $updateParentLink, $overspendWarning, $previousParentId, $controlled) {
             $documentNo = $controlled['document_no'];
-            $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
+            $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id, (string) $requestor->email);
 
             EApprovalFormValue::query()->where('submission_id', $submission->id)->delete();
 
@@ -648,6 +655,7 @@ final class EApprovalSubmissionService
         }
 
         $form = EApprovalForm::query()->with(['fields', 'workflowTemplate.steps'])->findOrFail($submission->form_id);
+        $values = $this->guardWritableValues($actor, $values, $submission);
 
         $overspendWarning = $this->assertLinkedParentAmounts($submission, $form, $values);
         $this->valuesValidator->validate(
@@ -656,6 +664,7 @@ final class EApprovalSubmissionService
             true,
             $this->attachmentCountsByFieldName($submission),
             $this->attachmentSlotsByFieldName($submission),
+            $actor,
         );
 
         $previousValues = $this->currentValuesMap($submission);
@@ -682,7 +691,13 @@ final class EApprovalSubmissionService
 
             $this->reissueDocumentNumberForValues($submission, $form, $values, $actor);
 
-            $prepared = $this->workflowPreparer->prepare($form, $values, (string) $submission->id);
+            $submission->loadMissing('requestor');
+            $prepared = $this->workflowPreparer->prepare(
+                $form,
+                $values,
+                (string) $submission->id,
+                $submission->requestor?->email,
+            );
             $currentCycle = max(1, (int) ($submission->approval_cycle ?: 1));
             $willResume = $routingDecision['routed'] === EApprovalRevisionRouting::RESUME_RETURNING_STEP;
             $nextCycle = $willResume ? $currentCycle : $currentCycle + 1;
@@ -917,6 +932,7 @@ final class EApprovalSubmissionService
             'document_links' => $this->documentLinks->listOutgoing($submission),
             'incoming_document_links' => $this->documentLinks->listIncoming($submission),
             'values' => $this->valueDisplay->mapForApi($submission->values),
+            'revision_baseline' => is_array($submission->revision_baseline_json) ? $submission->revision_baseline_json : null,
             'approvals' => $submission->approvals->map(static fn ($a) => $a->toListRow())->values()->all(),
             'attachments' => $submission->attachments->map(static fn ($a) => [
                 'id' => (string) $a->id,
@@ -1354,6 +1370,33 @@ final class EApprovalSubmissionService
         }
 
         $this->financeAudit->logOverspendPolicyAllowed($context, $submissionId, $actor);
+    }
+
+    /**
+     * Keep values this role cannot edit. Incoming copies of those fields are dropped.
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function guardWritableValues(TenantUser $actor, array $values, ?EApprovalSubmission $existing = null): array
+    {
+        $stored = [];
+        if ($existing !== null) {
+            $existing->loadMissing('values.field');
+            foreach ($existing->values as $row) {
+                $name = $row->field?->name;
+                if (! is_string($name) || $name === '') {
+                    continue;
+                }
+                if (! $this->roleAccess->editable($actor, $name)) {
+                    $stored[$name] = $row->value;
+                }
+            }
+        }
+
+        $editable = $this->roleAccess->onlyEditable($actor, $values);
+
+        return array_merge($stored, $editable);
     }
 
     private function persistValues(EApprovalSubmission $submission, EApprovalForm $form, array $values): void

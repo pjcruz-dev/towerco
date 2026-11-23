@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Lock, Pencil } from "lucide-react";
 
 import { EApprovalFieldRenderer } from "@/components/e-approval/e-approval-field-renderer";
+import { EApprovalRoleFieldFrame, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { parseBuilderLayoutRows } from "@/modules/e-approval/builder-layout-rows";
 import { visibleFormFields } from "@/modules/e-approval/field-visibility";
 import type { EApprovalCameraPhotoMetadata } from "@/modules/e-approval/field-camera-options";
@@ -153,7 +154,19 @@ export function EApprovalFormFieldsLayout({
   const layoutFields = normalizeFormFieldLayouts(fields, layoutRows);
   const fieldCatalog = catalogFields && catalogFields.length > 0 ? catalogFields : layoutFields;
   const displayFields = visibleFormFields(layoutFields, values);
-  const groups = buildFieldDisplayGroups(displayFields);
+  const access = useEApprovalSubmissionAccess();
+  const roleColumns = layoutFields
+    .filter((field) => field.type !== "section" && field.type !== "divider")
+    .map((field) => ({ id: field.name, label: field.label || field.name }));
+  const roleFields = access.configuring
+    ? displayFields
+    : displayFields.filter(
+        (field) =>
+          field.type === "section" ||
+          field.type === "divider" ||
+          access.visible(field.name, "form"),
+      );
+  const groups = buildFieldDisplayGroups(roleFields);
 
   const renderField = (
     field: EApprovalFormFieldInput,
@@ -169,6 +182,7 @@ export function EApprovalFormFieldsLayout({
     const isLocked = isPrefilled && field.type !== "section" && field.type !== "divider";
 
     return (
+      <EApprovalRoleFieldFrame fieldName={field.name} fieldLabel={field.label || field.name} columns={roleColumns}>
       <div
         id={`ea-field-${field.name}`}
         data-help={
@@ -230,7 +244,7 @@ export function EApprovalFormFieldsLayout({
           removingSavedAttachmentId={removingSavedAttachmentId}
           approverOptions={approverOptions}
           approverOptionsLoading={approverOptionsLoading}
-          disabled={disabled}
+          disabled={disabled || (!access.editable(field.name) && field.type !== "section" && field.type !== "divider")}
           prefillLocked={isLocked}
           density={density}
           planFeaturesOverride={planFeaturesOverride}
@@ -240,6 +254,7 @@ export function EApprovalFormFieldsLayout({
           gridSummary={gridSummary}
         />
       </div>
+      </EApprovalRoleFieldFrame>
     );
   };
 

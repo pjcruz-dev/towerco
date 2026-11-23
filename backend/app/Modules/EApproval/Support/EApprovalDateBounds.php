@@ -43,8 +43,13 @@ final class EApprovalDateBounds
      * @param  array<string, mixed>|null  $options
      * @param  array<string, mixed>  $values
      */
-    public static function gridError(?array $options, mixed $raw, array $values, ?DateTimeInterface $today = null): ?string
-    {
+    public static function gridError(
+        ?array $options,
+        mixed $raw,
+        array $values,
+        ?DateTimeInterface $today = null,
+        string $siteSearchScope = 'request',
+    ): ?string {
         $columns = self::columnRecords($options);
         if ($columns === []) {
             return null;
@@ -67,7 +72,7 @@ final class EApprovalDateBounds
                 if ($dateError !== null) {
                     return $dateError;
                 }
-                $siteError = self::subsidiaryError($column, $cell, $values, $label !== '' ? $label : 'Site');
+                $siteError = self::subsidiaryError($column, $cell, $values, $label !== '' ? $label : 'Site', $siteSearchScope);
                 if ($siteError !== null) {
                     return $siteError;
                 }
@@ -81,13 +86,19 @@ final class EApprovalDateBounds
      * @param  array<string, mixed>  $column
      * @param  array<string, mixed>  $values
      */
-    private static function subsidiaryError(array $column, string $cell, array $values, string $label): ?string
+    private static function subsidiaryError(array $column, string $cell, array $values, string $label, string $siteSearchScope = 'request'): ?string
     {
         $field = trim((string) ($column['subsidiary_field'] ?? ''));
         if ($field === '') {
             return null;
         }
-        $expected = strtoupper(trim((string) ($values[$field] ?? '')));
+        $scope = strtolower(trim($siteSearchScope));
+        if ($scope === 'all') {
+            return null;
+        }
+        $expected = $scope === 'atc' || $scope === 'adic'
+            ? strtoupper($scope)
+            : strtoupper(trim((string) ($values[$field] ?? '')));
         if ($expected === '') {
             return null;
         }
@@ -95,7 +106,7 @@ final class EApprovalDateBounds
             if (strtoupper($subsidiary) !== $expected) {
                 return __(':label must belong to :subsidiary.', [
                     'label' => $label,
-                    'subsidiary' => trim((string) ($values[$field] ?? '')),
+                    'subsidiary' => $expected,
                 ]);
             }
         }

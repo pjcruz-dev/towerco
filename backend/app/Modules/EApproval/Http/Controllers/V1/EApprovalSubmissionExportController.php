@@ -12,7 +12,9 @@ use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Services\EApprovalReportService;
 use App\Modules\EApproval\Services\EApprovalSubmissionExportService;
 use App\Modules\EApproval\Support\EApprovalExportViewerScope;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use App\Modules\EApproval\Support\SimpleXlsxWriter;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,9 +27,11 @@ class EApprovalSubmissionExportController extends AbstractApiController
         Request $request,
         EApprovalSubmissionExportService $export,
         EApprovalReportService $reports,
+        EApprovalRoleFieldAccess $roleAccess,
     ): Response|JsonResponse {
         $user = $request->user();
         abort_unless($user !== null && EApprovalExportViewerScope::userCanExport($user), 403);
+        abort_unless($roleAccess->allows($user, 'export'), 403);
 
         ModuleListExportQuery::coerceArrayParams($request, ['ids', 'columns', 'statuses']);
 
@@ -90,6 +94,7 @@ class EApprovalSubmissionExportController extends AbstractApiController
         ]);
 
         $selectedColumns = ! empty($validated['columns']) ? array_values($validated['columns']) : null;
+        $selectedColumns = $this->columnsAllowedForRole($export, $roleAccess, $user, $form, $includeFields, $selectedColumns);
 
         $gridField = null;
         if ($layout === 'line_items') {
@@ -227,7 +232,7 @@ class EApprovalSubmissionExportController extends AbstractApiController
         string $filename,
         array $exportHeaders,
     ): Response {
-        $writer = new SimpleXlsxWriter();
+        $writer = new SimpleXlsxWriter;
 
         $sheets = [[
             'name' => 'Submissions',
@@ -248,5 +253,41 @@ class EApprovalSubmissionExportController extends AbstractApiController
         return response()->download($path, $filename, array_merge($exportHeaders, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]))->deleteFileAfterSend(true);
+    }
+
+    /**
+     * @param  list<string>|null  $selected
+     * @return list<string>
+     */
+    private function columnsAllowedForRole(
+        EApprovalSubmissionExportService $export,
+        EApprovalRoleFieldAccess $roleAccess,
+        TenantUser $user,
+        ?EApprovalForm $form,
+        bool $includeFields,
+        ?array $selected,
+    ): array {
+        $allowed = ['id'];
+        foreach ($export->columns($form, $includeFields) as $column) {
+            $key = (string) ($column['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $field = $roleAccess->fieldForExportKey($key, $form);
+            if ($field === null || $roleAccess->visible($user, $field, 'table')) {
+                $allowed[] = $key;
+            }
+        }
+        $allowed = array_values(array_unique($allowed));
+        if ($selected === null) {
+            return $allowed;
+        }
+        $flip = array_flip($allowed);
+        $picked = array_values(array_filter(
+            $selected,
+            static fn (string $key): bool => isset($flip[$key]),
+        ));
+
+        return $picked !== [] ? $picked : ['id'];
     }
 }

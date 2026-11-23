@@ -58,6 +58,7 @@ export function EApprovalSubmissionNewPageClient() {
     [searchParams],
   );
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("all");
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
   const [copyingFormId, setCopyingFormId] = useState<string | null>(null);
 
@@ -77,17 +78,28 @@ export function EApprovalSubmissionNewPageClient() {
   });
 
   const publishedForms = formsQuery.data?.data ?? [];
+  const categories = useMemo(() => {
+    const names = new Set<string>();
+    for (const form of publishedForms) {
+      const name = form.category?.trim();
+      if (name) names.add(name);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [publishedForms]);
   const filteredForms = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return publishedForms;
-
-    return publishedForms.filter(
-      (form) =>
+    return publishedForms.filter((form) => {
+      if (category !== "all" && (form.category?.trim() || "General") !== category) {
+        return false;
+      }
+      if (!query) return true;
+      return (
         form.name.toLowerCase().includes(query) ||
         (form.description ?? "").toLowerCase().includes(query) ||
-        (form.category ?? "").toLowerCase().includes(query),
-    );
-  }, [publishedForms, search]);
+        (form.category ?? "").toLowerCase().includes(query)
+      );
+    });
+  }, [category, publishedForms, search]);
 
   /** Document Approval tour stays on that form. The finance tour stays on cash advance, liquidation, and reimbursement. */
   const formsForDisplay = useMemo(() => {
@@ -325,6 +337,28 @@ export function EApprovalSubmissionNewPageClient() {
                     className="h-11 pl-9 text-base sm:h-9 sm:text-sm"
                   />
                 </div>
+                {categories.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Form category">
+                    {["all", ...categories].map((name) => {
+                      const selected = category === name;
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setCategory(name)}
+                          className={
+                            selected
+                              ? "rounded-full border border-primary bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                              : "rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                          }
+                        >
+                          {name === "all" ? "All" : name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
               <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Form picker view" />
             </div>

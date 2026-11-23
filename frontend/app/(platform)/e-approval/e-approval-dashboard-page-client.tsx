@@ -15,7 +15,9 @@ import {
 
 import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
 import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
+import { EApprovalRoleFieldFrame, useEApprovalRolePreview, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
+import { E_APPROVAL_LIST_FIELDS } from "@/lib/e-approval/submission-role-access";
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
@@ -68,6 +70,8 @@ function formatWhen(iso: string | null | undefined): string {
     : d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
 }
 
+const ROLE_COLUMNS = E_APPROVAL_LIST_FIELDS.map((field) => ({ id: field.id, label: field.label }));
+
 function QueueList({
   items,
   emptyMessage,
@@ -81,6 +85,8 @@ function QueueList({
 }) {
   const searchParams = useSearchParams();
   const tourActive = isEApprovalSampleTourActive(searchParams);
+  const access = useEApprovalSubmissionAccess();
+  const preview = useEApprovalRolePreview();
 
   if (items.length === 0) {
     if (tourActive && tourFixture) {
@@ -97,30 +103,50 @@ function QueueList({
     <ul className="divide-y divide-border rounded-lg border border-border">
       {items.map((row) => (
         <li key={row.id}>
+          {preview.allowsHref(row.href) ? (
           <Link
             href={row.href}
             className="flex items-start justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30"
           >
             <div className="min-w-0 space-y-0.5">
-              <p className="truncate text-sm font-medium text-foreground">
-                {row.document_no || "Untitled"}
-                {row.form_name ? (
-                  <span className="ml-2 font-normal text-muted-foreground">{row.form_name}</span>
+              <div className="truncate text-sm font-medium text-foreground">
+                {access.visible("document_no", "table") ? (
+                  <EApprovalRoleFieldFrame fieldName="document_no" fieldLabel="Document" columns={ROLE_COLUMNS}>
+                    <span>{row.document_no || "Untitled"}</span>
+                  </EApprovalRoleFieldFrame>
+                ) : (
+                  "Request"
+                )}
+                {row.form_name && access.visible("form_name", "table") ? (
+                  <EApprovalRoleFieldFrame fieldName="form_name" fieldLabel="Form" columns={ROLE_COLUMNS}>
+                    <span className="ml-2 font-normal text-muted-foreground">{row.form_name}</span>
+                  </EApprovalRoleFieldFrame>
                 ) : null}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {row.status_label?.trim() || formatEApprovalStatusLabel(row.status)}
-                {row.step_order != null ? ` · Step ${row.step_order}` : ""}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {access.visible("status", "table") ? (
+                  <EApprovalRoleFieldFrame fieldName="status" fieldLabel="Status" columns={ROLE_COLUMNS}>
+                    <span>{row.status_label?.trim() || formatEApprovalStatusLabel(row.status)}</span>
+                  </EApprovalRoleFieldFrame>
+                ) : null}
+                {row.step_order != null && access.visible("current_step", "table") ? ` · Step ${row.step_order}` : ""}
                 {row.duty === "review" ? " · Reviewer" : row.duty === "approve" ? " · Approver" : ""}
                 {row.age_days != null
                   ? ` · ${row.age_days} day${row.age_days === 1 ? "" : "s"} this round`
-                  : metaLabel === "requestor" && row.requestor_name
+                  : metaLabel === "requestor" && row.requestor_name && access.visible("requestor", "table")
                     ? ` · ${row.requestor_name}`
                     : ` · ${formatWhen(row.waiting_since)}`}
-              </p>
+              </div>
             </div>
             <ArrowRight className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </Link>
+          ) : (
+            <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+              <div className="min-w-0 space-y-0.5">
+                <div className="truncate text-sm font-medium text-foreground">{row.document_no || "Request"}</div>
+              </div>
+            </div>
+          )}
         </li>
       ))}
     </ul>
@@ -188,10 +214,22 @@ function EApprovalDashboardPageInner() {
   }, [layout, serverReady, setLayout]);
 
   const capabilities = data?.capabilities;
-  const showApproveQueue = capabilities?.can_approve ?? canApprove;
-  const showCreate = capabilities?.can_create ?? canCreate;
-  const showForms = capabilities?.can_manage_forms ?? canManageForms;
-  const showReports = capabilities?.can_audit ?? canAudit;
+  const preview = useEApprovalRolePreview();
+  const access = useEApprovalSubmissionAccess();
+  const showApproveQueue =
+    (capabilities?.can_approve ?? canApprove) &&
+    preview.allowsPermission(permissions.eApprovalApprove) &&
+    access.allows("view");
+  const showCreate =
+    (capabilities?.can_create ?? canCreate) &&
+    preview.allowsPermission(permissions.eApprovalSubmissionsCreate) &&
+    access.allows("create");
+  const showForms =
+    (capabilities?.can_manage_forms ?? canManageForms) &&
+    preview.allowsPermission(permissions.eApprovalFormsManage);
+  const showReports =
+    (capabilities?.can_audit ?? canAudit) &&
+    preview.allowsAny([permissions.eApprovalAuditView, permissions.eApprovalSubmissionsView]);
 
   const awaitingQueue = data?.queues?.awaiting_approval ?? [];
   const attentionQueue = data?.queues?.my_attention ?? [];
@@ -203,31 +241,31 @@ function EApprovalDashboardPageInner() {
           label: "Submissions",
           description: "Track your requests",
           icon: FileStack,
-          show: true,
+          show: preview.allowsHref("/e-approval/submissions"),
         },
         {
           href: "/e-approval/approvals?awaiting_me=1",
           label: "Approvals",
           description: "Decide on pending items",
           icon: Inbox,
-          show: showApproveQueue,
+          show: showApproveQueue && preview.allowsHref("/e-approval/approvals"),
         },
         {
           href: "/e-approval/forms",
           label: "Forms",
           description: "Templates and workflows",
           icon: FileText,
-          show: showForms,
+          show: showForms && preview.allowsHref("/e-approval/forms"),
         },
         {
           href: "/e-approval/reports",
           label: "Reports",
           description: "Analytics and exports",
           icon: FileSpreadsheet,
-          show: showReports,
+          show: showReports && preview.allowsHref("/e-approval/reports"),
         },
       ].filter((item) => item.show),
-    [showApproveQueue, showForms, showReports],
+    [preview, showApproveQueue, showForms, showReports],
   );
 
   const layoutMeta = useMemo(() => {
@@ -287,12 +325,14 @@ function EApprovalDashboardPageInner() {
             title="Needs my attention"
             description="Returned and draft submissions you own."
             actions={
+              preview.allowsHref("/e-approval/submissions") ? (
               <Link
                 href="/e-approval/submissions?mine=1"
                 className="text-xs font-medium text-primary hover:underline"
               >
                 View mine
               </Link>
+              ) : null
             }
           >
             <QueueList
@@ -350,6 +390,7 @@ function EApprovalDashboardPageInner() {
   }, [
     attentionQueue,
     awaitingQueue,
+    preview,
     shortcuts,
     showApproveQueue,
     showReports,

@@ -47,6 +47,22 @@ describe("date bounds", () => {
       { subsidiary: "ADIC" },
     );
     expect(message).toBe("From site / location must belong to ADIC.");
+    expect(
+      gridColumnSubsidiaryIssue(
+        { label: "From site / location", type: "select", subsidiary_field: "subsidiary" },
+        JSON.stringify({ site: "M1053", fields: { subsidiary: "ADIC" } }),
+        { subsidiary: "ATC" },
+        "all",
+      ),
+    ).toBeNull();
+    expect(
+      gridColumnSubsidiaryIssue(
+        { label: "From site / location", type: "select", subsidiary_field: "subsidiary" },
+        JSON.stringify({ site: "M1053", fields: { subsidiary: "ADIC" } }),
+        { subsidiary: "ADIC" },
+        "atc",
+      ),
+    ).toBe("From site / location must belong to ATC.");
   });
 
   it("locks funds needed by only after a forecast line has a value", () => {

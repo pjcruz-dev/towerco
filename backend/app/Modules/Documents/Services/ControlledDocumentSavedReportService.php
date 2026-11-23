@@ -18,6 +18,7 @@ final class ControlledDocumentSavedReportService
 {
     public function __construct(
         private readonly ControlledDocumentRegistryService $registry,
+        private readonly ControlledDocumentRoleFieldAccess $roleAccess,
         private readonly TenantActivityLogger $activity,
     ) {}
 
@@ -97,7 +98,7 @@ final class ControlledDocumentSavedReportService
     {
         $this->assertOwner($user, $report);
 
-        return $this->registry->exportCsv($user, $this->filterPayload($report));
+        return $this->registry->exportCsv($user, $this->filterPayload($report), $this->roleAccess->hiddenExportColumns($user));
     }
 
     /**
@@ -149,7 +150,7 @@ final class ControlledDocumentSavedReportService
             throw new \RuntimeException('Scheduled report owner is missing.');
         }
 
-        $csv = $this->registry->exportCsv($owner, $this->filterPayload($report));
+        $csv = $this->registry->exportCsv($owner, $this->filterPayload($report), $this->roleAccess->hiddenExportColumns($owner));
         $filename = Str::slug($report->name) !== '' ? Str::slug($report->name).'.csv' : 'controlled-document-register.csv';
         $path = sprintf(
             '%s/controlled-document-reports/%s/%s',

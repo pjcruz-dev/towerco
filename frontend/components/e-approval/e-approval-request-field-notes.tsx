@@ -57,6 +57,7 @@ type Props = {
     pin_h?: number;
     mention_user_ids?: string[];
   }) => void;
+  onResolve?: (commentId: string, resolved: boolean) => void;
   children: ReactNode;
 };
 
@@ -67,6 +68,7 @@ export function EApprovalRequestFieldMark({
   posting,
   decision = null,
   onPost,
+  onResolve,
   children,
 }: Props) {
   const frameRef = useRef<HTMLDivElement>(null);
@@ -216,7 +218,7 @@ export function EApprovalRequestFieldMark({
               <button
                 type="button"
                 aria-label={`Comment by ${mark.user_name}`}
-                className={cn("absolute", color.fill, open && "ring-2", open && color.ring)}
+                className={cn("absolute", color.fill, open && "ring-2", open && color.ring, mark.resolved_at && "opacity-40")}
                 style={{
                   left: `${pinX * 100}%`,
                   top: `${pinY * 100}%`,
@@ -279,6 +281,21 @@ export function EApprovalRequestFieldMark({
                   >
                     Reply
                   </button>
+                  {onResolve ? (
+                    <button
+                      type="button"
+                      className="mt-1 ml-3 text-xs text-primary hover:underline"
+                      disabled={posting}
+                      onClick={() => onResolve(mark.id, !mark.resolved_at)}
+                    >
+                      {mark.resolved_at ? "Reopen" : "Resolve"}
+                    </button>
+                  ) : null}
+                  {mark.resolved_at ? (
+                    <span className="mt-1 block text-[11px] text-muted-foreground">
+                      Resolved{mark.resolved_by_name ? ` by ${mark.resolved_by_name}` : ""}
+                    </span>
+                  ) : null}
                   {replyTo === mark.id ? (
                     <span className="mt-2 block space-y-2">
                       <EApprovalMentionField

@@ -22,6 +22,7 @@ final class EApprovalApprovalPolicyCompilerService
         private readonly EApprovalFormWorkflowRulesCompilerService $formRulesCompiler,
         private readonly EApprovalConditionalWorkflowCompilerService $conditionalCompiler,
         private readonly EApprovalUserListStepExpander $userListExpander,
+        private readonly EApprovalManagerChainExpander $managerChainExpander,
     ) {}
 
     /**
@@ -34,10 +35,14 @@ final class EApprovalApprovalPolicyCompilerService
      *   approval_policy_label: string|null
      * }
      */
-    public function compileForSubmit(EApprovalForm $form, array $values, string $submissionId): array
-    {
+    public function compileForSubmit(
+        EApprovalForm $form,
+        array $values,
+        string $submissionId,
+        ?string $requestorEmail = null,
+    ): array {
         if (EApprovalFormWorkflowRulesSupport::usesRulesMode($form)) {
-            return $this->conditionalCompiler->compileForSubmit($form, $values, $submissionId);
+            return $this->conditionalCompiler->compileForSubmit($form, $values, $submissionId, $requestorEmail);
         }
 
         $baseSnapshot = $this->baseWorkflowSnapshot($form);
@@ -46,7 +51,7 @@ final class EApprovalApprovalPolicyCompilerService
             ! EApprovalFormPolicySupport::usesApprovalPolicy($form)
             || EApprovalFormPolicySupport::prefersFormWorkflowSteps($form)
         ) {
-            return $this->conditionalCompiler->compileForSubmit($form, $values, $submissionId);
+            return $this->conditionalCompiler->compileForSubmit($form, $values, $submissionId, $requestorEmail);
         }
 
         $version = $this->policies->publishedVersion();
@@ -83,6 +88,7 @@ final class EApprovalApprovalPolicyCompilerService
 
         $stepDefinitions = is_array($profile['steps'] ?? null) ? $profile['steps'] : [];
         $stepDefinitions = $this->userListExpander->expand($stepDefinitions, $values, true);
+        $stepDefinitions = $this->managerChainExpander->expand($stepDefinitions, $requestorEmail, true);
         $steps = $this->stepPersister->persist($templateId, $submissionId, $stepDefinitions);
 
         $snapshot = [

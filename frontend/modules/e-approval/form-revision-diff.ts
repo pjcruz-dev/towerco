@@ -96,6 +96,12 @@ function stepSignature(step: EApprovalWorkflowStepInput, index: number): string 
     parallel_mode: step.parallel_mode ?? null,
     parallel_quorum: step.parallel_quorum ?? null,
     fallback_approver_id: step.fallback_approver_id ?? "",
+    manager_chain: step.manager_chain === true || step.condition?.manager_chain === true,
+    manager_chain_stop_titles:
+      step.manager_chain_stop_titles ??
+      (typeof step.condition?.manager_chain_stop_titles === "string"
+        ? step.condition.manager_chain_stop_titles
+        : ""),
     duty: typeof step.condition?.duty === "string" ? step.condition.duty : null,
     confirm_settlement: step.confirm_settlement === true,
   });

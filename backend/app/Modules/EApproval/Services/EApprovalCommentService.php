@@ -26,7 +26,7 @@ final class EApprovalCommentService
     public function listThread(EApprovalSubmission $submission): array
     {
         $comments = EApprovalComment::query()
-            ->with(['user:id,name', 'replies.user:id,name'])
+            ->with(['user:id,name', 'resolvedBy:id,name', 'replies.user:id,name'])
             ->where('submission_id', $submission->id)
             ->whereNull('parent_id')
             ->orderBy('created_at')
@@ -38,6 +38,8 @@ final class EApprovalCommentService
             'images' => $this->imagePayload($c),
             'user_name' => $c->user?->name ?? '—',
             'created_at' => $c->created_at?->toIso8601String(),
+            'resolved_at' => $c->resolved_at?->toIso8601String(),
+            'resolved_by_name' => $c->resolvedBy?->name,
             'field_name' => is_string($c->field_name) && $c->field_name !== '' ? $c->field_name : null,
             'attachment_id' => $c->attachment_id !== null ? (string) $c->attachment_id : null,
             'pin_page' => $c->pin_page !== null ? (int) $c->pin_page : null,
@@ -113,6 +115,21 @@ final class EApprovalCommentService
         if ($notifyStakeholders && $notice !== '') {
             $this->notifyStakeholders($submission, $actor, $notice, $parentId, $mentionUserIds);
         }
+
+        return $comment;
+    }
+
+    public function resolve(EApprovalSubmission $submission, EApprovalComment $comment, TenantUser $actor, bool $resolved): EApprovalComment
+    {
+        if ((string) $comment->submission_id !== (string) $submission->id || $comment->parent_id !== null) {
+            throw ValidationException::withMessages([
+                'comment' => [__('Resolve the original note. A reply stays with it.')],
+            ]);
+        }
+
+        $comment->resolved_at = $resolved ? now() : null;
+        $comment->resolved_by_id = $resolved ? $actor->id : null;
+        $comment->save();
 
         return $comment;
     }

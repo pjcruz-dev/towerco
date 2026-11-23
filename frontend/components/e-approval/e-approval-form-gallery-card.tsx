@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 
 import { EApprovalFormListActions } from "@/components/e-approval/e-approval-form-list-actions";
+import { EApprovalRoleFieldFrame } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import type { EApprovalFormListRow } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ export function EApprovalFormGalleryCard({ form, canManage }: Props) {
   const href = `/e-approval/forms/${form.id}`;
 
   return (
+    <EApprovalRoleFieldFrame fieldName="form_name" fieldLabel={form.name} menu="actions" className="h-full">
     <article
       className={cn(
         "group flex h-full flex-col rounded-xl border border-border bg-card shadow-sm transition-colors",
@@ -69,5 +71,6 @@ export function EApprovalFormGalleryCard({ form, canManage }: Props) {
         />
       </div>
     </article>
+    </EApprovalRoleFieldFrame>
   );
 }

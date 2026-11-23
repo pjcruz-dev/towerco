@@ -159,7 +159,28 @@ CSV;
         $pendingRevision = $document->revisions()->first();
         $this->assertNotNull($pendingRevision);
         $this->assertSame('Sample.pdf', $pendingRevision->original_filename);
-        $this->assertNotSame('', (string) $pendingRevision->stored_path);
+        $firstStoredPath = (string) $pendingRevision->stored_path;
+        $this->assertNotSame('', $firstStoredPath);
+
+        $replacedPath = 'tenant/e-approval/'.$pending->id.'/replaced.pdf';
+        Storage::disk('tenant_files')->put($replacedPath, 'replaced-file');
+        $firstAttachment = EApprovalAttachment::query()->where('submission_id', $pending->id)->first();
+        $this->assertNotNull($firstAttachment);
+        $firstAttachment->metadata = ['superseded_at' => now()->toIso8601String()];
+        $firstAttachment->save();
+        EApprovalAttachment::query()->create([
+            'id' => (string) Str::uuid(),
+            'submission_id' => $pending->id,
+            'field_name' => 'attachments',
+            'file_path' => $replacedPath,
+            'file_name' => 'Replaced.pdf',
+        ]);
+        $hook->afterAttachmentStored($pending->fresh(['form', 'attachments']));
+        $pendingRevision->refresh();
+        $this->assertSame('Replaced.pdf', $pendingRevision->original_filename);
+        $this->assertNotSame($firstStoredPath, (string) $pendingRevision->stored_path);
+        $this->assertFalse(Storage::disk('tenant_files')->exists($firstStoredPath));
+        $this->assertSame('replaced-file', Storage::disk('tenant_files')->get((string) $pendingRevision->stored_path));
 
         $published = ControlledDocument::query()->create([
             'id' => (string) Str::uuid(),

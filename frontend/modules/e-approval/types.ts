@@ -21,6 +21,15 @@ export type EApprovalWorkflowStepInput = {
   default_approver_id?: string;
   /** Used when manager / field / role (or fixed user) primary resolution fails. */
   fallback_approver_id?: string;
+  /**
+   * Direct manager only, or walk Entra managers in order until a job title.
+   * Off keeps a single direct manager. On is per form, per step.
+   */
+  manager_chain?: boolean;
+  /** Comma-separated job titles. The matching person is included, then the line stops. Blank walks to the level limit. */
+  manager_chain_stop_titles?: string;
+  /** Safety cap, 1–8. Default 6. */
+  manager_chain_max_levels?: number;
   /** user_list people come from a form field, or from named approvers on the step. */
   list_source?: "field" | "fixed";
   /** Named people when list_source is fixed. */
@@ -97,6 +106,7 @@ export type EApprovalFormListRow = {
   name: string;
   description: string | null;
   category: string;
+  form_family?: string | null;
   status: string;
   schema_version: number;
   created_at: string | null;
@@ -282,6 +292,8 @@ export type EApprovalSubmissionDetail = Omit<EApprovalSubmissionListRow, "public
   revision_remarks?: string | null;
   revision_remarks_at?: string | null;
   revision_remarks_by?: string | null;
+  /** Field values captured when the last revision was requested. */
+  revision_baseline?: Record<string, string> | null;
   revision_config?: {
     routing: "restart_from_start" | "resume_returning_step";
     material_fields: string[];
@@ -660,4 +672,6 @@ export type EApprovalCommentRow = {
     attachment_id?: string | null;
     images?: { id: string; file_name: string }[];
   }[];
+  resolved_at?: string | null;
+  resolved_by_name?: string | null;
 };

@@ -212,7 +212,7 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['mail'] = $mail;
         }
 
-        return $definition;
+        return self::withManagerChain($definition, ['condition' => $condition]);
     }
 
     /**
@@ -339,7 +339,7 @@ final class EApprovalWorkflowStepDefinitionSupport
             $definition['mail'] = $mail;
         }
 
-        return $definition;
+        return self::withManagerChain($definition, $step);
     }
 
     /**
@@ -625,6 +625,16 @@ final class EApprovalWorkflowStepDefinitionSupport
             $condition['mail'] = $mail;
         }
 
+        unset($condition['resolved_chain'], $condition['manager_chain_role'], $condition['manager_chain_warning']);
+        if ($type === 'manager' && self::managerChainEnabled($step)) {
+            $chain = self::managerChainSettings($step);
+            $condition['manager_chain'] = true;
+            $condition['manager_chain_stop_titles'] = $chain['stop_titles_raw'] ?? '';
+            $condition['manager_chain_max_levels'] = $chain['max_levels'] ?? 6;
+        } else {
+            unset($condition['manager_chain'], $condition['manager_chain_stop_titles'], $condition['manager_chain_max_levels']);
+        }
+
         return $condition === [] ? null : $condition;
     }
 
@@ -687,6 +697,92 @@ final class EApprovalWorkflowStepDefinitionSupport
         );
 
         return $elapsed >= $days;
+    }
+
+    public static function managerChainEnabled(array $step): bool
+    {
+        return self::managerChainSettings($step) !== null;
+    }
+
+    /**
+     * Reporting-line options for a Direct manager step. Null when the option is off.
+     *
+     * @param  array<string, mixed>  $step
+     * @return array{stop_titles: list<string>, stop_titles_raw: string, max_levels: int}|null
+     */
+    public static function managerChainSettings(array $step): ?array
+    {
+        $condition = is_array($step['condition'] ?? null) ? $step['condition'] : [];
+        $enabled = array_key_exists('manager_chain', $step)
+            ? self::flagTruthy($step['manager_chain'])
+            : self::flagTruthy($condition['manager_chain'] ?? false);
+        if ($enabled !== true) {
+            return null;
+        }
+
+        $raw = self::managerChainTitlesRaw($step, $condition);
+        $titles = [];
+        foreach (preg_split('/\s*,\s*/', $raw) ?: [] as $part) {
+            $part = trim((string) $part);
+            if ($part === '') {
+                continue;
+            }
+            $part = mb_substr($part, 0, 40);
+            $titles[mb_strtolower($part)] = $part;
+            if (count($titles) >= 8) {
+                break;
+            }
+        }
+
+        $levelsRaw = $step['manager_chain_max_levels'] ?? $condition['manager_chain_max_levels'] ?? 6;
+        $levels = is_numeric($levelsRaw) ? (int) $levelsRaw : 6;
+
+        return [
+            'stop_titles' => array_values($titles),
+            'stop_titles_raw' => $raw,
+            'max_levels' => max(1, min(8, $levels)),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     * @param  array<string, mixed>  $source
+     * @return array<string, mixed>
+     */
+    public static function withManagerChain(array $definition, array $source): array
+    {
+        unset($definition['resolved_chain'], $definition['manager_chain_role'], $definition['manager_chain_warning']);
+        $chain = self::managerChainSettings($source);
+        if ($chain === null) {
+            unset($definition['manager_chain'], $definition['manager_chain_stop_titles'], $definition['manager_chain_max_levels']);
+
+            return $definition;
+        }
+
+        $definition['manager_chain'] = true;
+        $definition['manager_chain_stop_titles'] = $chain['stop_titles_raw'];
+        $definition['manager_chain_max_levels'] = $chain['max_levels'];
+
+        return $definition;
+    }
+
+    /**
+     * @param  array<string, mixed>  $step
+     * @param  array<string, mixed>  $condition
+     */
+    private static function managerChainTitlesRaw(array $step, array $condition): string
+    {
+        if (array_key_exists('manager_chain_stop_titles', $step)) {
+            $raw = $step['manager_chain_stop_titles'];
+        } elseif (array_key_exists('manager_chain_stop_titles', $condition)) {
+            $raw = $condition['manager_chain_stop_titles'];
+        } else {
+            $raw = 'Director';
+        }
+
+        $text = trim(preg_replace('/\s+/u', ' ', trim((string) $raw)) ?? '');
+
+        return mb_substr($text, 0, 120);
     }
 
     public static function listSource(array $step, array $condition = []): string

@@ -27,10 +27,14 @@ final class EApprovalSubmissionWorkflowPreparer
      *   skipped_steps: list<array<string, mixed>>
      * }
      */
-    public function prepare(EApprovalForm $form, array $values, string $submissionId): array
-    {
+    public function prepare(
+        EApprovalForm $form,
+        array $values,
+        string $submissionId,
+        ?string $requestorEmail = null,
+    ): array {
         $base = $this->snapshots->capture($form);
-        $compiled = $this->policyCompiler->compileForSubmit($form, $values, $submissionId);
+        $compiled = $this->policyCompiler->compileForSubmit($form, $values, $submissionId, $requestorEmail);
 
         $workflowSnapshot = $compiled['snapshot'];
         $workflowVersionId = hash('sha256', json_encode($workflowSnapshot['steps'] ?? [], JSON_THROW_ON_ERROR));

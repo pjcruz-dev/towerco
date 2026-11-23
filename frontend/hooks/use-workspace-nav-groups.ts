@@ -1,6 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+
+import { filterEApprovalPreviewNav, useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
+import { filterDocumentRegisterPreviewNav, useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { useMemo } from "react";
 import { LayoutDashboard } from "lucide-react";
 
@@ -203,5 +206,27 @@ export function useWorkspaceNavGroups(options?: { enabled?: boolean }): {
     });
   }, [dbGroups, groups, workspacesQuery.data]);
 
-  return { groups: groupsWithWorkspaces, notificationUnread };
+  const eApprovalPreview = useEApprovalRolePreview();
+  const documentPreview = useDocumentRegisterRolePreview();
+  const previewedGroups = useMemo(
+    () =>
+      filterDocumentRegisterPreviewNav(
+        filterEApprovalPreviewNav(
+          groupsWithWorkspaces,
+          eApprovalPreview.allowsHref,
+          eApprovalPreview.active,
+        ),
+        documentPreview.allowsHref,
+        documentPreview.active,
+      ),
+    [
+      documentPreview.active,
+      documentPreview.allowsHref,
+      eApprovalPreview.active,
+      eApprovalPreview.allowsHref,
+      groupsWithWorkspaces,
+    ],
+  );
+
+  return { groups: previewedGroups, notificationUnread };
 }

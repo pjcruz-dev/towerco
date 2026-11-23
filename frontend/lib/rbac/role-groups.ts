@@ -1,4 +1,5 @@
 import type { AdminRoleRow } from "@/lib/api/modules/admin-roles-api";
+import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
 
 export type RoleGroup = {
   id: string;
@@ -59,7 +60,18 @@ const MODULE_GROUP_ORDER: { id: string; label: string; prefix: string }[] = [
   { id: "dynamic_entities", label: "Dynamic Entities", prefix: "dynamic_entities_" },
 ];
 
-const TIER_ORDER = ["viewer", "contributor", "requestor", "author", "operator", "approver", "controller", "admin"];
+const TIER_ORDER = [
+  "viewer",
+  "user",
+  "employee",
+  "contributor",
+  "requestor",
+  "author",
+  "operator",
+  "approver",
+  "controller",
+  "admin",
+];
 
 function tierSortKey(roleName: string): number {
   for (let i = 0; i < TIER_ORDER.length; i++) {
@@ -175,4 +187,45 @@ export function groupRolesByType(roles: AdminRoleRow[], options?: GroupRolesOpti
   }
 
   return groups;
+}
+
+/**
+ * Every role, for the Viewing as menu.
+ * Workspace holds owner and cross-module roles. Module groups follow. Custom roles are last.
+ */
+export function groupRolesForMenu(roles: AdminRoleRow[], options?: GroupRolesOptions): RoleGroup[] {
+  const groups = groupRolesByType(roles, options);
+  const placed = new Set(groups.flatMap((group) => group.roles.map((role) => role.name)));
+  const workspaceExtras = sortRoles(
+    filterRolesForEnabledModules(roles, options).filter((role) => !placed.has(role.name)),
+  );
+  const baseline = groups.find((group) => group.id === "baseline");
+  const modulesAndCustom = groups.filter((group) => group.id !== "baseline");
+  const workspaceRoles = sortByLabel([...(baseline?.roles ?? []), ...workspaceExtras]);
+
+  return [
+    ...(workspaceRoles.length > 0
+      ? [{ id: "workspace", label: "Workspace", roles: workspaceRoles }]
+      : []),
+    ...modulesAndCustom,
+  ];
+}
+
+/** Short label once the group heading already names the module. */
+export function roleLabelWithinGroup(groupId: string, roleName: string): string {
+  const full = roleDisplayLabel(roleName);
+  const prefix = MODULE_GROUP_ORDER.find((group) => group.id === groupId)?.prefix;
+  if (!prefix) return full;
+
+  const head = prefix.replace(/_/g, " ");
+  if (!full.toLowerCase().startsWith(head)) return full;
+  const rest = full.slice(head.length).trim();
+  if (!rest) return full;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+function sortByLabel(roles: AdminRoleRow[]): AdminRoleRow[] {
+  return [...roles].sort((a, b) =>
+    roleDisplayLabel(a.name).localeCompare(roleDisplayLabel(b.name), undefined, { sensitivity: "base" }),
+  );
 }

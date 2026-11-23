@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 
+import { useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,6 +62,7 @@ export function EApprovalExportReportCard({
   onSaved,
   onExported,
 }: Props) {
+  const access = useEApprovalSubmissionAccess();
   const [scope, setScope] = useState<Scope>("all");
   const [viewerScope, setViewerScope] = useState<ViewerScope>("all");
   const [formId, setFormId] = useState<string>("");
@@ -263,6 +265,14 @@ export function EApprovalExportReportCard({
       setIsSaving(false);
     }
   };
+
+  if (!access.allows("export")) {
+    return (
+      <EApprovalSectionCard title={title?.trim() || "Export report"} description={description}>
+        <p className="text-sm text-muted-foreground">This role cannot export submissions.</p>
+      </EApprovalSectionCard>
+    );
+  }
 
   return (
     <EApprovalSectionCard

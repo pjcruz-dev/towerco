@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+
+import { DocumentRegisterRoleFieldFrame } from "@/components/documents/document-register-role-field-access";
 
 import {
   createActionsColumn,
@@ -12,23 +15,31 @@ import type { ControlledDocumentRow } from "@/lib/api/modules/controlled-documen
 import { controlledDocumentStatusTone, statusToneClassName } from "@/lib/ui/status-tone";
 import { controlledDocumentSubmissionUrl } from "@/modules/documents/controlled-document-submission-url";
 
+function roleCell(field: string, label: string, node: ReactNode) {
+  return (
+    <DocumentRegisterRoleFieldFrame fieldName={field} fieldLabel={label}>
+      {node}
+    </DocumentRegisterRoleFieldFrame>
+  );
+}
+
 export function createControlledDocumentsTableColumns(options: {
   canCreate: boolean;
   onOpen: (documentId: string) => void;
 }): ColumnDef<ControlledDocumentRow>[] {
   return [
-    createTextColumn("document_code", "Code", (row) => row.document_code, {
+    createTextColumn("document_code", "Code", (row) => roleCell("document_code", "Code", row.document_code), {
       className: "font-mono text-xs",
       enableSorting: true,
     }),
-    createTextColumn("dcf_number", "DCF number", (row) => row.dcf_number ?? "—", {
+    createTextColumn("dcf_number", "DCF number", (row) => roleCell("dcf_number", "DCF number", row.dcf_number ?? "—"), {
       className: "font-mono text-xs tabular-nums",
       enableSorting: true,
     }),
     createTextColumn(
       "title",
       "Title",
-      (row) => (
+      (row) => roleCell("title", "Title", (
         <button
           type="button"
           className="rounded-md text-left font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -37,24 +48,24 @@ export function createControlledDocumentsTableColumns(options: {
         >
           {row.title}
         </button>
-      ),
+      )),
       { enableSorting: true },
     ),
-    createTextColumn("document_type", "Type", (row) => row.document_type ?? "—", {
+    createTextColumn("document_type", "Type", (row) => roleCell("document_type", "Type", row.document_type ?? "—"), {
       className: "text-muted-foreground",
       enableSorting: true,
     }),
-    createTextColumn("department", "Department", (row) => row.department ?? "—", {
+    createTextColumn("department", "Department", (row) => roleCell("department", "Department", row.department ?? "—"), {
       className: "text-muted-foreground",
       enableSorting: true,
     }),
-    createTextColumn("current_revision", "Rev", (row) => row.current_revision, {
+    createTextColumn("current_revision", "Rev", (row) => roleCell("current_revision", "Revision", String(row.current_revision)), {
       className: "tabular-nums",
     }),
     createTextColumn(
       "status",
       "Status",
-      (row) => (
+      (row) => roleCell("status", "Status", (
         <span className="inline-flex flex-wrap items-center gap-1.5">
           <span className={statusToneClassName(controlledDocumentStatusTone(row.status))}>
             {row.status}
@@ -68,14 +79,14 @@ export function createControlledDocumentsTableColumns(options: {
             </Link>
           ) : null}
         </span>
-      ),
+      )),
       { enableSorting: true },
     ),
-    createTextColumn("effective_date", "Effective", (row) => row.effective_date ?? "—", {
+    createTextColumn("effective_date", "Effective", (row) => roleCell("effective_date", "Effective", row.effective_date ?? "—"), {
       className: "text-muted-foreground tabular-nums",
       enableSorting: true,
     }),
-    createTextColumn("next_review_date", "Next review", (row) => row.next_review_date ?? "—", {
+    createTextColumn("next_review_date", "Next review", (row) => roleCell("next_review_date", "Next review", row.next_review_date ?? "—"), {
       className: "text-muted-foreground tabular-nums",
       enableSorting: true,
     }),
@@ -87,7 +98,7 @@ export function createControlledDocumentsTableColumns(options: {
         if (people.length === 0) {
           return "—";
         }
-        return (
+        return roleCell("aging", "Aging", (
           <span className="flex max-w-sm flex-col gap-0.5 whitespace-normal">
             {people.map((person) => (
               <span key={`${person.submission_id}-${person.name}`} className="text-xs text-muted-foreground">
@@ -95,18 +106,18 @@ export function createControlledDocumentsTableColumns(options: {
               </span>
             ))}
           </span>
-        );
+        ));
       },
       { className: "whitespace-normal align-top" },
     ),
     createTextColumn(
       "has_file",
       "File",
-      (row) => (
+      (row) => roleCell("has_file", "File", (
         <span className={statusToneClassName(row.has_file ? "success" : "neutral")}>
           {row.has_file ? "Has file" : "Missing file"}
         </span>
-      ),
+      )),
     ),
     createActionsColumn("Actions", (row) => {
       const revisionFormId = row.original.revision_form_id || row.original.e_approval_form_id;
@@ -122,6 +133,7 @@ export function createControlledDocumentsTableColumns(options: {
           : null;
 
       return (
+        <DocumentRegisterRoleFieldFrame fieldName="actions" fieldLabel="Actions" menu="actions">
         <RowActionsMenu
           items={[
             {
@@ -137,6 +149,7 @@ export function createControlledDocumentsTableColumns(options: {
             },
           ]}
         />
+        </DocumentRegisterRoleFieldFrame>
       );
     }),
   ];

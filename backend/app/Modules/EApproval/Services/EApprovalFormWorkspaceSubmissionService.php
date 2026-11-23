@@ -9,6 +9,7 @@ use App\Modules\EApproval\Models\EApprovalFormField;
 use App\Modules\EApproval\Models\EApprovalFormValue;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceDashboardSupport;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Support\Collection;
 
@@ -17,6 +18,7 @@ final class EApprovalFormWorkspaceSubmissionService
     public function __construct(
         private readonly EApprovalSubmissionService $submissions,
         private readonly EApprovalFormValueDisplayService $valueDisplay,
+        private readonly EApprovalRoleFieldAccess $roleAccess,
     ) {}
 
     /**
@@ -44,7 +46,10 @@ final class EApprovalFormWorkspaceSubmissionService
         $dashboard = is_array($workspace['dashboard'] ?? null) ? $workspace['dashboard'] : [];
         $columns = is_array($dashboard['table_columns'] ?? null) ? $dashboard['table_columns'] : [];
         $fieldColumns = EApprovalFormWorkspaceDashboardSupport::visibleFieldColumns($columns);
-        $fieldNames = array_map(static fn (array $column): string => $column['field_name'], $fieldColumns);
+        $fieldNames = array_values(array_filter(
+            array_map(static fn (array $column): string => $column['field_name'], $fieldColumns),
+            fn (string $name): bool => $this->roleAccess->visible($viewer, $name, 'table'),
+        ));
         $fieldsByName = $this->fieldsByName($primaryForm, $fieldNames);
 
         $paginator = $this->submissions->paginate(
@@ -65,9 +70,13 @@ final class EApprovalFormWorkspaceSubmissionService
             $awaitingApproverId,
         );
 
-        $rows = $paginator->getCollection()->map(function (EApprovalSubmission $submission) use ($fieldsByName, $fieldNames): array {
-            $row = $submission->toListRow();
-            $row['field_values'] = $this->fieldValuesForSubmission($submission, $fieldsByName, $fieldNames);
+        $rows = $paginator->getCollection()->map(function (EApprovalSubmission $submission) use ($fieldsByName, $fieldNames, $viewer): array {
+            $row = $this->roleAccess->redactListRow($viewer, $submission->toListRow());
+            $row['field_values'] = $this->roleAccess->redactFieldMap(
+                $viewer,
+                $this->fieldValuesForSubmission($submission, $fieldsByName, $fieldNames),
+                'table',
+            );
 
             return $row;
         })->values()->all();

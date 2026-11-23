@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { LayoutDashboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { EApprovalAnywhereMenu, EApprovalNavTargetFrame, filterEApprovalPreviewNav, useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
+import { DocumentRegisterAnywhereMenu, DocumentRegisterNavTargetFrame, DocumentRegisterRoleAccessProvider, filterDocumentRegisterPreviewNav, useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNavGroup, type SidebarSubNavItem } from "@/components/layout/sidebar-nav-group";
 import {
@@ -39,9 +41,9 @@ import { useAuthStore } from "@/stores/auth-store";
 
 type SubNav = SidebarSubNavItem & { permissions: string[]; section?: string };
 
-function resolveNavGroupHomeHref(items: SubNav[]): string {
+function resolveNavGroupHomeHref(items: SubNav[], fallback: string): string {
   const overview = items.find((item) => item.exact);
-  return overview?.href ?? items[0]!.href;
+  return overview?.href ?? items[0]?.href ?? fallback;
 }
 
 const navButtonClass =
@@ -152,6 +154,8 @@ export function AppSidebar() {
     staleTime: 60_000,
   });
 
+  const eApprovalPreview = useEApprovalRolePreview();
+
   const groupsWithBadges = useMemo(() => {
     const workspaceTopLevelItems: Array<{
       title: string;
@@ -185,25 +189,44 @@ export function AppSidebar() {
     });
   }, [groups, workspacesQuery.data]);
 
+  const documentPreview = useDocumentRegisterRolePreview();
+
+  const visibleGroups = useMemo(
+    () =>
+      filterDocumentRegisterPreviewNav(
+        filterEApprovalPreviewNav(groupsWithBadges, eApprovalPreview.allowsHref, eApprovalPreview.active),
+        documentPreview.allowsHref,
+        documentPreview.active,
+      ),
+    [
+      documentPreview.active,
+      documentPreview.allowsHref,
+      eApprovalPreview.active,
+      eApprovalPreview.allowsHref,
+      groupsWithBadges,
+    ],
+  );
+
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">
       <SidebarHeader className="border-b border-sidebar-border p-4 group-data-[collapsible=icon]:p-2">
         <SidebarBrand variant="tenant" />
       </SidebarHeader>
+      <EApprovalAnywhereMenu className="flex min-h-0 flex-1 flex-col">
       <SidebarContent className="scrollbar-hide gap-1 px-2 py-2">
-        {groupsWithBadges.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.group} className="mt-2 first:mt-0">
             <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
               {group.group}
             </div>
             <SidebarMenu>
-              {group.items.map((item) =>
-                item.items ? (
+              {group.items.map((item) => {
+                const node = item.items ? (
                   <SidebarNavGroup
                     key={item.title}
                     title={item.title}
                     icon={item.icon}
-                    href={resolveNavGroupHomeHref(item.items as SubNav[])}
+                    href={resolveNavGroupHomeHref(item.items as SubNav[], item.href ?? "/dashboard")}
                     dataHelp={
                       item.title === "Settings"
                         ? "ea-nav-settings"
@@ -221,6 +244,17 @@ export function AppSidebar() {
                         item.title === "E-Forms" ||
                         item.title === "Ticketing" ||
                         item.title === "DocExtract")
+                    }
+                    wrapSub={
+                      item.title === "E-Forms"
+                        ? (sub, link: ReactNode) => (
+                            <EApprovalNavTargetFrame href={sub.href}>{link}</EApprovalNavTargetFrame>
+                          )
+                        : item.title === "Document register"
+                          ? (sub, link: ReactNode) => (
+                              <DocumentRegisterNavTargetFrame href={sub.href}>{link}</DocumentRegisterNavTargetFrame>
+                            )
+                          : undefined
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {
                       const pathOnly = href.split("?")[0] ?? href;
@@ -289,12 +323,19 @@ export function AppSidebar() {
                     icon={item.icon}
                     badge={item.title === "Notifications" ? notificationUnread : undefined}
                   />
-                ),
-              )}
+                );
+                if (item.title !== "Document register") return node;
+                return (
+                  <DocumentRegisterRoleAccessProvider key={item.title}>
+                    <DocumentRegisterAnywhereMenu className="block">{node}</DocumentRegisterAnywhereMenu>
+                  </DocumentRegisterRoleAccessProvider>
+                );
+              })}
             </SidebarMenu>
           </div>
         ))}
       </SidebarContent>
+      </EApprovalAnywhereMenu>
     </Sidebar>
   );
 }

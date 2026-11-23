@@ -23,6 +23,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { EApprovalAnywhereMenu } from "@/components/e-approval/e-approval-role-field-access";
+import { DocumentRegisterAnywhereMenu, DocumentRegisterRoleAccessProvider } from "@/components/documents/document-register-role-field-access";
 import { useWorkspaceNavGroups, type WorkspaceNavGroupView } from "@/hooks/use-workspace-nav-groups";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
 import type { WorkspaceSubNavItem, WorkspaceTopNavItem } from "@/lib/navigation/workspace-nav-config";
@@ -507,6 +509,7 @@ export function AppTopNav() {
   const administration = groups.find((g) => g.group === "Administration");
 
   return (
+    <EApprovalAnywhereMenu className="block shrink-0">
     <div className="shrink-0 border-b border-border bg-slate-900 print:hidden dark:bg-slate-950">
       <div className="flex h-12 items-center gap-1.5 px-3 md:h-10 sm:px-4 md:px-6">
         <MobileOperationsSheet
@@ -526,13 +529,21 @@ export function AppTopNav() {
           className="hidden min-w-0 flex-1 flex-nowrap items-center gap-0.5 overflow-x-auto scrollbar-hide md:flex"
           aria-label="Operations"
         >
-          {(operations?.items ?? []).map((item) => (
-            <TopNavDropdown
-              key={`${item.module ?? "nav"}:${item.title}:${item.href ?? item.items?.[0]?.href ?? ""}`}
-              item={item}
-              notificationUnread={notificationUnread}
-            />
-          ))}
+          {(operations?.items ?? []).map((item) => {
+            const dropdown = (
+              <TopNavDropdown
+                key={`${item.module ?? "nav"}:${item.title}:${item.href ?? item.items?.[0]?.href ?? ""}`}
+                item={item}
+                notificationUnread={notificationUnread}
+              />
+            );
+            if (item.title !== "Document register") return dropdown;
+            return (
+              <DocumentRegisterRoleAccessProvider key={item.title}>
+                <DocumentRegisterAnywhereMenu className="block">{dropdown}</DocumentRegisterAnywhereMenu>
+              </DocumentRegisterRoleAccessProvider>
+            );
+          })}
         </nav>
 
         <p className="min-w-0 flex-1 truncate text-sm text-slate-200 md:hidden">
@@ -546,5 +557,6 @@ export function AppTopNav() {
         ) : null}
       </div>
     </div>
+    </EApprovalAnywhereMenu>
   );
 }

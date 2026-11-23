@@ -11,7 +11,7 @@ import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-bo
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalSubmissionGalleryCard } from "@/components/e-approval/e-approval-submission-gallery-card";
-import { eApprovalSubmissionTableColumns } from "@/components/e-approval/e-approval-submission-table-columns";
+import { useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { FilterSelect } from "@/components/forms/filter-select";
 import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
@@ -70,6 +70,8 @@ import {
 } from "@/lib/ui/module-list-selection";
 import { readVisibleExportColumnsFromStorage } from "@/lib/ui/module-list-visible-columns";
 import { E_APPROVAL_SUBMISSIONS_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
+import { eApprovalSubmissionTableColumns } from "@/components/e-approval/e-approval-submission-table-columns";
+import { eApprovalFieldKey } from "@/lib/e-approval/submission-role-access";
 import { permissions } from "@/lib/rbac/permissions";
 import { useNotificationStore } from "@/stores/notification-store";
 import { createRowSelectionColumn } from "@/components/ui/data-table-row-selection";
@@ -109,12 +111,15 @@ function formatSubmissionFilterLabel(status: (typeof STATUS_FILTERS)[number]): s
   return formatEApprovalStatusLabel(status);
 }
 
-export function EApprovalSubmissionsPageClient() {
+function EApprovalSubmissionsPageBody() {
   const searchParams = useSearchParams();
   const push = useNotificationStore((s) => s.push);
   const canCreate = usePermission([permissions.eApprovalSubmissionsCreate]);
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canExport = usePermission([permissions.eApprovalAuditView]);
+  const access = useEApprovalSubmissionAccess();
+  const showCreate = canCreate && access.allows("create");
+  const showExport = canExport && access.allows("export");
   // Auditors can see all submissions; show the "Mine" scope toggle for them.
   const canViewAll = usePermission([permissions.eApprovalAuditView]);
   const [page, setPage] = useState(1);
@@ -160,7 +165,7 @@ export function EApprovalSubmissionsPageClient() {
   const exportColumnsQuery = useQuery({
     queryKey: ["e-approval", "submissions", "export-columns", formId],
     queryFn: () => fetchEApprovalSubmissionsExportColumns(formId || undefined),
-    enabled: Boolean(formId) && canExport,
+    enabled: Boolean(formId) && showExport,
     staleTime: 60_000,
   });
   const gridFields = exportColumnsQuery.data?.grids ?? [];
@@ -307,6 +312,8 @@ export function EApprovalSubmissionsPageClient() {
   const subsidiaryOptions = metadataQuery.data?.subsidiaries ?? [];
   const departmentOptions = metadataQuery.data?.departments ?? [];
   const formOptions = formsQuery.data?.data ?? [];
+  const liquidationFormId =
+    formOptions.find((form) => form.form_family === "liquidation")?.id ?? null;
   const hasAdvancedFilters = Boolean(formId || subsidiary || department || from || to);
 
   const clearAdvancedFilters = () => {
@@ -318,10 +325,17 @@ export function EApprovalSubmissionsPageClient() {
     setPage(1);
   };
 
-  const tableColumns = useMemo(
-    () => [createRowSelectionColumn<EApprovalSubmissionListRow>(), ...eApprovalSubmissionTableColumns],
-    [],
-  );
+  const tableColumns = useMemo(() => {
+    const defs = [
+      createRowSelectionColumn<EApprovalSubmissionListRow>(),
+      ...eApprovalSubmissionTableColumns(liquidationFormId, { showView: access.allows("view") }),
+    ];
+    return defs.filter((column) => {
+      const id = String(column.id ?? "");
+      if (id === "select" || id === "actions") return true;
+      return access.visible(eApprovalFieldKey(id), "table");
+    });
+  }, [access, liquidationFormId]);
 
   const normalizedData = useMemo(
     () =>
@@ -415,12 +429,14 @@ export function EApprovalSubmissionsPageClient() {
                       className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
                     />
                   </div>
-                  <EApprovalListViewToggle
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <EApprovalListViewToggle
                     value={viewMode}
                     onChange={setViewMode}
                     ariaLabel="Submissions list view"
                     dataHelp="ea-submissions-view"
-                  />
+                    />
+                  </div>
                 </div>
                 <div className={filterBarFieldsClassName} data-help="ea-submissions-advanced-filters">
                   <FilterSelect
@@ -558,11 +574,11 @@ export function EApprovalSubmissionsPageClient() {
                       </div>
                       <h2 className="mt-4 text-base font-medium">No submissions</h2>
                       <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        {canCreate
+                        {showCreate
                           ? "No requests yet. Start a new submission from a published form."
                           : "Nothing matches this filter. You need the requestor role (e_approval:submissions:create) to start requests — ask an administrator."}
                       </p>
-                      {canCreate ? (
+                      {showCreate ? (
                         <Button
                           className="mt-4"
                           size="sm"
@@ -582,6 +598,7 @@ export function EApprovalSubmissionsPageClient() {
                         submission={row}
                         helpStatus={index === 0}
                         helpActions={index === 0}
+                        liquidationFormId={liquidationFormId}
                       />
                     ))}
                   </div>
@@ -623,7 +640,7 @@ export function EApprovalSubmissionsPageClient() {
       },
     ];
   }, [
-    canCreate,
+    showCreate,
     canViewAll,
     department,
     departmentOptions,
@@ -731,11 +748,11 @@ export function EApprovalSubmissionsPageClient() {
               ) : null}
               {isVisible("export") ? (
                 <ModuleListToolbar
-                  showExport={canExport}
+                  showExport={showExport}
                   selectedCount={selectedIds.size}
                   onClearSelection={() => setSelectedIds(new Set())}
                   start={
-                    canExport && formId && hasGrids ? (
+                    showExport && formId && hasGrids ? (
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Select
                           value={exportLayout}
@@ -768,7 +785,7 @@ export function EApprovalSubmissionsPageClient() {
                     ) : null
                   }
                   onExport={
-                    canExport
+                    showExport
                       ? async (format) => {
                           try {
                             const ids = selectedIdsList(selectedIds);
@@ -996,7 +1013,7 @@ export function EApprovalSubmissionsPageClient() {
                 />
               ) : null}
               {isVisible("new") ? (
-                canCreate ? (
+                showCreate ? (
                   <Button
                     size="sm"
                     type="button"
@@ -1043,4 +1060,8 @@ export function EApprovalSubmissionsPageClient() {
       </div>
     </PermissionGate>
   );
+}
+
+export function EApprovalSubmissionsPageClient() {
+  return <EApprovalSubmissionsPageBody />;
 }

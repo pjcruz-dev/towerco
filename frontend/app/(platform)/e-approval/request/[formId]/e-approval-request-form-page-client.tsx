@@ -11,27 +11,29 @@ import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { eApprovalFocusUrl } from "@/modules/documents/controlled-document-submission-url";
 import { fetchEApprovalForm } from "@/lib/api/modules/e-approval-api";
+import { isIsoDocumentControlForm } from "@/modules/e-approval/form-workspace";
 import { viewerCanStartFormRequest } from "@/modules/e-approval/form-request-access";
 import { permissions } from "@/lib/rbac/permissions";
 import { useAuthStore } from "@/stores/auth-store";
 
 type Props = { formId: string };
 
-export function EApprovalRequestFormPageClient({ formId }: Props) {
+function EApprovalRequestFormPageBody({ formId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const resubmitSubmissionId = searchParams.get("resubmit")?.trim() || undefined;
 
-  const isControlledDocumentRequest =
-    !resubmitSubmissionId &&
-    (searchParams.get("controlled_mode") === "revision" ||
-      searchParams.get("controlled_mode") === "new");
-
   const formQuery = useQuery({
     queryKey: ["e-approval", "form", formId, "submit-title"],
     queryFn: () => fetchEApprovalForm(formId),
   });
+
+  const isControlledDocumentRequest =
+    isIsoDocumentControlForm(formQuery.data?.metadata_json) &&
+    !resubmitSubmissionId &&
+    (searchParams.get("controlled_mode") === "revision" ||
+      searchParams.get("controlled_mode") === "new");
 
   const startBlocked =
     !resubmitSubmissionId &&
@@ -94,7 +96,8 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
             </>
           }
           actions={
-            startBlocked ? null : (
+            <div className="flex flex-wrap items-center gap-2">
+              {startBlocked ? null : (
             <Button
               type="button"
               variant="outline"
@@ -107,7 +110,8 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
               Focused view
               <ExternalLink className="h-3.5 w-3.5" />
             </Button>
-            )
+              )}
+            </div>
           }
         />
 
@@ -121,4 +125,8 @@ export function EApprovalRequestFormPageClient({ formId }: Props) {
       </div>
     </PermissionGate>
   );
+}
+
+export function EApprovalRequestFormPageClient({ formId }: Props) {
+  return <EApprovalRequestFormPageBody formId={formId} />;
 }

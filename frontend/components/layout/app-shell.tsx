@@ -9,6 +9,7 @@ import { AppFooter } from "@/components/layout/app-footer";
 import { GlobalCommandPalette } from "@/components/layout/global-command-palette";
 import { SubscriptionAccessBanner } from "@/components/feedback/subscription-access-banner";
 import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
+import { EApprovalRoleAccessProvider } from "@/components/e-approval/e-approval-role-field-access";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopNav } from "@/components/layout/app-top-nav";
 import { TenantAppearanceCustomizer } from "@/components/layout/tenant-appearance-customizer";
@@ -80,6 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const useNavbar = layout === "navbar";
 
   return (
+    <EApprovalRoleAccessProvider>
     <GlobalCommandPaletteProvider>
       <AssistantDrawerProvider enabled={canUseAssistant}>
         <SidebarProvider>
@@ -129,5 +131,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarProvider>
       </AssistantDrawerProvider>
     </GlobalCommandPaletteProvider>
+    </EApprovalRoleAccessProvider>
   );
 }

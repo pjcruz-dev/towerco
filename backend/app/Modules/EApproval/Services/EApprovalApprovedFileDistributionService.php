@@ -40,7 +40,12 @@ final class EApprovalApprovedFileDistributionService
 
         $choice = $this->choiceOnSubmission($submission);
         if ($choice === null) {
-            $choice = ['audience' => 'everyone', 'ids' => []];
+            Log::warning('e_approval.approved_files_skipped', [
+                'submission_id' => (string) $submission->id,
+                'reason' => 'no_audience_chosen',
+            ]);
+
+            return;
         }
 
         $recipients = $choice['audience'] === 'everyone'

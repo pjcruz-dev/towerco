@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { DocumentRegisterRoleFieldFrame, useDocumentRegisterAccess, useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
@@ -162,6 +163,15 @@ function BoardTable({
   uploadingId: string | null;
   onUpload: (row: ControlledDocumentObsoleteRow, file: File) => void;
 }) {
+  const access = useDocumentRegisterAccess();
+  const showCode = access.visible("document_code", "table");
+  const showTitle = access.visible("title", "table");
+  const showDepartment = access.visible("department", "table");
+  const showRevision = access.visible("current_revision", "table");
+  const showEffective = access.visible("effective_date", "table");
+  const showApproved = access.visible("published_at", "table");
+  const showFile = access.visible("has_file", "table");
+
   if (rows.length === 0) {
     return <p className="px-4 py-8 text-center text-sm text-muted-foreground">{empty}</p>;
   }
@@ -171,42 +181,78 @@ function BoardTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Department</TableHead>
-            <TableHead className="text-right">Revision</TableHead>
-            <TableHead>Effective</TableHead>
-            <TableHead>Approved</TableHead>
-            <TableHead>Attachment</TableHead>
+            {showCode ? <TableHead>Code</TableHead> : null}
+            {showTitle ? <TableHead>Title</TableHead> : null}
+            {showDepartment ? <TableHead>Department</TableHead> : null}
+            {showRevision ? <TableHead className="text-right">Revision</TableHead> : null}
+            {showEffective ? <TableHead>Effective</TableHead> : null}
+            {showApproved ? <TableHead>Approved</TableHead> : null}
+            {showFile ? <TableHead>Attachment</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
             <TableRow key={`${row.document_id}-${row.revision_id ?? "document"}-${row.standing}`}>
-              <TableCell>
-                <Link
-                  href={`/documents/controlled/register?q=${encodeURIComponent(row.document_code)}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {row.document_code}
-                </Link>
-              </TableCell>
-              <TableCell className="max-w-80 truncate" title={row.title}>
-                {displayTitle(row.title)}
-              </TableCell>
-              <TableCell>{row.department || "—"}</TableCell>
-              <TableCell className="text-right tabular-nums">{row.revision_number ?? "—"}</TableCell>
-              <TableCell className="tabular-nums whitespace-nowrap">{formatDay(row.effective_date)}</TableCell>
-              <TableCell className="tabular-nums whitespace-nowrap">{formatDay(row.approved_at)}</TableCell>
-              <TableCell>
-                <FileCell
-                  row={row}
-                  canUpload={canUpload}
-                  canDownload={row.standing !== "obsolete" || canDownloadObsolete}
-                  uploading={uploadingId === row.revision_id}
-                  onUpload={(file) => onUpload(row, file)}
-                />
-              </TableCell>
+              {showCode ? (
+                <TableCell>
+                  <DocumentRegisterRoleFieldFrame fieldName="document_code" fieldLabel="Code">
+                    <Link
+                      href={`/documents/controlled/register?q=${encodeURIComponent(row.document_code)}`}
+                      className="font-medium text-foreground hover:underline"
+                    >
+                      {row.document_code}
+                    </Link>
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showTitle ? (
+                <TableCell className="max-w-80 truncate" title={row.title}>
+                  <DocumentRegisterRoleFieldFrame fieldName="title" fieldLabel="Title">
+                    {displayTitle(row.title)}
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showDepartment ? (
+                <TableCell>
+                  <DocumentRegisterRoleFieldFrame fieldName="department" fieldLabel="Department">
+                    {row.department || "—"}
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showRevision ? (
+                <TableCell className="text-right tabular-nums">
+                  <DocumentRegisterRoleFieldFrame fieldName="current_revision" fieldLabel="Revision">
+                    {row.revision_number ?? "—"}
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showEffective ? (
+                <TableCell className="tabular-nums whitespace-nowrap">
+                  <DocumentRegisterRoleFieldFrame fieldName="effective_date" fieldLabel="Effective">
+                    {formatDay(row.effective_date)}
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showApproved ? (
+                <TableCell className="tabular-nums whitespace-nowrap">
+                  <DocumentRegisterRoleFieldFrame fieldName="published_at" fieldLabel="Published">
+                    {formatDay(row.approved_at)}
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
+              {showFile ? (
+                <TableCell>
+                  <DocumentRegisterRoleFieldFrame fieldName="has_file" fieldLabel="File">
+                    <FileCell
+                      row={row}
+                      canUpload={canUpload}
+                      canDownload={row.standing !== "obsolete" || canDownloadObsolete}
+                      uploading={uploadingId === row.revision_id}
+                      onUpload={(file) => onUpload(row, file)}
+                    />
+                  </DocumentRegisterRoleFieldFrame>
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>
@@ -216,6 +262,7 @@ function BoardTable({
 }
 
 export function ControlledDocumentObsoletePageClient() {
+  const preview = useDocumentRegisterRolePreview();
   const canManage = usePermission([permissions.documentsControlledManage]);
   const queryClient = useQueryClient();
   const push = useNotificationStore((state) => state.push);
@@ -269,9 +316,11 @@ export function ControlledDocumentObsoletePageClient() {
           description="Obsolete revisions, the live approved file, and revisions still in approval."
           actions={
             <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {preview.allowsHref("/documents/controlled") ? (
               <Button size="sm" variant="outline" render={<Link href="/documents/controlled" />}>
                 Overview
               </Button>
+              ) : null}
               <Button
                 size="sm"
                 variant="outline"

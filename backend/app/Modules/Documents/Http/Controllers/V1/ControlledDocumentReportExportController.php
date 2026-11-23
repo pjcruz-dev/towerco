@@ -6,6 +6,8 @@ namespace App\Modules\Documents\Http\Controllers\V1;
 
 use App\Modules\Documents\Services\ControlledDocumentAccessService;
 use App\Modules\Documents\Services\ControlledDocumentRegistryService;
+use App\Modules\Documents\Support\ControlledDocumentRoleFieldAccess;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -16,9 +18,12 @@ class ControlledDocumentReportExportController
         Request $request,
         ControlledDocumentRegistryService $registry,
         ControlledDocumentAccessService $access,
+        ControlledDocumentRoleFieldAccess $roleAccess,
     ): StreamedResponse {
         $user = $request->user();
-        abort_unless($user !== null && $access->canAccessRegistry($user), 403);
+        abort_unless($user instanceof TenantUser && $access->canAccessRegistry($user), 403);
+        abort_unless($roleAccess->allows($user, 'export'), 403);
+        abort_unless(! $roleAccess->navTargetHidden($user, '/documents/controlled/reports'), 403);
 
         $data = $request->validate([
             'period' => ['sometimes', 'nullable', 'integer', Rule::in([30, 90, 365])],
@@ -31,7 +36,7 @@ class ControlledDocumentReportExportController
             'published_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:published_from'],
         ]);
 
-        $csv = $registry->exportCsv($user, $data);
+        $csv = $registry->exportCsv($user, $data, $roleAccess->hiddenExportColumns($user));
 
         return response()->streamDownload(static function () use ($csv): void {
             echo $csv;

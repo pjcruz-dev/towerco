@@ -86,5 +86,8 @@ export function newRequestHref(formId: string, workspace: EApprovalFormWorkspace
   if (mode === "standard") {
     return `/e-approval/request/${formId}`;
   }
-  return `/e-approval/focus/${formId}?controlled_mode=new`;
+  if (workspace.slug === ISO_FORM_WORKSPACE_SLUG) {
+    return `/e-approval/focus/${formId}?controlled_mode=new`;
+  }
+  return `/e-approval/focus/${formId}`;
 }

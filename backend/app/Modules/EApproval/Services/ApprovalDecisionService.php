@@ -679,6 +679,8 @@ final class ApprovalDecisionService
                         actor: $actor,
                     );
                     $this->mail->dispatchToRequestor($submission, 'approved', $actor->name);
+                    $submission->loadMissing(['form', 'values.field']);
+                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                     app(EApprovalApprovedFileDistributionService::class)->send($submission);
                     if ($submission->isExternalSubmission() && $this->settings->notifyExternalOnApproved()) {
                         $package = $this->externalPackages->mintPackageLinks($submission);
@@ -707,8 +709,6 @@ final class ApprovalDecisionService
                         ]),
                         entityLabel: $submission->document_no,
                     );
-                    $submission->loadMissing(['form', 'values.field']);
-                    $this->controlledDocumentHook->afterSubmissionMutation($submission, $actor);
                 }
             } else {
                 $this->audit->log(

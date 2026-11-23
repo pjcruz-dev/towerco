@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { EApprovalFormListActions } from "@/components/e-approval/e-approval-form-list-actions";
+import { EApprovalRoleFieldFrame } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { createActionsColumn } from "@/components/ui/data-table-column-helpers";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
@@ -23,6 +24,7 @@ export function createEApprovalFormsTableColumns(canManage: boolean): ColumnDef<
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
       cell: ({ row }) => (
+        <EApprovalRoleFieldFrame fieldName="form_name" fieldLabel="Form" menu="actions">
         <div>
           <Link
             href={`/e-approval/forms/${row.original.id}`}
@@ -34,6 +36,7 @@ export function createEApprovalFormsTableColumns(canManage: boolean): ColumnDef<
             <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{row.original.description}</p>
           ) : null}
         </div>
+        </EApprovalRoleFieldFrame>
       ),
     },
     {

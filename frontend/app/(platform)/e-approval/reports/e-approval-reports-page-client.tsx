@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { useEApprovalRolePreview, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import {
   EApprovalAnalyticsBoardProvider,
   EApprovalAnalyticsKindSlot,
@@ -84,8 +85,14 @@ export function EApprovalReportsPageClient() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const permissionsReady = useAuthStore((state) => state.permissionsReady);
-  const canAudit = usePermission([permissions.eApprovalAuditView]);
-  const canViewSubmissions = usePermission([permissions.eApprovalSubmissionsView]);
+  const preview = useEApprovalRolePreview();
+  const access = useEApprovalSubmissionAccess();
+  const canExport = access.allows("export");
+  const canAudit =
+    usePermission([permissions.eApprovalAuditView]) && preview.allowsPermission(permissions.eApprovalAuditView);
+  const canViewSubmissions =
+    usePermission([permissions.eApprovalSubmissionsView]) &&
+    preview.allowsPermission(permissions.eApprovalSubmissionsView);
   const canAccess = canAudit || canViewSubmissions;
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -375,6 +382,7 @@ export function EApprovalReportsPageClient() {
                           >
                             Schedule
                           </Button>
+                          {canExport ? (
                           <Button
                             type="button"
                             size="sm"
@@ -388,6 +396,7 @@ export function EApprovalReportsPageClient() {
                             )}
                             Run
                           </Button>
+                          ) : null}
                           <Button
                             type="button"
                             size="sm"
@@ -498,7 +507,7 @@ export function EApprovalReportsPageClient() {
                         </td>
                         <td className="px-3 py-2 capitalize text-muted-foreground">{row.triggered_by}</td>
                         <td className="px-3 py-2">
-                          {row.status === "completed" && row.download ? (
+                          {canExport && row.status === "completed" && row.download ? (
                             <Button
                               type="button"
                               size="sm"
@@ -545,6 +554,7 @@ export function EApprovalReportsPageClient() {
     reportsQuery.error,
     reportsQuery.isError,
     reportsQuery.isLoading,
+    canExport,
     runMutation,
     scheduleMutation.isPending,
     schedulingId,

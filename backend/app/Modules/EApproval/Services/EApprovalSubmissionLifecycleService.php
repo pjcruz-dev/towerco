@@ -95,6 +95,20 @@ final class EApprovalSubmissionLifecycleService
             $previousStatus = (string) $submission->status;
             $previousForceFullRestart = (bool) $submission->force_full_restart;
 
+            $submission->loadMissing('values.field');
+            $baseline = [];
+            foreach ($submission->values as $row) {
+                $key = trim((string) ($row->field?->name ?? ''));
+                if ($key === '') {
+                    continue;
+                }
+                $raw = $row->value;
+                $baseline[$key] = is_scalar($raw) || $raw === null
+                    ? (string) ($raw ?? '')
+                    : (string) json_encode($raw);
+            }
+            $submission->revision_baseline_json = $baseline;
+
             $submission->status = EApprovalSubmissionStatus::RETURNED;
             $submission->returned_from_step = $returnedFromStep > 0 ? $returnedFromStep : null;
             $submission->force_full_restart = $forceFullRestart;

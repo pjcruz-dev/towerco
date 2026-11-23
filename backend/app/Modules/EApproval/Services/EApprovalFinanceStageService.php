@@ -606,6 +606,35 @@ final class EApprovalFinanceStageService
         $open = EApprovalSubmission::query()
             ->with('form')
             ->where('requestor_id', $requestor->id)
+            ->whereIn('status', EApprovalSubmissionStatus::open())
+            ->get();
+
+        foreach ($open as $candidate) {
+            $family = $this->family($candidate->form);
+            if ($family !== 'cash_advance' && $family !== 'liquidation') {
+                continue;
+            }
+
+            $documentNo = trim((string) $candidate->document_no);
+            throw ValidationException::withMessages([
+                'form_id' => [
+                    $family === 'liquidation'
+                        ? ($documentNo !== ''
+                            ? __('Finish liquidation :document before requesting another cash advance.', ['document' => $documentNo])
+                            : __('Finish the open liquidation before requesting another cash advance.'))
+                        : ($documentNo !== ''
+                            ? __('Finish cash advance :document before requesting another.', ['document' => $documentNo])
+                            : __('Finish the open cash advance before requesting another.')),
+                ],
+                '_link_submission_id' => [(string) $candidate->id],
+                '_link_kind' => [$family],
+                '_link_document_no' => [$documentNo],
+            ]);
+        }
+
+        $open = EApprovalSubmission::query()
+            ->with('form')
+            ->where('requestor_id', $requestor->id)
             ->where('status', EApprovalSubmissionStatus::APPROVED)
             ->get();
 

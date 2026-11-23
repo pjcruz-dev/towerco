@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, EyeOff, FileText, Lock, PenLine, Table2 } from "lucide-react";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 import {
   ContextMenuItem,
@@ -24,6 +24,7 @@ import { canEntityAction, type EntityAccessAction } from "@/lib/rbac/entity-acce
 import { FIELD_ACCESS_LEVELS, fieldVisibleOnSurface } from "@/lib/rbac/field-surface-access";
 import { permissions } from "@/lib/rbac/permissions";
 import { roleDisplayLabel } from "@/lib/rbac/role-display-labels";
+import { groupRolesForMenu, roleLabelWithinGroup } from "@/lib/rbac/role-groups";
 import { notify } from "@/lib/ui/notify";
 import { cn } from "@/lib/utils";
 
@@ -69,19 +70,48 @@ export function useRoleFieldAccessContext(): RoleFieldAccessValue | null {
 
 export function RoleFieldAccessProvider({
   entitySlug,
+  storageKey,
   children,
 }: {
   entitySlug: string;
+  /** Keeps the preview role when moving between screens in one module. */
+  storageKey?: string;
   children: ReactNode;
 }) {
-  const value = useRoleFieldAccess(entitySlug);
+  const value = useRoleFieldAccess(entitySlug, storageKey);
   return <RoleFieldAccessContext.Provider value={value}>{children}</RoleFieldAccessContext.Provider>;
 }
 
-function useRoleFieldAccess(entitySlug: string): RoleFieldAccessValue {
+function useRoleFieldAccess(entitySlug: string, storageKey?: string): RoleFieldAccessValue {
   const canManageRoles = usePermission([permissions.roleManage]);
   const queryClient = useQueryClient();
-  const [roleId, setRoleId] = useState<number | null>(null);
+  const [roleId, setRoleIdState] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) setRoleIdState(parsed);
+    }
+    function onPreview(event: Event) {
+      const detail = (event as CustomEvent<{ storageKey?: string; roleId?: number | null }>).detail;
+      if (detail?.storageKey !== storageKey) return;
+      setRoleIdState(detail.roleId ?? null);
+    }
+    window.addEventListener("toweros:viewing-as", onPreview);
+    return () => window.removeEventListener("toweros:viewing-as", onPreview);
+  }, [storageKey]);
+
+  function setRoleId(next: number | null) {
+    setRoleIdState(next);
+    if (!storageKey) return;
+    if (next == null) window.sessionStorage.removeItem(storageKey);
+    else window.sessionStorage.setItem(storageKey, String(next));
+    window.dispatchEvent(
+      new CustomEvent("toweros:viewing-as", { detail: { storageKey, roleId: next } }),
+    );
+  }
   const catalog = useQuery({
     queryKey: ["admin", "roles"],
     queryFn: fetchAdminRoleCatalog,
@@ -196,13 +226,13 @@ const quietSelectClass =
   "h-8 max-w-[12rem] rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** Compact role preview. Sits in a toolbar, not its own banner. */
-export function ViewingAsSelect() {
+export function ViewingAsSelect({ label = "Viewing as" }: { label?: string }) {
   const access = useRoleFieldAccessContext();
   if (!access?.canManageRoles) return null;
 
   return (
     <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-      <span className="whitespace-nowrap">Viewing as</span>
+      <span className="whitespace-nowrap">{label}</span>
       <select
         id="dyn-viewing-as-role"
         className={quietSelectClass}
@@ -238,9 +268,11 @@ export function ViewingAsMenuItems() {
   if (!access?.canManageRoles) return null;
 
   const current = access.selected ? roleDisplayLabel(access.selected.name) : "My own access";
+  const groups = groupRolesForMenu(access.roles);
 
   return (
     <ContextMenuSub
+      className="max-h-[min(32rem,70vh)] min-w-56"
       label={
         <>
           <span>Viewing as</span>
@@ -252,15 +284,21 @@ export function ViewingAsMenuItems() {
         <span className="flex-1">My own access</span>
         {access.selected ? null : <Check className="size-3.5 text-emerald-600" aria-label="Selected" />}
       </ContextMenuItem>
-      {access.roles.map((role) => {
-        const selected = access.selected?.id === role.id;
-        return (
-          <ContextMenuItem key={role.id} onClick={() => access.setRoleId(role.id)}>
-            <span className="flex-1">{roleDisplayLabel(role.name)}</span>
-            {selected ? <Check className="size-3.5 text-emerald-600" aria-label="Selected" /> : null}
-          </ContextMenuItem>
-        );
-      })}
+      {groups.map((group) => (
+        <Fragment key={group.id}>
+          <ContextMenuSeparator />
+          <ContextMenuLabel className="sticky top-0 bg-popover">{group.label}</ContextMenuLabel>
+          {group.roles.map((role) => {
+            const selected = access.selected?.id === role.id;
+            return (
+              <ContextMenuItem key={role.id} onClick={() => access.setRoleId(role.id)}>
+                <span className="flex-1">{roleLabelWithinGroup(group.id, role.name)}</span>
+                {selected ? <Check className="size-3.5 text-emerald-600" aria-label="Selected" /> : null}
+              </ContextMenuItem>
+            );
+          })}
+        </Fragment>
+      ))}
     </ContextMenuSub>
   );
 }
@@ -282,8 +320,9 @@ export function RoleAllColumnsMenuItems({
   columns: ReadonlyArray<{ id: string; label: string }>;
 }) {
   const access = useRoleFieldAccessContext();
-  if (!access?.canManageRoles || !access.selected || columns.length === 0) return null;
-  const locked = ownerRole(access.selected) || access.selected.permissions.length === 0 || access.saving;
+  if (!access?.canManageRoles || columns.length === 0) return null;
+  const locked =
+    !access.selected || ownerRole(access.selected) || access.selected.permissions.length === 0 || access.saving;
 
   return (
     <ContextMenuSub label="Columns">
@@ -359,15 +398,19 @@ export function RoleFieldAccessMenuItems({
 /** Right-click the Actions column to show or hide view, edit, clone, and delete for the preview role. */
 export function RoleRowActionsMenuItems({
   columns = [],
+  always = false,
 }: {
   columns?: ReadonlyArray<{ id: string; label: string }>;
+  /** Keep the action rows visible before a role is chosen, so every surface shows the same menu. */
+  always?: boolean;
 } = {}) {
   const access = useRoleFieldAccessContext();
   if (!access?.canManageRoles) return null;
-  if (!access.selected) return <ViewingAsMenuItems />;
+  if (!access.selected && !always) return <ViewingAsMenuItems />;
 
-  const roleName = roleDisplayLabel(access.selected.name);
-  const locked = ownerRole(access.selected) || access.selected.permissions.length === 0 || access.saving;
+  const roleName = access.selected ? roleDisplayLabel(access.selected.name) : "Role";
+  const locked =
+    !access.selected || ownerRole(access.selected) || access.selected.permissions.length === 0 || access.saving;
   const actions: Array<{ action: EntityAccessAction; label: string }> = [
     { action: "view", label: "View" },
     { action: "edit", label: "Edit" },
@@ -382,7 +425,9 @@ export function RoleRowActionsMenuItems({
     <>
       <ViewingAsMenuItems />
       <ContextMenuSeparator />
-      <ContextMenuLabel className="uppercase tracking-wide">{roleName} · Actions</ContextMenuLabel>
+      <ContextMenuLabel className="uppercase tracking-wide">
+        {access.selected ? `${roleName} · Actions` : "Actions"}
+      </ContextMenuLabel>
       {actions.map((item) => {
         const allowed = access.entityAllows(item.action);
         return (

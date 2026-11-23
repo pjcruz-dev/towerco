@@ -8,6 +8,7 @@ use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Services\EApprovalFormWorkspaceService;
 use App\Modules\EApproval\Services\EApprovalFormWorkspaceSubmissionService;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,6 +24,7 @@ class EApprovalFormWorkspaceSubmissionsController extends AbstractApiController
     ): JsonResponse {
         abort_unless($request->user()?->can('e_approval:view'), 403);
         abort_unless($request->user()?->can('e_approval:submissions:view'), 403);
+        abort_unless(app(EApprovalRoleFieldAccess::class)->allows($request->user(), 'view'), 403);
 
         $context = $workspaces->resolveWorkspaceContext($slug, $request->user());
         $query = $this->validatedTenantListQuery($request);

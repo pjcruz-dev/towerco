@@ -28,6 +28,8 @@ type Highlight = {
   pin_w: number;
   pin_h: number;
   replies: EApprovalCommentRow["replies"];
+  resolved_at?: string | null;
+  resolved_by_name?: string | null;
 };
 
 type Draft = {
@@ -87,6 +89,7 @@ type Props = {
     pin_h?: number;
     mention_user_ids?: string[];
   }) => void;
+  onResolve?: (commentId: string, resolved: boolean) => void;
 };
 
 function formatWhen(value: string | null): string {
@@ -142,6 +145,7 @@ function PdfPageView({
   onStartReply,
   onReplyDraft,
   onPostReply,
+  onResolve,
   noteRef,
   people,
   decision,
@@ -166,6 +170,7 @@ function PdfPageView({
   onStartReply: (id: string) => void;
   onReplyDraft: (value: string) => void;
   onPostReply: (id: string) => void;
+  onResolve?: (commentId: string, resolved: boolean) => void;
   noteRef: RefObject<HTMLTextAreaElement | null>;
   people: EApprovalMentionPerson[];
   decision: {
@@ -297,7 +302,7 @@ function PdfPageView({
               <button
                 type="button"
                 aria-label={`Comment by ${mark.user_name}`}
-                className={cn("absolute inset-0", color.fill, open && "ring-2", open && color.ring)}
+                className={cn("absolute inset-0", color.fill, open && "ring-2", open && color.ring, mark.resolved_at && "opacity-40")}
                 onPointerDown={(event) => event.stopPropagation()}
                 onFocus={() => onHover(mark.id)}
                 onBlur={() => onHover(null)}
@@ -345,6 +350,21 @@ function PdfPageView({
                 >
                   Reply
                 </button>
+                {onResolve ? (
+                  <button
+                    type="button"
+                    className="mt-1 ml-3 text-xs text-primary"
+                    disabled={posting}
+                    onClick={() => onResolve(mark.id, !mark.resolved_at)}
+                  >
+                    {mark.resolved_at ? "Reopen" : "Resolve"}
+                  </button>
+                ) : null}
+                {mark.resolved_at ? (
+                  <span className="mt-1 block text-[11px] text-muted-foreground">
+                    Resolved{mark.resolved_by_name ? ` by ${mark.resolved_by_name}` : ""}
+                  </span>
+                ) : null}
                 {replyTo === mark.id ? (
                   <span className="mt-2 block space-y-2">
                     <EApprovalMentionField
@@ -494,6 +514,7 @@ export function EApprovalPdfPinLayer({
   onFocusHandled,
   markingEnabled = true,
   onPost,
+  onResolve,
 }: Props) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -686,6 +707,8 @@ export function EApprovalPdfPinLayer({
         pin_w: comment.pin_w && comment.pin_w > 0 ? comment.pin_w : 0.08,
         pin_h: comment.pin_h && comment.pin_h > 0 ? comment.pin_h : 0.02,
         replies: comment.replies ?? [],
+        resolved_at: comment.resolved_at,
+        resolved_by_name: comment.resolved_by_name,
       },
     ];
   });
@@ -854,6 +877,7 @@ export function EApprovalPdfPinLayer({
                   setReplyDraft("");
                   setReplyTo(null);
                 }}
+                onResolve={onResolve}
                 people={people}
                 decision={decision}
               />

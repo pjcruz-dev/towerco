@@ -9,6 +9,7 @@ import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DASHBOARD_CHART } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { DashboardLineChart } from "@/components/dashboard/dashboard-line-chart";
+import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { FilterSelect } from "@/components/forms/filter-select";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -120,6 +121,7 @@ function formatDay(value: string | null): string {
 }
 
 export function ControlledDocumentOverviewPageClient() {
+  const preview = useDocumentRegisterRolePreview();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryState = useMemo(() => readOverviewQuery(searchParams), [searchParams]);
@@ -166,15 +168,21 @@ export function ControlledDocumentOverviewPageClient() {
           description="Pending includes new documents and approved documents with a revision still in approval. Obsolete is a withdrawn document or one that still has an older revision."
           actions={
             <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {preview.allowsHref("/documents/controlled/register") ? (
               <Button size="sm" render={<Link href="/documents/controlled/register" />}>
                 Open register
               </Button>
+              ) : null}
+              {preview.allowsHref("/documents/controlled/obsolete") ? (
               <Button size="sm" variant="outline" render={<Link href="/documents/controlled/obsolete" />}>
                 Files
               </Button>
+              ) : null}
+              {preview.allowsHref("/documents/controlled/reports") ? (
               <Button size="sm" variant="outline" render={<Link href={reportsHref(queryState)} />}>
                 Reports
               </Button>
+              ) : null}
               <Button
                 size="sm"
                 variant="outline"

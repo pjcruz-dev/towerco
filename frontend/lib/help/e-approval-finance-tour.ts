@@ -900,7 +900,8 @@ const decideSteps: LiveTourStep[] = [
     query: { tab: "decide" },
     target: "ea-decide-signature",
     title: "Your signature",
-    body: "A signature saved on My E-Forms profile loads here. Otherwise draw, type, or upload, then accept consent.",
+    body: "A signature saved on My E-Forms profile is used automatically and this block stays hidden. Otherwise draw, type, or upload, then accept consent.",
+    skipIfProfileSignature: true,
     audience: "approver",
   },
   {

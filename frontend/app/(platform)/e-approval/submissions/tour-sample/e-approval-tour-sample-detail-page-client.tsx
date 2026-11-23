@@ -242,16 +242,16 @@ function TourSampleDetailInner() {
           <TabsTrigger value="activity" className="gap-1.5">
             <MessageSquare className="h-3.5 w-3.5" />
             Activity
-            <Badge variant="outline" className="ml-1 h-5 min-w-5 px-1 text-[10px]">
+            <Badge className="ml-1 h-5 min-w-5 rounded-full border-transparent bg-foreground px-1.5 text-[10px] font-semibold text-background">
               {commentsBadgeCount}
             </Badge>
           </TabsTrigger>
           {showDecideTab ? (
-            <TabsTrigger value="decide" className="gap-1.5" data-help="ea-detail-decide-tab">
+            <TabsTrigger value="decide" className={canApprove ? "gap-1.5 font-semibold text-foreground" : "gap-1.5"} data-help="ea-detail-decide-tab">
               <Zap className="h-3.5 w-3.5" />
               Decide
               {canApprove ? (
-                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1 text-[10px]">
+                <Badge className="ml-1 h-5 min-w-5 rounded-full px-1.5 text-[10px] font-semibold">
                   1
                 </Badge>
               ) : null}

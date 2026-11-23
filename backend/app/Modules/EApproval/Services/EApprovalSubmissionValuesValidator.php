@@ -12,7 +12,9 @@ use App\Modules\EApproval\Support\EApprovalForecastActivityLimit;
 use App\Modules\EApproval\Support\EApprovalFundsNeededBy;
 use App\Modules\EApproval\Support\EApprovalGridColumnRules;
 use App\Modules\EApproval\Support\EApprovalPerDiemDays;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use App\Modules\EApproval\Support\EApprovalUserListValueParser;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Validation\ValidationException;
 
 final class EApprovalSubmissionValuesValidator
@@ -21,6 +23,8 @@ final class EApprovalSubmissionValuesValidator
         private readonly EApprovalFieldVisibilityEvaluator $visibility,
         private readonly EApprovalApprovalPolicyRequiredApproverFields $policyRequiredApprovers,
         private readonly EApprovalFinanceProcurementPolicyService $procurementPolicy,
+        private readonly EApprovalSettingsService $settings,
+        private readonly EApprovalRoleFieldAccess $roleAccess,
     ) {}
 
     /**
@@ -34,6 +38,7 @@ final class EApprovalSubmissionValuesValidator
         bool $requireRequired = true,
         array $attachmentCountsByFieldName = [],
         array $attachmentSlotsByFieldName = [],
+        ?TenantUser $actor = null,
     ): void {
         $form->loadMissing('fields');
         $errors = [];
@@ -56,6 +61,9 @@ final class EApprovalSubmissionValuesValidator
             }
 
             $name = (string) $field->name;
+            if ($actor !== null && ! $this->roleAccess->editable($actor, $name)) {
+                continue;
+            }
             $raw = $values[$name] ?? $values[(string) $field->id] ?? null;
             $value = $this->normalizeValue($raw);
             $validation = is_array($field->validation) ? $field->validation : [];
@@ -154,6 +162,8 @@ final class EApprovalSubmissionValuesValidator
                         is_array($field->options) ? $field->options : [],
                         $raw,
                         $values,
+                        null,
+                        $this->settings->siteSearchScope(),
                     );
                     if ($boundError !== null) {
                         $errors["values.{$name}"] = [$boundError];

@@ -295,9 +295,6 @@ final class ControlledDocumentSyncService
         if (! $revision instanceof ControlledDocumentRevision || $revision->status !== ControlledDocumentRevisionStatus::PENDING) {
             return;
         }
-        if ($revision->stored_path !== null && $revision->stored_path !== '') {
-            return;
-        }
 
         $revision->loadMissing('document');
         $document = $revision->document;
@@ -316,6 +313,11 @@ final class ControlledDocumentSyncService
         if (! $attachment instanceof EApprovalAttachment) {
             return;
         }
+        if ($this->pendingFileMatchesAttachment($revision, $attachment)) {
+            return;
+        }
+
+        $previousPath = trim((string) $revision->stored_path);
 
         try {
             $copied = $this->storage->copyFromEApprovalPath(
@@ -326,6 +328,9 @@ final class ControlledDocumentSyncService
             );
             $revision->fill($copied);
             $revision->save();
+            if ($previousPath !== '' && $previousPath !== (string) ($copied['stored_path'] ?? '')) {
+                $this->storage->deleteStoredFile($previousPath);
+            }
         } catch (\Throwable $exception) {
             Log::warning('Controlled document pending file was not copied', [
                 'submission_id' => (string) $submission->id,
@@ -580,11 +585,41 @@ final class ControlledDocumentSyncService
         return $map;
     }
 
+    private function pendingFileMatchesAttachment(ControlledDocumentRevision $revision, EApprovalAttachment $attachment): bool
+    {
+        if (trim((string) $revision->stored_path) === '') {
+            return false;
+        }
+        if ((string) $revision->original_filename !== (string) $attachment->file_name) {
+            return false;
+        }
+
+        $storedAt = $revision->updated_at;
+        $uploadedAt = $attachment->created_at;
+        if ($storedAt === null || $uploadedAt === null) {
+            return false;
+        }
+
+        return $storedAt->greaterThanOrEqualTo($uploadedAt);
+    }
+
+    /**
+     * The file on the request right now: newest live attachment for the field.
+     * A replaced file stays on the submission, and must not stay the document file.
+     */
     private function primaryAttachment(EApprovalSubmission $submission, string $fieldName): ?EApprovalAttachment
     {
-        $attachments = $submission->attachments->sortBy(
-            static fn (EApprovalAttachment $attachment): int => $attachment->created_at?->getTimestamp() ?? 0,
-        );
+        $attachments = $submission->attachments
+            ->filter(static fn (EApprovalAttachment $attachment): bool => ! $attachment->isSuperseded())
+            ->sort(static function (EApprovalAttachment $left, EApprovalAttachment $right): int {
+                $byTime = ($right->created_at?->getTimestamp() ?? 0) <=> ($left->created_at?->getTimestamp() ?? 0);
+                if ($byTime !== 0) {
+                    return $byTime;
+                }
+
+                return strcmp((string) $right->id, (string) $left->id);
+            })
+            ->values();
         $scoped = $attachments
             ->first(static fn (EApprovalAttachment $attachment): bool => (string) $attachment->field_name === $fieldName);
 
@@ -592,7 +627,9 @@ final class ControlledDocumentSyncService
             return $scoped;
         }
 
-        return $attachments->first();
+        $fallback = $attachments->first();
+
+        return $fallback instanceof EApprovalAttachment ? $fallback : null;
     }
 
     private function parseRevisionNumber(?string $raw, int $fallback): int

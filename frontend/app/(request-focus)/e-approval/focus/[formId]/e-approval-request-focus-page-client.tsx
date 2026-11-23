@@ -8,7 +8,10 @@ import { RequestFocusShell } from "@/components/layout/request-focus-shell";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { eApprovalRequestUrl } from "@/modules/documents/controlled-document-submission-url";
 import type { ControlledDocumentRequestMode } from "@/modules/e-approval/controlled-document-compose";
+import { isIsoDocumentControlForm } from "@/modules/e-approval/form-workspace";
+import { fetchEApprovalForm } from "@/lib/api/modules/e-approval-api";
 import { permissions } from "@/lib/rbac/permissions";
+import { useQuery } from "@tanstack/react-query";
 
 type Props = { formId: string };
 
@@ -33,7 +36,13 @@ export function EApprovalRequestFocusPageClient({ formId }: Props) {
     ? undefined
     : searchParams.get("document_code")?.trim() || undefined;
 
+  const formQuery = useQuery({
+    queryKey: ["e-approval", "form", formId, "focus-family"],
+    queryFn: () => fetchEApprovalForm(formId),
+  });
+
   const isControlledDocumentRequest =
+    isIsoDocumentControlForm(formQuery.data?.metadata_json) &&
     !resubmitSubmissionId &&
     (initialControlledMode === "revision" || initialControlledMode === "new");
 

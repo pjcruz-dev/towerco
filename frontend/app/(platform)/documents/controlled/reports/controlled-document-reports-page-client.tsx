@@ -10,6 +10,7 @@ import { DASHBOARD_CHART } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
 import { DashboardLineChart } from "@/components/dashboard/dashboard-line-chart";
 import { ControlledDocumentSavedReportsCard } from "@/components/documents/controlled-document-saved-reports-card";
+import { useDocumentRegisterAccess } from "@/components/documents/document-register-role-field-access";
 import { FilterSelect } from "@/components/forms/filter-select";
 import { WorkspacePageHeader } from "@/components/layout/workspace-page-header";
 import { PermissionGate } from "@/components/layout/permission-gate";
@@ -37,6 +38,7 @@ function shareOf(part: number, whole: number): string {
 }
 
 export function ControlledDocumentReportsPageClient() {
+  const access = useDocumentRegisterAccess();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryState = readControlledReportQuery(searchParams);
@@ -109,10 +111,12 @@ export function ControlledDocumentReportsPageClient() {
           }
           actions={
             <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {access.allows("export") ? (
               <Button type="button" variant="outline" size="sm" disabled={exporting} onClick={() => void onExport()}>
                 <Download className="mr-1.5 h-4 w-4" />
                 {exporting ? "Exporting…" : "Export CSV"}
               </Button>
+              ) : null}
               <Button
                 type="button"
                 size="sm"

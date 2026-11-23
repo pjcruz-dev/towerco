@@ -7,6 +7,8 @@ namespace App\Modules\Documents\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Documents\Services\ControlledDocumentAccessService;
 use App\Modules\Documents\Services\ControlledDocumentRegistryService;
+use App\Modules\Documents\Support\ControlledDocumentRoleFieldAccess;
+use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,9 +19,12 @@ class ControlledDocumentReportController extends AbstractApiController
         Request $request,
         ControlledDocumentRegistryService $registry,
         ControlledDocumentAccessService $access,
+        ControlledDocumentRoleFieldAccess $roleAccess,
     ): JsonResponse {
         $user = $request->user();
-        abort_unless($user !== null && $access->canAccessRegistry($user), 403);
+        abort_unless($user instanceof TenantUser && $access->canAccessRegistry($user), 403);
+        abort_unless($roleAccess->allows($user, 'view'), 403);
+        abort_unless(! $roleAccess->navTargetHidden($user, '/documents/controlled/reports'), 403);
 
         $data = $request->validate([
             'period' => ['sometimes', 'nullable', 'integer', Rule::in([30, 90, 365])],

@@ -49,6 +49,7 @@ class EApprovalSubmission extends Model
         'approval_policy_version_id',
         'approval_policy_label',
         'finance_json',
+        'revision_baseline_json',
     ];
 
     protected function casts(): array
@@ -59,6 +60,7 @@ class EApprovalSubmission extends Model
             'force_full_restart' => 'boolean',
             'approval_cycle' => 'integer',
             'finance_json' => 'array',
+            'revision_baseline_json' => 'array',
             'external_upload_token_expires_at' => 'datetime',
             'external_resubmit_token_expires_at' => 'datetime',
         ];

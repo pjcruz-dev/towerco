@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
 import { EApprovalTenantSubsidiaryLogosPanel } from "@/components/e-approval/e-approval-tenant-subsidiary-logos-panel";
-import { EApprovalUserGuidesSettingsCard } from "@/components/help/e-approval-user-guides-settings-card";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -382,7 +381,7 @@ export function EApprovalSettingsPageClient() {
               <div>
                 <Label htmlFor="block_new_cash_advance">Block a new cash advance</Label>
                 <p className="text-xs text-muted-foreground">
-                  While one is unliquidated or overdue, that person cannot file another.
+                  While a cash advance is pending, a liquidation is still open, or a released advance is not yet liquidated, that person cannot file another.
                 </p>
               </div>
               <Switch
@@ -454,8 +453,6 @@ export function EApprovalSettingsPageClient() {
             </Button>
           </div>
         </EApprovalSectionCard>
-
-        <EApprovalUserGuidesSettingsCard />
       </div>
     </PermissionGate>
   );

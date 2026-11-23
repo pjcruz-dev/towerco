@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useMemo, type ReactNode } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { EApprovalRoleFieldFrame, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
 import { RegistryDataTableView } from "@/components/registry/registry-data-table-view";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { PaginatedMeta } from "@/lib/api/paginated";
+import { E_APPROVAL_LIST_FIELDS, eApprovalFieldKey } from "@/lib/e-approval/submission-role-access";
 import type { EApprovalWorkspaceLineRow } from "@/lib/api/modules/e-approval-api";
 
 export type WorkspaceListMode = "requests" | "lines";
@@ -34,29 +36,48 @@ export function EApprovalWorkspaceLinesTable({
   onPageChange,
   toolbarStart,
 }: Props) {
+  const access = useEApprovalSubmissionAccess();
   const columns = useMemo((): ColumnDef<EApprovalWorkspaceLineRow>[] => {
-    return [
+    const catalog = [
+      { id: "document_no", label: "Document" },
+      { id: "requestor", label: "Requestor" },
+      { id: "subsidiary", label: "Subsidiary" },
+      { id: "date_range", label: "Date range" },
+      { id: "amount", label: "Amount" },
+      { id: "status", label: "Status" },
+    ];
+    const defs: ColumnDef<EApprovalWorkspaceLineRow>[] = [
       {
         id: "document_no",
         accessorKey: "document_no",
         header: "Document",
         cell: ({ row }) => (
-          <Link href={`/e-approval/submissions/${row.original.submission_id}`} className="font-medium text-primary hover:underline">
-            {row.original.document_no}
-          </Link>
+          <EApprovalRoleFieldFrame fieldName="document_no" fieldLabel="Document" columns={E_APPROVAL_LIST_FIELDS}>
+            <Link href={`/e-approval/submissions/${row.original.submission_id}`} className="font-medium text-primary hover:underline">
+              {row.original.document_no}
+            </Link>
+          </EApprovalRoleFieldFrame>
         ),
       },
       {
         id: "requestor_name",
         accessorKey: "requestor_name",
         header: "Requestor",
-        cell: ({ row }) => <span className="text-muted-foreground">{row.original.requestor_name || "—"}</span>,
+        cell: ({ row }) => (
+          <EApprovalRoleFieldFrame fieldName="requestor" fieldLabel="Requestor" columns={E_APPROVAL_LIST_FIELDS}>
+            <span className="text-muted-foreground">{row.original.requestor_name || "—"}</span>
+          </EApprovalRoleFieldFrame>
+        ),
       },
       {
         id: "subsidiary",
         accessorKey: "subsidiary",
         header: "Subsidiary",
-        cell: ({ row }) => row.original.subsidiary || "—",
+        cell: ({ row }) => (
+          <EApprovalRoleFieldFrame fieldName="subsidiary" fieldLabel="Subsidiary" columns={E_APPROVAL_LIST_FIELDS}>
+            <span>{row.original.subsidiary || "—"}</span>
+          </EApprovalRoleFieldFrame>
+        ),
       },
       {
         id: "date_range",
@@ -76,7 +97,11 @@ export function EApprovalWorkspaceLinesTable({
         id: "status",
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => <EApprovalStatusBadge status={row.original.status} kind="submission" />,
+        cell: ({ row }) => (
+          <EApprovalRoleFieldFrame fieldName="status" fieldLabel="Status" columns={E_APPROVAL_LIST_FIELDS}>
+            <EApprovalStatusBadge status={row.original.status} kind="submission" />
+          </EApprovalRoleFieldFrame>
+        ),
       },
       {
         id: "open",
@@ -93,7 +118,12 @@ export function EApprovalWorkspaceLinesTable({
         ),
       },
     ];
-  }, []);
+    return defs.filter((column) => {
+      const id = String(column.id ?? "");
+      if (id === "open") return access.allows("view");
+      return access.visible(eApprovalFieldKey(id), "table");
+    });
+  }, [access]);
 
   if (isError) {
     return (

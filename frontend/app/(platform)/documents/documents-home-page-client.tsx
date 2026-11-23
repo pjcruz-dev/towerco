@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DASHBOARD_CHART } from "@/components/dashboard/dashboard-chart-utils";
 import { DocumentDetailDrawer } from "@/components/documents/document-detail-drawer";
+import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { RefreshingHint } from "@/components/ui/refreshing-hint";
 import { usePermission } from "@/hooks/use-permission";
@@ -18,6 +19,7 @@ export function DocumentsHomePageClient({
 }: {
   initialDocumentId?: string | null;
 }) {
+  const registerPreview = useDocumentRegisterRolePreview();
   const canManageTemplate = usePermission([permissions.documentsTemplateManage]);
   const [detailDocumentId, setDetailDocumentId] = useState<string | null>(initialDocumentId);
 
@@ -60,12 +62,14 @@ export function DocumentsHomePageClient({
               Binder template
             </Link>
           ) : null}
+          {registerPreview.allowsHref("/documents/controlled") ? (
           <Link
             href="/documents/controlled"
             className="text-sm font-medium text-primary hover:underline"
           >
             Document control
           </Link>
+          ) : null}
         </header>
 
         <div className="grid gap-3 sm:grid-cols-3">

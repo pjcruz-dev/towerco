@@ -155,6 +155,8 @@ export type EApprovalWorkflowPreviewStep = {
   mapping_source_value?: string | null;
   mapping_matched_key?: string | null;
   path_reason?: string | null;
+  /** Job title from the Entra reporting line, when this step was expanded from Direct manager. */
+  role_label?: string | null;
   parallel_mode?: "all" | "any" | "n_of_m" | null;
   parallel_quorum?: number | null;
   used_fallback?: boolean;
@@ -729,6 +731,16 @@ export async function fetchEApprovalComments(submissionId: string): Promise<EApp
     `/e-approval/submissions/${submissionId}/comments`,
   );
   return response.data.data;
+}
+
+export async function resolveEApprovalComment(
+  submissionId: string,
+  commentId: string,
+  resolved: boolean,
+): Promise<void> {
+  await apiClient.post(`/e-approval/submissions/${submissionId}/comments/${commentId}/resolve`, {
+    resolved,
+  });
 }
 
 export async function postEApprovalComment(

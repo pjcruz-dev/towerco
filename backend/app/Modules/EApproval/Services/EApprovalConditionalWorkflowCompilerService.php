@@ -18,6 +18,7 @@ final class EApprovalConditionalWorkflowCompilerService
         private readonly EApprovalWorkflowConditionEvaluator $evaluator,
         private readonly EApprovalApprovalPolicyStepPersister $stepPersister,
         private readonly EApprovalUserListStepExpander $userListExpander,
+        private readonly EApprovalManagerChainExpander $managerChainExpander,
     ) {}
 
     /**
@@ -30,10 +31,14 @@ final class EApprovalConditionalWorkflowCompilerService
      *   approval_policy_label: string|null
      * }
      */
-    public function compileForSubmit(EApprovalForm $form, array $values, string $submissionId): array
-    {
+    public function compileForSubmit(
+        EApprovalForm $form,
+        array $values,
+        string $submissionId,
+        ?string $requestorEmail = null,
+    ): array {
         $definitions = EApprovalWorkflowStepDefinitionSupport::definitionsFromForm($form);
-        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, strictUserList: true);
+        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, true, $requestorEmail);
 
         if ($activeDefinitions === []) {
             throw ValidationException::withMessages([
@@ -48,7 +53,7 @@ final class EApprovalConditionalWorkflowCompilerService
             'template_id' => $templateId,
             'workflow_mode' => 'conditional_steps',
             'policy_context' => $values,
-            'step_definitions' => $definitions,
+            'step_definitions' => $this->managerChainExpander->stamp($definitions),
             'active_step_definitions' => $activeDefinitions,
             'steps' => $steps->map(static fn (EApprovalWorkflowStep $step) => [
                 'id' => $step->id,
@@ -82,7 +87,7 @@ final class EApprovalConditionalWorkflowCompilerService
         ?array $definitions = null,
     ): array {
         $definitions ??= EApprovalWorkflowStepDefinitionSupport::definitionsFromForm($form);
-        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, strictUserList: false);
+        $activeDefinitions = $this->filterActiveDefinitions($definitions, $values, false, $requestorEmail);
         $skipped = $this->describeSkippedSteps($definitions, $values);
 
         return [
@@ -106,8 +111,12 @@ final class EApprovalConditionalWorkflowCompilerService
      * @param  array<string, mixed>  $values
      * @return list<array<string, mixed>>
      */
-    public function filterActiveDefinitions(array $definitions, array $values, bool $strictUserList = true): array
-    {
+    public function filterActiveDefinitions(
+        array $definitions,
+        array $values,
+        bool $strictUserList = true,
+        ?string $requestorEmail = null,
+    ): array {
         $matched = [];
 
         foreach (array_values($definitions) as $definition) {
@@ -131,8 +140,10 @@ final class EApprovalConditionalWorkflowCompilerService
             $matched[] = $definition;
         }
 
+        $expanded = $this->userListExpander->expand($matched, $values, $strictUserList);
+
         return EApprovalWorkflowStepDefinitionSupport::compactStepOrdersPreservingTies(
-            $this->userListExpander->expand($matched, $values, $strictUserList),
+            $this->managerChainExpander->expand($expanded, $requestorEmail, $strictUserList),
         );
     }
 

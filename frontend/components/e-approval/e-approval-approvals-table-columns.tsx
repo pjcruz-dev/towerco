@@ -3,7 +3,9 @@
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { EApprovalRoleFieldFrame } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
+import { E_APPROVAL_LIST_FIELDS } from "@/lib/e-approval/submission-role-access";
 import { createActionsColumn } from "@/components/ui/data-table-column-helpers";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import type { EApprovalApprovalRow } from "@/modules/e-approval/types";
@@ -17,6 +19,8 @@ function submissionHref(row: EApprovalApprovalRow): string | null {
   return pending ? `/e-approval/submissions/${id}?tab=decide` : `/e-approval/submissions/${id}`;
 }
 
+const ROLE_COLUMNS = E_APPROVAL_LIST_FIELDS.map((field) => ({ id: field.id, label: field.label }));
+
 export function createEApprovalApprovalsTableColumns(): ColumnDef<EApprovalApprovalRow>[] {
   return [
     {
@@ -24,18 +28,28 @@ export function createEApprovalApprovalsTableColumns(): ColumnDef<EApprovalAppro
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Document" />,
       cell: ({ row }) => (
-        <span className="font-mono text-xs">{row.original.submission?.document_no}</span>
+        <EApprovalRoleFieldFrame fieldName="document_no" fieldLabel="Document" columns={ROLE_COLUMNS}>
+          <span className="font-mono text-xs">{row.original.submission?.document_no}</span>
+        </EApprovalRoleFieldFrame>
       ),
     },
     {
       id: "form",
       header: "Form",
-      cell: ({ row }) => row.original.submission?.form_name,
+      cell: ({ row }) => (
+        <EApprovalRoleFieldFrame fieldName="form_name" fieldLabel="Form" columns={ROLE_COLUMNS}>
+          <span>{row.original.submission?.form_name}</span>
+        </EApprovalRoleFieldFrame>
+      ),
     },
     {
       id: "requestor",
       header: "Requestor",
-      cell: ({ row }) => row.original.submission?.requestor?.name ?? "—",
+      cell: ({ row }) => (
+        <EApprovalRoleFieldFrame fieldName="requestor" fieldLabel="Requestor" columns={ROLE_COLUMNS}>
+          <span>{row.original.submission?.requestor?.name ?? "—"}</span>
+        </EApprovalRoleFieldFrame>
+      ),
     },
     {
       id: "submitted",
@@ -53,11 +67,13 @@ export function createEApprovalApprovalsTableColumns(): ColumnDef<EApprovalAppro
       enableSorting: true,
       header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
       cell: ({ row }) => (
-        <EApprovalStatusBadge
-          status={row.original.submission?.status || row.original.status}
-          label={row.original.submission?.status_label}
-          kind="submission"
-        />
+        <EApprovalRoleFieldFrame fieldName="status" fieldLabel="Status" columns={ROLE_COLUMNS}>
+          <EApprovalStatusBadge
+            status={row.original.submission?.status || row.original.status}
+            label={row.original.submission?.status_label}
+            kind="submission"
+          />
+        </EApprovalRoleFieldFrame>
       ),
     },
     createActionsColumn("Actions", (row) => {

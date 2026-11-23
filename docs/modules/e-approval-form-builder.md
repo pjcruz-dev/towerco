@@ -438,7 +438,7 @@ Tests: `backend/tests/Feature/EApproval/EApprovalSubmissionFinanceAuditTest.php`
 
 - **Fixed user** — specific approver
 - **From approver field** — value chosen on the form
-- **Direct manager (Entra)** — resolved at submit from Microsoft Entra; test lookup on Workflow tab
+- **Direct manager (Entra)** — resolved at submit from Microsoft Entra; test lookup on Workflow tab. **Follow the reporting line** (off by default, set per step so every form can use it) walks managers in order and stops at a job title, including that person. A requestor who reports to a manager, who reports to a director, gets both steps. A requestor who already reports to the director gets only the director. Preview and the submission workflow path list each person.
 
 Requires tenant Entra settings and E-Forms workflow settings (auto-provision manager users optional).
 

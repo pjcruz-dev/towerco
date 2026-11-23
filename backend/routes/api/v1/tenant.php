@@ -227,6 +227,7 @@ use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionAttachmentDestr
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionAttachmentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionCancelController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionCommentIndexController;
+use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionCommentResolveController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionCommentStoreController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionDcfResubmitController;
 use App\Modules\EApproval\Http\Controllers\V1\EApprovalSubmissionDraftUpdateController;
@@ -598,6 +599,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::put('e-approval/submissions/{submission}/resubmit', EApprovalSubmissionResubmitController::class)->name('api.tenant.v1.e_approval.submissions.resubmit');
     Route::get('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentIndexController::class)->name('api.tenant.v1.e_approval.submissions.comments.index');
     Route::post('e-approval/submissions/{submission}/comments', EApprovalSubmissionCommentStoreController::class)->name('api.tenant.v1.e_approval.submissions.comments.store');
+    Route::post('e-approval/submissions/{submission}/comments/{comment}/resolve', EApprovalSubmissionCommentResolveController::class)->name('api.tenant.v1.e_approval.submissions.comments.resolve');
     Route::post('e-approval/submissions/{submission}/training/invites', [EApprovalPublicationTrainingController::class, 'invite'])->name('api.tenant.v1.e_approval.submissions.training.invites');
     Route::post('e-approval/submissions/{submission}/training/complete', [EApprovalPublicationTrainingController::class, 'complete'])->name('api.tenant.v1.e_approval.submissions.training.complete');
     Route::delete('e-approval/submissions/{submission}/training/invites/{invite}', [EApprovalPublicationTrainingController::class, 'remove'])->name('api.tenant.v1.e_approval.submissions.training.invites.destroy');

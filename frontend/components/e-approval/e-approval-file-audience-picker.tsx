@@ -12,9 +12,9 @@ import { fetchEApprovalAssignableUsers } from "@/lib/api/modules/e-approval-api"
 export type EApprovalFileAudience = "everyone" | "specific_person" | "selected_users";
 
 type Props = {
-  audience: EApprovalFileAudience;
+  audience: EApprovalFileAudience | "";
   recipientIds: string[];
-  onAudienceChange: (audience: EApprovalFileAudience) => void;
+  onAudienceChange: (audience: EApprovalFileAudience | "") => void;
   onRecipientIdsChange: (ids: string[]) => void;
   disabled?: boolean;
   /** Controlled documents send a register link. The published file is not attached. */
@@ -35,7 +35,7 @@ export function EApprovalFileAudiencePicker({
   const usersQuery = useQuery({
     queryKey: ["e-approval", "assignable-users", "recipients"],
     queryFn: () => fetchEApprovalAssignableUsers("recipients"),
-    enabled: audience !== "everyone",
+    enabled: audience !== "everyone" && audience !== "",
     staleTime: 120_000,
   });
 
@@ -60,7 +60,9 @@ export function EApprovalFileAudiencePicker({
     ? "a link to the current published file. The file is not attached."
     : "the published files.";
   const confirmation =
-    audience === "everyone"
+    audience === ""
+      ? "Choose who should receive this before you finish the request."
+      : audience === "everyone"
       ? `Everyone with an email address receives ${receives}`
       : chosen.length === 0
         ? audience === "specific_person"
@@ -79,21 +81,22 @@ export function EApprovalFileAudiencePicker({
         disabled={disabled}
         onChange={(event) => {
           const next = event.target.value;
-          const audienceNext: EApprovalFileAudience =
-            next === "specific_person" || next === "selected_users" ? next : "everyone";
+          const audienceNext: EApprovalFileAudience | "" =
+            next === "specific_person" || next === "selected_users" || next === "everyone" ? next : "";
           onAudienceChange(audienceNext);
-          if (audienceNext === "everyone") {
+          if (audienceNext === "everyone" || audienceNext === "") {
             onRecipientIdsChange([]);
           } else if (audienceNext === "specific_person") {
             onRecipientIdsChange(recipientIds.slice(0, 1));
           }
         }}
       >
+        <option value="">Choose who receives this</option>
         <option value="everyone">Everyone</option>
         <option value="specific_person">Specific person</option>
         <option value="selected_users">Selected users</option>
       </Select>
-      {audience === "everyone" ? null : (
+      {audience === "everyone" || audience === "" ? null : (
         <div className="space-y-2">
           <Input
             value={search}

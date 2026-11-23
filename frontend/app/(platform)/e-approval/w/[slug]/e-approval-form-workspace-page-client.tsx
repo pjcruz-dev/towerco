@@ -9,6 +9,7 @@ import { Plus, Printer } from "lucide-react";
 
 import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
+import { EApprovalRoleFieldFrame, useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-badge";
 import {
   EApprovalWorkflowStepShow,
@@ -55,6 +56,7 @@ import {
   type EApprovalWorkspaceSubmissionRow,
 } from "@/lib/api/modules/e-approval-api";
 import { getErrorMessage } from "@/lib/api/error";
+import { eApprovalFieldKey } from "@/lib/e-approval/submission-role-access";
 import { permissions } from "@/lib/rbac/permissions";
 import { saveBlob } from "@/lib/ui/module-list-download";
 import { Select } from "@/components/ui/select";
@@ -192,10 +194,11 @@ function renderColumnValue(row: EApprovalWorkspaceSubmissionRow, column: Workspa
   }
 }
 
-export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) {
+function EApprovalFormWorkspacePageBody({ slug, queue = null }: Props) {
   const router = useRouter();
   const push = useNotificationStore((s) => s.push);
   const canApprove = usePermission([permissions.eApprovalApprove]);
+  const access = useEApprovalSubmissionAccess();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [prefs, setPrefs] = useLocalStorageJsonState<WorkspacePrefs>(
@@ -487,7 +490,9 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
   const isEmpty = !submissionsQuery.isFetching && rows.length === 0;
 
   const columns = useMemo((): ColumnDef<EApprovalWorkspaceSubmissionRow>[] => {
-    const defs: ColumnDef<EApprovalWorkspaceSubmissionRow>[] = tableColumns.map((column) => {
+    const visible = tableColumns.filter((column) => access.visible(eApprovalFieldKey(column.key), "table"));
+    const roleColumns = tableColumns.map((column) => ({ id: column.key, label: column.label }));
+    const defs: ColumnDef<EApprovalWorkspaceSubmissionRow>[] = visible.map((column) => {
       const sortable = column.kind === "system" && SORTABLE_SYSTEM_COLUMNS.has(column.key);
 
       return {
@@ -498,11 +503,18 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
         },
         header: sortable
           ? ({ column: tableColumn }) => (
-              <DataTableColumnHeader column={tableColumn} title={column.label} />
+              <EApprovalRoleFieldFrame fieldName={column.key} fieldLabel={column.label} columns={roleColumns}>
+                <DataTableColumnHeader column={tableColumn} title={column.label} />
+              </EApprovalRoleFieldFrame>
             )
-          : column.label,
+          : () => (
+              <EApprovalRoleFieldFrame fieldName={column.key} fieldLabel={column.label} columns={roleColumns}>
+                <span className="font-medium">{column.label}</span>
+              </EApprovalRoleFieldFrame>
+            ),
         enableSorting: sortable,
         cell: ({ row }) => {
+          const body = (() => {
           if (column.key === "status") {
             return <EApprovalStatusBadge status={row.original.status} label={row.original.status_label} kind="submission" />;
           }
@@ -527,13 +539,23 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
             );
           }
           return <span className="text-muted-foreground">{renderColumnValue(row.original, column)}</span>;
+          })();
+          return (
+            <EApprovalRoleFieldFrame fieldName={column.key} fieldLabel={column.label} columns={roleColumns}>
+              {body}
+            </EApprovalRoleFieldFrame>
+          );
         },
       };
     });
 
     defs.push({
       id: "open",
-      header: () => <span className="block w-full text-right">Open</span>,
+      header: () => (
+        <EApprovalRoleFieldFrame fieldName="open" fieldLabel="Open" columns={roleColumns} menu="actions">
+          <span className="block w-full text-right">Open</span>
+        </EApprovalRoleFieldFrame>
+      ),
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
@@ -555,7 +577,7 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
     });
 
     return defs;
-  }, [tableColumns]);
+  }, [access, tableColumns]);
 
   const applySavedView = (view: WorkspaceSavedView) => {
     patchPrefs({
@@ -961,7 +983,7 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
                   Refresh
                 </Button>
               ) : null}
-              {isVisible("export") && dashboard?.viewer.can_export ? (
+              {isVisible("export") && dashboard?.viewer.can_export && access.allows("export") ? (
                 <ModuleListToolbar
                   showPrint={false}
                   start={
@@ -1041,7 +1063,7 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
                   My approvals
                 </Link>
               ) : null}
-              {isVisible("new") && dashboard?.viewer.can_submit ? (
+              {isVisible("new") && dashboard?.viewer.can_submit && access.allows("create") ? (
                 <Link href={dashboard.viewer.new_request_href} className={buttonVariants({ size: "sm" })}>
                   <Plus className="h-3.5 w-3.5" />
                   New request
@@ -1078,4 +1100,8 @@ export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) 
       </div>
     </PermissionGate>
   );
+}
+
+export function EApprovalFormWorkspacePageClient({ slug, queue = null }: Props) {
+  return <EApprovalFormWorkspacePageBody slug={slug} queue={queue} />;
 }

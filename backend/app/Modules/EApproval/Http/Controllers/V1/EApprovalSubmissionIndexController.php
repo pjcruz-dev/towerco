@@ -11,6 +11,7 @@ use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Services\EApprovalFormWorkspaceService;
 use App\Modules\EApproval\Services\EApprovalSubmissionService;
 use App\Modules\EApproval\Support\EApprovalFormWorkspaceSupport;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,9 +19,14 @@ class EApprovalSubmissionIndexController extends AbstractApiController
 {
     use ValidatesTenantListQuery;
 
-    public function __invoke(Request $request, EApprovalSubmissionService $service): JsonResponse
-    {
+    public function __invoke(
+        Request $request,
+        EApprovalSubmissionService $service,
+        EApprovalRoleFieldAccess $roleAccess,
+    ): JsonResponse {
         abort_unless($request->user()?->can('e_approval:submissions:view'), 403);
+        abort_unless($roleAccess->allows($request->user(), 'view'), 403);
+        abort_unless(! $roleAccess->navTargetHidden($request->user(), '/e-approval/submissions'), 403);
 
         $query = $this->validatedTenantListQuery($request);
         $status = (string) $request->query('status', 'all');
@@ -71,7 +77,9 @@ class EApprovalSubmissionIndexController extends AbstractApiController
         );
 
         return $this->okWithMeta(
-            $paginator->getCollection()->map(static fn (EApprovalSubmission $s) => $s->toListRow())->values()->all(),
+            $paginator->getCollection()->map(
+                fn (EApprovalSubmission $s) => $roleAccess->redactListRow($request->user(), $s->toListRow()),
+            )->values()->all(),
             [
                 'total' => $paginator->total(),
                 'per_page' => $paginator->perPage(),

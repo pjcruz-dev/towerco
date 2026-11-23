@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -44,6 +44,8 @@ type SidebarNavGroupProps = {
   dataHelp?: string;
   /** When true, keep the group expanded (e.g. during a live tour). */
   forceOpen?: boolean;
+  /** Wraps each child link, for example with a right-click menu. */
+  wrapSub?: (item: SidebarSubNavItem, link: ReactNode) => ReactNode;
 };
 
 const groupShellClass =
@@ -69,6 +71,7 @@ export function SidebarNavGroup({
   subButtonClassName,
   dataHelp,
   forceOpen = false,
+  wrapSub,
 }: SidebarNavGroupProps) {
   const pathname = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -206,6 +209,32 @@ export function SidebarNavGroup({
                         {item.section}
                       </p>
                     ) : null}
+                    {wrapSub ? (
+                      wrapSub(
+                        item,
+                        <Link
+                          href={item.href}
+                          prefetch={false}
+                          onClick={() => {
+                            setFlyoutOpen(false);
+                            closeMobile();
+                          }}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                            active
+                              ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                              : "text-sidebar-foreground/70",
+                          )}
+                        >
+                          <span className="truncate">{item.title}</span>
+                          {item.badge && item.badge > 0 ? (
+                            <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar-primary-foreground">
+                              {item.badge > 99 ? "99+" : item.badge}
+                            </span>
+                          ) : null}
+                        </Link>,
+                      )
+                    ) : (
                     <Link
                       href={item.href}
                       prefetch={false}
@@ -227,6 +256,7 @@ export function SidebarNavGroup({
                         </span>
                       ) : null}
                     </Link>
+                    )}
                   </li>
                 );
               })}
@@ -313,6 +343,35 @@ export function SidebarNavGroup({
                     {item.section}
                   </p>
                 ) : null}
+                {wrapSub ? (
+                  wrapSub(
+                    item,
+                    <SidebarMenuSubButton
+                      size="md"
+                      render={
+                        <Link
+                          href={item.href}
+                          prefetch={false}
+                          onClick={closeMobile}
+                          data-help={item.dataHelp}
+                          data-tour-nav={item.tourNav ?? (item.dataHelp ? item.href : undefined)}
+                        />
+                      }
+                      isActive={active}
+                      className={cn(
+                        "text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
+                        subButtonClassName,
+                      )}
+                    >
+                      <span>{item.title}</span>
+                      {item.badge && item.badge > 0 ? (
+                        <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-primary px-1.5 text-[10px] font-medium text-sidebar-primary-foreground">
+                          {item.badge > 99 ? "99+" : item.badge}
+                        </span>
+                      ) : null}
+                    </SidebarMenuSubButton>,
+                  )
+                ) : (
                 <SidebarMenuSubButton
                   size="md"
                   render={
@@ -337,6 +396,7 @@ export function SidebarNavGroup({
                     </span>
                   ) : null}
                 </SidebarMenuSubButton>
+                )}
               </SidebarMenuSubItem>
             );
           })}

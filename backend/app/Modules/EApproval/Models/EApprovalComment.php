@@ -29,6 +29,8 @@ class EApprovalComment extends Model
         'pin_w',
         'pin_h',
         'image_attachment_ids',
+        'resolved_at',
+        'resolved_by_id',
     ];
 
     /**
@@ -43,6 +45,7 @@ class EApprovalComment extends Model
             'pin_w' => 'float',
             'pin_h' => 'float',
             'image_attachment_ids' => 'array',
+            'resolved_at' => 'datetime',
         ];
     }
 
@@ -56,6 +59,12 @@ class EApprovalComment extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(TenantUser::class, 'user_id');
+    }
+
+    /** @return BelongsTo<TenantUser, $this> */
+    public function resolvedBy(): BelongsTo
+    {
+        return $this->belongsTo(TenantUser::class, 'resolved_by_id');
     }
 
     /** @return BelongsTo<EApprovalComment, $this> */

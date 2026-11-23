@@ -9,6 +9,7 @@ use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Services\ControlledDocumentAccessService;
 use App\Modules\Documents\Services\ControlledDocumentFormResolverService;
 use App\Modules\Documents\Services\ControlledDocumentRegistryService;
+use App\Modules\Documents\Support\ControlledDocumentRoleFieldAccess;
 use App\Modules\Identity\Models\TenantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,9 +22,12 @@ class ControlledDocumentIndexController extends AbstractApiController
         ControlledDocumentRegistryService $registry,
         ControlledDocumentAccessService $access,
         ControlledDocumentFormResolverService $forms,
+        ControlledDocumentRoleFieldAccess $roleAccess,
     ): JsonResponse {
         $user = $request->user();
         abort_unless($user instanceof TenantUser && $access->canAccessRegistry($user), 403);
+        abort_unless($roleAccess->allows($user, 'view'), 403);
+        abort_unless(! $roleAccess->navTargetHidden($user, '/documents/controlled/register'), 403);
 
         $data = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -90,6 +94,11 @@ class ControlledDocumentIndexController extends AbstractApiController
                 'aging' => is_array($people) ? array_values($people) : [],
             ];
         });
+        $documents->setCollection(
+            $documents->getCollection()->map(
+                fn (array $row): array => $roleAccess->redact($user, $row),
+            ),
+        );
 
         return $this->ok([
             'kpis' => $result['kpis'],

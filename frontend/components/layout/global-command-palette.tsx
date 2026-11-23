@@ -17,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
+import { useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
+import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
 import { isCanceledRequestError } from "@/lib/api/error";
 import { fetchWorkspaceSearch } from "@/lib/api/modules/workspace-search-api";
@@ -144,10 +146,18 @@ export function GlobalCommandPalette() {
   // Same Manage Sidebar tree as the left aside / top nav.
   const { groups: workspaceNavGroups } = useWorkspaceNavGroups({ enabled: open });
 
-  const index = useMemo(
-    () => buildWorkspaceCommandIndex(scopedUser, enabledModules, workspaceNavGroups),
-    [enabledModules, scopedUser, workspaceNavGroups],
-  );
+  const eApprovalPreview = useEApprovalRolePreview();
+  const documentPreview = useDocumentRegisterRolePreview();
+
+  const index = useMemo(() => {
+    const built = buildWorkspaceCommandIndex(scopedUser, enabledModules, workspaceNavGroups);
+    const allow = (href: string) => eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href);
+    if (!eApprovalPreview.active && !documentPreview.active) return built;
+    return {
+      navigate: built.navigate.filter((item) => allow(item.href)),
+      actions: built.actions.filter((item) => allow(item.href)),
+    };
+  }, [documentPreview, eApprovalPreview, enabledModules, scopedUser, workspaceNavGroups]);
 
   const canViewWorkspaces = useMemo(
     () => hasPermission(scopedUser, [permissions.eApprovalView, permissions.eApprovalSubmissionsView]),
@@ -162,8 +172,11 @@ export function GlobalCommandPalette() {
   });
 
   const workspaceNavigateItems = useMemo(
-    () => formWorkspacesToCommandItems(workspacesQuery.data ?? []),
-    [workspacesQuery.data],
+    () =>
+      formWorkspacesToCommandItems(workspacesQuery.data ?? []).filter((item) =>
+        eApprovalPreview.allowsHref(item.href),
+      ),
+    [eApprovalPreview, workspacesQuery.data],
   );
 
   const [query, setQuery] = useState("");

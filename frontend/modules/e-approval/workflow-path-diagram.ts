@@ -77,12 +77,15 @@ function runNodeFromStep(step: EApprovalWorkflowPreviewStep, memberIndex: number
     step.resolved_user_name?.trim() ||
     step.label;
   const email = step.runtime_approver?.email ?? step.resolved_user_email;
+  const role = step.role_label?.trim();
 
   return {
     id: `run-${step.step_order}-${step.resolved_user_id ?? memberIndex}-${step.approval_id ?? "x"}`,
     stepOrder: step.step_order,
     title: name,
-    subtitle: `${workflowStepTypeLabel(step.type)}${email ? ` · ${email}` : ""}`,
+    subtitle: role
+      ? `${role}${email ? ` · ${email}` : ""}`
+      : `${workflowStepTypeLabel(step.type)}${email ? ` · ${email}` : ""}`,
     detail: step.path_reason ?? null,
     // Keep order on the main path; render like condition-skipped cards.
     kind: isRuntimeSkipped ? "skipped" : "run",

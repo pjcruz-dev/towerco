@@ -186,6 +186,8 @@ export type ValidateSubmissionValuesOptions = {
   /** Daily caps from E-Forms settings. Null leaves that cap unchecked. */
   perDiemMaxPerDay?: number | null;
   lodgingMaxPerDay?: number | null;
+  /** Site ID search from E-Forms settings. All subsidiaries skips the form subsidiary check. */
+  siteSearchScope?: "request" | "all" | "atc" | "adic";
 };
 
 export function validateSubmissionValues(
@@ -285,7 +287,12 @@ export function validateSubmissionValues(
             gridRuleMessage = gridColumnDateIssue(column, cell, values, fields);
           }
           if (!subsidiaryIssue) {
-            const siteMessage = gridColumnSubsidiaryIssue(column, cell, values);
+            const siteMessage = gridColumnSubsidiaryIssue(
+              column,
+              cell,
+              values,
+              options.siteSearchScope ?? "request",
+            );
             const matchField = column.subsidiary_field?.trim() ?? "";
             if (siteMessage && matchField !== "") {
               subsidiaryIssue = { fieldName: matchField, message: siteMessage };

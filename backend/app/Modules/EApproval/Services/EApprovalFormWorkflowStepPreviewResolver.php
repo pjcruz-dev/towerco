@@ -41,7 +41,7 @@ final class EApprovalFormWorkflowStepPreviewResolver
             : trim((string) ($definition['approver_id'] ?? ''));
 
         $label = match ($type) {
-            'manager' => __('Direct manager (Entra)'),
+            'manager' => $this->managerStepLabel($definition),
             'field' => $approverId !== '' ? __('Approver field: :field', ['field' => $approverId]) : __('Approver field'),
             'field_map' => $this->fieldMapLabel($definition, $values),
             'role' => $approverId !== '' ? __('Role: :role', ['role' => $approverId]) : __('Role'),
@@ -100,7 +100,8 @@ final class EApprovalFormWorkflowStepPreviewResolver
             'mapping_source_field' => $type === 'field_map' ? ($sourceField !== '' ? $sourceField : null) : null,
             'mapping_source_value' => $type === 'field_map' ? ($sourceValue !== '' ? $sourceValue : null) : null,
             'mapping_matched_key' => $matchedKey,
-            'path_reason' => __('Conditions matched — step runs for these sample values.'),
+            'path_reason' => $this->pathReason($definition),
+            'role_label' => $this->roleLabel($definition),
             'parallel_mode' => $parallelMode,
             'parallel_quorum' => $parallelQuorum,
             'used_fallback' => $usedFallback,
@@ -124,7 +125,7 @@ final class EApprovalFormWorkflowStepPreviewResolver
             : trim((string) ($definition['approver_id'] ?? ''));
 
         $label = match ($type) {
-            'manager' => __('Direct manager (Entra)'),
+            'manager' => $this->managerStepLabel($definition),
             'field' => $approverId !== '' ? __('Approver field: :field', ['field' => $approverId]) : __('Approver field'),
             'field_map' => __('Mapped field value'),
             'role' => $approverId !== '' ? __('Role: :role', ['role' => $approverId]) : __('Role'),
@@ -159,6 +160,41 @@ final class EApprovalFormWorkflowStepPreviewResolver
             'manager' => $this->resolveManagerUserId($requestorEmail),
             default => null,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     */
+    private function managerStepLabel(array $definition): string
+    {
+        if (EApprovalWorkflowStepDefinitionSupport::managerChainEnabled($definition)) {
+            return __('Reporting line (Entra)');
+        }
+
+        return __('Direct manager (Entra)');
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     */
+    private function roleLabel(array $definition): ?string
+    {
+        $role = trim((string) ($definition['manager_chain_role'] ?? ''));
+
+        return $role !== '' ? $role : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     */
+    private function pathReason(array $definition): string
+    {
+        $role = $this->roleLabel($definition);
+        if ($role !== null) {
+            return __('Reporting line · :role', ['role' => $role]);
+        }
+
+        return __('Conditions matched — step runs for these sample values.');
     }
 
     private function resolveManagerUserId(?string $requestorEmail): ?string
@@ -269,9 +305,15 @@ final class EApprovalFormWorkflowStepPreviewResolver
         }
 
         if ($type === 'manager') {
+            $chainWarning = trim((string) ($definition['manager_chain_warning'] ?? ''));
+            if ($chainWarning !== '') {
+                return $chainWarning;
+            }
             $email = trim((string) $requestorEmail);
             if ($email === '') {
-                return __('Enter a requestor email to preview Direct manager resolution.');
+                return EApprovalWorkflowStepDefinitionSupport::managerChainEnabled($definition)
+                    ? __('Enter a requestor email to preview the reporting line.')
+                    : __('Enter a requestor email to preview Direct manager resolution.');
             }
             if ($user === null) {
                 $hasFallback = is_string($definition['fallback_approver_id'] ?? null)

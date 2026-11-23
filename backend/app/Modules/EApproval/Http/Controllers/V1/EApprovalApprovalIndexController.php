@@ -8,6 +8,7 @@ use App\Core\Http\Concerns\ValidatesTenantListQuery;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Services\ApprovalDecisionService;
+use App\Modules\EApproval\Support\EApprovalRoleFieldAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,8 +33,18 @@ class EApprovalApprovalIndexController extends AbstractApiController
             $query['sort'],
         );
 
+        $roleAccess = app(EApprovalRoleFieldAccess::class);
+        abort_unless($roleAccess->allows($request->user(), 'view'), 403);
+
         return $this->okWithMeta(
-            $paginator->getCollection()->map(static fn (EApprovalRequestApproval $a) => $a->toListRow())->values()->all(),
+            $paginator->getCollection()->map(function (EApprovalRequestApproval $approval) use ($roleAccess, $request) {
+                $row = $approval->toListRow();
+                if (isset($row['submission']) && is_array($row['submission'])) {
+                    $row['submission'] = $roleAccess->redactListRow($request->user(), $row['submission']);
+                }
+
+                return $row;
+            })->values()->all(),
             [
                 'total' => $paginator->total(),
                 'per_page' => $paginator->perPage(),

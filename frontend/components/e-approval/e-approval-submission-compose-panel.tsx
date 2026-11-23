@@ -169,7 +169,9 @@ export function EApprovalSubmissionComposePanel({
     isLastStep: true,
   });
   const [composeCurrentStep, setComposeCurrentStep] = useState(0);
-  const [parentSubmissionId, setParentSubmissionId] = useState<string | null>(null);
+  const [parentSubmissionId, setParentSubmissionId] = useState<string | null>(
+    () => searchParams.get("parent")?.trim() || null,
+  );
   const [draftSubmissionId, setDraftSubmissionId] = useState<string | null>(null);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const hydratedRef = useRef(false);
@@ -673,6 +675,7 @@ export function EApprovalSubmissionComposePanel({
       cameraMetadataByField,
       perDiemMaxPerDay: cap(financeCapsQuery.data?.per_diem_max_per_day),
       lodgingMaxPerDay: cap(financeCapsQuery.data?.hotel_accommodation_max),
+      siteSearchScope: financeCapsQuery.data?.site_search_scope ?? "request",
     };
   }, [
     approverOptions,
@@ -680,6 +683,7 @@ export function EApprovalSubmissionComposePanel({
     draftExistingAttachmentCounts,
     financeCapsQuery.data?.hotel_accommodation_max,
     financeCapsQuery.data?.per_diem_max_per_day,
+    financeCapsQuery.data?.site_search_scope,
     requiredApproverFieldNames,
   ]);
 

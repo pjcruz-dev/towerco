@@ -354,10 +354,14 @@ final class EApprovalFormWorkspaceService
             $viewer,
         );
 
+        $metadata = is_array($form->metadata_json) ? $form->metadata_json : [];
+        $family = trim((string) ($metadata['form_family'] ?? ''));
         $newRequestMode = (string) ($workspace['actions']['new_request_mode'] ?? 'focused');
         $newRequestHref = $newRequestMode === 'standard'
             ? '/e-approval/request/'.$formId
-            : '/e-approval/focus/'.$formId.'?controlled_mode=new';
+            : ($family === EApprovalFormWorkspaceSupport::ISO_FORM_FAMILY
+                ? '/e-approval/focus/'.$formId.'?controlled_mode=new'
+                : '/e-approval/focus/'.$formId);
 
         $statusBreakdown = $this->statusBreakdown(clone $scopedQuery);
         $amountBreakdown = $money !== null

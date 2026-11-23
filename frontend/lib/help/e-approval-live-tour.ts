@@ -1018,8 +1018,9 @@ export const eApprovalLiveTour: LiveTourDefinition = {
       query: { tab: "decide" },
       target: "ea-decide-signature",
       title: "Your signature",
-      body: "If you saved one in My E-Forms profile, it loads here automatically. Otherwise draw, type, or upload — then accept consent.",
+      body: "If you saved one in My E-Forms profile, it is used automatically and this block stays hidden. Otherwise draw, type, or upload — then accept consent.",
       missingHint: "Open the Decide tab — the signature block is under Your decision.",
+      skipIfProfileSignature: true,
       audience: "approver",
     },
     {
