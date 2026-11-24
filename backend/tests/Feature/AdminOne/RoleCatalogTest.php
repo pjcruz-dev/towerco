@@ -9,6 +9,8 @@ use App\Core\Http\Middleware\EnsureMfaVerified;
 use App\Modules\AdminOne\Models\TenantRole;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Tenancy\Services\TenantRbacBaselineService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use Tests\Support\Concerns\InteractsWithInMemoryTenantApi;
 use Tests\TestCase;
 
@@ -196,6 +198,38 @@ final class RoleCatalogTest extends TestCase
 
         $again->assertOk();
         $this->assertEqualsCanonicalizing($next, $again->json('data.permissions'));
+    }
+
+    public function test_hiding_a_page_does_not_require_ai_permissions_when_the_module_is_off(): void
+    {
+        if (! Schema::connection('central')->hasColumn('tenants', 'enabled_modules')) {
+            Schema::connection('central')->table('tenants', function (Blueprint $table): void {
+                $table->json('enabled_modules')->nullable();
+            });
+        }
+        $this->testTenant->enabled_modules = ['core', 'team_access', 'e_approval', 'ticketing'];
+        $this->testTenant->save();
+
+        $roleId = $this->viewerRoleId();
+
+        $response = $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->patchJson('/api/v1/admin/roles/'.$roleId, [
+                'permissions' => ['dashboard:view'],
+                'access_matrix' => [
+                    'ai' => ['preset' => 'ask'],
+                    'fields' => [
+                        'e_approval_submission' => ['nav:/e-approval' => 'hide'],
+                    ],
+                ],
+            ]);
+
+        $response->assertOk();
+        $this->assertNotContains('ai_assistant:tools:use', $response->json('data.permissions'));
+        $this->assertSame(
+            'hide',
+            $response->json('data.access_matrix.fields.e_approval_submission.nav:/e-approval'),
+        );
     }
 
     public function test_workspace_owner_permissions_cannot_be_narrowed(): void

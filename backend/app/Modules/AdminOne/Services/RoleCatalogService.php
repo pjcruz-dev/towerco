@@ -287,6 +287,11 @@ class RoleCatalogService
             }
         }
 
+        $grant = array_values(array_filter(
+            $grant,
+            fn (string $permission): bool => $this->permissionCatalog->isEnabled($permission),
+        ));
+
         $present = TenantPermission::query()
             ->where('guard_name', 'sanctum')
             ->whereIn('name', $grant)
