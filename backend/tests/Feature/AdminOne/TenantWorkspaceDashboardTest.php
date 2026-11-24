@@ -150,4 +150,40 @@ final class TenantWorkspaceDashboardTest extends TestCase
         $this->assertNotContains('ea_open_submissions', $keys);
         $this->assertNotContains('ea_stale_approvals', $keys);
     }
+
+    public function test_requestor_recent_activity_links_their_submission(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $requestor = TenantUser::query()->create([
+            'name' => 'Owner Requestor',
+            'email' => 'owner-requestor@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $requestor->assignRole('e_approval_requestor');
+
+        $form = EApprovalForm::query()->create([
+            'name' => 'Liquidation',
+            'status' => 'published',
+            'schema_version' => 1,
+        ]);
+        $submission = EApprovalSubmission::query()->create([
+            'document_no' => 'ATC-LQ-1',
+            'form_id' => $form->id,
+            'requestor_id' => $requestor->id,
+            'status' => 'pending',
+            'current_step' => 1,
+        ]);
+
+        tenancy()->end();
+
+        $response = $this->actingAs($requestor, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/dashboard');
+
+        $response->assertOk();
+        $hrefs = collect($response->json('data.recent_activity'))->pluck('href')->all();
+        $this->assertContains('/e-approval/submissions/'.$submission->id, $hrefs);
+    }
 }
