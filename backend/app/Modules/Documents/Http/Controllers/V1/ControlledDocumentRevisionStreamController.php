@@ -7,6 +7,7 @@ namespace App\Modules\Documents\Http\Controllers\V1;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Services\ControlledDocumentRegistryService;
 use App\Modules\Documents\Services\ControlledDocumentStorageService;
+use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 

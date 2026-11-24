@@ -8,6 +8,7 @@ use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Documents\Models\ControlledDocument;
 use App\Modules\Documents\Services\ControlledDocumentRegistryService;
 use App\Modules\Documents\Services\ControlledDocumentStorageService;
+use App\Modules\Documents\Support\ControlledDocumentRevisionStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
