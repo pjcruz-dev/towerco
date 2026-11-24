@@ -194,7 +194,7 @@ final class EApprovalSubmissionRelatedService
         $children = EApprovalSubmission::query()
             ->with(['values.field'])
             ->where('parent_submission_id', $parent->id)
-            ->where('status', '<>', EApprovalSubmissionStatus::REJECTED)
+            ->whereIn('status', EApprovalSubmissionStatus::reservesCashAdvance())
             ->get();
 
         $total = 0.0;

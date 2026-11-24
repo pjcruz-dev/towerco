@@ -170,7 +170,7 @@ final class EApprovalCashAdvanceService
         $childrenQuery = EApprovalSubmission::query()
             ->with(['values.field'])
             ->where('parent_submission_id', $parentSubmissionId)
-            ->where('status', '<>', EApprovalSubmissionStatus::REJECTED);
+            ->whereIn('status', EApprovalSubmissionStatus::reservesCashAdvance());
 
         if ($excludeChildSubmissionId !== null && $excludeChildSubmissionId !== '') {
             $childrenQuery->where('id', '<>', $excludeChildSubmissionId);
@@ -257,9 +257,11 @@ final class EApprovalCashAdvanceService
 
         }
 
+        $countedChildAmount = 'CASE WHEN c.status IN ('.$this->reservedCashAdvanceStatusSql().') THEN CAST(tr.value AS DECIMAL(14,2)) ELSE 0 END';
+
         $having = $onlyPositiveBalance
 
-            ? "HAVING CAST(req.value AS DECIMAL(14,2)) - IFNULL(SUM(CASE WHEN c.status <> 'rejected' THEN CAST(tr.value AS DECIMAL(14,2)) ELSE 0 END), 0) > 0"
+            ? "HAVING CAST(req.value AS DECIMAL(14,2)) - IFNULL(SUM({$countedChildAmount}), 0) > 0"
 
             : '';
 
@@ -283,7 +285,7 @@ final class EApprovalCashAdvanceService
 
                 req.value AS requested_amount,
 
-                IFNULL(SUM(CASE WHEN c.status <> 'rejected' THEN CAST(tr.value AS DECIMAL(14,2)) ELSE 0 END), 0) AS reimbursed_amount
+                IFNULL(SUM({$countedChildAmount}), 0) AS reimbursed_amount
 
             FROM e_approval_submissions p
 
@@ -327,5 +329,13 @@ final class EApprovalCashAdvanceService
 
         );
 
+    }
+
+    private function reservedCashAdvanceStatusSql(): string
+    {
+        return implode(', ', array_map(
+            static fn (string $status): string => "'".$status."'",
+            EApprovalSubmissionStatus::reservesCashAdvance(),
+        ));
     }
 }

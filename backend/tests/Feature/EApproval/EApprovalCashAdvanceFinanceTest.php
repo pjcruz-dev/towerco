@@ -222,6 +222,51 @@ final class EApprovalCashAdvanceFinanceTest extends TestCase
             ->assertJsonValidationErrors(['values.expense_lines']);
     }
 
+    public function test_cancelled_liquidation_does_not_reduce_the_open_balance(): void
+    {
+        $caFormId = $this->createPublishedForm(
+            'Cash advance',
+            [
+                ['type' => 'currency', 'name' => 'requested_amount', 'label' => 'Requested amount', 'validation' => ['required' => true]],
+            ],
+            ['form_family' => 'cash_advance'],
+        );
+        $caId = $this->createSubmission($caFormId, ['requested_amount' => '4500']);
+        $this->approveSubmission($caId);
+
+        $liqFormId = $this->createPublishedForm(
+            'Liquidation',
+            [
+                ['type' => 'currency', 'name' => 'total_reimbursement', 'label' => 'Total', 'validation' => ['required' => true]],
+            ],
+            ['form_family' => 'liquidation', 'parent_form_family' => 'cash_advance'],
+        );
+
+        foreach (['375', '375'] as $amount) {
+            $created = $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->postJson('/api/v1/e-approval/submissions', [
+                    'form_id' => $liqFormId,
+                    'parent_submission_id' => $caId,
+                    'values' => ['total_reimbursement' => $amount],
+                ]);
+            $created->assertCreated();
+
+            $this->actingAsTenantAdmin()
+                ->withHeaders($this->tenantApiHeaders())
+                ->postJson('/api/v1/e-approval/submissions/'.$created->json('data.id').'/cancel')
+                ->assertOk();
+        }
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/e-approval/cash-advances/open')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', $caId)
+            ->assertJsonPath('data.items.0.reimbursed_amount', 0)
+            ->assertJsonPath('data.items.0.open_balance', 4500);
+    }
+
     public function test_open_cash_advance_copies_grids_and_sites_are_searchable(): void
     {
         tenancy()->initialize($this->testTenant);

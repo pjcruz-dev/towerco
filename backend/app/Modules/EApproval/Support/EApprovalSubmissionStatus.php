@@ -44,6 +44,22 @@ final class EApprovalSubmissionStatus
         return [self::PENDING, self::RETURNED, self::AWAITING_DCF];
     }
 
+    /**
+     * Child requests that still hold cash from a released advance.
+     * A draft was never sent. A cancelled or rejected request released the cash.
+     *
+     * @return list<string>
+     */
+    public static function reservesCashAdvance(): array
+    {
+        return [
+            self::PENDING,
+            self::APPROVED,
+            self::RETURNED,
+            self::AWAITING_DCF,
+        ];
+    }
+
     public static function label(string $status): string
     {
         return match (strtolower(trim($status))) {
