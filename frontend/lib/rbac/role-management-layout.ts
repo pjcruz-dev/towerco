@@ -3,7 +3,7 @@
  * Entity matrix columns share module-level keys (TowerOS has no per-entity ACL yet).
  */
 
-export type DataAccessColumn = "view" | "view_own" | "create" | "edit" | "delete" | "export";
+export type DataAccessColumn = "view" | "view_own" | "create" | "edit" | "delete" | "export" | "approve";
 
 export type DataAccessRow = {
   id: string;
@@ -278,6 +278,7 @@ export const MODULE_ACCESS_ROWS: Array<DataAccessRow & { module: string }> = [
       create: "e_approval:submissions:create",
       edit: "e_approval:forms:manage",
       export: "e_approval:submissions:view",
+      approve: "e_approval:approve",
     },
   },
   {
@@ -299,6 +300,7 @@ export const MODULE_ACCESS_ROWS: Array<DataAccessRow & { module: string }> = [
       view: "documents:controlled:view",
       create: "documents:controlled:create",
       edit: "documents:controlled:manage",
+      approve: "documents:controlled:approve",
     },
   },
 ];
@@ -324,6 +326,7 @@ export const DATA_ACCESS_COLUMNS: Array<{ id: DataAccessColumn; label: string }>
   { id: "edit", label: "Edit" },
   { id: "delete", label: "Delete" },
   { id: "export", label: "Export" },
+  { id: "approve", label: "Approve" },
 ];
 
 export const WORKFLOW_GROUPS: WorkflowGroup[] = [

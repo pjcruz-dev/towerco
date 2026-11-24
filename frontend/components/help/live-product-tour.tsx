@@ -867,8 +867,8 @@ export function LiveProductTour() {
             return;
           }
           // Land on Batches so Open links exist for the next auto-nav pass.
-          if (pathname !== "/doc-extract") {
-            router.replace(resolveStepHref(step, tour.id, stepIndex, "/doc-extract", searchParams));
+          if (pathname !== "/doc-extract/batches") {
+            router.replace(resolveStepHref(step, tour.id, stepIndex, "/doc-extract/batches", searchParams));
             return;
           }
         }

@@ -31,11 +31,12 @@ final class EApprovalWebhookDispatcher
             return;
         }
 
-        $submission->loadMissing(['form:id,name', 'requestor:id,name']);
+        $submission->loadMissing(['form:id,name,metadata_json', 'requestor:id,name']);
         $resolver = app(TenantAppUrlResolver::class);
         $path = EApprovalNotificationCategory::hrefFor(
             'external_received',
             (string) $submission->id,
+            EApprovalSubmissionLink::path($submission),
         );
         $openUrl = $resolver->urlForCurrentTenant($path);
         $submitter = $submission->mailSubmitterContext();

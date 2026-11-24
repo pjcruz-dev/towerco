@@ -10,7 +10,7 @@ import {
 describe("page-chrome-config", () => {
   it("uses defaults when prefs empty", () => {
     const chrome = resolvePageChrome(DOC_EXTRACT_BATCHES_PAGE_CHROME, {});
-    expect(chrome.title).toBe("DocExtract");
+    expect(chrome.title).toBe("Batches");
     expect(chrome.visibleActionIds).toContain("customize");
     expect(chrome.visibleActionIds).toContain("new");
     expect(isActionVisible(chrome, "tour")).toBe(false);

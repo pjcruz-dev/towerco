@@ -207,7 +207,7 @@ export function DocExtractNewBatchPageClient() {
       <div className="w-full space-y-8" data-help="dx-new-workspace">
         <LiveProductTourHost />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button size="sm" variant="ghost" render={<Link href="/doc-extract" data-help="dx-back-batches" />}>
+          <Button size="sm" variant="ghost" render={<Link href="/doc-extract/batches" data-help="dx-back-batches" />}>
             <ArrowLeft className="size-4" />
             Batches
           </Button>

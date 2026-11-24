@@ -1,3 +1,4 @@
+import { controlledDocumentSubmissionUrl } from "@/modules/documents/controlled-document-submission-url";
 import {
   ISO_FORM_FAMILY,
   ISO_FORM_WORKSPACE_SLUG,
@@ -87,7 +88,7 @@ export function newRequestHref(formId: string, workspace: EApprovalFormWorkspace
     return `/e-approval/request/${formId}`;
   }
   if (workspace.slug === ISO_FORM_WORKSPACE_SLUG) {
-    return `/e-approval/focus/${formId}?controlled_mode=new`;
+    return controlledDocumentSubmissionUrl({ formId, mode: "new" });
   }
   return `/e-approval/focus/${formId}`;
 }

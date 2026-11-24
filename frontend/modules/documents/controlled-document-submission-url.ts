@@ -1,3 +1,5 @@
+import { ISO_FORM_FAMILY } from "@/modules/e-approval/form-workspace-types";
+
 export type ControlledDocumentSubmissionMode = "new" | "revision";
 
 type SearchParamsLike = { get(name: string): string | null };
@@ -16,7 +18,21 @@ export function controlledDocumentSubmissionUrl(options: {
     params.set("document_code", options.documentCode.trim());
   }
 
-  return `/e-approval/submissions/new?${params.toString()}`;
+  return `/documents/controlled/new?${params.toString()}`;
+}
+
+/** Open a submission in the module that owns it. */
+export function submissionOpenPath(
+  submissionId: string,
+  formFamily?: string | null,
+  tab?: string | null,
+): string {
+  const base =
+    formFamily === ISO_FORM_FAMILY
+      ? `/documents/controlled/requests/${submissionId}`
+      : `/e-approval/submissions/${submissionId}`;
+  const cleanTab = tab?.trim();
+  return cleanTab ? `${base}?tab=${cleanTab}` : base;
 }
 
 /** When /submissions/new is opened with form_id, jump to the full request compose page. */
@@ -33,7 +49,11 @@ export function eApprovalRequestUrlFromNewSubmissionQuery(
   const documentCode = searchParams.get("document_code")?.trim();
 
   if (mode === "new" || mode === "revision") {
-    params.set("controlled_mode", mode);
+    return controlledDocumentSubmissionUrl({
+      formId,
+      mode,
+      documentCode: documentCode || undefined,
+    });
   }
   if (documentCode) {
     params.set("document_code", documentCode);

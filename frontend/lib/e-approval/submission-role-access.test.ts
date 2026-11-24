@@ -4,6 +4,7 @@ import {
   eApprovalEntityAllows,
   eApprovalFieldKey,
   eApprovalNavTargetForPath,
+  eApprovalPageListState,
   eApprovalNavTargetHidden,
   eApprovalPreviewAllowsPath,
   filterNavGroupsForEApprovalPreview,
@@ -72,6 +73,13 @@ describe("e-approval role access", () => {
     expect(eApprovalPreviewAllowsPath(granted, matrix, "/e-approval/submissions")).toBe(false);
     expect(eApprovalPreviewAllowsPath(granted, matrix, "/e-approval/submissions/new")).toBe(true);
     expect(eApprovalPreviewAllowsPath(granted, matrix, "/e-approval")).toBe(true);
+  });
+
+  it("does not call Approvals shown when the role cannot approve", () => {
+    const granted = ["e_approval:view", "e_approval:submissions:view", "e_approval:submissions:create"];
+    expect(eApprovalPageListState(granted, undefined, "/e-approval/approvals")).toBe("no-access");
+    expect(eApprovalPageListState(granted, undefined, "/e-approval/submissions")).toBe("shown");
+    expect(eApprovalPageListState(granted, undefined, "/e-approval/reports")).toBe("shown");
   });
 
   it("treats a record as the Submissions page and leaves a new request unmatched", () => {

@@ -11,7 +11,11 @@ import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-bo
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalSubmissionGalleryCard } from "@/components/e-approval/e-approval-submission-gallery-card";
-import { useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
+import {
+  useEApprovalRolePreview,
+  useEApprovalSubmissionAccess,
+  useEApprovalTableViewAllowed,
+} from "@/components/e-approval/e-approval-role-field-access";
 import { FilterSelect } from "@/components/forms/filter-select";
 import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { EApprovalHelpEntryActions } from "@/components/help/e-approval-help-entry-actions";
@@ -118,8 +122,15 @@ function EApprovalSubmissionsPageBody() {
   const canApprove = usePermission([permissions.eApprovalApprove]);
   const canExport = usePermission([permissions.eApprovalAuditView]);
   const access = useEApprovalSubmissionAccess();
-  const showCreate = canCreate && access.allows("create");
-  const showExport = canExport && access.allows("export");
+  const preview = useEApprovalRolePreview();
+  const showCreate =
+    canCreate &&
+    access.allows("create") &&
+    preview.allowsPermission(permissions.eApprovalSubmissionsCreate);
+  const showExport =
+    canExport &&
+    access.allows("export") &&
+    preview.allowsPermission(permissions.eApprovalAuditView);
   // Auditors can see all submissions; show the "Mine" scope toggle for them.
   const canViewAll = usePermission([permissions.eApprovalAuditView]);
   const [page, setPage] = useState(1);
@@ -143,6 +154,8 @@ function EApprovalSubmissionsPageBody() {
   const [exportLayout, setExportLayout] = useState<"submissions" | "line_items">("submissions");
   const [gridFieldId, setGridFieldId] = useState("");
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
+  const tableViewAllowed = useEApprovalTableViewAllowed();
+  const listView = tableViewAllowed ? viewMode : "gallery";
   const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
     useDashboardLayoutPrefs(LAYOUT_KEY);
   const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
@@ -430,12 +443,14 @@ function EApprovalSubmissionsPageBody() {
                     />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-3">
-                    <EApprovalListViewToggle
-                    value={viewMode}
-                    onChange={setViewMode}
-                    ariaLabel="Submissions list view"
-                    dataHelp="ea-submissions-view"
-                    />
+                    {tableViewAllowed ? (
+                      <EApprovalListViewToggle
+                        value={viewMode}
+                        onChange={setViewMode}
+                        ariaLabel="Submissions list view"
+                        dataHelp="ea-submissions-view"
+                      />
+                    ) : null}
                   </div>
                 </div>
                 <div className={filterBarFieldsClassName} data-help="ea-submissions-advanced-filters">
@@ -556,7 +571,7 @@ function EApprovalSubmissionsPageBody() {
               ) : null
             }
           >
-            {viewMode === "gallery" ? (
+            {listView === "gallery" ? (
               <div className="p-4" data-help="ea-submissions-gallery">
                 {isFetching && rows.length === 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -670,7 +685,8 @@ function EApprovalSubmissionsPageBody() {
     subsidiaryOptions,
     tableColumns,
     to,
-    viewMode,
+    listView,
+    tableViewAllowed,
   ]);
 
   const titleOverrides = useMemo(() => {

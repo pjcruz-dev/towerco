@@ -23,6 +23,10 @@ class EApprovalApprovalIndexController extends AbstractApiController
         $query = $this->validatedTenantListQuery($request);
         $status = (string) $request->query('status', 'pending');
         $awaitingMe = filter_var($request->query('awaiting_me', false), FILTER_VALIDATE_BOOLEAN);
+        $formFamily = trim((string) $request->query('form_family', ''));
+        if ($formFamily !== '' && preg_match('/^[a-z0-9_]{1,64}$/', $formFamily) !== 1) {
+            $formFamily = '';
+        }
 
         $paginator = $service->paginate(
             $request->user(),
@@ -31,6 +35,7 @@ class EApprovalApprovalIndexController extends AbstractApiController
             $status,
             $awaitingMe,
             $query['sort'],
+            $formFamily !== '' ? $formFamily : null,
         );
 
         $roleAccess = app(EApprovalRoleFieldAccess::class);

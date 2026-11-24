@@ -4,6 +4,7 @@ import { Palette } from "lucide-react";
 import { Suspense, useMemo } from "react";
 
 import { AppHeaderSearchTrigger } from "@/components/layout/app-header-search-trigger";
+import { ModuleAppSwitcher } from "@/components/layout/module-app-switcher";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { UserProfileMenu } from "@/components/layout/user-profile-menu";
 import { WorkspaceBreadcrumbs } from "@/components/layout/workspace-breadcrumbs";
@@ -67,6 +68,7 @@ export function AppHeader({
           <SidebarBrand variant="tenant" compact />
         </div>
       ) : null}
+      <ModuleAppSwitcher />
       <WorkspaceBreadcrumbs />
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <Button

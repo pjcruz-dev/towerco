@@ -11,6 +11,7 @@ const COLUMNS: Array<{ id: DataAccessColumn; label: string }> = [
   { id: "create", label: "Create" },
   { id: "edit", label: "Edit" },
   { id: "export", label: "Export" },
+  { id: "approve", label: "Approve" },
 ];
 
 type Props = {
@@ -40,7 +41,7 @@ export function RoleModuleAccessGrid({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Module access for this workspace. Field-level security and workflow approvals appear when Dynamic Entities is enabled.
+        Module access for this workspace. Approve puts the Approvals page on E-Forms and document approval on Document register.
       </p>
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="min-w-full text-sm">
@@ -57,7 +58,7 @@ export function RoleModuleAccessGrid({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={COLUMNS.length + 1} className="px-3 py-8 text-center text-sm text-muted-foreground">
                   {needle ? "No modules match this filter." : "No modules are enabled for data access."}
                 </td>
               </tr>

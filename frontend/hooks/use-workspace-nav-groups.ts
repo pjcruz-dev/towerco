@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { filterEApprovalPreviewNav, useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
 import { filterDocumentRegisterPreviewNav, useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
+import { filterTicketingPreviewNav, useTicketingRolePreview } from "@/components/ticketing/ticketing-role-field-access";
 import { useMemo } from "react";
 import { LayoutDashboard } from "lucide-react";
 
@@ -28,12 +29,62 @@ export type WorkspaceNavGroupView = {
   items: WorkspaceTopNavItem[];
 };
 
+function withFormWorkspaces(
+  source: WorkspaceNavGroupView[],
+  workspaces: Array<{ title: string; slug: string }> | undefined,
+): WorkspaceNavGroupView[] {
+  const workspaceItems: WorkspaceTopNavItem[] =
+    workspaces?.map((workspace) => ({
+      title: workspace.title,
+      href: `/e-approval/w/${workspace.slug}`,
+      icon: LayoutDashboard,
+      permissions: [permissions.eApprovalView],
+      module: "e_approval",
+    })) ?? [];
+
+  if (workspaceItems.length === 0) {
+    return source;
+  }
+
+  return source.map((group) => {
+    if (group.group !== "Operations") {
+      return group;
+    }
+
+    return {
+      ...group,
+      items: group.items.map((item) => {
+        if (item.title !== "E-Forms" && item.title !== "E-Approval") {
+          return item;
+        }
+        const existing = item.items ?? [];
+        const withoutDup = existing.filter((sub) => !workspaceItems.some((ws) => ws.href === sub.href));
+        return {
+          ...item,
+          items: [
+            ...withoutDup,
+            ...workspaceItems.map((ws) => ({
+              title: ws.title,
+              href: ws.href!,
+              section: "Workspaces",
+              permissions: ws.permissions,
+              module: ws.module,
+            })),
+          ],
+        };
+      }),
+    };
+  });
+}
+
 /**
  * Shared filtered workspace navigation for sidebar and top navbar layouts.
  * Prefers tenant Manage Sidebar DB tree; falls back to static config.
  */
 export function useWorkspaceNavGroups(options?: { enabled?: boolean }): {
   groups: WorkspaceNavGroupView[];
+  /** Permission-filtered product nav. Ignores the saved sidebar tree so app lists match the sidebar. */
+  catalogGroups: WorkspaceNavGroupView[];
   notificationUnread: number;
 } {
   const enabled = options?.enabled ?? true;
@@ -166,58 +217,31 @@ export function useWorkspaceNavGroups(options?: { enabled?: boolean }): {
       return groups;
     }
 
-    const workspaceTopLevelItems: WorkspaceTopNavItem[] =
-      workspacesQuery.data?.map((workspace) => ({
-        title: workspace.title,
-        href: `/e-approval/w/${workspace.slug}`,
-        icon: LayoutDashboard,
-        permissions: [permissions.eApprovalView],
-        module: "e_approval",
-      })) ?? [];
-
-    return groups.map((group) => {
-      let items = group.items;
-
-      if (group.group === "Operations" && workspaceTopLevelItems.length > 0) {
-        // Nest form workspaces under E-Approval (navbar stays compact — no extra top-level pills).
-        items = items.map((item) => {
-          if (item.title !== "E-Approval") return item;
-          const existing = item.items ?? [];
-          const withoutDup = existing.filter(
-            (sub) => !workspaceTopLevelItems.some((ws) => ws.href === sub.href),
-          );
-          return {
-            ...item,
-            items: [
-              ...withoutDup,
-              ...workspaceTopLevelItems.map((ws) => ({
-                title: ws.title,
-                href: ws.href!,
-                section: "Workspaces",
-                permissions: ws.permissions,
-                module: ws.module,
-              })),
-            ],
-          };
-        });
-      }
-
-      return { ...group, items };
-    });
+    return withFormWorkspaces(groups, workspacesQuery.data);
   }, [dbGroups, groups, workspacesQuery.data]);
+
+  const catalogWithWorkspaces = useMemo(
+    () => withFormWorkspaces(staticGroups, workspacesQuery.data),
+    [staticGroups, workspacesQuery.data],
+  );
 
   const eApprovalPreview = useEApprovalRolePreview();
   const documentPreview = useDocumentRegisterRolePreview();
+  const ticketingPreview = useTicketingRolePreview();
   const previewedGroups = useMemo(
     () =>
-      filterDocumentRegisterPreviewNav(
-        filterEApprovalPreviewNav(
-          groupsWithWorkspaces,
-          eApprovalPreview.allowsHref,
-          eApprovalPreview.active,
+      filterTicketingPreviewNav(
+        filterDocumentRegisterPreviewNav(
+          filterEApprovalPreviewNav(
+            groupsWithWorkspaces,
+            eApprovalPreview.allowsHref,
+            eApprovalPreview.active,
+          ),
+          documentPreview.allowsHref,
+          documentPreview.active,
         ),
-        documentPreview.allowsHref,
-        documentPreview.active,
+        ticketingPreview.allowsHref,
+        ticketingPreview.active,
       ),
     [
       documentPreview.active,
@@ -225,8 +249,36 @@ export function useWorkspaceNavGroups(options?: { enabled?: boolean }): {
       eApprovalPreview.active,
       eApprovalPreview.allowsHref,
       groupsWithWorkspaces,
+      ticketingPreview.active,
+      ticketingPreview.allowsHref,
     ],
   );
 
-  return { groups: previewedGroups, notificationUnread };
+  const catalogGroups = useMemo(
+    () =>
+      filterTicketingPreviewNav(
+        filterDocumentRegisterPreviewNav(
+          filterEApprovalPreviewNav(
+            catalogWithWorkspaces,
+            eApprovalPreview.allowsHref,
+            eApprovalPreview.active,
+          ),
+          documentPreview.allowsHref,
+          documentPreview.active,
+        ),
+        ticketingPreview.allowsHref,
+        ticketingPreview.active,
+      ),
+    [
+      catalogWithWorkspaces,
+      documentPreview.active,
+      documentPreview.allowsHref,
+      eApprovalPreview.active,
+      eApprovalPreview.allowsHref,
+      ticketingPreview.active,
+      ticketingPreview.allowsHref,
+    ],
+  );
+
+  return { groups: previewedGroups, catalogGroups, notificationUnread };
 }

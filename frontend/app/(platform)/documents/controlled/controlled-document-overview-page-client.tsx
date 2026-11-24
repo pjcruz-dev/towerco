@@ -164,7 +164,7 @@ export function ControlledDocumentOverviewPageClient() {
     <PermissionGate requiredPermissions={[permissions.documentsControlledView]}>
       <div className="space-y-4">
         <WorkspacePageHeader
-          title="Document register"
+          title="Electronic Document Control System"
           description="Pending includes new documents and approved documents with a revision still in approval. Obsolete is a withdrawn document or one that still has an older revision."
           actions={
             <div className="flex flex-wrap items-center justify-end gap-1.5">

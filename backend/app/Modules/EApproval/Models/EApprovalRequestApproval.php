@@ -207,6 +207,7 @@ class EApprovalRequestApproval extends Model
             'status_label' => $list['status_label'] ?? null,
             'form_id' => $list['form_id'] ?? null,
             'form_name' => $list['form_name'] ?? null,
+            'form_family' => $list['form_family'] ?? null,
             'subsidiary' => $list['subsidiary'] ?? null,
             'current_step' => $list['current_step'] ?? 0,
             'step_count' => $list['step_count'] ?? null,

@@ -340,6 +340,32 @@ final class AppMenuService
 
         if (! AppMenuTile::query()->exists()) {
             $this->syncDefaults();
+
+            return;
+        }
+
+        $this->ensureMissingDefaultTiles();
+    }
+
+    /**
+     * Add system tiles that were introduced after this environment was seeded.
+     * Existing tiles keep their href and title.
+     */
+    private function ensureMissingDefaultTiles(): void
+    {
+        $workspacesId = $this->ensureWorkspacesGroup();
+
+        foreach (AppMenuTileDefaults::tiles() as $node) {
+            $exists = AppMenuTile::query()->where('key', $node['key'])->exists();
+            if ($exists) {
+                continue;
+            }
+
+            AppMenuTile::query()->create([
+                ...$node,
+                'id' => (string) Str::uuid(),
+                'group_id' => $workspacesId,
+            ]);
         }
     }
 

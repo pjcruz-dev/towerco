@@ -1,38 +1,23 @@
 <?php
 
-
-
 declare(strict_types=1);
-
-
 
 namespace App\Modules\EApproval\Services;
 
-
-
 use App\Modules\EApproval\Models\EApprovalSubmission;
-
 use App\Modules\EApproval\Support\EApprovalNotificationCategory;
-
+use App\Modules\EApproval\Support\EApprovalSubmissionLink;
 use App\Modules\Identity\Models\TenantUser;
-
 use App\Modules\Notifications\Services\TenantNotificationService;
-
 use App\Modules\Notifications\Support\TenantNotificationModule;
 
-
-
 final class EApprovalInAppNotificationService
-
 {
-
     public function __construct(
 
         private readonly TenantNotificationService $tenantNotifications,
 
     ) {}
-
-
 
     public function notify(
 
@@ -56,23 +41,19 @@ final class EApprovalInAppNotificationService
 
             $submission = EApprovalSubmission::query()
 
-                ->with('form:id,name')
+                ->with('form:id,name,metadata_json')
 
                 ->find($submissionId);
 
         } elseif ($submission !== null && ! $submission->relationLoaded('form')) {
 
-            $submission->loadMissing('form:id,name');
+            $submission->loadMissing('form:id,name,metadata_json');
 
         }
-
-
 
         $documentNo = $submission?->document_no;
 
         $formName = $submission?->form?->name;
-
-
 
         $this->tenantNotifications->notify(
 
@@ -94,7 +75,11 @@ final class EApprovalInAppNotificationService
 
             bodyPreview: $bodyPreview,
 
-            href: EApprovalNotificationCategory::hrefFor($type, $submissionId),
+            href: EApprovalNotificationCategory::hrefFor(
+                $type,
+                $submissionId,
+                $submission !== null ? EApprovalSubmissionLink::path($submission) : null,
+            ),
 
             actor: $actor,
 
@@ -104,30 +89,21 @@ final class EApprovalInAppNotificationService
 
     }
 
-
-
     public function unreadCount(string $userId): int
-
     {
 
         return $this->tenantNotifications->unreadCount($userId, [TenantNotificationModule::E_APPROVAL]);
 
     }
 
-
-
     public function markRead(string $userId, string $notificationId): void
-
     {
 
         $this->tenantNotifications->markRead($userId, $notificationId, TenantNotificationModule::E_APPROVAL);
 
     }
 
-
-
     public function markAllRead(string $userId, ?string $category = null): void
-
     {
 
         $this->tenantNotifications->markAllRead(
@@ -143,6 +119,4 @@ final class EApprovalInAppNotificationService
         );
 
     }
-
 }
-

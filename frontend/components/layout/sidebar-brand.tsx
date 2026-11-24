@@ -1,9 +1,11 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { TenantBrandMark } from "@/components/layout/tenant-brand-mark";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
+import { resolveModuleShell } from "@/lib/navigation/module-shell";
 import { resolveEnvironmentBadgeLabel } from "@/lib/runtime/app-environment";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,7 @@ const badgeTone: Record<string, string> = {
 /** Sidebar header brand — organization logo/title from branding + auth context. */
 export function SidebarBrand({ variant, className, compact = false }: Props) {
   const organizationLabel = useOrganizationLabel();
+  const pathname = usePathname();
   const [envBadge, setEnvBadge] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,7 +39,13 @@ export function SidebarBrand({ variant, className, compact = false }: Props) {
     return organizationLabel;
   }, [organizationLabel, variant]);
 
-  const subtitle = variant === "platform" ? "Superadmin console" : "Workspace";
+  const shell = variant === "tenant" ? resolveModuleShell(pathname) : null;
+  const subtitle =
+    variant === "platform"
+      ? "Superadmin console"
+      : shell && shell.kind !== "hub"
+        ? (shell.sectionTitle ?? shell.title)
+        : "Workspace";
 
   if (compact) {
     return (

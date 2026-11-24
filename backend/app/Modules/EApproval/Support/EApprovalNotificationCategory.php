@@ -34,8 +34,14 @@ final class EApprovalNotificationCategory
         return in_array($type, self::actionTypes(), true) ? self::ACTION : self::UPDATE;
     }
 
-    public static function hrefFor(string $type, ?string $submissionId): string
+    public static function hrefFor(string $type, ?string $submissionId, ?string $submissionPath = null): string
     {
+        $open = ($submissionId !== null && $submissionId !== '')
+            ? ($submissionPath !== null && $submissionPath !== ''
+                ? $submissionPath
+                : "/e-approval/submissions/{$submissionId}")
+            : null;
+
         if (in_array($type, [
             'approval_assigned',
             'approval_assigned_revised',
@@ -43,14 +49,14 @@ final class EApprovalNotificationCategory
             'sla_escalation',
             'manual_follow_up',
         ], true)) {
-            if ($submissionId !== null && $submissionId !== '') {
-                return "/e-approval/submissions/{$submissionId}?tab=decide";
+            if ($open !== null) {
+                return $open.'?tab=decide';
             }
 
             return '/e-approval/approvals?awaiting_me=1';
         }
 
-        if ($submissionId !== null && $submissionId !== '') {
+        if ($open !== null) {
             $tab = match ($type) {
                 'returned', 'awaiting_dcf' => 'decide',
                 'approved', 'rejected', 'cancelled', 'approval_no_longer_needed',
@@ -60,7 +66,7 @@ final class EApprovalNotificationCategory
                 default => 'approvals',
             };
 
-            return "/e-approval/submissions/{$submissionId}?tab={$tab}";
+            return $open.'?tab='.$tab;
         }
 
         return '/e-approval';

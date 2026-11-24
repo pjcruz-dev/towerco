@@ -488,7 +488,7 @@ export function DocExtractTemplatesPageClient() {
     <PermissionGate requiredPermissions={[permissions.docExtractTemplatesManage]}>
       <div className="w-full space-y-6">
         <div className="flex flex-wrap items-center gap-3">
-          <Button size="sm" variant="ghost" render={<Link href="/doc-extract" />}>
+          <Button size="sm" variant="ghost" render={<Link href="/doc-extract/batches" />}>
             <ArrowLeft className="size-4" />
             Batches
           </Button>

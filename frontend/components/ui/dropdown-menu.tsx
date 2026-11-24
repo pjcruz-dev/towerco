@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
+import { ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,44 @@ function DropdownMenuLabel({ className, ...props }: React.ComponentProps<"div">)
   );
 }
 
+function DropdownMenuSub({
+  label,
+  children,
+  className,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <MenuPrimitive.SubmenuRoot>
+      <MenuPrimitive.SubmenuTrigger
+        className={cn(
+          "flex cursor-default items-center gap-2 px-3 py-2 text-sm text-foreground outline-none select-none",
+          "data-highlighted:bg-muted data-popup-open:bg-muted",
+        )}
+      >
+        {label}
+        <ChevronRight className="ml-auto size-3.5 text-muted-foreground" aria-hidden />
+      </MenuPrimitive.SubmenuTrigger>
+      <MenuPrimitive.Portal>
+        <MenuPrimitive.Positioner align="start" side="right" sideOffset={4} className="isolate z-[110]">
+          <MenuPrimitive.Popup
+            data-slot="dropdown-menu-sub-content"
+            className={cn(
+              "z-[110] min-w-[10.5rem] origin-(--transform-origin) overflow-hidden rounded-lg border border-border bg-popover py-1 text-popover-foreground shadow-lg outline-none",
+              "transition duration-150 ease-out data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0",
+              className,
+            )}
+          >
+            {children}
+          </MenuPrimitive.Popup>
+        </MenuPrimitive.Positioner>
+      </MenuPrimitive.Portal>
+    </MenuPrimitive.SubmenuRoot>
+  );
+}
+
 export {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -116,4 +155,5 @@ export {
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuSub,
 };

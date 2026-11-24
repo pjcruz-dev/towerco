@@ -99,7 +99,8 @@ final class ControlledDocumentRoleFieldAccess
 
     /**
      * A page hidden from the role stays hidden on that URL.
-     * Overview matches only itself, so hiding it does not hide Register, Files, or Reports.
+     * Overview matches only itself, so hiding it does not hide Register, Approvals, Files, or Reports.
+     * A new document stays with Register. Opening a request stays with Approvals.
      *
      * @param  array<string, mixed>  $matrix
      */
@@ -115,6 +116,7 @@ final class ControlledDocumentRoleFieldAccess
         $targets = [
             '/documents/controlled',
             '/documents/controlled/register',
+            '/documents/controlled/approvals',
             '/documents/controlled/obsolete',
             '/documents/controlled/reports',
         ];
@@ -135,6 +137,19 @@ final class ControlledDocumentRoleFieldAccess
                     $path === $target
                     || str_starts_with($path, $target.'/')
                     || str_starts_with($path, '/documents/controlled/published')
+                    || $path === '/documents/controlled/new'
+                    || str_starts_with($path, '/documents/controlled/new/')
+                ) {
+                    return true;
+                }
+
+                continue;
+            }
+            if ($target === '/documents/controlled/approvals') {
+                if (
+                    $path === $target
+                    || str_starts_with($path, $target.'/')
+                    || str_starts_with($path, '/documents/controlled/requests')
                 ) {
                     return true;
                 }

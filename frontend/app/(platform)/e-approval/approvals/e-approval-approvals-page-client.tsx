@@ -9,7 +9,7 @@ import { ConfigurableModulePageHeader } from "@/components/dashboard/configurabl
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { EApprovalApprovalGalleryCard } from "@/components/e-approval/e-approval-approval-gallery-card";
-import { useEApprovalSubmissionAccess } from "@/components/e-approval/e-approval-role-field-access";
+import { useEApprovalSubmissionAccess, useEApprovalTableViewAllowed } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalBackLink } from "@/components/e-approval/e-approval-page-header";
@@ -44,9 +44,7 @@ import type { DashboardWidgetDef } from "@/lib/ui/dashboard-widget-registry";
 import { E_APPROVAL_APPROVALS_PAGE_CHROME } from "@/lib/ui/page-chrome-config";
 
 const PER_PAGE = 25;
-const VIEW_STORAGE_KEY = "e-approval-approvals-view";
 const DEFAULT_SORT = "created_at:desc";
-const LAYOUT_KEY = "toweros.e-approval.approvals.layout";
 const APPROVAL_COLUMN_TO_API: Record<string, string> = {
   document: "document_no",
 };
@@ -54,13 +52,20 @@ const APPROVAL_API_TO_COLUMN: Record<string, string> = {
   document_no: "document",
 };
 
-export function EApprovalApprovalsPageClient() {
+export function EApprovalApprovalsPageClient({ formFamily }: { formFamily?: string } = {}) {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [awaitingMe, setAwaitingMe] = useState(true);
-  const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
+  const [viewMode, setViewMode] = useEApprovalListView(
+    formFamily ? "edcs-approvals-view" : "e-approval-approvals-view",
+    "gallery",
+  );
+  const tableViewAllowed = useEApprovalTableViewAllowed();
+  const listView = tableViewAllowed ? viewMode : "gallery";
   const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
-    useDashboardLayoutPrefs(LAYOUT_KEY);
+    useDashboardLayoutPrefs(
+      formFamily ? "toweros.documents.controlled.approvals.layout" : "toweros.e-approval.approvals.layout",
+    );
   const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: DEFAULT_SORT,
@@ -74,7 +79,7 @@ export function EApprovalApprovalsPageClient() {
   }, [sort]);
 
   const { data, isFetching, isError } = useQuery({
-    queryKey: ["e-approval", "approvals", page, awaitingMe, sort],
+    queryKey: ["e-approval", "approvals", page, awaitingMe, sort, formFamily ?? ""],
     queryFn: () =>
       fetchEApprovalApprovalsIndex({
         page,
@@ -82,6 +87,7 @@ export function EApprovalApprovalsPageClient() {
         status: awaitingMe ? "pending" : "all",
         awaiting_me: awaitingMe,
         sort,
+        form_family: formFamily,
       }),
   });
 
@@ -168,7 +174,9 @@ export function EApprovalApprovalsPageClient() {
             }
             toolbar={
               <div className="flex flex-wrap items-center justify-end gap-3">
-                <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Approvals list view" />
+                {tableViewAllowed ? (
+                  <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Approvals list view" />
+                ) : null}
               </div>
             }
             footer={
@@ -181,7 +189,7 @@ export function EApprovalApprovalsPageClient() {
               ) : null
             }
           >
-            {viewMode === "gallery" ? (
+            {listView === "gallery" ? (
               <div data-help="ea-approvals-queue" className="p-4">
                 {isFetching && rows.length === 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -249,7 +257,8 @@ export function EApprovalApprovalsPageClient() {
     rows,
     searchParams,
     sorting,
-    viewMode,
+    listView,
+    tableViewAllowed,
   ]);
 
   const titleOverrides = useMemo(() => {
@@ -298,7 +307,9 @@ export function EApprovalApprovalsPageClient() {
       <div className="space-y-5">
         <LiveProductTourHost />
         <nav className="text-sm text-muted-foreground">
-          <EApprovalBackLink href="/e-approval">Dashboard</EApprovalBackLink>
+          <EApprovalBackLink href={formFamily ? "/documents/controlled" : "/e-approval"}>
+            {formFamily ? "EDCS" : "Dashboard"}
+          </EApprovalBackLink>
         </nav>
         <ConfigurableModulePageHeader
           defaults={E_APPROVAL_APPROVALS_PAGE_CHROME}

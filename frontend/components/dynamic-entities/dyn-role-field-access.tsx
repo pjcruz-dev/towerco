@@ -46,8 +46,17 @@ const ICON_CLASS: Record<FieldAccessLevel, string> = {
   hide: "text-destructive",
 };
 
+const ENTITY_MENU_MODULE: Record<string, string> = {
+  ticketing_ticket: "ticketing",
+  e_approval_submission: "e_approval",
+  controlled_document: "document_register",
+  it_asset: "asset_management",
+};
+
 type RoleFieldAccessValue = {
   canManageRoles: boolean;
+  /** Module whose roles belong in Viewing as. Empty means the full list. */
+  moduleId: string | null;
   roles: AdminRoleRow[];
   selected: AdminRoleRow | null;
   setRoleId: (roleId: number | null) => void;
@@ -82,6 +91,17 @@ export function RoleFieldAccessProvider({
   return <RoleFieldAccessContext.Provider value={value}>{children}</RoleFieldAccessContext.Provider>;
 }
 
+function normalizeRoleId(value: number | string | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readStoredRoleId(storageKey?: string): number | null {
+  if (!storageKey || typeof window === "undefined") return null;
+  return normalizeRoleId(window.sessionStorage.getItem(storageKey));
+}
+
 function useRoleFieldAccess(entitySlug: string, storageKey?: string): RoleFieldAccessValue {
   const canManageRoles = usePermission([permissions.roleManage]);
   const queryClient = useQueryClient();
@@ -89,27 +109,24 @@ function useRoleFieldAccess(entitySlug: string, storageKey?: string): RoleFieldA
 
   useEffect(() => {
     if (!storageKey) return;
-    const raw = window.sessionStorage.getItem(storageKey);
-    if (raw) {
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed)) setRoleIdState(parsed);
-    }
+    setRoleIdState(readStoredRoleId(storageKey));
     function onPreview(event: Event) {
       const detail = (event as CustomEvent<{ storageKey?: string; roleId?: number | null }>).detail;
       if (detail?.storageKey !== storageKey) return;
-      setRoleIdState(detail.roleId ?? null);
+      setRoleIdState(normalizeRoleId(detail.roleId));
     }
     window.addEventListener("toweros:viewing-as", onPreview);
     return () => window.removeEventListener("toweros:viewing-as", onPreview);
   }, [storageKey]);
 
   function setRoleId(next: number | null) {
-    setRoleIdState(next);
+    const normalized = normalizeRoleId(next);
+    setRoleIdState(normalized);
     if (!storageKey) return;
-    if (next == null) window.sessionStorage.removeItem(storageKey);
-    else window.sessionStorage.setItem(storageKey, String(next));
+    if (normalized == null) window.sessionStorage.removeItem(storageKey);
+    else window.sessionStorage.setItem(storageKey, String(normalized));
     window.dispatchEvent(
-      new CustomEvent("toweros:viewing-as", { detail: { storageKey, roleId: next } }),
+      new CustomEvent("toweros:viewing-as", { detail: { storageKey, roleId: normalized } }),
     );
   }
   const catalog = useQuery({
@@ -119,7 +136,13 @@ function useRoleFieldAccess(entitySlug: string, storageKey?: string): RoleFieldA
     staleTime: 30_000,
   });
   const roles = catalog.data?.roles ?? [];
-  const selected = roles.find((role) => role.id === roleId) ?? null;
+  const selected = roles.find((role) => normalizeRoleId(role.id) === roleId) ?? null;
+
+  useEffect(() => {
+    if (!storageKey || roleId != null) return;
+    const stored = readStoredRoleId(storageKey);
+    if (stored != null) setRoleIdState(stored);
+  }, [catalog.data, roleId, storageKey]);
 
   const save = useMutation({
     mutationFn: async (input: { role: AdminRoleRow; matrix: RoleAccessMatrix }) => {
@@ -211,6 +234,7 @@ function useRoleFieldAccess(entitySlug: string, storageKey?: string): RoleFieldA
 
   return {
     canManageRoles,
+    moduleId: ENTITY_MENU_MODULE[entitySlug] ?? null,
     roles,
     selected,
     setRoleId,
@@ -268,7 +292,7 @@ export function ViewingAsMenuItems() {
   if (!access?.canManageRoles) return null;
 
   const current = access.selected ? roleDisplayLabel(access.selected.name) : "My own access";
-  const groups = groupRolesForMenu(access.roles);
+  const groups = groupRolesForMenu(access.roles, { moduleId: access.moduleId });
 
   return (
     <ContextMenuSub
@@ -396,13 +420,26 @@ export function RoleFieldAccessMenuItems({
 }
 
 /** Right-click the Actions column to show or hide view, edit, clone, and delete for the preview role. */
+const DEFAULT_ROLE_ACTIONS: Array<{ action: EntityAccessAction; label: string }> = [
+  { action: "view", label: "View" },
+  { action: "edit", label: "Edit" },
+  { action: "duplicate", label: "Clone" },
+  { action: "delete", label: "Delete" },
+  { action: "create", label: "Add new" },
+  { action: "import", label: "Import" },
+  { action: "columns", label: "Table view" },
+];
+
 export function RoleRowActionsMenuItems({
   columns = [],
   always = false,
+  actions = DEFAULT_ROLE_ACTIONS,
 }: {
   columns?: ReadonlyArray<{ id: string; label: string }>;
   /** Keep the action rows visible before a role is chosen, so every surface shows the same menu. */
   always?: boolean;
+  /** Actions this module actually has. Defaults to the Assets set. */
+  actions?: ReadonlyArray<{ action: EntityAccessAction; label: string }>;
 } = {}) {
   const access = useRoleFieldAccessContext();
   if (!access?.canManageRoles) return null;
@@ -411,15 +448,6 @@ export function RoleRowActionsMenuItems({
   const roleName = access.selected ? roleDisplayLabel(access.selected.name) : "Role";
   const locked =
     !access.selected || ownerRole(access.selected) || access.selected.permissions.length === 0 || access.saving;
-  const actions: Array<{ action: EntityAccessAction; label: string }> = [
-    { action: "view", label: "View" },
-    { action: "edit", label: "Edit" },
-    { action: "duplicate", label: "Clone" },
-    { action: "delete", label: "Delete" },
-    { action: "create", label: "Add new" },
-    { action: "import", label: "Import" },
-    { action: "columns", label: "Table view" },
-  ];
 
   return (
     <>

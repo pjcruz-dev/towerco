@@ -156,7 +156,7 @@ export function isActionVisible(
 }
 
 export const DOC_EXTRACT_BATCHES_PAGE_CHROME: PageChromeDefaults = {
-  title: "DocExtract",
+  title: "Batches",
   description:
     "Upload → consolidate pages → extract → customize columns → export. Source files purge after 7 days; filenames stay for audit.",
   actions: [
@@ -342,8 +342,7 @@ export const DOC_EXTRACT_TEMPLATES_PAGE_CHROME: PageChromeDefaults = {
 
 export const WORKSPACE_DASHBOARD_PAGE_CHROME: PageChromeDefaults = {
   title: "Dashboard",
-  description:
-    "Work awaiting you across modules — gate approvals, e-approvals, tickets, and SLA risk.",
+  description: "Work waiting on you. Open an app to see only that module.",
   actions: [
     { id: "customize", label: "Customize", hideable: false },
     { id: "refresh", label: "Refresh", hideable: true },

@@ -11,6 +11,7 @@ import {
   buildWorkflowStepShowItems,
   withPublicationTrainingStep,
 } from "@/components/e-approval/e-approval-workflow-step-show";
+import { submissionOpenPath } from "@/modules/documents/controlled-document-submission-url";
 import type { EApprovalApprovalRow } from "@/modules/e-approval/types";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ function submissionHref(row: EApprovalApprovalRow): string | null {
     return null;
   }
   const pending = (row.approval_status ?? row.status) === "pending";
-  return pending ? `/e-approval/submissions/${id}?tab=decide` : `/e-approval/submissions/${id}`;
+  return submissionOpenPath(id, row.submission?.form_family, pending ? "decide" : null);
 }
 
 const ROLE_COLUMNS = E_APPROVAL_LIST_FIELDS.map((field) => ({ id: field.id, label: field.label }));

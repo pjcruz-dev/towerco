@@ -71,7 +71,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         module: "core",
       },
       {
-        title: "Document register",
+        title: "EDCS",
         icon: ClipboardCheck,
         module: "document_register",
         permissions: ["documents:controlled:view"],
@@ -88,6 +88,12 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
             href: "/documents/controlled/register",
             section: "Operate",
             permissions: ["documents:controlled:view"],
+          },
+          {
+            title: "Approvals",
+            href: "/documents/controlled/approvals",
+            section: "Decide",
+            permissions: ["documents:controlled:view", "e_approval:approve"],
           },
           {
             title: "Files",
@@ -577,9 +583,15 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
         permissions: ["doc-extract:view", "doc-extract:run", "doc-extract:templates:manage"],
         items: [
           {
-            title: "Batches",
+            title: "Dashboard",
             href: "/doc-extract",
             exact: true,
+            section: "Operate",
+            permissions: ["doc-extract:view"],
+          },
+          {
+            title: "Batches",
+            href: "/doc-extract/batches",
             section: "Operate",
             permissions: ["doc-extract:view"],
           },

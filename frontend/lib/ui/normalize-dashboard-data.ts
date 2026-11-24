@@ -370,7 +370,7 @@ export function normalizeDocExtractBatches(rows: DocExtractBatchListRow[]): Dash
               id: "dx-processing",
               title: `${processing} extraction${processing === 1 ? "" : "s"} scanning`,
               subtitle: "Auto-refreshes while processing",
-              href: "/doc-extract?status=processing",
+              href: "/doc-extract/batches?status=processing",
               tone: "neutral" as const,
             },
           ]
@@ -381,7 +381,7 @@ export function normalizeDocExtractBatches(rows: DocExtractBatchListRow[]): Dash
               id: "dx-failed",
               title: `${failed} extraction${failed === 1 ? "" : "s"} failed`,
               subtitle: "Review and retry from the batch",
-              href: "/doc-extract?status=failed",
+              href: "/doc-extract/batches?status=failed",
               tone: "danger" as const,
             },
           ]

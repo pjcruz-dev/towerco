@@ -24,6 +24,7 @@ import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entr
 import { TicketingPriorityBadge, TicketingStatusBadge } from "@/components/ticketing/ticketing-badges";
 import { formatTicketingDate } from "@/components/ticketing/ticketing-utils";
 import { PermissionGate } from "@/components/layout/permission-gate";
+import { useTicketingRolePreview } from "@/components/ticketing/ticketing-role-field-access";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -80,6 +81,7 @@ const NAV_TILES = [
 ] as const;
 export function TicketingDashboardPageClient() {
   const searchParams = useSearchParams();
+  const rolePreview = useTicketingRolePreview();
   const tourActive = isTicketingTourActive(searchParams);
   const { prefs, patchPrefs, layout: legacyLayout } = useTicketingWorkspacePrefs();
   const {
@@ -368,7 +370,7 @@ export function TicketingDashboardPageClient() {
         defaultSpan: "full",
         render: () => (
           <div data-help="tk-overview-quick-actions" className="grid gap-4 sm:grid-cols-2">
-            {NAV_TILES.map((tile) => {
+            {NAV_TILES.filter((tile) => rolePreview.allowsHref(tile.href)).map((tile) => {
               const Icon = tile.icon;
               return (
                 <Link
@@ -467,6 +469,7 @@ export function TicketingDashboardPageClient() {
     departmentSeries,
     prioritySeries,
     queueSeries,
+    rolePreview.allowsHref,
     tourActive,
   ]);
 

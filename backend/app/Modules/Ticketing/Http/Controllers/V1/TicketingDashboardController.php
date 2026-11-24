@@ -7,6 +7,7 @@ namespace App\Modules\Ticketing\Http\Controllers\V1;
 use App\Core\Http\Controllers\AbstractApiController;
 use App\Modules\Ticketing\Services\TicketingDashboardService;
 use App\Modules\Ticketing\Services\TicketingPlanFeaturesService;
+use App\Modules\Ticketing\Support\TicketingRoleFieldAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -16,9 +17,13 @@ class TicketingDashboardController extends AbstractApiController
         Request $request,
         TicketingDashboardService $service,
         TicketingPlanFeaturesService $planFeatures,
+        TicketingRoleFieldAccess $roleAccess,
     ): JsonResponse {
         abort_unless($request->user()?->can('ticketing:view'), 403);
         $planFeatures->assertModuleEnabled();
+        if ($request->query('surface') === 'reports') {
+            abort_unless(! $roleAccess->navTargetHidden($request->user(), '/ticketing/reports'), 403);
+        }
 
         return $this->ok($service->build($request->user(), [
             'status' => $request->query('status'),

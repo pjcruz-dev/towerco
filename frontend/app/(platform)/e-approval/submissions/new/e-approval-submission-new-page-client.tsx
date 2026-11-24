@@ -8,6 +8,7 @@ import { FileText, Search } from "lucide-react";
 
 import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
+import { useEApprovalTableViewAllowed } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalSubmissionFormPickerCard } from "@/components/e-approval/e-approval-submission-form-picker-card";
 import {
@@ -60,6 +61,8 @@ export function EApprovalSubmissionNewPageClient() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
+  const tableViewAllowed = useEApprovalTableViewAllowed();
+  const listView = tableViewAllowed ? viewMode : "gallery";
   const [copyingFormId, setCopyingFormId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -269,7 +272,7 @@ export function EApprovalSubmissionNewPageClient() {
     }
 
     if (formsQuery.isFetching && publishedForms.length === 0) {
-      return viewMode === "gallery" ? (
+      return listView === "gallery" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <div key={index} className="h-56 animate-pulse rounded-xl border border-border bg-muted/40" />
@@ -291,7 +294,7 @@ export function EApprovalSubmissionNewPageClient() {
     const missingFinanceHighlight =
       financeTour &&
       !formsForDisplay.some((form) => financeFamilyFromFormName(form.name) === financeFamily);
-    const list = viewMode === "gallery" ? renderGallery(formsForDisplay) : renderTable(formsForDisplay);
+    const list = listView === "gallery" ? renderGallery(formsForDisplay) : renderTable(formsForDisplay);
     if (!missingFinanceHighlight) return list;
     return (
       <div className="space-y-4">
@@ -360,7 +363,9 @@ export function EApprovalSubmissionNewPageClient() {
                   </div>
                 ) : null}
               </div>
-              <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Form picker view" />
+              {tableViewAllowed ? (
+                <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Form picker view" />
+              ) : null}
             </div>
           }
         >

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
-import { Plus, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Plus, RefreshCw, X } from "lucide-react";
 
 import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
@@ -13,7 +13,11 @@ import { FilterSelect } from "@/components/forms/filter-select";
 import { TicketingHelpEntryActions } from "@/components/help/ticketing-help-entry-actions";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { TicketingTourSampleNotice } from "@/components/help/ticketing-tour-fixtures";
-import { createTicketingTicketsTableColumns } from "@/components/ticketing/ticketing-tickets-table-columns";
+import {
+  TICKETING_STATUS_MENU_OPTIONS,
+  createTicketingTicketsTableColumns,
+} from "@/components/ticketing/ticketing-tickets-table-columns";
+import { useTicketingTicketAccess } from "@/components/ticketing/ticketing-role-field-access";
 import { useTicketingSchema } from "@/components/ticketing/ticketing-custom-fields";
 import { ModuleListToolbar } from "@/components/registry/module-list-toolbar";
 import { PaginatedListFooter } from "@/components/registry/paginated-list-footer";
@@ -22,7 +26,14 @@ import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { createRowSelectionColumn } from "@/components/ui/data-table-row-selection";
 import { DataListCard } from "@/components/ui/data-list-card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { RefreshingHint } from "@/components/ui/refreshing-hint";
 import { Spinner } from "@/components/ui/spinner";
 import { useDashboardBoardLayoutHandlers } from "@/hooks/use-dashboard-board-layout-handlers";
 import {
@@ -36,6 +47,7 @@ import {
   fetchTicketingDashboard,
   fetchTicketingMetadata,
   fetchTicketingTickets,
+  updateTicketingTicket,
 } from "@/lib/api/modules/ticketing-api";
 import { getErrorMessage } from "@/lib/api/error";
 import {
@@ -65,6 +77,7 @@ import { filterBarFieldsClassName } from "@/lib/ui/field-control";
 import { cn } from "@/lib/utils";
 import type { TicketingTicketListRow } from "@/modules/ticketing/types";
 import { useTicketingWorkspacePrefs } from "@/modules/ticketing/workspace-prefs";
+import { useAuthStore } from "@/stores/auth-store";
 import { useNotificationStore } from "@/stores/notification-store";
 import { ticketingPrefsFromSearchParams } from "@/lib/ticketing/kpi-deep-links";
 
@@ -72,9 +85,16 @@ const DEFAULT_SORT = "updated_at:desc";
 const LAYOUT_KEY = "toweros.ticketing.tickets.layout";
 
 export function TicketingTicketsPageClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tourActive = isTicketingTourActive(searchParams);
+  const queryClient = useQueryClient();
   const push = useNotificationStore((s) => s.push);
+  const currentUser = useAuthStore((s) => s.user);
+  const ticketAccess = useTicketingTicketAccess();
+  const canOpenTicket = ticketAccess.allows("view");
+  const canCreateTicket = ticketAccess.allows("create");
+  const canExportTickets = ticketAccess.allows("export");
   const { prefs, patchPrefs } = useTicketingWorkspacePrefs();
   const { status, category, priority, department, mineOnly, assignedMe, slaStatus, density } = prefs;
   const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
@@ -115,7 +135,10 @@ export function TicketingTicketsPageClient() {
     queryFn: () => fetchTicketingDashboard(),
     staleTime: 300_000,
   });
-  const departmentOptions = filterOptionsQuery.data?.filter_options?.departments ?? [];
+  const departmentOptions = useMemo(
+    () => filterOptionsQuery.data?.filter_options?.departments ?? [],
+    [filterOptionsQuery.data],
+  );
 
   const searchLite = useMemo(
     () =>
@@ -182,6 +205,111 @@ export function TicketingTicketsPageClient() {
     }
     return [ticketingTourSampleListRow, ...rows];
   }, [query.data?.data, tourActive]);
+
+  const invalidateTicketQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
+    queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
+  };
+
+  const assignToMeMutation = useMutation({
+    mutationFn: (row: TicketingTicketListRow) => {
+      if (!currentUser) {
+        return Promise.reject(new Error("Not signed in."));
+      }
+      return updateTicketingTicket(row.id, { assignee_id: currentUser.id });
+    },
+    onSuccess: (_data, row) => {
+      invalidateTicketQueries();
+      push({ level: "success", title: "Ticket assigned", message: `${row.ticket_number} assigned to you.` });
+    },
+    onError: (error) => {
+      push({ level: "error", title: "Assign failed", message: getErrorMessage(error) });
+    },
+  });
+
+  const changeStatusMutation = useMutation({
+    mutationFn: ({ row, status }: { row: TicketingTicketListRow; status: string }) =>
+      updateTicketingTicket(row.id, { status }),
+    onSuccess: (_data, variables) => {
+      invalidateTicketQueries();
+      push({
+        level: "success",
+        title: "Status updated",
+        message: `${variables.row.ticket_number} marked ${variables.status.replace(/_/g, " ")}.`,
+      });
+    },
+    onError: (error) => {
+      push({ level: "error", title: "Update failed", message: getErrorMessage(error) });
+    },
+  });
+
+  const bulkAssignToMeMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!currentUser) {
+        throw new Error("Not signed in.");
+      }
+      const results = await Promise.allSettled(
+        ids.map((id) => updateTicketingTicket(id, { assignee_id: currentUser.id })),
+      );
+      return {
+        total: ids.length,
+        succeeded: results.filter((result) => result.status === "fulfilled").length,
+        failed: results.filter((result) => result.status === "rejected").length,
+      };
+    },
+    onSuccess: (result) => {
+      invalidateTicketQueries();
+      if (result.failed === 0) {
+        push({
+          level: "success",
+          title: "Tickets assigned",
+          message: `Updated ${result.succeeded} ticket${result.succeeded === 1 ? "" : "s"}.`,
+        });
+        setSelectedIds(new Set());
+      } else {
+        push({
+          level: "warning",
+          title: "Some tickets failed",
+          message: `Updated ${result.succeeded} of ${result.total} tickets — ${result.failed} failed.`,
+        });
+      }
+    },
+    onError: (error) => {
+      push({ level: "error", title: "Assign failed", message: getErrorMessage(error) });
+    },
+  });
+
+  const bulkChangeStatusMutation = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      const results = await Promise.allSettled(ids.map((id) => updateTicketingTicket(id, { status })));
+      return {
+        total: ids.length,
+        succeeded: results.filter((result) => result.status === "fulfilled").length,
+        failed: results.filter((result) => result.status === "rejected").length,
+      };
+    },
+    onSuccess: (result) => {
+      invalidateTicketQueries();
+      if (result.failed === 0) {
+        push({
+          level: "success",
+          title: "Tickets updated",
+          message: `Updated ${result.succeeded} ticket${result.succeeded === 1 ? "" : "s"}.`,
+        });
+        setSelectedIds(new Set());
+      } else {
+        push({
+          level: "warning",
+          title: "Some tickets failed",
+          message: `Updated ${result.succeeded} of ${result.total} tickets — ${result.failed} failed.`,
+        });
+      }
+    },
+    onError: (error) => {
+      push({ level: "error", title: "Update failed", message: getErrorMessage(error) });
+    },
+  });
+
   const { data: schema } = useTicketingSchema();
   const columns = useMemo(
     () => {
@@ -197,10 +325,15 @@ export function TicketingTicketsPageClient() {
           tourQuery: tourActive ? searchParams.toString() : undefined,
           customFields,
           hiddenColumns,
+          currentUserId: currentUser?.id,
+          onAssignToMe: (row) => assignToMeMutation.mutate(row),
+          onChangeStatus: (row, status) => changeStatusMutation.mutate({ row, status }),
+          canOpen: canOpenTicket,
         }),
       ];
     },
-    [schema?.fields, searchParams, tourActive],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [schema?.fields, searchParams, tourActive, currentUser?.id, canOpenTicket],
   );
   const meta = query.data?.meta;
   const statusOptions = useMemo(() => metadata?.statuses ?? [], [metadata]);
@@ -214,7 +347,7 @@ export function TicketingTicketsPageClient() {
   );
   const emptyMessage = hasFilters ? "No tickets match your filters." : "No tickets yet.";
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearch("");
     patchPrefs({
       status: "",
@@ -226,7 +359,70 @@ export function TicketingTicketsPageClient() {
       slaStatus: "",
     });
     setPage(1);
-  };
+  }, [patchPrefs]);
+
+  const filterChips = useMemo(() => {
+    const chips: Array<{ id: string; label: string; onClear: () => void }> = [];
+    if (debouncedSearch) {
+      chips.push({
+        id: "search",
+        label: `Search: ${debouncedSearch}`,
+        onClear: () => setSearch(""),
+      });
+    }
+    if (status) {
+      chips.push({
+        id: "status",
+        label: `Status: ${status.replace(/_/g, " ").replace(",", " / ")}`,
+        onClear: () => {
+          patchPrefs({ status: "" });
+          setPage(1);
+        },
+      });
+    }
+    if (priority) {
+      chips.push({
+        id: "priority",
+        label: `Priority: ${priority.replace(/_/g, " ")}`,
+        onClear: () => {
+          patchPrefs({ priority: "" });
+          setPage(1);
+        },
+      });
+    }
+    if (slaStatus) {
+      chips.push({
+        id: "sla",
+        label: `SLA: ${slaStatus.replace(/_/g, " ").replace(",", " / ")}`,
+        onClear: () => {
+          patchPrefs({ slaStatus: "" });
+          setPage(1);
+        },
+      });
+    }
+    if (category) {
+      const label = categoryOptions.find((item) => item.id === category)?.label ?? category;
+      chips.push({
+        id: "category",
+        label: `Category: ${label}`,
+        onClear: () => {
+          patchPrefs({ category: "" });
+          setPage(1);
+        },
+      });
+    }
+    if (department) {
+      chips.push({
+        id: "department",
+        label: `Department: ${department}`,
+        onClear: () => {
+          patchPrefs({ department: "" });
+          setPage(1);
+        },
+      });
+    }
+    return chips;
+  }, [debouncedSearch, status, priority, slaStatus, category, department, categoryOptions, patchPrefs]);
 
   const layoutMeta = useMemo(
     () => [
@@ -393,11 +589,6 @@ export function TicketingTicketsPageClient() {
                   </button>
                 </div>
               </div>
-              {hasFilters ? (
-                <Button type="button" size="sm" variant="ghost" className="h-8" onClick={clearFilters}>
-                  Clear filters
-                </Button>
-              ) : null}
               <Button
                 size="sm"
                 variant="outline"
@@ -407,7 +598,36 @@ export function TicketingTicketsPageClient() {
               >
                 {query.isFetching ? <Spinner className="size-4" /> : <RefreshCw className="h-4 w-4" aria-hidden />}
               </Button>
+              {query.isFetching && tickets.length > 0 ? (
+                <RefreshingHint label="Updating tickets" />
+              ) : null}
             </div>
+
+            {filterChips.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {filterChips.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    className="inline-flex h-7 items-center gap-1 rounded-full border border-border bg-muted px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    onClick={chip.onClear}
+                  >
+                    {chip.label}
+                    <X className="size-3" aria-hidden />
+                    <span className="sr-only">Remove {chip.label}</span>
+                  </button>
+                ))}
+                {filterChips.length >= 2 ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    onClick={clearFilters}
+                  >
+                    Clear all
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ),
       },
@@ -440,6 +660,7 @@ export function TicketingTicketsPageClient() {
                   isLoading={query.isLoading || (query.isFetching && tickets.length === 0)}
                   isEmpty={!query.isLoading && tickets.length === 0}
                   emptyMessage={emptyMessage}
+                  onRowClick={(row) => router.push(`/ticketing/tickets/${row.original.id}`)}
                   enableColumnVisibility
                   columnVisibilityStorageKey="toweros.table.columns.ticketing.tickets"
                   sorting={sorting}
@@ -510,7 +731,56 @@ export function TicketingTicketsPageClient() {
                       <ModuleListToolbar
                         selectedCount={selectedIds.size}
                         onClearSelection={() => setSelectedIds(new Set())}
-                        onExport={async (format) => {
+                        end={
+                          selectedIds.size > 0 ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5"
+                                disabled={bulkAssignToMeMutation.isPending}
+                                onClick={() => bulkAssignToMeMutation.mutate(selectedIdsList(selectedIds))}
+                              >
+                                {bulkAssignToMeMutation.isPending ? <Spinner className="size-3.5" /> : null}
+                                Assign to me
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger
+                                  render={
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-1.5"
+                                      disabled={bulkChangeStatusMutation.isPending}
+                                    >
+                                      {bulkChangeStatusMutation.isPending ? <Spinner className="size-3.5" /> : null}
+                                      Change status
+                                    </Button>
+                                  }
+                                />
+                                <DropdownMenuContent align="end" className="min-w-[10rem]">
+                                  {TICKETING_STATUS_MENU_OPTIONS.map((option) => (
+                                    <DropdownMenuItem
+                                      key={option.value}
+                                      disabled={bulkChangeStatusMutation.isPending}
+                                      onClick={() =>
+                                        bulkChangeStatusMutation.mutate({
+                                          ids: selectedIdsList(selectedIds),
+                                          status: option.value,
+                                        })
+                                      }
+                                    >
+                                      {option.label}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </>
+                          ) : undefined
+                        }
+                        onExport={canExportTickets ? async (format) => {
                           try {
                             const ids = selectedIdsList(selectedIds);
                             const result = await downloadTicketingTicketsExport({
@@ -549,7 +819,7 @@ export function TicketingTicketsPageClient() {
                           } catch (e) {
                             push({ level: "error", title: "Export failed", message: getErrorMessage(e) });
                           }
-                        }}
+                        } : undefined}
                         onPrint={() => {
                           try {
                             printModuleListTable({
@@ -634,8 +904,11 @@ export function TicketingTicketsPageClient() {
     ];
   }, [
     assignedMe,
+    bulkAssignToMeMutation,
+    bulkChangeStatusMutation,
     category,
     categoryOptions,
+    clearFilters,
     columns,
     density,
     department,
@@ -647,7 +920,7 @@ export function TicketingTicketsPageClient() {
     effectiveSla,
     effectiveStatus,
     emptyMessage,
-    hasFilters,
+    filterChips,
     meta,
     mineOnly,
     manualSorting,
@@ -657,6 +930,7 @@ export function TicketingTicketsPageClient() {
     priorityOptions,
     push,
     query,
+    router,
     search,
     selectedIds,
     slaStatus,
@@ -738,7 +1012,7 @@ export function TicketingTicketsPageClient() {
                   data={normalizedData}
                 />
               ) : null}
-              {isVisible("new") ? (
+              {isVisible("new") && canCreateTicket ? (
                 <Button
                   size="sm"
                   data-help="tk-tickets-new"

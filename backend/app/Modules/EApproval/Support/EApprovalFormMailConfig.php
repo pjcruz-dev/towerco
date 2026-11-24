@@ -263,9 +263,12 @@ final class EApprovalFormMailConfig
         return $buttons;
     }
 
-    public static function buttonPath(string $target, string $submissionId): string
+    public static function buttonPath(string $target, string $submissionId, ?EApprovalSubmission $submission = null): string
     {
         $tab = $target === 'open_approval' ? 'decide' : 'approvals';
+        if ($submission !== null) {
+            return EApprovalSubmissionLink::path($submission, $tab);
+        }
 
         return "/e-approval/submissions/{$submissionId}?tab={$tab}";
     }
@@ -786,7 +789,7 @@ final class EApprovalFormMailConfig
     {
         $submission->loadMissing(['values.field', 'form.fields', 'attachments']);
         $url = app(TenantAppUrlResolver::class)->urlForCurrentTenant(
-            '/e-approval/submissions/'.$submission->id.'?tab=request',
+            EApprovalSubmissionLink::path($submission, 'request'),
         );
         $safeUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $links = [];

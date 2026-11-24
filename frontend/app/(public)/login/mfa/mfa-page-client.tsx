@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -12,7 +12,7 @@ import { AuthOtpInput } from "@/components/auth/auth-otp-input";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
-import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
+import { safeInternalNext, tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import {
   requestMfaChallenge,
   verifyMfaChallenge,
@@ -29,6 +29,8 @@ type FormValues = z.infer<typeof schema>;
 
 export function MfaPageClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = safeInternalNext(searchParams.get("next"));
   const pendingMfa = useAuthStore((state) => state.pendingMfa);
   const setPendingMfa = useAuthStore((state) => state.setPendingMfa);
   const setSession = useAuthStore((state) => state.setSession);
@@ -53,7 +55,7 @@ export function MfaPageClient() {
       setSession(nextSession);
       setPendingMfa(null);
       setSessionCookie();
-      router.replace(tenantPostLoginPath(nextSession));
+      router.replace(tenantPostLoginPath(nextSession, nextPath));
     },
     onError: (error) =>
       notify({
@@ -93,7 +95,7 @@ export function MfaPageClient() {
       setSession(nextSession);
       setPendingMfa(null);
       setSessionCookie();
-      router.replace(tenantPostLoginPath(nextSession));
+      router.replace(tenantPostLoginPath(nextSession, nextPath));
     },
     onError: (error) =>
       notify({

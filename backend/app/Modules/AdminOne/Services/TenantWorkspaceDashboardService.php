@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\AdminOne\Services;
 
 use App\Models\TicketingTicket;
+use App\Modules\EApproval\Models\EApprovalPublicationTraining;
 use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
@@ -88,18 +89,26 @@ final class TenantWorkspaceDashboardService
                     ->count();
             }
 
-            $openSubmissions = EApprovalSubmission::query()
+            $canSeeWorkspace = $user->can('e_approval:audit:view') || $user->can('e_approval:forms:manage');
+
+            $openSubmissionsQuery = EApprovalSubmission::query()
                 ->whereNotIn('status', [
                     EApprovalSubmissionStatus::APPROVED,
                     EApprovalSubmissionStatus::REJECTED,
                     EApprovalSubmissionStatus::CANCELLED,
-                ])
-                ->count();
+                ]);
+            if (! $canSeeWorkspace) {
+                $openSubmissionsQuery->where('requestor_id', $user->id);
+            }
+            $openSubmissions = (int) $openSubmissionsQuery->count();
 
-            $staleApprovals = EApprovalRequestApproval::query()
+            $staleApprovalsQuery = EApprovalRequestApproval::query()
                 ->where('status', EApprovalApprovalStatus::PENDING)
-                ->where('created_at', '<=', Carbon::now()->subDays(self::STALE_APPROVAL_DAYS))
-                ->count();
+                ->where('created_at', '<=', Carbon::now()->subDays(self::STALE_APPROVAL_DAYS));
+            if (! $canSeeWorkspace) {
+                $staleApprovalsQuery->where('approver_id', $user->id);
+            }
+            $staleApprovals = (int) $staleApprovalsQuery->count();
 
             if ($awaitingMyApproval > 0) {
                 $kpis[] = [
@@ -121,7 +130,7 @@ final class TenantWorkspaceDashboardService
             if ($staleApprovals > 0) {
                 $kpis[] = [
                     'key' => 'ea_stale_approvals',
-                    'label' => 'E-Forms · stale steps',
+                    'label' => $canSeeWorkspace ? 'E-Forms · stale steps' : 'E-Forms · your stale steps',
                     'value' => (string) $staleApprovals,
                     'change' => '>'.self::STALE_APPROVAL_DAYS.' days pending',
                     'tone' => 'danger',
@@ -131,7 +140,7 @@ final class TenantWorkspaceDashboardService
             if ($openSubmissions > 0 && $awaitingMyApproval === 0) {
                 $kpis[] = [
                     'key' => 'ea_open_submissions',
-                    'label' => 'E-Forms · open submissions',
+                    'label' => $canSeeWorkspace ? 'E-Forms · open submissions' : 'E-Forms · your open submissions',
                     'value' => (string) $openSubmissions,
                     'change' => 'In workflow',
                     'tone' => 'warning',
@@ -161,6 +170,23 @@ final class TenantWorkspaceDashboardService
                     'count' => $assignedToMe,
                     'href' => '/ticketing/tickets?assigned_me=1',
                     'priority' => 'high',
+                ];
+            }
+        }
+
+        if ($user->can('documents:controlled:view') && Schema::connection('tenant')->hasTable('e_approval_publication_trainings')) {
+            $trainingPending = EApprovalPublicationTraining::query()
+                ->where('user_id', $user->id)
+                ->where('status', '!=', 'completed')
+                ->count();
+
+            if ($trainingPending > 0) {
+                $kpis[] = [
+                    'key' => 'docs_training_pending',
+                    'label' => 'Document Control · training due',
+                    'value' => (string) $trainingPending,
+                    'change' => 'Before publication',
+                    'tone' => 'warning',
                 ];
             }
         }
@@ -216,7 +242,7 @@ final class TenantWorkspaceDashboardService
 
         if ($user->can('e_approval:approve')) {
             $approvals = EApprovalRequestApproval::query()
-                ->with(['submission:id,document_no,form_id', 'submission.form:id,name'])
+                ->with(['submission:id,document_no,form_id', 'submission.form:id,name,metadata_json'])
                 ->where('approver_id', $user->id)
                 ->where('status', EApprovalApprovalStatus::PENDING)
                 ->orderBy('created_at')
@@ -233,7 +259,7 @@ final class TenantWorkspaceDashboardService
                         : 'E-Forms step awaiting you',
                     'detail' => $submission?->form?->name,
                     'href' => $submission
-                        ? '/e-approval/submissions/'.$submission->id
+                        ? EApprovalSubmissionLink::path($submission, 'decide')
                         : '/e-approval/approvals?awaiting_me=1',
                     'created_at' => $approval->created_at?->toIso8601String(),
                 ];
@@ -291,6 +317,9 @@ final class TenantWorkspaceDashboardService
         if ($user->can('ticketing:view')) {
             $links[] = ['label' => 'Ticketing', 'href' => '/ticketing'];
         }
+        if ($user->can('documents:controlled:view')) {
+            $links[] = ['label' => 'Document Control', 'href' => '/documents'];
+        }
         if (TenantNotificationAccess::allowedModulesFor($user) !== []) {
             $links[] = ['label' => 'Notifications', 'href' => '/notifications'];
         }
@@ -338,9 +367,10 @@ final class TenantWorkspaceDashboardService
         if ($user->can('e_approval:submissions:view')) {
             $submissions = EApprovalSubmission::query()
                 ->where('requestor_id', $user->id)
+                ->with(['form:id,metadata_json'])
                 ->orderByDesc('updated_at')
                 ->limit(4)
-                ->get(['id', 'document_no', 'status', 'updated_at']);
+                ->get(['id', 'document_no', 'status', 'form_id', 'updated_at']);
 
             foreach ($submissions as $submission) {
                 $items[] = [
@@ -348,7 +378,7 @@ final class TenantWorkspaceDashboardService
                     'module' => 'e_approval',
                     'label' => self::submissionActivityLabel((string) $submission->status),
                     'detail' => (string) ($submission->document_no ?: 'Your submission'),
-                    'href' => '/e-approval/submissions/'.$submission->id,
+                    'href' => EApprovalSubmissionLink::path($submission),
                     'created_at' => $submission->updated_at?->toIso8601String(),
                 ];
             }
@@ -356,7 +386,7 @@ final class TenantWorkspaceDashboardService
 
         if ($user->can('e_approval:approve')) {
             $approvals = EApprovalRequestApproval::query()
-                ->with(['submission:id,document_no', 'step:id,step_order'])
+                ->with(['submission:id,document_no,form_id', 'submission.form:id,metadata_json', 'step:id,step_order'])
                 ->where('approver_id', $user->id)
                 ->orderByRaw('COALESCE(acted_at, updated_at, created_at) DESC')
                 ->limit(4)
@@ -375,8 +405,8 @@ final class TenantWorkspaceDashboardService
                     'module' => 'e_approval',
                     'label' => self::approvalActivityLabel((string) $approval->status),
                     'detail' => $detail,
-                    'href' => $approval->submission_id !== null
-                        ? '/e-approval/submissions/'.$approval->submission_id
+                    'href' => $approval->submission !== null
+                        ? EApprovalSubmissionLink::path($approval->submission)
                         : '/e-approval/approvals',
                     'created_at' => ($approval->acted_at ?? $approval->updated_at ?? $approval->created_at)?->toIso8601String(),
                 ];

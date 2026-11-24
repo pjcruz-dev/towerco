@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Archive,
   ChevronDown,
@@ -23,10 +23,12 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { EApprovalAnywhereMenu } from "@/components/e-approval/e-approval-role-field-access";
-import { DocumentRegisterAnywhereMenu, DocumentRegisterRoleAccessProvider } from "@/components/documents/document-register-role-field-access";
+import { EApprovalAnywhereMenu, EApprovalNavTargetFrame } from "@/components/e-approval/e-approval-role-field-access";
+import { DocumentRegisterAnywhereMenu, DocumentRegisterNavTargetFrame, DocumentRegisterRoleAccessProvider } from "@/components/documents/document-register-role-field-access";
+import { TicketingAnywhereMenu, TicketingNavTargetFrame, TicketingRoleAccessProvider } from "@/components/ticketing/ticketing-role-field-access";
 import { useWorkspaceNavGroups, type WorkspaceNavGroupView } from "@/hooks/use-workspace-nav-groups";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
+import { applyModuleShellToGroups, compressShellFooter, resolveModuleShell, shellFooterItems } from "@/lib/navigation/module-shell";
 import type { WorkspaceSubNavItem, WorkspaceTopNavItem } from "@/lib/navigation/workspace-nav-config";
 import { cn } from "@/lib/utils";
 
@@ -125,9 +127,11 @@ function sectionedItems(
 function TopNavDropdown({
   item,
   notificationUnread,
+  wrapSub,
 }: {
   item: WorkspaceTopNavItem;
   notificationUnread: number;
+  wrapSub?: (sub: { href: string }, link: ReactNode) => ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -177,14 +181,28 @@ function TopNavDropdown({
         <ChevronDown className="size-3 opacity-60" />
       </PopoverTrigger>
       <PopoverContent align="start" className={cn("p-1", wide ? "w-[28rem]" : "w-64")}>
-        <Link
-          href={home}
-          prefetch={false}
-          onClick={() => setOpen(false)}
-          className="block rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-        >
-          {item.title} overview
-        </Link>
+        {wrapSub ? (
+          wrapSub(
+            { href: home },
+            <Link
+              href={home}
+              prefetch={false}
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              {item.title} overview
+            </Link>,
+          )
+        ) : (
+          <Link
+            href={home}
+            prefetch={false}
+            onClick={() => setOpen(false)}
+            className="block rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            {item.title} overview
+          </Link>
+        )}
         <div className="my-1 border-t border-border" />
         <div className={cn(multiSection && wide && "grid grid-cols-2 gap-x-2")}>
           {blocks.map((block) => (
@@ -196,9 +214,8 @@ function TopNavDropdown({
               ) : null}
               {block.items.map((sub) => {
                 const subActive = hrefMatches(pathname, sub.href, sub.exact);
-                return (
+                const link = (
                   <Link
-                    key={sub.href}
                     href={sub.href}
                     prefetch={false}
                     onClick={() => setOpen(false)}
@@ -211,6 +228,11 @@ function TopNavDropdown({
                   >
                     {sub.title}
                   </Link>
+                );
+                return (
+                  <span key={sub.href} className="contents">
+                    {wrapSub ? wrapSub(sub, link) : link}
+                  </span>
                 );
               })}
             </div>
@@ -394,10 +416,12 @@ function SetupMenu({ group }: { group: WorkspaceNavGroupView }) {
 function MobileOperationsSheet({
   operations,
   administration,
+  footerItems,
   notificationUnread,
 }: {
   operations: WorkspaceNavGroupView | undefined;
   administration: WorkspaceNavGroupView | undefined;
+  footerItems: WorkspaceTopNavItem[];
   notificationUnread: number;
 }) {
   const pathname = usePathname();
@@ -471,6 +495,43 @@ function MobileOperationsSheet({
             );
           })}
 
+          {footerItems.length > 0 ? (
+            <div className="mt-3 border-t border-white/10 pt-3">
+              {footerItems.map((item) => {
+                const Icon = item.icon;
+                const home = groupHomeHref(item);
+                return (
+                  <div key={item.title} className="mb-2">
+                    <Link
+                      href={home}
+                      prefetch={false}
+                      onClick={() => setOpen(false)}
+                      className="flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-slate-200 hover:bg-white/10 hover:text-white"
+                    >
+                      <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
+                      {item.title}
+                    </Link>
+                    {item.items?.length ? (
+                      <div className="mt-0.5 ms-6 space-y-0.5">
+                        {item.items.map((sub) => (
+                          <Link
+                            key={`${sub.section ?? ""}:${sub.href}`}
+                            href={sub.href}
+                            prefetch={false}
+                            onClick={() => setOpen(false)}
+                            className="flex min-h-11 items-center rounded-md px-3 text-sm text-slate-400 hover:bg-white/8 hover:text-slate-200"
+                          >
+                            {sub.title}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
           {administration ? (
             <div className="mt-3 border-t border-white/10 pt-3">
               <p className="px-3 pb-1 text-[10px] font-medium tracking-wide text-slate-500 uppercase">
@@ -503,60 +564,101 @@ function MobileOperationsSheet({
  * Dark module strip: one row on desktop (scroll if packed) · sheet on mobile.
  */
 export function AppTopNav() {
+  const pathname = usePathname();
   const { groups, notificationUnread } = useWorkspaceNavGroups();
+  const shell = resolveModuleShell(pathname);
+  const scoped = applyModuleShellToGroups(groups, shell);
 
-  const operations = groups.find((g) => g.group === "Operations") ?? groups[0];
-  const administration = groups.find((g) => g.group === "Administration");
+  const operations = scoped[0];
+  const administration = scoped.find((group) => group.group === "Administration");
+  const footerItems = compressShellFooter(shellFooterItems(groups, scoped));
+  const sectionLabel = shell.kind === "hub" ? "Apps" : shell.title;
 
   return (
-    <EApprovalAnywhereMenu className="block shrink-0">
     <div className="shrink-0 border-b border-border bg-slate-900 print:hidden dark:bg-slate-950">
       <div className="flex h-12 items-center gap-1.5 px-3 md:h-10 sm:px-4 md:px-6">
         <MobileOperationsSheet
           operations={operations}
           administration={administration}
+          footerItems={footerItems}
           notificationUnread={notificationUnread}
         />
 
         <div className="hidden md:contents">
           <AppTopNavUtilities />
           <span className="mr-0.5 hidden shrink-0 px-1 text-[9px] font-medium tracking-wide text-slate-500 uppercase lg:inline">
-            Operations
+            {sectionLabel}
           </span>
         </div>
 
         <nav
           className="hidden min-w-0 flex-1 flex-nowrap items-center gap-0.5 overflow-x-auto scrollbar-hide md:flex"
-          aria-label="Operations"
+          aria-label={sectionLabel}
         >
           {(operations?.items ?? []).map((item) => {
+            const wrapSub =
+              item.title === "E-Forms"
+                ? (sub: { href: string }, link: ReactNode) => (
+                    <EApprovalNavTargetFrame href={sub.href}>{link}</EApprovalNavTargetFrame>
+                  )
+                : item.module === "document_register"
+                  ? (sub: { href: string }, link: ReactNode) => (
+                      <DocumentRegisterNavTargetFrame href={sub.href}>{link}</DocumentRegisterNavTargetFrame>
+                    )
+                  : item.title === "Ticketing"
+                    ? (sub: { href: string }, link: ReactNode) => (
+                        <TicketingNavTargetFrame href={sub.href}>{link}</TicketingNavTargetFrame>
+                      )
+                    : undefined;
             const dropdown = (
               <TopNavDropdown
-                key={`${item.module ?? "nav"}:${item.title}:${item.href ?? item.items?.[0]?.href ?? ""}`}
                 item={item}
                 notificationUnread={notificationUnread}
+                wrapSub={wrapSub}
               />
             );
-            if (item.title !== "Document register") return dropdown;
-            return (
-              <DocumentRegisterRoleAccessProvider key={item.title}>
-                <DocumentRegisterAnywhereMenu className="block">{dropdown}</DocumentRegisterAnywhereMenu>
-              </DocumentRegisterRoleAccessProvider>
-            );
+            const key = `${item.module ?? "nav"}:${item.title}:${item.href ?? item.items?.[0]?.href ?? ""}`;
+            if (item.module === "document_register") {
+              return (
+                <DocumentRegisterRoleAccessProvider key={key}>
+                  <DocumentRegisterAnywhereMenu className="block">{dropdown}</DocumentRegisterAnywhereMenu>
+                </DocumentRegisterRoleAccessProvider>
+              );
+            }
+            if (item.title === "Ticketing") {
+              return (
+                <TicketingRoleAccessProvider key={key}>
+                  <TicketingAnywhereMenu className="block">{dropdown}</TicketingAnywhereMenu>
+                </TicketingRoleAccessProvider>
+              );
+            }
+            if (item.title === "E-Forms") {
+              return (
+                <EApprovalAnywhereMenu key={key} className="block">
+                  {dropdown}
+                </EApprovalAnywhereMenu>
+              );
+            }
+            return <span key={key} className="contents">{dropdown}</span>;
           })}
         </nav>
 
         <p className="min-w-0 flex-1 truncate text-sm text-slate-200 md:hidden">
-          {operations?.group ?? "Operations"}
+          {operations?.group ?? sectionLabel}
         </p>
 
-        {administration ? (
+        {footerItems.length > 0 ? (
+          <div className="ml-auto hidden shrink-0 items-center gap-0.5 border-l border-white/10 pl-2 md:flex">
+            {footerItems.map((item) => (
+              <TopNavDropdown key={item.title} item={item} notificationUnread={notificationUnread} />
+            ))}
+          </div>
+        ) : administration ? (
           <div className="ml-auto hidden shrink-0 items-center border-l border-white/10 pl-2 md:flex">
             <SetupMenu group={administration} />
           </div>
         ) : null}
       </div>
     </div>
-    </EApprovalAnywhereMenu>
   );
 }

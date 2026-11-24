@@ -173,7 +173,7 @@ export function ControlledDocumentsPageClient() {
   );
   const newRequestHref = defaultFormId
     ? controlledDocumentSubmissionUrl({ formId: defaultFormId, mode: "new" })
-    : "/e-approval/submissions/new";
+    : "/documents/controlled/new";
 
   const openDocument = useCallback(
     (id: string) => {
@@ -218,7 +218,7 @@ export function ControlledDocumentsPageClient() {
     <PermissionGate requiredPermissions={[permissions.documentsControlledView]}>
       <div className="space-y-6">
         <WorkspacePageHeader
-          title="Controlled Document Register"
+          title="Register"
           description="ISO master list. Pending includes documents that have never been published and approved documents with a revision still in approval. Obsolete includes withdrawn documents and published documents that still have an older revision."
           actions={
             <>
@@ -229,14 +229,6 @@ export function ControlledDocumentsPageClient() {
               >
                 Reports
               </Link>
-              ) : null}
-              {canManage ? (
-                <Link
-                  href="/documents/controlled/access"
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
-                  Register access
-                </Link>
               ) : null}
               {canCreate ? (
                 <Link href={newRequestHref} className={buttonVariants({ size: "sm" })}>

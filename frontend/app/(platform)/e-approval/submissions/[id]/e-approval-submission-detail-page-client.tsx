@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileDown,
@@ -18,6 +18,8 @@ import {
   EApprovalFileAudiencePicker,
   type EApprovalFileAudience,
 } from "@/components/e-approval/e-approval-file-audience-picker";
+import { submissionOpenPath } from "@/modules/documents/controlled-document-submission-url";
+import { ISO_FORM_FAMILY } from "@/modules/e-approval/form-workspace-types";
 import { hasSignatureValue } from "@/modules/e-approval/signature";
 import { EApprovalApprovalTrail } from "@/components/e-approval/e-approval-approval-trail";
 import { EApprovalSectionCard } from "@/components/e-approval/e-approval-section-card";
@@ -170,6 +172,7 @@ function resolveSubmissionTab(
 function EApprovalSubmissionDetailPageBody({ submissionId }: Props) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const push = useNotificationStore((s) => s.push);
   const canApprove = usePermission([permissions.eApprovalApprove]);
@@ -216,6 +219,11 @@ function EApprovalSubmissionDetailPageBody({ submissionId }: Props) {
     queryKey: ["e-approval", "submission", submissionId],
     queryFn: () => fetchEApprovalSubmission(submissionId),
   });
+
+  useEffect(() => {
+    if (data?.form_family !== ISO_FORM_FAMILY || !pathname.startsWith("/e-approval/")) return;
+    router.replace(submissionOpenPath(submissionId, data.form_family, searchParams.get("tab")));
+  }, [data?.form_family, pathname, router, searchParams, submissionId]);
   const awaitsTraining = data?.awaits_publication_training === true;
   const showFileAudience = Boolean(data?.publishes_on_approve) && !awaitsTraining;
   const controlledFileLink = submissionSendsFileLink(data?.values);

@@ -24,6 +24,7 @@ import {
   documentRegisterNavTargetForPath,
   documentRegisterNavTargetHidden,
   documentRegisterNavTargetKey,
+  documentRegisterPageListState,
   documentRegisterPreviewAllowsPath,
   filterNavGroupsForDocumentRegisterPreview,
 } from "@/lib/documents/register-role-access";
@@ -77,7 +78,13 @@ export function useDocumentRegisterRolePreview() {
     return () => window.removeEventListener("toweros:viewing-as", onPreview);
   }, []);
 
-  const selected = catalog.data?.roles.find((role) => role.id === roleId) ?? null;
+  const selected = catalog.data?.roles.find((role) => String(role.id) === String(roleId)) ?? null;
+
+  useEffect(() => {
+    if (roleId != null) return;
+    const stored = readStoredRoleId();
+    if (stored != null) setRoleId(stored);
+  }, [catalog.data, roleId]);
   const previewing = Boolean(selected) && !previewRoleIsOwner(selected?.name);
   const matrix = previewing ? selected?.access_matrix : accessMatrix;
   const filtering = previewing || documentRegisterHasHiddenNavTargets(matrix);
@@ -111,7 +118,16 @@ export function filterDocumentRegisterPreviewNav<
 export function DocumentRegisterRoleMenuItems({ href }: { href?: string }) {
   return (
     <>
-      <RoleRowActionsMenuItems columns={CONTROLLED_DOCUMENT_LIST_FIELDS} always />
+      <RoleRowActionsMenuItems
+        columns={CONTROLLED_DOCUMENT_LIST_FIELDS}
+        actions={[
+          { action: "view", label: "View" },
+          { action: "create", label: "Add new" },
+          { action: "import", label: "Import" },
+          { action: "export", label: "Export" },
+        ]}
+        always
+      />
       <DocumentRegisterPagesMenuItems href={href} />
     </>
   );
@@ -196,7 +212,11 @@ export function DocumentRegisterPagesMenuItems({ href }: { href?: string }) {
 
   const locked = pageLocked(access);
   const current = href ? documentRegisterNavTargetForPath(href) : null;
-  const currentHidden = current ? access.levelFor(documentRegisterNavTargetKey(current.href)) === "hide" : false;
+  const stateFor = (targetHref: string) =>
+    access.selected
+      ? documentRegisterPageListState(access.selected.permissions, access.selected.access_matrix, targetHref)
+      : "shown";
+  const currentState = current ? stateFor(current.href) : "shown";
 
   return (
     <>
@@ -204,25 +224,46 @@ export function DocumentRegisterPagesMenuItems({ href }: { href?: string }) {
       <ContextMenuLabel className="uppercase tracking-wide">Pages</ContextMenuLabel>
       {current ? (
         <ContextMenuItem
-          disabled={locked}
-          onClick={() => access.setLevel(documentRegisterNavTargetKey(current.href), currentHidden ? "full" : "hide")}
+          disabled={locked || currentState === "no-access"}
+          onClick={() =>
+            access.setLevel(
+              documentRegisterNavTargetKey(current.href),
+              currentState === "hidden" ? "full" : "hide",
+            )
+          }
         >
-          {currentHidden ? <EyeOff className="size-3.5 text-destructive" /> : <Lock className="size-3.5 text-emerald-600" />}
-          <span className="flex-1">{currentHidden ? `Show ${current.label}` : `Hide ${current.label}`}</span>
-          <span className="text-xs text-muted-foreground">{currentHidden ? "Hidden" : "Shown"}</span>
+          {currentState === "shown" ? (
+            <Lock className="size-3.5 text-emerald-600" />
+          ) : (
+            <EyeOff className="size-3.5 text-destructive" />
+          )}
+          <span className="flex-1">
+            {currentState === "no-access"
+              ? current.label
+              : currentState === "hidden"
+                ? `Show ${current.label}`
+                : `Hide ${current.label}`}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {currentState === "no-access" ? "No access" : currentState === "hidden" ? "Hidden" : "Shown"}
+          </span>
         </ContextMenuItem>
       ) : null}
       <ContextMenuSub label="All pages">
         {DOCUMENT_REGISTER_NAV_TARGETS.map((target) => {
-          const hidden = access.levelFor(documentRegisterNavTargetKey(target.href)) === "hide";
+          const state = stateFor(target.href);
           return (
             <ContextMenuItem
               key={target.href}
-              disabled={locked}
-              onClick={() => access.setLevel(documentRegisterNavTargetKey(target.href), hidden ? "full" : "hide")}
+              disabled={locked || state === "no-access"}
+              onClick={() =>
+                access.setLevel(documentRegisterNavTargetKey(target.href), state === "hidden" ? "full" : "hide")
+              }
             >
               <span className="flex-1">{target.label}</span>
-              <span className="text-xs text-muted-foreground">{hidden ? "Hidden" : "Shown"}</span>
+              <span className="text-xs text-muted-foreground">
+                {state === "no-access" ? "No access" : state === "hidden" ? "Hidden" : "Shown"}
+              </span>
             </ContextMenuItem>
           );
         })}

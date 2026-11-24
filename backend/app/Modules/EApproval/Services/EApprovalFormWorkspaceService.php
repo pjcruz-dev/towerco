@@ -360,7 +360,7 @@ final class EApprovalFormWorkspaceService
         $newRequestHref = $newRequestMode === 'standard'
             ? '/e-approval/request/'.$formId
             : ($family === EApprovalFormWorkspaceSupport::ISO_FORM_FAMILY
-                ? '/e-approval/focus/'.$formId.'?controlled_mode=new'
+                ? '/documents/controlled/new?form_id='.$formId.'&controlled_mode=new'
                 : '/e-approval/focus/'.$formId);
 
         $statusBreakdown = $this->statusBreakdown(clone $scopedQuery);

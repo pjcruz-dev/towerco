@@ -10,7 +10,7 @@ import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/error";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
-import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
+import { safeInternalNext, tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { completeMfaEnrollment, startMfaEnrollment } from "@/lib/api/modules/auth-api";
 import {
   dismissLiveTourPrompt,
@@ -202,9 +202,12 @@ function MfaEnrollPageInner() {
                 const tenantId = state.activeTenantId ?? pendingMfa.user?.tenantId ?? null;
                 dismissLiveTourPrompt(MFA_LOGIN_LIVE_TOUR_ID, userId, tenantId);
                 router.replace(
-                  tenantPostLoginPath({
-                    passkeyEnrollmentRequired: state.passkeyEnrollmentRequired,
-                  }),
+                  tenantPostLoginPath(
+                    {
+                      passkeyEnrollmentRequired: state.passkeyEnrollmentRequired,
+                    },
+                    safeInternalNext(searchParams.get("next")),
+                  ),
                 );
               }}
             >

@@ -61,6 +61,16 @@ export function eApprovalNavTargetForPath(href: string): (typeof E_APPROVAL_NAV_
   return ordered.find((target) => eApprovalPathMatchesTarget(path, target.href)) ?? null;
 }
 
+/** Actions the E-Forms pages actually render. Clone and delete are not on these screens. */
+export const E_APPROVAL_ROLE_ACTIONS = [
+  { action: "view" as const, label: "View" },
+  { action: "edit" as const, label: "Edit" },
+  { action: "create" as const, label: "Add new" },
+  { action: "import" as const, label: "Import" },
+  { action: "export" as const, label: "Export" },
+  { action: "columns" as const, label: "Table view" },
+];
+
 export const E_APPROVAL_LIST_FIELDS = [
   { id: "document_no", label: "Document" },
   { id: "form_name", label: "Form" },
@@ -202,6 +212,27 @@ export function eApprovalPreviewAllowsPath(
   if (!roleHasPermissions(permissions, rule.permissions, rule.mode)) return false;
   if (rule.action && !eApprovalEntityAllows(matrix, rule.action)) return false;
   return true;
+}
+
+/** What the navigation does with this page: shown, hidden by the admin, or unavailable for the role. */
+export function eApprovalPageListState(
+  granted: readonly string[] | null | undefined,
+  matrix: RoleAccessMatrix | null | undefined,
+  href: string,
+): "shown" | "hidden" | "no-access" {
+  const fields = { ...(matrix?.fields?.[E_APPROVAL_SUBMISSION_ENTITY] ?? {}) };
+  const key = eApprovalNavTargetKey(href);
+  const hidden = fields[key] === "hide";
+  delete fields[key];
+  const stripped: RoleAccessMatrix = {
+    ...(matrix ?? {}),
+    fields: {
+      ...(matrix?.fields ?? {}),
+      [E_APPROVAL_SUBMISSION_ENTITY]: fields,
+    },
+  };
+  if (!eApprovalPreviewAllowsPath(granted, stripped, href)) return "no-access";
+  return hidden ? "hidden" : "shown";
 }
 
 type PreviewNavNode = {

@@ -125,7 +125,12 @@ export function DataTable<TData>({
                   )}
                   onClick={(event) => {
                     // Keep checkbox / button clicks from triggering row click
-                    if (onRowClick && (event.target as HTMLElement).closest("input, button, a, [role='menuitem']")) {
+                    if (
+                      onRowClick &&
+                      (event.target as HTMLElement).closest(
+                        "input, button, a, [role='menuitem'], [role='checkbox']",
+                      )
+                    ) {
                       event.stopPropagation();
                     }
                   }}

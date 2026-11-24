@@ -8,6 +8,7 @@ import { EApprovalStatusBadge } from "@/components/e-approval/e-approval-status-
 import { E_APPROVAL_LIST_FIELDS } from "@/lib/e-approval/submission-role-access";
 import { createActionsColumn } from "@/components/ui/data-table-column-helpers";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { submissionOpenPath } from "@/modules/documents/controlled-document-submission-url";
 import type { EApprovalApprovalRow } from "@/modules/e-approval/types";
 
 function submissionHref(row: EApprovalApprovalRow): string | null {
@@ -16,7 +17,7 @@ function submissionHref(row: EApprovalApprovalRow): string | null {
     return null;
   }
   const pending = (row.approval_status ?? row.status) === "pending";
-  return pending ? `/e-approval/submissions/${id}?tab=decide` : `/e-approval/submissions/${id}`;
+  return submissionOpenPath(id, row.submission?.form_family, pending ? "decide" : null);
 }
 
 const ROLE_COLUMNS = E_APPROVAL_LIST_FIELDS.map((field) => ({ id: field.id, label: field.label }));

@@ -13,6 +13,7 @@ use App\Modules\Identity\Services\ModuleListExportService;
 use App\Modules\Ticketing\Services\TicketingPlanFeaturesService;
 use App\Modules\Ticketing\Services\TicketingSchemaService;
 use App\Modules\Ticketing\Services\TicketingTicketService;
+use App\Modules\Ticketing\Support\TicketingRoleFieldAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,9 +28,13 @@ class TicketingTicketExportController extends AbstractApiController
         TicketingPlanFeaturesService $planFeatures,
         TicketingSchemaService $schema,
         ModuleListExportService $asyncExports,
+        TicketingRoleFieldAccess $roleAccess,
     ): Response|JsonResponse {
         abort_unless($request->user()?->can('ticketing:view'), 403);
         $planFeatures->assertModuleEnabled();
+        if ($request->query('source') === 'reports') {
+            abort_unless(! $roleAccess->navTargetHidden($request->user(), '/ticketing/reports'), 403);
+        }
 
         ModuleListExportQuery::coerceArrayParams($request);
 

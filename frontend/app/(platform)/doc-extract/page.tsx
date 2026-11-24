@@ -1,5 +1,5 @@
-import { DocExtractBatchesPageClient } from "./doc-extract-batches-page-client";
+import { DocExtractDashboardPageClient } from "./doc-extract-dashboard-page-client";
 
 export default function DocExtractPage() {
-  return <DocExtractBatchesPageClient />;
+  return <DocExtractDashboardPageClient />;
 }

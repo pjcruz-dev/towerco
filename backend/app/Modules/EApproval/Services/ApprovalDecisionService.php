@@ -47,11 +47,12 @@ final class ApprovalDecisionService
         ?string $status,
         bool $awaitingMeOnly,
         ?string $sort = null,
+        ?string $formFamily = null,
     ): LengthAwarePaginator {
         $page = max(1, $page);
         $perPage = max(1, min(100, $perPage));
 
-        $ranked = $this->rankedApprovalsQuery($viewer, $status, $awaitingMeOnly);
+        $ranked = $this->rankedApprovalsQuery($viewer, $status, $awaitingMeOnly, $formFamily);
         $total = (clone $ranked)->count();
 
         [$column, $direction] = AllowlistedSort::resolve(
@@ -107,6 +108,7 @@ final class ApprovalDecisionService
         TenantUser $viewer,
         ?string $status,
         bool $awaitingMeOnly,
+        ?string $formFamily = null,
     ): Builder {
         $viewerId = (string) $viewer->id;
         $pending = EApprovalApprovalStatus::PENDING;
@@ -115,6 +117,11 @@ final class ApprovalDecisionService
             ->table('e_approval_request_approvals as era')
             ->leftJoin('e_approval_workflow_steps as steps', 'steps.id', '=', 'era.step_id')
             ->leftJoin('e_approval_submissions as eas', 'eas.id', '=', 'era.submission_id');
+
+        if ($formFamily !== null && $formFamily !== '') {
+            $inner->join('e_approval_forms as eaf', 'eaf.id', '=', 'eas.form_id')
+                ->where('eaf.metadata_json->form_family', $formFamily);
+        }
 
         if ($awaitingMeOnly) {
             $inner->where('era.approver_id', $viewerId)->where('era.status', $pending);

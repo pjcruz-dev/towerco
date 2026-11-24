@@ -12,6 +12,7 @@ import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-bo
 import { EApprovalFormGalleryCard } from "@/components/e-approval/e-approval-form-gallery-card";
 import { EApprovalFormTemplateGallery } from "@/components/e-approval/e-approval-form-template-gallery";
 import { EApprovalFormImportExportPanel } from "@/components/e-approval/e-approval-form-import-export-panel";
+import { useEApprovalSubmissionAccess, useEApprovalTableViewAllowed } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { createEApprovalFormsTableColumns } from "@/components/e-approval/e-approval-forms-table-columns";
@@ -53,6 +54,11 @@ export function EApprovalFormsPageClient() {
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "gallery");
+  const access = useEApprovalSubmissionAccess();
+  const tableViewAllowed = useEApprovalTableViewAllowed();
+  const listView = tableViewAllowed ? viewMode : "gallery";
+  const showImportAction = canManage && access.allows("import");
+  const showCreateForm = canManage && access.allows("create");
   const { layout, setLayout, tenantDefault, publishTenantDefault, resetToTenantDefault, flushPersonalPersist } =
     useDashboardLayoutPrefs(LAYOUT_KEY);
   const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
@@ -92,16 +98,16 @@ export function EApprovalFormsPageClient() {
       { id: "filters", label: "Search & view" },
       { id: "table", label: "Forms catalog" },
     ];
-    if (canManage) {
+    if (showImportAction) {
       items.unshift({ id: "import_panel", label: "Import panel" });
     }
     return items;
-  }, [canManage]);
+  }, [canManage, showImportAction]);
 
   const boardWidgets = useMemo((): DashboardWidgetDef[] => {
     const widgets: DashboardWidgetDef[] = [];
 
-    if (canManage) {
+    if (showImportAction) {
       widgets.push({
         id: "import_panel",
         label: "Import panel",
@@ -165,7 +171,9 @@ export function EApprovalFormsPageClient() {
                 className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
               />
             </div>
-            <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Forms list view" />
+            {tableViewAllowed ? (
+              <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Forms list view" />
+            ) : null}
           </div>
         ),
       },
@@ -188,7 +196,7 @@ export function EApprovalFormsPageClient() {
               ) : null
             }
           >
-            {viewMode === "gallery" ? (
+            {listView === "gallery" ? (
               <div className="p-4">
                 {isFetching && rows.length === 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -205,14 +213,18 @@ export function EApprovalFormsPageClient() {
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                       Create a new form or import a legacy JSON export to get started.
                     </p>
-                    {canManage ? (
+                    {showCreateForm || showImportAction ? (
                       <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <Button size="sm" onClick={() => router.push("/e-approval/forms/new")}>
-                          New form
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
-                          Import JSON
-                        </Button>
+                        {showCreateForm ? (
+                          <Button size="sm" onClick={() => router.push("/e-approval/forms/new")}>
+                            New form
+                          </Button>
+                        ) : null}
+                        {showImportAction ? (
+                          <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
+                            Import JSON
+                          </Button>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -261,7 +273,10 @@ export function EApprovalFormsPageClient() {
     search,
     showImport,
     sorting,
-    viewMode,
+    listView,
+    tableViewAllowed,
+    showCreateForm,
+    showImportAction,
   ]);
 
   const titleOverrides = useMemo(() => {
@@ -350,13 +365,13 @@ export function EApprovalFormsPageClient() {
                     Templates
                   </Link>
                 ) : null}
-                {isVisible("import") ? (
+                {isVisible("import") && showImportAction ? (
                   <Button size="sm" type="button" variant="outline" onClick={() => setShowImport((v) => !v)}>
                     <Upload className="h-3.5 w-3.5" />
                     {showImport ? "Hide import" : "Import JSON"}
                   </Button>
                 ) : null}
-                {isVisible("new") ? (
+                {isVisible("new") && showCreateForm ? (
                   <Button size="sm" type="button" onClick={() => router.push("/e-approval/forms/create")}>
                     <Plus className="h-3.5 w-3.5" />
                     New form

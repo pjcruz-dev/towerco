@@ -18,7 +18,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
 import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
+import { useTicketingRolePreview } from "@/components/ticketing/ticketing-role-field-access";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
+import { resolveModuleShell } from "@/lib/navigation/module-shell";
 import { resolveWorkspaceBreadcrumbs } from "@/lib/navigation/workspace-breadcrumbs";
 import {
   buildWorkspaceCommandIndex,
@@ -109,21 +111,27 @@ export function AppTopNavUtilities() {
 
   const eApprovalPreview = useEApprovalRolePreview();
   const documentPreview = useDocumentRegisterRolePreview();
+  const ticketingPreview = useTicketingRolePreview();
 
   const index = useMemo(() => {
     const built = buildWorkspaceCommandIndex(scopedUser, enabledModules, groups);
-    const allow = (href: string) => eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href);
-    if (!eApprovalPreview.active && !documentPreview.active) return built;
+    const allow = (href: string) =>
+      eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href) && ticketingPreview.allowsHref(href);
+    if (!eApprovalPreview.active && !documentPreview.active && !ticketingPreview.active) return built;
     return {
       navigate: built.navigate.filter((item) => allow(item.href)),
       actions: built.actions.filter((item) => allow(item.href)),
     };
-  }, [documentPreview, eApprovalPreview, enabledModules, groups, scopedUser]);
+  }, [documentPreview, eApprovalPreview, enabledModules, groups, scopedUser, ticketingPreview]);
 
   const lookupItems = useMemo(
     () => [...index.navigate, ...index.actions],
     [index.actions, index.navigate],
   );
+
+  const shell = resolveModuleShell(pathname);
+  const homeHref = shell.homeHref;
+  const homeLabel = shell.kind === "hub" ? "All apps" : `${shell.title} home`;
 
   const pageTitle = useMemo(() => {
     const crumbs = resolveWorkspaceBreadcrumbs(pathname);
@@ -270,11 +278,11 @@ export function AppTopNavUtilities() {
       </Popover>
 
       <Link
-        href="/dashboard"
+        href={homeHref}
         prefetch={false}
-        className={utilityButtonClass(pathname === "/dashboard")}
-        aria-label="Home"
-        title="Home"
+        className={utilityButtonClass(pathname === homeHref)}
+        aria-label={homeLabel}
+        title={homeLabel}
       >
         <Home className="size-3.5" aria-hidden />
       </Link>

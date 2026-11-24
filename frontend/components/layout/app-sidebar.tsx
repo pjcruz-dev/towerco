@@ -8,11 +8,13 @@ import type { LucideIcon } from "lucide-react";
 
 import { EApprovalAnywhereMenu, EApprovalNavTargetFrame, filterEApprovalPreviewNav, useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
 import { DocumentRegisterAnywhereMenu, DocumentRegisterNavTargetFrame, DocumentRegisterRoleAccessProvider, filterDocumentRegisterPreviewNav, useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
+import { TicketingAnywhereMenu, TicketingNavTargetFrame, TicketingRoleAccessProvider, filterTicketingPreviewNav, useTicketingRolePreview } from "@/components/ticketing/ticketing-role-field-access";
 import { SidebarBrand } from "@/components/layout/sidebar-brand";
 import { SidebarNavGroup, type SidebarSubNavItem } from "@/components/layout/sidebar-nav-group";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -30,6 +32,7 @@ import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures
 import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
 import { isNavActive } from "@/lib/navigation/is-nav-active";
+import { applyModuleShellToGroups, compressShellFooter, resolveModuleShell, shellFooterItems } from "@/lib/navigation/module-shell";
 import { filterByTenantModules, filterTop } from "@/lib/navigation/workspace-command-index";
 import { workspaceNavGroups } from "@/lib/navigation/workspace-nav-config";
 import {
@@ -97,6 +100,7 @@ function SidebarNavLink({
 }
 
 export function AppSidebar() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const tourActive =
     isEApprovalSampleTourActive(searchParams) ||
@@ -190,35 +194,47 @@ export function AppSidebar() {
   }, [groups, workspacesQuery.data]);
 
   const documentPreview = useDocumentRegisterRolePreview();
+  const ticketingPreview = useTicketingRolePreview();
 
-  const visibleGroups = useMemo(
-    () =>
+  const { visibleGroups, footerItems } = useMemo(() => {
+    const previewed = filterTicketingPreviewNav(
       filterDocumentRegisterPreviewNav(
         filterEApprovalPreviewNav(groupsWithBadges, eApprovalPreview.allowsHref, eApprovalPreview.active),
         documentPreview.allowsHref,
         documentPreview.active,
       ),
-    [
-      documentPreview.active,
-      documentPreview.allowsHref,
-      eApprovalPreview.active,
-      eApprovalPreview.allowsHref,
-      groupsWithBadges,
-    ],
-  );
+      ticketingPreview.allowsHref,
+      ticketingPreview.active,
+    );
+    const visibleGroups = applyModuleShellToGroups(previewed, resolveModuleShell(pathname));
+    return {
+      visibleGroups,
+      footerItems: compressShellFooter(shellFooterItems(previewed, visibleGroups)),
+    };
+  }, [
+    documentPreview.active,
+    documentPreview.allowsHref,
+    eApprovalPreview.active,
+    eApprovalPreview.allowsHref,
+    groupsWithBadges,
+    pathname,
+    ticketingPreview.active,
+    ticketingPreview.allowsHref,
+  ]);
 
   return (
     <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground print:hidden">
       <SidebarHeader className="border-b border-sidebar-border p-4 group-data-[collapsible=icon]:p-2">
         <SidebarBrand variant="tenant" />
       </SidebarHeader>
-      <EApprovalAnywhereMenu className="flex min-h-0 flex-1 flex-col">
       <SidebarContent className="scrollbar-hide gap-1 px-2 py-2">
         {visibleGroups.map((group) => (
           <div key={group.group} className="mt-2 first:mt-0">
-            <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
-              {group.group}
-            </div>
+            {group.items.length === 1 && group.items[0]?.title === group.group ? null : (
+              <div className="px-2 py-2 text-xs font-medium text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
+                {group.group}
+              </div>
+            )}
             <SidebarMenu>
               {group.items.map((item) => {
                 const node = item.items ? (
@@ -250,11 +266,15 @@ export function AppSidebar() {
                         ? (sub, link: ReactNode) => (
                             <EApprovalNavTargetFrame href={sub.href}>{link}</EApprovalNavTargetFrame>
                           )
-                        : item.title === "Document register"
+                        : item.module === "document_register"
                           ? (sub, link: ReactNode) => (
                               <DocumentRegisterNavTargetFrame href={sub.href}>{link}</DocumentRegisterNavTargetFrame>
                             )
-                          : undefined
+                          : item.title === "Ticketing"
+                            ? (sub, link: ReactNode) => (
+                                <TicketingNavTargetFrame href={sub.href}>{link}</TicketingNavTargetFrame>
+                              )
+                            : undefined
                     }
                     items={item.items.map(({ title, href, exact, section, badge }) => {
                       const pathOnly = href.split("?")[0] ?? href;
@@ -293,7 +313,9 @@ export function AppSidebar() {
                               : null;
                       const docExtractNav =
                         pathOnly === "/doc-extract"
-                          ? { dataHelp: "dx-nav-doc-extract-batches", tourNav: "/doc-extract" }
+                          ? { dataHelp: "dx-nav-doc-extract-dashboard", tourNav: "/doc-extract" }
+                          : pathOnly === "/doc-extract/batches"
+                            ? { dataHelp: "dx-nav-doc-extract-batches", tourNav: "/doc-extract/batches" }
                           : pathOnly === "/doc-extract/new"
                             ? { dataHelp: "dx-nav-doc-extract-new", tourNav: "/doc-extract/new" }
                             : pathOnly === "/doc-extract/templates"
@@ -324,18 +346,65 @@ export function AppSidebar() {
                     badge={item.title === "Notifications" ? notificationUnread : undefined}
                   />
                 );
-                if (item.title !== "Document register") return node;
-                return (
-                  <DocumentRegisterRoleAccessProvider key={item.title}>
-                    <DocumentRegisterAnywhereMenu className="block">{node}</DocumentRegisterAnywhereMenu>
-                  </DocumentRegisterRoleAccessProvider>
-                );
+                if (item.module === "document_register") {
+                  return (
+                    <DocumentRegisterRoleAccessProvider key={item.title}>
+                      <DocumentRegisterAnywhereMenu className="block">{node}</DocumentRegisterAnywhereMenu>
+                    </DocumentRegisterRoleAccessProvider>
+                  );
+                }
+                if (item.title === "Ticketing") {
+                  return (
+                    <TicketingRoleAccessProvider key={item.title}>
+                      <TicketingAnywhereMenu className="block">{node}</TicketingAnywhereMenu>
+                    </TicketingRoleAccessProvider>
+                  );
+                }
+                if (item.title === "E-Forms") {
+                  return (
+                    <EApprovalAnywhereMenu key={item.title} className="block">
+                      {node}
+                    </EApprovalAnywhereMenu>
+                  );
+                }
+                return node;
               })}
             </SidebarMenu>
           </div>
         ))}
       </SidebarContent>
-      </EApprovalAnywhereMenu>
+      {footerItems.length > 0 ? (
+        <SidebarFooter className="border-t border-sidebar-border">
+          <SidebarMenu>
+            {footerItems.map((item) =>
+              item.items ? (
+                <SidebarNavGroup
+                  key={item.title}
+                  title={item.title}
+                  icon={item.icon}
+                  href={resolveNavGroupHomeHref(item.items as SubNav[], item.href ?? "/settings")}
+                  items={item.items.map(({ title, href, exact, section, badge }) => ({
+                    title,
+                    href,
+                    exact,
+                    section,
+                    badge,
+                  }))}
+                  buttonClassName={navButtonClass}
+                />
+              ) : (
+                <SidebarNavLink
+                  key={item.title}
+                  title={item.title}
+                  href={item.href!}
+                  exact={item.exact}
+                  icon={item.icon}
+                />
+              ),
+            )}
+          </SidebarMenu>
+        </SidebarFooter>
+      ) : null}
     </Sidebar>
   );
 }

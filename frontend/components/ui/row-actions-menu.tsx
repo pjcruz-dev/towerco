@@ -11,9 +11,19 @@ import {
   DropdownMenuItem,
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+
+export type RowActionSubItem = {
+  key: string;
+  label: ReactNode;
+  onSelect?: () => void;
+  disabled?: boolean;
+  icon?: ReactNode;
+  hidden?: boolean;
+};
 
 export type RowActionItem =
   | {
@@ -30,6 +40,13 @@ export type RowActionItem =
   | {
       type: "separator";
       key: string;
+      hidden?: boolean;
+    }
+  | {
+      type: "submenu";
+      key: string;
+      label: ReactNode;
+      items: RowActionSubItem[];
       hidden?: boolean;
     };
 
@@ -83,6 +100,27 @@ export function RowActionsMenu({
             {visible.map((item) => {
               if (item.type === "separator") {
                 return <DropdownMenuSeparator key={item.key} />;
+              }
+
+              if (item.type === "submenu") {
+                const subItems = item.items.filter((subItem) => !subItem.hidden);
+                if (subItems.length === 0) {
+                  return null;
+                }
+                return (
+                  <DropdownMenuSub key={item.key} label={item.label}>
+                    {subItems.map((subItem) => (
+                      <DropdownMenuItem
+                        key={subItem.key}
+                        disabled={subItem.disabled}
+                        onClick={() => subItem.onSelect?.()}
+                      >
+                        {subItem.icon}
+                        {subItem.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSub>
+                );
               }
 
               if (item.href) {

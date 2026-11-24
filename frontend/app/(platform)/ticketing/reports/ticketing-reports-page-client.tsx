@@ -69,7 +69,7 @@ export function TicketingReportsPageClient() {
     [category, department, priority, scope, status],
   );
 
-  const dashboardQuery = useTicketingDashboard(filters);
+  const dashboardQuery = useTicketingDashboard({ ...filters, surface: "reports" });
   const metadataQuery = useQuery({
     queryKey: ["ticketing", "metadata"],
     queryFn: fetchTicketingMetadata,
@@ -167,6 +167,7 @@ export function TicketingReportsPageClient() {
         ...filters,
         format,
         async: format === "html" ? true : undefined,
+        source: "reports",
       });
       if (result.mode === "async") {
         push({

@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   CreditCard,
   ExternalLink,
+  FileScan,
   FlaskConical,
   Landmark,
   LayoutDashboard,
@@ -34,6 +35,7 @@ export const APP_MENU_ICON_OPTIONS: Array<{ value: string; label: string; Icon: 
   { value: "Waypoints", label: "Waypoints", Icon: Waypoints },
   { value: "Activity", label: "Activity", Icon: Activity },
   { value: "Archive", label: "Archive", Icon: Archive },
+  { value: "FileScan", label: "File scan", Icon: FileScan },
   { value: "ExternalLink", label: "External link", Icon: ExternalLink },
 ];
 

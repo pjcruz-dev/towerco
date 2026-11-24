@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, FileScan, Plus, ScrollText, Search } from "lucide-react";
@@ -64,6 +65,13 @@ import { useNotificationStore } from "@/stores/notification-store";
 type StatusFilter = "all" | "processing" | "ready" | "failed";
 
 const PER_PAGE = 20;
+
+function statusFromQuery(value: string | null): StatusFilter {
+  if (value === "processing" || value === "ready" || value === "failed") {
+    return value;
+  }
+  return "all";
+}
 const COLUMN_VISIBILITY_KEY = "toweros.table.columns.doc-extract.batches";
 
 const DOC_EXTRACT_EXPORT_COLUMN_MAP: Record<string, string | string[] | null> = {
@@ -78,6 +86,7 @@ const DOC_EXTRACT_EXPORT_COLUMN_MAP: Record<string, string | string[] | null> = 
 };
 
 export function DocExtractBatchesPageClient() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const notify = useNotificationStore((state) => state.push);
   const user = useAuthStore((state) => state.user);
@@ -87,7 +96,7 @@ export function DocExtractBatchesPageClient() {
   const canRun = hasPermission(scopedUser, [permissions.docExtractRun]);
   const canExport = hasPermission(scopedUser, [permissions.docExtractExport]);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => statusFromQuery(searchParams.get("status")));
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [requeueBatchId, setRequeueBatchId] = useState<string | null>(null);

@@ -14,6 +14,7 @@ import { EyeOff, Lock } from "lucide-react";
 import { usePermission } from "@/hooks/use-permission";
 import {
   E_APPROVAL_LIST_FIELDS,
+  E_APPROVAL_ROLE_ACTIONS,
   E_APPROVAL_NAV_TARGETS,
   E_APPROVAL_SUBMISSION_ENTITY,
   E_APPROVAL_VIEWING_AS_KEY,
@@ -22,6 +23,7 @@ import {
   eApprovalNavTargetForPath,
   eApprovalNavTargetHidden,
   eApprovalNavTargetKey,
+  eApprovalPageListState,
   eApprovalPreviewAllowsPath,
   filterNavGroupsForEApprovalPreview,
 } from "@/lib/e-approval/submission-role-access";
@@ -86,7 +88,7 @@ export function filterEApprovalPreviewNav<
 export function EApprovalRoleMenuItems({ href }: { href?: string }) {
   return (
     <>
-      <RoleRowActionsMenuItems columns={E_APPROVAL_LIST_FIELDS} always />
+      <RoleRowActionsMenuItems columns={E_APPROVAL_LIST_FIELDS} actions={E_APPROVAL_ROLE_ACTIONS} always />
       <EApprovalPagesMenuItems href={href} />
     </>
   );
@@ -164,6 +166,11 @@ export function useEApprovalSubmissionAccess() {
   );
 }
 
+/** Table view is the `columns` action. Hidden keeps the gallery and leaves the toggle off. */
+export function useEApprovalTableViewAllowed() {
+  return useEApprovalSubmissionAccess().allows("columns");
+}
+
 function pageLocked(access: NonNullable<ReturnType<typeof useRoleFieldAccessContext>>): boolean {
   const selected = access.selected;
   if (!selected) return true;
@@ -177,7 +184,11 @@ export function EApprovalPagesMenuItems({ href }: { href?: string }) {
 
   const locked = pageLocked(access);
   const current = href ? eApprovalNavTargetForPath(href) : null;
-  const currentHidden = current ? access.levelFor(eApprovalNavTargetKey(current.href)) === "hide" : false;
+  const stateFor = (targetHref: string) =>
+    access.selected
+      ? eApprovalPageListState(access.selected.permissions, access.selected.access_matrix, targetHref)
+      : "shown";
+  const currentState = current ? stateFor(current.href) : "shown";
 
   return (
     <>
@@ -185,25 +196,41 @@ export function EApprovalPagesMenuItems({ href }: { href?: string }) {
       <ContextMenuLabel className="uppercase tracking-wide">Pages</ContextMenuLabel>
       {current ? (
         <ContextMenuItem
-          disabled={locked}
-          onClick={() => access.setLevel(eApprovalNavTargetKey(current.href), currentHidden ? "full" : "hide")}
+          disabled={locked || currentState === "no-access"}
+          onClick={() =>
+            access.setLevel(eApprovalNavTargetKey(current.href), currentState === "hidden" ? "full" : "hide")
+          }
         >
-          {currentHidden ? <EyeOff className="size-3.5 text-destructive" /> : <Lock className="size-3.5 text-emerald-600" />}
-          <span className="flex-1">{currentHidden ? `Show ${current.label}` : `Hide ${current.label}`}</span>
-          <span className="text-xs text-muted-foreground">{currentHidden ? "Hidden" : "Shown"}</span>
+          {currentState === "shown" ? (
+            <Lock className="size-3.5 text-emerald-600" />
+          ) : (
+            <EyeOff className="size-3.5 text-destructive" />
+          )}
+          <span className="flex-1">
+            {currentState === "no-access"
+              ? current.label
+              : currentState === "hidden"
+                ? `Show ${current.label}`
+                : `Hide ${current.label}`}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {currentState === "no-access" ? "No access" : currentState === "hidden" ? "Hidden" : "Shown"}
+          </span>
         </ContextMenuItem>
       ) : null}
       <ContextMenuSub label="All pages">
         {E_APPROVAL_NAV_TARGETS.map((target) => {
-          const hidden = access.levelFor(eApprovalNavTargetKey(target.href)) === "hide";
+          const state = stateFor(target.href);
           return (
             <ContextMenuItem
               key={target.href}
-              disabled={locked}
-              onClick={() => access.setLevel(eApprovalNavTargetKey(target.href), hidden ? "full" : "hide")}
+              disabled={locked || state === "no-access"}
+              onClick={() => access.setLevel(eApprovalNavTargetKey(target.href), state === "hidden" ? "full" : "hide")}
             >
               <span className="flex-1">{target.label}</span>
-              <span className="text-xs text-muted-foreground">{hidden ? "Hidden" : "Shown"}</span>
+              <span className="text-xs text-muted-foreground">
+                {state === "no-access" ? "No access" : state === "hidden" ? "Hidden" : "Shown"}
+              </span>
             </ContextMenuItem>
           );
         })}

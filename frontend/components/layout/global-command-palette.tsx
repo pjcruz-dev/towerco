@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Search } from "lucide-react";
@@ -19,6 +19,7 @@ import { useGlobalCommandPalette } from "@/hooks/use-global-command-palette";
 import { useOrganizationLabel } from "@/hooks/use-organization-label";
 import { useEApprovalRolePreview } from "@/components/e-approval/e-approval-role-field-access";
 import { useDocumentRegisterRolePreview } from "@/components/documents/document-register-role-field-access";
+import { useTicketingRolePreview } from "@/components/ticketing/ticketing-role-field-access";
 import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
 import { isCanceledRequestError } from "@/lib/api/error";
 import { fetchWorkspaceSearch } from "@/lib/api/modules/workspace-search-api";
@@ -31,6 +32,11 @@ import {
   type WorkspaceCommandItem,
 } from "@/lib/navigation/workspace-command-index";
 import { formWorkspacesToCommandItems } from "@/lib/navigation/form-workspace-command-items";
+import {
+  commandItemMatchesShell,
+  moduleShellLinksFromGroups,
+  resolveModuleShell,
+} from "@/lib/navigation/module-shell";
 import {
   EAPPROVAL_FORM_WORKSPACES_QUERY_KEY,
   fetchEApprovalFormWorkspaces,
@@ -125,6 +131,7 @@ function groupEntityItemsByModule(items: WorkspaceCommandItem[]): PaletteSection
 
 export function GlobalCommandPalette() {
   const router = useRouter();
+  const pathname = usePathname();
   const { open, setOpen } = useGlobalCommandPalette();
   const organizationLabel = useOrganizationLabel();
   const user = useAuthStore((state) => state.user);
@@ -144,20 +151,22 @@ export function GlobalCommandPalette() {
   );
 
   // Same Manage Sidebar tree as the left aside / top nav.
-  const { groups: workspaceNavGroups } = useWorkspaceNavGroups({ enabled: open });
+  const { groups: workspaceNavGroups, catalogGroups } = useWorkspaceNavGroups({ enabled: open });
 
   const eApprovalPreview = useEApprovalRolePreview();
   const documentPreview = useDocumentRegisterRolePreview();
+  const ticketingPreview = useTicketingRolePreview();
 
   const index = useMemo(() => {
     const built = buildWorkspaceCommandIndex(scopedUser, enabledModules, workspaceNavGroups);
-    const allow = (href: string) => eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href);
-    if (!eApprovalPreview.active && !documentPreview.active) return built;
+    const allow = (href: string) =>
+      eApprovalPreview.allowsHref(href) && documentPreview.allowsHref(href) && ticketingPreview.allowsHref(href);
+    if (!eApprovalPreview.active && !documentPreview.active && !ticketingPreview.active) return built;
     return {
       navigate: built.navigate.filter((item) => allow(item.href)),
       actions: built.actions.filter((item) => allow(item.href)),
     };
-  }, [documentPreview, eApprovalPreview, enabledModules, scopedUser, workspaceNavGroups]);
+  }, [documentPreview, eApprovalPreview, enabledModules, scopedUser, ticketingPreview, workspaceNavGroups]);
 
   const canViewWorkspaces = useMemo(
     () => hasPermission(scopedUser, [permissions.eApprovalView, permissions.eApprovalSubmissionsView]),
@@ -191,9 +200,27 @@ export function GlobalCommandPalette() {
   const entitySearchRequestId = useRef(0);
   const wasOpen = useRef(false);
 
+  const appSwitchItems = useMemo((): WorkspaceCommandItem[] => {
+    const active = resolveModuleShell(pathname);
+    if (active.kind === "hub") {
+      return [];
+    }
+    return moduleShellLinksFromGroups(catalogGroups)
+      .filter((link) => link.id !== active.id)
+      .map((link) => ({
+        id: `shell:${link.id}`,
+        kind: "navigate" as const,
+        title: link.title,
+        description: `Opens the ${link.title} dashboard`,
+        href: link.homeHref,
+        icon: link.icon,
+        group: "Apps",
+      }));
+  }, [catalogGroups, pathname]);
+
   const allLookupItems = useMemo(
-    () => [...index.actions, ...index.navigate, ...workspaceNavigateItems],
-    [index.actions, index.navigate, workspaceNavigateItems],
+    () => [...index.actions, ...index.navigate, ...workspaceNavigateItems, ...appSwitchItems],
+    [appSwitchItems, index.actions, index.navigate, workspaceNavigateItems],
   );
 
   useEffect(() => {
@@ -260,14 +287,22 @@ export function GlobalCommandPalette() {
   }, [open, query, searchAttempt]);
 
   const sections = useMemo((): PaletteSection[] => {
+    const active = resolveModuleShell(pathname);
+    const inShell = (item: { href: string; module?: string }) => commandItemMatchesShell(item, active);
     const trimmed = query.trim();
-    const recentMatches = recent.filter((item) => matchesWorkspaceCommandQuery(item, trimmed));
-    const actionMatches = index.actions.filter((item) => matchesWorkspaceCommandQuery(item, trimmed));
+    const recentMatches = recent.filter(
+      (item) => inShell(item) && matchesWorkspaceCommandQuery(item, trimmed),
+    );
+    const actionMatches = index.actions.filter(
+      (item) => inShell(item) && matchesWorkspaceCommandQuery(item, trimmed),
+    );
     const navigateMatches = [
-      ...index.navigate.filter((item) => matchesWorkspaceCommandQuery(item, trimmed)),
-      ...workspaceNavigateItems.filter((item) => matchesWorkspaceCommandQuery(item, trimmed)),
+      ...index.navigate.filter((item) => inShell(item) && matchesWorkspaceCommandQuery(item, trimmed)),
+      ...workspaceNavigateItems.filter((item) => inShell(item) && matchesWorkspaceCommandQuery(item, trimmed)),
     ];
-    const entityMatches = trimmed.length >= ENTITY_SEARCH_MIN_CHARS ? entityResults : [];
+    const appMatches = appSwitchItems.filter((item) => matchesWorkspaceCommandQuery(item, trimmed));
+    const entityMatches =
+      trimmed.length >= ENTITY_SEARCH_MIN_CHARS ? entityResults.filter((item) => inShell(item)) : [];
 
     if (!trimmed) {
       const output: PaletteSection[] = [];
@@ -279,6 +314,9 @@ export function GlobalCommandPalette() {
       }
       if (navigateMatches.length > 0) {
         output.push({ label: "Go to", items: navigateMatches });
+      }
+      if (appMatches.length > 0) {
+        output.push({ label: "Other apps", items: appMatches });
       }
       return output;
     }
@@ -296,8 +334,11 @@ export function GlobalCommandPalette() {
     if (recentMatches.length > 0) {
       output.push({ label: "Recent", items: recentMatches });
     }
+    if (appMatches.length > 0) {
+      output.push({ label: "Other apps", items: appMatches });
+    }
     return output;
-  }, [entityResults, index.actions, index.navigate, query, recent, workspaceNavigateItems]);
+  }, [appSwitchItems, entityResults, index.actions, index.navigate, pathname, query, recent, workspaceNavigateItems]);
 
   const flatItems = useMemo(() => sections.flatMap((section) => section.items), [sections]);
 

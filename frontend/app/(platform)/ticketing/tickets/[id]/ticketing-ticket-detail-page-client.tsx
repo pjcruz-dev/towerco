@@ -20,9 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { RefreshingHint } from "@/components/ui/refreshing-hint";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionCardSkeleton } from "@/components/ui/page-skeletons";
-import { getErrorMessage } from "@/lib/api/error";
+import { getErrorMessage, isForbiddenApiError, isNotFoundApiError } from "@/lib/api/error";
 import {
   addTicketingComment,
   deleteTicketingAttachment,
@@ -61,12 +63,8 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
 
   const [comment, setComment] = useState("");
   const [isInternalComment, setIsInternalComment] = useState(false);
-  const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
-  const [category, setCategory] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [showResolveFlow, setShowResolveFlow] = useState(false);
   const [resolutionComment, setResolutionComment] = useState("");
-  const [manageError, setManageError] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploadStateByKey, setUploadStateByKey] = useState<
@@ -112,23 +110,117 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
 
   const fetchSavedAttachment = useCallback((id: string) => fetchTicketingAttachmentBlob(id), []);
 
-  const updateMutation = useMutation({
-    mutationFn: (payload: {
-      status?: string;
-      priority?: string;
-      category?: string | null;
-      assignee_id?: string | null;
-      resolution_comment?: string;
-    }) => updateTicketingTicket(ticketId, payload),
+  const statusMutation = useMutation({
+    mutationFn: (payload: { status: string; resolution_comment?: string }) =>
+      updateTicketingTicket(ticketId, payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ticketQueryKey });
+      const previous = queryClient.getQueryData(ticketQueryKey);
+      queryClient.setQueryData(ticketQueryKey, (current: typeof ticket) =>
+        current ? { ...current, status: payload.status } : current,
+      );
+      return { previous };
+    },
+    onError: (error, _payload, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(ticketQueryKey, context.previous);
+      }
+      pushNotice({
+        level: "error",
+        title: "Could not update status",
+        message: getErrorMessage(error) || "Could not update status.",
+      });
+    },
     onSuccess: () => {
+      setShowResolveFlow(false);
       setResolutionComment("");
-      setManageError(null);
       queryClient.invalidateQueries({ queryKey: ticketQueryKey });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
     },
-    onError: () => {
-      setManageError("Could not update ticket. Check required fields and try again.");
+  });
+
+  const priorityMutation = useMutation({
+    mutationFn: (payload: { priority: string }) => updateTicketingTicket(ticketId, payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ticketQueryKey });
+      const previous = queryClient.getQueryData(ticketQueryKey);
+      queryClient.setQueryData(ticketQueryKey, (current: typeof ticket) =>
+        current ? { ...current, priority: payload.priority } : current,
+      );
+      return { previous };
+    },
+    onError: (error, _payload, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(ticketQueryKey, context.previous);
+      }
+      pushNotice({
+        level: "error",
+        title: "Could not update priority",
+        message: getErrorMessage(error) || "Could not update priority.",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
+    },
+  });
+
+  const categoryMutation = useMutation({
+    mutationFn: (payload: { category: string | null }) => updateTicketingTicket(ticketId, payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ticketQueryKey });
+      const previous = queryClient.getQueryData(ticketQueryKey);
+      queryClient.setQueryData(ticketQueryKey, (current: typeof ticket) =>
+        current ? { ...current, category: payload.category } : current,
+      );
+      return { previous };
+    },
+    onError: (error, _payload, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(ticketQueryKey, context.previous);
+      }
+      pushNotice({
+        level: "error",
+        title: "Could not update category",
+        message: getErrorMessage(error) || "Could not update category.",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
+    },
+  });
+
+  const assigneeMutation = useMutation({
+    mutationFn: (payload: { assignee_id: string | null }) => updateTicketingTicket(ticketId, payload),
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: ticketQueryKey });
+      const previous = queryClient.getQueryData(ticketQueryKey);
+      const nextAssignee = payload.assignee_id
+        ? (assignableUsers ?? []).find((row) => row.id === payload.assignee_id) ?? null
+        : null;
+      queryClient.setQueryData(ticketQueryKey, (current: typeof ticket) =>
+        current ? { ...current, assignee: nextAssignee } : current,
+      );
+      return { previous };
+    },
+    onError: (error, _payload, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(ticketQueryKey, context.previous);
+      }
+      pushNotice({
+        level: "error",
+        title: "Could not update assignee",
+        message: getErrorMessage(error) || "Could not update assignee.",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["ticketing", "tickets"] });
     },
   });
 
@@ -254,9 +346,12 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
           }
           title={ticket?.title ?? "Ticket"}
           actions={
-            <Button size="sm" variant="outline" type="button" onClick={() => ticketQuery.refetch()}>
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              {ticketQuery.isFetching && ticket ? <RefreshingHint /> : null}
+              <Button size="sm" variant="outline" type="button" onClick={() => ticketQuery.refetch()}>
+                Refresh
+              </Button>
+            </div>
           }
         />
 
@@ -268,9 +363,28 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
         ) : null}
 
         {ticketQuery.isError ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-            Could not load ticket.
-          </div>
+          isNotFoundApiError(ticketQuery.error) ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <p className="font-medium text-destructive">This ticket doesn&apos;t exist or was removed.</p>
+              <Link href="/ticketing/tickets" className="mt-2 inline-block text-sm text-primary hover:underline">
+                Back to Tickets
+              </Link>
+            </div>
+          ) : isForbiddenApiError(ticketQuery.error) ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <p className="font-medium text-destructive">You don&apos;t have access to this ticket.</p>
+              <Link href="/ticketing/tickets" className="mt-2 inline-block text-sm text-primary hover:underline">
+                Back to Tickets
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <p className="font-medium text-destructive">Couldn&apos;t load this ticket.</p>
+              <Button size="sm" variant="outline" type="button" className="mt-2" onClick={() => ticketQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
+          )
         ) : null}
 
         {ticket ? (
@@ -504,9 +618,10 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                     type="button"
                     size="sm"
                     className="mt-3 w-full"
-                    disabled={updateMutation.isPending}
-                    onClick={() => updateMutation.mutate({ status: "open" })}
+                    disabled={statusMutation.isPending}
+                    onClick={() => statusMutation.mutate({ status: "open" })}
                   >
+                    {statusMutation.isPending ? <Spinner className="mr-1.5 size-3.5" /> : null}
                     Reopen ticket
                   </Button>
                 </div>
@@ -528,99 +643,138 @@ export function TicketingTicketDetailPageClient({ ticketId }: Props) {
                   <h3 className="text-sm font-medium text-foreground">Manage</h3>
                   <div className="space-y-2">
                     <Label htmlFor="status-update">Status</Label>
-                    <Select
-                      id="status-update"
-                      className="h-9"
-                      value={status || ticket.status}
-                      onChange={(e) => setStatus(e.target.value)}
-                    >
-                      {(metadata?.statuses ?? [])
-                        .filter((item) => !(ticket.status === "closed" && item === "open"))
-                        .map((item) => (
-                        <option key={item} value={item}>
-                          {item.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        id="status-update"
+                        className="h-9"
+                        value={showResolveFlow ? "resolved" : ticket.status}
+                        disabled={statusMutation.isPending}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          if (next === "resolved") {
+                            setShowResolveFlow(true);
+                            return;
+                          }
+                          setShowResolveFlow(false);
+                          statusMutation.mutate({ status: next });
+                        }}
+                      >
+                        {(metadata?.statuses ?? [])
+                          .filter((item) => !(ticket.status === "closed" && item === "open"))
+                          .map((item) => (
+                          <option key={item} value={item}>
+                            {item.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </Select>
+                      {statusMutation.isPending ? (
+                        <Spinner className="size-4 shrink-0 text-muted-foreground" />
+                      ) : null}
+                    </div>
+                    {showResolveFlow ? (
+                      <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-2">
+                        <Label htmlFor="resolution-comment">Resolution comment</Label>
+                        <Textarea
+                          id="resolution-comment"
+                          value={resolutionComment}
+                          onChange={(e) => setResolutionComment(e.target.value)}
+                          placeholder="Explain how the issue was resolved…"
+                          rows={3}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={statusMutation.isPending || !resolutionComment.trim()}
+                            onClick={() =>
+                              statusMutation.mutate({
+                                status: "resolved",
+                                resolution_comment: resolutionComment.trim(),
+                              })
+                            }
+                          >
+                            {statusMutation.isPending ? <Spinner className="mr-1.5 size-3.5" /> : null}
+                            Mark resolved
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={statusMutation.isPending}
+                            onClick={() => {
+                              setShowResolveFlow(false);
+                              setResolutionComment("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="priority-update">Priority</Label>
-                    <Select
-                      id="priority-update"
-                      className="h-9"
-                      value={priority || ticket.priority}
-                      onChange={(e) => setPriority(e.target.value)}
-                    >
-                      {(metadata?.priorities ?? []).map((item) => (
-                        <option key={item} value={item}>
-                          {item.replace(/_/g, " ")}
-                        </option>
-                      ))}
-                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        id="priority-update"
+                        className="h-9"
+                        value={ticket.priority}
+                        disabled={priorityMutation.isPending}
+                        onChange={(e) => priorityMutation.mutate({ priority: e.target.value })}
+                      >
+                        {(metadata?.priorities ?? []).map((item) => (
+                          <option key={item} value={item}>
+                            {item.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </Select>
+                      {priorityMutation.isPending ? (
+                        <Spinner className="size-4 shrink-0 text-muted-foreground" />
+                      ) : null}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category-update">Category</Label>
-                    <Select
-                      id="category-update"
-                      className="h-9"
-                      value={category || ticket.category || ""}
-                      onChange={(e) => setCategory(e.target.value)}
-                    >
-                      <option value="">Uncategorized</option>
-                      {(metadata?.category_options ?? []).map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  {(status || ticket.status) === "resolved" ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="resolution-comment">Resolution comment</Label>
-                      <Textarea
-                        id="resolution-comment"
-                        value={resolutionComment}
-                        onChange={(e) => setResolutionComment(e.target.value)}
-                        placeholder="Explain how the issue was resolved…"
-                        rows={3}
-                      />
+                    <div className="flex items-center gap-2">
+                      <Select
+                        id="category-update"
+                        className="h-9"
+                        value={ticket.category || ""}
+                        disabled={categoryMutation.isPending}
+                        onChange={(e) => categoryMutation.mutate({ category: e.target.value || null })}
+                      >
+                        <option value="">Uncategorized</option>
+                        {(metadata?.category_options ?? []).map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </Select>
+                      {categoryMutation.isPending ? (
+                        <Spinner className="size-4 shrink-0 text-muted-foreground" />
+                      ) : null}
                     </div>
-                  ) : null}
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="assignee">Assignee</Label>
-                    <TicketingUserPicker
-                      id="assignee"
-                      users={assignableUsers ?? []}
-                      value={assigneeId || ticket.assignee?.id || ""}
-                      onChange={setAssigneeId}
-                      placeholder="Unassigned"
-                      clearLabel="Unassigned"
-                      emptyLabel="No assignable users match your search."
-                    />
+                    <div className="flex items-center gap-2">
+                      <TicketingUserPicker
+                        id="assignee"
+                        users={assignableUsers ?? []}
+                        value={ticket.assignee?.id || ""}
+                        onChange={(nextAssigneeId) =>
+                          assigneeMutation.mutate({ assignee_id: nextAssigneeId || null })
+                        }
+                        disabled={assigneeMutation.isPending}
+                        placeholder="Unassigned"
+                        clearLabel="Unassigned"
+                        emptyLabel="No assignable users match your search."
+                      />
+                      {assigneeMutation.isPending ? (
+                        <Spinner className="size-4 shrink-0 text-muted-foreground" />
+                      ) : null}
+                    </div>
                   </div>
-                  {manageError ? <p className="text-xs text-destructive">{manageError}</p> : null}
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="w-full"
-                    disabled={updateMutation.isPending}
-                    onClick={() => {
-                      const nextStatus = status || ticket.status;
-                      if (nextStatus === "resolved" && !resolutionComment.trim()) {
-                        setManageError("A resolution comment is required when resolving a ticket.");
-                        return;
-                      }
-                      updateMutation.mutate({
-                        status: nextStatus,
-                        priority: priority || ticket.priority,
-                        category: (category || ticket.category || "") || null,
-                        assignee_id: (assigneeId || ticket.assignee?.id || "") || null,
-                        resolution_comment: nextStatus === "resolved" ? resolutionComment.trim() : undefined,
-                      });
-                    }}
-                  >
-                    Save changes
-                  </Button>
                 </div>
               ) : null}
             </aside>

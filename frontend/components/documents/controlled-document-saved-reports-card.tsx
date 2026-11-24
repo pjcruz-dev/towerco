@@ -111,9 +111,7 @@ export function ControlledDocumentSavedReportsCard({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {savedQuery.isError ? (
         <p className="text-sm text-destructive">{getErrorMessage(savedQuery.error)}</p>
-      ) : null}
-
-      {savedQuery.isLoading ? (
+      ) : savedQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading saved reports…</p>
       ) : (savedQuery.data ?? []).length === 0 ? (
         <p className="text-sm text-muted-foreground">No saved reports yet.</p>

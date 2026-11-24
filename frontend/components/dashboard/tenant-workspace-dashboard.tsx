@@ -5,14 +5,10 @@ import { useMemo } from "react";
 
 import { AwaitingMeHub } from "@/components/dashboard/awaiting-me-hub";
 import { ConfigurableModulePageHeader } from "@/components/dashboard/configurable-module-page-header";
-import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { DashboardBoardSkeleton } from "@/components/dashboard/dashboard-board-skeleton";
-import { DashboardDonutChart } from "@/components/dashboard/dashboard-donut-chart";
-import { chartColorAt, kpiSeries } from "@/components/dashboard/dashboard-chart-utils";
 import { DashboardLayoutToolbar } from "@/components/dashboard/dashboard-layout-toolbar";
 import { DashboardWidgetBoard } from "@/components/dashboard/dashboard-widget-board";
 import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
-import { ActionableWidgets } from "@/components/dashboard/actionable-widgets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,7 +17,9 @@ import {
   useDashboardCustomizeMode,
   useDashboardLayoutPrefs,
 } from "@/hooks/use-dashboard-layout-prefs";
+import { useWorkspaceNavGroups } from "@/hooks/use-workspace-nav-groups";
 import { useWorkspaceDashboard } from "@/hooks/use-workspace-dashboard";
+import { moduleShellLinksFromGroups } from "@/lib/navigation/module-shell";
 import { emptyWorkspaceDashboard } from "@/lib/api/modules/workspace-dashboard-api";
 import {
   bindableCatalogEntries,
@@ -36,17 +34,12 @@ import type { WorkspaceDashboardActivity } from "@/modules/workspace/types";
 
 const LAYOUT_KEY = "toweros.workspace.dashboard.layout";
 
-const DEFAULT_ENABLED_IDS = [
-  "kpis",
-  "awaiting_me",
-  "action_charts",
-  "action_queue",
-  "recent_activity",
-] as const;
+const DEFAULT_ENABLED_IDS = ["awaiting_me", "recent_activity"] as const;
 
 const moduleLabels: Record<string, string> = {
   e_approval: "E-Forms",
   ticketing: "Ticketing",
+  documents: "EDCS",
   notifications: "Notifications",
 };
 
@@ -120,6 +113,36 @@ function RecentActivityPanel({ items }: { items: WorkspaceDashboardActivity[] })
   );
 }
 
+function WorkspaceAppCards() {
+  const { catalogGroups } = useWorkspaceNavGroups();
+  const apps = moduleShellLinksFromGroups(catalogGroups);
+  if (apps.length === 0) {
+    return null;
+  }
+
+  return (
+    <section>
+      <h2 className="text-base font-medium text-foreground">Your apps</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Open an app to land on its dashboard. The sidebar then shows only that app.
+      </p>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {apps.map((app) => (
+          <li key={app.id}>
+            <Link
+              href={app.homeHref}
+              className="flex h-full flex-col rounded-xl border border-border bg-card p-4 shadow-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="text-sm font-medium text-foreground">{app.title}</span>
+              <span className="mt-1 text-xs text-muted-foreground">Opens the {app.title} dashboard</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function TenantWorkspaceDashboard() {
   const { data, isFetching, isError, isPlaceholderData, refetch } = useWorkspaceDashboard();
   const dashboard = data ?? emptyWorkspaceDashboard;
@@ -134,38 +157,9 @@ export function TenantWorkspaceDashboard() {
   } = useDashboardLayoutPrefs(LAYOUT_KEY);
   const { editing, setEditing } = useDashboardCustomizeMode({ onExitEdit: flushPersonalPersist });
 
-  const actionSeries = useMemo(
-    () =>
-      dashboard.actions
-        .filter((action) => action.count > 0)
-        .map((action, index) => ({
-          key: action.id,
-          label: action.label,
-          value: action.count,
-          fill: chartColorAt(index),
-        })),
-    [dashboard.actions],
-  );
-
-  const attentionSeries = useMemo(
-    () =>
-      kpiSeries(dashboard.kpis, [
-        "unread_notifications",
-        "ea_awaiting_my_approval",
-        "ea_stale_approvals",
-        "rollout_gates_awaiting_me",
-        "ticketing_assigned_me",
-        "rollout_sla_risk",
-      ]).filter((row) => row.value > 0),
-    [dashboard.kpis],
-  );
-
   const layoutMeta = useMemo(
     () => [
-      { id: "kpis", label: "KPI strip" },
       { id: "awaiting_me", label: "Awaiting you" },
-      { id: "action_charts", label: "Action & attention charts" },
-      { id: "action_queue", label: "Action queue" },
       { id: "recent_activity", label: "Recent activity" },
     ],
     [],
@@ -189,43 +183,13 @@ export function TenantWorkspaceDashboard() {
         ),
       },
       {
-        id: "action_charts",
-        label: "Action & attention charts",
-        defaultSpan: "full",
-        render: () => (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DashboardBarChart
-              title="Action queues"
-              description="Items in your operational queues"
-              data={actionSeries}
-              layout="horizontal"
-              emptyMessage="No queued actions right now."
-              height={200}
-            />
-            <DashboardDonutChart
-              title="Attention mix"
-              description="Notifications, approvals, tickets, and SLA risk"
-              data={attentionSeries}
-              emptyMessage="Nothing requiring attention."
-              height={200}
-            />
-          </div>
-        ),
-      },
-      {
-        id: "action_queue",
-        label: "Action queue",
-        defaultSpan: "half",
-        render: () => <ActionableWidgets items={dashboard.actions} />,
-      },
-      {
         id: "recent_activity",
         label: "Recent activity",
         defaultSpan: "half",
         render: () => <RecentActivityPanel items={dashboard.recent_activity} />,
       },
     ];
-  }, [actionSeries, attentionSeries, dashboard]);
+  }, [dashboard]);
 
   const titleOverrides = useMemo(() => {
     const map: Record<string, string | undefined> = {};
@@ -316,6 +280,8 @@ export function TenantWorkspaceDashboard() {
           </>
         )}
       />
+
+      <WorkspaceAppCards />
 
       {dashboard.quick_links.length > 0 && !editing && !showSkeleton ? (
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium">

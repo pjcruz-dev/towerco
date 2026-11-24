@@ -1,6 +1,11 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
-/** Breadcrumbs link here; list lives at /doc-extract. */
+import { DocExtractBatchesPageClient } from "../doc-extract-batches-page-client";
+
 export default function DocExtractBatchesIndexPage() {
-  redirect("/doc-extract");
+  return (
+    <Suspense fallback={null}>
+      <DocExtractBatchesPageClient />
+    </Suspense>
+  );
 }

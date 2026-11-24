@@ -635,6 +635,7 @@ export async function fetchEApprovalApprovalsIndex(params: {
   status?: string;
   awaiting_me?: boolean;
   sort?: string;
+  form_family?: string;
 }): Promise<{ data: EApprovalApprovalRow[]; meta: PaginatedMeta }> {
   const response = await apiClient.get<{ data: EApprovalApprovalRow[]; meta: PaginatedMeta }>("/e-approval/approvals", {
     params: {

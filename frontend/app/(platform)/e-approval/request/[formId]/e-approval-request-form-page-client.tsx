@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { EApprovalSubmissionComposePanel } from "@/components/e-approval/e-approval-submission-compose-panel";
@@ -9,7 +10,8 @@ import { LiveProductTourHost } from "@/components/help/live-product-tour-host";
 import { PermissionGate } from "@/components/layout/permission-gate";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
-import { eApprovalFocusUrl } from "@/modules/documents/controlled-document-submission-url";
+import { controlledDocumentSubmissionUrl, eApprovalFocusUrl, submissionOpenPath } from "@/modules/documents/controlled-document-submission-url";
+import { ISO_FORM_FAMILY } from "@/modules/e-approval/form-workspace-types";
 import { fetchEApprovalForm } from "@/lib/api/modules/e-approval-api";
 import { isIsoDocumentControlForm } from "@/modules/e-approval/form-workspace";
 import { viewerCanStartFormRequest } from "@/modules/e-approval/form-request-access";
@@ -20,6 +22,7 @@ type Props = { formId: string };
 
 function EApprovalRequestFormPageBody({ formId }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const resubmitSubmissionId = searchParams.get("resubmit")?.trim() || undefined;
@@ -35,6 +38,18 @@ function EApprovalRequestFormPageBody({ formId }: Props) {
     (searchParams.get("controlled_mode") === "revision" ||
       searchParams.get("controlled_mode") === "new");
 
+  useEffect(() => {
+    if (!isControlledDocumentRequest || !pathname.startsWith("/e-approval/")) return;
+    const mode = searchParams.get("controlled_mode") === "revision" ? "revision" : "new";
+    router.replace(
+      controlledDocumentSubmissionUrl({
+        formId,
+        mode,
+        documentCode: searchParams.get("document_code") ?? undefined,
+      }),
+    );
+  }, [formId, isControlledDocumentRequest, pathname, router, searchParams]);
+
   const startBlocked =
     !resubmitSubmissionId &&
     formQuery.isSuccess &&
@@ -46,7 +61,7 @@ function EApprovalRequestFormPageBody({ formId }: Props) {
       return;
     }
     if (isControlledDocumentRequest) {
-      router.push("/documents/controlled");
+      router.push(submissionOpenPath(submission.id, ISO_FORM_FAMILY));
     } else {
       router.push("/e-approval/submissions");
     }
@@ -58,7 +73,7 @@ function EApprovalRequestFormPageBody({ formId }: Props) {
       return;
     }
     if (isControlledDocumentRequest) {
-      router.push("/documents/controlled");
+      router.push("/documents/controlled/register");
     } else {
       router.push("/e-approval/submissions/new");
     }
@@ -85,7 +100,7 @@ function EApprovalRequestFormPageBody({ formId }: Props) {
                   <EApprovalBackLink href="/e-approval/submissions">My submissions</EApprovalBackLink>
                 </>
               ) : isControlledDocumentRequest ? (
-                <EApprovalBackLink href="/documents/controlled">Document register</EApprovalBackLink>
+                <EApprovalBackLink href="/documents/controlled">EDCS</EApprovalBackLink>
               ) : (
                 <>
                   <EApprovalBackLink href="/e-approval/submissions/new">Choose another form</EApprovalBackLink>

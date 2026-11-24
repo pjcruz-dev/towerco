@@ -429,6 +429,7 @@ export type EApprovalApprovalRow = {
     status_label?: string | null;
     form_id?: string;
     form_name?: string;
+    form_family?: string | null;
     subsidiary?: string | null;
     current_step?: number;
     step_count?: number | null;

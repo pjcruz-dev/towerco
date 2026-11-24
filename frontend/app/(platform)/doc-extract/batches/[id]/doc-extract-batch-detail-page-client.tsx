@@ -431,7 +431,7 @@ export function DocExtractBatchDetailPageClient() {
         <LiveProductTourHost />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="sm" variant="ghost" render={<Link href="/doc-extract" />}>
+            <Button size="sm" variant="ghost" render={<Link href="/doc-extract/batches" />}>
               <ArrowLeft className="size-4" />
               Batches
             </Button>

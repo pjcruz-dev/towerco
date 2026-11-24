@@ -29,7 +29,14 @@ final class AppMenuTileDefaults
         $stagingHref = self::configuredHref('staging')
             ?? FrontendDevUrl::tenantLoginUrl('staging.myapp.localhost', 'staging');
 
-        return [
+        $modules = [
+            ['key' => 'module-e-forms', 'title' => 'E-Forms', 'icon' => 'ClipboardCheck', 'accent' => 'sky', 'path' => '/e-approval'],
+            ['key' => 'module-ticketing', 'title' => 'Ticketing', 'icon' => 'LifeBuoy', 'accent' => 'violet', 'path' => '/ticketing'],
+            ['key' => 'module-document-control', 'title' => 'Document Control', 'icon' => 'Archive', 'accent' => 'emerald', 'path' => '/documents/controlled'],
+            ['key' => 'module-doc-extract', 'title' => 'DocExtract', 'icon' => 'FileScan', 'accent' => 'amber', 'path' => '/doc-extract'],
+        ];
+
+        $tiles = [
             [
                 'key' => 'production',
                 'title' => 'Production',
@@ -55,6 +62,33 @@ final class AppMenuTileDefaults
                 'is_system' => true,
             ],
         ];
+
+        foreach ($modules as $index => $module) {
+            $tiles[] = [
+                'key' => $module['key'],
+                'title' => $module['title'],
+                'subtitle' => 'Opens the '.$module['title'].' dashboard',
+                'icon' => $module['icon'],
+                'accent' => $module['accent'],
+                'href' => self::moduleHref($productionHref, $module['path']),
+                'open_in_new_tab' => false,
+                'sort_order' => $index + 2,
+                'is_visible' => true,
+                'is_system' => true,
+            ];
+        }
+
+        return $tiles;
+    }
+
+    public static function moduleHref(string $loginUrl, string $path): string
+    {
+        $base = preg_replace('#/login(?:\?.*)?$#', '', trim($loginUrl));
+        if (! is_string($base) || $base === '') {
+            $base = trim($loginUrl);
+        }
+
+        return rtrim($base, '/').$path;
     }
 
     private static function configuredHref(string $environment): ?string

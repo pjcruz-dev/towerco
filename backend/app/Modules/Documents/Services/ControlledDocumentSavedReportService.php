@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Documents\Services;
 
 use App\Modules\Documents\Models\ControlledDocumentReportDefinition;
+use App\Modules\Documents\Support\ControlledDocumentRoleFieldAccess;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Workspace\Services\TenantActivityLogger;
 use Carbon\CarbonImmutable;

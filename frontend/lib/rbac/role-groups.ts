@@ -12,6 +12,8 @@ export type GroupRolesOptions = {
   enabledModules?: string[] | null;
   /** Always keep these role names visible (e.g. already assigned on the user). */
   alwaysIncludeRoleNames?: string[];
+  /** When set, the Viewing as menu lists only this module's roles. */
+  moduleId?: string | null;
 };
 
 const CORE_ROLE_NAMES = new Set([
@@ -203,12 +205,14 @@ export function groupRolesForMenu(roles: AdminRoleRow[], options?: GroupRolesOpt
   const modulesAndCustom = groups.filter((group) => group.id !== "baseline");
   const workspaceRoles = sortByLabel([...(baseline?.roles ?? []), ...workspaceExtras]);
 
-  return [
+  const menu = [
     ...(workspaceRoles.length > 0
       ? [{ id: "workspace", label: "Workspace", roles: workspaceRoles }]
       : []),
     ...modulesAndCustom,
   ];
+  if (!options?.moduleId) return menu;
+  return menu.filter((group) => group.id === options.moduleId);
 }
 
 /** Short label once the group heading already names the module. */

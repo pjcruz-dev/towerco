@@ -83,6 +83,23 @@ describe("groupRolesForMenu", () => {
     expect(groups.flatMap((group) => group.roles)).toHaveLength(12);
   });
 
+  it("lists only the module that opened the menu", () => {
+    const groups = groupRolesForMenu(
+      [
+        role("tenant_admin", 1),
+        role("billing", 2),
+        role("ticketing_viewer", 3),
+        role("ticketing_admin", 4),
+        role("dcf_approver", 5),
+        role("e_approval_requestor", 6),
+      ],
+      { moduleId: "ticketing" },
+    );
+
+    expect(groups.map((group) => group.id)).toEqual(["ticketing"]);
+    expect(groups[0]?.roles.map((row) => row.name)).toEqual(["ticketing_viewer", "ticketing_admin"]);
+  });
+
   it("shortens the role name under its module heading", () => {
     expect(roleLabelWithinGroup("e_approval", "e_approval_requestor")).toBe("Requestor");
     expect(roleLabelWithinGroup("document_register", "dcf_controller")).toBe("Controller");

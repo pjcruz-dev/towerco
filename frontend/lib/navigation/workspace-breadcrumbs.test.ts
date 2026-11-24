@@ -30,12 +30,43 @@ describe("resolveWorkspaceBreadcrumbs", () => {
     ]);
   });
 
+  it("maps controlled documents to the EDCS name", () => {
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Overview" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/register")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Register" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/obsolete")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Files" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/reports")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Reports" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/new")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "New document" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/approvals")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Approvals" },
+    ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/requests/sub-1")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Request" },
+    ]);
+  });
+
   it("maps doc-extract batch detail without linking to /doc-extract/batches", () => {
     expect(
       resolveWorkspaceBreadcrumbs("/doc-extract/batches/01a084e1-1d12-72a1-b080-f7b4849fed82"),
     ).toEqual([
       { label: "DocExtract", href: "/doc-extract" },
-      { label: "Batches", href: "/doc-extract" },
+      { label: "Batches", href: "/doc-extract/batches" },
       { label: "Detail" },
     ]);
   });

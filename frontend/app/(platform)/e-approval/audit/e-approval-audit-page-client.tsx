@@ -6,6 +6,7 @@ import { ScrollText } from "lucide-react";
 
 import { EApprovalAuditGalleryCard } from "@/components/e-approval/e-approval-audit-gallery-card";
 import { EApprovalListShell } from "@/components/e-approval/e-approval-list-shell";
+import { useEApprovalTableViewAllowed } from "@/components/e-approval/e-approval-role-field-access";
 import { EApprovalListViewToggle } from "@/components/e-approval/e-approval-list-view-toggle";
 import { EApprovalBackLink, EApprovalPageHeader } from "@/components/e-approval/e-approval-page-header";
 import { eApprovalAuditTableColumns } from "@/components/e-approval/e-approval-audit-table-columns";
@@ -27,6 +28,8 @@ export function EApprovalAuditPageClient() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useEApprovalListView(VIEW_STORAGE_KEY, "table");
+  const tableViewAllowed = useEApprovalTableViewAllowed();
+  const listView = tableViewAllowed ? viewMode : "gallery";
   const debouncedSearch = useDebouncedValue(search, 350, () => setPage(1));
   const { sort, sorting, onSortingChange, manualSorting } = useServerTableSort({
     defaultSort: DEFAULT_SORT,
@@ -81,7 +84,9 @@ export function EApprovalAuditPageClient() {
                   className="h-11 w-full text-base sm:h-9 sm:max-w-md sm:text-sm"
                 />
               </div>
-              <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Audit log view" />
+              {tableViewAllowed ? (
+                <EApprovalListViewToggle value={viewMode} onChange={setViewMode} ariaLabel="Audit log view" />
+              ) : null}
             </div>
           }
           footer={
@@ -90,7 +95,7 @@ export function EApprovalAuditPageClient() {
             ) : null
           }
         >
-          {viewMode === "gallery" ? (
+          {listView === "gallery" ? (
             <div className="p-4">
               {isFetching && rows.length === 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2">

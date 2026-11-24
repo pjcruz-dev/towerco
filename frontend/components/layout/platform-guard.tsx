@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { useAuthProfileSync } from "@/hooks/use-auth-profile-sync";
 import { setLoginNotice } from "@/lib/auth/login-notice";
+import { loginPathWithNext } from "@/lib/auth/tenant-post-login-path";
 import { sessionMatchesCurrentTenant } from "@/lib/auth/tenant-session";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -32,7 +33,7 @@ export function PlatformGuard({ children }: { children: React.ReactNode }) {
         message: "Your saved session belongs to a different tenant host. Sign in again for this environment.",
       });
       state.clearSession();
-      router.replace("/login");
+      router.replace(loginPathWithNext("/login", `${window.location.pathname}${window.location.search}`));
       return;
     }
 
@@ -40,7 +41,7 @@ export function PlatformGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    router.replace("/login");
+    router.replace(loginPathWithNext("/login", `${window.location.pathname}${window.location.search}`));
   }, [hasSession, isHydrated, pendingMfa, router]);
 
   if (!isHydrated) {

@@ -73,7 +73,26 @@ final class ControlledDocumentRoleFieldAccessTest extends TestCase
 
         $this->assertTrue($access->navTargetHiddenIn($matrix, '/documents/controlled/register'));
         $this->assertTrue($access->navTargetHiddenIn($matrix, '/documents/controlled/published/doc-1'));
+        $this->assertTrue($access->navTargetHiddenIn($matrix, '/documents/controlled/new'));
         $this->assertFalse($access->navTargetHiddenIn($matrix, '/documents/controlled'));
         $this->assertFalse($access->navTargetHiddenIn($matrix, '/documents/controlled/reports'));
+        $this->assertFalse($access->navTargetHiddenIn($matrix, '/documents/controlled/approvals'));
+    }
+
+    public function test_hidden_approvals_page_hides_the_request_and_leaves_the_register(): void
+    {
+        $access = new ControlledDocumentRoleFieldAccess;
+        $matrix = [
+            'fields' => [
+                ControlledDocumentRoleFieldAccess::ENTITY => [
+                    'nav:/documents/controlled/approvals' => 'hide',
+                ],
+            ],
+        ];
+
+        $this->assertTrue($access->navTargetHiddenIn($matrix, '/documents/controlled/approvals'));
+        $this->assertTrue($access->navTargetHiddenIn($matrix, '/documents/controlled/requests/sub-1?tab=decide'));
+        $this->assertFalse($access->navTargetHiddenIn($matrix, '/documents/controlled/register'));
+        $this->assertFalse($access->navTargetHiddenIn($matrix, '/documents/controlled/new'));
     }
 }

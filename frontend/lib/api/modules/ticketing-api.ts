@@ -18,10 +18,13 @@ export async function fetchTicketingDashboard(
   params: Pick<
     TicketingTicketListParams,
     "status" | "priority" | "category" | "department" | "mine" | "assigned_me"
-  > = {},
+  > & { surface?: "reports" } = {},
 ): Promise<TicketingDashboardResponse> {
   const response = await apiClient.get<{ data: TicketingDashboardResponse }>("/ticketing/dashboard", {
-    params: cleanListParams(params),
+    params: {
+      ...cleanListParams(params),
+      ...(params.surface ? { surface: params.surface } : {}),
+    },
   });
   return response.data.data;
 }
@@ -98,6 +101,7 @@ export async function downloadTicketingTicketsExport(
     columns?: string[];
     ids?: string[];
     async?: boolean;
+    source?: "reports";
   } = {},
 ): Promise<ModuleListExportResult> {
   const response = await apiClient.get<Blob | { data: Record<string, unknown> }>("/ticketing/tickets/export", {
@@ -106,6 +110,7 @@ export async function downloadTicketingTicketsExport(
       columns: params.columns && params.columns.length > 0 ? params.columns : undefined,
       ids: params.ids && params.ids.length > 0 ? params.ids : undefined,
       async: params.async ? 1 : undefined,
+      source: params.source,
     },
     paramsSerializer: moduleListExportParamsSerializer,
     responseType: "blob",
@@ -131,10 +136,12 @@ export async function createTicketingTicket(payload: CreateTicketingTicketInput)
 
 export async function updateTicketingTicket(
   ticketId: string,
-  payload: Partial<CreateTicketingTicketInput> & {
+  payload: Partial<Omit<CreateTicketingTicketInput, "category" | "assignee_id">> & {
     status?: string;
     priority?: string;
     resolution_comment?: string;
+    category?: string | null;
+    assignee_id?: string | null;
   },
 ): Promise<TicketingTicketDetail> {
   const response = await apiClient.patch<{ data: TicketingTicketDetail }>(

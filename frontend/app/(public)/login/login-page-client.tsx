@@ -13,7 +13,7 @@ import { ComingSoonLoginPanel } from "@/components/auth/coming-soon-login-panel"
 import { LoginNoticeBanner } from "@/components/feedback/login-notice-banner";
 import { Button } from "@/components/ui/button";
 import { setSessionCookie } from "@/lib/auth/session-cookie";
-import { tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
+import { loginPathWithNext, safeInternalNext, tenantPostLoginPath } from "@/lib/auth/tenant-post-login-path";
 import { resolveApiBaseUrl } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/api/error";
 import { fetchTenantAuthPublicStatus } from "@/lib/api/modules/admin-api";
@@ -189,6 +189,7 @@ function LoginPageContent() {
   } = form.formState;
 
   const applyAuthSession = (session: Parameters<typeof setSession>[0]) => {
+    const nextPath = safeInternalNext(searchParams.get("next"));
     if (session.mfaRequired) {
       beginMfaLogin(session);
       notify({
@@ -199,15 +200,15 @@ function LoginPageContent() {
           : "Enter your verification code to finish signing in.",
       });
       if (session.mfaEnrollmentRequired) {
-        router.replace("/login/mfa/enroll");
+        router.replace(loginPathWithNext("/login/mfa/enroll", nextPath));
         return;
       }
-      router.replace("/login/mfa");
+      router.replace(loginPathWithNext("/login/mfa", nextPath));
       return;
     }
     setSession(session);
     setSessionCookie();
-    window.location.assign(tenantPostLoginPath(session));
+    window.location.assign(tenantPostLoginPath(session, nextPath));
   };
 
   const mutation = useMutation({

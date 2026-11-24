@@ -114,6 +114,20 @@ final class EApprovalFormMailConfigTest extends TestCase
         $this->assertStringContainsString('/e-approval/submissions/sub-id?tab=approvals', (string) $mail->actionUrl);
     }
 
+    public function test_document_control_mail_opens_in_edcs(): void
+    {
+        $form = new EApprovalForm([
+            'name' => 'ISO',
+            'metadata_json' => ['form_family' => 'iso_document_control'],
+        ]);
+        $mail = $this->render('approval_assigned', $form);
+
+        $this->assertStringContainsString(
+            '/documents/controlled/requests/sub-id?tab=approvals',
+            (string) $mail->actionUrl,
+        );
+    }
+
     public function test_html_body_keeps_formatting_and_drops_scripts(): void
     {
         $form = new EApprovalForm([

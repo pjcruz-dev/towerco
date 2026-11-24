@@ -11,6 +11,7 @@ export const DOCUMENT_REGISTER_VIEWING_AS_KEY = "toweros.document-register.viewi
 export const DOCUMENT_REGISTER_NAV_TARGETS = [
   { href: "/documents/controlled", label: "Overview" },
   { href: "/documents/controlled/register", label: "Register" },
+  { href: "/documents/controlled/approvals", label: "Approvals" },
   { href: "/documents/controlled/obsolete", label: "Files" },
   { href: "/documents/controlled/reports", label: "Reports" },
 ] as const;
@@ -56,7 +57,16 @@ function documentRegisterPathMatchesTarget(path: string, target: string): boolea
     return (
       path === target ||
       path.startsWith(`${target}/`) ||
-      path.startsWith("/documents/controlled/published")
+      path.startsWith("/documents/controlled/published") ||
+      path === "/documents/controlled/new" ||
+      path.startsWith("/documents/controlled/new/")
+    );
+  }
+  if (target === "/documents/controlled/approvals") {
+    return (
+      path === target ||
+      path.startsWith(`${target}/`) ||
+      path.startsWith("/documents/controlled/requests")
     );
   }
   return path === target || path.startsWith(`${target}/`);
@@ -152,6 +162,27 @@ export function documentRegisterPreviewAllowsPath(
   return true;
 }
 
+/** What the navigation does with this page: shown, hidden by the admin, or unavailable for the role. */
+export function documentRegisterPageListState(
+  granted: readonly string[] | null | undefined,
+  matrix: RoleAccessMatrix | null | undefined,
+  href: string,
+): "shown" | "hidden" | "no-access" {
+  const fields = { ...(matrix?.fields?.[CONTROLLED_DOCUMENT_ENTITY] ?? {}) };
+  const key = documentRegisterNavTargetKey(href);
+  const hidden = fields[key] === "hide";
+  delete fields[key];
+  const stripped: RoleAccessMatrix = {
+    ...(matrix ?? {}),
+    fields: {
+      ...(matrix?.fields ?? {}),
+      [CONTROLLED_DOCUMENT_ENTITY]: fields,
+    },
+  };
+  if (!documentRegisterPreviewAllowsPath(granted, stripped, href)) return "no-access";
+  return hidden ? "hidden" : "shown";
+}
+
 type PreviewNavNode = {
   title: string;
   href?: string | null;
@@ -168,8 +199,15 @@ export function filterNavGroupsForDocumentRegisterPreview<T extends PreviewNavNo
       ...group,
       items: group.items.flatMap((item): T[] => {
         if (item.items) {
+          if (item.items.length === 0) {
+            return [item];
+          }
           const next = item.items.filter((sub) => allowsHref(sub.href ?? ""));
-          if (item.title === "Document register") {
+          if (
+            item.title === "EDCS" ||
+            item.title === "Electronic Document Control System" ||
+            item.title === "Document register"
+          ) {
             return [{ ...item, items: next }];
           }
           if (next.length === 0) {

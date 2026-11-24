@@ -119,18 +119,41 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
 
     const crumbs: WorkspaceBreadcrumb[] = [{ label: moduleRoot.label, href: moduleRoot.href }];
 
-    // DocExtract list is /doc-extract (not /doc-extract/batches); skip the alias segment.
     if (root === "doc-extract" && parts[1] === "batches") {
       if (parts.length === 2) {
         crumbs.push({ label: "Batches" });
         return crumbs;
       }
-      crumbs.push({ label: "Batches", href: "/doc-extract" });
+      crumbs.push({ label: "Batches", href: "/doc-extract/batches" });
       pushPathSegments(parts, 2, crumbs);
       return crumbs;
     }
 
     pushPathSegments(parts, 1, crumbs);
+    return crumbs;
+  }
+
+  if (root === "documents" && parts[1] === "controlled") {
+    const crumbs: WorkspaceBreadcrumb[] = [
+      { label: "EDCS", href: "/documents/controlled" },
+    ];
+    if (parts.length === 2) {
+      crumbs.push({ label: "Overview" });
+      return crumbs;
+    }
+    if (parts[2] === "new") {
+      crumbs.push({ label: "New document" });
+      return crumbs;
+    }
+    if (parts[2] === "approvals") {
+      crumbs.push({ label: "Approvals" });
+      return crumbs;
+    }
+    if (parts[2] === "requests") {
+      crumbs.push({ label: "Request" });
+      return crumbs;
+    }
+    pushPathSegments(parts, 2, crumbs);
     return crumbs;
   }
 

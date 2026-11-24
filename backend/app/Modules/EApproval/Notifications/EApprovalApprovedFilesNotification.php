@@ -104,17 +104,17 @@ final class EApprovalApprovedFilesNotification extends Notification
             if ($buttons === null || $buttons === []) {
                 $message->action(
                     __('Open review'),
-                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath('open_submission', $openId)),
+                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath('open_submission', $openId, $submission)),
                 );
             } else {
                 $first = $buttons[0];
                 $message->action(
                     $first['label'],
-                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($first['target'], $openId)),
+                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($first['target'], $openId, $submission)),
                 );
                 if (isset($buttons[1])) {
                     $second = $buttons[1];
-                    $secondUrl = $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($second['target'], $openId));
+                    $secondUrl = $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($second['target'], $openId, $submission));
                     $message->line('['.$second['label'].']('.$secondUrl.')');
                 }
             }

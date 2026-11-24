@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   controlledDocumentSubmissionUrl,
   eApprovalRequestUrlFromNewSubmissionQuery,
+  submissionOpenPath,
 } from "@/modules/documents/controlled-document-submission-url";
 
 describe("controlled document submission url", () => {
@@ -14,7 +15,7 @@ describe("controlled document submission url", () => {
         documentCode: "ATC-P-PMO-001",
       }),
     ).toBe(
-      "/e-approval/submissions/new?form_id=019efd72-ab9b-7100-9968-cf8a155f2cf7&controlled_mode=revision&document_code=ATC-P-PMO-001",
+      "/documents/controlled/new?form_id=019efd72-ab9b-7100-9968-cf8a155f2cf7&controlled_mode=revision&document_code=ATC-P-PMO-001",
     );
   });
 
@@ -26,7 +27,16 @@ describe("controlled document submission url", () => {
     });
 
     expect(eApprovalRequestUrlFromNewSubmissionQuery(params)).toBe(
-      "/e-approval/request/019efd72-ab9b-7100-9968-cf8a155f2cf7?controlled_mode=revision&document_code=ATC-P-PMO-001",
+      "/documents/controlled/new?form_id=019efd72-ab9b-7100-9968-cf8a155f2cf7&controlled_mode=revision&document_code=ATC-P-PMO-001",
+    );
+  });
+
+  it("opens a controlled document in EDCS and other forms in E-Forms", () => {
+    expect(submissionOpenPath("sub-1", "iso_document_control", "decide")).toBe(
+      "/documents/controlled/requests/sub-1?tab=decide",
+    );
+    expect(submissionOpenPath("sub-1", "cash_advance", "approvals")).toBe(
+      "/e-approval/submissions/sub-1?tab=approvals",
     );
   });
 

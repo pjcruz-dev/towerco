@@ -10,6 +10,7 @@ use App\Modules\EApproval\Models\EApprovalRequestApproval;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalApprovalStatus;
 use App\Modules\EApproval\Support\EApprovalReviewStep;
+use App\Modules\EApproval\Support\EApprovalSubmissionLink;
 use App\Modules\EApproval\Support\EApprovalSubmissionStatus;
 use App\Modules\Identity\Models\TenantUser;
 use Carbon\Carbon;
@@ -205,7 +206,7 @@ final class EApprovalDashboardService
     private function awaitingApprovalQueue(TenantUser $user): array
     {
         return EApprovalRequestApproval::query()
-            ->with(['submission.form:id,name', 'submission.requestor:id,name,email', 'step'])
+            ->with(['submission.form:id,name,metadata_json', 'submission.requestor:id,name,email', 'step'])
             ->where('approver_id', $user->id)
             ->where('status', EApprovalApprovalStatus::PENDING)
             ->orderBy('created_at')
@@ -234,7 +235,7 @@ final class EApprovalDashboardService
                     'age_days' => $ageDays,
                     'submitted_at' => $submittedAt?->toIso8601String(),
                     'waiting_since' => $approval->created_at?->toIso8601String(),
-                    'href' => $submission ? '/e-approval/submissions/'.$submission->id : '/e-approval/approvals?awaiting_me=1',
+                    'href' => $submission ? EApprovalSubmissionLink::path($submission, 'decide') : '/e-approval/approvals?awaiting_me=1',
                 ];
             })
             ->values()
@@ -247,7 +248,7 @@ final class EApprovalDashboardService
     private function myAttentionQueue(TenantUser $user): array
     {
         return EApprovalSubmission::query()
-            ->with(['form:id,name'])
+            ->with(['form:id,name,metadata_json'])
             ->where('requestor_id', $user->id)
             ->whereIn('status', [
                 EApprovalSubmissionStatus::RETURNED,
@@ -271,7 +272,7 @@ final class EApprovalDashboardService
                     'status_label' => app(EApprovalFinanceStageService::class)->label($submission),
                     'step_order' => $submission->current_step,
                     'waiting_since' => $submission->updated_at?->toIso8601String(),
-                    'href' => '/e-approval/submissions/'.$submission->id,
+                    'href' => EApprovalSubmissionLink::path($submission),
                 ];
             })
             ->values()

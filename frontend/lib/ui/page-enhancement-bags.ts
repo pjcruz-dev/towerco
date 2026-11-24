@@ -45,7 +45,7 @@ export function docExtractBatchesEnhancements(input: {
       id: "dx-processing",
       title: `${input.processing} extraction${input.processing === 1 ? "" : "s"} scanning`,
       subtitle: "Auto-refreshes while processing",
-      href: "/doc-extract?status=processing",
+      href: "/doc-extract/batches?status=processing",
       tone: "neutral",
     });
   }
@@ -54,7 +54,7 @@ export function docExtractBatchesEnhancements(input: {
       id: "dx-failed",
       title: `${input.failed} extraction${input.failed === 1 ? "" : "s"} failed`,
       subtitle: "Review and retry from the batch",
-      href: "/doc-extract?status=failed",
+      href: "/doc-extract/batches?status=failed",
       tone: "danger",
     });
   }
@@ -77,7 +77,7 @@ export function docExtractTemplatesEnhancements(): Partial<
 > {
   return {
     shortcuts: [
-      { href: "/doc-extract", label: "Batches", description: "Back to extractions" },
+      { href: "/doc-extract/batches", label: "Batches", description: "Back to extractions" },
       { href: "/doc-extract/new", label: "New extraction", description: "Run with a published template" },
     ],
     exportsTeaser: exportsTeaser(),

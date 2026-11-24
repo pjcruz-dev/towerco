@@ -222,7 +222,7 @@ final class WorkspaceSearchService
         $query = EApprovalSubmission::query()
             ->select(['id', 'document_no', 'status', 'form_id', 'requestor_id', 'current_step', 'approval_cycle'])
             ->with([
-                'form:id,name',
+                'form:id,name,metadata_json',
                 'requestor:id,name,email',
                 'approvals' => static function ($approvals): void {
                     $approvals
@@ -320,7 +320,7 @@ final class WorkspaceSearchService
                 : ($rawStatus !== null ? EApprovalSubmissionStatus::label($rawStatus) : null),
             'current_step' => $currentStep > 0 ? $currentStep : null,
             'waiting_on' => $waitingOn,
-            'href' => '/e-approval/submissions/'.$submission->id,
+            'href' => EApprovalSubmissionLink::path($submission),
         ];
     }
 

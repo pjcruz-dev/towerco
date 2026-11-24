@@ -103,7 +103,7 @@ export function ControlledDocumentReportsPageClient() {
     <PermissionGate requiredPermissions={[permissions.documentsControlledView]}>
       <div className="space-y-4">
         <WorkspacePageHeader
-          title="Register reports"
+          title="Reports"
           description={
             data
               ? `${data.from} to ${data.to}. Filters change every count and chart. Export downloads this list, up to 5,000 rows.`

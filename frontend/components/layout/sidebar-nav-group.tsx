@@ -83,8 +83,9 @@ export function SidebarNavGroup({
 
   const sortedItems = sortNavItemsBySection(items);
 
-  const homeActive = isNavActive(pathname, href, true);
-  const groupActive = homeActive || sortedItems.some((item) => isNavActive(pathname, item.href, item.exact));
+  const groupActive =
+    isNavActive(pathname, href, false) ||
+    sortedItems.some((item) => isNavActive(pathname, item.href, item.exact));
   const [open, setOpen] = useState(groupActive || forceOpen);
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const flyoutCloseTimer = useRef<number | null>(null);

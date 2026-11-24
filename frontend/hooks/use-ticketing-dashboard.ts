@@ -18,6 +18,7 @@ export type TicketingDashboardFilters = {
   department?: string;
   mine?: boolean;
   assigned_me?: boolean;
+  surface?: "reports";
 };
 
 export function useTicketingDashboard(filters: TicketingDashboardFilters = {}) {
@@ -31,6 +32,7 @@ export function useTicketingDashboard(filters: TicketingDashboardFilters = {}) {
       filters.department ?? "",
       filters.mine ? 1 : 0,
       filters.assigned_me ? 1 : 0,
+      filters.surface ?? "",
     ],
     queryFn: () =>
       fetchTicketingDashboard({
@@ -40,6 +42,7 @@ export function useTicketingDashboard(filters: TicketingDashboardFilters = {}) {
         department: filters.department || undefined,
         mine: filters.mine || undefined,
         assigned_me: filters.assigned_me || undefined,
+        surface: filters.surface,
       }),
     staleTime: 60_000,
     placeholderData: emptyState,

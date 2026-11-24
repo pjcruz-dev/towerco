@@ -7,6 +7,7 @@ namespace App\Modules\EApproval\Notifications;
 use App\Modules\EApproval\Models\EApprovalSubmission;
 use App\Modules\EApproval\Support\EApprovalFormMailConfig;
 use App\Modules\EApproval\Support\EApprovalRevisionRouting;
+use App\Modules\EApproval\Support\EApprovalSubmissionLink;
 use App\Modules\Tenancy\Support\TenantAppUrlResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -110,9 +111,11 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
             $submissionId = (string) $this->submission->id;
             $commentEvent = in_array($this->event, ['comment_added', 'comment_replied', 'comment_mention'], true);
             $trainingEvent = in_array($this->event, ['training_invited', 'training_required', 'publication_released'], true);
-            $actionPath = $trainingEvent
-                ? "/e-approval/submissions/{$submissionId}"
-                : "/e-approval/submissions/{$submissionId}?tab=".($commentEvent ? 'activity' : 'approvals');
+            $actionPath = EApprovalSubmissionLink::path(
+                $this->submission,
+                $trainingEvent ? null : ($commentEvent ? 'activity' : 'approvals'),
+            );
+            $moduleLabel = EApprovalSubmissionLink::isControlledDocument($this->submission) ? 'EDCS' : 'E-Forms';
             $actionLabel = match (true) {
                 $commentEvent => 'Open comment',
                 $this->event === 'training_invited', $this->event === 'training_required' => 'Open training',
@@ -124,7 +127,7 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 ->mailer((string) config('toweros.notifications_mail_mailer', config('mail.default')))
                 ->from((string) config('mail.from.address'), $brand)
                 ->subject($subject)
-                ->greeting("{$brand} — ".__('E-Forms'))
+                ->greeting("{$brand} — ".__($moduleLabel))
                 ->line(__('Document: **:document**', ['document' => $documentNo]))
                 ->line(__('Form: :form', ['form' => $formName]));
 
@@ -290,11 +293,11 @@ final class EApprovalSubmissionNotification extends Notification implements Shou
                 $first = $buttons[0];
                 $message->action(
                     $first['label'],
-                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($first['target'], $submissionId)),
+                    $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($first['target'], $submissionId, $this->submission)),
                 );
                 if (isset($buttons[1])) {
                     $second = $buttons[1];
-                    $secondUrl = $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($second['target'], $submissionId));
+                    $secondUrl = $resolver->urlForCurrentTenant(EApprovalFormMailConfig::buttonPath($second['target'], $submissionId, $this->submission));
                     $message->line('['.$second['label'].']('.$secondUrl.')');
                 }
             }
