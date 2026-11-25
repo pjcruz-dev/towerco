@@ -4,12 +4,22 @@ import {
   authPanelUsesBrandMark,
   contrastForeground,
   cssColorToHex,
+  parseColorInput,
   resolveTenantChrome,
 } from "@/lib/theme/tenant-chrome";
 
 describe("tenant chrome", () => {
   it("turns computed rgb into hex", () => {
     expect(cssColorToHex("rgb(13, 148, 136)")).toBe("#0d9488");
+  });
+
+  it("accepts a typed hex or RGB color", () => {
+    expect(parseColorInput("#0D9488")).toBe("#0d9488");
+    expect(parseColorInput("0D9488")).toBe("#0d9488");
+    expect(parseColorInput("#0d9")).toBe("#00dd99");
+    expect(parseColorInput("rgb(13, 148, 136)")).toBe("#0d9488");
+    expect(parseColorInput("13, 148, 136")).toBe("#0d9488");
+    expect(parseColorInput("teal")).toBeNull();
   });
 
   it("keeps saturated brand marks on the dark auth panel and drops near-black", () => {

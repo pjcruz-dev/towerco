@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Moon, Palette, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,8 +26,10 @@ import { MODULE_ACCENT_TARGETS, moduleStyleFor } from "@/lib/theme/module-accent
 import {
   DEFAULT_TENANT_CHROME,
   isHex6,
+  parseColorInput,
   productPrimaryHex,
   readSwatchHex,
+  TENANT_CHROME_PRESET_HEX,
   TENANT_CHROME_PRESETS,
   type TenantChrome,
   type TenantChromePresetId,
@@ -49,6 +51,104 @@ const COLOR_MODES: { value: WorkspaceColorMode; label: string; icon: typeof Sun 
   { value: "dark", label: "Dark", icon: Moon },
   { value: "system", label: "System", icon: Monitor },
 ];
+
+type ModuleColorDraft = {
+  preset: TenantChromePresetId | "plain" | "custom";
+  accent: string;
+  sidebar: string;
+  background: string;
+  card: string;
+};
+
+function presetForHex(hex: string): TenantChromePresetId | null {
+  const match = TENANT_CHROME_PRESETS.find((preset) => TENANT_CHROME_PRESET_HEX[preset.id] === hex);
+  return match?.id ?? null;
+}
+
+function HexColorField({
+  label,
+  value,
+  fallback,
+  onCommit,
+  allowClear,
+  inputRef,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  onCommit: (hex: string) => void;
+  allowClear?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
+}) {
+  const shown = isHex6(value) ? value.toUpperCase() : "";
+  const [text, setText] = useState(shown);
+  const [focused, setFocused] = useState(false);
+  const [synced, setSynced] = useState(shown);
+  if (!focused && synced !== shown) {
+    setSynced(shown);
+    setText(shown);
+  }
+
+  const swatch = isHex6(value) ? value : fallback;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-14 shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <input
+        type="color"
+        aria-label={`${label} color`}
+        className="size-7 shrink-0 cursor-pointer rounded border border-border bg-white p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        value={swatch}
+        onChange={(event) => onCommit(event.target.value)}
+      />
+      <input
+        ref={inputRef}
+        type="text"
+        spellCheck={false}
+        aria-label={`${label} hex`}
+        placeholder="#0D9488"
+        maxLength={22}
+        className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground uppercase placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        value={text}
+        onFocus={() => setFocused(true)}
+        onChange={(event) => {
+          const next = event.target.value;
+          setText(next);
+          const parsed = parseColorInput(next);
+          if (parsed) {
+            onCommit(parsed);
+          } else if (allowClear && next.trim() === "") {
+            onCommit("");
+          }
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const parsed = parseColorInput(text);
+          if (parsed) {
+            onCommit(parsed);
+            setText(parsed.toUpperCase());
+            return;
+          }
+          if (allowClear && text.trim() === "") {
+            onCommit("");
+            setText("");
+            return;
+          }
+          setText(shown);
+        }}
+      />
+      {allowClear && value ? (
+        <button
+          type="button"
+          className="shrink-0 text-[10px] text-foreground underline"
+          onClick={() => onCommit("")}
+        >
+          Default
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 function chromeFrom(source: WorkspaceAppearance | null): TenantChrome {
   if (source?.saved) {
@@ -73,13 +173,11 @@ export function TenantAppearanceCustomizer() {
   const { theme, setTheme } = useTheme();
 
   const [draft, setDraft] = useState<TenantChrome>(DEFAULT_TENANT_CHROME);
-  const [moduleAccents, setModuleAccents] = useState<
-    Record<string, { preset: TenantChromePresetId | "plain"; sidebar: string; background: string; card: string }>
-  >({});
+  const [moduleAccents, setModuleAccents] = useState<Record<string, ModuleColorDraft>>({});
   const [colorMode, setColorMode] = useState<WorkspaceColorMode>("system");
   const [dirty, setDirty] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
-  const colorRef = useRef<HTMLInputElement>(null);
+  const primaryHexRef = useRef<HTMLInputElement>(null);
   const swatchRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const themeOnOpen = useRef<WorkspaceColorMode>("system");
   const skipThemeRestore = useRef(false);
@@ -106,14 +204,13 @@ export function TenantAppearanceCustomizer() {
     }
     setDraft(chromeFrom(saved));
     setColorMode(saved?.colorMode ?? themeOnOpen.current);
-    const accents: Record<
-      string,
-      { preset: TenantChromePresetId | "plain"; sidebar: string; background: string; card: string }
-    > = {};
+    const accents: Record<string, ModuleColorDraft> = {};
     for (const shell of MODULE_ACCENT_TARGETS) {
       const style = moduleStyleFor(branding?.module_accents, shell.id);
+      const preset = style?.primary_preset;
       accents[shell.id] = {
-        preset: style?.primary_preset && style.primary_preset !== "custom" ? style.primary_preset : "plain",
+        preset: preset && preset !== "plain" ? preset : "plain",
+        accent: style?.primary ?? "",
         sidebar: style?.sidebar ?? "",
         background: style?.background ?? "",
         card: style?.card ?? "",
@@ -152,7 +249,7 @@ export function TenantAppearanceCustomizer() {
                 moduleId,
                 {
                   primary_preset: style.preset,
-                  primary: null,
+                  primary: style.preset === "custom" && isHex6(style.accent) ? style.accent : null,
                   sidebar: style.sidebar || null,
                   background: style.background || null,
                   card: style.card || null,
@@ -226,6 +323,15 @@ export function TenantAppearanceCustomizer() {
     update({ primary_preset: preset, primary: null });
   }
 
+  function applyPrimaryHex(hex: string) {
+    if (!isHex6(hex)) {
+      update({ primary_preset: null, primary: null });
+      return;
+    }
+    const preset = presetForHex(hex);
+    update(preset ? { primary_preset: preset, primary: null } : { primary_preset: "custom", primary: hex });
+  }
+
   function selectCustom() {
     const seed = isHex6(draft.primary)
       ? draft.primary
@@ -233,7 +339,26 @@ export function TenantAppearanceCustomizer() {
           draft.primary_preset && draft.primary_preset !== "custom" ? draft.primary_preset : "teal",
         ) ?? productPrimaryHex();
     update({ primary_preset: "custom", primary: seed });
-    window.setTimeout(() => colorRef.current?.click(), 0);
+    window.setTimeout(() => primaryHexRef.current?.focus(), 0);
+  }
+
+  function applyModuleHex(moduleId: string, style: ModuleColorDraft, key: "accent" | "sidebar" | "background" | "card", hex: string) {
+    setDirty(true);
+    setModuleAccents((current) => {
+      const base = current[moduleId] ?? style;
+      if (key !== "accent") {
+        return { ...current, [moduleId]: { ...base, [key]: hex } };
+      }
+      const preset = isHex6(hex) ? presetForHex(hex) : null;
+      return {
+        ...current,
+        [moduleId]: {
+          ...base,
+          preset: hex === "" ? "plain" : (preset ?? "custom"),
+          accent: preset || hex === "" ? "" : hex,
+        },
+      };
+    });
   }
 
   function reset() {
@@ -253,7 +378,7 @@ export function TenantAppearanceCustomizer() {
         setOpen(next);
       }}
     >
-      <SheetContent className="w-full gap-0 overflow-hidden sm:max-w-sm">
+      <SheetContent className="w-full gap-0 overflow-hidden sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Customize workspace</SheetTitle>
           <SheetDescription>
@@ -351,31 +476,42 @@ export function TenantAppearanceCustomizer() {
               >
                 <Palette className="size-4" aria-hidden />
               </button>
-              <input
-                ref={colorRef}
-                type="color"
-                className="sr-only"
-                tabIndex={-1}
-                aria-label="Custom primary color value"
-                value={isHex6(draft.primary) ? draft.primary : productPrimaryHex()}
-                onChange={(event) => {
-                  update({ primary_preset: "custom", primary: event.target.value });
-                }}
-              />
             </div>
+            <HexColorField
+              label="Color"
+              inputRef={primaryHexRef}
+              allowClear
+              fallback={productPrimaryHex()}
+              value={
+                draft.primary_preset === "custom" && isHex6(draft.primary)
+                  ? draft.primary
+                  : draft.primary_preset && draft.primary_preset !== "custom"
+                    ? TENANT_CHROME_PRESET_HEX[draft.primary_preset]
+                    : ""
+              }
+              onCommit={applyPrimaryHex}
+            />
+            <p className="text-[11px] text-muted-foreground">Type a hex color such as #0D9488, or RGB such as 13, 148, 136.</p>
             {canSetModuleColors ? (
               <div className="space-y-3">
                 <p className="text-xs font-medium text-muted-foreground">Module accents</p>
                 <p className="text-xs text-muted-foreground">
-                  Plain keeps the white page. Accent colors buttons, links, and charts. Sidebar, page, and cards stay white until you pick a color. Success, warning, and error stay the same.
+                  Type a hex color such as #0D9488, or RGB such as 13, 148, 136. Plain keeps the white page. Success, warning, and error stay the same.
                 </p>
                 {MODULE_ACCENT_TARGETS.map((shell) => {
                   const style = moduleAccents[shell.id] ?? {
                     preset: "plain" as const,
+                    accent: "",
                     sidebar: "",
                     background: "",
                     card: "",
                   };
+                  const accentHex =
+                    style.preset === "custom" && isHex6(style.accent)
+                      ? style.accent
+                      : style.preset !== "plain" && style.preset !== "custom"
+                        ? TENANT_CHROME_PRESET_HEX[style.preset]
+                        : "";
                   return (
                     <div key={shell.id} className="space-y-2 rounded-lg border border-border p-2">
                       <div className="flex items-center justify-between gap-3">
@@ -390,7 +526,7 @@ export function TenantAppearanceCustomizer() {
                               setDirty(true);
                               setModuleAccents((current) => ({
                                 ...current,
-                                [shell.id]: { ...style, preset: "plain" },
+                                [shell.id]: { ...style, preset: "plain", accent: "" },
                               }));
                             }}
                             className={cn(
@@ -411,7 +547,7 @@ export function TenantAppearanceCustomizer() {
                                   setDirty(true);
                                   setModuleAccents((current) => ({
                                     ...current,
-                                    [shell.id]: { ...style, preset: preset.id },
+                                    [shell.id]: { ...style, preset: preset.id, accent: "" },
                                   }));
                                 }}
                                 className={cn(
@@ -424,7 +560,14 @@ export function TenantAppearanceCustomizer() {
                           })}
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1.5">
+                        <HexColorField
+                          label="Accent"
+                          allowClear
+                          fallback="#ffffff"
+                          value={accentHex}
+                          onCommit={(hex) => applyModuleHex(shell.id, style, "accent", hex)}
+                        />
                         {(
                           [
                             ["sidebar", "Sidebar"],
@@ -432,39 +575,14 @@ export function TenantAppearanceCustomizer() {
                             ["card", "Cards"],
                           ] as const
                         ).map(([key, label]) => (
-                          <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
-                            <span className="block">{label}</span>
-                            <span className="flex items-center gap-1">
-                              <input
-                                type="color"
-                                aria-label={`${shell.title} ${label}`}
-                                className="h-7 w-full cursor-pointer rounded border border-border bg-white"
-                                value={isHex6(style[key]) ? style[key] : "#ffffff"}
-                                onChange={(event) => {
-                                  setDirty(true);
-                                  setModuleAccents((current) => ({
-                                    ...current,
-                                    [shell.id]: { ...style, [key]: event.target.value },
-                                  }));
-                                }}
-                              />
-                              {style[key] ? (
-                                <button
-                                  type="button"
-                                  className="shrink-0 text-[10px] text-foreground underline"
-                                  onClick={() => {
-                                    setDirty(true);
-                                    setModuleAccents((current) => ({
-                                      ...current,
-                                      [shell.id]: { ...style, [key]: "" },
-                                    }));
-                                  }}
-                                >
-                                  Default
-                                </button>
-                              ) : null}
-                            </span>
-                          </label>
+                          <HexColorField
+                            key={key}
+                            label={label}
+                            allowClear
+                            fallback="#ffffff"
+                            value={style[key]}
+                            onCommit={(hex) => applyModuleHex(shell.id, style, key, hex)}
+                          />
                         ))}
                       </div>
                     </div>

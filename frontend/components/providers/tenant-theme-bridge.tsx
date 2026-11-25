@@ -33,9 +33,10 @@ export function TenantThemeBridge() {
   const pathname = usePathname();
   const shell = resolveModuleShell(pathname ?? "/");
   const moduleStyle = shell.kind === "module" ? moduleStyleFor(branding?.module_accents, shell.id) : null;
-  const moduleAccent = moduleStyle?.primary_preset
-    ? { primary_preset: moduleStyle.primary_preset, primary: moduleStyle.primary }
-    : null;
+  const moduleAccent =
+    moduleStyle?.primary_preset && moduleStyle.primary_preset !== "plain"
+      ? { primary_preset: moduleStyle.primary_preset, primary: moduleStyle.primary }
+      : null;
 
   const [hostname, setHostname] = useState<string | null>(null);
 

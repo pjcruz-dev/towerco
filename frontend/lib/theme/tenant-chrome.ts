@@ -127,8 +127,41 @@ export function resolveTenantChrome(
   return null;
 }
 
+export const TENANT_CHROME_PRESET_HEX: Record<TenantChromePresetId, string> = {
+  violet: "#7367f0",
+  teal: "#0d9488",
+  rose: "#e11d48",
+  amber: "#f59e0b",
+  blue: "#2563eb",
+};
+
 export function isHex6(value: string | null | undefined): value is string {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+/** Accepts `#0D9488`, `0D9488`, `#0d9`, `rgb(13, 148, 136)`, or `13, 148, 136`. */
+export function parseColorInput(raw: string): string | null {
+  const value = raw.trim();
+  const hex = value.match(/^#?([0-9a-fA-F]{6})$/);
+  if (hex) {
+    return `#${hex[1].toLowerCase()}`;
+  }
+  const short = value.match(/^#?([0-9a-fA-F]{3})$/);
+  if (short) {
+    const [red, green, blue] = short[1];
+    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
+  }
+  const rgb =
+    value.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i) ??
+    value.match(/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/);
+  if (!rgb) {
+    return null;
+  }
+  const channels = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  if (channels.some((channel) => channel > 255)) {
+    return null;
+  }
+  return rgbToHex(channels[0], channels[1], channels[2]);
 }
 
 export function cssColorToHex(value: string): string | null {
