@@ -22,7 +22,7 @@ import {
   deleteUserUiPreference,
   putUserUiPreference,
 } from "@/lib/api/modules/user-ui-preferences-api";
-import { MODULE_ACCENT_TARGETS, moduleStyleFor } from "@/lib/theme/module-accents";
+import { MODULE_ACCENT_TARGETS, moduleStyleFor, type ModuleAccentMap } from "@/lib/theme/module-accents";
 import {
   DEFAULT_TENANT_CHROME,
   isHex6,
@@ -166,6 +166,7 @@ export function TenantAppearanceCustomizer() {
   const open = useTenantAppearanceStore((state) => state.open);
   const setOpen = useTenantAppearanceStore((state) => state.setOpen);
   const setPreview = useTenantAppearanceStore((state) => state.setPreview);
+  const setModulePreview = useTenantAppearanceStore((state) => state.setModulePreview);
   const saved = useTenantAppearanceStore((state) => state.saved);
   const setSaved = useTenantAppearanceStore((state) => state.setSaved);
   const notify = useNotificationStore((state) => state.push);
@@ -225,6 +226,23 @@ export function TenantAppearanceCustomizer() {
     }
     setPreview({ ...draft, saved: true });
   }, [draft, open, setPreview]);
+
+  useEffect(() => {
+    if (!open || !canSetModuleColors || Object.keys(moduleAccents).length === 0) {
+      return;
+    }
+    const previewAccents: ModuleAccentMap = {};
+    for (const [moduleId, style] of Object.entries(moduleAccents)) {
+      previewAccents[moduleId] = {
+        primary_preset: style.preset === "plain" ? null : style.preset,
+        primary: style.preset === "custom" && isHex6(style.accent) ? style.accent : null,
+        sidebar: style.sidebar || null,
+        background: style.background || null,
+        card: style.card || null,
+      };
+    }
+    setModulePreview(previewAccents);
+  }, [canSetModuleColors, moduleAccents, open, setModulePreview]);
 
   useEffect(() => {
     if (!open || !themeReady) {
@@ -369,6 +387,8 @@ export function TenantAppearanceCustomizer() {
 
   return (
     <Sheet
+      modal={false}
+      disablePointerDismissal
       open={open}
       onOpenChange={(next) => {
         if (!next && !skipThemeRestore.current) {
@@ -378,13 +398,14 @@ export function TenantAppearanceCustomizer() {
         setOpen(next);
       }}
     >
-      <SheetContent className="w-full gap-0 overflow-hidden sm:max-w-md">
+      <SheetContent showOverlay={false} className="w-full gap-0 overflow-hidden shadow-xl sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Customize workspace</SheetTitle>
           <SheetDescription>
+            Live preview. Light, dark, color, skin, layout, and width update this page as you change them.
             {canSetModuleColors
-              ? "Module accents apply to everyone in that module. Skin, layout, and light or dark stay on your account."
-              : "Skin, layout, and light or dark for your account. Other people keep their own design."}
+              ? " Open another module to preview that module. Save to keep module colors for everyone."
+              : " Save to keep skin, layout, and light or dark on your account."}
           </SheetDescription>
         </SheetHeader>
 

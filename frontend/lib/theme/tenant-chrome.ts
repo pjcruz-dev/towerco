@@ -38,16 +38,23 @@ const MANAGED_COLOR_KEYS = [
 /** Surfaces a module accent may tint. Status colors are not in this list. */
 export const MODULE_SURFACE_KEYS = [
   "background",
+  "foreground",
   "card",
+  "card-foreground",
   "popover",
   "sidebar",
+  "sidebar-foreground",
   "sidebar-accent",
+  "sidebar-accent-foreground",
   "sidebar-border",
   "border",
   "input",
   "muted",
+  "muted-foreground",
   "secondary",
+  "secondary-foreground",
   "accent",
+  "accent-foreground",
   "chart-1",
   "chart-2",
   "chart-3",
@@ -264,38 +271,62 @@ export function moduleSurfaceVariables(accentHex: string, mode: "light" | "dark"
   return variables;
 }
 
-/** Admin-chosen surfaces. Empty values keep the shared plain theme. Dark mode keeps the shared dark shell. */
+/** Admin-chosen surfaces. Empty values keep the shared theme, including the dark shell. Text follows the chosen color so light and dark stay readable. */
 export function chosenModuleSurfaceVariables(
   surfaces: { sidebar?: string | null; background?: string | null; card?: string | null },
   mode: "light" | "dark",
 ): Record<string, string> {
-  if (mode === "dark") {
-    return {};
-  }
+  const edge = mode === "dark" ? 0.24 : 0.16;
   const variables: Record<string, string> = {};
   if (isHex6(surfaces.background)) {
+    const foreground = contrastForeground(surfaces.background);
     variables.background = surfaces.background;
+    variables.foreground = foreground;
+    variables.muted = mixHex(surfaces.background, foreground, 0.08);
+    variables.secondary = variables.muted;
+    variables.accent = variables.muted;
+    variables["muted-foreground"] = mixHex(foreground, surfaces.background, 0.35);
+    variables["secondary-foreground"] = foreground;
+    variables["accent-foreground"] = foreground;
+    variables.border = mixHex(surfaces.background, foreground, edge);
+    variables.input = variables.border;
   }
   if (isHex6(surfaces.card)) {
     variables.card = surfaces.card;
-    variables.popover = surfaces.card;
+    variables["card-foreground"] = contrastForeground(surfaces.card);
   }
   if (isHex6(surfaces.sidebar)) {
+    const foreground = contrastForeground(surfaces.sidebar);
     variables.sidebar = surfaces.sidebar;
-    variables["sidebar-accent"] = mixHex(surfaces.sidebar, "#0f172a", 0.06);
-    variables["sidebar-border"] = mixHex(surfaces.sidebar, "#94a3b8", 0.28);
+    variables["sidebar-foreground"] = foreground;
+    variables["sidebar-accent"] = mixHex(surfaces.sidebar, foreground, 0.1);
+    variables["sidebar-accent-foreground"] = foreground;
+    variables["sidebar-border"] = mixHex(surfaces.sidebar, foreground, edge);
   }
   return variables;
+}
+
+function moduleSurfaceHosts(): HTMLElement[] {
+  if (typeof document === "undefined") {
+    return [];
+  }
+  const hosts: HTMLElement[] = [document.documentElement];
+  const shell = document.querySelector(".app-shell-viewport");
+  if (shell instanceof HTMLElement) {
+    hosts.push(shell);
+  }
+  return hosts;
 }
 
 export function applyChosenModuleSurfaces(
   surfaces: { sidebar?: string | null; background?: string | null; card?: string | null },
   mode: "light" | "dark",
 ): void {
-  if (typeof document === "undefined") {
+  const shell = moduleSurfaceHosts().find((host) => host.classList.contains("app-shell-viewport"));
+  const root = shell ?? moduleSurfaceHosts()[0];
+  if (!root) {
     return;
   }
-  const root = document.documentElement;
   for (const [key, value] of Object.entries(chosenModuleSurfaceVariables(surfaces, mode))) {
     root.style.setProperty(`--${key}`, value);
   }
@@ -316,12 +347,10 @@ export function applyModuleCharts(accentHex: string, mode: "light" | "dark"): vo
 }
 
 export function clearModuleSurfaces(): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const root = document.documentElement;
-  for (const key of MODULE_SURFACE_KEYS) {
-    root.style.removeProperty(`--${key}`);
+  for (const root of moduleSurfaceHosts()) {
+    for (const key of MODULE_SURFACE_KEYS) {
+      root.style.removeProperty(`--${key}`);
+    }
   }
 }
 

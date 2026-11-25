@@ -18,12 +18,18 @@ describe("module surfaces", () => {
     expect(keys).not.toContain("warning");
   });
 
-  it("leaves surfaces plain until a color is chosen and skips them in dark mode", () => {
+  it("keeps an empty module on the shared theme and matches text to a chosen color in dark mode", () => {
     expect(chosenModuleSurfaceVariables({}, "light")).toEqual({});
-    expect(chosenModuleSurfaceVariables({ sidebar: "#ffffff", background: "#f8fafc" }, "dark")).toEqual({});
+    expect(chosenModuleSurfaceVariables({}, "dark")).toEqual({});
+    const dark = chosenModuleSurfaceVariables({ sidebar: "#ffffff", background: "#0d9488" }, "dark");
+    expect(dark.sidebar).toBe("#ffffff");
+    expect(dark.background).toBe("#0d9488");
+    expect(dark["sidebar-foreground"]).toBe("#111827");
+    expect(dark.foreground).toBe("#fafafa");
     const light = chosenModuleSurfaceVariables({ sidebar: "#e0f2f1", card: "#ffffff" }, "light");
     expect(light.sidebar).toBe("#e0f2f1");
     expect(light.card).toBe("#ffffff");
+    expect(light["card-foreground"]).toBe("#111827");
     expect(light.background).toBeUndefined();
   });
 

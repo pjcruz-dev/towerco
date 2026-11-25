@@ -29,10 +29,14 @@ export function TenantThemeBridge() {
   const branding = useTenantBrandingStore((s) => s.branding);
   const setBranding = useTenantBrandingStore((s) => s.setBranding);
   const preview = useTenantAppearanceStore((state) => state.preview);
+  const modulePreview = useTenantAppearanceStore((state) => state.modulePreview);
   const chrome = useResolvedTenantChrome();
   const pathname = usePathname();
   const shell = resolveModuleShell(pathname ?? "/");
-  const moduleStyle = shell.kind === "module" ? moduleStyleFor(branding?.module_accents, shell.id) : null;
+  const moduleStyle =
+    shell.kind === "module"
+      ? moduleStyleFor(modulePreview ?? branding?.module_accents, shell.id)
+      : null;
   const moduleAccent =
     moduleStyle?.primary_preset && moduleStyle.primary_preset !== "plain"
       ? { primary_preset: moduleStyle.primary_preset, primary: moduleStyle.primary }
@@ -96,20 +100,18 @@ export function TenantThemeBridge() {
     const mode = resolvedTheme === "dark" ? "dark" : "light";
     const palette = mode === "dark" ? branding?.dark : branding?.light;
     applyTenantThemePalette(palette);
-    if (preview) {
-      applyPreviewPrimary(preview);
-    } else if (moduleAccent) {
+    const personal = preview ?? chrome;
+    if (moduleAccent) {
       applyPreviewPrimary({
-        ...chrome,
         saved: true,
         primary_preset: moduleAccent.primary_preset,
         primary: moduleAccent.primary,
-        skin: chrome?.skin ?? "default",
-        layout: chrome?.layout ?? "vertical",
-        content: chrome?.content ?? "compact",
+        skin: personal?.skin ?? "default",
+        layout: personal?.layout ?? "vertical",
+        content: personal?.content ?? "compact",
       });
-    } else if (chrome?.primary_preset) {
-      applyPreviewPrimary(chrome);
+    } else if (personal?.primary_preset) {
+      applyPreviewPrimary(personal);
     }
     const accentHex =
       moduleAccent == null
@@ -134,7 +136,7 @@ export function TenantThemeBridge() {
       }
       link.href = resolveBrandingAssetUrl(branding.favicon_url) ?? branding.favicon_url;
     }
-  }, [branding, chrome, hostname, moduleAccent, moduleStyle, preview, resolvedTheme]);
+  }, [branding, chrome, hostname, moduleAccent, modulePreview, moduleStyle, preview, resolvedTheme]);
 
   return null;
 }
