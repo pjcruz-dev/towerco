@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { TenantNotificationRow } from "@/components/notifications/tenant-notification-row";
@@ -20,6 +21,7 @@ import {
   filterNotificationsByTab,
   type NotificationTab,
 } from "@/modules/notifications/display";
+import { notificationShellForPath } from "@/modules/notifications/shell";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -37,8 +39,9 @@ export function TenantNotificationBell({ enabled = true }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<NotificationTab>("action");
   const queryClient = useQueryClient();
-  const unreadQuery = useTenantNotificationUnreadCount(enabled);
-  const listQuery = useTenantNotifications(enabled && open);
+  const shell = notificationShellForPath(usePathname());
+  const unreadQuery = useTenantNotificationUnreadCount(enabled, shell);
+  const listQuery = useTenantNotifications(enabled && open, shell);
   const unreadCount = unreadQuery.data ?? 0;
 
   const notifications = listQuery.data?.data ?? [];
@@ -94,7 +97,11 @@ export function TenantNotificationBell({ enabled = true }: Props) {
   });
 
   const markAllReadMutation = useMutation({
-    mutationFn: () => markAllTenantNotificationsRead(tab === "all" ? undefined : { category: tab }),
+    mutationFn: () =>
+      markAllTenantNotificationsRead({
+        ...(tab === "all" ? {} : { category: tab }),
+        ...(shell ? { shell } : {}),
+      }),
     onSuccess: invalidateNotifications,
   });
 

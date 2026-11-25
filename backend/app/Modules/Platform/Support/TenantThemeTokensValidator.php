@@ -69,6 +69,16 @@ final class TenantThemeTokensValidator
 
     private const HOSTED_ASSET_PATH = '/^platform\/tenant-branding\/[0-9a-f-]{36}\/(logo|favicon)\.[a-z0-9]{2,5}$/';
 
+    /** @var list<string> */
+    public const MODULE_ACCENT_IDS = [
+        'e_approval',
+        'ticketing',
+        'document_register',
+        'doc_extract',
+        'asset_management',
+        'dynamic_entities',
+    ];
+
     /**
      * @param  array<string, mixed>  $themeTokens
      * @return ThemeTokens
@@ -92,6 +102,9 @@ final class TenantThemeTokensValidator
                 'chrome.skin' => ['nullable', 'string', 'in:default,bordered'],
                 'chrome.layout' => ['nullable', 'string', 'in:vertical,collapsed,horizontal'],
                 'chrome.content' => ['nullable', 'string', 'in:compact,wide'],
+                'module_accents' => ['nullable', 'array', 'max:12'],
+                'module_accents.*.primary_preset' => ['nullable', 'string', 'in:violet,teal,rose,amber,blue,custom'],
+                'module_accents.*.primary' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             ],
         );
 
@@ -103,6 +116,15 @@ final class TenantThemeTokensValidator
                 }
                 if (! is_string($url) || ! self::isAllowedPublicUrl($url)) {
                     $v->errors()->add($urlKey, __('Use an HTTPS URL or upload a file in Tenant branding.'));
+                }
+            }
+
+            $accents = $themeTokens['module_accents'] ?? null;
+            if (is_array($accents)) {
+                foreach ($accents as $moduleId => $row) {
+                    if (! is_string($moduleId) || ! in_array($moduleId, self::MODULE_ACCENT_IDS, true)) {
+                        $v->errors()->add('module_accents', __('Unknown module color.'));
+                    }
                 }
             }
 
@@ -170,6 +192,7 @@ final class TenantThemeTokensValidator
             'light' => [],
             'dark' => [],
             'chrome' => self::defaultChrome(),
+            'module_accents' => [],
         ];
 
         if (! is_array($raw)) {
@@ -181,6 +204,9 @@ final class TenantThemeTokensValidator
             unset($validated['logo_asset'], $validated['favicon_asset']);
             $validated['chrome'] = self::normalizeChrome(
                 is_array($validated['chrome'] ?? null) ? $validated['chrome'] : null,
+            );
+            $validated['module_accents'] = self::normalizeModuleAccents(
+                is_array($raw['module_accents'] ?? null) ? $raw['module_accents'] : [],
             );
 
             return array_merge($defaults, $validated);
@@ -262,6 +288,35 @@ final class TenantThemeTokensValidator
                 ? (string) $chrome['content']
                 : $defaults['content'],
         ];
+    }
+
+    /**
+     * @param  array<mixed>  $raw
+     * @return array<string, array{primary_preset: string, primary: string|null}>
+     */
+    public static function normalizeModuleAccents(array $raw): array
+    {
+        $allowed = ['violet', 'teal', 'rose', 'amber', 'blue', 'custom'];
+        $out = [];
+        foreach (self::MODULE_ACCENT_IDS as $id) {
+            $row = $raw[$id] ?? null;
+            if (! is_array($row)) {
+                continue;
+            }
+            $preset = $row['primary_preset'] ?? null;
+            if (! is_string($preset) || ! in_array($preset, $allowed, true)) {
+                continue;
+            }
+            $primary = $row['primary'] ?? null;
+            $out[$id] = [
+                'primary_preset' => $preset,
+                'primary' => $preset === 'custom' && is_string($primary) && preg_match('/^#[0-9A-Fa-f]{6}$/', $primary) === 1
+                    ? strtolower($primary)
+                    : null,
+            ];
+        }
+
+        return $out;
     }
 
     public static function isAllowedPublicUrl(string $url): bool

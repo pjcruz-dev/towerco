@@ -91,6 +91,44 @@ final class TenantAppearanceService
     }
 
     /**
+     * Accent color for each module. Neutrals and status colors stay shared.
+     *
+     * @param  array<string, array{primary_preset?: string|null, primary?: string|null}>  $modules
+     * @return array<string, mixed>
+     */
+    public function updateModuleAccents(array $modules, TenantUser $actor): array
+    {
+        $tenant = $this->resolveTenant();
+        $existing = is_array($tenant->theme_tokens) ? $tenant->theme_tokens : [];
+        $before = TenantThemeTokensValidator::normalizeModuleAccents(
+            is_array($existing['module_accents'] ?? null) ? $existing['module_accents'] : [],
+        );
+        $accents = TenantThemeTokensValidator::normalizeModuleAccents($modules);
+
+        $existing['version'] = min(999, max(1, ((int) ($existing['version'] ?? 0)) + 1));
+        $existing['module_accents'] = $accents;
+        if (! isset($existing['light']) || ! is_array($existing['light'])) {
+            $existing['light'] = [];
+        }
+        if (! isset($existing['dark']) || ! is_array($existing['dark'])) {
+            $existing['dark'] = [];
+        }
+        if (! array_key_exists('logo_url', $existing)) {
+            $existing['logo_url'] = null;
+        }
+        if (! array_key_exists('favicon_url', $existing)) {
+            $existing['favicon_url'] = null;
+        }
+
+        $tenant->theme_tokens = TenantThemeTokensValidator::validate($existing);
+        $tenant->save();
+
+        $this->audit($tenant, $actor, $before, $accents, 'module_accents');
+
+        return $this->present($tenant);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function present(Tenant $tenant): array
@@ -104,11 +142,11 @@ final class TenantAppearanceService
      * @param  array<string, mixed>  $before
      * @param  array<string, mixed>  $after
      */
-    private function audit(Tenant $tenant, TenantUser $actor, array $before, array $after): void
+    private function audit(Tenant $tenant, TenantUser $actor, array $before, array $after, string $field = 'chrome'): void
     {
         $recordId = (string) Str::uuid();
         $changes = [
-            'chrome' => [
+            $field => [
                 'from' => $before,
                 'to' => $after,
             ],

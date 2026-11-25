@@ -30,10 +30,12 @@ class TenantNotificationIndexController extends AbstractApiController
         $validated = $request->validate([
             'category' => ['sometimes', 'string', Rule::in(['action', 'update'])],
             'module' => ['sometimes', 'string', Rule::in(TenantNotificationModule::all())],
+            'shell' => ['sometimes', 'string', Rule::in(TenantNotificationShell::all())],
             'unread_only' => ['sometimes', 'boolean'],
         ]);
 
         $module = isset($validated['module']) ? (string) $validated['module'] : null;
+        $shell = isset($validated['shell']) ? (string) $validated['shell'] : null;
         if ($module !== null) {
             abort_unless(TenantNotificationAccess::canAccessModule($user, $module), 403);
         }
@@ -49,6 +51,7 @@ class TenantNotificationIndexController extends AbstractApiController
             $category,
             $unreadOnly,
             $module,
+            $shell,
         );
 
         return $this->okWithMeta(

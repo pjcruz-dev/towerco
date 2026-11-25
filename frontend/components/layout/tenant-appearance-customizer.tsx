@@ -16,10 +16,17 @@ import {
 } from "@/components/ui/sheet";
 import { workspaceAppearanceQueryKey } from "@/components/layout/workspace-appearance-hydrator";
 import { getErrorMessage } from "@/lib/api/error";
+import { hasPermission, permissions } from "@/lib/rbac/permissions";
+import { updateTenantModuleAccents } from "@/lib/api/modules/admin-api";
 import {
   deleteUserUiPreference,
   putUserUiPreference,
 } from "@/lib/api/modules/user-ui-preferences-api";
+import {
+  MODULE_ACCENT_DEFAULTS,
+  MODULE_ACCENT_TARGETS,
+  moduleAccentFor,
+} from "@/lib/theme/module-accents";
 import {
   DEFAULT_TENANT_CHROME,
   isHex6,
@@ -38,6 +45,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
+import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
 import { useNotificationStore } from "@/stores/notification-store";
 
 const COLOR_MODES: { value: WorkspaceColorMode; label: string; icon: typeof Sun }[] = [
@@ -54,7 +62,11 @@ function chromeFrom(source: WorkspaceAppearance | null): TenantChrome {
 }
 
 export function TenantAppearanceCustomizer() {
-  const userId = useAuthStore((state) => state.user?.id);
+  const user = useAuthStore((state) => state.user);
+  const userId = user?.id;
+  const canSetModuleColors = hasPermission(user, [permissions.tenantManage]);
+  const branding = useTenantBrandingStore((state) => state.branding);
+  const setBranding = useTenantBrandingStore((state) => state.setBranding);
   const open = useTenantAppearanceStore((state) => state.open);
   const setOpen = useTenantAppearanceStore((state) => state.setOpen);
   const setPreview = useTenantAppearanceStore((state) => state.setPreview);
@@ -65,6 +77,7 @@ export function TenantAppearanceCustomizer() {
   const { theme, setTheme } = useTheme();
 
   const [draft, setDraft] = useState<TenantChrome>(DEFAULT_TENANT_CHROME);
+  const [moduleAccents, setModuleAccents] = useState<Record<string, TenantChromePresetId>>({});
   const [colorMode, setColorMode] = useState<WorkspaceColorMode>("system");
   const [dirty, setDirty] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
@@ -95,7 +108,16 @@ export function TenantAppearanceCustomizer() {
     }
     setDraft(chromeFrom(saved));
     setColorMode(saved?.colorMode ?? themeOnOpen.current);
-  }, [dirty, open, saved]);
+    const accents: Record<string, TenantChromePresetId> = {};
+    for (const shell of MODULE_ACCENT_TARGETS) {
+      const accent = moduleAccentFor(branding?.module_accents, shell.id);
+      accents[shell.id] =
+        accent && accent.primary_preset !== "custom"
+          ? accent.primary_preset
+          : (MODULE_ACCENT_DEFAULTS[shell.id] ?? "teal");
+    }
+    setModuleAccents(accents);
+  }, [branding?.module_accents, dirty, open, saved]);
 
   useEffect(() => {
     if (!open) {
@@ -112,27 +134,41 @@ export function TenantAppearanceCustomizer() {
   }, [colorMode, open, setTheme, themeReady]);
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const appearance: WorkspaceAppearance = {
         ...draft,
         saved: true,
         colorMode,
         primary: draft.primary_preset === "custom" ? draft.primary : null,
       };
-      return putUserUiPreference(WORKSPACE_APPEARANCE_KEY, serializeWorkspaceAppearance(appearance)).then(
-        () => appearance,
-      );
+      await putUserUiPreference(WORKSPACE_APPEARANCE_KEY, serializeWorkspaceAppearance(appearance));
+      const moduleBranding = canSetModuleColors
+        ? await updateTenantModuleAccents(
+            Object.fromEntries(
+              Object.entries(moduleAccents).map(([moduleId, preset]) => [
+                moduleId,
+                { primary_preset: preset, primary: null },
+              ]),
+            ),
+          )
+        : null;
+      return { appearance, moduleBranding };
     },
-    onSuccess: (appearance) => {
+    onSuccess: ({ appearance, moduleBranding }) => {
       setSaved(appearance);
       setPreview(null);
       setDirty(false);
       skipThemeRestore.current = true;
+      if (moduleBranding) {
+        setBranding({ ...(branding ?? moduleBranding), ...moduleBranding });
+      }
       void queryClient.invalidateQueries({ queryKey: workspaceAppearanceQueryKey(userId) });
       notify({
         level: "success",
         title: "Your workspace design was saved",
-        message: "Only your account uses this color, skin, and layout.",
+        message: canSetModuleColors
+          ? "Module accents apply to everyone. Skin, layout, and light or dark stay on your account."
+          : "Only your account uses this skin and layout.",
       });
       setOpen(false);
     },
@@ -212,7 +248,9 @@ export function TenantAppearanceCustomizer() {
         <SheetHeader>
           <SheetTitle>Customize workspace</SheetTitle>
           <SheetDescription>
-            Color, skin, layout, and content width for your account. Other people keep their own design.
+            {canSetModuleColors
+              ? "Module accents apply to everyone in that module. Skin, layout, and light or dark stay on your account."
+              : "Skin, layout, and light or dark for your account. Other people keep their own design."}
           </SheetDescription>
         </SheetHeader>
 
@@ -316,6 +354,42 @@ export function TenantAppearanceCustomizer() {
                 }}
               />
             </div>
+            {canSetModuleColors ? (
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">Module accents</p>
+                <p className="text-xs text-muted-foreground">
+                  Buttons, links, and the active menu use this color. Pages, cards, and status colors stay shared.
+                </p>
+                {MODULE_ACCENT_TARGETS.map((shell) => (
+                  <div key={shell.id} className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-foreground">{shell.title}</span>
+                    <div className="flex items-center gap-1.5" role="radiogroup" aria-label={`${shell.title} accent`}>
+                      {TENANT_CHROME_PRESETS.map((preset) => {
+                        const selected = moduleAccents[shell.id] === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            aria-label={`${shell.title} ${preset.label}`}
+                            onClick={() => {
+                              setDirty(true);
+                              setModuleAccents((current) => ({ ...current, [shell.id]: preset.id }));
+                            }}
+                            className={cn(
+                              "size-6 rounded-md border border-transparent focus-visible:ring-2 focus-visible:ring-ring",
+                              selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                            )}
+                            style={{ backgroundColor: `var(--chrome-swatch-${preset.id})` }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <OptionSection

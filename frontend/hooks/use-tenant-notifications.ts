@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchTenantNotificationUnreadCount,
   fetchTenantNotificationsIndex,
+  type NotificationShellParam,
   type TenantNotificationsIndexParams,
 } from "@/lib/api/modules/tenant-notifications-api";
 
@@ -14,10 +15,10 @@ export const tenantNotificationQueryKeys = {
     ["tenant", "notifications", "list", params ?? {}] as const,
 };
 
-export function useTenantNotificationUnreadCount(enabled = true) {
+export function useTenantNotificationUnreadCount(enabled = true, shell?: NotificationShellParam | null) {
   return useQuery({
-    queryKey: tenantNotificationQueryKeys.unreadCount,
-    queryFn: fetchTenantNotificationUnreadCount,
+    queryKey: [...tenantNotificationQueryKeys.unreadCount, shell ?? "all"],
+    queryFn: () => fetchTenantNotificationUnreadCount(shell),
     enabled,
     staleTime: 60_000,
     // Relaxed from 60s to 2m: rollout Echo events invalidate ["tenant","notifications"] and we
@@ -41,6 +42,9 @@ export function useTenantNotificationsIndex(
 }
 
 /** Recent notifications for the header popover (first page, up to 50). */
-export function useTenantNotifications(enabled = true) {
-  return useTenantNotificationsIndex({ page: 1, per_page: 50 }, enabled);
+export function useTenantNotifications(enabled = true, shell?: NotificationShellParam | null) {
+  return useTenantNotificationsIndex(
+    { page: 1, per_page: 50, shell: shell ?? undefined },
+    enabled,
+  );
 }

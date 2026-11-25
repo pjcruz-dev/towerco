@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api/client";
 
+import type { ModuleAccentMap } from "@/lib/theme/module-accents";
 import type { TenantChrome } from "@/lib/theme/tenant-chrome";
 
 export type TenantBrandingPayload = {
@@ -9,6 +10,7 @@ export type TenantBrandingPayload = {
   light: Record<string, string>;
   dark: Record<string, string>;
   chrome?: TenantChrome;
+  module_accents?: ModuleAccentMap;
   /** From tenant slug (e.g. ATC). Present on known hosts so pre-login chrome can brand correctly. */
   organization_label?: string | null;
   company_address?: string | null;

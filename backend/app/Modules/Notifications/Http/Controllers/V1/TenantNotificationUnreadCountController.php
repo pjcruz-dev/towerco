@@ -18,9 +18,12 @@ class TenantNotificationUnreadCountController extends AbstractApiController
         TenantNotificationAccess::abortUnlessCanAccessAny($user);
 
         $modules = TenantNotificationAccess::allowedModulesFor($user);
+        $shell = $request->validate([
+            'shell' => ['sometimes', 'string', Rule::in(TenantNotificationShell::all())],
+        ])['shell'] ?? null;
 
         return $this->ok([
-            'count' => $service->unreadCount((string) $user->id, $modules),
+            'count' => $service->unreadCount((string) $user->id, $modules, is_string($shell) ? $shell : null),
         ]);
     }
 }

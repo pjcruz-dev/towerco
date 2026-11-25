@@ -20,6 +20,7 @@ final class TenantNotificationIndexService
         ?string $category = null,
         bool $unreadOnly = false,
         ?string $module = null,
+        ?string $shell = null,
     ): LengthAwarePaginator {
         $query = TenantNotification::query()
             ->where('user_id', $userId)
@@ -28,6 +29,10 @@ final class TenantNotificationIndexService
 
         if ($module !== null && in_array($module, $modules, true)) {
             $query->where('module', $module);
+        }
+
+        if ($shell !== null && in_array($shell, TenantNotificationShell::all(), true)) {
+            TenantNotificationShell::apply($query, $shell);
         }
 
         if ($category === 'action' || $category === 'update') {

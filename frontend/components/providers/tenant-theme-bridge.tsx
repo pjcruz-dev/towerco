@@ -1,10 +1,13 @@
 "use client";
 
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { fetchTenantBranding, resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
+import { resolveModuleShell } from "@/lib/navigation/module-shell";
 import { applyTenantThemePalette, clearTenantThemeCssVariables } from "@/lib/theme/apply-tenant-theme";
+import { moduleAccentFor } from "@/lib/theme/module-accents";
 import { applyPreviewPrimary, applyTenantChromeSurface } from "@/lib/theme/tenant-chrome";
 import { useResolvedTenantChrome, useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
 import { isCentralHostname } from "@/lib/tenant/resolve-tenant-domain";
@@ -19,6 +22,9 @@ export function TenantThemeBridge() {
   const setBranding = useTenantBrandingStore((s) => s.setBranding);
   const preview = useTenantAppearanceStore((state) => state.preview);
   const chrome = useResolvedTenantChrome();
+  const pathname = usePathname();
+  const shell = resolveModuleShell(pathname ?? "/");
+  const moduleAccent = shell.kind === "module" ? moduleAccentFor(branding?.module_accents, shell.id) : null;
 
   const [hostname, setHostname] = useState<string | null>(null);
 
@@ -78,6 +84,16 @@ export function TenantThemeBridge() {
     applyTenantThemePalette(palette);
     if (preview) {
       applyPreviewPrimary(preview);
+    } else if (moduleAccent) {
+      applyPreviewPrimary({
+        ...chrome,
+        saved: true,
+        primary_preset: moduleAccent.primary_preset,
+        primary: moduleAccent.primary,
+        skin: chrome?.skin ?? "default",
+        layout: chrome?.layout ?? "vertical",
+        content: chrome?.content ?? "compact",
+      });
     } else if (chrome?.primary_preset) {
       applyPreviewPrimary(chrome);
     }
@@ -92,7 +108,7 @@ export function TenantThemeBridge() {
       }
       link.href = resolveBrandingAssetUrl(branding.favicon_url) ?? branding.favicon_url;
     }
-  }, [branding, chrome, hostname, preview, resolvedTheme]);
+  }, [branding, chrome, hostname, moduleAccent, preview, resolvedTheme]);
 
   return null;
 }

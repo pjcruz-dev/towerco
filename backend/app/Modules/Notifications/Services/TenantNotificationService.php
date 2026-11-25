@@ -7,6 +7,7 @@ namespace App\Modules\Notifications\Services;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Notifications\Models\TenantNotification;
 use App\Modules\Notifications\Support\TenantNotificationCategoryResolver;
+use App\Modules\Notifications\Support\TenantNotificationShell;
 use Illuminate\Support\Str;
 
 final class TenantNotificationService
@@ -58,17 +59,22 @@ final class TenantNotificationService
     /**
      * @param  list<string>  $modules
      */
-    public function unreadCount(string $userId, array $modules): int
+    public function unreadCount(string $userId, array $modules, ?string $shell = null): int
     {
         if ($modules === []) {
             return 0;
         }
 
-        return TenantNotification::query()
+        $query = TenantNotification::query()
             ->where('user_id', $userId)
             ->whereIn('module', $modules)
-            ->where('is_read', false)
-            ->count();
+            ->where('is_read', false);
+
+        if ($shell !== null && in_array($shell, TenantNotificationShell::all(), true)) {
+            TenantNotificationShell::apply($query, $shell);
+        }
+
+        return $query->count();
     }
 
     public function markRead(string $userId, string $notificationId, ?string $module = null): void
@@ -87,8 +93,13 @@ final class TenantNotificationService
     /**
      * @param  list<string>  $modules
      */
-    public function markAllRead(string $userId, array $modules, ?string $category = null, ?string $module = null): void
-    {
+    public function markAllRead(
+        string $userId,
+        array $modules,
+        ?string $category = null,
+        ?string $module = null,
+        ?string $shell = null,
+    ): void {
         if ($modules === []) {
             return;
         }
@@ -100,6 +111,10 @@ final class TenantNotificationService
 
         if ($module !== null && in_array($module, $modules, true)) {
             $query->where('module', $module);
+        }
+
+        if ($shell !== null && in_array($shell, TenantNotificationShell::all(), true)) {
+            TenantNotificationShell::apply($query, $shell);
         }
 
         if ($category === 'action' || $category === 'update') {

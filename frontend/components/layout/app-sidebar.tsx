@@ -28,6 +28,7 @@ import {
   fetchEApprovalFormWorkspaces,
 } from "@/lib/api/modules/e-approval-api";
 import { useTenantNotificationUnreadCount } from "@/hooks/use-tenant-notifications";
+import { notificationShellForPath } from "@/modules/notifications/shell";
 import { isEApprovalSampleTourActive } from "@/lib/help/e-approval-tour-fixtures";
 import { isDocExtractTourActive } from "@/lib/help/doc-extract-live-tour";
 import { isTicketingTourActive } from "@/lib/help/ticketing-live-tour";
@@ -144,7 +145,10 @@ export function AppSidebar() {
       hasPermission(scopedUser, [permissions.eApprovalView]),
     [enabledModules, scopedUser],
   );
-  const unreadQuery = useTenantNotificationUnreadCount(canViewNotifications);
+  const unreadQuery = useTenantNotificationUnreadCount(
+    canViewNotifications,
+    notificationShellForPath(pathname),
+  );
   const notificationUnread = unreadQuery.data ?? 0;
 
   const canViewEApproval = useMemo(

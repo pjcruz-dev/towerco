@@ -10,6 +10,23 @@ use Tests\TestCase;
 
 final class TenantThemeTokensValidatorTest extends TestCase
 {
+    public function test_accepts_module_accents(): void
+    {
+        $tokens = TenantThemeTokensValidator::validate([
+            'version' => 1,
+            'logo_url' => null,
+            'favicon_url' => null,
+            'light' => [],
+            'dark' => [],
+            'module_accents' => [
+                'document_register' => ['primary_preset' => 'teal', 'primary' => null],
+            ],
+        ]);
+
+        $public = TenantThemeTokensValidator::sanitizeForPublic($tokens);
+        $this->assertSame('teal', $public['module_accents']['document_register']['primary_preset']);
+    }
+
     public function test_accepts_https_logo_url(): void
     {
         $tokens = TenantThemeTokensValidator::validate([
