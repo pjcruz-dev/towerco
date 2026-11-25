@@ -358,7 +358,7 @@ export function TenantAppearanceCustomizer() {
               <div className="space-y-3">
                 <p className="text-xs font-medium text-muted-foreground">Module accents</p>
                 <p className="text-xs text-muted-foreground">
-                  Buttons, links, and the active menu use this color. Pages, cards, and status colors stay shared.
+                  Buttons, links, the sidebar, page background, cards, and charts use this color. Success, warning, and error stay the same in every module.
                 </p>
                 {MODULE_ACCENT_TARGETS.map((shell) => (
                   <div key={shell.id} className="flex items-center justify-between gap-3">

@@ -8,7 +8,14 @@ import { fetchTenantBranding, resolveBrandingAssetUrl } from "@/lib/api/modules/
 import { resolveModuleShell } from "@/lib/navigation/module-shell";
 import { applyTenantThemePalette, clearTenantThemeCssVariables } from "@/lib/theme/apply-tenant-theme";
 import { moduleAccentFor } from "@/lib/theme/module-accents";
-import { applyPreviewPrimary, applyTenantChromeSurface } from "@/lib/theme/tenant-chrome";
+import {
+  applyModuleSurfaces,
+  applyPreviewPrimary,
+  applyTenantChromeSurface,
+  clearModuleSurfaces,
+  isHex6,
+  readSwatchHex,
+} from "@/lib/theme/tenant-chrome";
 import { useResolvedTenantChrome, useTenantAppearanceStore } from "@/stores/tenant-appearance-store";
 import { isCentralHostname } from "@/lib/tenant/resolve-tenant-domain";
 import { useTenantBrandingStore } from "@/stores/tenant-branding-store";
@@ -71,14 +78,16 @@ export function TenantThemeBridge() {
       return;
     }
 
-    if (!branding && !preview && !chrome) {
+    if (!branding && !preview && !chrome && !moduleAccent) {
       clearTenantThemeCssVariables();
+      clearModuleSurfaces();
       applyTenantChromeSurface(null);
 
       return;
     }
 
     clearTenantThemeCssVariables();
+    clearModuleSurfaces();
     const mode = resolvedTheme === "dark" ? "dark" : "light";
     const palette = mode === "dark" ? branding?.dark : branding?.light;
     applyTenantThemePalette(palette);
@@ -96,6 +105,15 @@ export function TenantThemeBridge() {
       });
     } else if (chrome?.primary_preset) {
       applyPreviewPrimary(chrome);
+    }
+    const accentHex =
+      moduleAccent == null
+        ? null
+        : moduleAccent.primary_preset === "custom" && isHex6(moduleAccent.primary)
+          ? moduleAccent.primary
+          : readSwatchHex(moduleAccent.primary_preset);
+    if (accentHex) {
+      applyModuleSurfaces(accentHex, mode);
     }
     applyTenantChromeSurface(chrome);
 

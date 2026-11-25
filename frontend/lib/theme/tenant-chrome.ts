@@ -35,6 +35,82 @@ const MANAGED_COLOR_KEYS = [
   "chart-1",
 ] as const;
 
+/** Surfaces a module accent may tint. Status colors are not in this list. */
+export const MODULE_SURFACE_KEYS = [
+  "background",
+  "card",
+  "popover",
+  "sidebar",
+  "sidebar-accent",
+  "sidebar-border",
+  "border",
+  "input",
+  "muted",
+  "secondary",
+  "accent",
+  "chart-1",
+  "chart-2",
+  "chart-3",
+  "chart-4",
+  "chart-5",
+] as const;
+
+const LIGHT_SURFACES = {
+  background: "#f8fafc",
+  card: "#ffffff",
+  popover: "#ffffff",
+  sidebar: "#ffffff",
+  "sidebar-accent": "#f1f5f9",
+  "sidebar-border": "#e2e8f0",
+  border: "#e2e8f0",
+  input: "#e2e8f0",
+  muted: "#f1f5f9",
+  secondary: "#f1f5f9",
+  accent: "#f1f5f9",
+} as const;
+
+const DARK_SURFACES = {
+  background: "#0f172a",
+  card: "#111827",
+  popover: "#111827",
+  sidebar: "#0f172a",
+  "sidebar-accent": "#1e293b",
+  "sidebar-border": "#1e293b",
+  border: "#1e293b",
+  input: "#1e293b",
+  muted: "#1f2937",
+  secondary: "#1f2937",
+  accent: "#1f2937",
+} as const;
+
+const LIGHT_TINT = {
+  background: 0.08,
+  card: 0.035,
+  popover: 0.035,
+  sidebar: 0.16,
+  "sidebar-accent": 0.24,
+  "sidebar-border": 0.2,
+  border: 0.16,
+  input: 0.12,
+  muted: 0.12,
+  secondary: 0.12,
+  accent: 0.12,
+} as const;
+
+const DARK_TINT = {
+  background: 0.14,
+  card: 0.16,
+  popover: 0.16,
+  sidebar: 0.22,
+  "sidebar-accent": 0.3,
+  "sidebar-border": 0.28,
+  border: 0.24,
+  input: 0.2,
+  muted: 0.18,
+  secondary: 0.18,
+  accent: 0.18,
+} as const;
+
 /** Same cutoff as TenantChromePalette: amber stays dark text, saturated presets stay light text. */
 const LIGHT_TEXT_MAX_LUMINANCE = 0.4;
 
@@ -122,6 +198,58 @@ export function applyTenantChromeSurface(chrome: TenantChrome | null): void {
   }
   root.dataset.skin = chrome.skin;
   root.dataset.content = chrome.content;
+}
+
+export function mixHex(base: string, accent: string, accentWeight: number): string {
+  const from = hexToRgb(base);
+  const toward = hexToRgb(accent);
+  if (!from || !toward) {
+    return base;
+  }
+  const weight = Math.max(0, Math.min(1, accentWeight));
+  return rgbToHex(
+    from[0] * (1 - weight) + toward[0] * weight,
+    from[1] * (1 - weight) + toward[1] * weight,
+    from[2] * (1 - weight) + toward[2] * weight,
+  );
+}
+
+/** Tinted shell for one module. Success, warning, and error are left untouched. */
+export function moduleSurfaceVariables(accentHex: string, mode: "light" | "dark"): Record<string, string> {
+  const bases = mode === "dark" ? DARK_SURFACES : LIGHT_SURFACES;
+  const weights = mode === "dark" ? DARK_TINT : LIGHT_TINT;
+  const variables: Record<string, string> = {};
+  for (const key of Object.keys(bases) as Array<keyof typeof bases>) {
+    variables[key] = mixHex(bases[key], accentHex, weights[key]);
+  }
+  const lift = mode === "dark" ? "#0f172a" : "#ffffff";
+  variables["chart-1"] = accentHex;
+  variables["chart-2"] = mixHex(accentHex, lift, mode === "dark" ? 0.45 : 0.28);
+  variables["chart-3"] = mixHex(accentHex, lift, mode === "dark" ? 0.25 : 0.5);
+  variables["chart-4"] = mixHex(accentHex, lift, mode === "dark" ? 0.62 : 0.68);
+  variables["chart-5"] = mixHex(accentHex, lift, mode === "dark" ? 0.78 : 0.84);
+  return variables;
+}
+
+export function clearModuleSurfaces(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const root = document.documentElement;
+  for (const key of MODULE_SURFACE_KEYS) {
+    root.style.removeProperty(`--${key}`);
+  }
+}
+
+export function applyModuleSurfaces(accentHex: string, mode: "light" | "dark"): void {
+  if (typeof document === "undefined" || !isHex6(accentHex)) {
+    return;
+  }
+  const root = document.documentElement;
+  const variables = moduleSurfaceVariables(accentHex, mode);
+  for (const [key, value] of Object.entries(variables)) {
+    root.style.setProperty(`--${key}`, value);
+  }
 }
 
 export function applyPreviewPrimary(chrome: TenantChrome | null): void {
