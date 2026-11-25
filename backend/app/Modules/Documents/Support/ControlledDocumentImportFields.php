@@ -26,6 +26,7 @@ final class ControlledDocumentImportFields
             ['name' => 'folder_path', 'label' => 'Folder path', 'required' => false],
             ['name' => 'status', 'label' => 'Status', 'required' => false],
             ['name' => 'approver_email', 'label' => 'Approver email', 'required' => false],
+            ['name' => 'created_by_email', 'label' => 'Created by email', 'required' => false],
             ['name' => 'pending_since', 'label' => 'Pending since', 'required' => false],
         ];
     }
@@ -103,6 +104,7 @@ final class ControlledDocumentImportFields
             'folder_path' => ['folder_path', 'file_path', 'path', 'file_name', 'filename', 'attachment'],
             'status' => ['status'],
             'approver_email' => ['approver_email', 'approver'],
+            'created_by_email' => ['created_by_email', 'created_by', 'owner_email', 'author_email'],
             'pending_since' => ['pending_since', 'submitted_at'],
         ];
     }

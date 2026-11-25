@@ -370,6 +370,7 @@ final class ControlledDocumentImportService
             $effectiveDate = $this->parseDate($data['effective_date'] ?? null);
             $nextReviewDate = $this->parseDate($data['next_review_date'] ?? null);
             $documentStatus = $this->resolveImportedDocumentStatus($data, $document);
+            $creator = $this->creator($data, $actor);
 
             if ($document === null) {
                 $document = ControlledDocument::query()->create([
@@ -382,10 +383,13 @@ final class ControlledDocumentImportService
                     'status' => $documentStatus,
                     'effective_date' => $effectiveDate,
                     'next_review_date' => $nextReviewDate,
-                    'created_by_id' => $actor->id,
+                    'created_by_id' => $creator->id,
                     'published_at' => $documentStatus === ControlledDocumentStatus::PUBLISHED ? now() : null,
                 ]);
             } else {
+                if ($this->createdByEmail($data) !== '') {
+                    $document->created_by_id = $creator->id;
+                }
                 $document->fill([
                     'title' => $title,
                     'document_type' => $this->labels->documentType($this->nullableString($data['document_type'] ?? null)) ?? $document->document_type,
@@ -413,7 +417,7 @@ final class ControlledDocumentImportService
                 'effective_date' => $effectiveDate,
                 'approved_at' => now(),
                 'approved_by_id' => $actor->id,
-                'created_by_id' => $actor->id,
+                'created_by_id' => $creator->id,
             ]);
 
             if ($file instanceof UploadedFile) {
@@ -744,6 +748,63 @@ final class ControlledDocumentImportService
     /**
      * @param  array<string, string|null>  $data
      */
+    private function createdByEmail(array $data): string
+    {
+        return strtolower(trim((string) ($data['created_by_email'] ?? '')));
+    }
+
+    /**
+     * @param  array<string, string|null>  $data
+     */
+    private function creatorProblem(array $data): ?string
+    {
+        $email = $this->createdByEmail($data);
+        if ($email === '') {
+            return null;
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return __('created_by_email must be an email address.');
+        }
+
+        if ($this->activeUserByEmail($email) === null) {
+            return __('No active user matches :email.', ['email' => $email]);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, string|null>  $data
+     */
+    private function creator(array $data, TenantUser $actor): TenantUser
+    {
+        $email = $this->createdByEmail($data);
+        if ($email === '') {
+            return $actor;
+        }
+
+        $owner = $this->activeUserByEmail($email);
+        if (! $owner instanceof TenantUser) {
+            throw ValidationException::withMessages([
+                'created_by_email' => [__('No active user matches :email.', ['email' => $email])],
+            ]);
+        }
+
+        return $owner;
+    }
+
+    private function activeUserByEmail(string $email): ?TenantUser
+    {
+        return TenantUser::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * @param  array<string, string|null>  $data
+     */
     private function rowProblem(array $data, string $fileStatus): ?string
     {
         $code = trim((string) ($data['document_code'] ?? ''));
@@ -760,6 +821,11 @@ final class ControlledDocumentImportService
         $dcfProblem = $this->dcfNumbers->importProblem($data['dcf_number'] ?? null, $status === 'pending');
         if ($dcfProblem !== null) {
             return $dcfProblem;
+        }
+
+        $creatorProblem = $this->creatorProblem($data);
+        if ($creatorProblem !== null) {
+            return $creatorProblem;
         }
 
         return match ($fileStatus) {

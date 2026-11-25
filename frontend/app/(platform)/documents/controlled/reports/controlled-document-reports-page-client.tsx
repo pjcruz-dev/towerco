@@ -1,6 +1,7 @@
 "use client";
 
 import { Download } from "lucide-react";
+import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -258,7 +259,7 @@ export function ControlledDocumentReportsPageClient() {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Metric label="In this period" value={data?.counts.total} detail={data ? `${data.from} – ${data.to}` : "Published in the window"} />
           <Metric
             label="Published"
@@ -269,6 +270,12 @@ export function ControlledDocumentReportsPageClient() {
             label="Obsolete"
             value={data?.counts.obsolete}
             detail={data ? `${shareOf(data.counts.obsolete, total)}% of this period` : "—"}
+          />
+          <Metric
+            label="Drafts"
+            value={data?.drafts?.count}
+            detail="Unsent document requests you saved"
+            href={data?.drafts?.href ?? "/e-approval/submissions?status=draft&mine=1"}
           />
           <Metric
             label="Aging"
@@ -375,12 +382,35 @@ export function ControlledDocumentReportsPageClient() {
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: number | null | undefined; detail: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+function Metric({
+  label,
+  value,
+  detail,
+  href,
+}: {
+  label: string;
+  value: number | null | undefined;
+  detail: string;
+  href?: string;
+}) {
+  const body = (
+    <>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-2xl font-medium tabular-nums text-foreground">{value ?? "—"}</p>
       <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">{detail}</p>
-    </div>
+    </>
+  );
+
+  if (!href) {
+    return <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">{body}</div>;
+  }
+
+  return (
+    <Link
+      href={href}
+      className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-muted/40"
+    >
+      {body}
+    </Link>
   );
 }

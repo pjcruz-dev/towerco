@@ -302,8 +302,8 @@ export function ControlledDocumentOverviewPageClient() {
             </Button>
           </div>
         ) : overviewQuery.isLoading || !data || !counts ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }, (_, index) => (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }, (_, index) => (
               <div key={index} className="h-24 animate-pulse rounded-xl border border-border bg-muted/40" />
             ))}
           </div>
@@ -357,7 +357,7 @@ function OverviewBody({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <ShareCard
           label="Pending"
           value={counts.pending + counts.incoming}
@@ -375,6 +375,12 @@ function OverviewBody({
           value={counts.obsolete}
           detail={`${shareOf(counts.obsolete, total)}% of the register`}
           href={registerHref({ "filter[status]": "obsolete" })}
+        />
+        <ShareCard
+          label="Drafts"
+          value={data.drafts?.count ?? 0}
+          detail="Unsent document requests you saved"
+          href={data.drafts?.href ?? "/e-approval/submissions?status=draft&mine=1"}
         />
         <ShareCard
           label="Aging"

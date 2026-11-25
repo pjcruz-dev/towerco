@@ -202,6 +202,7 @@ export type ControlledDocumentOverview = {
   facets: { departments: string[]; document_types: string[] };
   mix: { pending: number; approved: number; obsolete: number };
   aging_summary: { documents: number; people: number; oldest_days: number };
+  drafts?: { count: number; href: string };
   departments: Array<{
     key: string;
     label: string;
@@ -272,6 +273,7 @@ export type ControlledDocumentReport = {
   mix: { pending: number; approved: number; obsolete: number };
   aging: ControlledDocumentOverview["aging"];
   aging_summary: ControlledDocumentOverview["aging_summary"];
+  drafts?: { count: number; href: string };
 };
 
 export async function fetchControlledDocumentOverview(params?: {

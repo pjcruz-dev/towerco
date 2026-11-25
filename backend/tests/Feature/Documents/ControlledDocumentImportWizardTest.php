@@ -369,4 +369,48 @@ final class ControlledDocumentImportWizardTest extends TestCase
             Carbon::setTestNow();
         }
     }
+
+    public function test_import_created_by_email_sets_the_document_owner(): void
+    {
+        tenancy()->initialize($this->testTenant);
+        $owner = TenantUser::query()->create([
+            'name' => 'Ricardo Corpuz',
+            'email' => 'owner.import@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        tenancy()->end();
+
+        $csv = "document_code,title,created_by_email\nATC-FAD-P-001,Finance policy,owner.import@test.localhost\n";
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/documents/controlled/import/analyze', [
+                'file' => UploadedFile::fake()->createWithContent('register.csv', $csv),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.suggested_map.created_by_email', 'created_by_email');
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->post('/api/v1/documents/controlled/import/run', [
+                'file' => UploadedFile::fake()->createWithContent('register.csv', $csv),
+                'column_map' => json_encode([
+                    'document_code' => 'document_code',
+                    'title' => 'title',
+                    'created_by_email' => 'created_by_email',
+                ]),
+                'available_paths' => json_encode([]),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.errors', []);
+
+        tenancy()->initialize($this->testTenant);
+        $this->assertSame(
+            (string) $owner->id,
+            (string) ControlledDocument::query()->where('document_code', 'ATC-FAD-P-001')->value('created_by_id'),
+        );
+        tenancy()->end();
+    }
 }

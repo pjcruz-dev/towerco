@@ -316,6 +316,7 @@ final class ControlledDocumentRegistryService
             'mix' => $this->registerMix($filtered, $incomingCodes),
             'aging' => $this->agingRowsFrom($agingGrouped = $this->agingByDocumentCode($filtered)),
             'aging_summary' => $this->agingSummary($agingGrouped),
+            'drafts' => $this->myDocumentDrafts($actor),
             'recent' => $recent->map(static fn (ControlledDocument $document): array => [
                 'id' => (string) $document->id,
                 'document_code' => $document->document_code,
@@ -561,6 +562,28 @@ final class ControlledDocumentRegistryService
             'mix' => $this->registerMix($filtered, array_keys($this->openRevisionIndex())),
             'aging' => $this->agingRows($filtered),
             'aging_summary' => $this->agingSummary($this->agingByDocumentCode($filtered)),
+            'drafts' => $this->myDocumentDrafts($actor),
+        ];
+    }
+
+    /**
+     * Unsent document-control requests saved by this person.
+     *
+     * @return array{count: int, href: string}
+     */
+    private function myDocumentDrafts(TenantUser $actor): array
+    {
+        $count = EApprovalSubmission::query()
+            ->where('requestor_id', $actor->id)
+            ->where('status', EApprovalSubmissionStatus::DRAFT)
+            ->whereHas('form', static function (Builder $form): void {
+                $form->where('metadata_json->form_family', 'iso_document_control');
+            })
+            ->count();
+
+        return [
+            'count' => $count,
+            'href' => '/e-approval/submissions?status=draft&mine=1',
         ];
     }
 
