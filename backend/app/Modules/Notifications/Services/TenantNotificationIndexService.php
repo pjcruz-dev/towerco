@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Services;
 
 use App\Modules\Notifications\Models\TenantNotification;
+use App\Modules\Notifications\Support\TenantNotificationShell;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class TenantNotificationIndexService
