@@ -7,9 +7,10 @@ import { useEffect, useState } from "react";
 import { fetchTenantBranding, resolveBrandingAssetUrl } from "@/lib/api/modules/branding-api";
 import { resolveModuleShell } from "@/lib/navigation/module-shell";
 import { applyTenantThemePalette, clearTenantThemeCssVariables } from "@/lib/theme/apply-tenant-theme";
-import { moduleAccentFor } from "@/lib/theme/module-accents";
+import { moduleStyleFor } from "@/lib/theme/module-accents";
 import {
-  applyModuleSurfaces,
+  applyChosenModuleSurfaces,
+  applyModuleCharts,
   applyPreviewPrimary,
   applyTenantChromeSurface,
   clearModuleSurfaces,
@@ -31,7 +32,10 @@ export function TenantThemeBridge() {
   const chrome = useResolvedTenantChrome();
   const pathname = usePathname();
   const shell = resolveModuleShell(pathname ?? "/");
-  const moduleAccent = shell.kind === "module" ? moduleAccentFor(branding?.module_accents, shell.id) : null;
+  const moduleStyle = shell.kind === "module" ? moduleStyleFor(branding?.module_accents, shell.id) : null;
+  const moduleAccent = moduleStyle?.primary_preset
+    ? { primary_preset: moduleStyle.primary_preset, primary: moduleStyle.primary }
+    : null;
 
   const [hostname, setHostname] = useState<string | null>(null);
 
@@ -78,7 +82,7 @@ export function TenantThemeBridge() {
       return;
     }
 
-    if (!branding && !preview && !chrome && !moduleAccent) {
+    if (!branding && !preview && !chrome && !moduleStyle) {
       clearTenantThemeCssVariables();
       clearModuleSurfaces();
       applyTenantChromeSurface(null);
@@ -113,7 +117,10 @@ export function TenantThemeBridge() {
           ? moduleAccent.primary
           : readSwatchHex(moduleAccent.primary_preset);
     if (accentHex) {
-      applyModuleSurfaces(accentHex, mode);
+      applyModuleCharts(accentHex, mode);
+    }
+    if (moduleStyle) {
+      applyChosenModuleSurfaces(moduleStyle, mode);
     }
     applyTenantChromeSurface(chrome);
 
@@ -126,7 +133,7 @@ export function TenantThemeBridge() {
       }
       link.href = resolveBrandingAssetUrl(branding.favicon_url) ?? branding.favicon_url;
     }
-  }, [branding, chrome, hostname, moduleAccent, preview, resolvedTheme]);
+  }, [branding, chrome, hostname, moduleAccent, moduleStyle, preview, resolvedTheme]);
 
   return null;
 }

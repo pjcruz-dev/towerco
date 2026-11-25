@@ -103,8 +103,11 @@ final class TenantThemeTokensValidator
                 'chrome.layout' => ['nullable', 'string', 'in:vertical,collapsed,horizontal'],
                 'chrome.content' => ['nullable', 'string', 'in:compact,wide'],
                 'module_accents' => ['nullable', 'array', 'max:12'],
-                'module_accents.*.primary_preset' => ['nullable', 'string', 'in:violet,teal,rose,amber,blue,custom'],
+                'module_accents.*.primary_preset' => ['nullable', 'string', 'in:plain,violet,teal,rose,amber,blue,custom'],
                 'module_accents.*.primary' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'module_accents.*.sidebar' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'module_accents.*.background' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'module_accents.*.card' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             ],
         );
 
@@ -292,7 +295,7 @@ final class TenantThemeTokensValidator
 
     /**
      * @param  array<mixed>  $raw
-     * @return array<string, array{primary_preset: string, primary: string|null}>
+     * @return array<string, array{primary_preset: string|null, primary: string|null, sidebar: string|null, background: string|null, card: string|null}>
      */
     public static function normalizeModuleAccents(array $raw): array
     {
@@ -304,19 +307,33 @@ final class TenantThemeTokensValidator
                 continue;
             }
             $preset = $row['primary_preset'] ?? null;
-            if (! is_string($preset) || ! in_array($preset, $allowed, true)) {
+            $preset = is_string($preset) && in_array($preset, $allowed, true) ? $preset : null;
+            $primary = $row['primary'] ?? null;
+            $sidebar = self::hexOrNull($row['sidebar'] ?? null);
+            $background = self::hexOrNull($row['background'] ?? null);
+            $card = self::hexOrNull($row['card'] ?? null);
+            if ($preset === null && $sidebar === null && $background === null && $card === null) {
                 continue;
             }
-            $primary = $row['primary'] ?? null;
             $out[$id] = [
                 'primary_preset' => $preset,
                 'primary' => $preset === 'custom' && is_string($primary) && preg_match('/^#[0-9A-Fa-f]{6}$/', $primary) === 1
                     ? strtolower($primary)
                     : null,
+                'sidebar' => $sidebar,
+                'background' => $background,
+                'card' => $card,
             ];
         }
 
         return $out;
+    }
+
+    private static function hexOrNull(mixed $value): ?string
+    {
+        return is_string($value) && preg_match('/^#[0-9A-Fa-f]{6}$/', $value) === 1
+            ? strtolower($value)
+            : null;
     }
 
     public static function isAllowedPublicUrl(string $url): bool

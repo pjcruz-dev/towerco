@@ -22,11 +22,7 @@ import {
   deleteUserUiPreference,
   putUserUiPreference,
 } from "@/lib/api/modules/user-ui-preferences-api";
-import {
-  MODULE_ACCENT_DEFAULTS,
-  MODULE_ACCENT_TARGETS,
-  moduleAccentFor,
-} from "@/lib/theme/module-accents";
+import { MODULE_ACCENT_TARGETS, moduleStyleFor } from "@/lib/theme/module-accents";
 import {
   DEFAULT_TENANT_CHROME,
   isHex6,
@@ -77,7 +73,9 @@ export function TenantAppearanceCustomizer() {
   const { theme, setTheme } = useTheme();
 
   const [draft, setDraft] = useState<TenantChrome>(DEFAULT_TENANT_CHROME);
-  const [moduleAccents, setModuleAccents] = useState<Record<string, TenantChromePresetId>>({});
+  const [moduleAccents, setModuleAccents] = useState<
+    Record<string, { preset: TenantChromePresetId | "plain"; sidebar: string; background: string; card: string }>
+  >({});
   const [colorMode, setColorMode] = useState<WorkspaceColorMode>("system");
   const [dirty, setDirty] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
@@ -108,13 +106,18 @@ export function TenantAppearanceCustomizer() {
     }
     setDraft(chromeFrom(saved));
     setColorMode(saved?.colorMode ?? themeOnOpen.current);
-    const accents: Record<string, TenantChromePresetId> = {};
+    const accents: Record<
+      string,
+      { preset: TenantChromePresetId | "plain"; sidebar: string; background: string; card: string }
+    > = {};
     for (const shell of MODULE_ACCENT_TARGETS) {
-      const accent = moduleAccentFor(branding?.module_accents, shell.id);
-      accents[shell.id] =
-        accent && accent.primary_preset !== "custom"
-          ? accent.primary_preset
-          : (MODULE_ACCENT_DEFAULTS[shell.id] ?? "teal");
+      const style = moduleStyleFor(branding?.module_accents, shell.id);
+      accents[shell.id] = {
+        preset: style?.primary_preset && style.primary_preset !== "custom" ? style.primary_preset : "plain",
+        sidebar: style?.sidebar ?? "",
+        background: style?.background ?? "",
+        card: style?.card ?? "",
+      };
     }
     setModuleAccents(accents);
   }, [branding?.module_accents, dirty, open, saved]);
@@ -145,9 +148,15 @@ export function TenantAppearanceCustomizer() {
       const moduleBranding = canSetModuleColors
         ? await updateTenantModuleAccents(
             Object.fromEntries(
-              Object.entries(moduleAccents).map(([moduleId, preset]) => [
+              Object.entries(moduleAccents).map(([moduleId, style]) => [
                 moduleId,
-                { primary_preset: preset, primary: null },
+                {
+                  primary_preset: style.preset,
+                  primary: null,
+                  sidebar: style.sidebar || null,
+                  background: style.background || null,
+                  card: style.card || null,
+                },
               ]),
             ),
           )
@@ -358,36 +367,109 @@ export function TenantAppearanceCustomizer() {
               <div className="space-y-3">
                 <p className="text-xs font-medium text-muted-foreground">Module accents</p>
                 <p className="text-xs text-muted-foreground">
-                  Buttons, links, the sidebar, page background, cards, and charts use this color. Success, warning, and error stay the same in every module.
+                  Plain keeps the white page. Accent colors buttons, links, and charts. Sidebar, page, and cards stay white until you pick a color. Success, warning, and error stay the same.
                 </p>
-                {MODULE_ACCENT_TARGETS.map((shell) => (
-                  <div key={shell.id} className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-foreground">{shell.title}</span>
-                    <div className="flex items-center gap-1.5" role="radiogroup" aria-label={`${shell.title} accent`}>
-                      {TENANT_CHROME_PRESETS.map((preset) => {
-                        const selected = moduleAccents[shell.id] === preset.id;
-                        return (
+                {MODULE_ACCENT_TARGETS.map((shell) => {
+                  const style = moduleAccents[shell.id] ?? {
+                    preset: "plain" as const,
+                    sidebar: "",
+                    background: "",
+                    card: "",
+                  };
+                  return (
+                    <div key={shell.id} className="space-y-2 rounded-lg border border-border p-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-foreground">{shell.title}</span>
+                        <div className="flex items-center gap-1.5" role="radiogroup" aria-label={`${shell.title} accent`}>
                           <button
-                            key={preset.id}
                             type="button"
                             role="radio"
-                            aria-checked={selected}
-                            aria-label={`${shell.title} ${preset.label}`}
+                            aria-checked={style.preset === "plain"}
+                            aria-label={`${shell.title} plain`}
                             onClick={() => {
                               setDirty(true);
-                              setModuleAccents((current) => ({ ...current, [shell.id]: preset.id }));
+                              setModuleAccents((current) => ({
+                                ...current,
+                                [shell.id]: { ...style, preset: "plain" },
+                              }));
                             }}
                             className={cn(
-                              "size-6 rounded-md border border-transparent focus-visible:ring-2 focus-visible:ring-ring",
-                              selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                              "size-6 rounded-md border border-border bg-white focus-visible:ring-2 focus-visible:ring-ring",
+                              style.preset === "plain" && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
                             )}
-                            style={{ backgroundColor: `var(--chrome-swatch-${preset.id})` }}
                           />
-                        );
-                      })}
+                          {TENANT_CHROME_PRESETS.map((preset) => {
+                            const selected = style.preset === preset.id;
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                aria-label={`${shell.title} ${preset.label}`}
+                                onClick={() => {
+                                  setDirty(true);
+                                  setModuleAccents((current) => ({
+                                    ...current,
+                                    [shell.id]: { ...style, preset: preset.id },
+                                  }));
+                                }}
+                                className={cn(
+                                  "size-6 rounded-md border border-transparent focus-visible:ring-2 focus-visible:ring-ring",
+                                  selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                                )}
+                                style={{ backgroundColor: `var(--chrome-swatch-${preset.id})` }}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(
+                          [
+                            ["sidebar", "Sidebar"],
+                            ["background", "Page"],
+                            ["card", "Cards"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
+                            <span className="block">{label}</span>
+                            <span className="flex items-center gap-1">
+                              <input
+                                type="color"
+                                aria-label={`${shell.title} ${label}`}
+                                className="h-7 w-full cursor-pointer rounded border border-border bg-white"
+                                value={isHex6(style[key]) ? style[key] : "#ffffff"}
+                                onChange={(event) => {
+                                  setDirty(true);
+                                  setModuleAccents((current) => ({
+                                    ...current,
+                                    [shell.id]: { ...style, [key]: event.target.value },
+                                  }));
+                                }}
+                              />
+                              {style[key] ? (
+                                <button
+                                  type="button"
+                                  className="shrink-0 text-[10px] text-foreground underline"
+                                  onClick={() => {
+                                    setDirty(true);
+                                    setModuleAccents((current) => ({
+                                      ...current,
+                                      [shell.id]: { ...style, [key]: "" },
+                                    }));
+                                  }}
+                                >
+                                  Default
+                                </button>
+                              ) : null}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
           </section>

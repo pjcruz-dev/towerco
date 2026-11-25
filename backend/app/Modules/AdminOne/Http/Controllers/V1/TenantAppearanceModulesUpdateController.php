@@ -24,8 +24,11 @@ final class TenantAppearanceModulesUpdateController extends AbstractApiControlle
         $data = $request->validate([
             'modules' => ['required', 'array'],
             'modules.*' => ['array'],
-            'modules.*.primary_preset' => ['required', 'string', Rule::in(['violet', 'teal', 'rose', 'amber', 'blue', 'custom'])],
+            'modules.*.primary_preset' => ['nullable', 'string', Rule::in(['plain', 'violet', 'teal', 'rose', 'amber', 'blue', 'custom'])],
             'modules.*.primary' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'modules.*.sidebar' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'modules.*.background' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'modules.*.card' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         foreach (array_keys($data['modules']) as $moduleId) {

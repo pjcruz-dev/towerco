@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { moduleSurfaceVariables } from "@/lib/theme/tenant-chrome";
+import { chosenModuleSurfaceVariables, moduleSurfaceVariables } from "@/lib/theme/tenant-chrome";
 
 describe("module surfaces", () => {
   it("tints the page, sidebar, and cards from the accent", () => {
@@ -16,6 +16,15 @@ describe("module surfaces", () => {
     expect(keys).not.toContain("destructive");
     expect(keys).not.toContain("success");
     expect(keys).not.toContain("warning");
+  });
+
+  it("leaves surfaces plain until a color is chosen and skips them in dark mode", () => {
+    expect(chosenModuleSurfaceVariables({}, "light")).toEqual({});
+    expect(chosenModuleSurfaceVariables({ sidebar: "#ffffff", background: "#f8fafc" }, "dark")).toEqual({});
+    const light = chosenModuleSurfaceVariables({ sidebar: "#e0f2f1", card: "#ffffff" }, "light");
+    expect(light.sidebar).toBe("#e0f2f1");
+    expect(light.card).toBe("#ffffff");
+    expect(light.background).toBeUndefined();
   });
 
   it("uses a darker page in dark mode than in light mode", () => {

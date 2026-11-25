@@ -231,6 +231,57 @@ export function moduleSurfaceVariables(accentHex: string, mode: "light" | "dark"
   return variables;
 }
 
+/** Admin-chosen surfaces. Empty values keep the shared plain theme. Dark mode keeps the shared dark shell. */
+export function chosenModuleSurfaceVariables(
+  surfaces: { sidebar?: string | null; background?: string | null; card?: string | null },
+  mode: "light" | "dark",
+): Record<string, string> {
+  if (mode === "dark") {
+    return {};
+  }
+  const variables: Record<string, string> = {};
+  if (isHex6(surfaces.background)) {
+    variables.background = surfaces.background;
+  }
+  if (isHex6(surfaces.card)) {
+    variables.card = surfaces.card;
+    variables.popover = surfaces.card;
+  }
+  if (isHex6(surfaces.sidebar)) {
+    variables.sidebar = surfaces.sidebar;
+    variables["sidebar-accent"] = mixHex(surfaces.sidebar, "#0f172a", 0.06);
+    variables["sidebar-border"] = mixHex(surfaces.sidebar, "#94a3b8", 0.28);
+  }
+  return variables;
+}
+
+export function applyChosenModuleSurfaces(
+  surfaces: { sidebar?: string | null; background?: string | null; card?: string | null },
+  mode: "light" | "dark",
+): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const root = document.documentElement;
+  for (const [key, value] of Object.entries(chosenModuleSurfaceVariables(surfaces, mode))) {
+    root.style.setProperty(`--${key}`, value);
+  }
+}
+
+export function applyModuleCharts(accentHex: string, mode: "light" | "dark"): void {
+  if (typeof document === "undefined" || !isHex6(accentHex)) {
+    return;
+  }
+  const root = document.documentElement;
+  const variables = moduleSurfaceVariables(accentHex, mode);
+  for (const key of ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"]) {
+    const value = variables[key];
+    if (value) {
+      root.style.setProperty(`--${key}`, value);
+    }
+  }
+}
+
 export function clearModuleSurfaces(): void {
   if (typeof document === "undefined") {
     return;

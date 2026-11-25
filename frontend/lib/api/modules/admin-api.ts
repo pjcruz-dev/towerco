@@ -135,7 +135,16 @@ export async function fetchTenantAppearance(): Promise<TenantBrandingPayload> {
 }
 
 export async function updateTenantModuleAccents(
-  modules: Record<string, { primary_preset: string; primary: string | null }>,
+  modules: Record<
+    string,
+    {
+      primary_preset: string;
+      primary: string | null;
+      sidebar?: string | null;
+      background?: string | null;
+      card?: string | null;
+    }
+  >,
 ): Promise<TenantBrandingPayload> {
   const response = await apiClient.put<{ data: TenantBrandingPayload }>("/admin/appearance/modules", {
     modules,
