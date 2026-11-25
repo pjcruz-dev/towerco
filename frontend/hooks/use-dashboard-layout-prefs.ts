@@ -16,6 +16,7 @@ import {
   normalizeDashboardLayoutPrefs,
   type DashboardLayoutPrefs,
 } from "@/lib/ui/dashboard-widget-registry";
+import { useNotificationStore } from "@/stores/notification-store";
 
 export type DashboardLayoutUpdater =
   | DashboardLayoutPrefs
@@ -43,6 +44,7 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
   storageKeyRef.current = storageKey;
   /** User edited before/while server bundle loaded — do not clobber Card appearance etc. */
   const dirtyRef = useRef(false);
+  const notify = useNotificationStore((state) => state.push);
 
   useEffect(() => {
     dirtyRef.current = false;
@@ -87,6 +89,7 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
   const flushPersonalPersist = useCallback(async () => {
     const key = storageKeyRef.current;
     if (key === null) return;
+    if (followingTenantRef.current && !dirtyRef.current) return;
     if (persistTimerRef.current) {
       clearTimeout(persistTimerRef.current);
       persistTimerRef.current = null;
@@ -109,7 +112,7 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
   useEffect(() => {
     return () => {
       const key = storageKeyRef.current;
-      if (!key) return;
+      if (!key || (followingTenantRef.current && !dirtyRef.current)) return;
       if (persistTimerRef.current) {
         clearTimeout(persistTimerRef.current);
         persistTimerRef.current = null;
@@ -170,11 +173,29 @@ export function useDashboardLayoutPrefs(storageKey: string | null) {
       storageKey,
       normalizeDashboardLayoutPrefs(prefsRef.current),
     );
-    if (published) {
-      setTenantDefault(published);
+    if (!published) {
+      notify({
+        level: "error",
+        title: "Could not publish the tenant default",
+        message: "This board was not shared. Check that your account can manage the workspace, then try again.",
+      });
+      return null;
     }
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    setTenantDefault(published);
+    setHasPersonalOverride(false);
+    followingTenantRef.current = true;
+    dirtyRef.current = false;
+    notify({
+      level: "success",
+      title: "Tenant default published",
+      message: "Everyone sees this board on their next visit. A later personal rearrange stays on that account until you publish again.",
+    });
     return published;
-  }, [storageKey]);
+  }, [notify, storageKey]);
 
   const resetToTenantDefault = useCallback(async () => {
     if (storageKey === null) return;

@@ -113,18 +113,17 @@ export function TicketingDashboardPageClient() {
       Object.keys(legacy.spans).length > 0 ||
       Object.keys(legacy.widgetOptions).length > 0 ||
       Object.keys(legacy.pageChrome ?? {}).length > 0;
-    if (empty && hasLegacy) {
-      setLayout({
-        ...legacy,
-        enabledWidgetIds: expandTicketingDashboardWidgetIds(legacy.enabledWidgetIds),
-        widgetOrder: expandTicketingDashboardWidgetIds(legacy.widgetOrder),
-      });
-    }
-  }, [legacyLayout, layout, serverReady, setLayout]);
+    if (tenantDefault || !empty || !hasLegacy) return;
+    setLayout({
+      ...legacy,
+      enabledWidgetIds: expandTicketingDashboardWidgetIds(legacy.enabledWidgetIds),
+      widgetOrder: expandTicketingDashboardWidgetIds(legacy.widgetOrder),
+    });
+  }, [legacyLayout, layout, serverReady, setLayout, tenantDefault]);
 
   // One-time: split legacy Analytics / Category bundles into separate widgets.
   useEffect(() => {
-    if (!serverReady || expandedBundlesRef.current) return;
+    if (!serverReady || expandedBundlesRef.current || tenantDefault) return;
     const needsExpand =
       layout.enabledWidgetIds.includes("queue_charts") ||
       layout.enabledWidgetIds.includes("category_analytics") ||
@@ -155,7 +154,7 @@ export function TicketingDashboardPageClient() {
       widgetOrder: order,
       spans,
     });
-  }, [layout, serverReady, setLayout]);
+  }, [layout, serverReady, setLayout, tenantDefault]);
 
   const { data, isFetching, isError, error, isPlaceholderData, refetch } = useTicketingDashboard({
     status: status || undefined,

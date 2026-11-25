@@ -8,6 +8,8 @@ use App\Core\Services\AbstractDomainService;
 use App\Modules\Identity\Models\ModuleListSharedLayout;
 use App\Modules\Identity\Models\TenantUser;
 use App\Modules\Identity\Models\UserUiPreference;
+use App\Modules\Platform\Support\StructuredAuditLogWriter;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -161,19 +163,36 @@ class UserUiPreferenceService extends AbstractDomainService
             $normalized = ['layouts' => array_values(array_slice($layouts, 0, 12))];
         }
 
-        $existing = ModuleListSharedLayout::query()->where('storage_key', $key)->first();
-        if ($existing === null) {
-            ModuleListSharedLayout::query()->create([
-                'id' => (string) Str::uuid(),
-                'storage_key' => $key,
-                'layouts_json' => $normalized,
-                'updated_by' => $user->id,
+        $clearedPersonal = 0;
+        DB::transaction(function () use ($key, $normalized, $user, &$clearedPersonal): void {
+            $existing = ModuleListSharedLayout::query()->where('storage_key', $key)->first();
+            if ($existing === null) {
+                ModuleListSharedLayout::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'storage_key' => $key,
+                    'layouts_json' => $normalized,
+                    'updated_by' => $user->id,
+                ]);
+            } else {
+                $existing->forceFill([
+                    'layouts_json' => $normalized,
+                    'updated_by' => $user->id,
+                ])->save();
+            }
+
+            if ($this->isDashboardLayoutKey($key)) {
+                $clearedPersonal = UserUiPreference::query()
+                    ->where('preference_key', $key)
+                    ->delete();
+            }
+        });
+
+        if ($this->isDashboardLayoutKey($key)) {
+            app(StructuredAuditLogWriter::class)->write('tenant.ui', 'dashboard_layout.published', [
+                'preference_key' => $key,
+                'actor_user_id' => (string) $user->id,
+                'personal_layouts_cleared' => $clearedPersonal,
             ]);
-        } else {
-            $existing->forceFill([
-                'layouts_json' => $normalized,
-                'updated_by' => $user->id,
-            ])->save();
         }
 
         return $this->getShared($key) ?? ($this->isDashboardLayoutKey($key)

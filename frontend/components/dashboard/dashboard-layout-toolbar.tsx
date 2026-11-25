@@ -199,7 +199,7 @@ export function DashboardLayoutToolbar({
                     Publish as tenant default
                   </p>
                   <p className="text-[11px] leading-snug text-muted-foreground">
-                    New users without a personal layout get this board.
+                    Replaces personal layouts. Everyone sees this board on their next visit.
                   </p>
                 </button>
               ) : null}
