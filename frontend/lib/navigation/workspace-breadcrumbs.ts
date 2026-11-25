@@ -149,6 +149,10 @@ export function resolveWorkspaceBreadcrumbs(pathname: string): WorkspaceBreadcru
       crumbs.push({ label: "Approvals" });
       return crumbs;
     }
+    if (parts[2] === "drafts") {
+      crumbs.push({ label: "Drafts" });
+      return crumbs;
+    }
     if (parts[2] === "requests") {
       crumbs.push({ label: "Request" });
       return crumbs;

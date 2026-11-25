@@ -276,6 +276,22 @@ export type ControlledDocumentReport = {
   drafts?: { count: number; href: string };
 };
 
+export type ControlledDocumentDraftItem = {
+  id: string;
+  document_no: string;
+  form_id: string;
+  form_name: string;
+  updated_at: string | null;
+  href: string;
+};
+
+export async function fetchControlledDocumentDrafts(): Promise<ControlledDocumentDraftItem[]> {
+  const response = await apiClient.get<{ data: { items: ControlledDocumentDraftItem[] } }>(
+    "/documents/controlled/drafts",
+  );
+  return response.data.data.items ?? [];
+}
+
 export async function fetchControlledDocumentOverview(params?: {
   department?: string;
   document_type?: string;

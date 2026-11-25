@@ -380,7 +380,7 @@ function OverviewBody({
           label="Drafts"
           value={data.drafts?.count ?? 0}
           detail="Unsent document requests you saved"
-          href={data.drafts?.href ?? "/e-approval/submissions?status=draft&mine=1"}
+          href={data.drafts?.href ?? "/documents/controlled/drafts"}
         />
         <ShareCard
           label="Aging"

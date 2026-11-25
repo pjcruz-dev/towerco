@@ -573,18 +573,52 @@ final class ControlledDocumentRegistryService
      */
     private function myDocumentDrafts(TenantUser $actor): array
     {
-        $count = EApprovalSubmission::query()
+        $count = $this->documentDraftQuery($actor)->count();
+
+        return [
+            'count' => $count,
+            'href' => '/documents/controlled/drafts',
+        ];
+    }
+
+    /**
+     * @return list<array{id: string, document_no: string, form_id: string, form_name: string, updated_at: string|null, href: string}>
+     */
+    public function documentDraftItems(TenantUser $actor): array
+    {
+        return $this->documentDraftQuery($actor)
+            ->with(['form:id,name'])
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get()
+            ->map(static function (EApprovalSubmission $submission): array {
+                $formId = (string) $submission->form_id;
+
+                return [
+                    'id' => (string) $submission->id,
+                    'document_no' => (string) $submission->document_no,
+                    'form_id' => $formId,
+                    'form_name' => (string) ($submission->form?->name ?? ''),
+                    'updated_at' => $submission->updated_at?->toIso8601String()
+                        ?? $submission->created_at?->toIso8601String(),
+                    'href' => '/documents/controlled/new?form_id='.$formId,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return Builder<EApprovalSubmission>
+     */
+    private function documentDraftQuery(TenantUser $actor): Builder
+    {
+        return EApprovalSubmission::query()
             ->where('requestor_id', $actor->id)
             ->where('status', EApprovalSubmissionStatus::DRAFT)
             ->whereHas('form', static function (Builder $form): void {
                 $form->where('metadata_json->form_family', 'iso_document_control');
-            })
-            ->count();
-
-        return [
-            'count' => $count,
-            'href' => '/e-approval/submissions?status=draft&mine=1',
-        ];
+            });
     }
 
     /**

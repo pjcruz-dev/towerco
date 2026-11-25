@@ -72,6 +72,7 @@ use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateDestroyControll
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateIndexController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateStoreController;
 use App\Modules\DocExtract\Http\Controllers\V1\DocExtractTemplateUpdateController;
+use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentDraftIndexController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportAnalyzeController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportController;
 use App\Modules\Documents\Http\Controllers\V1\ControlledDocumentImportPreviewController;
@@ -417,6 +418,7 @@ Route::middleware(['tenant.sanctum', 'auth:sanctum', 'auth.session', 'auth.mfa',
     Route::middleware('tenant.module:document_register')->group(function () {
         Route::get('documents/controlled', ControlledDocumentIndexController::class)->name('api.tenant.v1.documents.controlled.index');
         Route::get('documents/controlled/overview', ControlledDocumentOverviewController::class)->name('api.tenant.v1.documents.controlled.overview');
+        Route::get('documents/controlled/drafts', ControlledDocumentDraftIndexController::class)->name('api.tenant.v1.documents.controlled.drafts');
         Route::get('documents/controlled/obsolete', ControlledDocumentObsoleteBoardController::class)->name('api.tenant.v1.documents.controlled.obsolete');
         Route::get('documents/controlled/reports', ControlledDocumentReportController::class)->name('api.tenant.v1.documents.controlled.reports');
         Route::get('documents/controlled/reports/export', ControlledDocumentReportExportController::class)->name('api.tenant.v1.documents.controlled.reports.export');

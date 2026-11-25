@@ -55,6 +55,10 @@ describe("resolveWorkspaceBreadcrumbs", () => {
       { label: "EDCS", href: "/documents/controlled" },
       { label: "Approvals" },
     ]);
+    expect(resolveWorkspaceBreadcrumbs("/documents/controlled/drafts")).toEqual([
+      { label: "EDCS", href: "/documents/controlled" },
+      { label: "Drafts" },
+    ]);
     expect(resolveWorkspaceBreadcrumbs("/documents/controlled/requests/sub-1")).toEqual([
       { label: "EDCS", href: "/documents/controlled" },
       { label: "Request" },

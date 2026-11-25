@@ -386,6 +386,55 @@ CSV;
         tenancy()->end();
     }
 
+    public function test_document_drafts_stay_inside_document_control(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $iso = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'ISO Document Control',
+            'status' => 'published',
+            'metadata_json' => ['form_family' => 'iso_document_control'],
+        ]);
+        $other = EApprovalForm::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Cash advance',
+            'status' => 'published',
+            'metadata_json' => ['form_family' => 'cash_advance'],
+        ]);
+        $mine = EApprovalSubmission::query()->create([
+            'document_no' => 'DRAFT-EDCS',
+            'form_id' => $iso->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::DRAFT,
+            'current_step' => 0,
+        ]);
+        EApprovalSubmission::query()->create([
+            'document_no' => 'DRAFT-CA',
+            'form_id' => $other->id,
+            'requestor_id' => $this->testTenantAdmin->id,
+            'status' => EApprovalSubmissionStatus::DRAFT,
+            'current_step' => 0,
+        ]);
+
+        tenancy()->end();
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled/drafts')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', (string) $mine->id)
+            ->assertJsonPath('data.items.0.href', '/documents/controlled/new?form_id='.$iso->id);
+
+        $this->actingAsTenantAdmin()
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled/overview')
+            ->assertOk()
+            ->assertJsonPath('data.drafts.count', 1)
+            ->assertJsonPath('data.drafts.href', '/documents/controlled/drafts');
+    }
+
     public function test_index_filters_by_review_file_effective_date_and_keeps_status_counts(): void
     {
         tenancy()->initialize($this->testTenant);

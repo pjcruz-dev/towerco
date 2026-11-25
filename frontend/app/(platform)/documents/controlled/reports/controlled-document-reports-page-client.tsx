@@ -275,7 +275,7 @@ export function ControlledDocumentReportsPageClient() {
             label="Drafts"
             value={data?.drafts?.count}
             detail="Unsent document requests you saved"
-            href={data?.drafts?.href ?? "/e-approval/submissions?status=draft&mine=1"}
+            href={data?.drafts?.href ?? "/documents/controlled/drafts"}
           />
           <Metric
             label="Aging"
