@@ -435,6 +435,37 @@ CSV;
             ->assertJsonPath('data.drafts.href', '/documents/controlled/drafts');
     }
 
+    public function test_author_with_viewer_role_sees_only_documents_they_created(): void
+    {
+        tenancy()->initialize($this->testTenant);
+
+        $author = TenantUser::query()->create([
+            'name' => 'Demetrio Pilar',
+            'email' => 'pid.author@test.localhost',
+            'password' => 'password',
+            'is_active' => true,
+        ]);
+        $author->assignRole(['dcf_viewer', 'dcf_author']);
+
+        $this->makeControlledDocument('ATC-PID-P-001', 'PID procedure', [
+            'created_by_id' => $author->id,
+            'published_at' => now(),
+        ]);
+        $this->makeControlledDocument('ATC-QMS-P-001', 'Quality policy', [
+            'created_by_id' => $this->testTenantAdmin->id,
+            'published_at' => now(),
+        ]);
+
+        tenancy()->end();
+
+        $this->actingAs($author, 'sanctum')
+            ->withHeaders($this->tenantApiHeaders())
+            ->getJson('/api/v1/documents/controlled/overview')
+            ->assertOk()
+            ->assertJsonPath('data.counts.published', 1)
+            ->assertJsonPath('data.counts.total', 1);
+    }
+
     public function test_index_filters_by_review_file_effective_date_and_keeps_status_counts(): void
     {
         tenancy()->initialize($this->testTenant);

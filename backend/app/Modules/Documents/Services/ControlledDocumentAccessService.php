@@ -96,8 +96,9 @@ final class ControlledDocumentAccessService
     }
 
     /**
-     * Authors (default: dcf_author) see only documents they created or revised,
-     * unless they also hold a broader register role (viewer/approver/controller/admin).
+     * Authors see only documents they created or revised.
+     * A read-only viewer role does not open the rest of the register.
+     * Approvers, controllers, and admins still see every document.
      */
     private function shouldScopeToOwnDocuments(TenantUser $user, ControlledDocumentAccessPolicy $policy): bool
     {
@@ -112,10 +113,9 @@ final class ControlledDocumentAccessService
         }
 
         $broaderRoles = array_values(array_unique(array_merge(
-            $policy->viewerRoles,
             $policy->fullAccessRoles,
             array_keys($policy->roleDepartmentMap),
-            ['dcf_viewer', 'dcf_approver', 'dcf_controller', 'dcf_admin'],
+            ['dcf_approver', 'dcf_controller', 'dcf_admin'],
         )));
         $broaderRoles = array_values(array_diff($broaderRoles, $policy->ownOnlyRoles));
 
