@@ -10,6 +10,7 @@ use App\Modules\Notifications\Models\TenantNotification;
 use App\Modules\Notifications\Services\TenantNotificationIndexService;
 use App\Modules\Notifications\Support\TenantNotificationAccess;
 use App\Modules\Notifications\Support\TenantNotificationModule;
+use App\Modules\Notifications\Support\TenantNotificationShell;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
